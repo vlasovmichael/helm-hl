@@ -5,9 +5,15 @@ import { sendTelegramMessage } from "../utils/telegram.js";
 
 const COMMISSION = 0.001;  // 0.1%
 const SLIPPAGE   = 0.0005; // 0.05%
-const ROTATION_THRESHOLD = 1.25;
+const ROUND_TRIP_COST = (COMMISSION + SLIPPAGE) * 2; // close + open = 0.3%
+const MAX_PAYBACK_HOURS = 24;
+const MIN_HOLD_HOURS = 4;  // cooldown
+const EMA_SLOTS = 6;       // сглаживание: 6 тиков × 5 мин = 30 минут
 
 const STATE_FILE = "logs/state.json";
+
+// EMA-буфер: coin -> { ema, count }
+const emaState = new Map();
 
 const stats = {
   balance: 0,
@@ -125,60 +131,130 @@ function closePosition(currentPrice, reason) {
   );
 }
 
+/**
+ * Обновляет EMA (экспоненциальное скользящее среднее) для APY монеты.
+ * α = 2 / (N + 1) — стандартная формула EMA.
+ * Первые EMA_SLOTS тиков идёт «прогрев»: EMA ещё не стабильна,
+ * но мы уже возвращаем лучшее приближение, чтобы не блокировать вход.
+ */
+function updateEma(coin, rawApy) {
+  const alpha = 2 / (EMA_SLOTS + 1);
+  const entry = emaState.get(coin);
+
+  if (!entry) {
+    emaState.set(coin, { ema: rawApy, count: 1 });
+    return rawApy;
+  }
+
+  entry.ema = alpha * rawApy + (1 - alpha) * entry.ema;
+  entry.count++;
+  emaState.set(coin, entry);
+  return entry.ema;
+}
+
+/** EMA «прогрета» — набрала достаточно точек для надёжного сигнала */
+function isEmaWarmedUp(coin) {
+  const entry = emaState.get(coin);
+  return entry != null && entry.count >= EMA_SLOTS;
+}
+
+/**
+ * Breakeven-check: за сколько часов дельта APY окупит двойную комиссию?
+ *
+ * Доход за час = sizeUsd × 0.5 × hourlyFundingRate
+ * Стоимость ротации = sizeUsd × ROUND_TRIP_COST
+ *
+ * paybackHours = ROUND_TRIP_COST / (0.5 × deltaHourlyRate)
+ *              = ROUND_TRIP_COST / (0.5 × (betterApy − currentApy) / 24 / 365 / 100)
+ */
+function paybackHours(currentApy, betterApy) {
+  const deltaHourly = (betterApy - currentApy) / 100 / 365 / 24;
+  if (deltaHourly <= 0) return Infinity;
+  return ROUND_TRIP_COST / (0.5 * deltaHourly);
+}
+
 export async function processTick(marketData) {
   const prevBalance = stats.balance;
 
+  // --- Обновляем EMA для всех монет ---
+  const smoothed = marketData.map((m) => ({
+    ...m,
+    smoothedApy: updateEma(m.coin, m.apy),
+  }));
+
   if (!stats.position) {
-    const best = marketData
-      .filter((m) => m.apy >= config.minApy)
-      .sort((a, b) => b.apy - a.apy)[0];
+    // --------- Нет позиции — ищем лучшую ---------
+    // Вход ТОЛЬКО если EMA-сглаженный APY >= entryApy (60%)
+    // и EMA прогрета (минимум 30 мин наблюдений)
+    const candidates = smoothed.filter(
+      (m) => m.fundingRate > 0 && m.smoothedApy >= config.entryApy && isEmaWarmedUp(m.coin),
+    );
+    const best = candidates.sort((a, b) => b.smoothedApy - a.smoothedApy)[0];
 
     if (!best) {
-      logger.info("No coins meet minApy threshold, skipping tick");
+      logger.info(
+        `No coins meet entry threshold (EMA ≥ ${config.entryApy}%), skipping tick`,
+      );
       logSession();
       return;
     }
 
-    openPosition(best.coin, best.price, best.fundingRate, best.apy);
+    openPosition(best.coin, best.price, best.fundingRate, best.smoothedApy);
   } else {
-    // Позиция открыта — начисляем фандинг
+    // --------- Позиция открыта — начисляем фандинг ---------
     const { coin, sizeUsd, lastTickTime } = stats.position;
-    const current = marketData.find((m) => m.coin === coin);
+    const current = smoothed.find((m) => m.coin === coin);
 
     const now = Date.now();
     const elapsedHours = (now - lastTickTime) / 3_600_000;
     stats.position.lastTickTime = now;
 
     if (current) {
-      const shortPositionSize = sizeUsd * 0.5;
-      const fundingEarned = shortPositionSize * current.fundingRate * elapsedHours;
+      const fundingEarned = sizeUsd * 0.5 * current.fundingRate * elapsedHours;
       stats.balance += fundingEarned;
 
       logger.info(
-        `[TICK] ${coin} | funding earned: $${fundingEarned.toFixed(4)} | APY: ${current.apy.toFixed(2)}% | balance: $${stats.balance.toFixed(2)}`,
+        `[TICK] ${coin} | funding: $${fundingEarned.toFixed(4)} | rawAPY: ${current.apy.toFixed(2)}% | emaAPY: ${current.smoothedApy.toFixed(2)}% | bal: $${stats.balance.toFixed(2)}`,
       );
     }
 
-    // Проверяем условия выхода
-    const currentApy = current?.apy ?? 0;
+    // --------- Проверяем условия выхода ---------
+    const currentApy = current?.smoothedApy ?? 0;
     const closePrice = current?.price ?? stats.position.entryPrice;
+    const heldHours = (Date.now() - stats.position.entryTime) / 3_600_000;
 
+    // 1. Negative funding — экстренный выход, без cooldown
     if (currentApy < 0) {
       closePosition(closePrice, "negative_funding");
+
+    // 2. APY ниже порога — экстренный выход, без cooldown
     } else if (currentApy < config.minApy) {
       closePosition(closePrice, "apy_below_threshold");
-    } else {
-      const better = marketData
-        .filter((m) => m.coin !== coin)
-        .sort((a, b) => b.apy - a.apy)[0];
 
-      if (better && better.apy >= currentApy * ROTATION_THRESHOLD) {
-        closePosition(closePrice, `rotation_to_${better.coin}`);
+    // 3. Ротация — только после cooldown + breakeven + прогретой EMA
+    } else if (heldHours >= MIN_HOLD_HOURS) {
+      const best = smoothed
+        .filter((m) => m.coin !== coin && m.fundingRate > 0 && isEmaWarmedUp(m.coin))
+        .sort((a, b) => b.smoothedApy - a.smoothedApy)[0];
+
+      if (best && best.smoothedApy > currentApy) {
+        const hours = paybackHours(currentApy, best.smoothedApy);
+
+        if (hours <= MAX_PAYBACK_HOURS) {
+          logger.info(
+            `[ROTATION] ${coin} (${currentApy.toFixed(2)}%) -> ${best.coin} (${best.smoothedApy.toFixed(2)}%) | payback: ${hours.toFixed(1)}h`,
+          );
+          closePosition(closePrice, `rotation_to_${best.coin}`);
+        } else {
+          logger.info(
+            `[ROTATION SKIP] ${best.coin} APY ${best.smoothedApy.toFixed(2)}% but payback ${hours.toFixed(1)}h > ${MAX_PAYBACK_HOURS}h`,
+          );
+        }
       }
     }
   }
 
-  // Обновляем peak, max drawdown и логируем сессию
+  // --- Обновляем peak, max drawdown ---
   if (stats.balance > stats.peakBalance) {
     stats.peakBalance = stats.balance;
   }
@@ -190,7 +266,6 @@ export async function processTick(marketData) {
   }
   logSession();
 
-  // Сохраняем только если баланс изменился
   if (stats.balance !== prevBalance) {
     await saveState();
   }

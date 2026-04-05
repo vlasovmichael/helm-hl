@@ -2,7 +2,8 @@ import 'dotenv/config';
 
 export const config = {
     walletAddress: process.env.PUBLIC_WALLET_ADDRESS,
-    minApy: parseFloat(process.env.MIN_APY_THRESHOLD || '20'),
+    minApy: parseFloat(process.env.MIN_APY_THRESHOLD || '30'),
+    entryApy: parseFloat(process.env.ENTRY_APY_THRESHOLD || '60'),
     telegram: {
         token: process.env.TELEGRAM_BOT_TOKEN,
         chat_id: process.env.TELEGRAM_CHAT_ID
