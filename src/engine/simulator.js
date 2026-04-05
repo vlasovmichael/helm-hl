@@ -1,10 +1,11 @@
 import { readFile, writeFile, rename } from "fs/promises";
 import { config } from "../config/index.js";
 import { logger } from "../utils/logger.js";
+import { sendTelegramMessage } from "../utils/telegram.js";
 
 const COMMISSION = 0.001;  // 0.1%
 const SLIPPAGE   = 0.0005; // 0.05%
-const ROTATION_THRESHOLD = 1.1;
+const ROTATION_THRESHOLD = 1.25;
 
 const STATE_FILE = "logs/state.json";
 
@@ -74,6 +75,13 @@ function openPosition(coin, price, fundingRate, apy) {
   logger.info(
     `[OPEN] ${coin} | APY: ${apy.toFixed(2)}% | size: $${stats.balance.toFixed(2)} | fee: $${commission.toFixed(4)} | slippage: $${slippage.toFixed(4)}`,
   );
+
+  const fire = apy > 100 ? "🔥🔥🔥 " : "";
+  sendTelegramMessage(
+    `${fire}🟢 <b>[OPEN] #${coin}</b>\n` +
+    `💰 APY: ${apy.toFixed(2)}%\n` +
+    `📊 Размер: $${stats.balance.toFixed(2)}`
+  );
 }
 
 function closePosition(currentPrice, reason) {
@@ -108,6 +116,12 @@ function closePosition(currentPrice, reason) {
 
   logger.info(
     `[CLOSE] ${coin} | reason: ${reason} | held: ${holdHours.toFixed(2)}h | fee: $${commission.toFixed(4)} | slippage: $${slippage.toFixed(4)} | balance: $${stats.balance.toFixed(2)}`,
+  );
+
+  sendTelegramMessage(
+    `🔴 <b>[CLOSE] #${coin}</b>\n` +
+    `📈 Причина: ${reason}\n` +
+    `⏳ Удержание: ${holdHours.toFixed(1)}ч`
   );
 }
 
