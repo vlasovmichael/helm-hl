@@ -1,0 +1,19 @@
+version: '3.8'
+services:
+  hl-paper-scanner:
+    build: .
+    container_name: hl-paper-scanner
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./logs:/app/logs
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks:
+      - workspace_app_network
+
+networks:
+  workspace_app_network:
+    external: true
