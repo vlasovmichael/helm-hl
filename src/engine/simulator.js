@@ -7,13 +7,22 @@ const COMMISSION = 0.001;  // 0.1%
 const SLIPPAGE   = 0.0005; // 0.05%
 const ROUND_TRIP_COST = (COMMISSION + SLIPPAGE) * 2; // close + open = 0.3%
 const MAX_PAYBACK_HOURS = 24;
-const MIN_HOLD_HOURS = 4;  // cooldown
-const EMA_SLOTS = 6;       // сглаживание: 6 тиков × 5 мин = 30 минут
+const MIN_HOLD_HOURS = 4;       // cooldown ротации
+const EMA_SLOTS = 6;            // сглаживание: 6 тиков × 5 мин = 30 минут
+const VOLATILITY_PCT = 5;       // порог волатильности: 5%
+const PRICE_WINDOW = 3;         // окно: 3 тика = 15 минут
+const COIN_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 часа бан на монету после выхода
 
 const STATE_FILE = "logs/state.json";
 
 // EMA-буфер: coin -> { ema, count }
 const emaState = new Map();
+
+// Буфер цен: coin -> [price, price, ...] (последние PRICE_WINDOW значений)
+const priceHistory = new Map();
+
+// Бан-лист: coin -> timestamp когда можно снова заходить
+const coinCooldowns = new Map();
 
 const stats = {
   balance: 0,
@@ -173,13 +182,53 @@ function paybackHours(currentApy, betterApy) {
   return ROUND_TRIP_COST / (0.5 * deltaHourly);
 }
 
+/**
+ * Записывает цену монеты в кольцевой буфер и возвращает
+ * максимальное отклонение от самой старой цены в окне (в %).
+ */
+function trackPrice(coin, price) {
+  let buf = priceHistory.get(coin);
+  if (!buf) {
+    buf = [];
+    priceHistory.set(coin, buf);
+  }
+  buf.push(price);
+  if (buf.length > PRICE_WINDOW) buf.shift();
+  if (buf.length < 2) return 0;
+
+  const oldest = buf[0];
+  if (oldest === 0) return 0;
+  return Math.abs((price - oldest) / oldest) * 100;
+}
+
+/** Ставит монету в бан-лист на COIN_COOLDOWN_MS */
+function banCoin(coin) {
+  const until = Date.now() + COIN_COOLDOWN_MS;
+  coinCooldowns.set(coin, until);
+  logger.info(
+    `[BAN] ${coin} banned for ${COIN_COOLDOWN_MS / 3_600_000}h (until ${new Date(until).toISOString()})`,
+  );
+}
+
+/** Проверяет, снят ли бан с монеты */
+function isCoinBanned(coin) {
+  const until = coinCooldowns.get(coin);
+  if (!until) return false;
+  if (Date.now() >= until) {
+    coinCooldowns.delete(coin);
+    return false;
+  }
+  return true;
+}
+
 export async function processTick(marketData) {
   const prevBalance = stats.balance;
 
-  // --- Обновляем EMA для всех монет ---
+  // --- Обновляем EMA и ценовой буфер для всех монет ---
   const smoothed = marketData.map((m) => ({
     ...m,
     smoothedApy: updateEma(m.coin, m.apy),
+    volatilityPct: trackPrice(m.coin, m.price),
   }));
 
   if (!stats.position) {
@@ -187,7 +236,12 @@ export async function processTick(marketData) {
     // Вход ТОЛЬКО если EMA-сглаженный APY >= entryApy (60%)
     // и EMA прогрета (минимум 30 мин наблюдений)
     const candidates = smoothed.filter(
-      (m) => m.fundingRate > 0 && m.smoothedApy >= config.entryApy && isEmaWarmedUp(m.coin),
+      (m) =>
+        m.fundingRate > 0 &&
+        m.smoothedApy >= config.entryApy &&
+        isEmaWarmedUp(m.coin) &&
+        !isCoinBanned(m.coin) &&
+        m.volatilityPct < VOLATILITY_PCT,
     );
     const best = candidates.sort((a, b) => b.smoothedApy - a.smoothedApy)[0];
 
@@ -222,14 +276,25 @@ export async function processTick(marketData) {
     const currentApy = current?.smoothedApy ?? 0;
     const closePrice = current?.price ?? stats.position.entryPrice;
     const heldHours = (Date.now() - stats.position.entryTime) / 3_600_000;
+    const volPct = current?.volatilityPct ?? 0;
 
-    // 1. Negative funding — экстренный выход, без cooldown
-    if (currentApy < 0) {
+    // 1. Volatility spike — экстренный выход + бан монеты
+    if (volPct >= VOLATILITY_PCT) {
+      logger.info(
+        `[VOLATILITY] ${coin} price moved ${volPct.toFixed(2)}% in ${PRICE_WINDOW} ticks — emergency exit`,
+      );
+      closePosition(closePrice, "volatility_spike_exit");
+      banCoin(coin);
+
+    // 2. Negative funding — экстренный выход + бан
+    } else if (currentApy < 0) {
       closePosition(closePrice, "negative_funding");
+      banCoin(coin);
 
-    // 2. APY ниже порога — экстренный выход, без cooldown
+    // 3. APY ниже порога — выход + бан
     } else if (currentApy < config.minApy) {
       closePosition(closePrice, "apy_below_threshold");
+      banCoin(coin);
 
     // 3. Ротация — только после cooldown + breakeven + прогретой EMA
     } else if (heldHours >= MIN_HOLD_HOURS) {
