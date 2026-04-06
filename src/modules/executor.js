@@ -1,22 +1,23 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { savePosition, closePosition as dbClosePosition } from '../core/database.js';
-
-const PAPER_TRADE_SIZE = 11.0;
+import { getAvailableBalance } from './wallet.js';
 
 // Совпадают со Стратегом — единый источник правды о комиссиях
 const FEE_RATE = 0.0002;   // 0.02% taker
 const SLIPPAGE = 0.0001;   // 0.01%
 const ONE_LEG  = FEE_RATE + SLIPPAGE; // 0.03% за одну сторону
 
+const BALANCE_UTILIZATION = 0.95; // 95% от баланса — 5% остаётся на комиссии/маржу
+
 /**
  * Исполняет сигнал от Стратега.
  *
  * @param {{ action: string, [key: string]: any }} signal
  * @param {Object|undefined} activePosition — текущая строка из БД (positions)
- * @returns {{ ok: boolean, positionId?: number, pnl?: number }}
+ * @returns {Promise<{ ok: boolean, positionId?: number, pnl?: number }>}
  */
-export function execute(signal, activePosition) {
+export async function execute(signal, activePosition) {
   switch (signal.action) {
     case 'OPEN':
       return handleOpen(signal);
@@ -36,8 +37,15 @@ export function execute(signal, activePosition) {
 //  PAPER helpers
 // ─────────────────────────────────────────────────
 
-function paperOpen(coin, price, apy) {
-  const sizeUsd = PAPER_TRADE_SIZE;
+async function paperOpen(coin, price, apy) {
+  const realBalance = await getAvailableBalance();
+
+  if (realBalance <= 0) {
+    logger.warn(`[Executor] Cannot open — wallet balance is $${realBalance.toFixed(2)}`);
+    return { ok: false };
+  }
+
+  const sizeUsd = realBalance * BALANCE_UTILIZATION;
   const fee     = sizeUsd * ONE_LEG;
 
   const id = savePosition({
@@ -50,7 +58,7 @@ function paperOpen(coin, price, apy) {
   });
 
   logger.info(
-    `[Executor] 📝 PAPER OPEN #${coin} | $${sizeUsd.toFixed(2)} @ $${price} | APY: ${apy.toFixed(2)}% | fee: $${fee.toFixed(4)} | id: ${id}`,
+    `[Executor] 📝 PAPER OPEN #${coin} | $${sizeUsd.toFixed(2)} (of $${realBalance.toFixed(2)}) @ $${price} | APY: ${apy.toFixed(2)}% | fee: $${fee.toFixed(4)} | id: ${id}`,
   );
 
   return { ok: true, positionId: Number(id) };
@@ -66,9 +74,7 @@ function paperClose(signal, position) {
   const fundingPnl  = position.size_usd * 0.5 * hourlyRate * holdHours;
 
   // Комиссии: вход + выход
-  const entryFee = position.size_usd * ONE_LEG;
-  const exitFee  = position.size_usd * ONE_LEG;
-  const totalFee = entryFee + exitFee;
+  const totalFee = position.size_usd * ONE_LEG * 2;
 
   const realizedPnl = fundingPnl - totalFee;
 
@@ -119,7 +125,7 @@ function handleClose(signal, position) {
   return paperClose(signal, position);
 }
 
-function handleRotate(signal, position) {
+async function handleRotate(signal, position) {
   if (!position) {
     logger.warn(`[Executor] ROTATE signal but no active position — treating as OPEN`);
     return handleOpen({
@@ -137,7 +143,7 @@ function handleRotate(signal, position) {
     return { ok: false };
   }
 
-  // Атомарно: close + open
+  // Шаг 1: close
   const closeResult = paperClose(
     { price: signal.closePrice, reason: signal.reason },
     position,
@@ -145,7 +151,8 @@ function handleRotate(signal, position) {
 
   if (!closeResult.ok) return closeResult;
 
-  const openResult = paperOpen(signal.openCoin, signal.openPrice, signal.openApy);
+  // Шаг 2: open с актуальным балансом
+  const openResult = await paperOpen(signal.openCoin, signal.openPrice, signal.openApy);
 
   logger.info(
     `[Executor] 🔄 PAPER ROTATE ${signal.closeCoin} → ${signal.openCoin} | payback: ${signal.paybackHours}h`,
