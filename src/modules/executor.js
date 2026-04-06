@@ -2,6 +2,7 @@ import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { savePosition, closePosition as dbClosePosition } from '../core/database.js';
 import { getAvailableBalance } from './wallet.js';
+import { sendMessage } from './reporter.js';
 
 // Совпадают со Стратегом — единый источник правды о комиссиях
 const FEE_RATE = 0.0002;   // 0.02% taker
@@ -58,10 +59,19 @@ async function paperOpen(coin, price, apy) {
   });
 
   logger.info(
-    `[Executor] 📝 PAPER OPEN #${coin} | $${sizeUsd.toFixed(2)} (of $${realBalance.toFixed(2)}) @ $${price} | APY: ${apy.toFixed(2)}% | fee: $${fee.toFixed(4)} | id: ${id}`,
+    `[Executor] PAPER OPEN #${coin} | $${sizeUsd.toFixed(2)} (of $${realBalance.toFixed(2)}) @ $${price} | APY: ${apy.toFixed(2)}% | fee: $${fee.toFixed(4)} | id: ${id}`,
   );
 
-  return { ok: true, positionId: Number(id) };
+  const fire = apy > 100 ? '🔥🔥🔥 ' : '';
+  sendMessage(
+    `${fire}🟢 <b>[OPEN] #${coin}</b>\n` +
+    `💰 Размер: <b>$${sizeUsd.toFixed(2)}</b> (${(BALANCE_UTILIZATION * 100).toFixed(0)}% от $${realBalance.toFixed(2)})\n` +
+    `📊 APY: <b>${apy.toFixed(2)}%</b>\n` +
+    `💵 Цена: $${price}\n` +
+    `🏷 Fee: $${fee.toFixed(4)}`,
+  );
+
+  return { ok: true, positionId: Number(id), sizeUsd };
 }
 
 function paperClose(signal, position) {
@@ -75,7 +85,6 @@ function paperClose(signal, position) {
 
   // Комиссии: вход + выход
   const totalFee = position.size_usd * ONE_LEG * 2;
-
   const realizedPnl = fundingPnl - totalFee;
 
   dbClosePosition(position.id, {
@@ -87,18 +96,26 @@ function paperClose(signal, position) {
 
   const sign = realizedPnl >= 0 ? '+' : '';
   logger.info(
-    `[Executor] 📝 PAPER CLOSE #${position.coin} | reason: ${signal.reason} ` +
+    `[Executor] PAPER CLOSE #${position.coin} | reason: ${signal.reason} ` +
     `| held: ${holdHours.toFixed(1)}h | PnL: ${sign}$${realizedPnl.toFixed(4)} | fees: $${totalFee.toFixed(4)}`,
   );
 
-  return { ok: true, pnl: realizedPnl };
+  sendMessage(
+    `🔴 <b>[CLOSE] #${position.coin}</b>\n` +
+    `📈 Причина: <b>${signal.reason}</b>\n` +
+    `⏳ Удержание: ${holdHours.toFixed(1)}ч\n` +
+    `💰 PnL: <b>${sign}$${realizedPnl.toFixed(4)}</b>\n` +
+    `🏷 Fee: $${totalFee.toFixed(4)}`,
+  );
+
+  return { ok: true, pnl: realizedPnl, holdHours };
 }
 
 // ─────────────────────────────────────────────────
 //  Handlers
 // ─────────────────────────────────────────────────
 
-function handleOpen(signal) {
+async function handleOpen(signal) {
   if (config.isProduction) {
     logger.warn(
       `[Executor] 🔴 PRODUCTION OPEN signal for ${signal.coin} — SDK integration pending. Skipped.`,
@@ -154,8 +171,11 @@ async function handleRotate(signal, position) {
   // Шаг 2: open с актуальным балансом
   const openResult = await paperOpen(signal.openCoin, signal.openPrice, signal.openApy);
 
-  logger.info(
-    `[Executor] 🔄 PAPER ROTATE ${signal.closeCoin} → ${signal.openCoin} | payback: ${signal.paybackHours}h`,
+  sendMessage(
+    `🔄 <b>[ROTATE]</b> ${signal.closeCoin} → <b>${signal.openCoin}</b>\n` +
+    `📊 APY: ${signal.openApy.toFixed(2)}%\n` +
+    `⏱ Payback: ${signal.paybackHours}h\n` +
+    `💰 Close PnL: ${closeResult.pnl >= 0 ? '+' : ''}$${closeResult.pnl.toFixed(4)}`,
   );
 
   return {
