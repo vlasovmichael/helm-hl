@@ -54,7 +54,10 @@ function loadConfig() {
     trading: {
       minApy,
       entryApy,
+      exitBuffer:        parseFloat(process.env.EXIT_BUFFER           || '5'),
       leverage,
+      minHoldMinutes:    parseInt(process.env.MIN_HOLD_TIME_MINUTES   || '60',  10),
+      breathingMinutes:  parseInt(process.env.BREATHING_MINUTES       || '30',  10),
     },
 
     telegram: {

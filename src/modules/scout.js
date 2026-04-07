@@ -5,29 +5,31 @@ const HL_API   = 'https://api.hyperliquid.xyz/info';
 const RTT_LIMIT_MS = 10_000; // отклоняем ответы медленнее 10 с
 
 /**
- * EMA_ALPHA = 0.1 даёт "память" ~19 тиков (период сглаживания ≈ 1/alpha - 1).
- * При тике 5 мин это ~90 минут исторической памяти.
- * Повысь до 0.2–0.3 для более быстрой реакции на смену режима рынка.
+ * Два EMA-фильтра с разной скоростью реакции:
+ *
+ * FAST (α=0.15, ~12 тиков при 15с = ~3 мин):
+ *   для решений о входе и ротации — быстрый сигнал
+ *
+ * SLOW (α=0.03, ~62 тика при 15с = ~15 мин):
+ *   для решений о выходе — глубокое сглаживание,
+ *   секундные провалы APY не вызывают панику
  */
-const EMA_ALPHA = 0.1;
+const EMA_ALPHA_FAST = 0.15;
+const EMA_ALPHA_SLOW = 0.03;
 
-// coin -> { ema: number, ticks: number }
+// coin -> { fast, slow, ticks }
 const emaStore = new Map();
 
-/**
- * Обновляет EMA для монеты и возвращает текущее значение.
- * Первый тик инициализирует EMA сырым значением (без искажения нулём).
- */
 function updateEma(coin, rawApy) {
   const entry = emaStore.get(coin);
   if (!entry) {
-    emaStore.set(coin, { ema: rawApy, ticks: 1 });
-    return rawApy;
+    emaStore.set(coin, { fast: rawApy, slow: rawApy, ticks: 1 });
+    return { fast: rawApy, slow: rawApy };
   }
-  const ema = EMA_ALPHA * rawApy + (1 - EMA_ALPHA) * entry.ema;
-  entry.ema = ema;
+  entry.fast = EMA_ALPHA_FAST * rawApy + (1 - EMA_ALPHA_FAST) * entry.fast;
+  entry.slow = EMA_ALPHA_SLOW * rawApy + (1 - EMA_ALPHA_SLOW) * entry.slow;
   entry.ticks++;
-  return ema;
+  return { fast: entry.fast, slow: entry.slow };
 }
 
 /**
@@ -63,7 +65,8 @@ async function fetchMarkets() {
  *   price: number,
  *   fundingRate: number,
  *   rawApy: number,
- *   smoothedApy: number
+ *   smoothedApy: number,
+ *   slowApy: number
  * }>>}
  */
 export async function scan() {
@@ -97,12 +100,12 @@ export async function scan() {
 
     if (isNaN(price) || isNaN(fundingRate)) continue;
 
-    const rawApy      = fundingRate * 24 * 365 * 100;
-    const smoothedApy = updateEma(coin, rawApy);
+    const rawApy = fundingRate * 24 * 365 * 100;
+    const { fast, slow } = updateEma(coin, rawApy);
 
-    if (smoothedApy <= 0) continue;
+    if (fast <= 0) continue;
 
-    results.push({ coin, price, fundingRate, rawApy, smoothedApy });
+    results.push({ coin, price, fundingRate, rawApy, smoothedApy: fast, slowApy: slow });
   }
 
   results.sort((a, b) => b.smoothedApy - a.smoothedApy);
