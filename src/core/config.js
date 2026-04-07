@@ -58,6 +58,7 @@ function loadConfig() {
       leverage,
       minHoldMinutes:    parseInt(process.env.MIN_HOLD_TIME_MINUTES   || '60',  10),
       breathingMinutes:  parseInt(process.env.BREATHING_MINUTES       || '30',  10),
+      fakeBalance:       process.env.FAKE_BALANCE ? parseFloat(process.env.FAKE_BALANCE) : null,
     },
 
     telegram: {

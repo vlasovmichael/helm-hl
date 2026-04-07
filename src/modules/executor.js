@@ -38,15 +38,43 @@ export async function execute(signal, activePosition) {
 //  PAPER helpers
 // ─────────────────────────────────────────────────
 
-async function paperOpen(coin, price, apy) {
-  const realBalance = await getAvailableBalance();
+/**
+ * Определяет баланс для расчёта размера позиции.
+ *
+ * PAPER + FAKE_BALANCE: используем виртуальный баланс (для тестов без реальных денег).
+ * PAPER без FAKE_BALANCE: реальный withdrawable с биржи.
+ *
+ * @returns {Promise<number>}
+ */
+async function getPaperBalance() {
+  const fake = config.trading.fakeBalance;
 
-  if (realBalance <= 0) {
-    logger.warn(`[Executor] Cannot open — wallet balance is $${realBalance.toFixed(2)}`);
+  if (fake != null && fake > 0) {
+    logger.info(`[Executor] Using FAKE_BALANCE: $${fake.toFixed(2)}`);
+    return fake;
+  }
+
+  return getAvailableBalance();
+}
+
+/**
+ * Открывает виртуальную позицию.
+ *
+ * @param {string}  coin
+ * @param {number}  price
+ * @param {number}  apy
+ * @param {boolean} [silent=false] — подавить Telegram (при ротации шлём одно общее)
+ * @returns {Promise<{ ok: boolean, positionId?: number, sizeUsd?: number }>}
+ */
+async function paperOpen(coin, price, apy, silent = false) {
+  const balance = await getPaperBalance();
+
+  if (balance <= 0) {
+    logger.warn(`[Executor] Cannot open — balance is $${balance.toFixed(2)}`);
     return { ok: false };
   }
 
-  const sizeUsd = realBalance * BALANCE_UTILIZATION;
+  const sizeUsd = balance * BALANCE_UTILIZATION;
   const fee     = sizeUsd * ONE_LEG;
 
   const id = savePosition({
@@ -59,22 +87,32 @@ async function paperOpen(coin, price, apy) {
   });
 
   logger.info(
-    `[Executor] PAPER OPEN #${coin} | $${sizeUsd.toFixed(2)} (of $${realBalance.toFixed(2)}) @ $${price} | APY: ${apy.toFixed(2)}% | fee: $${fee.toFixed(4)} | id: ${id}`,
+    `[Executor] PAPER OPEN #${coin} | $${sizeUsd.toFixed(2)} (of $${balance.toFixed(2)}) @ $${price} | APY: ${apy.toFixed(2)}% | fee: $${fee.toFixed(4)} | id: ${id}`,
   );
 
-  const fire = apy > 100 ? '🔥🔥🔥 ' : '';
-  sendMessage(
-    `${fire}🟢 <b>[OPEN] #${coin}</b>\n` +
-    `💰 Размер: <b>$${sizeUsd.toFixed(2)}</b> (${(BALANCE_UTILIZATION * 100).toFixed(0)}% от $${realBalance.toFixed(2)})\n` +
-    `📊 APY: <b>${apy.toFixed(2)}%</b>\n` +
-    `💵 Цена: $${price}\n` +
-    `🏷 Fee: $${fee.toFixed(4)}`,
-  );
+  if (!silent) {
+    const fire = apy > 100 ? '🔥🔥🔥 ' : '';
+    await sendMessage(
+      `${fire}🟢 <b>[OPEN] #${coin}</b>\n` +
+      `💰 Размер: <b>$${sizeUsd.toFixed(2)}</b> (${(BALANCE_UTILIZATION * 100).toFixed(0)}% от $${balance.toFixed(2)})\n` +
+      `📊 APY: <b>${apy.toFixed(2)}%</b>\n` +
+      `💵 Цена: $${price}\n` +
+      `🏷 Fee: $${fee.toFixed(4)}`,
+    );
+  }
 
   return { ok: true, positionId: Number(id), sizeUsd };
 }
 
-function paperClose(signal, position) {
+/**
+ * Закрывает виртуальную позицию.
+ *
+ * @param {{ price: number, reason: string }} signal
+ * @param {Object} position — строка из БД
+ * @param {boolean} [silent=false] — подавить Telegram (при ротации шлём одно общее)
+ * @returns {{ ok: boolean, pnl: number, holdHours: number }}
+ */
+function paperClose(signal, position, silent = false) {
   const holdMs    = Date.now() - position.entry_time;
   const holdHours = holdMs / 3_600_000;
   const closePrice = signal.price;
@@ -100,17 +138,19 @@ function paperClose(signal, position) {
     `| held: ${holdHours.toFixed(1)}h | PnL: ${sign}$${realizedPnl.toFixed(4)} | fees: $${totalFee.toFixed(4)}`,
   );
 
-  // Убыток по позиции — критично, будим даже ночью
-  const isCriticalClose = realizedPnl < 0;
+  if (!silent) {
+    // Убыток по позиции — критично, будим даже ночью
+    const isCriticalClose = realizedPnl < 0;
 
-  sendMessage(
-    `🔴 <b>[CLOSE] #${position.coin}</b>\n` +
-      `📈 Причина: <b>${signal.reason}</b>\n` +
-      `⏳ Удержание: ${holdHours.toFixed(1)}ч\n` +
-      `💰 PnL: <b>${sign}$${realizedPnl.toFixed(4)}</b>\n` +
-      `🏷 Fee: $${totalFee.toFixed(4)}`,
-    isCriticalClose,
-  );
+    sendMessage(
+      `🔴 <b>[CLOSE] #${position.coin}</b>\n` +
+        `📈 Причина: <b>${signal.reason}</b>\n` +
+        `⏳ Удержание: ${holdHours.toFixed(1)}ч\n` +
+        `💰 PnL: <b>${sign}$${realizedPnl.toFixed(4)}</b>\n` +
+        `🏷 Fee: $${totalFee.toFixed(4)}`,
+      isCriticalClose,
+    );
+  }
 
   return { ok: true, pnl: realizedPnl, holdHours };
 }
@@ -164,22 +204,44 @@ async function handleRotate(signal, position) {
     return { ok: false };
   }
 
-  // Шаг 1: close
+  // ── Ротация: close + open, одно консолидированное уведомление ──
+
+  // Шаг 1: close (silent — не шлём отдельный пуш)
   const closeResult = paperClose(
     { price: signal.closePrice, reason: signal.reason },
     position,
+    true, // silent
   );
 
   if (!closeResult.ok) return closeResult;
 
-  // Шаг 2: open с актуальным балансом
-  const openResult = await paperOpen(signal.openCoin, signal.openPrice, signal.openApy);
+  // Шаг 2: open с актуальным балансом (silent)
+  const openResult = await paperOpen(signal.openCoin, signal.openPrice, signal.openApy, true);
 
-  sendMessage(
+  if (!openResult.ok) {
+    // Open не прошёл — отправляем алерт о неудачной ротации
+    await sendMessage(
+      `⚠️ <b>[ROTATE FAILED]</b> ${signal.closeCoin} закрыт, но ${signal.openCoin} не открылся!\n` +
+      `💰 Close PnL: ${closeResult.pnl >= 0 ? '+' : ''}$${closeResult.pnl.toFixed(4)}\n` +
+      `🔍 Причина: баланс $0 или ошибка. Бот остаётся без позиции.`,
+      true, // critical
+    );
+    return { ok: false, closePnl: closeResult.pnl };
+  }
+
+  // Шаг 3: одно консолидированное уведомление
+  const closePnlSign = closeResult.pnl >= 0 ? '+' : '';
+
+  await sendMessage(
     `🔄 <b>[ROTATE]</b> ${signal.closeCoin} → <b>${signal.openCoin}</b>\n` +
-    `📊 APY: ${signal.openApy.toFixed(2)}%\n` +
-    `⏱ Payback: ${signal.paybackHours}h\n` +
-    `💰 Close PnL: ${closeResult.pnl >= 0 ? '+' : ''}$${closeResult.pnl.toFixed(4)}`,
+    `<code>─────────────────────</code>\n` +
+    `🔴 Закрыл: #${signal.closeCoin} (${closeResult.holdHours.toFixed(1)}ч)\n` +
+    `💰 PnL: <b>${closePnlSign}$${closeResult.pnl.toFixed(4)}</b>\n` +
+    `<code>─────────────────────</code>\n` +
+    `🟢 Открыл: #${signal.openCoin} @ $${signal.openPrice}\n` +
+    `📊 APY: <b>${signal.openApy.toFixed(2)}%</b>\n` +
+    `💰 Размер: <b>$${openResult.sizeUsd.toFixed(2)}</b>\n` +
+    `⏱ Payback: ${signal.paybackHours}h`,
   );
 
   return {
