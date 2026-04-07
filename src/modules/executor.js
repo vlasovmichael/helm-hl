@@ -109,12 +109,16 @@ function paperClose(signal, position) {
       `| held: ${holdHours.toFixed(1)}h | PnL: ${sign}$${realizedPnl.toFixed(4)} | fees: $${totalFee.toFixed(4)}`,
   );
 
+  // Убыток по позиции — критично, будим даже ночью
+  const isCriticalClose = realizedPnl < 0;
+
   sendMessage(
     `🔴 <b>[CLOSE] #${position.coin}</b>\n` +
       `📈 Причина: <b>${signal.reason}</b>\n` +
       `⏳ Удержание: ${holdHours.toFixed(1)}ч\n` +
       `💰 PnL: <b>${sign}$${realizedPnl.toFixed(4)}</b>\n` +
       `🏷 Fee: $${totalFee.toFixed(4)}`,
+    isCriticalClose,
   );
 
   return { ok: true, pnl: realizedPnl, holdHours };

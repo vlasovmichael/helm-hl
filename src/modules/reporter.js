@@ -7,17 +7,38 @@ const TG_API = config.telegram.token
   : null;
 
 /**
- * Базовая отправка HTML-сообщения в Telegram.
- * При ошибке — логирует, не бросает исключение.
+ * Возвращает true, если сейчас "тихие часы".
+ * Поддерживает перенос через полночь (23–08) и внутри суток (02–06).
  */
-export async function sendMessage(text) {
+function isSilentHour() {
+  const hour  = new Date().getHours();
+  const start = config.telegram.silentStartHour;
+  const end   = config.telegram.silentEndHour;
+
+  // Диапазон с переходом через полночь (например, 23 → 08)
+  if (start > end) return hour >= start || hour < end;
+
+  // Диапазон внутри суток (например, 02 → 06)
+  return hour >= start && hour < end;
+}
+
+/**
+ * Базовая отправка HTML-сообщения в Telegram.
+ *
+ * @param {string}  text
+ * @param {boolean} [critical=false] — критичное сообщение всегда со звуком
+ */
+export async function sendMessage(text, critical = false) {
   if (!TG_API || !config.telegram.chatId) return;
+
+  const silent = !critical && isSilentHour();
 
   try {
     await axios.post(TG_API, {
-      chat_id:    config.telegram.chatId,
+      chat_id:              config.telegram.chatId,
       text,
-      parse_mode: 'HTML',
+      parse_mode:           'HTML',
+      disable_notification: silent,
     });
   } catch (err) {
     logger.error(`[Reporter] Telegram send failed: ${err.message}`);
@@ -42,6 +63,7 @@ export async function sendAnomalyAlert(coin, oldApy, newApy) {
     `#${coin}\n` +
     `📉 <b>${oldApy.toFixed(2)}%</b> → <b>${newApy.toFixed(2)}%</b>\n` +
     `Падение: <b>−${dropPct.toFixed(1)}%</b> за 1 тик`,
+    true, // critical — будит даже ночью
   );
 }
 
