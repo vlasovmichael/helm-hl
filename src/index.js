@@ -1,4 +1,4 @@
-import { writeFile, rename, mkdir } from 'fs/promises';
+import { writeFile, readFile, rename, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { config } from './core/config.js';
 import { logger } from './core/logger.js';
@@ -7,6 +7,7 @@ import { scan } from './modules/scout.js';
 import { analyze } from './modules/strategist.js';
 import { execute } from './modules/executor.js';
 import { sendMessage, sendAnomalyAlert, sendFomoAlert, sendDailySummary } from './modules/reporter.js';
+import { syncWithExchange } from './modules/sync.js';
 
 const TICK_INTERVAL_MS    = 15_000;          // 15 секунд
 const DAILY_INTERVAL_MS   = 24 * 3_600_000;  // 24 часа
@@ -124,8 +125,17 @@ async function tick() {
 
 /**
  * Сохраняет контекст бота в data/bot_state.json (атомарная запись через tmp + rename).
+ *
+ * Последовательность:
+ *   1. Формируем JSON-объект стейта
+ *   2. Создаём data/ если нет
+ *   3. Пишем во временный файл .bot_state_<pid>.tmp
+ *   4. rename() — атомарна на POSIX (оба файла на одном разделе)
+ *   5. Read-back: перечитываем и парсим — гарантия, что диск принял данные
  */
 async function saveBotState(activePosition, reason) {
+  logger.info('[System] Saving bot state…');
+
   const state = {
     saved_at:   Date.now(),
     reason,
@@ -133,26 +143,41 @@ async function saveBotState(activePosition, reason) {
     uptime_min: parseFloat(((Date.now() - startedAt) / 60_000).toFixed(1)),
     active_position: activePosition
       ? {
-          id:          activePosition.id,
-          coin:        activePosition.coin,
-          size_usd:    activePosition.size_usd,
-          entry_price: activePosition.entry_price,
-          entry_apy:   activePosition.entry_apy,
-          entry_time:  activePosition.entry_time,
+          id:           activePosition.id,
+          coin:         activePosition.coin,
+          size_usd:     activePosition.size_usd,
+          entry_price:  activePosition.entry_price,
+          entry_apy:    activePosition.entry_apy,
+          entry_time:   activePosition.entry_time,
           held_minutes: parseFloat(((Date.now() - activePosition.entry_time) / 60_000).toFixed(1)),
         }
       : null,
   };
 
-  // Атомарная запись: tmp → rename
-  await mkdir('data', { recursive: true });
+  const json    = JSON.stringify(state, null, 2);
   const tmpPath = join('data', `.bot_state_${process.pid}.tmp`);
-  await writeFile(tmpPath, JSON.stringify(state, null, 2));
 
-  // rename() атомарен на POSIX (тот же раздел)
+  // Шаг 1: убедиться, что директория существует
+  await mkdir('data', { recursive: true });
+  logger.debug(`[System] State dir ready`);
+
+  // Шаг 2: записать во временный файл
+  await writeFile(tmpPath, json, 'utf-8');
+  logger.debug(`[System] Wrote ${json.length} bytes to tmp: ${tmpPath}`);
+
+  // Шаг 3: атомарно переименовать tmp → финальный файл
   await rename(tmpPath, BOT_STATE_PATH);
+  logger.debug(`[System] Renamed tmp → ${BOT_STATE_PATH}`);
 
-  logger.info(`[System] Bot state saved to ${BOT_STATE_PATH}`);
+  // Шаг 4: read-back верификация — убеждаемся, что ФС приняла данные
+  const readBack = await readFile(BOT_STATE_PATH, 'utf-8');
+  JSON.parse(readBack); // бросит SyntaxError если файл повреждён
+
+  const posLabel = activePosition ? `#${activePosition.coin}` : 'no position';
+  logger.info(
+    `[System] ✅ State saved — ${BOT_STATE_PATH} | ${json.length} bytes | ${posLabel} | reason: ${reason}`,
+  );
+
   return state;
 }
 
@@ -229,62 +254,87 @@ async function sendShutdownNotification(activePosition, reason) {
 async function shutdown(signal) {
   // ── Защита от двойного вызова ─────────────────
   if (shuttingDown) {
-    logger.warn(`[System] ${signal} received again — already shutting down`);
+    logger.warn(`[System] ${signal} received again — shutdown already in progress`);
     return;
   }
   shuttingDown = true;
+  const t0 = Date.now();
 
-  logger.info(`[System] ${signal} received — starting graceful shutdown…`);
+  logger.info('───────────────────────────────────────────────');
+  logger.info(`[System] ${signal} — graceful shutdown BEGIN`);
+  logger.info('───────────────────────────────────────────────');
 
-  // ── 1. Остановить тик-лупу ────────────────────
+  // ── [1/6] Остановить тик-лупу ────────────────
+  logger.info('[System] [1/6] Stopping tick loop…');
   if (tickTimer) {
     clearInterval(tickTimer);
     tickTimer = null;
   }
+  logger.info('[System] [1/6] ✅ Tick loop stopped');
 
-  // ── 2. Дождаться завершения текущего тика ─────
-  await waitForTick(10_000);
+  // ── [2/6] Дождаться завершения текущего тика ─
+  logger.info('[System] [2/6] Waiting for active tick to finish…');
+  const tickDone = await waitForTick(10_000);
+  logger.info(
+    tickDone
+      ? '[System] [2/6] ✅ Tick finished cleanly'
+      : '[System] [2/6] ⚠️  Tick timed out — proceeding anyway',
+  );
 
-  // ── 3. Собрать информацию об активной позиции ─
+  // ── [3/6] Собрать информацию об активной позиции
+  logger.info('[System] [3/6] Reading active position from DB…');
   let activePosition = null;
   try {
     activePosition = getActivePosition();
+    logger.info(
+      activePosition
+        ? `[System] [3/6] ✅ Active position: #${activePosition.coin} ($${activePosition.size_usd.toFixed(2)}, entry APY ${activePosition.entry_apy.toFixed(2)}%)`
+        : '[System] [3/6] ✅ No active position',
+    );
   } catch (err) {
-    logger.error(`[System] Failed to read active position: ${err.message}`);
+    logger.error(`[System] [3/6] ❌ Failed to read active position: ${err.message}`);
   }
 
-  // ── 4. Сохранить стейт ────────────────────────
+  // ── [4/6] Сохранить стейт ────────────────────
+  logger.info('[System] [4/6] Persisting bot state…');
   try {
     await saveBotState(activePosition, signal);
+    logger.info('[System] [4/6] ✅ State persisted');
   } catch (err) {
-    logger.error(`[System] Failed to save bot state: ${err.message}`);
+    logger.error(`[System] [4/6] ❌ State save failed: ${err.message}`);
   }
 
-  // ── 5. PRODUCTION: защитные ордера ────────────
+  // ── [5/6] PRODUCTION: защитные ордера ────────
+  logger.info('[System] [5/6] Checking exchange protection…');
   try {
     await ensureExchangeProtection(activePosition);
+    logger.info('[System] [5/6] ✅ Exchange protection checked');
   } catch (err) {
-    logger.error(`[System] Failed to ensure exchange protection: ${err.message}`);
+    logger.error(`[System] [5/6] ❌ Exchange protection check failed: ${err.message}`);
   }
 
-  // ── 6. Telegram-уведомление ───────────────────
+  // ── [6/6] Telegram + закрыть БД ──────────────
+  logger.info('[System] [6/6] Sending Telegram notification…');
   try {
     await sendShutdownNotification(activePosition, signal);
+    logger.info('[System] [6/6] ✅ Telegram notification sent');
   } catch (err) {
-    logger.error(`[System] Failed to send shutdown notification: ${err.message}`);
+    logger.error(`[System] [6/6] ❌ Telegram notification failed: ${err.message}`);
   }
 
-  // ── 7. Закрыть БД ────────────────────────────
   if (db) {
     try {
       db.close();
-      logger.info('[System] Database closed');
+      logger.info('[System] ✅ Database closed');
     } catch (err) {
-      logger.error(`[System] DB close error: ${err.message}`);
+      logger.error(`[System] ❌ DB close error: ${err.message}`);
     }
   }
 
-  logger.info('[System] Goodbye.');
+  const elapsed = Date.now() - t0;
+  logger.info('───────────────────────────────────────────────');
+  logger.info(`[System] Shutdown complete in ${elapsed}ms. Goodbye.`);
+  logger.info('───────────────────────────────────────────────');
   process.exit(0);
 }
 
@@ -298,6 +348,9 @@ async function main() {
   logger.info('═══════════════════════════════════════════════');
 
   db = initDB();
+
+  // Синхронизация состояния до первого тика
+  await syncWithExchange();
 
   await tick();
 
