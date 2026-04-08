@@ -31,6 +31,11 @@ const SLIPPAGE_WARN_PCT = 0.5;
 // Balance reconciliation: допустимое отклонение между ожидаемым и фактическим.
 const RECONCILIATION_TOLERANCE_PCT = 2.0;
 
+// Reconcile retry: задержка индексации ордера на стороне биржи.
+const RECONCILE_INITIAL_DELAY_MS = 2_000; // 2с перед первой проверкой
+const RECONCILE_RETRY_DELAY_MS   = 2_000; // 2с между повторами
+const RECONCILE_MAX_RETRIES      = 3;     // до 3 повторов → суммарно ~8с
+
 // ─────────────────────────────────────────────────
 //  Runtime Blacklist (с автоистечением)
 // ─────────────────────────────────────────────────
@@ -178,7 +183,40 @@ function checkSlippage(expectedPrice, fillPrice, side, coin) {
 // ─────────────────────────────────────────────────
 
 /**
- * Проверяет, что после fill баланс/позиция на бирже соответствуют ожиданиям.
+ * Утилита: sleep на заданное кол-во миллисекунд.
+ * @param {number} ms
+ */
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Запрашивает позиции и ищет конкретную монету.
+ *
+ * @param {string} coin
+ * @returns {Promise<{ hasPos: boolean, szi: number, posData: Object|null }>}
+ */
+async function fetchPositionState(coin) {
+  const positions = await getPositions();
+
+  const pos = positions.find((ap) => {
+    const p = ap?.position ?? ap;
+    return p?.coin === coin;
+  });
+  const posData = pos?.position ?? pos ?? null;
+  const szi = posData ? parseFloat(posData.szi ?? "0") : 0;
+
+  return { hasPos: szi !== 0, szi, posData };
+}
+
+/**
+ * Проверяет, что после fill позиция на бирже соответствует ожиданиям.
+ *
+ * Алгоритм:
+ *   1. Initial delay 2с — даём бирже проиндексировать ордер
+ *   2. Первый запрос → проверка
+ *   3. Если ожидаемое состояние НЕ совпало — retry loop (до 3 повторов × 2с)
+ *   4. Если после всех попыток рассогласование — ERROR + Telegram
  *
  * Вызывается ПОСЛЕ успешного fill (fire-and-forget, не блокирует основной поток).
  * Не бросает исключений — только логирует.
@@ -189,48 +227,77 @@ function checkSlippage(expectedPrice, fillPrice, side, coin) {
  */
 async function reconcile(coin, operation, checks) {
   try {
-    const positions = await getPositions();
+    // ── 1. Initial delay — ждём индексации ордера ──
+    logger.info(
+      `[Reconcile] ${operation} #${coin} — waiting ${RECONCILE_INITIAL_DELAY_MS}ms for exchange indexing…`,
+    );
+    await sleep(RECONCILE_INITIAL_DELAY_MS);
 
-    // Ищем позицию по монете
-    const pos = positions.find((ap) => {
-      const p = ap?.position ?? ap;
-      return p?.coin === coin;
-    });
-    const posData = pos?.position ?? pos;
-    const szi = posData ? parseFloat(posData.szi ?? "0") : 0;
-    const hasPos = szi !== 0;
+    // ── 2. Retry loop ─────────────────────────────
+    let state;
+    let matched = false;
 
-    // ── Проверка: ожидаем позицию или нет ───────
-    if (checks.expectPosition === true && !hasPos) {
+    for (let attempt = 1; attempt <= RECONCILE_MAX_RETRIES; attempt++) {
+      state = await fetchPositionState(coin);
+
+      // Проверяем соответствие ожиданиям
+      if (checks.expectPosition === true && state.hasPos) {
+        matched = true;
+        break;
+      }
+      if (checks.expectPosition === false && !state.hasPos) {
+        matched = true;
+        break;
+      }
+
+      // Не совпало — ждём и пробуем снова
+      if (attempt < RECONCILE_MAX_RETRIES) {
+        logger.info(
+          `[Reconcile] ${operation} #${coin} — ` +
+            `waiting for position to index… (attempt ${attempt}/${RECONCILE_MAX_RETRIES})`,
+        );
+        await sleep(RECONCILE_RETRY_DELAY_MS);
+      }
+    }
+
+    // ── 3. Финальная проверка ──────────────────────
+
+    // Ожидали позицию, но не нашли даже после retry
+    if (checks.expectPosition === true && !state.hasPos) {
       logger.error(
-        `[Reconcile] ❌ ${operation} #${coin} — expected position on exchange but found NONE!`,
+        `[Reconcile] ❌ ${operation} #${coin} — expected position on exchange but found NONE ` +
+          `after ${RECONCILE_MAX_RETRIES} retries (~${((RECONCILE_INITIAL_DELAY_MS + RECONCILE_MAX_RETRIES * RECONCILE_RETRY_DELAY_MS) / 1000).toFixed(0)}s)!`,
       );
       await sendMessage(
         `⚠️ <b>[RECONCILE] #${coin}</b>\n` +
-          `После ${operation}: позиция не найдена на бирже!\n` +
+          `После ${operation}: позиция не найдена на бирже\n` +
+          `после ${RECONCILE_MAX_RETRIES} попыток!\n` +
           `🔍 Проверь вручную.`,
         true,
       );
       return;
     }
 
-    if (checks.expectPosition === false && hasPos) {
+    // Ожидали закрытие, но позиция ещё висит
+    if (checks.expectPosition === false && state.hasPos) {
       logger.warn(
-        `[Reconcile] ⚠️ ${operation} #${coin} — expected NO position but found szi=${szi}`,
+        `[Reconcile] ⚠️ ${operation} #${coin} — expected NO position but found szi=${state.szi} ` +
+          `after ${RECONCILE_MAX_RETRIES} retries`,
       );
       await sendMessage(
         `⚠️ <b>[RECONCILE] #${coin}</b>\n` +
-          `После ${operation}: позиция всё ещё открыта (szi=${szi})!\n` +
+          `После ${operation}: позиция всё ещё открыта (szi=${state.szi})\n` +
+          `после ${RECONCILE_MAX_RETRIES} попыток!\n` +
           `🔍 Возможно, частичный fill. Проверь вручную.`,
         true,
       );
       return;
     }
 
-    // ── Проверка: размер позиции ≈ ожидаемый ────
-    if (checks.expectPosition && checks.expectedSzUsd && hasPos) {
-      const entryPx = parseFloat(posData.entryPx ?? "0");
-      const actualUsd = Math.abs(szi) * entryPx;
+    // ── 4. Размер позиции ≈ ожидаемый ─────────────
+    if (checks.expectPosition && checks.expectedSzUsd && state.hasPos) {
+      const entryPx = parseFloat(state.posData.entryPx ?? "0");
+      const actualUsd = Math.abs(state.szi) * entryPx;
       const diff = Math.abs(actualUsd - checks.expectedSzUsd);
       const diffPct =
         checks.expectedSzUsd > 0 ? (diff / checks.expectedSzUsd) * 100 : 0;
@@ -247,8 +314,8 @@ async function reconcile(coin, operation, checks) {
       }
     }
 
-    // ── Простая проверка: позиция закрыта ────────
-    if (checks.expectPosition === false && !hasPos) {
+    // Позиция закрыта — подтверждаем
+    if (checks.expectPosition === false && !state.hasPos) {
       logger.info(
         `[Reconcile] ✅ ${operation} #${coin} — no position confirmed`,
       );
@@ -676,7 +743,7 @@ async function productionOpen(coin, price, apy, silent = false) {
         `💵 Fill: <b>$${fill.avgPx}</b> (mark: $${price})\n` +
         `${slipWarn}📉 Slippage: <b>${slip.label}</b>\n` +
         `📊 APY: <b>${apy.toFixed(2)}%</b>\n` +
-        `⚖️ Leverage: <b>${effectiveLeverage}</b> (1x cross)\n` +
+        `⚖️ Leverage: <b>${effectiveLeverage}</b> (1x isolated)\n` +
         `🔑 OID: <code>${fill.oid}</code> | DB: id=${id}`,
     );
   }

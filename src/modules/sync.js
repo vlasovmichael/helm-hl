@@ -380,7 +380,7 @@ async function checkLeverageSettings() {
 
     // Ищем проблемные настройки
     const warnings = leverageInfo.filter(
-      (l) => l.type !== 'cross' || (!isNaN(l.value) && l.value > 1),
+      (l) => l.type !== 'isolated' || (!isNaN(l.value) && l.value > 1),
     );
 
     if (warnings.length > 0) {
@@ -393,7 +393,7 @@ async function checkLeverageSettings() {
           `<code>─────────────────────</code>\n` +
           `${lines.join('\n')}\n` +
           `<code>─────────────────────</code>\n` +
-          `⚙️ Ожидается: <b>1x cross</b> для всех позиций.\n` +
+          `⚙️ Ожидается: <b>1x isolated</b> для всех позиций.\n` +
           `❗️ Исправь вручную или бот выставит 1x при следующем OPEN.`,
         true,
       );

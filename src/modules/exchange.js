@@ -133,18 +133,23 @@ export async function disconnectExchange() {
 // ─────────────────────────────────────────────────
 
 /**
- * Устанавливает кросс-плечо для конкретного актива.
+ * Устанавливает плечо и margin mode для конкретного актива.
  *
  * Вызывается ПЕРЕД открытием позиции — гарантирует, что биржа
  * не применит повышенное плечо из предыдущих настроек.
  *
+ * Режим: isolated 1x — минимально возможный риск.
+ *   - cross: одна позиция может ликвидировать весь аккаунт
+ *   - isolated: ликвидация затрагивает только маржу конкретной позиции
+ *
  * SDK: sdk.exchange.updateLeverage(symbol, leverageMode, leverage)
  *
- * @param {string} coin     — "ETH", "BTC" (без "-PERP")
- * @param {number} leverage — целевое плечо (по умолчанию 1)
+ * @param {string} coin       — "ETH", "BTC" (без "-PERP")
+ * @param {number} leverage   — целевое плечо (по умолчанию 1)
+ * @param {string} marginMode — "isolated" | "cross" (по умолчанию "isolated")
  * @returns {Promise<void>}
  */
-export async function setLeverage(coin, leverage = 1) {
+export async function setLeverage(coin, leverage = 1, marginMode = "isolated") {
   if (!sdk) {
     logger.warn(`[Exchange] setLeverage skipped — SDK not initialized`);
     return;
@@ -154,12 +159,12 @@ export async function setLeverage(coin, leverage = 1) {
 
   try {
     await retryWithBackoff(
-      () => sdk.exchange.updateLeverage(symbol, "cross", leverage),
+      () => sdk.exchange.updateLeverage(symbol, marginMode, leverage),
       { label: `set-leverage-${coin}`, maxRetries: 2 },
     );
-    logger.info(`[Exchange] ✅ Leverage set: ${symbol} → ${leverage}x cross`);
+    logger.info(`[Exchange] ✅ Leverage set: ${symbol} → ${leverage}x ${marginMode}`);
   } catch (err) {
-    logger.error(`[Exchange] ❌ setLeverage(${symbol}, ${leverage}) failed: ${err.message}`);
+    logger.error(`[Exchange] ❌ setLeverage(${symbol}, ${leverage}, ${marginMode}) failed: ${err.message}`);
     throw err;
   }
 }
@@ -169,7 +174,7 @@ export async function setLeverage(coin, leverage = 1) {
  *
  * Возвращает массив { coin, type, value } для каждой позиции.
  * Логирует предупреждение, если обнаружен leverage > maxSafe
- * или mode !== "cross".
+ * или mode !== "isolated".
  *
  * @param {number} [maxSafe=1] — порог для предупреждения
  * @returns {Promise<Array<{ coin: string, type: string, value: number }>>}
@@ -201,9 +206,9 @@ export async function checkAccountLeverage(maxSafe = 1) {
     results.push(entry);
 
     // Предупреждения
-    if (entry.type !== "cross") {
+    if (entry.type !== "isolated") {
       logger.warn(
-        `[Exchange] ⚠️ #${entry.coin} margin mode: ${entry.type} (expected: cross)`,
+        `[Exchange] ⚠️ #${entry.coin} margin mode: ${entry.type} (expected: isolated)`,
       );
     }
     if (!isNaN(entry.value) && entry.value > maxSafe) {
