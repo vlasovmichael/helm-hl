@@ -6,9 +6,19 @@ import { initDB, getActivePosition, getHistory } from './core/database.js';
 import { scan } from './modules/scout.js';
 import { analyze } from './modules/strategist.js';
 import { execute } from './modules/executor.js';
-import { sendMessage, sendAnomalyAlert, sendFomoAlert, sendDailySummary } from './modules/reporter.js';
+import {
+  sendMessage,
+  sendAnomalyAlert,
+  sendFomoAlert,
+  sendDailySummary,
+  sendStartupNotification,
+  setStatusCollector,
+  startCallbackPolling,
+  stopCallbackPolling,
+} from './modules/reporter.js';
 import { syncWithExchange } from './modules/sync.js';
-import { initExchange, disconnectExchange } from './modules/exchange.js';
+import { initExchange, disconnectExchange, getBalance as getExchangeBalance } from './modules/exchange.js';
+import { getAvailableBalance } from './modules/wallet.js';
 
 const TICK_INTERVAL_MS    = 15_000;          // 15 секунд
 const DAILY_INTERVAL_MS   = 24 * 3_600_000;  // 24 часа
@@ -265,13 +275,14 @@ async function shutdown(signal) {
   logger.info(`[System] ${signal} — graceful shutdown BEGIN`);
   logger.info('───────────────────────────────────────────────');
 
-  // ── [1/6] Остановить тик-лупу ────────────────
-  logger.info('[System] [1/6] Stopping tick loop…');
+  // ── [1/6] Остановить тик-лупу + polling ──────
+  logger.info('[System] [1/6] Stopping tick loop & polling…');
   if (tickTimer) {
     clearInterval(tickTimer);
     tickTimer = null;
   }
-  logger.info('[System] [1/6] ✅ Tick loop stopped');
+  stopCallbackPolling();
+  logger.info('[System] [1/6] ✅ Tick loop & polling stopped');
 
   // ── [2/6] Дождаться завершения текущего тика ─
   logger.info('[System] [2/6] Waiting for active tick to finish…');
@@ -362,6 +373,48 @@ async function main() {
 
   // Синхронизация состояния до первого тика
   await syncWithExchange();
+
+  // ── Startup notification ──────────────────────
+  const activePos = getActivePosition();
+  let startupBalance = 0;
+  try {
+    startupBalance = config.isProduction
+      ? await getExchangeBalance()
+      : await getAvailableBalance();
+  } catch {
+    // не критично — покажем $0
+  }
+
+  await sendStartupNotification({
+    balance:        startupBalance,
+    activePosition: activePos,
+  });
+
+  // ── Status collector (для кнопки "📊 Статус") ──
+  setStatusCollector(async () => {
+    const position = getActivePosition();
+    const history  = getHistory(1000);
+
+    let balance = 0;
+    try {
+      balance = config.isProduction
+        ? await getExchangeBalance()
+        : await getAvailableBalance();
+    } catch {
+      // покажем $0
+    }
+
+    return {
+      balance,
+      activePosition: position,
+      uptimeMin:      Math.round((Date.now() - startedAt) / 60_000),
+      totalTrades:    history.length,
+      totalPnl:       history.reduce((s, t) => s + t.realized_pnl, 0),
+    };
+  });
+
+  // ── Запуск callback polling для inline-кнопок ──
+  startCallbackPolling();
 
   await tick();
 

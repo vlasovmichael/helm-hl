@@ -2,9 +2,15 @@ import axios from 'axios';
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 
-const TG_API = config.telegram.token
-  ? `https://api.telegram.org/bot${config.telegram.token}/sendMessage`
+const TG_BASE = config.telegram.token
+  ? `https://api.telegram.org/bot${config.telegram.token}`
   : null;
+const TG_API = TG_BASE ? `${TG_BASE}/sendMessage` : null;
+
+// ID последнего обработанного update (для polling)
+let lastUpdateId = 0;
+let pollingTimer  = null;
+const POLLING_INTERVAL_MS = 5_000; // проверяем callback-кнопки раз в 5с
 
 // ── Throttle: антиспам для повторяющихся ошибок ──
 // Ключ = первые 120 символов текста → timestamp последней отправки.
@@ -149,7 +155,7 @@ export async function sendDailySummary(stats) {
 
   logger.info(`[Reporter] Daily summary: trades=${totalTrades} PnL=${pnlSign}$${totalPnl.toFixed(4)} net=${netSign}$${net.toFixed(4)}`);
 
-  await sendMessage(
+  await sendMessageWithButton(
     `📅 <b>Дневная сводка</b>\n` +
     `<code>─────────────────────</code>\n` +
     `🔁 Сделок: <b>${totalTrades}</b>  |  Win-rate: <b>${winRate}%</b>\n` +
@@ -160,4 +166,194 @@ export async function sendDailySummary(stats) {
     `🏆 Лучшая сделка: ${bestLine}\n` +
     `📌 Позиция: ${posLine}`,
   );
+}
+
+// ─────────────────────────────────────────────────
+//  Сообщение с inline-кнопкой "Статус"
+// ─────────────────────────────────────────────────
+
+/**
+ * Отправляет сообщение с inline-кнопкой "📊 Статус".
+ * Используется для startup, shutdown и daily summary — чтобы кнопка
+ * всегда была доступна в последнем сообщении.
+ *
+ * @param {string}  text
+ * @param {boolean} [critical=false]
+ */
+async function sendMessageWithButton(text, critical = false) {
+  if (!TG_BASE || !config.telegram.chatId) return;
+
+  const silent = !critical && isSilentHour();
+
+  try {
+    await axios.post(`${TG_BASE}/sendMessage`, {
+      chat_id:              config.telegram.chatId,
+      text,
+      parse_mode:           'HTML',
+      disable_notification: silent,
+      reply_markup: JSON.stringify({
+        inline_keyboard: [[
+          { text: '📊 Статус', callback_data: 'bot_status' },
+        ]],
+      }),
+    });
+  } catch (err) {
+    logger.error(`[Reporter] Telegram sendWithButton failed: ${err.message}`);
+  }
+}
+
+// ─────────────────────────────────────────────────
+//  Startup notification
+// ─────────────────────────────────────────────────
+
+/**
+ * Отправляет уведомление о старте бота с балансом и настройками.
+ *
+ * @param {{ balance: number, activePosition: Object|null }} info
+ */
+export async function sendStartupNotification({ balance, activePosition }) {
+  let posLine = '💤 Нет открытых позиций';
+  if (activePosition) {
+    const heldH = ((Date.now() - activePosition.entry_time) / 3_600_000).toFixed(1);
+    posLine =
+      `📌 Позиция: <b>#${activePosition.coin}</b>\n` +
+      `💰 $${activePosition.size_usd.toFixed(2)} @ $${activePosition.entry_price}\n` +
+      `📊 APY: ${activePosition.entry_apy.toFixed(2)}%\n` +
+      `⏳ Удержание: ${heldH}ч`;
+  }
+
+  await sendMessageWithButton(
+    `🚀 <b>${config.mode} запущен</b>\n` +
+    `<code>─────────────────────</code>\n` +
+    `💵 Баланс: <b>$${balance.toFixed(2)}</b>\n` +
+    `🎯 Цель: APY > <b>${config.trading.entryApy}%</b>\n` +
+    `🛡 Выход: APY < <b>${config.trading.minApy - config.trading.exitBuffer}%</b>\n` +
+    `<code>─────────────────────</code>\n` +
+    `${posLine}`,
+    true, // critical — всегда со звуком
+  );
+}
+
+// ─────────────────────────────────────────────────
+//  Callback query polling (кнопка "Статус")
+// ─────────────────────────────────────────────────
+
+// Функция, которая собирает статус — устанавливается из index.js
+let statusCollector = null;
+
+/**
+ * Регистрирует функцию-коллектор статуса.
+ * Вызывается из index.js при старте.
+ *
+ * @param {Function} fn — async () => { balance, activePosition, uptime, ... }
+ */
+export function setStatusCollector(fn) {
+  statusCollector = fn;
+}
+
+/**
+ * Обрабатывает нажатие кнопки "📊 Статус".
+ * Собирает свежие данные и отправляет ответ.
+ */
+async function handleStatusCallback(callbackQueryId) {
+  // Сначала ответим на callback — иначе кнопка зависнет
+  try {
+    await axios.post(`${TG_BASE}/answerCallbackQuery`, {
+      callback_query_id: callbackQueryId,
+      text: 'Собираю данные…',
+    });
+  } catch {
+    // не критично
+  }
+
+  if (!statusCollector) {
+    await sendMessage('⚠️ Статус недоступен — бот ещё инициализируется.');
+    return;
+  }
+
+  try {
+    const status = await statusCollector();
+
+    let posLine = '💤 Нет открытых позиций';
+    if (status.activePosition) {
+      const p     = status.activePosition;
+      const heldH = ((Date.now() - p.entry_time) / 3_600_000).toFixed(1);
+      posLine =
+        `📌 <b>#${p.coin}</b>\n` +
+        `💰 $${p.size_usd.toFixed(2)} @ $${p.entry_price}\n` +
+        `📊 APY: ${p.entry_apy.toFixed(2)}%\n` +
+        `⏳ Удержание: ${heldH}ч`;
+    }
+
+    await sendMessageWithButton(
+      `📊 <b>Статус бота</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `📡 Режим: <b>${config.mode}</b>\n` +
+      `⏱ Uptime: <b>${status.uptimeMin} мин</b>\n` +
+      `💵 Баланс: <b>$${status.balance.toFixed(2)}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `${posLine}\n` +
+      `<code>─────────────────────</code>\n` +
+      `🔁 Сделок всего: <b>${status.totalTrades}</b>\n` +
+      `💰 PnL: <b>${status.totalPnl >= 0 ? '+' : ''}$${status.totalPnl.toFixed(4)}</b>`,
+    );
+  } catch (err) {
+    logger.error(`[Reporter] Status callback failed: ${err.message}`);
+    await sendMessage(`⚠️ Ошибка сбора статуса: <code>${err.message}</code>`);
+  }
+}
+
+/**
+ * Запускает polling Telegram getUpdates для обработки callback_query.
+ * Вызывается при старте бота.
+ */
+export function startCallbackPolling() {
+  if (!TG_BASE || !config.telegram.chatId) {
+    logger.info('[Reporter] Telegram not configured — callback polling disabled');
+    return;
+  }
+
+  logger.info('[Reporter] Starting callback button polling');
+
+  pollingTimer = setInterval(async () => {
+    try {
+      const { data } = await axios.get(`${TG_BASE}/getUpdates`, {
+        params: {
+          offset:          lastUpdateId + 1,
+          timeout:         0,           // non-blocking
+          allowed_updates: JSON.stringify(['callback_query']),
+        },
+        timeout: 10_000,
+      });
+
+      if (!data?.ok || !Array.isArray(data.result)) return;
+
+      for (const update of data.result) {
+        lastUpdateId = update.update_id;
+
+        const cb = update.callback_query;
+        if (cb?.data === 'bot_status') {
+          logger.info(`[Reporter] Status button pressed by ${cb.from?.username ?? cb.from?.id}`);
+          await handleStatusCallback(cb.id);
+        }
+      }
+    } catch (err) {
+      // Не спамим логи если Telegram лежит
+      logger.debug(`[Reporter] Polling error: ${err.message}`);
+    }
+  }, POLLING_INTERVAL_MS);
+
+  // Не мешаем Node.js завершиться
+  if (pollingTimer.unref) pollingTimer.unref();
+}
+
+/**
+ * Останавливает callback polling (для graceful shutdown).
+ */
+export function stopCallbackPolling() {
+  if (pollingTimer) {
+    clearInterval(pollingTimer);
+    pollingTimer = null;
+    logger.info('[Reporter] Callback polling stopped');
+  }
 }
