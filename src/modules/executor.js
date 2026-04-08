@@ -3,7 +3,7 @@ import { logger } from '../core/logger.js';
 import { retryWithBackoff } from '../core/retry.js';
 import { savePosition, closePosition as dbClosePosition } from '../core/database.js';
 import { getAvailableBalance } from './wallet.js';
-import { getExchange, getBalance, getMeta } from './exchange.js';
+import { getExchange, getBalance, getPositions, getMeta } from './exchange.js';
 import { sendMessage } from './reporter.js';
 
 // ─────────────────────────────────────────────────
@@ -20,6 +20,12 @@ const BALANCE_UTILIZATION = 0.95; // 95% от баланса — 5% остаёт
 // Slippage для IoC-лимитки (имитация маркет-ордера).
 // Реальный fill будет по рынку, это лишь потолок допустимой цены.
 const MARKET_SLIPPAGE = 0.03; // 3%
+
+// Порог предупреждения: если реальный slippage > 0.5%, это аномалия.
+const SLIPPAGE_WARN_PCT = 0.5;
+
+// Balance reconciliation: допустимое отклонение между ожидаемым и фактическим.
+const RECONCILIATION_TOLERANCE_PCT = 2.0;
 
 // ─────────────────────────────────────────────────
 //  Кеш метаданных (universe → szDecimals)
@@ -62,6 +68,139 @@ async function resolveAsset(coin) {
 function roundDown(value, decimals) {
   const factor = Math.pow(10, decimals);
   return Math.floor(value * factor) / factor;
+}
+
+// ─────────────────────────────────────────────────
+//  Slippage guard
+// ─────────────────────────────────────────────────
+
+/**
+ * Вычисляет фактическое проскальзывание и логирует предупреждение если > порога.
+ *
+ * Для SELL (short open): slippage = (expectedPrice - fillPrice) / expectedPrice
+ *   Положительный = мы продали дешевле, чем ожидали (плохо)
+ *
+ * Для BUY (close short): slippage = (fillPrice - expectedPrice) / expectedPrice
+ *   Положительный = мы купили дороже, чем ожидали (плохо)
+ *
+ * @param {number}  expectedPrice — markPrice из сигнала
+ * @param {number}  fillPrice     — avgPx из fill
+ * @param {string}  side          — "SELL" или "BUY"
+ * @param {string}  coin
+ * @returns {{ pct: number, warn: boolean, label: string }}
+ */
+function checkSlippage(expectedPrice, fillPrice, side, coin) {
+  let pct;
+
+  if (side === 'SELL') {
+    // Шорт: продали дешевле = хуже
+    pct = ((expectedPrice - fillPrice) / expectedPrice) * 100;
+  } else {
+    // Закрытие шорта: купили дороже = хуже
+    pct = ((fillPrice - expectedPrice) / expectedPrice) * 100;
+  }
+
+  const absPct = Math.abs(pct);
+  const warn   = absPct > SLIPPAGE_WARN_PCT;
+  const sign   = pct >= 0 ? '+' : '';
+  const label  = `${sign}${pct.toFixed(3)}%`;
+
+  if (warn) {
+    logger.warn(
+      `[Executor] ⚠️ SLIPPAGE #${coin} ${side}: expected $${expectedPrice} → fill $${fillPrice} (${label})`,
+    );
+  } else {
+    logger.debug(
+      `[Executor] Slippage #${coin} ${side}: ${label}`,
+    );
+  }
+
+  return { pct, warn, label };
+}
+
+// ─────────────────────────────────────────────────
+//  Balance reconciliation
+// ─────────────────────────────────────────────────
+
+/**
+ * Проверяет, что после fill баланс/позиция на бирже соответствуют ожиданиям.
+ *
+ * Вызывается ПОСЛЕ успешного fill (fire-and-forget, не блокирует основной поток).
+ * Не бросает исключений — только логирует.
+ *
+ * @param {string} coin       — монета
+ * @param {string} operation  — "OPEN" | "CLOSE" | "ROTATE_CLOSE" | "ROTATE_OPEN"
+ * @param {{ expectedSzUsd?: number, expectPosition?: boolean }} checks
+ */
+async function reconcile(coin, operation, checks) {
+  try {
+    const positions = await getPositions();
+
+    // Ищем позицию по монете
+    const pos = positions.find((ap) => {
+      const p = ap?.position ?? ap;
+      return p?.coin === coin;
+    });
+    const posData = pos?.position ?? pos;
+    const szi     = posData ? parseFloat(posData.szi ?? '0') : 0;
+    const hasPos  = szi !== 0;
+
+    // ── Проверка: ожидаем позицию или нет ───────
+    if (checks.expectPosition === true && !hasPos) {
+      logger.error(
+        `[Reconcile] ❌ ${operation} #${coin} — expected position on exchange but found NONE!`,
+      );
+      await sendMessage(
+        `⚠️ <b>[RECONCILE] #${coin}</b>\n` +
+        `После ${operation}: позиция не найдена на бирже!\n` +
+        `🔍 Проверь вручную.`,
+        true,
+      );
+      return;
+    }
+
+    if (checks.expectPosition === false && hasPos) {
+      logger.warn(
+        `[Reconcile] ⚠️ ${operation} #${coin} — expected NO position but found szi=${szi}`,
+      );
+      await sendMessage(
+        `⚠️ <b>[RECONCILE] #${coin}</b>\n` +
+        `После ${operation}: позиция всё ещё открыта (szi=${szi})!\n` +
+        `🔍 Возможно, частичный fill. Проверь вручную.`,
+        true,
+      );
+      return;
+    }
+
+    // ── Проверка: размер позиции ≈ ожидаемый ────
+    if (checks.expectPosition && checks.expectedSzUsd && hasPos) {
+      const entryPx   = parseFloat(posData.entryPx ?? '0');
+      const actualUsd = Math.abs(szi) * entryPx;
+      const diff      = Math.abs(actualUsd - checks.expectedSzUsd);
+      const diffPct   = checks.expectedSzUsd > 0
+        ? (diff / checks.expectedSzUsd) * 100
+        : 0;
+
+      if (diffPct > RECONCILIATION_TOLERANCE_PCT) {
+        logger.warn(
+          `[Reconcile] ⚠️ ${operation} #${coin} — size mismatch: ` +
+          `expected ~$${checks.expectedSzUsd.toFixed(2)}, actual ~$${actualUsd.toFixed(2)} (Δ${diffPct.toFixed(1)}%)`,
+        );
+      } else {
+        logger.info(
+          `[Reconcile] ✅ ${operation} #${coin} — size OK: ~$${actualUsd.toFixed(2)} (Δ${diffPct.toFixed(1)}%)`,
+        );
+      }
+    }
+
+    // ── Простая проверка: позиция закрыта ────────
+    if (checks.expectPosition === false && !hasPos) {
+      logger.info(`[Reconcile] ✅ ${operation} #${coin} — no position confirmed`);
+    }
+  } catch (err) {
+    // Reconciliation — не критичная операция, не крашим бота
+    logger.warn(`[Reconcile] Failed for ${operation} #${coin}: ${err.message}`);
+  }
 }
 
 // ─────────────────────────────────────────────────
@@ -265,7 +404,6 @@ function paperClose(signal, position, silent = false) {
   );
 
   if (!silent) {
-    // Убыток по позиции — критично, будим даже ночью
     const isCriticalClose = realizedPnl < 0;
 
     sendMessage(
@@ -297,8 +435,10 @@ function paperClose(signal, position, silent = false) {
  *   3. Расчёт size       → (balance × 0.95) / price, floor до szDecimals
  *   4. marketOpen()      → IoC sell (short) с 3% slippage-потолком
  *   5. parseFillResponse → проверка fill / обработка ошибок
- *   6. savePosition()    → сохраняем в БД с реальной ценой fill
- *   7. sendMessage()     → Telegram-уведомление
+ *   6. checkSlippage()   → предупреждение если > 0.5%
+ *   7. savePosition()    → сохраняем в БД с реальной ценой fill
+ *   8. reconcile()       → фоновая проверка позиции на бирже
+ *   9. sendMessage()     → Telegram-уведомление
  *
  * @param {string}  coin  — "ETH", "BTC" (без "-PERP")
  * @param {number}  price — текущая markPrice (для логов; реальная цена = avgPx)
@@ -364,12 +504,6 @@ async function productionOpen(coin, price, apy, silent = false) {
   }
 
   // ── 4. Отправляем ордер ──────────────────────
-  //
-  // sdk.custom.marketOpen():
-  //   - Строит IoC Limit по цене midPrice × (1 ± slippage)
-  //   - is_buy=false → SELL (шорт)
-  //   - SDK сам получает midPrice и конвертирует coin → "COIN-PERP"
-  //
   logger.info(
     `[Executor] PROD OPEN #${coin} — placing market SELL | ` +
     `sz: ${sz} (~$${(sz * price).toFixed(2)}) | markPrice: $${price} | slippage: ${MARKET_SLIPPAGE * 100}%`,
@@ -379,16 +513,15 @@ async function productionOpen(coin, price, apy, silent = false) {
   try {
     result = await retryWithBackoff(
       () => exchange.custom.marketOpen(
-        `${coin}-PERP`,    // symbol: SDK формат
-        false,             // is_buy: false = SELL (short)
-        sz,                // size в монетах
-        undefined,         // px: undefined = SDK берёт midPrice
-        MARKET_SLIPPAGE,   // slippage: 3%
+        `${coin}-PERP`,
+        false,             // is_buy=false → SELL (short)
+        sz,
+        undefined,         // px: SDK берёт midPrice
+        MARKET_SLIPPAGE,
       ),
       { label: `open-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
     );
   } catch (err) {
-    // Сетевая ошибка после всех retry
     logger.error(`[Executor] PROD OPEN #${coin} — order request failed: ${err.message}`);
     await sendMessage(
       `🚨 <b>[OPEN FAILED] #${coin}</b>\n` +
@@ -402,7 +535,6 @@ async function productionOpen(coin, price, apy, silent = false) {
   const fill = parseFillResponse(result, 'OPEN');
 
   if (!fill.ok) {
-    // Бизнес-ошибка от биржи: Insufficient margin, Order size too small, и т.д.
     logger.error(`[Executor] PROD OPEN #${coin} — exchange rejected: ${fill.error}`);
     await sendMessage(
       `🚨 <b>[OPEN REJECTED] #${coin}</b>\n` +
@@ -413,13 +545,16 @@ async function productionOpen(coin, price, apy, silent = false) {
     return { ok: false };
   }
 
-  // ── 6. Ордер исполнен — сохраняем ───────────
+  // ── 6. Slippage guard ────────────────────────
+  const slip = checkSlippage(price, fill.avgPx, 'SELL', coin);
+
+  // ── 7. Сохраняем в БД ────────────────────────
   const fillUsd = fill.totalSz * fill.avgPx;
 
   const id = savePosition({
     coin,
-    size_usd:    fillUsd,           // реальный размер fill, не запрошенный
-    entry_price: fill.avgPx,        // реальная цена fill, не markPrice
+    size_usd:    fillUsd,
+    entry_price: fill.avgPx,
     entry_apy:   apy,
     entry_time:  Date.now(),
     mode:        'PRODUCTION',
@@ -428,25 +563,25 @@ async function productionOpen(coin, price, apy, silent = false) {
   logger.info(
     `[Executor] ✅ PROD OPEN #${coin} | oid: ${fill.oid} | ` +
     `filled: ${fill.totalSz} @ $${fill.avgPx} ($${fillUsd.toFixed(2)}) | ` +
-    `APY: ${apy.toFixed(2)}% | id: ${id}`,
+    `slippage: ${slip.label} | APY: ${apy.toFixed(2)}% | id: ${id}`,
   );
 
-  // ── 7. Telegram ──────────────────────────────
+  // ── 8. Reconciliation (fire-and-forget) ──────
+  reconcile(coin, 'OPEN', { expectPosition: true, expectedSzUsd: fillUsd });
+
+  // ── 9. Telegram ──────────────────────────────
   if (!silent) {
-    const slippagePct = price > 0
-      ? (((price - fill.avgPx) / price) * 100).toFixed(3)
-      : '?';
-    const fire = apy > 100 ? '🔥🔥🔥 ' : '';
+    const slipWarn = slip.warn ? '⚠️ ' : '';
+    const fire     = apy > 100 ? '🔥🔥🔥 ' : '';
 
     await sendMessage(
       `${fire}🟢 <b>[PROD OPEN] #${coin}</b>\n` +
       `<code>─────────────────────</code>\n` +
       `💰 Размер: <b>$${fillUsd.toFixed(2)}</b> (${fill.totalSz} ${coin})\n` +
       `💵 Fill: <b>$${fill.avgPx}</b> (mark: $${price})\n` +
-      `📉 Slippage: ${slippagePct}%\n` +
+      `${slipWarn}📉 Slippage: <b>${slip.label}</b>\n` +
       `📊 APY: <b>${apy.toFixed(2)}%</b>\n` +
-      `🔑 OID: <code>${fill.oid}</code>\n` +
-      `📋 DB: id=${id}`,
+      `🔑 OID: <code>${fill.oid}</code> | DB: id=${id}`,
     );
   }
 
@@ -479,26 +614,18 @@ async function productionClose(signal, position, silent = false) {
   );
 
   // ── 1. Отправляем ордер на закрытие ──────────
-  //
-  // sdk.custom.marketClose():
-  //   - Автоматически определяет размер и сторону из clearinghouseState
-  //   - Отправляет IoC buy (reduce_only=true) на полный szi
-  //   - size=undefined → закрыть полностью
-  //   - Бросает Error("No position found for ...") если позиции нет на бирже
-  //
   let result;
   try {
     result = await retryWithBackoff(
       () => exchange.custom.marketClose(
-        `${coin}-PERP`,    // symbol
-        undefined,         // size: undefined = закрыть полностью
-        undefined,         // px: undefined = SDK берёт midPrice
-        MARKET_SLIPPAGE,   // slippage: 3%
+        `${coin}-PERP`,
+        undefined,         // size: закрыть полностью
+        undefined,         // px: SDK берёт midPrice
+        MARKET_SLIPPAGE,
       ),
       { label: `close-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
     );
   } catch (err) {
-    // "No position found" — позиция уже закрыта (SL/TP/ликвидация)
     if (err.message?.includes('No position found')) {
       logger.error(
         `[Executor] PROD CLOSE #${coin} — no position on exchange! ` +
@@ -514,7 +641,6 @@ async function productionClose(signal, position, silent = false) {
       return { ok: false };
     }
 
-    // Сетевая ошибка
     logger.error(`[Executor] PROD CLOSE #${coin} — order request failed: ${err.message}`);
     await sendMessage(
       `🚨 <b>[CLOSE FAILED] #${coin}</b>\n` +
@@ -539,30 +665,17 @@ async function productionClose(signal, position, silent = false) {
     return { ok: false };
   }
 
-  // ── 3. Считаем реальный PnL ──────────────────
-  //
-  // В PRODUCTION мы знаем реальные цены входа и выхода:
-  //   - entry_price: avgPx при открытии (сохранён в БД)
-  //   - close_price: avgPx при закрытии (fill.avgPx)
-  //
-  // Для SHORT позиции:
-  //   pricePnl = (entryPrice - closePrice) × size_in_coins
-  //   Но у нас size_usd, а не size_in_coins, поэтому:
-  //   pricePnl = size_usd × (entryPrice - closePrice) / entryPrice
-  //
-  // Плюс фандинг (рассчитан по entry_apy — приближение, реальный
-  // фандинг мог отличаться тик-к-тику):
-  //   fundingPnl = size_usd × 0.5 × hourlyRate × holdHours
-  //
+  // ── 3. Slippage guard ────────────────────────
+  const slip = checkSlippage(signal.price, fill.avgPx, 'BUY', coin);
+
+  // ── 4. Считаем реальный PnL ──────────────────
   const pricePnl   = position.size_usd * (position.entry_price - fill.avgPx) / position.entry_price;
   const hourlyRate = position.entry_apy / 100 / 365 / 24;
   const fundingPnl = position.size_usd * 0.5 * hourlyRate * holdHours;
-
-  // Комиссии: реальные от биржи (taker обе ноги)
-  const totalFee    = position.size_usd * FEE_RATE * 2;
+  const totalFee   = position.size_usd * FEE_RATE * 2;
   const realizedPnl = pricePnl + fundingPnl - totalFee;
 
-  // ── 4. Закрываем в БД ────────────────────────
+  // ── 5. Закрываем в БД ────────────────────────
   dbClosePosition(position.id, {
     close_price:  fill.avgPx,
     realized_pnl: realizedPnl,
@@ -573,15 +686,19 @@ async function productionClose(signal, position, silent = false) {
   const sign = realizedPnl >= 0 ? '+' : '';
   logger.info(
     `[Executor] ✅ PROD CLOSE #${coin} | oid: ${fill.oid} | ` +
-    `filled: ${fill.totalSz} @ $${fill.avgPx} | ` +
+    `filled: ${fill.totalSz} @ $${fill.avgPx} | slippage: ${slip.label} | ` +
     `pricePnl: ${pricePnl >= 0 ? '+' : ''}$${pricePnl.toFixed(4)} | ` +
     `fundingPnl: +$${fundingPnl.toFixed(4)} | fees: $${totalFee.toFixed(4)} | ` +
     `total: ${sign}$${realizedPnl.toFixed(4)} | held: ${holdHours.toFixed(1)}h`,
   );
 
-  // ── 5. Telegram ──────────────────────────────
+  // ── 6. Reconciliation (fire-and-forget) ──────
+  reconcile(coin, 'CLOSE', { expectPosition: false });
+
+  // ── 7. Telegram ──────────────────────────────
   if (!silent) {
     const isCritical = realizedPnl < 0;
+    const slipWarn   = slip.warn ? '⚠️ ' : '';
 
     await sendMessage(
       `🔴 <b>[PROD CLOSE] #${coin}</b>\n` +
@@ -590,6 +707,7 @@ async function productionClose(signal, position, silent = false) {
       `⏳ Удержание: ${holdHours.toFixed(1)}ч\n` +
       `<code>─────────────────────</code>\n` +
       `💵 Entry: $${position.entry_price} → Exit: $${fill.avgPx}\n` +
+      `${slipWarn}📉 Slippage: <b>${slip.label}</b>\n` +
       `📊 Price PnL: ${pricePnl >= 0 ? '+' : ''}$${pricePnl.toFixed(4)}\n` +
       `💰 Funding PnL: +$${fundingPnl.toFixed(4)}\n` +
       `🏷 Fees: $${totalFee.toFixed(4)}\n` +
@@ -601,6 +719,102 @@ async function productionClose(signal, position, silent = false) {
   }
 
   return { ok: true, pnl: realizedPnl, holdHours };
+}
+
+/**
+ * Боевая ротация: закрываем старую позицию → открываем новую.
+ *
+ * Между close и open биржа освобождает маржу — getBalance() в productionOpen
+ * подхватит свежий withdrawable.
+ *
+ * Оба вызова идут с silent=true, в конце шлём ОДИН консолидированный чек.
+ * Если close прошёл, а open упал — Critical Alert: бот остался «голым».
+ *
+ * @param {{ closeCoin, closePrice, openCoin, openPrice, openApy, paybackHours, reason }} signal
+ * @param {Object} position — текущая позиция из БД
+ * @returns {Promise<{ ok: boolean, closePnl?: number, positionId?: number }>}
+ */
+async function productionRotate(signal, position) {
+  logger.info(
+    `[Executor] PROD ROTATE — ${signal.closeCoin} → ${signal.openCoin} | ` +
+    `payback: ${signal.paybackHours}h | reason: ${signal.reason}`,
+  );
+
+  // ── Шаг 1: закрываем старую (silent) ─────────
+  const closeResult = await productionClose(
+    { price: signal.closePrice, reason: signal.reason },
+    position,
+    true, // silent
+  );
+
+  if (!closeResult.ok) {
+    // Close не прошёл — позиция осталась, бот продолжает сопровождать её
+    logger.error(`[Executor] PROD ROTATE — close leg failed, aborting rotation`);
+    await sendMessage(
+      `🚨 <b>[ROTATE ABORTED]</b> ${signal.closeCoin} → ${signal.openCoin}\n` +
+      `Close не удался — позиция <b>#${signal.closeCoin}</b> осталась открытой.\n` +
+      `Бот продолжает сопровождение.`,
+      true,
+    );
+    return { ok: false };
+  }
+
+  // ── Шаг 2: открываем новую (silent) ──────────
+  const openResult = await productionOpen(
+    signal.openCoin,
+    signal.openPrice,
+    signal.openApy,
+    true, // silent
+  );
+
+  if (!openResult.ok) {
+    // КРИТИЧНО: Close прошёл, Open упал → бот «голый» (без позиции)
+    const closePnlSign = closeResult.pnl >= 0 ? '+' : '';
+
+    logger.error(
+      `[Executor] 🚨 PROD ROTATE — close OK but open FAILED! Bot is NAKED (no position).`,
+    );
+
+    await sendMessage(
+      `🚨🚨🚨 <b>[ROTATE FAILED — БОТ БЕЗ ПОЗИЦИИ]</b>\n` +
+      `<code>═════════════════════</code>\n` +
+      `🔴 Закрыл: <b>#${signal.closeCoin}</b> ✅\n` +
+      `💰 PnL: ${closePnlSign}$${closeResult.pnl.toFixed(4)}\n` +
+      `<code>─────────────────────</code>\n` +
+      `🟢 Открыть: <b>#${signal.openCoin}</b> ❌ ПРОВАЛ\n` +
+      `<code>═════════════════════</code>\n` +
+      `⚠️ Бот остался <b>БЕЗ ПОЗИЦИИ</b>!\n` +
+      `Средства свободны. Бот попробует войти\n` +
+      `в следующем тике автоматически.`,
+      true, // critical — будим в любое время
+    );
+
+    return { ok: false, closePnl: closeResult.pnl };
+  }
+
+  // ── Шаг 3: ОДНО консолидированное уведомление ─
+  const closePnlSign = closeResult.pnl >= 0 ? '+' : '';
+  const isCritical   = closeResult.pnl < 0;
+
+  await sendMessage(
+    `🔄 <b>[PROD ROTATE]</b> ${signal.closeCoin} → <b>${signal.openCoin}</b>\n` +
+    `<code>═════════════════════</code>\n` +
+    `🔴 Закрыл: <b>#${signal.closeCoin}</b> (${closeResult.holdHours.toFixed(1)}ч)\n` +
+    `💰 PnL: <b>${closePnlSign}$${closeResult.pnl.toFixed(4)}</b>\n` +
+    `<code>─────────────────────</code>\n` +
+    `🟢 Открыл: <b>#${signal.openCoin}</b>\n` +
+    `💰 Размер: <b>$${openResult.sizeUsd.toFixed(2)}</b>\n` +
+    `📊 APY: <b>${signal.openApy.toFixed(2)}%</b>\n` +
+    `⏱ Payback: ${signal.paybackHours}h\n` +
+    `<code>═════════════════════</code>`,
+    isCritical,
+  );
+
+  return {
+    ok:         true,
+    closePnl:   closeResult.pnl,
+    positionId: openResult.positionId,
+  };
 }
 
 // ─────────────────────────────────────────────────
@@ -640,39 +854,31 @@ async function handleRotate(signal, position) {
   }
 
   if (config.isProduction) {
-    // TODO: Шаг 3 — productionRotate (atomic close + open)
-    logger.warn(
-      `[Executor] 🔴 PRODUCTION ROTATE signal ${signal.closeCoin} → ${signal.openCoin} — pending. Skipped.`,
-    );
-    return { ok: false };
+    return productionRotate(signal, position);
   }
 
   // ── PAPER ротация: close + open, одно консолидированное уведомление ──
 
-  // Шаг 1: close (silent — не шлём отдельный пуш)
   const closeResult = paperClose(
     { price: signal.closePrice, reason: signal.reason },
     position,
-    true, // silent
+    true,
   );
 
   if (!closeResult.ok) return closeResult;
 
-  // Шаг 2: open с актуальным балансом (silent)
   const openResult = await paperOpen(signal.openCoin, signal.openPrice, signal.openApy, true);
 
   if (!openResult.ok) {
-    // Open не прошёл — отправляем алерт о неудачной ротации
     await sendMessage(
       `⚠️ <b>[ROTATE FAILED]</b> ${signal.closeCoin} закрыт, но ${signal.openCoin} не открылся!\n` +
       `💰 Close PnL: ${closeResult.pnl >= 0 ? '+' : ''}$${closeResult.pnl.toFixed(4)}\n` +
       `🔍 Причина: баланс $0 или ошибка. Бот остаётся без позиции.`,
-      true, // critical
+      true,
     );
     return { ok: false, closePnl: closeResult.pnl };
   }
 
-  // Шаг 3: одно консолидированное уведомление
   const closePnlSign = closeResult.pnl >= 0 ? '+' : '';
 
   await sendMessage(
