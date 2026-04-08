@@ -8,6 +8,17 @@ const ROUND_TRIP = (FEE_RATE + SLIPPAGE) * 2; // вход + выход
 
 const MAX_PAYBACK_HOURS = 6;
 
+// Гистерезис: negative funding должен держаться N тиков подряд
+// перед закрытием. При 15с тике, 2 тика = 30с.
+const NEGATIVE_FUNDING_TICKS = 2;
+
+// Минимальный APY для входа — защитный порог.
+// Даже если entryApy=60%, но текущий APY упал до 8%, не входим.
+const MIN_ENTRY_APY_FLOOR = 10;
+
+// Счётчик: сколько тиков подряд funding < 0
+let negativeFundingStreak = 0;
+
 const {
   minApy,
   entryApy,
@@ -46,11 +57,22 @@ export function analyze(scoutData, activePosition) {
   //  Сценарий А: нет позиции — ищем вход
   // ═══════════════════════════════════════════════
   if (!activePosition) {
+    // Сбрасываем счётчик negative funding — нет позиции
+    negativeFundingStreak = 0;
+
     const best = scoutData[0]; // отсортированы по smoothedApy desc
 
     if (!best || best.smoothedApy < entryApy) {
       logger.info(
         `[Strategist] HOLD — no coin ≥ ${entryApy}% | best: ${best?.coin ?? '—'} @ ${best?.smoothedApy.toFixed(2) ?? 0}%`,
+      );
+      return { action: 'HOLD' };
+    }
+
+    // Защитный порог: не входим если APY ниже пола
+    if (best.smoothedApy < MIN_ENTRY_APY_FLOOR) {
+      logger.info(
+        `[Strategist] HOLD — ${best.coin} APY ${best.smoothedApy.toFixed(2)}% < floor ${MIN_ENTRY_APY_FLOOR}%`,
       );
       return { action: 'HOLD' };
     }
@@ -98,14 +120,35 @@ export function analyze(scoutData, activePosition) {
   }
 
   // 3. Фандинг стал отрицательным (мы платим, а не нам)
+  //    Гистерезис: закрываем только если negative N тиков подряд.
+  //    При 15с тике, 2 тика = 30с — фильтрует мгновенные выбросы.
   if (current.fundingRate < 0) {
-    logger.warn(`[Strategist] CLOSE — ${currentCoin} funding negative (${current.fundingRate})`);
-    return {
-      action: 'CLOSE',
-      coin:   currentCoin,
-      price:  current.price,
-      reason: 'negative_funding',
-    };
+    negativeFundingStreak++;
+    logger.warn(
+      `[Strategist] ⚠️ ${currentCoin} funding negative (${current.fundingRate}) — ` +
+        `streak: ${negativeFundingStreak}/${NEGATIVE_FUNDING_TICKS}`,
+    );
+
+    if (negativeFundingStreak >= NEGATIVE_FUNDING_TICKS) {
+      logger.warn(
+        `[Strategist] CLOSE — ${currentCoin} funding negative ${negativeFundingStreak} ticks in a row`,
+      );
+      negativeFundingStreak = 0; // сброс
+      return {
+        action: 'CLOSE',
+        coin:   currentCoin,
+        price:  current.price,
+        reason: 'negative_funding',
+      };
+    }
+  } else {
+    // Funding вернулся в плюс — сброс счётчика
+    if (negativeFundingStreak > 0) {
+      logger.info(
+        `[Strategist] ✅ ${currentCoin} funding recovered (${current.fundingRate}) — streak reset`,
+      );
+      negativeFundingStreak = 0;
+    }
   }
 
   // ── Обычные выходы (только после minHold) ─────

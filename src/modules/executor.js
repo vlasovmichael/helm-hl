@@ -28,6 +28,13 @@ const MARKET_SLIPPAGE = 0.03; // 3%
 // Порог предупреждения: если реальный slippage > 0.5%, это аномалия.
 const SLIPPAGE_WARN_PCT = 0.5;
 
+// Критический порог: slippage > 1.5% → бан монеты на 10 мин.
+const SLIPPAGE_BAN_PCT = 1.5;
+const SLIPPAGE_BAN_TTL_MS = 10 * 60_000; // 10 минут
+
+// coin → timestamp бана за slippage
+const slippageBanMap = new Map();
+
 // Balance reconciliation: допустимое отклонение между ожидаемым и фактическим.
 const RECONCILIATION_TOLERANCE_PCT = 2.0;
 
@@ -47,20 +54,52 @@ const RUNTIME_BAN_TTL_MS = 30 * 60_000; // 30 минут
 // coin → timestamp бана
 const runtimeBlacklist = new Map();
 
+// ─────────────────────────────────────────────────
+//  Cooldown (запрет повторного входа после закрытия)
+// ─────────────────────────────────────────────────
+// После close по любой причине — бан на re-entry в ту же монету.
+// Защита от churning (FARTCOIN-кейс: 3 входа/выхода в минуту).
+const REENTRY_COOLDOWN_MS = 15 * 60_000; // 15 минут
+
+// coin → timestamp закрытия
+const cooldownMap = new Map();
+
 /**
  * Возвращает Set актуально заблокированных монет (с учётом TTL).
+ * Включает: runtime blacklist + slippage ban + re-entry cooldown.
  * @returns {Set<string>}
  */
 export function getRuntimeBlacklist() {
   const now = Date.now();
   const active = new Set();
+
+  // Runtime blacklist (asset not found)
   for (const [coin, bannedAt] of runtimeBlacklist) {
     if (now - bannedAt < RUNTIME_BAN_TTL_MS) {
       active.add(coin);
     } else {
-      runtimeBlacklist.delete(coin); // истёк — чистим
+      runtimeBlacklist.delete(coin);
     }
   }
+
+  // Slippage ban (slippage > 1.5%)
+  for (const [coin, bannedAt] of slippageBanMap) {
+    if (now - bannedAt < SLIPPAGE_BAN_TTL_MS) {
+      active.add(coin);
+    } else {
+      slippageBanMap.delete(coin);
+    }
+  }
+
+  // Re-entry cooldown (после close)
+  for (const [coin, closedAt] of cooldownMap) {
+    if (now - closedAt < REENTRY_COOLDOWN_MS) {
+      active.add(coin);
+    } else {
+      cooldownMap.delete(coin);
+    }
+  }
+
   return active;
 }
 
@@ -167,7 +206,16 @@ function checkSlippage(expectedPrice, fillPrice, side, coin) {
   const sign = pct >= 0 ? "+" : "";
   const label = `${sign}${pct.toFixed(3)}%`;
 
-  if (warn) {
+  // Критический slippage → бан монеты на 10 мин
+  const ban = absPct > SLIPPAGE_BAN_PCT;
+
+  if (ban) {
+    slippageBanMap.set(coin, Date.now());
+    logger.error(
+      `[Executor] 🚫 SLIPPAGE BAN #${coin} ${side}: ${label} (>${SLIPPAGE_BAN_PCT}%) — ` +
+        `trading paused for ${SLIPPAGE_BAN_TTL_MS / 60_000}min`,
+    );
+  } else if (warn) {
     logger.warn(
       `[Executor] ⚠️ SLIPPAGE #${coin} ${side}: expected $${expectedPrice} → fill $${fillPrice} (${label})`,
     );
@@ -175,7 +223,7 @@ function checkSlippage(expectedPrice, fillPrice, side, coin) {
     logger.debug(`[Executor] Slippage #${coin} ${side}: ${label}`);
   }
 
-  return { pct, warn, label };
+  return { pct, warn, ban, label };
 }
 
 // ─────────────────────────────────────────────────
@@ -520,6 +568,12 @@ async function paperClose(signal, position, silent = false) {
     reason: signal.reason,
   });
 
+  // Re-entry cooldown (paper mode тоже)
+  cooldownMap.set(position.coin, Date.now());
+  logger.info(
+    `[Executor] ⏳ Re-entry cooldown set: #${position.coin} → ${REENTRY_COOLDOWN_MS / 60_000}min`,
+  );
+
   const sign = realizedPnl >= 0 ? "+" : "";
   logger.info(
     `[Executor] PAPER CLOSE #${position.coin} | reason: ${signal.reason} ` +
@@ -697,6 +751,17 @@ async function productionOpen(coin, price, apy, silent = false) {
   // ── 6. Slippage guard ────────────────────────
   const slip = checkSlippage(price, fill.avgPx, "SELL", coin);
 
+  if (slip.ban) {
+    await sendMessage(
+      `🚫 <b>[SLIPPAGE BAN] #${coin}</b>\n` +
+        `<code>─────────────────────</code>\n` +
+        `📉 Slippage: <b>${slip.label}</b> (порог: ${SLIPPAGE_BAN_PCT}%)\n` +
+        `⏱ Бан: <b>${SLIPPAGE_BAN_TTL_MS / 60_000} мин</b>\n` +
+        `⚠️ Торговля по ${coin} приостановлена.`,
+      true,
+    );
+  }
+
   // ── 7. Сохраняем в БД ────────────────────────
   const fillUsd = fill.totalSz * fill.avgPx;
 
@@ -835,6 +900,21 @@ async function productionClose(signal, position, silent = false) {
 
   // ── 3. Slippage guard ────────────────────────
   const slip = checkSlippage(signal.price, fill.avgPx, "BUY", coin);
+
+  if (slip.ban) {
+    await sendMessage(
+      `🚫 <b>[SLIPPAGE BAN] #${coin}</b>\n` +
+        `📉 Slippage при CLOSE: <b>${slip.label}</b> (порог: ${SLIPPAGE_BAN_PCT}%)\n` +
+        `⏱ Торговля по ${coin} приостановлена на ${SLIPPAGE_BAN_TTL_MS / 60_000} мин.`,
+      true,
+    );
+  }
+
+  // ── 3.5. Re-entry cooldown ──────────────────
+  cooldownMap.set(coin, Date.now());
+  logger.info(
+    `[Executor] ⏳ Re-entry cooldown set: #${coin} → ${REENTRY_COOLDOWN_MS / 60_000}min`,
+  );
 
   // ── 4. Считаем реальный PnL ──────────────────
   const pricePnl =
