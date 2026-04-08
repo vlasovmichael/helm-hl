@@ -121,3 +121,16 @@ export function getHistory(limit = 50) {
     .prepare('SELECT * FROM history ORDER BY closed_at DESC LIMIT ?')
     .all(limit);
 }
+
+/**
+ * Возвращает сделки, закрытые после указанного timestamp.
+ * Используется для Daily Recap — выбирает сделки за текущий день.
+ *
+ * @param {number} sinceMs — Unix timestamp в миллисекундах
+ * @returns {Array<Object>}
+ */
+export function getHistorySince(sinceMs) {
+  return getDb()
+    .prepare('SELECT * FROM history WHERE closed_at >= ? ORDER BY closed_at DESC')
+    .all(sinceMs);
+}

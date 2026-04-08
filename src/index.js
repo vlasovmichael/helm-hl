@@ -2,7 +2,7 @@ import { writeFile, readFile, rename, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { config } from './core/config.js';
 import { logger } from './core/logger.js';
-import { initDB, getActivePosition, getHistory } from './core/database.js';
+import { initDB, getActivePosition, getHistory, getHistorySince } from './core/database.js';
 import { scan } from './modules/scout.js';
 import { analyze } from './modules/strategist.js';
 import { execute } from './modules/executor.js';
@@ -11,6 +11,7 @@ import {
   sendAnomalyAlert,
   sendFomoAlert,
   sendDailySummary,
+  sendPnlAlert,
   sendStartupNotification,
   setStatusCollector,
   startCallbackPolling,
@@ -21,10 +22,16 @@ import { initExchange, disconnectExchange, getBalance as getExchangeBalance, get
 import { getAvailableBalance } from './modules/wallet.js';
 
 const TICK_INTERVAL_MS    = 15_000;          // 15 секунд
-const DAILY_INTERVAL_MS   = 24 * 3_600_000;  // 24 часа
 const FOMO_COOLDOWN_MS    = 4 * 3_600_000;   // не чаще 1 раза в 4 часа
 const ANOMALY_THRESHOLD   = 0.30;            // 30% падение APY за тик → аномалия
 const FOMO_UPLIFT_MIN     = 1.50;            // лучший кандидат должен быть на 50% выше
+
+// Daily Recap: отправляется в этот час (21:00 по серверу)
+const DAILY_RECAP_HOUR    = 21;
+
+// PnL Alert: порог unrealized PnL (±3% от equity)
+const PNL_ALERT_PCT       = 3.0;
+const PNL_ALERT_COOLDOWN_MS = 60 * 60_000;   // не чаще 1 раза в час
 
 const BOT_STATE_PATH = 'data/bot_state.json';
 const SHUTDOWN_TIMEOUT_MS = 15_000;           // максимум 15с на завершение
@@ -34,8 +41,9 @@ let tickTimer;
 let tickRunning      = false;
 let shuttingDown     = false;                 // защита от двойного SIGINT
 let startedAt        = Date.now();
-let lastDailySummary = Date.now();           // первая сводка через 24ч
+let dailyRecapSentDate = '';                 // "YYYY-MM-DD" — защита от повторной отправки
 let lastFomoAlert    = 0;                    // UNIX ms последнего FOMO-алерта
+let lastPnlAlert     = 0;                    // UNIX ms последнего PnL-алерта
 let prevApyMap       = new Map();            // coin → smoothedApy прошлого тика
 
 async function runSmartAlerts(scoutData, signal, activePosition) {
@@ -71,39 +79,114 @@ async function runSmartAlerts(scoutData, signal, activePosition) {
     const best        = scoutData.find((m) => m.coin !== currentCoin);
 
     if (current && best && best.smoothedApy >= current.smoothedApy * FOMO_UPLIFT_MIN) {
-      // Стратег уже посчитал paybackHours — вычислим здесь по той же формуле
       const ROUND_TRIP   = (0.0002 + 0.0001) * 2;
       const deltaHourly  = (best.smoothedApy - current.smoothedApy) / 100 / 365 / 24;
       const paybackHours = deltaHourly > 0 ? ROUND_TRIP / (0.5 * deltaHourly) : Infinity;
 
-      if (paybackHours > 6) { // только если ротация невыгодна (иначе Стратег бы уже переключил)
+      if (paybackHours > 6) {
         await sendFomoAlert(currentCoin, best.coin, current.smoothedApy, best.smoothedApy, paybackHours);
         lastFomoAlert = now;
       }
     }
   }
 
-  // ── 3. Дневная сводка ─────────────────────────────────────────────
-  if (now - lastDailySummary >= DAILY_INTERVAL_MS) {
-    await runDailySummary();
-    lastDailySummary = now;
+  // ── 3. PnL Alert (unrealized PnL > ±3% от equity) ────────────────
+  if (activePosition && now - lastPnlAlert >= PNL_ALERT_COOLDOWN_MS) {
+    try {
+      const markPrice = await getMarkPrice(activePosition.coin);
+      if (markPrice != null) {
+        const qty           = activePosition.size_usd / activePosition.entry_price;
+        const unrealizedPnl = (activePosition.entry_price - markPrice) * qty;
+
+        // Получаем equity для расчёта процента
+        let equity = activePosition.size_usd; // fallback
+        try {
+          if (config.isProduction) {
+            const summary = await getAccountSummary();
+            equity = summary.equity;
+          } else {
+            equity = await getAvailableBalance();
+          }
+        } catch { /* fallback to size_usd */ }
+
+        const pnlPct = equity > 0 ? (Math.abs(unrealizedPnl) / equity) * 100 : 0;
+
+        if (pnlPct >= PNL_ALERT_PCT) {
+          await sendPnlAlert({
+            coin:          activePosition.coin,
+            markPrice,
+            entryPrice:    activePosition.entry_price,
+            unrealizedPnl,
+            pnlPct:        unrealizedPnl >= 0 ? pnlPct : -pnlPct,
+            equity,
+          });
+          lastPnlAlert = now;
+        }
+      }
+    } catch (err) {
+      logger.debug(`[Tick] PnL alert check failed: ${err.message}`);
+    }
   }
+
+  // ── 4. Daily Recap (в 21:00 по серверу) ──────────────────────────
+  await checkDailyRecap();
 }
 
-async function runDailySummary() {
-  const history       = getHistory(1000); // всё за последние 1000 сделок
-  const activePosition = getActivePosition();
+/**
+ * Daily Recap — отправляется один раз в день в DAILY_RECAP_HOUR.
+ * Только если за сутки была хотя бы одна закрытая сделка.
+ */
+async function checkDailyRecap() {
+  const now  = new Date();
+  const hour = now.getHours();
 
-  const totalTrades = history.length;
-  const winTrades   = history.filter((t) => t.realized_pnl > 0).length;
-  const totalPnl    = history.reduce((s, t) => s + t.realized_pnl, 0);
-  const totalFees   = history.reduce((s, t) => s + t.fee_paid, 0);
-  const bestTrade   = history.reduce(
+  // Только в нужный час
+  if (hour !== DAILY_RECAP_HOUR) return;
+
+  // Защита от повторной отправки в том же дне
+  const today = now.toISOString().slice(0, 10); // "YYYY-MM-DD"
+  if (dailyRecapSentDate === today) return;
+
+  // Начало текущего дня (00:00:00 по серверу)
+  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+  const todayHistory = getHistorySince(dayStart);
+
+  if (todayHistory.length === 0) {
+    logger.info('[System] Daily Recap skipped — no trades today');
+    dailyRecapSentDate = today;
+    return;
+  }
+
+  const totalTrades = todayHistory.length;
+  const winTrades   = todayHistory.filter((t) => t.realized_pnl > 0).length;
+  const totalPnl    = todayHistory.reduce((s, t) => s + t.realized_pnl, 0);
+  const totalFees   = todayHistory.reduce((s, t) => s + t.fee_paid, 0);
+  const bestTrade   = todayHistory.reduce(
     (best, t) => (!best || t.realized_pnl > best.realized_pnl ? t : best),
     null,
   );
 
-  await sendDailySummary({ totalTrades, winTrades, totalPnl, totalFees, bestTrade, activePosition });
+  const activePosition = getActivePosition();
+
+  // Получаем текущий баланс для отчёта
+  let equity = 0;
+  try {
+    if (config.isProduction) {
+      const summary = await getAccountSummary();
+      equity = summary.equity;
+    } else {
+      equity = await getAvailableBalance();
+    }
+  } catch { /* покажем $0 */ }
+
+  await sendDailySummary({
+    totalTrades, winTrades, totalPnl, totalFees,
+    bestTrade, activePosition, equity,
+  });
+
+  dailyRecapSentDate = today;
+  logger.info(`[System] Daily Recap sent for ${today}`);
 }
 
 async function tick() {

@@ -153,40 +153,79 @@ export async function sendFomoAlert(currentCoin, bestCoin, currentApy, bestApy, 
 }
 
 /**
- * Ежедневная сводка.
+ * PnL Alert: unrealized PnL превысил порог ±3% от депозита.
  *
- * @param {{ totalTrades, winTrades, totalPnl, totalFees, bestTrade, activePosition }} stats
+ * @param {{ coin: string, markPrice: number, entryPrice: number, unrealizedPnl: number, pnlPct: number, equity: number }} data
+ */
+export async function sendPnlAlert(data) {
+  const { coin, markPrice, entryPrice, unrealizedPnl, pnlPct, equity } = data;
+  const sign   = unrealizedPnl >= 0 ? '+' : '';
+  const emoji  = unrealizedPnl >= 0 ? '🟢' : '🔴';
+  const dir    = unrealizedPnl >= 0 ? '📈' : '📉';
+
+  logger.info(
+    `[Reporter] PnL Alert #${coin}: ${sign}$${unrealizedPnl.toFixed(2)} (${sign}${pnlPct.toFixed(1)}% of equity)`,
+  );
+
+  await sendMessage(
+    `${emoji} <b>PnL Alert #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `💵 Entry: <b>$${entryPrice}</b>\n` +
+      `🏷 Mark: <b>$${markPrice}</b>\n` +
+      `${dir} PnL: <b>${sign}$${unrealizedPnl.toFixed(4)}</b> (${sign}${pnlPct.toFixed(1)}%)\n` +
+      `💰 Equity: <b>$${equity.toFixed(2)}</b>`,
+  );
+}
+
+/**
+ * Daily Recap (21:00) — сводка за день.
+ * Отправляется только если за сутки была хотя бы одна закрытая сделка.
+ *
+ * @param {{ totalTrades, winTrades, totalPnl, totalFees, bestTrade, activePosition, equity }} stats
  */
 export async function sendDailySummary(stats) {
-  const { totalTrades, winTrades, totalPnl, totalFees, bestTrade, activePosition } = stats;
+  const { totalTrades, winTrades, totalPnl, totalFees, bestTrade, activePosition, equity } = stats;
+
+  // Нет сделок за день — не спамим
+  if (totalTrades === 0) {
+    logger.info('[Reporter] Daily Recap skipped — no trades today');
+    return;
+  }
+
   const winRate  = totalTrades > 0 ? ((winTrades / totalTrades) * 100).toFixed(1) : '0.0';
   const pnlSign  = totalPnl >= 0 ? '+' : '';
+  const pnlEmoji = totalPnl >= 0 ? '📈' : '📉';
   const netSign  = (totalPnl - totalFees) >= 0 ? '+' : '';
   const net      = totalPnl - totalFees;
 
-  let posLine = '<i>нет</i>';
+  let posLine = '💤 нет';
   if (activePosition) {
     const heldH = ((Date.now() - activePosition.entry_time) / 3_600_000).toFixed(1);
     posLine = `<b>#${activePosition.coin}</b> ${activePosition.entry_apy.toFixed(2)}% / ${heldH}ч`;
   }
 
-  let bestLine = '<i>нет сделок</i>';
+  let bestLine = '—';
   if (bestTrade) {
     const s = bestTrade.realized_pnl >= 0 ? '+' : '';
     bestLine = `<b>#${bestTrade.coin}</b> ${s}$${bestTrade.realized_pnl.toFixed(4)}`;
   }
 
-  logger.info(`[Reporter] Daily summary: trades=${totalTrades} PnL=${pnlSign}$${totalPnl.toFixed(4)} net=${netSign}$${net.toFixed(4)}`);
+  const balanceLine = equity > 0
+    ? `💰 Баланс: <b>$${equity.toFixed(2)}</b>\n`
+    : '';
+
+  logger.info(`[Reporter] Daily Recap: trades=${totalTrades} PnL=${pnlSign}$${totalPnl.toFixed(4)} net=${netSign}$${net.toFixed(4)}`);
 
   await sendMessageWithButton(
-    `📅 <b>Дневная сводка</b>\n` +
+    `📅 <b>Daily Recap</b>\n` +
     `<code>─────────────────────</code>\n` +
     `🔁 Сделок: <b>${totalTrades}</b>  |  Win-rate: <b>${winRate}%</b>\n` +
-    `💰 PnL: <b>${pnlSign}$${totalPnl.toFixed(4)}</b>\n` +
+    `${pnlEmoji} PnL: <b>${pnlSign}$${totalPnl.toFixed(4)}</b>\n` +
     `🏷 Комиссии: <b>$${totalFees.toFixed(4)}</b>\n` +
-    `📊 Чистый доход: <b>${netSign}$${net.toFixed(4)}</b>\n` +
+    `💎 Чистый доход: <b>${netSign}$${net.toFixed(4)}</b>\n` +
     `<code>─────────────────────</code>\n` +
-    `🏆 Лучшая сделка: ${bestLine}\n` +
+    `${balanceLine}` +
+    `🏆 Лучшая: ${bestLine}\n` +
     `📌 Позиция: ${posLine}`,
   );
 }
