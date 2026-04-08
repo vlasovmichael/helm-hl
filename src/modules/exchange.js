@@ -12,6 +12,7 @@
  * из приватного ключа агента.
  */
 
+import axios from "axios";
 import { Hyperliquid } from "hyperliquid";
 import { config } from "../core/config.js";
 import { logger } from "../core/logger.js";
@@ -162,9 +163,13 @@ export async function setLeverage(coin, leverage = 1, marginMode = "isolated") {
       () => sdk.exchange.updateLeverage(symbol, marginMode, leverage),
       { label: `set-leverage-${coin}`, maxRetries: 2 },
     );
-    logger.info(`[Exchange] ✅ Leverage set: ${symbol} → ${leverage}x ${marginMode}`);
+    logger.info(
+      `[Exchange] ✅ Leverage set: ${symbol} → ${leverage}x ${marginMode}`,
+    );
   } catch (err) {
-    logger.error(`[Exchange] ❌ setLeverage(${symbol}, ${leverage}, ${marginMode}) failed: ${err.message}`);
+    logger.error(
+      `[Exchange] ❌ setLeverage(${symbol}, ${leverage}, ${marginMode}) failed: ${err.message}`,
+    );
     throw err;
   }
 }
@@ -181,7 +186,9 @@ export async function setLeverage(coin, leverage = 1, marginMode = "isolated") {
  */
 export async function checkAccountLeverage(maxSafe = 1) {
   if (!sdk) {
-    logger.warn(`[Exchange] checkAccountLeverage skipped — SDK not initialized`);
+    logger.warn(
+      `[Exchange] checkAccountLeverage skipped — SDK not initialized`,
+    );
     return [];
   }
 
@@ -198,8 +205,8 @@ export async function checkAccountLeverage(maxSafe = 1) {
 
     const leverage = pos.leverage ?? {};
     const entry = {
-      coin:  pos.coin,
-      type:  leverage.type ?? "unknown",
+      coin: pos.coin,
+      type: leverage.type ?? "unknown",
       value: leverage.value != null ? parseFloat(leverage.value) : NaN,
     };
 
@@ -277,9 +284,11 @@ export async function getAccountSummary() {
         .then((state) => {
           const ms = state?.marginSummary ?? {};
           return {
-            equity:        parseFloat(ms.accountValue ?? "0"),
-            available:     parseFloat(state?.withdrawable ?? "0"),
-            unrealizedPnl: parseFloat(ms.totalUnrealizedPnl ?? ms.unrealizedPnl ?? "0"),
+            equity: parseFloat(ms.accountValue ?? "0"),
+            available: parseFloat(state?.withdrawable ?? "0"),
+            unrealizedPnl: parseFloat(
+              ms.totalUnrealizedPnl ?? ms.unrealizedPnl ?? "0",
+            ),
           };
         }),
     { label: "get-account-summary", maxRetries: 3 },
@@ -310,8 +319,8 @@ export async function getMeta() {
 export async function getMarkPrice(coin) {
   try {
     const { data } = await axios.post(
-      'https://api.hyperliquid.xyz/info',
-      { type: 'metaAndAssetCtxs' },
+      "https://api.hyperliquid.xyz/info",
+      { type: "metaAndAssetCtxs" },
       { timeout: 10_000 },
     );
 
@@ -321,12 +330,12 @@ export async function getMarkPrice(coin) {
 
     const upperCoin = coin.toUpperCase();
     const idx = universe.findIndex(
-      (a) => (a.name ?? '').toUpperCase() === upperCoin,
+      (a) => (a.name ?? "").toUpperCase() === upperCoin,
     );
 
     if (idx === -1 || !ctxs[idx]) return null;
 
-    const px = parseFloat(ctxs[idx].markPx ?? ctxs[idx].midPx ?? '0');
+    const px = parseFloat(ctxs[idx].markPx ?? ctxs[idx].midPx ?? "0");
     return px > 0 ? px : null;
   } catch (err) {
     logger.warn(`[Exchange] getMarkPrice(${coin}) failed: ${err.message}`);
