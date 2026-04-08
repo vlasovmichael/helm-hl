@@ -6,8 +6,9 @@ import {
   closePosition as dbClosePosition,
 } from "../core/database.js";
 import { getAvailableBalance } from "./wallet.js";
-import { getExchange, getBalance, getPositions, getMeta } from "./exchange.js";
+import { getExchange, getBalance, getPositions } from "./exchange.js";
 import { sendMessage } from "./reporter.js";
+import { findAsset, getUniverse, isUniverseFresh } from "../core/universe.js";
 
 // ─────────────────────────────────────────────────
 //  Константы
@@ -59,53 +60,55 @@ export function getRuntimeBlacklist() {
 }
 
 // ─────────────────────────────────────────────────
-//  Кеш метаданных (universe → szDecimals)
+//  Resolve Asset (из общего universe кеша)
 // ─────────────────────────────────────────────────
 
-let metaCache = null;
-let metaCacheTime = 0;
-const META_TTL_MS = 5 * 60_000; // обновляем раз в 5 минут
-
 /**
- * Возвращает szDecimals для монеты из кешированной meta.
+ * Возвращает szDecimals для монеты из ОБЩЕГО universe кеша.
+ *
+ * Источник данных — core/universe.js, куда Scout записывает
+ * universe каждый тик. Executor НЕ делает своих getMeta() запросов.
+ * Один источник → ноль рассинхронов.
  *
  * @param {string} coin — "ETH", "BTC" и т.д. (без "-PERP")
- * @returns {Promise<{ szDecimals: number }>}
+ * @returns {{ szDecimals: number }}
  */
-async function resolveAsset(coin) {
-  const cacheAge = Date.now() - metaCacheTime;
-
-  if (!metaCache || cacheAge > META_TTL_MS) {
-    metaCache = await getMeta();
-    metaCacheTime = Date.now();
-    logger.info(
-      `[Executor] Meta cache refreshed — ${metaCache.universe.length} assets in universe`,
-    );
-  }
-
-  // Case-insensitive поиск: API может вернуть "ZRO" или "zro"
-  const coinUpper = coin.toUpperCase();
-  const asset = metaCache.universe.find(
-    (a) => a.name.toUpperCase() === coinUpper,
-  );
+function resolveAsset(coin) {
+  const universe = getUniverse();
+  const asset    = findAsset(coin);
 
   if (!asset) {
-    // Баним только если кеш свежий (< 5 мин).
-    // Если кеш устарел или только что обновлён — это реальный "not found".
-    // Если getMeta() упал и кеш stale — не баним, вдруг монета валидная.
-    const cacheIsFresh = Date.now() - metaCacheTime < META_TTL_MS;
-    if (cacheIsFresh) {
+    // ── Диагностика: что лежит в universe? ──────
+    const sample = universe.slice(0, 10).map((a) => {
+      const name = typeof a === 'string' ? a : a?.name ?? JSON.stringify(a);
+      return name;
+    });
+
+    const fresh = isUniverseFresh();
+
+    logger.error(
+      `[Executor] resolveAsset("${coin}") FAILED | ` +
+      `universe: ${universe.length} assets, fresh: ${fresh} | ` +
+      `sample: [${sample.join(', ')}] | ` +
+      `type of first: ${typeof universe[0]}`,
+    );
+
+    // Баним только если кеш свежий и не пустой
+    if (fresh) {
       runtimeBlacklist.set(coin, Date.now());
       logger.warn(
         `[Executor] "${coin}" added to runtime blacklist for ${RUNTIME_BAN_TTL_MS / 60_000}min ` +
-        `(${runtimeBlacklist.size} total, universe: ${metaCache.universe.length} assets)`,
+        `(${runtimeBlacklist.size} total)`,
       );
     } else {
       logger.warn(
-        `[Executor] "${coin}" not found but meta cache is stale — NOT banning`,
+        `[Executor] "${coin}" not found but universe is stale/empty — NOT banning`,
       );
     }
-    throw new Error(`Asset "${coin}" not found in Hyperliquid universe`);
+
+    throw new Error(
+      `Asset "${coin}" not found in universe (${universe.length} assets, fresh=${fresh})`,
+    );
   }
 
   return { szDecimals: asset.szDecimals };
@@ -531,7 +534,7 @@ async function productionOpen(coin, price, apy, silent = false) {
   // ── 2. szDecimals ─────────────────────────────
   let szDecimals;
   try {
-    ({ szDecimals } = await resolveAsset(coin));
+    ({ szDecimals } = resolveAsset(coin));
   } catch (err) {
     logger.error(
       `[Executor] PROD OPEN #${coin} — resolveAsset failed: ${err.message}`,

@@ -1,17 +1,11 @@
 import axios from 'axios';
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
+import { setUniverse, getTradeableSet } from '../core/universe.js';
 import { getRuntimeBlacklist } from './executor.js';
 
 const HL_API   = 'https://api.hyperliquid.xyz/info';
 const RTT_LIMIT_MS = 10_000; // отклоняем ответы медленнее 10 с
-
-// ── Кеш торгуемого universe (из getMeta) ────────
-// Обновляется раз в 5 минут. Содержит Set<string> имён монет,
-// которые РЕАЛЬНО можно торговать через Exchange API.
-let tradeableCoins     = null;
-let tradeableCacheTime = 0;
-const TRADEABLE_TTL_MS = 5 * 60_000;
 
 /**
  * Два EMA-фильтра с разной скоростью реакции:
@@ -42,46 +36,23 @@ function updateEma(coin, rawApy) {
 }
 
 /**
- * Запрашивает getMeta() и строит Set торгуемых монет.
- * Кешируется на 5 минут — universe не меняется каждый тик.
+ * Обновляет общий кеш universe из ответа metaAndAssetCtxs.
  *
- * Это КАНОНИЧЕСКИЙ список: если монеты нет в getMeta().universe,
- * её нельзя торговать через Exchange API (пример: STBL — HLP-индекс).
+ * Вызывается из scan() после успешного fetch — записывает RAW universe
+ * в core/universe.js, откуда его читают и Scout (для фильтрации),
+ * и Executor (для resolveAsset). ОДИН источник, НОЛЬ рассинхронов.
  *
- * @returns {Promise<Set<string>>}
+ * @param {Array} universe — массив из meta.universe
  */
-async function fetchTradeableCoins() {
-  if (tradeableCoins && Date.now() - tradeableCacheTime < TRADEABLE_TTL_MS) {
-    return tradeableCoins;
+function refreshUniverse(universe) {
+  if (!Array.isArray(universe) || universe.length < 10) {
+    logger.warn(
+      `[Scout] Universe too small or invalid (${universe?.length ?? 0}) — not updating shared cache`,
+    );
+    return;
   }
 
-  try {
-    const { data } = await axios.post(HL_API, { type: 'meta' });
-    const universe = data?.universe;
-
-    if (!Array.isArray(universe)) {
-      logger.warn('[Scout] getMeta returned invalid universe — using stale cache');
-      return tradeableCoins ?? new Set();
-    }
-
-    // Санитарная проверка: если universe подозрительно маленький,
-    // не обновляем кеш — скорее всего API вернул мусор
-    if (universe.length < 10) {
-      logger.warn(
-        `[Scout] getMeta universe suspiciously small (${universe.length} assets) — keeping stale cache`,
-      );
-      return tradeableCoins ?? new Set();
-    }
-
-    tradeableCoins = new Set(universe.map((a) => a.name.toUpperCase()));
-    tradeableCacheTime = Date.now();
-
-    logger.info(`[Scout] Tradeable universe refreshed — ${tradeableCoins.size} assets`);
-    return tradeableCoins;
-  } catch (err) {
-    logger.warn(`[Scout] Failed to refresh tradeable universe: ${err.message}`);
-    return tradeableCoins ?? new Set();
-  }
+  setUniverse(universe);
 }
 
 /**
@@ -138,8 +109,11 @@ export async function scan() {
     return [];
   }
 
+  // Обновляем ОБЩИЙ кеш universe — Executor будет читать отсюда же
+  refreshUniverse(universe);
+
   // ── Тройная защита: блэклист + universe + runtime blacklist ──
-  const tradeable       = await fetchTradeableCoins();
+  const tradeable       = getTradeableSet(); // из core/universe.js
   const blacklist       = config.trading.coinBlacklist;
   const runtimeBlocked  = getRuntimeBlacklist();
 
@@ -174,8 +148,8 @@ export async function scan() {
       continue;
     }
 
-    // Фильтр 3: нет в торгуемом universe из getMeta() → не перп-контракт
-    // Пропускаем если tradeable пустой (getMeta ещё не прогрузился) —
+    // Фильтр 3: нет в общем universe → не перп-контракт
+    // Пропускаем если tradeable пустой (первый тик) —
     // лучше пропустить мусор в Executor, чем забанить всё живое
     if (tradeable.size > 0 && !tradeable.has(coinUpper)) {
       skippedUntradeable++;
