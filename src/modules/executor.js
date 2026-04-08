@@ -31,6 +31,22 @@ const SLIPPAGE_WARN_PCT = 0.5;
 const RECONCILIATION_TOLERANCE_PCT = 2.0;
 
 // ─────────────────────────────────────────────────
+//  Runtime Blacklist
+// ─────────────────────────────────────────────────
+// Монеты, которые упали с ошибкой "Asset not found" / "Invalid asset"
+// при текущем запуске. Сбрасывается при перезапуске бота.
+// Scout проверяет этот список при каждом scan().
+const runtimeBlacklist = new Set();
+
+/**
+ * Возвращает Set монет, заблокированных в рантайме.
+ * @returns {Set<string>}
+ */
+export function getRuntimeBlacklist() {
+  return runtimeBlacklist;
+}
+
+// ─────────────────────────────────────────────────
 //  Кеш метаданных (universe → szDecimals)
 // ─────────────────────────────────────────────────
 
@@ -56,6 +72,11 @@ async function resolveAsset(coin) {
   const asset = metaCache.universe.find((a) => a.name === coin);
 
   if (!asset) {
+    // Заносим в runtime blacklist — Scout перестанет предлагать эту монету
+    runtimeBlacklist.add(coin);
+    logger.warn(
+      `[Executor] "${coin}" added to runtime blacklist (${runtimeBlacklist.size} total)`,
+    );
     throw new Error(`Asset "${coin}" not found in Hyperliquid universe`);
   }
 

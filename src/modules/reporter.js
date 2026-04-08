@@ -6,6 +6,13 @@ const TG_API = config.telegram.token
   ? `https://api.telegram.org/bot${config.telegram.token}/sendMessage`
   : null;
 
+// ── Throttle: антиспам для повторяющихся ошибок ──
+// Ключ = первые 120 символов текста → timestamp последней отправки.
+// Одинаковые сообщения отправляются не чаще раза в THROTTLE_COOLDOWN_MS.
+const THROTTLE_COOLDOWN_MS = 60 * 60_000; // 1 час
+const throttleCache = new Map();
+const THROTTLE_KEY_LEN = 120;
+
 /**
  * Возвращает true, если сейчас "тихие часы".
  * Поддерживает перенос через полночь (23–08) и внутри суток (02–06).
@@ -25,11 +32,37 @@ function isSilentHour() {
 /**
  * Базовая отправка HTML-сообщения в Telegram.
  *
+ * Антиспам: идентичные (по первым 120 символам) сообщения
+ * отправляются не чаще раза в час. Уникальные сообщения и
+ * critical-алерты проходят всегда.
+ *
  * @param {string}  text
- * @param {boolean} [critical=false] — критичное сообщение всегда со звуком
+ * @param {boolean} [critical=false] — критичное: всегда со звуком, без throttle
  */
 export async function sendMessage(text, critical = false) {
   if (!TG_API || !config.telegram.chatId) return;
+
+  // ── Throttle check (critical обходит) ──────────
+  if (!critical) {
+    const key = text.slice(0, THROTTLE_KEY_LEN);
+    const lastSent = throttleCache.get(key);
+    const now = Date.now();
+
+    if (lastSent && now - lastSent < THROTTLE_COOLDOWN_MS) {
+      logger.debug(
+        `[Reporter] Throttled — same message sent ${Math.round((now - lastSent) / 1000)}s ago`,
+      );
+      return;
+    }
+    throttleCache.set(key, now);
+
+    // Чистим старые записи чтобы Map не рос бесконечно (макс ~200 ключей)
+    if (throttleCache.size > 200) {
+      for (const [k, ts] of throttleCache) {
+        if (now - ts > THROTTLE_COOLDOWN_MS) throttleCache.delete(k);
+      }
+    }
+  }
 
   const silent = !critical && isSilentHour();
 

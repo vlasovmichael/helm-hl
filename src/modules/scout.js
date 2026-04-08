@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
+import { getRuntimeBlacklist } from './executor.js';
 
 const HL_API   = 'https://api.hyperliquid.xyz/info';
 const RTT_LIMIT_MS = 10_000; // отклоняем ответы медленнее 10 с
@@ -128,13 +129,15 @@ export async function scan() {
     return [];
   }
 
-  // ── Двойная защита: структурный фильтр + блэклист ──
-  const tradeable = await fetchTradeableCoins();
-  const blacklist = config.trading.coinBlacklist;
+  // ── Тройная защита: блэклист + universe + runtime blacklist ──
+  const tradeable       = await fetchTradeableCoins();
+  const blacklist       = config.trading.coinBlacklist;
+  const runtimeBlocked  = getRuntimeBlacklist();
 
   const results = [];
-  let skippedBlacklist  = 0;
+  let skippedBlacklist   = 0;
   let skippedUntradeable = 0;
+  let skippedRuntime     = 0;
 
   for (let i = 0; i < universe.length; i++) {
     const asset = universe[i];
@@ -143,13 +146,19 @@ export async function scan() {
     const coin = asset?.name;
     if (!coin || !ctx) continue;
 
-    // Фильтр 1: ручной блэклист (STBL и подобные)
+    // Фильтр 1: ручной блэклист из .env (STBL и подобные)
     if (blacklist.has(coin)) {
       skippedBlacklist++;
       continue;
     }
 
-    // Фильтр 2: нет в торгуемом universe из getMeta() → не перп-контракт
+    // Фильтр 2: runtime blacklist — Executor уже обжёгся об этот актив
+    if (runtimeBlocked.has(coin)) {
+      skippedRuntime++;
+      continue;
+    }
+
+    // Фильтр 3: нет в торгуемом universe из getMeta() → не перп-контракт
     if (tradeable.size > 0 && !tradeable.has(coin)) {
       skippedUntradeable++;
       continue;
@@ -168,9 +177,9 @@ export async function scan() {
     results.push({ coin, price, fundingRate, rawApy, smoothedApy: fast, slowApy: slow });
   }
 
-  if (skippedBlacklist > 0 || skippedUntradeable > 0) {
+  if (skippedBlacklist > 0 || skippedUntradeable > 0 || skippedRuntime > 0) {
     logger.debug(
-      `[Scout] Filtered out: ${skippedBlacklist} blacklisted, ${skippedUntradeable} untradeable`,
+      `[Scout] Filtered out: ${skippedBlacklist} blacklisted, ${skippedUntradeable} untradeable, ${skippedRuntime} runtime-blocked`,
     );
   }
 
