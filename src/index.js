@@ -8,6 +8,7 @@ import { analyze } from './modules/strategist.js';
 import { execute } from './modules/executor.js';
 import { sendMessage, sendAnomalyAlert, sendFomoAlert, sendDailySummary } from './modules/reporter.js';
 import { syncWithExchange } from './modules/sync.js';
+import { initExchange, disconnectExchange } from './modules/exchange.js';
 
 const TICK_INTERVAL_MS    = 15_000;          // 15 секунд
 const DAILY_INTERVAL_MS   = 24 * 3_600_000;  // 24 часа
@@ -322,6 +323,13 @@ async function shutdown(signal) {
     logger.error(`[System] [6/6] ❌ Telegram notification failed: ${err.message}`);
   }
 
+  // Отключаем SDK (если PRODUCTION)
+  try {
+    await disconnectExchange();
+  } catch (err) {
+    logger.error(`[System] ❌ Exchange disconnect error: ${err.message}`);
+  }
+
   if (db) {
     try {
       db.close();
@@ -348,6 +356,9 @@ async function main() {
   logger.info('═══════════════════════════════════════════════');
 
   db = initDB();
+
+  // PRODUCTION: подключаемся к бирже через SDK
+  await initExchange();
 
   // Синхронизация состояния до первого тика
   await syncWithExchange();

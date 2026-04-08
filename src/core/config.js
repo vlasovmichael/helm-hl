@@ -19,9 +19,20 @@ function loadConfig() {
 
   const privateKey = process.env.HL_PRIVATE_KEY || null;
 
-  if (mode === 'PRODUCTION' && !privateKey) {
+  const agentPrivateKey = process.env.HL_AGENT_PRIVATE_KEY || null;
+
+  if (mode === 'PRODUCTION' && !agentPrivateKey && !privateKey) {
     throw new Error(
-      'TRADING_MODE is PRODUCTION but HL_PRIVATE_KEY is not set. Refusing to start.',
+      'TRADING_MODE is PRODUCTION but neither HL_AGENT_PRIVATE_KEY nor HL_PRIVATE_KEY is set. ' +
+      'Set HL_AGENT_PRIVATE_KEY (recommended) or HL_PRIVATE_KEY. Refusing to start.',
+    );
+  }
+
+  if (mode === 'PRODUCTION' && !agentPrivateKey) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '⚠️  WARNING: Using HL_PRIVATE_KEY (main wallet) instead of HL_AGENT_PRIVATE_KEY (agent). ' +
+      'Agent wallet is strongly recommended for production — it cannot withdraw funds.',
     );
   }
 
@@ -46,8 +57,9 @@ function loadConfig() {
     isProduction: mode === 'PRODUCTION',
 
     wallet: {
-      address:    walletAddress,
-      privateKey,
+      address:         walletAddress,
+      privateKey,                                        // основной ключ (fallback)
+      agentPrivateKey: process.env.HL_AGENT_PRIVATE_KEY || null,  // ключ агента для торговли
       rpcUrl: process.env.RPC_URL || 'https://mainnet.base.org',
     },
 
