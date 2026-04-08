@@ -258,14 +258,17 @@ export function setStatusCollector(fn) {
  * Собирает свежие данные и отправляет ответ.
  */
 async function handleStatusCallback(callbackQueryId) {
-  // Сначала ответим на callback — иначе кнопка зависнет
-  try {
-    await axios.post(`${TG_BASE}/answerCallbackQuery`, {
-      callback_query_id: callbackQueryId,
-      text: 'Собираю данные…',
-    });
-  } catch {
-    // не критично
+  // Если вызов от кнопки — подтверждаем callback (иначе кнопка зависнет)
+  // Если вызов от /status команды — callbackQueryId будет null, пропускаем
+  if (callbackQueryId) {
+    try {
+      await axios.post(`${TG_BASE}/answerCallbackQuery`, {
+        callback_query_id: callbackQueryId,
+        text: 'Собираю данные…',
+      });
+    } catch {
+      // не критично
+    }
   }
 
   if (!statusCollector) {
@@ -306,7 +309,10 @@ async function handleStatusCallback(callbackQueryId) {
 }
 
 /**
- * Запускает polling Telegram getUpdates для обработки callback_query.
+ * Запускает polling Telegram getUpdates для обработки:
+ *  - callback_query (нажатие кнопки "📊 Статус")
+ *  - message        (текстовая команда /status)
+ *
  * Вызывается при старте бота.
  */
 export function startCallbackPolling() {
@@ -315,15 +321,15 @@ export function startCallbackPolling() {
     return;
   }
 
-  logger.info('[Reporter] Starting callback button polling');
+  logger.info('[Reporter] Starting callback & command polling (/status button + command)');
 
   pollingTimer = setInterval(async () => {
     try {
       const { data } = await axios.get(`${TG_BASE}/getUpdates`, {
         params: {
           offset:          lastUpdateId + 1,
-          timeout:         0,           // non-blocking
-          allowed_updates: JSON.stringify(['callback_query']),
+          timeout:         0,
+          allowed_updates: JSON.stringify(['callback_query', 'message']),
         },
         timeout: 10_000,
       });
@@ -333,19 +339,29 @@ export function startCallbackPolling() {
       for (const update of data.result) {
         lastUpdateId = update.update_id;
 
+        // ── Кнопка "📊 Статус" ──────────────────
         const cb = update.callback_query;
         if (cb?.data === 'bot_status') {
           logger.info(`[Reporter] Status button pressed by ${cb.from?.username ?? cb.from?.id}`);
           await handleStatusCallback(cb.id);
+          continue;
+        }
+
+        // ── Текстовая команда /status ────────────
+        const msg = update.message;
+        if (msg?.text?.startsWith('/status')) {
+          // Игнорируем сообщения не из нашего чата
+          if (String(msg.chat.id) !== String(config.telegram.chatId)) continue;
+
+          logger.info(`[Reporter] /status command from ${msg.from?.username ?? msg.from?.id}`);
+          await handleStatusCallback(null); // null = нет callback_query_id, просто шлём ответ
         }
       }
     } catch (err) {
-      // Не спамим логи если Telegram лежит
       logger.debug(`[Reporter] Polling error: ${err.message}`);
     }
   }, POLLING_INTERVAL_MS);
 
-  // Не мешаем Node.js завершиться
   if (pollingTimer.unref) pollingTimer.unref();
 }
 
