@@ -17,7 +17,7 @@ import {
   stopCallbackPolling,
 } from './modules/reporter.js';
 import { syncWithExchange } from './modules/sync.js';
-import { initExchange, disconnectExchange, getBalance as getExchangeBalance, getAccountSummary } from './modules/exchange.js';
+import { initExchange, disconnectExchange, getBalance as getExchangeBalance, getAccountSummary, getMarkPrice } from './modules/exchange.js';
 import { getAvailableBalance } from './modules/wallet.js';
 
 const TICK_INTERVAL_MS    = 15_000;          // 15 секунд
@@ -395,14 +395,13 @@ async function main() {
     const position = getActivePosition();
     const history  = getHistory(1000);
 
-    // Баланс: equity + available + unrealizedPnl
-    let equity = 0, available = 0, unrealizedPnl = 0;
+    // Баланс: equity + available
+    let equity = 0, available = 0;
     try {
       if (config.isProduction) {
         const summary = await getAccountSummary();
         equity        = summary.equity;
         available     = summary.available;
-        unrealizedPnl = summary.unrealizedPnl;
       } else {
         available = await getAvailableBalance();
         equity    = available; // PAPER: equity = available
@@ -411,12 +410,29 @@ async function main() {
       // покажем $0
     }
 
+    // Динамический Unrealized PnL: запрашиваем Mark Price и считаем
+    // Формула для шорта: (entry_price - mark_price) * qty
+    let unrealizedPnl = 0;
+    let markPrice = null;
+    if (position) {
+      try {
+        markPrice = await getMarkPrice(position.coin);
+        if (markPrice != null) {
+          const qty = position.size_usd / position.entry_price;
+          unrealizedPnl = (position.entry_price - markPrice) * qty;
+        }
+      } catch {
+        // не критично — покажем 0
+      }
+    }
+
     const realizedPnl = history.reduce((s, t) => s + t.realized_pnl, 0);
 
     return {
       equity,
       available,
       unrealizedPnl,
+      markPrice,
       activePosition:  position,
       uptimeMin:       Math.round((Date.now() - startedAt) / 60_000),
       closedTrades:    history.length,

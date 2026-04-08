@@ -283,14 +283,19 @@ async function handleStatusCallback(callbackQueryId) {
     if (status.activePosition) {
       const p     = status.activePosition;
       const heldH = ((Date.now() - p.entry_time) / 3_600_000).toFixed(1);
+      const markStr = status.markPrice != null
+        ? `$${status.markPrice}`
+        : 'N/A';
       posLine =
         `📌 <b>#${p.coin}</b>\n` +
         `💰 $${p.size_usd.toFixed(2)} @ $${p.entry_price}\n` +
         `📊 APY: ${p.entry_apy.toFixed(2)}%\n` +
+        `🏷 Mark Price: <b>${markStr}</b>\n` +
         `⏳ Удержание: ${heldH}ч`;
     }
 
     const uPnlSign = status.unrealizedPnl >= 0 ? '+' : '';
+    const uPnlEmoji = status.unrealizedPnl >= 0 ? '📈' : '📉';
     const rPnlSign = status.realizedPnl >= 0 ? '+' : '';
     const totalTrades = status.openTrades + status.closedTrades;
 
@@ -304,7 +309,7 @@ async function handleStatusCallback(callbackQueryId) {
       `💵 Доступно: <b>$${status.available.toFixed(2)}</b>\n` +
       `<code>─────────────────────</code>\n` +
       `${posLine}\n` +
-      `📈 Unrealized PnL: <b>${uPnlSign}$${status.unrealizedPnl.toFixed(4)}</b>\n` +
+      `${uPnlEmoji} Unrealized PnL: <b>${uPnlSign}$${status.unrealizedPnl.toFixed(4)}</b>\n` +
       `<code>─────────────────────</code>\n` +
       `🔁 Сделок: <b>${totalTrades}</b> (открытых: ${status.openTrades} | закрытых: ${status.closedTrades})\n` +
       `💰 Realized PnL: <b>${rPnlSign}$${status.realizedPnl.toFixed(4)}</b>`,

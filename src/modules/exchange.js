@@ -297,3 +297,39 @@ export async function getMeta() {
     maxRetries: 2,
   });
 }
+
+/**
+ * Получает текущую Mark Price для конкретного тикера.
+ *
+ * Использует metaAndAssetCtxs API — возвращает markPx из assetCtx.
+ * Лёгкий запрос: один POST, парсим нужную монету.
+ *
+ * @param {string} coin — "ETH", "BTC" и т.д. (без "-PERP")
+ * @returns {Promise<number|null>} — markPrice или null если не найден
+ */
+export async function getMarkPrice(coin) {
+  try {
+    const { data } = await axios.post(
+      'https://api.hyperliquid.xyz/info',
+      { type: 'metaAndAssetCtxs' },
+      { timeout: 10_000 },
+    );
+
+    const [meta, ctxs] = data ?? [];
+    const universe = meta?.universe;
+    if (!Array.isArray(universe) || !Array.isArray(ctxs)) return null;
+
+    const upperCoin = coin.toUpperCase();
+    const idx = universe.findIndex(
+      (a) => (a.name ?? '').toUpperCase() === upperCoin,
+    );
+
+    if (idx === -1 || !ctxs[idx]) return null;
+
+    const px = parseFloat(ctxs[idx].markPx ?? ctxs[idx].midPx ?? '0');
+    return px > 0 ? px : null;
+  } catch (err) {
+    logger.warn(`[Exchange] getMarkPrice(${coin}) failed: ${err.message}`);
+    return null;
+  }
+}
