@@ -164,6 +164,28 @@ export async function getBalance() {
 }
 
 /**
+ * Получает полную сводку аккаунта: equity, available, unrealizedPnl.
+ *
+ * @returns {Promise<{ equity: number, available: number, unrealizedPnl: number }>}
+ */
+export async function getAccountSummary() {
+  return retryWithBackoff(
+    () =>
+      sdk.info.perpetuals
+        .getClearinghouseState(config.wallet.address)
+        .then((state) => {
+          const ms = state?.marginSummary ?? {};
+          return {
+            equity:        parseFloat(ms.accountValue ?? "0"),
+            available:     parseFloat(state?.withdrawable ?? "0"),
+            unrealizedPnl: parseFloat(ms.totalUnrealizedPnl ?? ms.unrealizedPnl ?? "0"),
+          };
+        }),
+    { label: "get-account-summary", maxRetries: 3 },
+  );
+}
+
+/**
  * Получает метаданные рынка (для определения assetIndex, szDecimals и т.д.).
  *
  * @returns {Promise<Object>}

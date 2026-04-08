@@ -290,17 +290,24 @@ async function handleStatusCallback(callbackQueryId) {
         `⏳ Удержание: ${heldH}ч`;
     }
 
+    const uPnlSign = status.unrealizedPnl >= 0 ? '+' : '';
+    const rPnlSign = status.realizedPnl >= 0 ? '+' : '';
+    const totalTrades = status.openTrades + status.closedTrades;
+
     await sendMessageWithButton(
       `📊 <b>Статус бота</b>\n` +
       `<code>─────────────────────</code>\n` +
       `📡 Режим: <b>${config.mode}</b>\n` +
       `⏱ Uptime: <b>${status.uptimeMin} мин</b>\n` +
-      `💵 Баланс: <b>$${status.balance.toFixed(2)}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `💰 Эквити: <b>$${status.equity.toFixed(2)}</b>\n` +
+      `💵 Доступно: <b>$${status.available.toFixed(2)}</b>\n` +
       `<code>─────────────────────</code>\n` +
       `${posLine}\n` +
+      `📈 Unrealized PnL: <b>${uPnlSign}$${status.unrealizedPnl.toFixed(4)}</b>\n` +
       `<code>─────────────────────</code>\n` +
-      `🔁 Сделок всего: <b>${status.totalTrades}</b>\n` +
-      `💰 PnL: <b>${status.totalPnl >= 0 ? '+' : ''}$${status.totalPnl.toFixed(4)}</b>`,
+      `🔁 Сделок: <b>${totalTrades}</b> (открытых: ${status.openTrades} | закрытых: ${status.closedTrades})\n` +
+      `💰 Realized PnL: <b>${rPnlSign}$${status.realizedPnl.toFixed(4)}</b>`,
     );
   } catch (err) {
     logger.error(`[Reporter] Status callback failed: ${err.message}`);

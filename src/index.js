@@ -17,7 +17,7 @@ import {
   stopCallbackPolling,
 } from './modules/reporter.js';
 import { syncWithExchange } from './modules/sync.js';
-import { initExchange, disconnectExchange, getBalance as getExchangeBalance } from './modules/exchange.js';
+import { initExchange, disconnectExchange, getBalance as getExchangeBalance, getAccountSummary } from './modules/exchange.js';
 import { getAvailableBalance } from './modules/wallet.js';
 
 const TICK_INTERVAL_MS    = 15_000;          // 15 секунд
@@ -395,21 +395,33 @@ async function main() {
     const position = getActivePosition();
     const history  = getHistory(1000);
 
-    let balance = 0;
+    // Баланс: equity + available + unrealizedPnl
+    let equity = 0, available = 0, unrealizedPnl = 0;
     try {
-      balance = config.isProduction
-        ? await getExchangeBalance()
-        : await getAvailableBalance();
+      if (config.isProduction) {
+        const summary = await getAccountSummary();
+        equity        = summary.equity;
+        available     = summary.available;
+        unrealizedPnl = summary.unrealizedPnl;
+      } else {
+        available = await getAvailableBalance();
+        equity    = available; // PAPER: equity = available
+      }
     } catch {
       // покажем $0
     }
 
+    const realizedPnl = history.reduce((s, t) => s + t.realized_pnl, 0);
+
     return {
-      balance,
-      activePosition: position,
-      uptimeMin:      Math.round((Date.now() - startedAt) / 60_000),
-      totalTrades:    history.length,
-      totalPnl:       history.reduce((s, t) => s + t.realized_pnl, 0),
+      equity,
+      available,
+      unrealizedPnl,
+      activePosition:  position,
+      uptimeMin:       Math.round((Date.now() - startedAt) / 60_000),
+      closedTrades:    history.length,
+      openTrades:      position ? 1 : 0,
+      realizedPnl,
     };
   });
 
