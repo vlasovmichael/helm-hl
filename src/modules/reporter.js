@@ -228,8 +228,8 @@ export async function sendStartupNotification({ balance, activePosition }) {
     `🚀 <b>${config.mode} запущен</b>\n` +
     `<code>─────────────────────</code>\n` +
     `💵 Баланс: <b>$${balance.toFixed(2)}</b>\n` +
-    `🎯 Цель: APY > <b>${config.trading.entryApy}%</b>\n` +
-    `🛡 Выход: APY < <b>${config.trading.minApy - config.trading.exitBuffer}%</b>\n` +
+    `🎯 Цель: APY &gt; <b>${config.trading.entryApy}%</b>\n` +
+    `🛡 Выход: APY &lt; <b>${config.trading.minApy - config.trading.exitBuffer}%</b>\n` +
     `<code>─────────────────────</code>\n` +
     `${posLine}`,
     true, // critical — всегда со звуком
