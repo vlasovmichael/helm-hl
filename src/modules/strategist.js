@@ -85,15 +85,15 @@ export function analyze(scoutData, activePosition) {
     };
   }
 
-  // 2. Цена рухнула >10% — защита от ликвидации при леверидже
-  const priceDrop = ((activePosition.entry_price - current.price) / activePosition.entry_price) * 100;
-  if (priceDrop > 10) {
-    logger.warn(`[Strategist] CLOSE — ${currentCoin} price dropped ${priceDrop.toFixed(2)}%`);
+  // 2. Цена выросла >10% — защита шорта от убытка
+  const priceSpike = ((current.price - activePosition.entry_price) / activePosition.entry_price) * 100;
+  if (priceSpike > 10) {
+    logger.warn(`[Strategist] CLOSE — ${currentCoin} price spiked +${priceSpike.toFixed(2)}% (short at risk)`);
     return {
       action: 'CLOSE',
       coin:   currentCoin,
       price:  current.price,
-      reason: 'price_drop_protection',
+      reason: 'price_spike_protection',
     };
   }
 

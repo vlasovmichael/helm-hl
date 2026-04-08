@@ -382,9 +382,9 @@ function paperClose(signal, position, silent = false) {
   const holdHours = holdMs / 3_600_000;
   const closePrice = signal.price;
 
-  // Funding PnL: шортовая нога (50%) × hourlyRate × hours
+  // Funding PnL: голый шорт — 100% позиции получает фандинг
   const hourlyRate  = position.entry_apy / 100 / 365 / 24;
-  const fundingPnl  = position.size_usd * 0.5 * hourlyRate * holdHours;
+  const fundingPnl  = position.size_usd * hourlyRate * holdHours;
 
   // Комиссии: вход + выход
   const totalFee = position.size_usd * ONE_LEG * 2;
@@ -406,7 +406,7 @@ function paperClose(signal, position, silent = false) {
   if (!silent) {
     const isCriticalClose = realizedPnl < 0;
 
-    sendMessage(
+    await sendMessage(
       `🔴 <b>[CLOSE] #${position.coin}</b>\n` +
         `📈 Причина: <b>${signal.reason}</b>\n` +
         `⏳ Удержание: ${holdHours.toFixed(1)}ч\n` +
@@ -670,8 +670,9 @@ async function productionClose(signal, position, silent = false) {
 
   // ── 4. Считаем реальный PnL ──────────────────
   const pricePnl   = position.size_usd * (position.entry_price - fill.avgPx) / position.entry_price;
+  // Funding PnL: голый шорт — 100% позиции получает фандинг
   const hourlyRate = position.entry_apy / 100 / 365 / 24;
-  const fundingPnl = position.size_usd * 0.5 * hourlyRate * holdHours;
+  const fundingPnl = position.size_usd * hourlyRate * holdHours;
   const totalFee   = position.size_usd * FEE_RATE * 2;
   const realizedPnl = pricePnl + fundingPnl - totalFee;
 

@@ -384,6 +384,24 @@ async function main() {
   process.on('SIGTERM', () => handleSignal('SIGTERM'));
 }
 
+// ── Страховка: ловим всё, что проскочило мимо try/catch ──
+process.on('unhandledRejection', (reason) => {
+  const msg = reason instanceof Error ? reason.message : String(reason);
+  logger.error(`[UnhandledRejection] ${msg}`);
+  // НЕ крашим процесс — логируем и продолжаем работу
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error(`[UncaughtException] ${err.message}`, { stack: err.stack });
+  // Тут ситуация серьёзнее — состояние процесса может быть повреждено.
+  // Пытаемся graceful shutdown, если ещё не запущен.
+  if (!shuttingDown) {
+    shutdown('uncaughtException').catch(() => process.exit(1));
+  } else {
+    process.exit(1);
+  }
+});
+
 main().catch((err) => {
   logger.error(`[Fatal] ${err.message}`);
   process.exit(1);
