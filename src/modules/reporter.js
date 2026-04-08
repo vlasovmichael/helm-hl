@@ -21,14 +21,18 @@ const THROTTLE_KEY_LEN = 120;
 
 /**
  * Возвращает true, если сейчас "тихие часы".
- * Поддерживает перенос через полночь (23–08) и внутри суток (02–06).
+ *
+ * По умолчанию: 22:00–09:00 (настраивается через SILENT_START_HOUR / SILENT_END_HOUR).
+ * В тихие часы все уведомления (кроме critical) отправляются без звука.
+ *
+ * Поддерживает перенос через полночь (22–09) и внутри суток (02–06).
  */
 function isSilentHour() {
   const hour  = new Date().getHours();
   const start = config.telegram.silentStartHour;
   const end   = config.telegram.silentEndHour;
 
-  // Диапазон с переходом через полночь (например, 23 → 08)
+  // Диапазон с переходом через полночь (например, 22 → 09)
   if (start > end) return hour >= start || hour < end;
 
   // Диапазон внутри суток (например, 02 → 06)
@@ -38,12 +42,30 @@ function isSilentHour() {
 /**
  * Базовая отправка HTML-сообщения в Telegram.
  *
+ * Тихие часы (по умолчанию 22:00–09:00):
+ *   critical=false → disable_notification=true (без звука)
+ *   critical=true  → disable_notification=false (со звуком ВСЕГДА)
+ *
+ * Правила critical:
+ *   ✅ CRITICAL (всегда со звуком):
+ *     - ROTATE FAILED (бот без позиции)
+ *     - CLOSE/OPEN FAILED (ордер не прошёл, ошибка API)
+ *     - RECONCILE ошибка
+ *     - SLIPPAGE BAN
+ *     - Sync mismatch / опасные настройки leverage
+ *     - Anomaly APY (падение >30% за тик)
+ *
+ *   ❌ НЕ critical (тишина ночью):
+ *     - Штатные OPEN / CLOSE / ROTATE
+ *     - Startup / Shutdown
+ *     - Status / Daily summary
+ *     - FOMO alert
+ *
  * Антиспам: идентичные (по первым 120 символам) сообщения
- * отправляются не чаще раза в час. Уникальные сообщения и
- * critical-алерты проходят всегда.
+ * отправляются не чаще раза в час. Critical обходит throttle.
  *
  * @param {string}  text
- * @param {boolean} [critical=false] — критичное: всегда со звуком, без throttle
+ * @param {boolean} [critical=false] — аварийное: всегда со звуком, без throttle
  */
 export async function sendMessage(text, critical = false) {
   if (!TG_API || !config.telegram.chatId) return;
@@ -232,7 +254,7 @@ export async function sendStartupNotification({ balance, activePosition }) {
     `🛡 Выход: APY &lt; <b>${config.trading.minApy - config.trading.exitBuffer}%</b>\n` +
     `<code>─────────────────────</code>\n` +
     `${posLine}`,
-    true, // critical — всегда со звуком
+    // critical=false: startup — штатная операция, тишина ночью
   );
 }
 

@@ -581,15 +581,13 @@ async function paperClose(signal, position, silent = false) {
   );
 
   if (!silent) {
-    const isCriticalClose = realizedPnl < 0;
-
     await sendMessage(
       `🔴 <b>[CLOSE] #${position.coin}</b>\n` +
         `📈 Причина: <b>${signal.reason}</b>\n` +
         `⏳ Удержание: ${holdHours.toFixed(1)}ч\n` +
         `💰 PnL: <b>${sign}$${realizedPnl.toFixed(4)}</b>\n` +
         `🏷 Fee: $${totalFee.toFixed(4)}`,
-      isCriticalClose,
+      // critical=false: штатная операция, тишина ночью
     );
   }
 
@@ -948,7 +946,6 @@ async function productionClose(signal, position, silent = false) {
 
   // ── 7. Telegram ──────────────────────────────
   if (!silent) {
-    const isCritical = realizedPnl < 0;
     const slipWarn = slip.warn ? "⚠️ " : "";
 
     await sendMessage(
@@ -965,7 +962,7 @@ async function productionClose(signal, position, silent = false) {
         `<b>💎 Итого: ${sign}$${realizedPnl.toFixed(4)}</b>\n` +
         `<code>─────────────────────</code>\n` +
         `🔑 OID: <code>${fill.oid}</code>`,
-      isCritical,
+      // critical=false: штатная операция, тишина ночью
     );
   }
 
@@ -1047,7 +1044,6 @@ async function productionRotate(signal, position) {
 
   // ── Шаг 3: ОДНО консолидированное уведомление ─
   const closePnlSign = closeResult.pnl >= 0 ? "+" : "";
-  const isCritical = closeResult.pnl < 0;
 
   await sendMessage(
     `🔄 <b>[PROD ROTATE]</b> ${signal.closeCoin} → <b>${signal.openCoin}</b>\n` +
@@ -1060,7 +1056,7 @@ async function productionRotate(signal, position) {
       `📊 APY: <b>${signal.openApy.toFixed(2)}%</b>\n` +
       `⏱ Payback: ${signal.paybackHours}h\n` +
       `<code>═════════════════════</code>`,
-    isCritical,
+    // critical=false: штатная ротация, тишина ночью
   );
 
   return {

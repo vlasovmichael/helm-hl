@@ -258,7 +258,7 @@ async function sendShutdownNotification(activePosition, reason) {
     `${status}\n` +
     `<code>─────────────────────</code>\n` +
     `✅ Параметры сохранены.`,
-    true, // critical — всегда со звуком
+    // critical=false: штатная остановка, тишина ночью
   );
 }
 
