@@ -80,7 +80,8 @@ export async function sendMessage(text, critical = false) {
       disable_notification: silent,
     });
   } catch (err) {
-    logger.error(`[Reporter] Telegram send failed: ${err.message}`);
+    const detail = err.response?.data?.description ?? err.message;
+    logger.error(`[Reporter] Telegram send failed: ${detail}`);
   }
 }
 
@@ -191,14 +192,15 @@ async function sendMessageWithButton(text, critical = false) {
       text,
       parse_mode:           'HTML',
       disable_notification: silent,
-      reply_markup: JSON.stringify({
+      reply_markup: {
         inline_keyboard: [[
           { text: '📊 Статус', callback_data: 'bot_status' },
         ]],
-      }),
+      },
     });
   } catch (err) {
-    logger.error(`[Reporter] Telegram sendWithButton failed: ${err.message}`);
+    const detail = err.response?.data?.description ?? err.message;
+    logger.error(`[Reporter] Telegram sendWithButton failed: ${detail}`);
   }
 }
 
