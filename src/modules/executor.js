@@ -6,7 +6,7 @@ import {
   closePosition as dbClosePosition,
 } from "../core/database.js";
 import { getAvailableBalance } from "./wallet.js";
-import { getExchange, getBalance, getPositions } from "./exchange.js";
+import { getExchange, getBalance, getPositions, getAccountSummary, setLeverage } from "./exchange.js";
 import { sendMessage } from "./reporter.js";
 import { findAsset, getUniverse, isUniverseFresh } from "../core/universe.js";
 
@@ -565,6 +565,21 @@ async function productionOpen(coin, price, apy, silent = false) {
     return { ok: false };
   }
 
+  // ── 3.5. Принудительно ставим 1x cross leverage ──
+  try {
+    await setLeverage(coin, 1);
+  } catch (err) {
+    logger.error(
+      `[Executor] PROD OPEN #${coin} — setLeverage(1) failed: ${err.message}. Aborting open.`,
+    );
+    await sendMessage(
+      `🚨 <b>[OPEN FAILED] #${coin}</b>\n` +
+        `Не удалось установить leverage 1x:\n<code>${err.message}</code>`,
+      true,
+    );
+    return { ok: false };
+  }
+
   // ── 4. Отправляем ордер ──────────────────────
   logger.info(
     `[Executor] PROD OPEN #${coin} — placing market SELL | ` +
@@ -618,6 +633,19 @@ async function productionOpen(coin, price, apy, silent = false) {
   // ── 7. Сохраняем в БД ────────────────────────
   const fillUsd = fill.totalSz * fill.avgPx;
 
+  // ── 6.5. Расчёт Effective Leverage ──────────
+  let effectiveLeverage = "N/A";
+  try {
+    const { equity } = await getAccountSummary();
+    if (equity > 0) {
+      effectiveLeverage = (fillUsd / equity).toFixed(2) + "x";
+    } else {
+      effectiveLeverage = "∞ (equity=0)";
+    }
+  } catch (err) {
+    logger.warn(`[Executor] Failed to calc effective leverage: ${err.message}`);
+  }
+
   const id = savePosition({
     coin,
     size_usd: fillUsd,
@@ -628,7 +656,7 @@ async function productionOpen(coin, price, apy, silent = false) {
   });
 
   logger.info(
-    `[Executor] ✅ PROD OPEN #${coin} | oid: ${fill.oid} | ` +
+    `[Executor] ✅ PROD OPEN #${coin} | Leverage: ${effectiveLeverage} | oid: ${fill.oid} | ` +
       `filled: ${fill.totalSz} @ $${fill.avgPx} ($${fillUsd.toFixed(2)}) | ` +
       `slippage: ${slip.label} | APY: ${apy.toFixed(2)}% | id: ${id}`,
   );
@@ -648,6 +676,7 @@ async function productionOpen(coin, price, apy, silent = false) {
         `💵 Fill: <b>$${fill.avgPx}</b> (mark: $${price})\n` +
         `${slipWarn}📉 Slippage: <b>${slip.label}</b>\n` +
         `📊 APY: <b>${apy.toFixed(2)}%</b>\n` +
+        `⚖️ Leverage: <b>${effectiveLeverage}</b> (1x cross)\n` +
         `🔑 OID: <code>${fill.oid}</code> | DB: id=${id}`,
     );
   }

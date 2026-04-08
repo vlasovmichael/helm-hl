@@ -129,8 +129,104 @@ export async function disconnectExchange() {
 }
 
 // ─────────────────────────────────────────────────
-//  Обёртки с retry для будущих торговых операций
-//  (пока не используются — подготовка к Шагу 2)
+//  Leverage management
+// ─────────────────────────────────────────────────
+
+/**
+ * Устанавливает кросс-плечо для конкретного актива.
+ *
+ * Вызывается ПЕРЕД открытием позиции — гарантирует, что биржа
+ * не применит повышенное плечо из предыдущих настроек.
+ *
+ * SDK: sdk.exchange.updateLeverage(symbol, leverageMode, leverage)
+ *
+ * @param {string} coin     — "ETH", "BTC" (без "-PERP")
+ * @param {number} leverage — целевое плечо (по умолчанию 1)
+ * @returns {Promise<void>}
+ */
+export async function setLeverage(coin, leverage = 1) {
+  if (!sdk) {
+    logger.warn(`[Exchange] setLeverage skipped — SDK not initialized`);
+    return;
+  }
+
+  const symbol = `${coin}-PERP`;
+
+  try {
+    await retryWithBackoff(
+      () => sdk.exchange.updateLeverage(symbol, "cross", leverage),
+      { label: `set-leverage-${coin}`, maxRetries: 2 },
+    );
+    logger.info(`[Exchange] ✅ Leverage set: ${symbol} → ${leverage}x cross`);
+  } catch (err) {
+    logger.error(`[Exchange] ❌ setLeverage(${symbol}, ${leverage}) failed: ${err.message}`);
+    throw err;
+  }
+}
+
+/**
+ * Проверяет текущие leverage-настройки всех открытых позиций на аккаунте.
+ *
+ * Возвращает массив { coin, type, value } для каждой позиции.
+ * Логирует предупреждение, если обнаружен leverage > maxSafe
+ * или mode !== "cross".
+ *
+ * @param {number} [maxSafe=1] — порог для предупреждения
+ * @returns {Promise<Array<{ coin: string, type: string, value: number }>>}
+ */
+export async function checkAccountLeverage(maxSafe = 1) {
+  if (!sdk) {
+    logger.warn(`[Exchange] checkAccountLeverage skipped — SDK not initialized`);
+    return [];
+  }
+
+  const state = await retryWithBackoff(
+    () => sdk.info.perpetuals.getClearinghouseState(config.wallet.address),
+    { label: "check-leverage", maxRetries: 3 },
+  );
+
+  const results = [];
+
+  for (const ap of state?.assetPositions ?? []) {
+    const pos = ap?.position;
+    if (!pos) continue;
+
+    const leverage = pos.leverage ?? {};
+    const entry = {
+      coin:  pos.coin,
+      type:  leverage.type ?? "unknown",
+      value: leverage.value != null ? parseFloat(leverage.value) : NaN,
+    };
+
+    results.push(entry);
+
+    // Предупреждения
+    if (entry.type !== "cross") {
+      logger.warn(
+        `[Exchange] ⚠️ #${entry.coin} margin mode: ${entry.type} (expected: cross)`,
+      );
+    }
+    if (!isNaN(entry.value) && entry.value > maxSafe) {
+      logger.warn(
+        `[Exchange] ⚠️ #${entry.coin} leverage: ${entry.value}x (max safe: ${maxSafe}x)`,
+      );
+    }
+  }
+
+  if (results.length === 0) {
+    logger.info(`[Exchange] ✅ No open positions — leverage check skipped`);
+  } else {
+    const summary = results
+      .map((r) => `${r.coin}=${r.value}x(${r.type})`)
+      .join(", ");
+    logger.info(`[Exchange] ✅ Leverage check: [${summary}]`);
+  }
+
+  return results;
+}
+
+// ─────────────────────────────────────────────────
+//  Обёртки с retry для торговых операций
 // ─────────────────────────────────────────────────
 
 /**

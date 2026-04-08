@@ -4,6 +4,7 @@ import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getActivePosition, savePosition } from '../core/database.js';
 import { sendMessage } from './reporter.js';
+import { checkAccountLeverage } from './exchange.js';
 
 const HL_API         = 'https://api.hyperliquid.xyz/info';
 const BOT_STATE_PATH = 'data/bot_state.json';
@@ -368,6 +369,40 @@ async function syncProduction() {
   logger.info('[Sync] PRODUCTION — clean start, no positions locally or on exchange');
 }
 
+/**
+ * Проверяет настройки leverage/margin mode на аккаунте при старте.
+ * Логирует предупреждения если leverage > 1x или mode != cross.
+ * Шлёт Telegram-алерт при обнаружении опасных настроек.
+ */
+async function checkLeverageSettings() {
+  try {
+    const leverageInfo = await checkAccountLeverage(1);
+
+    // Ищем проблемные настройки
+    const warnings = leverageInfo.filter(
+      (l) => l.type !== 'cross' || (!isNaN(l.value) && l.value > 1),
+    );
+
+    if (warnings.length > 0) {
+      const lines = warnings.map(
+        (w) => `⚠️ #${w.coin}: ${w.value}x ${w.type}`,
+      );
+
+      await sendMessage(
+        `🚨 <b>[SYNC] Опасные настройки leverage!</b>\n` +
+          `<code>─────────────────────</code>\n` +
+          `${lines.join('\n')}\n` +
+          `<code>─────────────────────</code>\n` +
+          `⚙️ Ожидается: <b>1x cross</b> для всех позиций.\n` +
+          `❗️ Исправь вручную или бот выставит 1x при следующем OPEN.`,
+        true,
+      );
+    }
+  } catch (err) {
+    logger.warn(`[Sync] Leverage check failed (non-critical): ${err.message}`);
+  }
+}
+
 // ─────────────────────────────────────────────────
 //  Public API
 // ─────────────────────────────────────────────────
@@ -390,6 +425,7 @@ export async function syncWithExchange() {
   try {
     if (config.isProduction) {
       await syncProduction();
+      await checkLeverageSettings();
     } else {
       await syncPaper();
     }
