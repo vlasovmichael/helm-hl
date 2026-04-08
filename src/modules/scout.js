@@ -64,10 +64,19 @@ async function fetchTradeableCoins() {
       return tradeableCoins ?? new Set();
     }
 
-    tradeableCoins = new Set(universe.map((a) => a.name));
+    // Санитарная проверка: если universe подозрительно маленький,
+    // не обновляем кеш — скорее всего API вернул мусор
+    if (universe.length < 10) {
+      logger.warn(
+        `[Scout] getMeta universe suspiciously small (${universe.length} assets) — keeping stale cache`,
+      );
+      return tradeableCoins ?? new Set();
+    }
+
+    tradeableCoins = new Set(universe.map((a) => a.name.toUpperCase()));
     tradeableCacheTime = Date.now();
 
-    logger.debug(`[Scout] Tradeable universe refreshed — ${tradeableCoins.size} assets`);
+    logger.info(`[Scout] Tradeable universe refreshed — ${tradeableCoins.size} assets`);
     return tradeableCoins;
   } catch (err) {
     logger.warn(`[Scout] Failed to refresh tradeable universe: ${err.message}`);
@@ -134,6 +143,11 @@ export async function scan() {
   const blacklist       = config.trading.coinBlacklist;
   const runtimeBlocked  = getRuntimeBlacklist();
 
+  logger.info(
+    `[Scout] Filters: API universe=${universe.length} | tradeable=${tradeable.size} | ` +
+    `blacklist=${blacklist.size} | runtime-banned=${runtimeBlocked.size}`,
+  );
+
   const results = [];
   let skippedBlacklist   = 0;
   let skippedUntradeable = 0;
@@ -146,20 +160,24 @@ export async function scan() {
     const coin = asset?.name;
     if (!coin || !ctx) continue;
 
+    const coinUpper = coin.toUpperCase();
+
     // Фильтр 1: ручной блэклист из .env (STBL и подобные)
-    if (blacklist.has(coin)) {
+    if (blacklist.has(coinUpper)) {
       skippedBlacklist++;
       continue;
     }
 
     // Фильтр 2: runtime blacklist — Executor уже обжёгся об этот актив
-    if (runtimeBlocked.has(coin)) {
+    if (runtimeBlocked.has(coin) || runtimeBlocked.has(coinUpper)) {
       skippedRuntime++;
       continue;
     }
 
     // Фильтр 3: нет в торгуемом universe из getMeta() → не перп-контракт
-    if (tradeable.size > 0 && !tradeable.has(coin)) {
+    // Пропускаем если tradeable пустой (getMeta ещё не прогрузился) —
+    // лучше пропустить мусор в Executor, чем забанить всё живое
+    if (tradeable.size > 0 && !tradeable.has(coinUpper)) {
       skippedUntradeable++;
       continue;
     }

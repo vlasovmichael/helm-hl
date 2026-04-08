@@ -31,19 +31,31 @@ const SLIPPAGE_WARN_PCT = 0.5;
 const RECONCILIATION_TOLERANCE_PCT = 2.0;
 
 // ─────────────────────────────────────────────────
-//  Runtime Blacklist
+//  Runtime Blacklist (с автоистечением)
 // ─────────────────────────────────────────────────
-// Монеты, которые упали с ошибкой "Asset not found" / "Invalid asset"
-// при текущем запуске. Сбрасывается при перезапуске бота.
-// Scout проверяет этот список при каждом scan().
-const runtimeBlacklist = new Set();
+// Монеты, которые упали с ошибкой "Asset not found" при СВЕЖЕМ кеше.
+// Записи истекают через RUNTIME_BAN_TTL_MS — если getMeta обновится
+// и монета появится в universe, она снова станет доступна.
+const RUNTIME_BAN_TTL_MS = 30 * 60_000; // 30 минут
+
+// coin → timestamp бана
+const runtimeBlacklist = new Map();
 
 /**
- * Возвращает Set монет, заблокированных в рантайме.
+ * Возвращает Set актуально заблокированных монет (с учётом TTL).
  * @returns {Set<string>}
  */
 export function getRuntimeBlacklist() {
-  return runtimeBlacklist;
+  const now = Date.now();
+  const active = new Set();
+  for (const [coin, bannedAt] of runtimeBlacklist) {
+    if (now - bannedAt < RUNTIME_BAN_TTL_MS) {
+      active.add(coin);
+    } else {
+      runtimeBlacklist.delete(coin); // истёк — чистим
+    }
+  }
+  return active;
 }
 
 // ─────────────────────────────────────────────────
@@ -61,22 +73,38 @@ const META_TTL_MS = 5 * 60_000; // обновляем раз в 5 минут
  * @returns {Promise<{ szDecimals: number }>}
  */
 async function resolveAsset(coin) {
-  if (!metaCache || Date.now() - metaCacheTime > META_TTL_MS) {
+  const cacheAge = Date.now() - metaCacheTime;
+
+  if (!metaCache || cacheAge > META_TTL_MS) {
     metaCache = await getMeta();
     metaCacheTime = Date.now();
-    logger.debug(
-      `[Executor] Meta cache refreshed — ${metaCache.universe.length} assets`,
+    logger.info(
+      `[Executor] Meta cache refreshed — ${metaCache.universe.length} assets in universe`,
     );
   }
 
-  const asset = metaCache.universe.find((a) => a.name === coin);
+  // Case-insensitive поиск: API может вернуть "ZRO" или "zro"
+  const coinUpper = coin.toUpperCase();
+  const asset = metaCache.universe.find(
+    (a) => a.name.toUpperCase() === coinUpper,
+  );
 
   if (!asset) {
-    // Заносим в runtime blacklist — Scout перестанет предлагать эту монету
-    runtimeBlacklist.add(coin);
-    logger.warn(
-      `[Executor] "${coin}" added to runtime blacklist (${runtimeBlacklist.size} total)`,
-    );
+    // Баним только если кеш свежий (< 5 мин).
+    // Если кеш устарел или только что обновлён — это реальный "not found".
+    // Если getMeta() упал и кеш stale — не баним, вдруг монета валидная.
+    const cacheIsFresh = Date.now() - metaCacheTime < META_TTL_MS;
+    if (cacheIsFresh) {
+      runtimeBlacklist.set(coin, Date.now());
+      logger.warn(
+        `[Executor] "${coin}" added to runtime blacklist for ${RUNTIME_BAN_TTL_MS / 60_000}min ` +
+        `(${runtimeBlacklist.size} total, universe: ${metaCache.universe.length} assets)`,
+      );
+    } else {
+      logger.warn(
+        `[Executor] "${coin}" not found but meta cache is stale — NOT banning`,
+      );
+    }
     throw new Error(`Asset "${coin}" not found in Hyperliquid universe`);
   }
 
