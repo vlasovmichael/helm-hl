@@ -71,6 +71,13 @@ function loadConfig() {
       minHoldMinutes:    parseInt(process.env.MIN_HOLD_TIME_MINUTES   || '60',  10),
       breathingMinutes:  parseInt(process.env.BREATHING_MINUTES       || '30',  10),
       fakeBalance:       process.env.FAKE_BALANCE ? parseFloat(process.env.FAKE_BALANCE) : null,
+      // Монеты, которые нельзя торговать (HLP-индексы, деривативы и т.п.)
+      coinBlacklist:     new Set(
+        (process.env.COIN_BLACKLIST || 'STBL')
+          .split(',')
+          .map((s) => s.trim().toUpperCase())
+          .filter(Boolean),
+      ),
     },
 
     telegram: {
