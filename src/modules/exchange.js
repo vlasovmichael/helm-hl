@@ -12,10 +12,10 @@
  * из приватного ключа агента.
  */
 
-import Hyperliquid from 'hyperliquid';
-import { config } from '../core/config.js';
-import { logger } from '../core/logger.js';
-import { retryWithBackoff } from '../core/retry.js';
+import { Hyperliquid } from "hyperliquid";
+import { config } from "../core/config.js";
+import { logger } from "../core/logger.js";
+import { retryWithBackoff } from "../core/retry.js";
 
 let sdk = null;
 
@@ -29,20 +29,20 @@ let sdk = null;
  */
 export async function initExchange() {
   if (!config.isProduction) {
-    logger.info('[Exchange] PAPER mode — SDK not initialized');
+    logger.info("[Exchange] PAPER mode — SDK not initialized");
     return null;
   }
 
   // Выбираем ключ: агент (рекомендуется) → основной (fallback)
   const privateKey = config.wallet.agentPrivateKey || config.wallet.privateKey;
-  const isAgent    = !!config.wallet.agentPrivateKey;
+  const isAgent = !!config.wallet.agentPrivateKey;
 
   if (!privateKey) {
-    throw new Error('[Exchange] No private key available for PRODUCTION mode');
+    throw new Error("[Exchange] No private key available for PRODUCTION mode");
   }
 
   logger.info(
-    `[Exchange] Initializing SDK (${isAgent ? 'AGENT wallet' : '⚠️ MAIN wallet'})…`,
+    `[Exchange] Initializing SDK (${isAgent ? "AGENT wallet" : "⚠️ MAIN wallet"})…`,
   );
 
   try {
@@ -60,7 +60,7 @@ export async function initExchange() {
     // SDK требует вызова connect() для инициализации внутренних структур
     await sdk.connect();
 
-    logger.info('[Exchange] ✅ SDK connected successfully');
+    logger.info("[Exchange] ✅ SDK connected successfully");
 
     // Верификация: запрашиваем состояние аккаунта
     await verifyConnection();
@@ -78,19 +78,21 @@ export async function initExchange() {
 async function verifyConnection() {
   const state = await retryWithBackoff(
     () => sdk.info.perpetuals.getClearinghouseState(config.wallet.address),
-    { label: 'verify-connection', maxRetries: 3 },
+    { label: "verify-connection", maxRetries: 3 },
   );
 
-  const accountValue = parseFloat(state?.marginSummary?.accountValue ?? '0');
-  const withdrawable = parseFloat(state?.withdrawable ?? '0');
+  const accountValue = parseFloat(state?.marginSummary?.accountValue ?? "0");
+  const withdrawable = parseFloat(state?.withdrawable ?? "0");
 
   logger.info(
     `[Exchange] ✅ Connection verified — ` +
-    `Account: $${accountValue.toFixed(2)} | Withdrawable: $${withdrawable.toFixed(2)}`,
+      `Account: $${accountValue.toFixed(2)} | Withdrawable: $${withdrawable.toFixed(2)}`,
   );
 
   if (accountValue <= 0) {
-    logger.warn('[Exchange] ⚠️  Account value is $0 — is this the right wallet?');
+    logger.warn(
+      "[Exchange] ⚠️  Account value is $0 — is this the right wallet?",
+    );
   }
 
   return { accountValue, withdrawable };
@@ -105,7 +107,7 @@ async function verifyConnection() {
 export function getExchange() {
   if (!sdk) {
     throw new Error(
-      '[Exchange] SDK not initialized. Call initExchange() first.',
+      "[Exchange] SDK not initialized. Call initExchange() first.",
     );
   }
   return sdk;
@@ -120,7 +122,7 @@ export async function disconnectExchange() {
   try {
     await sdk.disconnect();
     sdk = null;
-    logger.info('[Exchange] ✅ SDK disconnected');
+    logger.info("[Exchange] ✅ SDK disconnected");
   } catch (err) {
     logger.error(`[Exchange] Disconnect error: ${err.message}`);
   }
@@ -138,9 +140,11 @@ export async function disconnectExchange() {
  */
 export async function getPositions() {
   return retryWithBackoff(
-    () => sdk.info.perpetuals.getClearinghouseState(config.wallet.address)
-      .then((state) => state?.assetPositions ?? []),
-    { label: 'get-positions', maxRetries: 3 },
+    () =>
+      sdk.info.perpetuals
+        .getClearinghouseState(config.wallet.address)
+        .then((state) => state?.assetPositions ?? []),
+    { label: "get-positions", maxRetries: 3 },
   );
 }
 
@@ -151,9 +155,11 @@ export async function getPositions() {
  */
 export async function getBalance() {
   return retryWithBackoff(
-    () => sdk.info.perpetuals.getClearinghouseState(config.wallet.address)
-      .then((state) => parseFloat(state?.withdrawable ?? '0')),
-    { label: 'get-balance', maxRetries: 3 },
+    () =>
+      sdk.info.perpetuals
+        .getClearinghouseState(config.wallet.address)
+        .then((state) => parseFloat(state?.withdrawable ?? "0")),
+    { label: "get-balance", maxRetries: 3 },
   );
 }
 
@@ -163,8 +169,8 @@ export async function getBalance() {
  * @returns {Promise<Object>}
  */
 export async function getMeta() {
-  return retryWithBackoff(
-    () => sdk.info.perpetuals.getMeta(),
-    { label: 'get-meta', maxRetries: 2 },
-  );
+  return retryWithBackoff(() => sdk.info.perpetuals.getMeta(), {
+    label: "get-meta",
+    maxRetries: 2,
+  });
 }
