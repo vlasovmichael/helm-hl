@@ -21,6 +21,10 @@ const ONE_LEG = FEE_RATE + SLIPPAGE; // 0.03% за одну сторону
 
 const BALANCE_UTILIZATION = 0.95; // 95% от баланса — 5% остаётся на комиссии/маржу
 
+// Минимальный размер ордера в USD — ниже биржа отклонит или ордер бессмысленен.
+// Hyperliquid min ~$10, ставим $11 с запасом.
+const MIN_ORDER_USD = 11;
+
 // Slippage для IoC-лимитки (имитация маркет-ордера).
 // Реальный fill будет по рынку, это лишь потолок допустимой цены.
 const MARKET_SLIPPAGE = 0.03; // 3%
@@ -63,6 +67,14 @@ const REENTRY_COOLDOWN_MS = 15 * 60_000; // 15 минут
 
 // coin → timestamp закрытия
 const cooldownMap = new Map();
+
+// ─────────────────────────────────────────────────
+//  Throttle для ошибок OPEN REJECTED (Telegram)
+// ─────────────────────────────────────────────────
+// Одинаковые ошибки по одной монете не шлём в TG чаще раза в 30 мин.
+const REJECTED_ALERT_TTL_MS = 30 * 60_000; // 30 минут
+// coin → timestamp последнего TG-алерта
+const rejectedAlertMap = new Map();
 
 /**
  * Возвращает Set актуально заблокированных монет (с учётом TTL).
@@ -511,6 +523,13 @@ async function paperOpen(coin, price, apy, silent = false) {
   }
 
   const sizeUsd = balance * BALANCE_UTILIZATION;
+
+  if (sizeUsd < MIN_ORDER_USD) {
+    logger.warn(
+      `[Executor] [SKIP] PAPER #${coin} — order size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} minimum`,
+    );
+    return { ok: false };
+  }
   const fee = sizeUsd * ONE_LEG;
 
   const id = savePosition({
@@ -624,10 +643,24 @@ async function paperClose(signal, position, silent = false) {
 async function productionOpen(coin, price, apy, silent = false) {
   const exchange = getExchange();
 
-  // ── 1. Баланс ─────────────────────────────────
+  // ── 1. Баланс (с retry при подозрительно малом значении) ──
   let balance;
   try {
     balance = await getBalance();
+
+    // После ротации/закрытия биржа может не успеть обновить withdrawable.
+    // Если баланс < MIN_ORDER_USD — ждём 2с и перезапрашиваем один раз.
+    if (balance < MIN_ORDER_USD) {
+      logger.info(
+        `[Executor] PROD OPEN #${coin} — balance $${balance.toFixed(2)} < $${MIN_ORDER_USD}, ` +
+          `waiting 2s for exchange to settle…`,
+      );
+      await sleep(2_000);
+      balance = await getBalance();
+      logger.info(
+        `[Executor] PROD OPEN #${coin} — balance after retry: $${balance.toFixed(2)}`,
+      );
+    }
   } catch (err) {
     logger.error(
       `[Executor] PROD OPEN #${coin} — failed to get balance: ${err.message}`,
@@ -667,6 +700,16 @@ async function productionOpen(coin, price, apy, silent = false) {
 
   // ── 3. Расчёт размера ────────────────────────
   const sizeUsd = balance * BALANCE_UTILIZATION;
+
+  // Hard limit: не шлём микро-ордера, которые биржа отклонит
+  if (sizeUsd < MIN_ORDER_USD) {
+    logger.warn(
+      `[Executor] [SKIP] #${coin} — order size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} minimum. ` +
+        `Balance: $${balance.toFixed(2)}`,
+    );
+    return { ok: false };
+  }
+
   const rawSz = sizeUsd / price;
   const sz = roundDown(rawSz, szDecimals);
 
@@ -737,12 +780,31 @@ async function productionOpen(coin, price, apy, silent = false) {
     logger.error(
       `[Executor] PROD OPEN #${coin} — exchange rejected: ${fill.error}`,
     );
-    await sendMessage(
-      `🚨 <b>[OPEN REJECTED] #${coin}</b>\n` +
-        `Биржа отклонила ордер:\n<code>${fill.error}</code>\n\n` +
-        `Запрошено: ${sz} ${coin} (~$${(sz * price).toFixed(2)})`,
-      true,
+
+    // ── Бан монеты на 30 мин: не долбимся в закрытую дверь ──
+    runtimeBlacklist.set(coin, Date.now());
+    logger.warn(
+      `[Executor] #${coin} → runtime blacklist for ${RUNTIME_BAN_TTL_MS / 60_000}min after OPEN REJECTED`,
     );
+
+    // ── Telegram throttle: не спамим одинаковыми ошибками ──
+    const now = Date.now();
+    const lastAlert = rejectedAlertMap.get(coin);
+    if (!lastAlert || now - lastAlert >= REJECTED_ALERT_TTL_MS) {
+      rejectedAlertMap.set(coin, now);
+      await sendMessage(
+        `🚨 <b>[OPEN REJECTED] #${coin}</b>\n` +
+          `Биржа отклонила ордер:\n<code>${fill.error}</code>\n\n` +
+          `Запрошено: ${sz} ${coin} (~$${(sz * price).toFixed(2)})\n` +
+          `⏱ Бан: ${RUNTIME_BAN_TTL_MS / 60_000} мин`,
+        true,
+      );
+    } else {
+      logger.debug(
+        `[Executor] OPEN REJECTED TG alert for #${coin} throttled (sent ${Math.round((now - lastAlert) / 1000)}s ago)`,
+      );
+    }
+
     return { ok: false };
   }
 
