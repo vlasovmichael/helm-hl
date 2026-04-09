@@ -43,9 +43,9 @@ const slippageBanMap = new Map();
 const RECONCILIATION_TOLERANCE_PCT = 2.0;
 
 // Reconcile retry: задержка индексации ордера на стороне биржи.
-const RECONCILE_INITIAL_DELAY_MS = 2_000; // 2с перед первой проверкой
-const RECONCILE_RETRY_DELAY_MS   = 2_000; // 2с между повторами
-const RECONCILE_MAX_RETRIES      = 3;     // до 3 повторов → суммарно ~8с
+const RECONCILE_INITIAL_DELAY_MS = 3_000; // 3с перед первой проверкой
+const RECONCILE_RETRY_DELAY_MS   = 3_000; // 3с между повторами
+const RECONCILE_MAX_RETRIES      = 5;     // до 5 повторов → суммарно ~18с
 
 // ─────────────────────────────────────────────────
 //  Runtime Blacklist (с автоистечением)
