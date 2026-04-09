@@ -48,6 +48,8 @@ let dailyRecapSentDate = '';                 // "YYYY-MM-DD" — защита о
 let lastFomoAlert    = 0;                    // UNIX ms последнего FOMO-алерта
 let lastPnlAlert     = 0;                    // UNIX ms последнего PnL-алерта
 let lastIntegrityCheck = 0;                  // UNIX ms последней integrity-проверки
+const INTEGRITY_GRACE_PERIOD_MS = 30_000;    // 30с grace period после старта бота
+let botStartedAt = 0;                        // timestamp старта (устанавливается в main)
 let prevApyMap       = new Map();            // coin → smoothedApy прошлого тика
 
 async function runSmartAlerts(scoutData, signal, activePosition) {
@@ -213,6 +215,12 @@ async function integrityCheck() {
   if (!config.isProduction) return false;
 
   const now = Date.now();
+
+  // ── Grace period: 30с после старта — API может лагать ──
+  if (botStartedAt > 0 && now - botStartedAt < INTEGRITY_GRACE_PERIOD_MS) {
+    return false;
+  }
+
   if (now - lastIntegrityCheck < INTEGRITY_CHECK_INTERVAL_MS) return false;
   lastIntegrityCheck = now;
 
@@ -232,24 +240,42 @@ async function integrityCheck() {
 
     if (found) return false; // позиция на месте — всё OK
 
-    // ── Позиция исчезла с биржи! ──────────────────
-    logger.error(
-      `[Integrity] ⚠️ EXTERNAL CLOSE detected: #${dbPosition.coin} is OPEN in DB ` +
-        `but ABSENT on exchange! (ADL / liquidation / manual close)`,
-    );
-
-    // Рассчитываем приблизительный PnL
+    // ── Позиция исчезла из getPositions() ─────────────
+    // Перед тем как объявить EXTERNAL CLOSE — проверяем equity vs withdrawable.
+    // Если withdrawable << equity, значит маржа заблокирована → позиция жива,
+    // а getPositions() просто вернул стейл-данные (лаг API).
     let equity = 0;
+    let withdrawable = 0;
     let estimatedPnl = 0;
     try {
       const summary = await getAccountSummary();
-      equity = summary.equity;
-      // PnL ≈ текущий equity - (equity на момент входа)
-      // equity на момент входа ≈ size_usd (т.к. мы используем ~95% баланса)
+      equity      = summary.equity;
+      withdrawable = summary.available;
       estimatedPnl = equity - dbPosition.size_usd;
     } catch {
       // не удалось получить equity — PnL неизвестен
     }
+
+    // ── Margin Guard: equity > $10 и маржа занята → скорее всего лаг API ──
+    // Если позиция реально закрыта, withdrawable ≈ equity (всё свободно).
+    // Если позиция жива, withdrawable << equity (маржа заблокирована).
+    // Порог: withdrawable < 50% equity → подозрительно, не закрываем.
+    if (equity > 10 && withdrawable < equity * 0.5) {
+      logger.warn(
+        `[Integrity] ⚡ #${dbPosition.coin} not found in getPositions() but ` +
+          `margin is locked: withdrawable=$${withdrawable.toFixed(2)} vs equity=$${equity.toFixed(2)} ` +
+          `(${((withdrawable / equity) * 100).toFixed(1)}%). ` +
+          `Likely API lag — skipping external close detection.`,
+      );
+      return false;
+    }
+
+    // ── Позиция действительно закрыта ──────────────
+    logger.error(
+      `[Integrity] ⚠️ EXTERNAL CLOSE detected: #${dbPosition.coin} is OPEN in DB ` +
+        `but ABSENT on exchange! withdrawable=$${withdrawable.toFixed(2)}, equity=$${equity.toFixed(2)} ` +
+        `(margin freed → position is genuinely gone)`,
+    );
 
     // Закрываем в БД
     const holdMs    = Date.now() - dbPosition.entry_time;
@@ -282,7 +308,7 @@ async function integrityCheck() {
         `💵 Entry: <b>$${dbPosition.entry_price}</b>\n` +
         `⏳ Удержание: <b>${holdHours.toFixed(1)}ч</b>\n` +
         `${pnlEmoji} PnL (оценка): <b>${pnlSign}$${estimatedPnl.toFixed(4)}</b>\n` +
-        `💰 Текущий Equity: <b>$${equity.toFixed(2)}</b>\n` +
+        `💰 Equity: <b>$${equity.toFixed(2)}</b> | Withdrawable: <b>$${withdrawable.toFixed(2)}</b>\n` +
         `<code>═════════════════════</code>\n` +
         `🤖 Бот переведён в режим <b>IDLE</b>.\n` +
         `Следующий вход — в ближайшем тике.`,
@@ -643,6 +669,12 @@ async function main() {
 
   // ── Запуск callback polling для inline-кнопок ──
   startCallbackPolling();
+
+  // Grace period для integrityCheck — API может лагать после старта
+  botStartedAt = Date.now();
+  logger.info(
+    `[System] Integrity check grace period: ${INTEGRITY_GRACE_PERIOD_MS / 1000}s`,
+  );
 
   await tick();
 
