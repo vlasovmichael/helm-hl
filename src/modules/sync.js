@@ -224,36 +224,58 @@ async function handleMismatch(dbPosition) {
 /**
  * Orphaned Position: на бирже есть позиция, а в БД нет.
  * Создаём запись в БД чтобы бот мог сопровождать её.
+ *
+ * Ключевые решения:
+ *   - size_usd = |szi| × entryPx (стоимость НА ВХОДЕ, не текущая рыночная)
+ *   - entry_time = Date.now() — реальное время входа неизвестно,
+ *     но это безопаснее чем ставить прошлое: minHoldMinutes защитит от
+ *     мгновенного закрытия пока бот оценит ситуацию.
+ *   - entry_apy = 0 — стратегист использует live slowApy для решений
+ *     о выходе, entry_apy влияет только на расчёт PnL при закрытии.
  */
 async function handleOrphaned(exchangePos) {
+  const sizeUsd = Math.abs(exchangePos.szi) * exchangePos.entryPx;
+  const side    = exchangePos.szi < 0 ? 'SHORT' : 'LONG';
+
   logger.warn(
     `[Sync] 🔍 ORPHANED — #${exchangePos.coin} found on exchange ` +
-    `(szi: ${exchangePos.szi}, entry: $${exchangePos.entryPx}) ` +
-    `but no local position. Adopting.`,
+    `(${side} szi=${exchangePos.szi}, entry=$${exchangePos.entryPx}, ` +
+    `size=$${sizeUsd.toFixed(2)}, uPnL=$${exchangePos.unrealizedPnl.toFixed(4)}) ` +
+    `but no local position. Adopting…`,
   );
 
   // Создаём позицию в БД для сопровождения
   const id = savePosition({
     coin:        exchangePos.coin,
-    size_usd:    Math.abs(exchangePos.positionValue),
+    size_usd:    sizeUsd,
     entry_price: exchangePos.entryPx,
-    entry_apy:   0, // неизвестен — обновится при следующем тике
-    entry_time:  Date.now(), // не знаем точно — ставим текущее время
+    entry_apy:   0,
+    entry_time:  Date.now(),
     mode:        config.mode,
   });
 
-  logger.info(`[Sync] Adopted orphaned position #${exchangePos.coin} as DB id=${id}`);
+  logger.info(
+    `[Sync] ✅ Adopted #${exchangePos.coin} as DB id=${id} | ` +
+    `size: $${sizeUsd.toFixed(2)} | entry: $${exchangePos.entryPx} | ` +
+    `liq: ${exchangePos.liquidationPx != null ? `$${exchangePos.liquidationPx}` : 'N/A'}`,
+  );
+
+  const liqLine = exchangePos.liquidationPx != null
+    ? `🔻 Ликвидация: <b>$${exchangePos.liquidationPx}</b>\n`
+    : '';
 
   await sendMessage(
-    `ℹ️ <b>[SYNC] Обнаружена позиция без контекста</b>\n` +
-    `<code>─────────────────────</code>\n` +
-    `📌 #${exchangePos.coin}\n` +
-    `📐 Size: ${exchangePos.szi} (value: $${Math.abs(exchangePos.positionValue).toFixed(2)})\n` +
-    `💵 Entry: $${exchangePos.entryPx}\n` +
-    `💰 Unrealized PnL: $${exchangePos.unrealizedPnl.toFixed(4)}\n` +
-    `<code>─────────────────────</code>\n` +
-    `🤖 Бот берёт позицию под контроль (id=${id}).`,
-    true, // critical — нужно внимание
+    `⚠️ <b>Обнаружена неучтённая позиция #${exchangePos.coin}</b>\n` +
+    `<code>═════════════════════</code>\n` +
+    `📌 Монета: <b>#${exchangePos.coin}</b> (${side})\n` +
+    `📐 Размер: <b>${Math.abs(exchangePos.szi)} ${exchangePos.coin}</b> (~$${sizeUsd.toFixed(2)})\n` +
+    `💵 Entry Price: <b>$${exchangePos.entryPx}</b>\n` +
+    `${liqLine}` +
+    `💰 Unrealized PnL: <b>$${exchangePos.unrealizedPnl.toFixed(4)}</b>\n` +
+    `<code>═════════════════════</code>\n` +
+    `🤖 Взята под контроль (id=${id}).\n` +
+    `<i>APY будет определён на следующем тике.</i>`,
+    true,
   );
 
   return id;
