@@ -7,6 +7,10 @@ import { getRuntimeBlacklist } from './executor.js';
 const HL_API   = 'https://api.hyperliquid.xyz/info';
 const RTT_LIMIT_MS = 10_000; // отклоняем ответы медленнее 10 с
 
+// Предыдущие значения — логируем INFO только при изменении
+let prevFilterSnapshot = '';
+let prevTopCoin = '';
+
 /**
  * Два EMA-фильтра с разной скоростью реакции:
  *
@@ -117,10 +121,20 @@ export async function scan() {
   const blacklist       = config.trading.coinBlacklist;
   const runtimeBlocked  = getRuntimeBlacklist();
 
-  logger.info(
-    `[Scout] Filters: API universe=${universe.length} | tradeable=${tradeable.size} | ` +
-    `blacklist=${blacklist.size} | runtime-banned=${runtimeBlocked.size}`,
-  );
+  // Логируем фильтры на INFO только при изменении, иначе debug
+  const filterSnap = `${universe.length}|${tradeable.size}|${blacklist.size}|${runtimeBlocked.size}`;
+  if (filterSnap !== prevFilterSnapshot) {
+    prevFilterSnapshot = filterSnap;
+    logger.info(
+      `[Scout] Filters: API universe=${universe.length} | tradeable=${tradeable.size} | ` +
+      `blacklist=${blacklist.size} | runtime-banned=${runtimeBlocked.size}`,
+    );
+  } else {
+    logger.debug(
+      `[Scout] Filters: API universe=${universe.length} | tradeable=${tradeable.size} | ` +
+      `blacklist=${blacklist.size} | runtime-banned=${runtimeBlocked.size}`,
+    );
+  }
 
   const results = [];
   let skippedBlacklist   = 0;
@@ -177,9 +191,16 @@ export async function scan() {
 
   results.sort((a, b) => b.smoothedApy - a.smoothedApy);
 
-  logger.info(
-    `[Scout] ${results.length} coins with smoothedApy > 0 | top: ${results[0]?.coin ?? '—'} @ ${results[0]?.smoothedApy.toFixed(2) ?? 0}%`,
-  );
+  // INFO при смене лидера, иначе debug — не забиваем консоль
+  const topCoin = results[0]?.coin ?? '—';
+  const topLine = `[Scout] ${results.length} coins with smoothedApy > 0 | top: ${topCoin} @ ${results[0]?.smoothedApy.toFixed(2) ?? 0}%`;
+
+  if (topCoin !== prevTopCoin) {
+    prevTopCoin = topCoin;
+    logger.info(topLine);
+  } else {
+    logger.debug(topLine);
+  }
 
   return results;
 }

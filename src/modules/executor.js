@@ -856,13 +856,52 @@ async function productionClose(signal, position, silent = false) {
     if (err.message?.includes("No position found")) {
       logger.error(
         `[Executor] PROD CLOSE #${coin} — no position on exchange! ` +
-          `Likely closed via SL/TP or liquidated.`,
+          `Likely closed via ADL/SL/TP or liquidated. Syncing DB…`,
       );
+
+      // ── Немедленная синхронизация БД ──────────
+      // Позиция уже закрыта на бирже — обновляем локальное состояние
+      // чтобы бот не пытался закрывать снова и не спамил.
+      const holdHours = holdMs / 3_600_000;
+      let estimatedPnl = 0;
+      let equity = 0;
+      try {
+        const summary = await getAccountSummary();
+        equity = summary.equity;
+        estimatedPnl = equity - position.size_usd;
+      } catch { /* PnL неизвестен */ }
+
+      try {
+        dbClosePosition(position.id, {
+          close_price:  0,
+          realized_pnl: estimatedPnl,
+          fee_paid:     0,
+          reason:       'external_close_detected_on_exit',
+        });
+        logger.info(
+          `[Executor] ✅ DB synced: #${coin} (id=${position.id}) → CLOSED | ` +
+            `reason: external_close_detected_on_exit | est. PnL: $${estimatedPnl.toFixed(4)}`,
+        );
+      } catch (dbErr) {
+        logger.error(`[Executor] DB close failed: ${dbErr.message}`);
+      }
+
+      const pnlSign = estimatedPnl >= 0 ? '+' : '';
+      const pnlEmoji = estimatedPnl >= 0 ? '📈' : '📉';
+
       await sendMessage(
-        `🚨 <b>[CLOSE FAILED] #${coin}</b>\n` +
-          `Позиции нет на бирже!\n` +
-          `Возможная причина: <b>TP/SL/ликвидация</b> пока бот работал.\n` +
-          `🔍 Проверь историю ордеров на бирже!`,
+        `⚠️ <b>ВНЕШНЕЕ ЗАКРЫТИЕ ПОЗИЦИИ</b>\n` +
+          `<code>═════════════════════</code>\n` +
+          `🔍 <b>#${coin}</b> закрыт на стороне биржи\n` +
+          `<i>(обнаружено при попытке CLOSE)</i>\n` +
+          `<code>─────────────────────</code>\n` +
+          `💰 Размер: <b>$${position.size_usd.toFixed(2)}</b>\n` +
+          `💵 Entry: <b>$${position.entry_price}</b>\n` +
+          `⏳ Удержание: <b>${holdHours.toFixed(1)}ч</b>\n` +
+          `${pnlEmoji} PnL (оценка): <b>${pnlSign}$${estimatedPnl.toFixed(4)}</b>\n` +
+          `💰 Equity: <b>$${equity.toFixed(2)}</b>\n` +
+          `<code>═════════════════════</code>\n` +
+          `🤖 БД синхронизирована. Бот свободен.`,
         true,
       );
       return { ok: false };
