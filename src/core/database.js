@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { mkdirSync } from 'fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { logger } from './logger.js';
 
 mkdirSync('data', { recursive: true });
@@ -133,4 +133,55 @@ export function getHistorySince(sinceMs) {
   return getDb()
     .prepare('SELECT * FROM history WHERE closed_at >= ? ORDER BY closed_at DESC')
     .all(sinceMs);
+}
+
+/**
+ * Архивирует всю историю в data/history_archive.json и очищает таблицу history.
+ *
+ * Файл архива — JSON-массив. При повторных вызовах записи дописываются
+ * (append) к существующему массиву, дедупликация по id.
+ *
+ * @returns {number} кол-во заархивированных записей
+ */
+export function archiveAndClearHistory() {
+  const ARCHIVE_PATH = 'data/history_archive.json';
+
+  const rows = getDb()
+    .prepare('SELECT * FROM history ORDER BY closed_at ASC')
+    .all();
+
+  if (rows.length === 0) {
+    logger.info('[DB] Archive skipped — history is empty');
+    return 0;
+  }
+
+  // Читаем существующий архив (если есть)
+  let existing = [];
+  try {
+    const raw = readFileSync(ARCHIVE_PATH, 'utf-8');
+    existing = JSON.parse(raw);
+    if (!Array.isArray(existing)) existing = [];
+  } catch {
+    // файл не существует или повреждён — начинаем с нуля
+  }
+
+  // Дедупликация по id + closed_at
+  const existingKeys = new Set(
+    existing.map((r) => `${r.id}_${r.closed_at}`),
+  );
+  const newRows = rows.filter(
+    (r) => !existingKeys.has(`${r.id}_${r.closed_at}`),
+  );
+
+  const merged = [...existing, ...newRows];
+  writeFileSync(ARCHIVE_PATH, JSON.stringify(merged, null, 2), 'utf-8');
+
+  // Очищаем таблицу history
+  getDb().prepare('DELETE FROM history').run();
+
+  logger.info(
+    `[DB] ✅ Archived ${newRows.length} new records (${merged.length} total) → ${ARCHIVE_PATH} | history cleared`,
+  );
+
+  return newRows.length;
 }

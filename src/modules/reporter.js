@@ -181,10 +181,11 @@ export async function sendPnlAlert(data) {
  * Daily Recap (21:00) — сводка за день.
  * Отправляется только если за сутки была хотя бы одна закрытая сделка.
  *
- * @param {{ totalTrades, winTrades, totalPnl, totalFees, bestTrade, activePosition, equity }} stats
+ * @param {{ totalTrades, winTrades, totalPnl, totalFees, bestTrade, activePosition, equity, sessionProfit, sessionStartEquity }} stats
  */
 export async function sendDailySummary(stats) {
-  const { totalTrades, winTrades, totalPnl, totalFees, bestTrade, activePosition, equity } = stats;
+  const { totalTrades, winTrades, totalPnl, totalFees, bestTrade, activePosition, equity,
+    sessionProfit = 0, sessionStartEquity = 0 } = stats;
 
   // Нет сделок за день — не спамим
   if (totalTrades === 0) {
@@ -214,7 +215,20 @@ export async function sendDailySummary(stats) {
     ? `💰 Баланс: <b>$${equity.toFixed(2)}</b>\n`
     : '';
 
-  logger.info(`[Reporter] Daily Recap: trades=${totalTrades} PnL=${pnlSign}$${totalPnl.toFixed(4)} net=${netSign}$${net.toFixed(4)}`);
+  // Session Profit
+  const spSign  = sessionProfit >= 0 ? '+' : '';
+  const spEmoji = sessionProfit >= 0 ? '💚' : '❤️';
+  const spPct   = sessionStartEquity > 0
+    ? ` (${spSign}${((sessionProfit / sessionStartEquity) * 100).toFixed(2)}%)`
+    : '';
+  const sessionLine = sessionStartEquity > 0
+    ? `${spEmoji} Session Profit: <b>${spSign}$${sessionProfit.toFixed(4)}</b>${spPct}\n`
+    : '';
+
+  logger.info(
+    `[Reporter] Daily Recap: trades=${totalTrades} PnL=${pnlSign}$${totalPnl.toFixed(4)} ` +
+      `net=${netSign}$${net.toFixed(4)} session=${spSign}$${sessionProfit.toFixed(4)}`,
+  );
 
   await sendMessageWithButton(
     `📅 <b>Daily Recap</b>\n` +
@@ -225,6 +239,7 @@ export async function sendDailySummary(stats) {
     `💎 Чистый доход: <b>${netSign}$${net.toFixed(4)}</b>\n` +
     `<code>─────────────────────</code>\n` +
     `${balanceLine}` +
+    `${sessionLine}` +
     `🏆 Лучшая: ${bestLine}\n` +
     `📌 Позиция: ${posLine}`,
   );
@@ -360,6 +375,14 @@ async function handleStatusCallback(callbackQueryId) {
     const rPnlSign = status.realizedPnl >= 0 ? '+' : '';
     const totalTrades = status.openTrades + status.closedTrades;
 
+    // Session Profit (true PnL с начала сессии)
+    const sp     = status.sessionProfit ?? 0;
+    const spSign = sp >= 0 ? '+' : '';
+    const spEmoji = sp >= 0 ? '💚' : '❤️';
+    const spPct  = status.sessionStartEquity > 0
+      ? ` (${spSign}${((sp / status.sessionStartEquity) * 100).toFixed(2)}%)`
+      : '';
+
     await sendMessageWithButton(
       `📊 <b>Статус бота</b>\n` +
       `<code>─────────────────────</code>\n` +
@@ -368,6 +391,7 @@ async function handleStatusCallback(callbackQueryId) {
       `<code>─────────────────────</code>\n` +
       `💰 Эквити: <b>$${status.equity.toFixed(2)}</b>\n` +
       `💵 Доступно: <b>$${status.available.toFixed(2)}</b>\n` +
+      `${spEmoji} Session Profit: <b>${spSign}$${sp.toFixed(4)}</b>${spPct}\n` +
       `<code>─────────────────────</code>\n` +
       `${posLine}\n` +
       `${uPnlEmoji} Unrealized PnL: <b>${uPnlSign}$${status.unrealizedPnl.toFixed(4)}</b>\n` +

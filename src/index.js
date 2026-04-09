@@ -2,7 +2,7 @@ import { writeFile, readFile, rename, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { config } from './core/config.js';
 import { logger } from './core/logger.js';
-import { initDB, getActivePosition, getHistory, getHistorySince, closePosition as dbClosePosition } from './core/database.js';
+import { initDB, getActivePosition, getHistory, getHistorySince, closePosition as dbClosePosition, archiveAndClearHistory } from './core/database.js';
 import { scan } from './modules/scout.js';
 import { analyze } from './modules/strategist.js';
 import { execute } from './modules/executor.js';
@@ -51,6 +51,8 @@ let lastIntegrityCheck = 0;                  // UNIX ms последней integ
 const INTEGRITY_GRACE_PERIOD_MS = 30_000;    // 30с grace period после старта бота
 let botStartedAt = 0;                        // timestamp старта (устанавливается в main)
 let prevApyMap       = new Map();            // coin → smoothedApy прошлого тика
+let sessionStartEquity = 0;                  // equity на момент старта сессии
+let lastIdleAt       = 0;                    // timestamp последнего перехода в IDLE (нет позиции)
 
 async function runSmartAlerts(scoutData, signal, activePosition) {
   const now = Date.now();
@@ -141,6 +143,9 @@ async function runSmartAlerts(scoutData, signal, activePosition) {
 /**
  * Daily Recap — отправляется один раз в день в DAILY_RECAP_HOUR.
  * Только если за сутки была хотя бы одна закрытая сделка.
+ *
+ * Auto-Cleanup: если бот в IDLE >1 часа на момент Daily Recap,
+ * архивируем историю и сбрасываем baseline equity.
  */
 async function checkDailyRecap() {
   const now  = new Date();
@@ -158,9 +163,25 @@ async function checkDailyRecap() {
 
   const todayHistory = getHistorySince(dayStart);
 
+  // Получаем текущий баланс для отчёта
+  let equity = 0;
+  try {
+    if (config.isProduction) {
+      const summary = await getAccountSummary();
+      equity = summary.equity;
+    } else {
+      equity = await getAvailableBalance();
+    }
+  } catch { /* покажем $0 */ }
+
+  // Session Profit
+  const sessionProfit = sessionStartEquity > 0 ? equity - sessionStartEquity : 0;
+
   if (todayHistory.length === 0) {
     logger.info('[System] Daily Recap skipped — no trades today');
     dailyRecapSentDate = today;
+    // Auto-cleanup всё равно проверяем
+    await maybeAutoCleanup(equity);
     return;
   }
 
@@ -175,24 +196,69 @@ async function checkDailyRecap() {
 
   const activePosition = getActivePosition();
 
-  // Получаем текущий баланс для отчёта
-  let equity = 0;
-  try {
-    if (config.isProduction) {
-      const summary = await getAccountSummary();
-      equity = summary.equity;
-    } else {
-      equity = await getAvailableBalance();
-    }
-  } catch { /* покажем $0 */ }
-
   await sendDailySummary({
     totalTrades, winTrades, totalPnl, totalFees,
     bestTrade, activePosition, equity,
+    sessionProfit, sessionStartEquity,
   });
 
   dailyRecapSentDate = today;
   logger.info(`[System] Daily Recap sent for ${today}`);
+
+  // Auto-cleanup после отправки Recap
+  await maybeAutoCleanup(equity);
+}
+
+/**
+ * Auto-Cleanup: если бот в IDLE >1 часа, архивируем историю
+ * и сбрасываем session baseline equity.
+ *
+ * Условия:
+ *   1. Нет активной позиции
+ *   2. IDLE длится >1 часа
+ *   3. Есть что архивировать (history не пуста)
+ *
+ * @param {number} currentEquity — текущий equity для нового baseline
+ */
+async function maybeAutoCleanup(currentEquity) {
+  const activePosition = getActivePosition();
+  if (activePosition) return; // есть позиция — не трогаем
+
+  const IDLE_THRESHOLD_MS = 60 * 60_000; // 1 час
+  if (lastIdleAt === 0 || Date.now() - lastIdleAt < IDLE_THRESHOLD_MS) return;
+
+  const allHistory = getHistory(10_000);
+  if (allHistory.length === 0) return; // нечего архивировать
+
+  logger.info(
+    `[System] Auto-Cleanup: IDLE for ${((Date.now() - lastIdleAt) / 60_000).toFixed(0)}min, ` +
+      `archiving ${allHistory.length} trades…`,
+  );
+
+  try {
+    const archived = archiveAndClearHistory();
+
+    // Сброс baseline equity
+    const oldBaseline = sessionStartEquity;
+    sessionStartEquity = currentEquity;
+
+    logger.info(
+      `[System] ✅ Auto-Cleanup complete: ${archived} trades archived | ` +
+        `baseline equity reset: $${oldBaseline.toFixed(2)} → $${sessionStartEquity.toFixed(2)}`,
+    );
+
+    await sendMessage(
+      `🧹 <b>Auto-Cleanup</b>\n` +
+        `<code>─────────────────────</code>\n` +
+        `📦 Заархивировано: <b>${archived} сделок</b>\n` +
+        `💰 Новый baseline: <b>$${sessionStartEquity.toFixed(2)}</b>\n` +
+        `<i>Предыдущий: $${oldBaseline.toFixed(2)}</i>\n` +
+        `<code>─────────────────────</code>\n` +
+        `🤖 Новый цикл учёта начат.`,
+    );
+  } catch (err) {
+    logger.error(`[System] Auto-Cleanup failed: ${err.message}`);
+  }
 }
 
 /**
@@ -345,7 +411,15 @@ async function tick() {
     }
 
     const activePosition = getActivePosition();
-    const signal         = analyze(scoutData, activePosition);
+
+    // Трекинг IDLE-состояния (для auto-cleanup)
+    if (!activePosition && lastIdleAt === 0) {
+      lastIdleAt = Date.now();
+    } else if (activePosition) {
+      lastIdleAt = 0;
+    }
+
+    const signal = analyze(scoutData, activePosition);
 
     if (signal.action !== 'HOLD') {
       await execute(signal, activePosition);
@@ -378,6 +452,7 @@ async function saveBotState(activePosition, reason) {
     reason,
     mode:       config.mode,
     uptime_min: parseFloat(((Date.now() - startedAt) / 60_000).toFixed(1)),
+    session_start_equity: sessionStartEquity,
     active_position: activePosition
       ? {
           id:           activePosition.id,
@@ -600,16 +675,25 @@ async function main() {
   // Синхронизация состояния до первого тика
   await syncWithExchange();
 
-  // ── Startup notification ──────────────────────
+  // ── Baseline: session_start_equity ────────────
   const activePos = getActivePosition();
   let startupBalance = 0;
   try {
-    startupBalance = config.isProduction
-      ? await getExchangeBalance()
-      : await getAvailableBalance();
+    if (config.isProduction) {
+      const summary = await getAccountSummary();
+      startupBalance = summary.equity;
+    } else {
+      startupBalance = await getAvailableBalance();
+    }
   } catch {
     // не критично — покажем $0
   }
+
+  sessionStartEquity = startupBalance;
+  if (!activePos) lastIdleAt = Date.now();
+  logger.info(
+    `[System] Session baseline equity: $${sessionStartEquity.toFixed(2)}`,
+  );
 
   await sendStartupNotification({
     balance:        startupBalance,
@@ -654,6 +738,11 @@ async function main() {
 
     const realizedPnl = history.reduce((s, t) => s + t.realized_pnl, 0);
 
+    // Session Profit = текущий equity − equity на старте сессии
+    const sessionProfit = sessionStartEquity > 0
+      ? equity - sessionStartEquity
+      : 0;
+
     return {
       equity,
       available,
@@ -664,6 +753,8 @@ async function main() {
       closedTrades:    history.length,
       openTrades:      position ? 1 : 0,
       realizedPnl,
+      sessionProfit,
+      sessionStartEquity,
     };
   });
 
