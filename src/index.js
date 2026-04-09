@@ -5,7 +5,7 @@ import { logger } from './core/logger.js';
 import { initDB, getActivePosition, getHistory, getHistorySince, closePosition as dbClosePosition, archiveAndClearHistory } from './core/database.js';
 import { scan } from './modules/scout.js';
 import { analyze } from './modules/strategist.js';
-import { execute } from './modules/executor.js';
+import { execute } from './modules/executor/index.js';
 import {
   sendMessage,
   sendAnomalyAlert,

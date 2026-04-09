@@ -1,0 +1,138 @@
+// ─────────────────────────────────────────────────
+//  Paper Mode — виртуальные позиции
+// ─────────────────────────────────────────────────
+
+import { config } from '../../core/config.js';
+import { logger } from '../../core/logger.js';
+import {
+  savePosition,
+  closePosition as dbClosePosition,
+} from '../../core/database.js';
+import { getAvailableBalance } from '../wallet.js';
+import { calcSize, ONE_LEG, MIN_ORDER_USD } from './math.js';
+import { setCooldown, REENTRY_COOLDOWN_MS } from './state.js';
+import { notify } from './hooks.js';
+import { notifyPaperOpen, notifyPaperClose } from './notifications.js';
+
+/**
+ * Определяет баланс для расчёта размера позиции.
+ * PAPER + FAKE_BALANCE: виртуальный баланс (для тестов без реальных денег).
+ * PAPER без FAKE_BALANCE: реальный withdrawable с биржи.
+ */
+async function getPaperBalance() {
+  const fake = config.trading.fakeBalance;
+  if (fake != null && fake > 0) {
+    logger.info(`[Executor] Using FAKE_BALANCE: $${fake.toFixed(2)}`);
+    return fake;
+  }
+  return getAvailableBalance();
+}
+
+/**
+ * Открывает виртуальную позицию.
+ *
+ * @param {string}  coin
+ * @param {number}  price
+ * @param {number}  apy
+ * @param {boolean} [silent=false]
+ * @returns {Promise<{ ok: boolean, positionId?: number, sizeUsd?: number }>}
+ */
+export async function paperOpen(coin, price, apy, silent = false) {
+  const balance = await getPaperBalance();
+
+  if (balance <= 0) {
+    logger.warn(`[Executor] Cannot open — balance is $${balance.toFixed(2)}`);
+    return { ok: false };
+  }
+
+  const { sizeUsd, tooSmall } = calcSize(balance, price, 0);
+
+  if (tooSmall) {
+    logger.warn(
+      `[Executor] [SKIP] PAPER #${coin} — order size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} minimum`,
+    );
+    return { ok: false };
+  }
+
+  const fee = sizeUsd * ONE_LEG;
+
+  const id = savePosition({
+    coin,
+    size_usd: sizeUsd,
+    entry_price: price,
+    entry_apy: apy,
+    entry_time: Date.now(),
+    mode: "PAPER",
+  });
+
+  logger.info(
+    `[Executor] PAPER OPEN #${coin} | $${sizeUsd.toFixed(2)} (of $${balance.toFixed(2)}) @ $${price} | APY: ${apy.toFixed(2)}% | fee: $${fee.toFixed(4)} | id: ${id}`,
+  );
+
+  if (!silent) {
+    await notifyPaperOpen({ coin, sizeUsd, balance, price, apy, fee });
+  }
+
+  notify('afterOpen', { coin, price, apy, sizeUsd, positionId: Number(id), mode: 'PAPER' });
+
+  return { ok: true, positionId: Number(id), sizeUsd };
+}
+
+/**
+ * Закрывает виртуальную позицию.
+ *
+ * Paper PnL = fundingPnl − fees (без pricePnl, т.к. нет реального fill).
+ * Fee = size_usd × ONE_LEG × 2 (вход + выход, включая оценку slippage).
+ *
+ * @param {{ price: number, reason: string }} signal
+ * @param {Object} position — строка из БД
+ * @param {boolean} [silent=false]
+ * @returns {Promise<{ ok: boolean, pnl: number, holdHours: number }>}
+ */
+export async function paperClose(signal, position, silent = false) {
+  const holdMs    = Date.now() - position.entry_time;
+  const holdHours = holdMs / 3_600_000;
+  const closePrice = signal.price;
+
+  // Funding PnL: голый шорт — 100% позиции получает фандинг
+  const hourlyRate  = position.entry_apy / 100 / 365 / 24;
+  const fundingPnl  = position.size_usd * hourlyRate * holdHours;
+
+  // Комиссии: вход + выход (с учётом slippage оценки)
+  const totalFee    = position.size_usd * ONE_LEG * 2;
+  const realizedPnl = fundingPnl - totalFee;
+
+  dbClosePosition(position.id, {
+    close_price:  closePrice,
+    realized_pnl: realizedPnl,
+    fee_paid:     totalFee,
+    reason:       signal.reason,
+  });
+
+  // Re-entry cooldown (paper mode тоже)
+  setCooldown(position.coin);
+  logger.info(
+    `[Executor] ⏳ Re-entry cooldown set: #${position.coin} → ${REENTRY_COOLDOWN_MS / 60_000}min`,
+  );
+
+  const sign = realizedPnl >= 0 ? "+" : "";
+  logger.info(
+    `[Executor] PAPER CLOSE #${position.coin} | reason: ${signal.reason} ` +
+      `| held: ${holdHours.toFixed(1)}h | PnL: ${sign}$${realizedPnl.toFixed(4)} | fees: $${totalFee.toFixed(4)}`,
+  );
+
+  if (!silent) {
+    await notifyPaperClose({
+      coin: position.coin, holdHours,
+      reason: signal.reason,
+      pnl: realizedPnl, fee: totalFee,
+    });
+  }
+
+  notify('afterClose', {
+    coin: position.coin, pnl: realizedPnl, holdHours,
+    reason: signal.reason, mode: 'PAPER',
+  });
+
+  return { ok: true, pnl: realizedPnl, holdHours };
+}

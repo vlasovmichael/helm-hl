@@ -2,7 +2,7 @@ import axios from 'axios';
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { setUniverse, getTradeableSet } from '../core/universe.js';
-import { getRuntimeBlacklist } from './executor.js';
+import { getRuntimeBlacklist } from './executor/index.js';
 
 const HL_API   = 'https://api.hyperliquid.xyz/info';
 const RTT_LIMIT_MS = 10_000; // отклоняем ответы медленнее 10 с
