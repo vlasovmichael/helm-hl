@@ -2,7 +2,7 @@ import { writeFile, readFile, rename, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { config } from './core/config.js';
 import { logger } from './core/logger.js';
-import { initDB, getActivePosition, getHistory, getHistorySince } from './core/database.js';
+import { initDB, getActivePosition, getHistory, getHistorySince, closePosition as dbClosePosition } from './core/database.js';
 import { scan } from './modules/scout.js';
 import { analyze } from './modules/strategist.js';
 import { execute } from './modules/executor.js';
@@ -18,7 +18,7 @@ import {
   stopCallbackPolling,
 } from './modules/reporter.js';
 import { syncWithExchange } from './modules/sync.js';
-import { initExchange, disconnectExchange, getBalance as getExchangeBalance, getAccountSummary, getMarkPrice } from './modules/exchange.js';
+import { initExchange, disconnectExchange, getBalance as getExchangeBalance, getAccountSummary, getMarkPrice, getPositions } from './modules/exchange.js';
 import { getAvailableBalance } from './modules/wallet.js';
 
 const TICK_INTERVAL_MS    = 15_000;          // 15 секунд
@@ -33,6 +33,9 @@ const DAILY_RECAP_HOUR    = 21;
 const PNL_ALERT_PCT       = 3.0;
 const PNL_ALERT_COOLDOWN_MS = 60 * 60_000;   // не чаще 1 раза в час
 
+// Integrity check: сверка с биржей каждые N секунд
+const INTEGRITY_CHECK_INTERVAL_MS = 60_000;   // раз в 60с
+
 const BOT_STATE_PATH = 'data/bot_state.json';
 const SHUTDOWN_TIMEOUT_MS = 15_000;           // максимум 15с на завершение
 
@@ -44,6 +47,7 @@ let startedAt        = Date.now();
 let dailyRecapSentDate = '';                 // "YYYY-MM-DD" — защита от повторной отправки
 let lastFomoAlert    = 0;                    // UNIX ms последнего FOMO-алерта
 let lastPnlAlert     = 0;                    // UNIX ms последнего PnL-алерта
+let lastIntegrityCheck = 0;                  // UNIX ms последней integrity-проверки
 let prevApyMap       = new Map();            // coin → smoothedApy прошлого тика
 
 async function runSmartAlerts(scoutData, signal, activePosition) {
@@ -189,11 +193,124 @@ async function checkDailyRecap() {
   logger.info(`[System] Daily Recap sent for ${today}`);
 }
 
+/**
+ * Integrity Check — детектор внешнего закрытия позиций.
+ *
+ * Каждые 60с проверяет: если в БД есть OPEN-позиция, но на бирже
+ * по этому тикеру позиция отсутствует (size=0), значит она была
+ * закрыта внешне (ADL, ликвидация, ручное действие в UI).
+ *
+ * При обнаружении:
+ *   1. Закрывает позицию в БД с reason='external_close'
+ *   2. Рассчитывает приблизительный PnL по текущему equity
+ *   3. Отправляет critical Telegram-алерт
+ *
+ * Работает только в PRODUCTION (в PAPER нет биржевых позиций).
+ *
+ * @returns {Promise<boolean>} true если позиция была закрыта внешне
+ */
+async function integrityCheck() {
+  if (!config.isProduction) return false;
+
+  const now = Date.now();
+  if (now - lastIntegrityCheck < INTEGRITY_CHECK_INTERVAL_MS) return false;
+  lastIntegrityCheck = now;
+
+  const dbPosition = getActivePosition();
+  if (!dbPosition) return false; // нет позиции в БД — нечего проверять
+
+  try {
+    const exchangePositions = await getPositions();
+
+    // Ищем нашу монету на бирже
+    const found = exchangePositions.find((ap) => {
+      const pos = ap?.position ?? ap;
+      const coin = pos?.coin;
+      const szi  = parseFloat(pos?.szi ?? '0');
+      return coin === dbPosition.coin && szi !== 0;
+    });
+
+    if (found) return false; // позиция на месте — всё OK
+
+    // ── Позиция исчезла с биржи! ──────────────────
+    logger.error(
+      `[Integrity] ⚠️ EXTERNAL CLOSE detected: #${dbPosition.coin} is OPEN in DB ` +
+        `but ABSENT on exchange! (ADL / liquidation / manual close)`,
+    );
+
+    // Рассчитываем приблизительный PnL
+    let equity = 0;
+    let estimatedPnl = 0;
+    try {
+      const summary = await getAccountSummary();
+      equity = summary.equity;
+      // PnL ≈ текущий equity - (equity на момент входа)
+      // equity на момент входа ≈ size_usd (т.к. мы используем ~95% баланса)
+      estimatedPnl = equity - dbPosition.size_usd;
+    } catch {
+      // не удалось получить equity — PnL неизвестен
+    }
+
+    // Закрываем в БД
+    const holdMs    = Date.now() - dbPosition.entry_time;
+    const holdHours = holdMs / 3_600_000;
+
+    dbClosePosition(dbPosition.id, {
+      close_price:  0, // неизвестна — позиция закрыта вне бота
+      realized_pnl: estimatedPnl,
+      fee_paid:     0, // неизвестна
+      reason:       'external_close',
+    });
+
+    logger.info(
+      `[Integrity] DB position #${dbPosition.coin} (id=${dbPosition.id}) closed | ` +
+        `held: ${holdHours.toFixed(1)}h | estimated PnL: $${estimatedPnl.toFixed(4)}`,
+    );
+
+    // Critical Telegram-алерт
+    const pnlSign = estimatedPnl >= 0 ? '+' : '';
+    const pnlEmoji = estimatedPnl >= 0 ? '📈' : '📉';
+
+    await sendMessage(
+      `⚠️ <b>ВНЕШНЕЕ ЗАКРЫТИЕ ПОЗИЦИИ</b>\n` +
+        `<code>═════════════════════</code>\n` +
+        `🔍 Обнаружено расхождение:\n` +
+        `<b>#${dbPosition.coin}</b> закрыт на стороне биржи\n` +
+        `<i>(ADL, ликвидация или ручное действие)</i>\n` +
+        `<code>─────────────────────</code>\n` +
+        `💰 Размер: <b>$${dbPosition.size_usd.toFixed(2)}</b>\n` +
+        `💵 Entry: <b>$${dbPosition.entry_price}</b>\n` +
+        `⏳ Удержание: <b>${holdHours.toFixed(1)}ч</b>\n` +
+        `${pnlEmoji} PnL (оценка): <b>${pnlSign}$${estimatedPnl.toFixed(4)}</b>\n` +
+        `💰 Текущий Equity: <b>$${equity.toFixed(2)}</b>\n` +
+        `<code>═════════════════════</code>\n` +
+        `🤖 Бот переведён в режим <b>IDLE</b>.\n` +
+        `Следующий вход — в ближайшем тике.`,
+      true, // critical — ВСЕГДА со звуком
+    );
+
+    return true; // позиция была закрыта
+  } catch (err) {
+    logger.debug(`[Integrity] Check failed (non-critical): ${err.message}`);
+    return false;
+  }
+}
+
 async function tick() {
   if (tickRunning || shuttingDown) return;
   tickRunning = true;
 
   try {
+    // ── Integrity Check: детекция внешнего закрытия ──
+    const externalClose = await integrityCheck();
+    if (externalClose) {
+      // Позиция только что была закрыта внешне.
+      // Пропускаем этот тик — пусть состояние БД устаканится.
+      // В следующем тике бот увидит отсутствие позиции и начнёт искать вход.
+      logger.info('[Tick] Skipping after external close detection');
+      return;
+    }
+
     const scoutData = await scan();
 
     if (scoutData.length === 0) {
