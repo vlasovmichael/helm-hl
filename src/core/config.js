@@ -105,8 +105,8 @@ function loadConfig() {
     telegram: {
       token:           process.env.TELEGRAM_BOT_TOKEN  || null,
       chatId:          process.env.TELEGRAM_CHAT_ID    || null,
-      silentStartHour: parseInt(process.env.SILENT_START_HOUR ?? '22', 10),
-      silentEndHour:   parseInt(process.env.SILENT_END_HOUR   ?? '9',  10),
+      silentStartHour: parseInt(process.env.SILENT_START_HOUR || '22', 10),
+      silentEndHour:   parseInt(process.env.SILENT_END_HOUR   || '9',  10),
     },
 
     // ── Binance (read-only, для Tax Collector) ──

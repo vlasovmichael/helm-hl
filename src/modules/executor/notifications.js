@@ -121,8 +121,7 @@ export async function notifyRotate({ closeCoin, openCoin, holdHours, closePnl, o
 export async function notifyOpenFailed({ coin, reason }) {
   if (shouldThrottle(`${coin}_open_failed`)) return;
   await sendMessage(
-    `🚨 <b>[OPEN FAILED] #${coin}</b>\n${reason}`,
-    true,
+    `🚨 <b>[OPEN FAILED] #${coin}</b>\n${reason}`
   );
 }
 
@@ -139,8 +138,7 @@ export async function notifyOpenRejected({ coin, error, sz, price, banMinutes })
 export async function notifyOpenSkipped({ coin, reason }) {
   if (shouldThrottle(`${coin}_open_skipped`)) return;
   await sendMessage(
-    `⚠️ <b>[OPEN SKIPPED] #${coin}</b>\n${reason}`,
-    true,
+    `⚠️ <b>[OPEN SKIPPED] #${coin}</b>\n${reason}`
   );
 }
 
@@ -214,8 +212,7 @@ export async function notifyOpenBlocked({ coin, reason, details }) {
     `⛔ <b>[OPEN BLOCKED] #${coin}</b>\n` +
       `<code>─────────────────────</code>\n` +
       `🛡 Защита: <b>${reason}</b>\n` +
-      `${details}`,
-    true,
+      `${details}`
   );
 }
 
@@ -226,10 +223,10 @@ export async function notifyOiCapBan({ coin, banMinutes = 30 }) {
       `<code>─────────────────────</code>\n` +
       `🚫 Биржа отказала в открытии: <b>open interest at cap</b>\n` +
       `⏱ Бан: <b>${banMinutes} мин</b>\n` +
-      `Бот остаётся в текущей позиции.`,
-    true,
+      `Бот остаётся в текущей позиции.`
   );
 }
+
 
 export async function notifyOiCapAfterRotate({ closeCoin, openCoin, closePnl, banMinutes = 30 }) {
   if (shouldThrottle(`${openCoin}_oicap`)) return;
