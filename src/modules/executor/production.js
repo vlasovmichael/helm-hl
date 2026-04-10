@@ -12,6 +12,7 @@ import {
   getExchange,
   getBalance,
   getAccountSummary,
+  getPositions,
   setLeverage,
 } from '../exchange.js';
 import { resolveAsset, parseFillResponse } from './fill-parser.js';
@@ -292,6 +293,33 @@ export async function productionClose(signal, position, silent = false) {
       `held: ${holdHours.toFixed(1)}h | markPrice: $${signal.price}`,
   );
 
+  // ── 0. Снимаем реальный накопленный фандинг ДО закрытия ─
+  // После marketClose позиция исчезнет из clearinghouseState и cumFunding пропадёт.
+  // Hyperliquid: для shorts sinceOpen отрицателен, когда мы получали фандинг (профит).
+  // Знак инвертируется → realFundingUsd = -sinceOpen.
+  // Подтверждено эмпирически на PURR: sinceOpen=-0.009869 → +$0.009869 профита.
+  let realFundingUsd = null;
+  try {
+    const positions = await getPositions();
+    const found = positions.find((ap) => (ap?.position?.coin) === coin);
+    const sinceOpenRaw = found?.position?.cumFunding?.sinceOpen;
+    const sinceOpen = parseFloat(sinceOpenRaw);
+    if (Number.isFinite(sinceOpen)) {
+      realFundingUsd = -sinceOpen;
+      logger.info(
+        `[Executor] PROD CLOSE #${coin} — cumFunding.sinceOpen=${sinceOpen} → realFundingUsd=$${realFundingUsd.toFixed(6)}`,
+      );
+    } else {
+      logger.warn(
+        `[Executor] PROD CLOSE #${coin} — cumFunding.sinceOpen unparseable (${sinceOpenRaw}), fallback to APY estimate`,
+      );
+    }
+  } catch (err) {
+    logger.warn(
+      `[Executor] PROD CLOSE #${coin} — failed to read cumFunding (${err.message}), fallback to APY estimate`,
+    );
+  }
+
   // ── 1. Отправляем ордер на закрытие ──────────
   let result;
   try {
@@ -392,7 +420,8 @@ export async function productionClose(signal, position, silent = false) {
   );
 
   // ── 4. Считаем реальный PnL ──────────────────
-  const { pricePnl, fundingPnl, totalFee, realizedPnl } = calcPnl(position, fill.avgPx, holdHours);
+  const { pricePnl, fundingPnl, totalFee, realizedPnl, fundingSource } =
+    calcPnl(position, fill.avgPx, holdHours, realFundingUsd);
 
   // ── 5. Закрываем в БД ────────────────────────
   dbClosePosition(position.id, {
@@ -403,11 +432,12 @@ export async function productionClose(signal, position, silent = false) {
   });
 
   const sign = realizedPnl >= 0 ? "+" : "";
+  const fSign = fundingPnl >= 0 ? "+" : "";
   logger.info(
     `[Executor] ✅ PROD CLOSE #${coin} | oid: ${fill.oid} | ` +
       `filled: ${fill.totalSz} @ $${fill.avgPx} | slippage: ${slip.label} | ` +
       `pricePnl: ${pricePnl >= 0 ? "+" : ""}$${pricePnl.toFixed(4)} | ` +
-      `fundingPnl: +$${fundingPnl.toFixed(4)} | fees: $${totalFee.toFixed(4)} | ` +
+      `fundingPnl: ${fSign}$${fundingPnl.toFixed(4)} (${fundingSource}) | fees: $${totalFee.toFixed(4)} | ` +
       `total: ${sign}$${realizedPnl.toFixed(4)} | held: ${holdHours.toFixed(1)}h`,
   );
 

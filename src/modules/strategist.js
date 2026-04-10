@@ -6,7 +6,7 @@ const FEE_RATE   = 0.0002;  // 0.02% taker
 const SLIPPAGE   = 0.0001;  // 0.01%
 const ROUND_TRIP = (FEE_RATE + SLIPPAGE) * 2; // вход + выход
 
-const MAX_PAYBACK_HOURS = 6;
+const MAX_PAYBACK_HOURS = 4;
 
 // Гистерезис: negative funding должен держаться N тиков подряд
 // перед закрытием. При 15с тике, 2 тика = 30с.

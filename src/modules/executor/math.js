@@ -79,17 +79,31 @@ export function checkSlippage(expectedPrice, fillPrice, side) {
 
 /**
  * PnL при закрытии позиции.
+ *
  * @param {Object} position   — строка из БД (size_usd, entry_price, entry_apy)
  * @param {number} fillPrice  — цена закрытия (avgPx или markPrice)
  * @param {number} holdHours  — время удержания в часах
- * @returns {{ pricePnl: number, fundingPnl: number, totalFee: number, realizedPnl: number }}
+ * @param {number|null} [realFundingUsd=null] — реальный накопленный фандинг с биржи
+ *   (cumFunding.sinceOpen инвертированный для shorts). Если null/NaN — fallback
+ *   на оценку через entry_apy.
+ * @returns {{ pricePnl: number, fundingPnl: number, totalFee: number, realizedPnl: number, fundingSource: string }}
  */
-export function calcPnl(position, fillPrice, holdHours) {
+export function calcPnl(position, fillPrice, holdHours, realFundingUsd = null) {
   const pricePnl   = (position.size_usd * (position.entry_price - fillPrice)) / position.entry_price;
-  const hourlyRate  = position.entry_apy / 100 / 365 / 24;
-  const fundingPnl  = position.size_usd * hourlyRate * holdHours;
+
+  let fundingPnl;
+  let fundingSource;
+  if (realFundingUsd != null && Number.isFinite(realFundingUsd)) {
+    fundingPnl    = realFundingUsd;
+    fundingSource = 'cumFunding';
+  } else {
+    const hourlyRate = position.entry_apy / 100 / 365 / 24;
+    fundingPnl    = position.size_usd * hourlyRate * holdHours;
+    fundingSource = 'estimate';
+  }
+
   const totalFee    = position.size_usd * FEE_RATE * 2;
   const realizedPnl = pricePnl + fundingPnl - totalFee;
 
-  return { pricePnl, fundingPnl, totalFee, realizedPnl };
+  return { pricePnl, fundingPnl, totalFee, realizedPnl, fundingSource };
 }
