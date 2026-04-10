@@ -17,7 +17,7 @@ import {
 } from './notifications.js';
 import {
   getCircuitBreakerStatus, checkDrawdown,
-  CB_PAUSE_MS,
+  CB_PAUSE_MS, isOiCapBanned, OI_CAP_BAN_TTL_MS,
 } from './state.js';
 import { notify } from './hooks.js';
 
@@ -113,7 +113,17 @@ async function preflightChecks(coin, smoothedApy = null) {
     }
   }
 
-  // 3. Volatility Filter — только если стратегист передал APY кандидата
+  // 3. OI Cap Ban (из стейта)
+  if (isOiCapBanned(coin)) {
+    logger.warn(`[Executor] ⛔ OI CAP active for #${coin}`);
+    return {
+      allowed: false,
+      reason: 'OI Cap reached',
+      details: `Биржа ранее отказала по OI Cap. Бан на <b>${OI_CAP_BAN_TTL_MS / 60_000} мин</b>.`,
+    };
+  }
+
+  // 4. Volatility Filter — только если стратегист передал APY кандидата
   if (smoothedApy != null) {
     const vol = await checkVolatility(coin, smoothedApy);
     if (!vol.allowed) {
@@ -129,6 +139,7 @@ async function preflightChecks(coin, smoothedApy = null) {
 
   return { allowed: true };
 }
+
 
 // ── Роутинг paper ↔ production ─────────────────
 

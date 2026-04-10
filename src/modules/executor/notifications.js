@@ -4,6 +4,37 @@
 // Единственная зависимость — sendMessage из reporter.js.
 
 import { sendMessage } from '../reporter.js';
+import { logger } from '../../core/logger.js';
+
+// ─────────────────────────────────────────────────
+//  Throttle для повторяющихся алертов
+// ─────────────────────────────────────────────────
+// Бот тикает каждые 15с — без throttle'а Volatility/OI Cap/Circuit Breaker
+// заспамят TG. Логика: для конкретного key (coin+reason) шлём в TG не чаще
+// раза в 30 мин. В консоль (logger.info) пишем КАЖДЫЙ раз — для traceability.
+
+const ALERT_THROTTLE_MS = 30 * 60_000;
+const sentAlertsMap = new Map();
+
+/**
+ * Возвращает true, если алерт с таким ключом был отправлен в последние 30 мин.
+ * Если false — обновляет timestamp и разрешает отправку.
+ */
+function shouldThrottle(key) {
+  const now = Date.now();
+  const last = sentAlertsMap.get(key);
+  if (last && now - last < ALERT_THROTTLE_MS) {
+    return true;
+  }
+  sentAlertsMap.set(key, now);
+  // Лёгкая периодическая чистка протухших ключей
+  if (sentAlertsMap.size > 200) {
+    for (const [k, t] of sentAlertsMap) {
+      if (now - t > ALERT_THROTTLE_MS) sentAlertsMap.delete(k);
+    }
+  }
+  return false;
+}
 
 // ── OPEN ───────────────────────────────────────
 
@@ -88,6 +119,7 @@ export async function notifyRotate({ closeCoin, openCoin, holdHours, closePnl, o
 // ── ERRORS / ALERTS ────────────────────────────
 
 export async function notifyOpenFailed({ coin, reason }) {
+  if (shouldThrottle(`${coin}_open_failed`)) return;
   await sendMessage(
     `🚨 <b>[OPEN FAILED] #${coin}</b>\n${reason}`,
     true,
@@ -105,6 +137,7 @@ export async function notifyOpenRejected({ coin, error, sz, price, banMinutes })
 }
 
 export async function notifyOpenSkipped({ coin, reason }) {
+  if (shouldThrottle(`${coin}_open_skipped`)) return;
   await sendMessage(
     `⚠️ <b>[OPEN SKIPPED] #${coin}</b>\n${reason}`,
     true,
@@ -151,6 +184,7 @@ export async function notifyExternalClose({ coin, sizeUsd, entryPrice, holdHours
 }
 
 export async function notifySlippageBan({ coin, slipLabel, banMinutes }) {
+  if (shouldThrottle(`${coin}_slippage_ban`)) return;
   await sendMessage(
     `🚫 <b>[SLIPPAGE BAN] #${coin}</b>\n` +
       `<code>─────────────────────</code>\n` +
@@ -175,6 +209,7 @@ export async function notifyCircuitBreaker({ losses, pauseMinutes, lastCoin, las
 }
 
 export async function notifyOpenBlocked({ coin, reason, details }) {
+  if (shouldThrottle(`${coin}_open_blocked`)) return;
   await sendMessage(
     `⛔ <b>[OPEN BLOCKED] #${coin}</b>\n` +
       `<code>─────────────────────</code>\n` +
@@ -185,6 +220,7 @@ export async function notifyOpenBlocked({ coin, reason, details }) {
 }
 
 export async function notifyOiCapBan({ coin, banMinutes = 30 }) {
+  if (shouldThrottle(`${coin}_oicap`)) return;
   await sendMessage(
     `⚠️ <b>[OI CAP BAN] #${coin}</b>\n` +
       `<code>─────────────────────</code>\n` +
@@ -196,6 +232,7 @@ export async function notifyOiCapBan({ coin, banMinutes = 30 }) {
 }
 
 export async function notifyOiCapAfterRotate({ closeCoin, openCoin, closePnl, banMinutes = 30 }) {
+  if (shouldThrottle(`${openCoin}_oicap`)) return;
   const sign = closePnl >= 0 ? "+" : "";
   await sendMessage(
     `🚨 <b>[ROTATE FAILED — OI CAP]</b>\n` +
@@ -210,6 +247,7 @@ export async function notifyOiCapAfterRotate({ closeCoin, openCoin, closePnl, ba
     true,
   );
 }
+
 
 export async function notifyDrawdownBreached({ equity, sessionStart, drawdownPct }) {
   await sendMessage(

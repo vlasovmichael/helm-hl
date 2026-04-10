@@ -23,6 +23,17 @@ function backoffMs(attempt) {
 }
 
 /**
+ * Утилита для надёжного сравнения тикеров.
+ * Игнорирует регистр и суффиксы типа -PERP.
+ */
+function isSameCoin(apiCoin, targetCoin) {
+  if (!apiCoin || !targetCoin) return false;
+  const a = apiCoin.toLowerCase();
+  const t = targetCoin.toLowerCase();
+  return a === t || a === `${t}-perp` || a === `@${t}` || a.replace("-perp", "") === t;
+}
+
+/**
  * "Тяжёлый" final check: тащит ПОЛНЫЙ clearinghouseState и ищет монету.
  * Используется ТОЛЬКО когда обычный polling не нашёл позицию после всех retry —
  * прежде чем поднимать тревогу, делаем последний срез на всякий случай
@@ -39,12 +50,12 @@ async function fetchPositionStateHeavy(coin) {
 
   const pos = assetPositions.find((ap) => {
     const p = ap?.position ?? ap;
-    return p?.coin === coin;
+    return isSameCoin(p?.coin, coin);
   });
   const posData = pos?.position ?? pos ?? null;
   const szi = posData ? parseFloat(posData.szi ?? '0') : 0;
 
-  return { hasPos: szi !== 0, szi, posData, equity, posCount };
+  return { hasPos: szi !== 0, szi, posData, equity, posCount, fullState };
 }
 
 export function sleep(ms) {
@@ -61,7 +72,7 @@ export async function fetchPositionState(coin) {
 
   const pos = positions.find((ap) => {
     const p = ap?.position ?? ap;
-    return p?.coin === coin;
+    return isSameCoin(p?.coin, coin);
   });
   const posData = pos?.position ?? pos ?? null;
   const szi = posData ? parseFloat(posData.szi ?? "0") : 0;
@@ -105,7 +116,12 @@ export async function reconcile(coin, operation, checks) {
       }
 
       if (attempt < RECONCILE_MAX_RETRIES) {
-        const wait = backoffMs(attempt);
+        let wait = backoffMs(attempt);
+        // Перед последними 3 попытками даём бирже больше времени продышаться (5-10с)
+        if (attempt >= RECONCILE_MAX_RETRIES - 3) {
+          wait = Math.max(wait, 10_000);
+        }
+
         logger.info(
           `[Reconcile] ${operation} #${coin} — ` +
             `waiting for position to index… (attempt ${attempt}/${RECONCILE_MAX_RETRIES}, next in ${wait}ms)`,
@@ -131,6 +147,14 @@ export async function reconcile(coin, operation, checks) {
             `equity=$${heavy.equity.toFixed(2)} | total positions=${heavy.posCount} | ` +
             `#${coin} szi=${heavy.szi} hasPos=${heavy.hasPos}`,
         );
+
+        // Если даже тяжелый запрос не нашел — дампим состояние для дебага
+        if ((checks.expectPosition && !heavy.hasPos) || (!checks.expectPosition && heavy.hasPos)) {
+          logger.error(
+            `[Reconcile] DEBUG DUMP for #${coin}:\n` +
+            JSON.stringify(heavy.fullState, null, 2)
+          );
+        }
       } catch (err) {
         logger.error(
           `[Reconcile] ${operation} #${coin} — final check FAILED: ${err.message}. ` +
@@ -138,6 +162,7 @@ export async function reconcile(coin, operation, checks) {
         );
         heavy = null;
       }
+
 
       // Если final check вернул другой результат — используем его как истину
       const finalState = heavy ?? state;
