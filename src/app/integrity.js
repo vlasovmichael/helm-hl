@@ -17,6 +17,17 @@ import {
 } from './state.js';
 
 /**
+ * Утилита для надёжного сравнения тикеров.
+ * Игнорирует регистр и суффиксы типа -PERP.
+ */
+function isSameCoin(apiCoin, targetCoin) {
+  if (!apiCoin || !targetCoin) return false;
+  const a = apiCoin.toLowerCase();
+  const t = targetCoin.toLowerCase();
+  return a === t || a === `${t}-perp` || a === `@${t}` || a.replace("-perp", "") === t;
+}
+
+/**
  * @returns {Promise<boolean>} true если позиция была закрыта внешне
  */
 export async function integrityCheck() {
@@ -24,7 +35,7 @@ export async function integrityCheck() {
 
   const now = Date.now();
 
-  // Grace period после старта — API может лагать
+  // 1. Grace period после старта бота
   if (state.botStartedAt > 0 && now - state.botStartedAt < INTEGRITY_GRACE_PERIOD_MS) {
     return false;
   }
@@ -35,15 +46,22 @@ export async function integrityCheck() {
   const dbPosition = getActivePosition();
   if (!dbPosition) return false;
 
+  // 2. Grace period после ОТКРЫТИЯ позиции (даем 10с на индексацию API)
+  // Это уберет ложные алерты сразу после покупки
+  if (now - dbPosition.entry_time < 10_000) {
+    return false;
+  }
+
   try {
     const exchangePositions = await getPositions();
 
     const found = exchangePositions.find((ap) => {
       const pos = ap?.position ?? ap;
-      const coin = pos?.coin;
+      const apiCoin = pos?.coin;
       const szi  = parseFloat(pos?.szi ?? '0');
-      return coin === dbPosition.coin && szi !== 0;
+      return isSameCoin(apiCoin, dbPosition.coin) && szi !== 0;
     });
+
 
     if (found) return false; // позиция на месте
 
