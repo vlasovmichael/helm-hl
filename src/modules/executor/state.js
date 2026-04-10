@@ -11,6 +11,7 @@ export const RUNTIME_BAN_TTL_MS    = 30 * 60_000;  // 30 мин
 export const SLIPPAGE_BAN_TTL_MS   = 10 * 60_000;  // 10 мин
 export const REENTRY_COOLDOWN_MS   = 15 * 60_000;  // 15 мин
 export const REJECTED_ALERT_TTL_MS = 30 * 60_000;  // 30 мин
+export const OI_CAP_BAN_TTL_MS     = 30 * 60_000;  // 30 мин
 
 // ── Risk-параметры (из .env через config.risk) ──
 export const CB_WINDOW_MS     = config.risk.cbWindowMs;
@@ -23,6 +24,7 @@ const runtimeBlacklist = new Map();  // coin → timestamp
 const slippageBanMap   = new Map();  // coin → timestamp
 const cooldownMap      = new Map();  // coin → timestamp
 const rejectedAlertMap = new Map();  // coin → timestamp
+const oiCapBanMap      = new Map();  // coin → expiresAt
 
 // ── Circuit Breaker state ─────────────────────
 const recentLosses = [];              // [{ ts, pnl, coin }]
@@ -36,6 +38,41 @@ export function setCooldown(coin)      { cooldownMap.set(coin, Date.now()); }
 export function setRejectedAlert(coin) { rejectedAlertMap.set(coin, Date.now()); }
 
 export function getLastRejectedAlert(coin) { return rejectedAlertMap.get(coin); }
+
+// ── OI Cap Ban ────────────────────────────────
+
+/**
+ * Банит монету по OI cap на 30 минут.
+ * Используется когда биржа отказала в открытии из-за переполненного open interest.
+ */
+export function banOiCap(coin) {
+  oiCapBanMap.set(coin, Date.now() + OI_CAP_BAN_TTL_MS);
+}
+
+/** Проверка по одной монете (с авто-cleanup протухших). */
+export function isOiCapBanned(coin) {
+  const exp = oiCapBanMap.get(coin);
+  if (!exp) return false;
+  if (Date.now() > exp) {
+    oiCapBanMap.delete(coin);
+    return false;
+  }
+  return true;
+}
+
+/** Возвращает Set актуально забаненных монет (с очисткой протухших). */
+export function getOiCapBans() {
+  const now = Date.now();
+  const active = new Set();
+  for (const [coin, exp] of oiCapBanMap) {
+    if (exp > now) {
+      active.add(coin);
+    } else {
+      oiCapBanMap.delete(coin);
+    }
+  }
+  return active;
+}
 
 // ── Circuit Breaker ───────────────────────────
 

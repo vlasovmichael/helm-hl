@@ -184,6 +184,33 @@ export async function notifyOpenBlocked({ coin, reason, details }) {
   );
 }
 
+export async function notifyOiCapBan({ coin, banMinutes = 30 }) {
+  await sendMessage(
+    `⚠️ <b>[OI CAP BAN] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `🚫 Биржа отказала в открытии: <b>open interest at cap</b>\n` +
+      `⏱ Бан: <b>${banMinutes} мин</b>\n` +
+      `Бот остаётся в текущей позиции.`,
+    true,
+  );
+}
+
+export async function notifyOiCapAfterRotate({ closeCoin, openCoin, closePnl, banMinutes = 30 }) {
+  const sign = closePnl >= 0 ? "+" : "";
+  await sendMessage(
+    `🚨 <b>[ROTATE FAILED — OI CAP]</b>\n` +
+      `<code>═════════════════════</code>\n` +
+      `🔴 Закрыл: <b>#${closeCoin}</b> ✅\n` +
+      `💰 PnL: ${sign}$${closePnl.toFixed(4)}\n` +
+      `<code>─────────────────────</code>\n` +
+      `🟢 Открыть: <b>#${openCoin}</b> ❌ open interest at cap\n` +
+      `<code>═════════════════════</code>\n` +
+      `🚫 <b>#${openCoin}</b> забанен на <b>${banMinutes} мин</b>\n` +
+      `⚠️ Бот остался <b>БЕЗ ПОЗИЦИИ</b>. Подыщет другую в след. тике.`,
+    true,
+  );
+}
+
 export async function notifyDrawdownBreached({ equity, sessionStart, drawdownPct }) {
   await sendMessage(
     `🚨🚨🚨 <b>[MAX DRAWDOWN BREACHED]</b>\n` +

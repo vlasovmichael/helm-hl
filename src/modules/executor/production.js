@@ -21,8 +21,10 @@ import {
   banRuntime, banSlippage, setCooldown,
   getLastRejectedAlert, setRejectedAlert,
   recordLoss, getCircuitBreakerStatus,
+  banOiCap,
   RUNTIME_BAN_TTL_MS, SLIPPAGE_BAN_TTL_MS,
   REENTRY_COOLDOWN_MS, REJECTED_ALERT_TTL_MS,
+  OI_CAP_BAN_TTL_MS,
   CB_PAUSE_MS,
 } from './state.js';
 import { reconcile } from './reconciler.js';
@@ -35,7 +37,13 @@ import {
   notifyExternalClose,
   notifyRotate, notifyRotateFailed,
   notifyCircuitBreaker,
+  notifyOiCapBan, notifyOiCapAfterRotate,
 } from './notifications.js';
+
+// Регэксп для детекции "open interest at cap" в ответе биржи.
+// Покрывает варианты: "open interest at cap", "exceeds max open interest",
+// "OI cap reached", "open interest cap" и т.п.
+const OI_CAP_REGEX = /open\s*interest|oi\s*cap/i;
 
 // ─────────────────────────────────────────────────
 //  OPEN
@@ -157,6 +165,17 @@ export async function productionOpen(coin, price, apy, silent = false) {
       { label: `open-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
     );
   } catch (err) {
+    // OI cap detection — ловим до общей обработки сетевых ошибок
+    if (OI_CAP_REGEX.test(err.message ?? '')) {
+      banOiCap(coin);
+      logger.warn(
+        `[Executor] 🚫 OI CAP BAN #${coin} — exchange rejected (${err.message}). ` +
+          `Banned for ${OI_CAP_BAN_TTL_MS / 60_000}min.`,
+      );
+      if (!silent) await notifyOiCapBan({ coin, banMinutes: OI_CAP_BAN_TTL_MS / 60_000 });
+      return { ok: false, reason: 'OI_CAP' };
+    }
+
     logger.error(
       `[Executor] PROD OPEN #${coin} — order request failed: ${err.message}`,
     );
@@ -171,6 +190,17 @@ export async function productionOpen(coin, price, apy, silent = false) {
   const fill = parseFillResponse(result, "OPEN");
 
   if (!fill.ok) {
+    // OI cap detection — биржа могла "отклонить" вместо throw
+    if (OI_CAP_REGEX.test(fill.error ?? '')) {
+      banOiCap(coin);
+      logger.warn(
+        `[Executor] 🚫 OI CAP BAN #${coin} — exchange rejected (${fill.error}). ` +
+          `Banned for ${OI_CAP_BAN_TTL_MS / 60_000}min.`,
+      );
+      if (!silent) await notifyOiCapBan({ coin, banMinutes: OI_CAP_BAN_TTL_MS / 60_000 });
+      return { ok: false, reason: 'OI_CAP' };
+    }
+
     logger.error(
       `[Executor] PROD OPEN #${coin} — exchange rejected: ${fill.error}`,
     );
@@ -537,10 +567,20 @@ export async function productionRotate(signal, position) {
     logger.error(
       `[Executor] 🚨 PROD ROTATE — close OK but open FAILED! Bot is NAKED (no position).`,
     );
-    await notifyRotateFailed({
-      closeCoin: signal.closeCoin, openCoin: signal.openCoin,
-      closePnl: closeResult.pnl, phase: 'open',
-    });
+
+    // Особый случай: новая нога упала по OI cap. Старая позиция уже закрыта,
+    // вернуть её не можем. Шлём отдельное уведомление, бан уже выставлен в productionOpen.
+    if (openResult.reason === 'OI_CAP') {
+      await notifyOiCapAfterRotate({
+        closeCoin: signal.closeCoin, openCoin: signal.openCoin,
+        closePnl: closeResult.pnl, banMinutes: OI_CAP_BAN_TTL_MS / 60_000,
+      });
+    } else {
+      await notifyRotateFailed({
+        closeCoin: signal.closeCoin, openCoin: signal.openCoin,
+        closePnl: closeResult.pnl, phase: 'open',
+      });
+    }
     return { ok: false, closePnl: closeResult.pnl };
   }
 

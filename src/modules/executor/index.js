@@ -8,6 +8,7 @@ import { logger } from '../../core/logger.js';
 import { state as appState } from '../../app/state.js';
 import { getAccountSummary } from '../exchange.js';
 import { getAvailableBalance } from '../wallet.js';
+import { checkVolatility } from '../volatility.js';
 import { paperOpen, paperClose } from './paper.js';
 import { productionOpen, productionClose, productionRotate } from './production.js';
 import {
@@ -21,7 +22,7 @@ import {
 import { notify } from './hooks.js';
 
 // Re-exports для внешних модулей
-export { getRuntimeBlacklist, getStateSnapshot } from './state.js';
+export { getRuntimeBlacklist, getStateSnapshot, getOiCapBans } from './state.js';
 export { on } from './hooks.js';
 
 // Чтобы не спамить TG алертом о drawdown — флаг на сессию
@@ -54,9 +55,11 @@ export async function execute(signal, activePosition) {
 
 /**
  * Защитные проверки перед открытием новой позиции.
+ * @param {string} coin
+ * @param {number|null} smoothedApy — APY кандидата для Volatility-фильтра. null = пропустить vol check.
  * @returns {Promise<{ allowed: boolean, reason?: string, details?: string }>}
  */
-async function preflightChecks(coin) {
+async function preflightChecks(coin, smoothedApy = null) {
   // 1. Circuit Breaker
   const cb = getCircuitBreakerStatus();
   if (cb.broken) {
@@ -110,13 +113,27 @@ async function preflightChecks(coin) {
     }
   }
 
+  // 3. Volatility Filter — только если стратегист передал APY кандидата
+  if (smoothedApy != null) {
+    const vol = await checkVolatility(coin, smoothedApy);
+    if (!vol.allowed) {
+      return {
+        allowed: false,
+        reason: 'Volatility',
+        details:
+          `VolIdx=<b>${vol.volIdx.toFixed(4)}</b>, требовался APY≥<b>${vol.requiredApy.toFixed(0)}%</b>, ` +
+          `фактический <b>${smoothedApy.toFixed(1)}%</b>. Монета "пампит" — пропускаем тик.`,
+      };
+    }
+  }
+
   return { allowed: true };
 }
 
 // ── Роутинг paper ↔ production ─────────────────
 
 async function handleOpen(signal) {
-  const pre = await preflightChecks(signal.coin);
+  const pre = await preflightChecks(signal.coin, signal.apy);
   if (!pre.allowed) {
     await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
     return { ok: false };
@@ -156,7 +173,7 @@ async function handleRotate(signal, position) {
 
   // Preflight: блокируем только открытие новой ноги. Старую позицию НЕ закрываем,
   // если новую открыть нельзя — ротация теряет смысл.
-  const pre = await preflightChecks(signal.openCoin);
+  const pre = await preflightChecks(signal.openCoin, signal.openApy);
   if (!pre.allowed) {
     await notifyOpenBlocked({ coin: signal.openCoin, reason: pre.reason, details: pre.details });
     return { ok: false };

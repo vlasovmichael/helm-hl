@@ -2,10 +2,18 @@ import axios from 'axios';
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { setUniverse, getTradeableSet } from '../core/universe.js';
-import { getRuntimeBlacklist } from './executor/index.js';
+import { getRuntimeBlacklist, getOiCapBans } from './executor/index.js';
 
 const HL_API   = 'https://api.hyperliquid.xyz/info';
 const RTT_LIMIT_MS = 10_000; // отклоняем ответы медленнее 10 с
+
+// ── Predictive Funding ─────────────────────────
+// Если у кандидата (rawApy >= ENTRY_APY_THRESHOLD) предсказанный фандинг
+// упадёт более чем на этот процент — пропускаем монету.
+const PREDICTED_DROP_THRESHOLD   = 0.30;
+const PREDICTED_FUNDING_CACHE_MS = 5 * 60_000; // биржа обновляет раз в час, кеш 5 мин
+
+let predictedCache = { ts: 0, map: new Map() };
 
 // Предыдущие значения — логируем INFO только при изменении
 let prevFilterSnapshot = '';
@@ -57,6 +65,53 @@ function refreshUniverse(universe) {
   }
 
   setUniverse(universe);
+}
+
+/**
+ * Запрашивает predictedFundings (с кешем 5 мин).
+ * Возвращает Map<coin, predictedRate> для venue 'HlPerp'.
+ *
+ * Fail-open: при ошибке возвращает старый кеш или пустую Map.
+ * Никогда не блокирует scan() целиком.
+ */
+async function fetchPredictedFundings() {
+  if (Date.now() - predictedCache.ts < PREDICTED_FUNDING_CACHE_MS) {
+    return predictedCache.map;
+  }
+
+  try {
+    const response = await axios.post(HL_API, { type: 'predictedFundings' });
+    const data = response.data;
+
+    if (!Array.isArray(data)) {
+      logger.warn(`[Scout] predictedFundings: unexpected shape, ignoring`);
+      return predictedCache.map;
+    }
+
+    // Формат: [[coin, [[venue, { fundingRate, nextFundingTime }], ...]], ...]
+    const map = new Map();
+    for (const entry of data) {
+      if (!Array.isArray(entry) || entry.length < 2) continue;
+      const [coin, venues] = entry;
+      if (!coin || !Array.isArray(venues)) continue;
+      for (const v of venues) {
+        if (!Array.isArray(v) || v.length < 2) continue;
+        const [venueName, payload] = v;
+        if (venueName === 'HlPerp' && payload && payload.fundingRate != null) {
+          const rate = parseFloat(payload.fundingRate);
+          if (!isNaN(rate)) map.set(coin, rate);
+          break;
+        }
+      }
+    }
+
+    predictedCache = { ts: Date.now(), map };
+    logger.debug(`[Scout] predictedFundings: refreshed cache, ${map.size} coins`);
+    return map;
+  } catch (err) {
+    logger.warn(`[Scout] predictedFundings fetch failed: ${err.message} — using stale cache`);
+    return predictedCache.map;
+  }
 }
 
 /**
@@ -116,30 +171,38 @@ export async function scan() {
   // Обновляем ОБЩИЙ кеш universe — Executor будет читать отсюда же
   refreshUniverse(universe);
 
-  // ── Тройная защита: блэклист + universe + runtime blacklist ──
+  // Predictive funding (5min cache, fail-open)
+  const predictedFundings = await fetchPredictedFundings();
+
+  // ── Защита: блэклист + universe + runtime + OI cap ──
   const tradeable       = getTradeableSet(); // из core/universe.js
   const blacklist       = config.trading.coinBlacklist;
   const runtimeBlocked  = getRuntimeBlacklist();
+  const oiCapBlocked    = getOiCapBans();
 
   // Логируем фильтры на INFO только при изменении, иначе debug
-  const filterSnap = `${universe.length}|${tradeable.size}|${blacklist.size}|${runtimeBlocked.size}`;
+  const filterSnap = `${universe.length}|${tradeable.size}|${blacklist.size}|${runtimeBlocked.size}|${oiCapBlocked.size}`;
   if (filterSnap !== prevFilterSnapshot) {
     prevFilterSnapshot = filterSnap;
     logger.info(
       `[Scout] Filters: API universe=${universe.length} | tradeable=${tradeable.size} | ` +
-      `blacklist=${blacklist.size} | runtime-banned=${runtimeBlocked.size}`,
+      `blacklist=${blacklist.size} | runtime-banned=${runtimeBlocked.size} | ` +
+      `oi-cap-banned=${oiCapBlocked.size}`,
     );
   } else {
     logger.debug(
       `[Scout] Filters: API universe=${universe.length} | tradeable=${tradeable.size} | ` +
-      `blacklist=${blacklist.size} | runtime-banned=${runtimeBlocked.size}`,
+      `blacklist=${blacklist.size} | runtime-banned=${runtimeBlocked.size} | ` +
+      `oi-cap-banned=${oiCapBlocked.size}`,
     );
   }
 
   const results = [];
-  let skippedBlacklist   = 0;
-  let skippedUntradeable = 0;
-  let skippedRuntime     = 0;
+  let skippedBlacklist     = 0;
+  let skippedUntradeable   = 0;
+  let skippedRuntime       = 0;
+  let skippedOiCap         = 0;
+  let skippedPredictedDrop = 0;
 
   for (let i = 0; i < universe.length; i++) {
     const asset = universe[i];
@@ -162,6 +225,12 @@ export async function scan() {
       continue;
     }
 
+    // Фильтр 2.5: OI cap ban — биржа отказала из-за переполненного OI
+    if (oiCapBlocked.has(coin) || oiCapBlocked.has(coinUpper)) {
+      skippedOiCap++;
+      continue;
+    }
+
     // Фильтр 3: нет в общем universe → не перп-контракт
     // Пропускаем если tradeable пустой (первый тик) —
     // лучше пропустить мусор в Executor, чем забанить всё живое
@@ -176,6 +245,25 @@ export async function scan() {
     if (isNaN(price) || isNaN(fundingRate)) continue;
 
     const rawApy = fundingRate * 24 * 365 * 100;
+
+    // Predictive Funding filter — только для серьёзных кандидатов.
+    // Если currentApy ниже порога входа — нам всё равно, мы туда не пойдём.
+    if (rawApy >= config.trading.entryApy) {
+      const predictedRate = predictedFundings.get(coin);
+      if (predictedRate != null) {
+        const predictedApy = predictedRate * 24 * 365 * 100;
+        const drop = (rawApy - predictedApy) / rawApy;
+        if (drop > PREDICTED_DROP_THRESHOLD) {
+          skippedPredictedDrop++;
+          logger.debug(
+            `[Scout] #${coin} APY ${rawApy.toFixed(0)}% → predicted ${predictedApy.toFixed(0)}% ` +
+            `(-${(drop * 100).toFixed(0)}%) — skip (predicted drop > ${(PREDICTED_DROP_THRESHOLD * 100).toFixed(0)}%)`,
+          );
+          continue;
+        }
+      }
+    }
+
     const { fast, slow } = updateEma(coin, rawApy);
 
     if (fast <= 0) continue;
@@ -183,9 +271,11 @@ export async function scan() {
     results.push({ coin, price, fundingRate, rawApy, smoothedApy: fast, slowApy: slow });
   }
 
-  if (skippedBlacklist > 0 || skippedUntradeable > 0 || skippedRuntime > 0) {
+  if (skippedBlacklist > 0 || skippedUntradeable > 0 || skippedRuntime > 0 || skippedOiCap > 0 || skippedPredictedDrop > 0) {
     logger.debug(
-      `[Scout] Filtered out: ${skippedBlacklist} blacklisted, ${skippedUntradeable} untradeable, ${skippedRuntime} runtime-blocked`,
+      `[Scout] Filtered out: ${skippedBlacklist} blacklisted, ${skippedUntradeable} untradeable, ` +
+      `${skippedRuntime} runtime-blocked, ${skippedOiCap} oi-cap-blocked, ` +
+      `${skippedPredictedDrop} predicted-drop`,
     );
   }
 
