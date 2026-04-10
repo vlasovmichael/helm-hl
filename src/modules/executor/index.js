@@ -5,14 +5,27 @@
 
 import { config } from '../../core/config.js';
 import { logger } from '../../core/logger.js';
+import { state as appState } from '../../app/state.js';
+import { getAccountSummary } from '../exchange.js';
+import { getAvailableBalance } from '../wallet.js';
 import { paperOpen, paperClose } from './paper.js';
 import { productionOpen, productionClose, productionRotate } from './production.js';
-import { notifyRotate, notifyRotateFailed } from './notifications.js';
+import {
+  notifyRotate, notifyRotateFailed,
+  notifyOpenBlocked, notifyDrawdownBreached,
+} from './notifications.js';
+import {
+  getCircuitBreakerStatus, checkDrawdown,
+  CB_PAUSE_MS,
+} from './state.js';
 import { notify } from './hooks.js';
 
 // Re-exports для внешних модулей
 export { getRuntimeBlacklist, getStateSnapshot } from './state.js';
 export { on } from './hooks.js';
+
+// Чтобы не спамить TG алертом о drawdown — флаг на сессию
+let drawdownAlertSent = false;
 
 /**
  * Исполняет сигнал от Стратега.
@@ -37,9 +50,78 @@ export async function execute(signal, activePosition) {
   }
 }
 
+// ── Preflight: Circuit Breaker + Drawdown ──────
+
+/**
+ * Защитные проверки перед открытием новой позиции.
+ * @returns {Promise<{ allowed: boolean, reason?: string, details?: string }>}
+ */
+async function preflightChecks(coin) {
+  // 1. Circuit Breaker
+  const cb = getCircuitBreakerStatus();
+  if (cb.broken) {
+    const remainMin = Math.ceil(cb.remainMs / 60_000);
+    logger.warn(
+      `[Executor] ⛔ Circuit breaker active — ${cb.losses} losses, ${remainMin}min remaining`,
+    );
+    return {
+      allowed: false,
+      reason: 'Circuit Breaker',
+      details: `${cb.losses} убытков подряд. Пауза ещё <b>${remainMin} мин</b>.`,
+    };
+  }
+
+  // 2. Max Drawdown Guard
+  if (appState.sessionStartEquity > 0) {
+    let equity = 0;
+    try {
+      if (config.isProduction) {
+        const summary = await getAccountSummary();
+        equity = summary.equity;
+      } else {
+        equity = await getAvailableBalance();
+      }
+    } catch (err) {
+      logger.warn(`[Executor] Drawdown check: failed to get equity: ${err.message}`);
+      return { allowed: true };  // не блокируем при ошибке API
+    }
+
+    const dd = checkDrawdown(equity, appState.sessionStartEquity);
+    if (dd.breached) {
+      logger.error(
+        `[Executor] ⛔ MAX DRAWDOWN BREACHED: -${dd.drawdownPct.toFixed(2)}% ` +
+          `($${appState.sessionStartEquity.toFixed(2)} → $${equity.toFixed(2)})`,
+      );
+
+      if (!drawdownAlertSent) {
+        drawdownAlertSent = true;
+        await notifyDrawdownBreached({
+          equity,
+          sessionStart: appState.sessionStartEquity,
+          drawdownPct: dd.drawdownPct,
+        });
+      }
+
+      return {
+        allowed: false,
+        reason: 'Max Drawdown',
+        details: `Equity $${equity.toFixed(2)} (-${dd.drawdownPct.toFixed(2)}% от стартового). Бот заморожен до перезапуска.`,
+      };
+    }
+  }
+
+  return { allowed: true };
+}
+
 // ── Роутинг paper ↔ production ─────────────────
 
 async function handleOpen(signal) {
+  const pre = await preflightChecks(signal.coin);
+  if (!pre.allowed) {
+    await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
+    return { ok: false };
+  }
+
   if (config.isProduction) {
     return productionOpen(signal.coin, signal.price, signal.apy);
   }
@@ -71,6 +153,15 @@ async function handleRotate(signal, position) {
       apy: signal.openApy,
     });
   }
+
+  // Preflight: блокируем только открытие новой ноги. Старую позицию НЕ закрываем,
+  // если новую открыть нельзя — ротация теряет смысл.
+  const pre = await preflightChecks(signal.openCoin);
+  if (!pre.allowed) {
+    await notifyOpenBlocked({ coin: signal.openCoin, reason: pre.reason, details: pre.details });
+    return { ok: false };
+  }
+
   if (config.isProduction) {
     return productionRotate(signal, position);
   }
@@ -87,6 +178,15 @@ async function paperRotate(signal, position) {
   );
 
   if (!closeResult.ok) return closeResult;
+
+  // Гард: close мог триггернуть circuit breaker
+  const cb = getCircuitBreakerStatus();
+  if (cb.broken) {
+    logger.warn(
+      `[Executor] PAPER ROTATE aborted: circuit breaker tripped during close. Bot stays IDLE.`,
+    );
+    return { ok: true, closePnl: closeResult.pnl };
+  }
 
   const openResult = await paperOpen(
     signal.openCoin,

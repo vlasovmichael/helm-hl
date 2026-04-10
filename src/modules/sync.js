@@ -2,7 +2,7 @@ import { readFile } from 'fs/promises';
 import axios from 'axios';
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
-import { getActivePosition, savePosition } from '../core/database.js';
+import { getActivePosition, savePosition, closePosition as dbClosePosition } from '../core/database.js';
 import { sendMessage } from './reporter.js';
 import { checkAccountLeverage } from './exchange.js';
 
@@ -196,6 +196,9 @@ async function handleMatch(dbPosition, exchangePos) {
 /**
  * Mismatch: локально позиция OPEN, но на бирже её нет.
  * Сделка была закрыта пока бот был оффлайн (SL/TP/ликвидация).
+ *
+ * КРИТИЧНО: закрываем стейл-запись в БД, иначе бот навсегда застрянет
+ * в режиме "позиция уже есть" и не сможет открыть новую.
  */
 async function handleMismatch(dbPosition) {
   const heldH = ((Date.now() - dbPosition.entry_time) / 3_600_000).toFixed(1);
@@ -205,7 +208,32 @@ async function handleMismatch(dbPosition) {
     `Position was closed while bot was offline. Held: ${heldH}h`,
   );
 
+  // ── Закрываем stale DB-позицию ───────────────
+  // PnL неизвестен — пользователь должен сверить вручную с биржей.
+  let dbClosed = false;
+  try {
+    dbClosePosition(dbPosition.id, {
+      close_price:  0,
+      realized_pnl: 0,
+      fee_paid:     0,
+      reason:       'closed_offline',
+    });
+    dbClosed = true;
+    logger.info(
+      `[Sync] ✅ Stale DB position #${dbPosition.coin} (id=${dbPosition.id}) marked as closed_offline`,
+    );
+  } catch (err) {
+    logger.error(
+      `[Sync] ❌ Failed to close stale DB position #${dbPosition.coin}: ${err.message}. ` +
+      `Bot may remain stuck — manual DB cleanup required!`,
+    );
+  }
+
   // CRITICAL alert — всегда со звуком
+  const dbStatusLine = dbClosed
+    ? `🤖 БД синхронизирована. Бот свободен для новых сделок.`
+    : `❌ <b>БД НЕ СИНХРОНИЗИРОВАНА!</b> Требуется ручная очистка.`;
+
   await sendMessage(
     `🚨 <b>[SYNC] ЧП! Сделка закрыта оффлайн</b>\n` +
     `<code>─────────────────────</code>\n` +
@@ -216,7 +244,9 @@ async function handleMismatch(dbPosition) {
     `⏳ Удержание до выключения: ${heldH}ч\n` +
     `<code>─────────────────────</code>\n` +
     `❗️ Причина: <b>TP/SL или Ликвидация</b>\n` +
-    `🔍 <b>Проверь баланс и историю на бирже!</b>`,
+    `🔍 <b>Проверь баланс и историю на бирже!</b>\n` +
+    `<code>─────────────────────</code>\n` +
+    `${dbStatusLine}`,
     true, // critical
   );
 }

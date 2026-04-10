@@ -161,6 +161,44 @@ export async function notifySlippageBan({ coin, slipLabel, banMinutes }) {
   );
 }
 
+export async function notifyCircuitBreaker({ losses, pauseMinutes, lastCoin, lastPnl }) {
+  await sendMessage(
+    `🛑 <b>[CIRCUIT BREAKER]</b>\n` +
+      `<code>═════════════════════</code>\n` +
+      `📉 <b>${losses}</b> убыточных сделки за час\n` +
+      `Последняя: <b>#${lastCoin}</b> ($${lastPnl.toFixed(4)})\n` +
+      `<code>─────────────────────</code>\n` +
+      `⏸ Торговля приостановлена на <b>${pauseMinutes} мин</b>\n` +
+      `Бот возобновит работу автоматически.`,
+    true,
+  );
+}
+
+export async function notifyOpenBlocked({ coin, reason, details }) {
+  await sendMessage(
+    `⛔ <b>[OPEN BLOCKED] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `🛡 Защита: <b>${reason}</b>\n` +
+      `${details}`,
+    true,
+  );
+}
+
+export async function notifyDrawdownBreached({ equity, sessionStart, drawdownPct }) {
+  await sendMessage(
+    `🚨🚨🚨 <b>[MAX DRAWDOWN BREACHED]</b>\n` +
+      `<code>═════════════════════</code>\n` +
+      `💰 Стартовый equity: <b>$${sessionStart.toFixed(2)}</b>\n` +
+      `💰 Текущий equity:   <b>$${equity.toFixed(2)}</b>\n` +
+      `📉 Drawdown: <b>-${drawdownPct.toFixed(2)}%</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `⛔ Открытие новых позиций <b>ЗАБЛОКИРОВАНО</b>\n` +
+      `до перезапуска бота.\n` +
+      `Проверь стратегию и рынок.`,
+    true,
+  );
+}
+
 export async function notifyRotateFailed({ closeCoin, openCoin, closePnl, phase }) {
   if (phase === 'close') {
     await sendMessage(

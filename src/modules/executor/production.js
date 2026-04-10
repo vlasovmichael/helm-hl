@@ -19,8 +19,10 @@ import { calcSize, calcPnl, checkSlippage, MARKET_SLIPPAGE, MIN_ORDER_USD, FEE_R
 import {
   banRuntime, banSlippage, setCooldown,
   getLastRejectedAlert, setRejectedAlert,
+  recordLoss, getCircuitBreakerStatus,
   RUNTIME_BAN_TTL_MS, SLIPPAGE_BAN_TTL_MS,
   REENTRY_COOLDOWN_MS, REJECTED_ALERT_TTL_MS,
+  CB_PAUSE_MS,
 } from './state.js';
 import { reconcile } from './reconciler.js';
 import { sleep } from './reconciler.js';
@@ -31,6 +33,7 @@ import {
   notifyProductionClose, notifyCloseRejected, notifyCloseFailed,
   notifyExternalClose,
   notifyRotate, notifyRotateFailed,
+  notifyCircuitBreaker,
 } from './notifications.js';
 
 // ─────────────────────────────────────────────────
@@ -421,6 +424,22 @@ export async function productionClose(signal, position, silent = false) {
     });
   }
 
+  // Circuit breaker: фиксируем убыток
+  if (realizedPnl < 0) {
+    const tripped = recordLoss(coin, realizedPnl);
+    if (tripped) {
+      logger.error(
+        `[Executor] 🛑 CIRCUIT BREAKER TRIPPED after PROD loss #${coin} ($${realizedPnl.toFixed(4)})`,
+      );
+      await notifyCircuitBreaker({
+        losses: 3,
+        pauseMinutes: CB_PAUSE_MS / 60_000,
+        lastCoin: coin,
+        lastPnl: realizedPnl,
+      });
+    }
+  }
+
   notify('afterClose', {
     coin, pnl: realizedPnl, holdHours,
     reason: signal.reason, fill, mode: 'PRODUCTION',
@@ -465,6 +484,15 @@ export async function productionRotate(signal, position) {
       closePnl: 0, phase: 'close',
     });
     return { ok: false };
+  }
+
+  // ── Гард: close мог триггернуть circuit breaker ──
+  const cb = getCircuitBreakerStatus();
+  if (cb.broken) {
+    logger.warn(
+      `[Executor] PROD ROTATE aborted: circuit breaker tripped during close. Bot stays IDLE.`,
+    );
+    return { ok: true, closePnl: closeResult.pnl };
   }
 
   // ── Шаг 2: открываем новую (silent) ──────────

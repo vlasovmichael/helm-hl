@@ -10,9 +10,12 @@ import {
 } from '../../core/database.js';
 import { getAvailableBalance } from '../wallet.js';
 import { calcSize, ONE_LEG, MIN_ORDER_USD } from './math.js';
-import { setCooldown, REENTRY_COOLDOWN_MS } from './state.js';
+import {
+  setCooldown, REENTRY_COOLDOWN_MS,
+  recordLoss, CB_PAUSE_MS,
+} from './state.js';
 import { notify } from './hooks.js';
-import { notifyPaperOpen, notifyPaperClose } from './notifications.js';
+import { notifyPaperOpen, notifyPaperClose, notifyCircuitBreaker } from './notifications.js';
 
 /**
  * Определяет баланс для расчёта размера позиции.
@@ -25,7 +28,12 @@ async function getPaperBalance() {
     logger.info(`[Executor] Using FAKE_BALANCE: $${fake.toFixed(2)}`);
     return fake;
   }
-  return getAvailableBalance();
+  try {
+    return await getAvailableBalance();
+  } catch (err) {
+    logger.error(`[Executor] PAPER getPaperBalance failed: ${err.message}`);
+    return 0;
+  }
 }
 
 /**
@@ -127,6 +135,22 @@ export async function paperClose(signal, position, silent = false) {
       reason: signal.reason,
       pnl: realizedPnl, fee: totalFee,
     });
+  }
+
+  // Circuit breaker: фиксируем убыток
+  if (realizedPnl < 0) {
+    const tripped = recordLoss(position.coin, realizedPnl);
+    if (tripped) {
+      logger.error(
+        `[Executor] 🛑 CIRCUIT BREAKER TRIPPED after PAPER loss #${position.coin} ($${realizedPnl.toFixed(4)})`,
+      );
+      await notifyCircuitBreaker({
+        losses: 3,
+        pauseMinutes: CB_PAUSE_MS / 60_000,
+        lastCoin: position.coin,
+        lastPnl: realizedPnl,
+      });
+    }
   }
 
   notify('afterClose', {
