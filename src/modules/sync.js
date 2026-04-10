@@ -5,6 +5,7 @@ import { logger } from '../core/logger.js';
 import { getActivePosition, savePosition, closePosition as dbClosePosition } from '../core/database.js';
 import { sendMessage } from './reporter.js';
 import { checkAccountLeverage } from './exchange.js';
+import { restoreCircuitBreaker } from './executor/state.js';
 
 const HL_API         = 'https://api.hyperliquid.xyz/info';
 const BOT_STATE_PATH = 'data/bot_state.json';
@@ -83,6 +84,14 @@ async function loadBotState() {
       `[Sync] ⚠️  State is ${(ageSec / 3600).toFixed(1)}h old — data may be stale. ` +
       `Exchange sync will resolve any discrepancies.`,
     );
+  }
+
+  // Восстанавливаем Circuit Breaker (recent_losses + broken_until)
+  // Толерантно к старым state-файлам без поля circuit_breaker.
+  try {
+    restoreCircuitBreaker(state.circuit_breaker);
+  } catch (err) {
+    logger.warn(`[Sync] Failed to restore circuit breaker (non-critical): ${err.message}`);
   }
 
   return state;

@@ -9,6 +9,7 @@ import { logger } from '../core/logger.js';
 import { getActivePosition } from '../core/database.js';
 import { disconnectExchange } from '../modules/exchange.js';
 import { sendMessage, stopCallbackPolling } from '../modules/reporter.js';
+import { serializeCircuitBreaker } from '../modules/executor/state.js';
 import { state, BOT_STATE_PATH } from './state.js';
 
 /**
@@ -47,6 +48,7 @@ export async function saveBotState(activePosition, reason) {
     mode:       config.mode,
     uptime_min: parseFloat(((Date.now() - state.startedAt) / 60_000).toFixed(1)),
     session_start_equity: state.sessionStartEquity,
+    circuit_breaker: serializeCircuitBreaker(),
     active_position: activePosition
       ? {
           id:           activePosition.id,

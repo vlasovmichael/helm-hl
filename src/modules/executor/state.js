@@ -2,21 +2,21 @@
 //  Executor State — централизованное хранилище
 // ─────────────────────────────────────────────────
 // Maps, TTL-константы, геттеры.
-// Нет зависимостей от проекта — чистый модуль данных.
 
-// ── TTL константы ──────────────────────────────
+import { config } from '../../core/config.js';
+import { logger } from '../../core/logger.js';
+
+// ── TTL константы (захардкожены — не настраиваются оператором) ──
 export const RUNTIME_BAN_TTL_MS    = 30 * 60_000;  // 30 мин
 export const SLIPPAGE_BAN_TTL_MS   = 10 * 60_000;  // 10 мин
 export const REENTRY_COOLDOWN_MS   = 15 * 60_000;  // 15 мин
 export const REJECTED_ALERT_TTL_MS = 30 * 60_000;  // 30 мин
 
-// ── Circuit Breaker ───────────────────────────
-export const CB_WINDOW_MS          = 60 * 60_000;  // скользящее окно 1 час
-export const CB_MAX_LOSSES         = 3;             // макс убытков в окне
-export const CB_PAUSE_MS           = 2 * 3_600_000; // пауза 2 часа
-
-// ── Max Drawdown Guard ────────────────────────
-export const MAX_DRAWDOWN_PCT      = 10;            // -10% от стартового equity → стоп
+// ── Risk-параметры (из .env через config.risk) ──
+export const CB_WINDOW_MS     = config.risk.cbWindowMs;
+export const CB_MAX_LOSSES    = config.risk.cbMaxLosses;
+export const CB_PAUSE_MS      = config.risk.cbPauseMs;
+export const MAX_DRAWDOWN_PCT = config.risk.maxDrawdownPct;
 
 // ── Приватные Maps ─────────────────────────────
 const runtimeBlacklist = new Map();  // coin → timestamp
@@ -59,6 +59,53 @@ export function recordLoss(coin, pnl) {
     return true;
   }
   return false;
+}
+
+/**
+ * Сериализует состояние Circuit Breaker для bot_state.json.
+ * Вызывается из lifecycle.saveBotState.
+ * @returns {{ recent_losses: Array, broken_until: number }}
+ */
+export function serializeCircuitBreaker() {
+  return {
+    recent_losses: recentLosses.map((l) => ({ ts: l.ts, pnl: l.pnl, coin: l.coin })),
+    broken_until: circuitBrokenUntil,
+  };
+}
+
+/**
+ * Восстанавливает Circuit Breaker из bot_state.json после рестарта.
+ * Толерантен к отсутствующему/повреждённому полю — старые stateы без CB
+ * просто инициализируются как пустые.
+ */
+export function restoreCircuitBreaker(saved) {
+  if (!saved || typeof saved !== 'object') return;
+
+  const now = Date.now();
+  const cutoff = now - CB_WINDOW_MS;
+
+  // Восстанавливаем только убытки, попадающие в актуальное окно
+  if (Array.isArray(saved.recent_losses)) {
+    recentLosses.length = 0;
+    for (const l of saved.recent_losses) {
+      if (l && typeof l.ts === 'number' && l.ts >= cutoff) {
+        recentLosses.push({ ts: l.ts, pnl: l.pnl ?? 0, coin: l.coin ?? '?' });
+      }
+    }
+  }
+
+  // Восстанавливаем активную паузу, если она ещё не истекла
+  if (typeof saved.broken_until === 'number' && saved.broken_until > now) {
+    circuitBrokenUntil = saved.broken_until;
+    const remainMin = Math.ceil((circuitBrokenUntil - now) / 60_000);
+    logger.warn(
+      `[Executor] 🛑 Circuit breaker RESTORED from state — ${recentLosses.length} losses, ${remainMin}min remaining`,
+    );
+  } else if (recentLosses.length > 0) {
+    logger.info(
+      `[Executor] Circuit breaker restored: ${recentLosses.length} recent losses in window (not tripped)`,
+    );
+  }
 }
 
 /**

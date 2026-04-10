@@ -46,6 +46,21 @@ function loadConfig() {
     throw new Error('MIN_APY_THRESHOLD, ENTRY_APY_THRESHOLD and LEVERAGE must be valid numbers');
   }
 
+  // ── Risk management ──
+  const maxDrawdownPct = parseFloat(process.env.MAX_DRAWDOWN_PCT || '10');
+  const cbMaxLosses    = parseInt(process.env.CB_MAX_LOSSES      || '3', 10);
+  const cbPauseHours   = parseFloat(process.env.CB_PAUSE_HOURS   || '2');
+
+  if (isNaN(maxDrawdownPct) || maxDrawdownPct <= 0 || maxDrawdownPct > 100) {
+    throw new Error(`MAX_DRAWDOWN_PCT must be a number in (0, 100]. Got: "${process.env.MAX_DRAWDOWN_PCT}"`);
+  }
+  if (isNaN(cbMaxLosses) || cbMaxLosses < 1) {
+    throw new Error(`CB_MAX_LOSSES must be integer ≥ 1. Got: "${process.env.CB_MAX_LOSSES}"`);
+  }
+  if (isNaN(cbPauseHours) || cbPauseHours <= 0) {
+    throw new Error(`CB_PAUSE_HOURS must be positive number. Got: "${process.env.CB_PAUSE_HOURS}"`);
+  }
+
   if (entryApy <= minApy) {
     throw new Error(
       `ENTRY_APY_THRESHOLD (${entryApy}) must be greater than MIN_APY_THRESHOLD (${minApy})`,
@@ -78,6 +93,13 @@ function loadConfig() {
           .map((s) => s.trim().toUpperCase())
           .filter(Boolean),
       ),
+    },
+
+    risk: {
+      maxDrawdownPct,                  // -X% от sessionStartEquity → стоп открытий
+      cbMaxLosses,                     // макс убытков подряд в окне
+      cbWindowMs:  60 * 60_000,        // окно скользящего счётчика (1ч, hardcoded)
+      cbPauseMs:   cbPauseHours * 3_600_000,
     },
 
     telegram: {
