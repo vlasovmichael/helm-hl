@@ -136,6 +136,27 @@ export function getHistorySince(sinceMs) {
 }
 
 /**
+ * Возвращает заархивированные сделки, закрытые после указанного timestamp.
+ * Читает данные из data/history_archive.json.
+ *
+ * @param {number} sinceMs — Unix timestamp в миллисекундах
+ * @returns {Array<Object>}
+ */
+export function getArchivedHistorySince(sinceMs) {
+  const ARCHIVE_PATH = 'data/history_archive.json';
+  try {
+    const raw = readFileSync(ARCHIVE_PATH, 'utf-8');
+    const archive = JSON.parse(raw);
+    if (!Array.isArray(archive)) return [];
+
+    return archive.filter((r) => r.closed_at >= sinceMs);
+  } catch {
+    // файл не существует или пуст
+    return [];
+  }
+}
+
+/**
  * Архивирует всю историю в data/history_archive.json и очищает таблицу history.
  *
  * Файл архива — JSON-массив. При повторных вызовах записи дописываются

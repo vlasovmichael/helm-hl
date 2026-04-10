@@ -124,7 +124,7 @@ function initChart() {
         x: {
           ticks: {
             color: "#71717A",
-            font: { family: "SF Mono", size: 14 },
+            font: { family: "Inter", size: 14 },
             maxRotation: 0,
             autoSkip: true,
             maxTicksLimit: 8,
@@ -135,7 +135,7 @@ function initChart() {
         y: {
           ticks: {
             color: "#71717A",
-            font: { family: "SF Mono", size: 14 },
+            font: { family: "Inter", size: 14 },
             callback: (v) => `$${v.toLocaleString()}`,
             maxTicksLimit: 6,
           },

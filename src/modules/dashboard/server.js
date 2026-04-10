@@ -9,8 +9,8 @@ import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { config } from "../../core/config.js";
 import { logger } from "../../core/logger.js";
-import { getActivePosition, getHistorySince } from "../../core/database.js";
-import { getAccountSummary } from "../exchange.js";
+import { getActivePosition, getHistorySince, getArchivedHistorySince } from "../../core/database.js";
+import { getAccountSummary, getPositions } from "../exchange.js";
 import { getAvailableBalance } from "../wallet.js";
 import { state } from "../../app/state.js";
 import { getTaxSummary } from "../taxCollector/index.js";
@@ -83,30 +83,52 @@ async function handleStatus(_req, res) {
  * GET /api/history?hours=N
  * Последние закрытые сделки за N часов + кумулятивная кривая equity.
  */
-function handleHistory(req, res) {
+async function handleHistory(req, res) {
   try {
     const hours = req.query.hours ? parseInt(req.query.hours, 10) : 24;
     const since = Date.now() - hours * 3_600_000;
-    const rows = getHistorySince(since);
 
-    // rows отсортированы DESC по closed_at — переворачиваем для cumsum
-    const asc = [...rows].reverse();
+    // 1. Собираем сделки из БД + Архива
+    const dbRows = getHistorySince(since);
+    const archRows = getArchivedHistorySince(since);
 
-    const baseline = state.sessionStartEquity || 0;
-    let running = baseline;
-    const points = asc.map((r) => {
-      running += r.realized_pnl;
+    // Объединяем и сортируем по времени (старые -> новые)
+    const allTrades = [...dbRows, ...archRows]
+      .sort((a, b) => a.closed_at - b.closed_at);
+
+    // 2. Получаем ТЕКУЩЕЕ equity для точки отсчета "назад"
+    let currentEquity = 0;
+    try {
+      if (config.isProduction) {
+        const summary = await getAccountSummary();
+        currentEquity = summary.equity;
+      } else {
+        currentEquity = await getAvailableBalance();
+      }
+    } catch {
+      currentEquity = state.sessionStartEquity || 0;
+    }
+
+    // 3. Строим кривую, работая "назад" от текущего момента
+    // Нам нужно знать финальную сумму всех PnL, чтобы найти начальную точку Equity
+    const totalPnlInWindow = allTrades.reduce((sum, t) => sum + t.realized_pnl, 0);
+    let runningEquity = currentEquity - totalPnlInWindow;
+    const baseline = runningEquity;
+
+    const points = allTrades.map((t) => {
+      runningEquity += t.realized_pnl;
       return {
-        ts: r.closed_at,
-        coin: r.coin,
-        pnl: r.realized_pnl,
-        equity: running,
-        reason: r.reason,
+        ts: t.closed_at,
+        coin: t.coin,
+        pnl: t.realized_pnl,
+        equity: runningEquity,
+        reason: t.reason,
       };
     });
 
     res.json({
       baseline,
+      currentEquity,
       windowHours: hours,
       count: points.length,
       points,
