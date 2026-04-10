@@ -16,6 +16,30 @@ const NEGATIVE_FUNDING_TICKS = 2;
 // Даже если entryApy=60%, но текущий APY упал до 8%, не входим.
 const MIN_ENTRY_APY_FLOOR = 10;
 
+// Funding-Aware Exit Gate: Hyperliquid платит фандинг каждый час в HH:00 UTC.
+// Закрытие позиции за N минут до выплаты = потеря накопленного за окно фандинга.
+// Блокируем soft-exits (APY below threshold, rotation) в этом окне.
+// Emergency-exits (delist, price spike, negative funding) гейт игнорируют.
+const FUNDING_GATE_MINUTES = 10;
+
+/**
+ * Сколько минут осталось до ближайшей выплаты фандинга (HH:00 UTC).
+ * @returns {number} число с дробной частью, например 9.5
+ */
+function minutesUntilNextFunding() {
+  const now      = new Date();
+  const nextHour = new Date(now);
+  nextHour.setUTCHours(now.getUTCHours() + 1, 0, 0, 0);
+  return (nextHour.getTime() - now.getTime()) / 60_000;
+}
+
+/**
+ * true если до выплаты < FUNDING_GATE_MINUTES → soft-exits заблокированы.
+ */
+function isInFundingGate() {
+  return minutesUntilNextFunding() < FUNDING_GATE_MINUTES;
+}
+
 // Счётчик: сколько тиков подряд funding < 0
 let negativeFundingStreak = 0;
 
@@ -158,6 +182,15 @@ export function analyze(scoutData, activePosition) {
     // APY упал ниже (minApy − exitBuffer)
     // Пример: minApy=30, exitBuffer=5 → выходим только ниже 25%
     if (current.slowApy < effectiveExitApy) {
+      // Funding-Aware Gate: не выходим в окне выплаты — потеряем накопленный фандинг
+      if (isInFundingGate()) {
+        logger.info(
+          `[Strategist] HOLD (funding gate) — ${currentCoin} slowApy ${current.slowApy.toFixed(2)}% ` +
+            `< exit ${effectiveExitApy}% but ${minutesUntilNextFunding().toFixed(1)}min to funding payout`,
+        );
+        return { action: 'HOLD' };
+      }
+
       logger.warn(
         `[Strategist] CLOSE — ${currentCoin} slowApy ${current.slowApy.toFixed(2)}% < effectiveExit ${effectiveExitApy}% (held ${held.toFixed(0)}min)`,
       );
@@ -185,6 +218,15 @@ export function analyze(scoutData, activePosition) {
       const hours = calculatePaybackHours(current.smoothedApy, best.smoothedApy);
 
       if (hours <= MAX_PAYBACK_HOURS) {
+        // Funding-Aware Gate: ротация = close+open, close теряет накопленный фандинг
+        if (isInFundingGate()) {
+          logger.info(
+            `[Strategist] HOLD (funding gate) — would rotate ${currentCoin} → ${best.coin} ` +
+              `but ${minutesUntilNextFunding().toFixed(1)}min to funding payout`,
+          );
+          return { action: 'HOLD' };
+        }
+
         logger.info(
           `[Strategist] ROTATE — ${currentCoin} (${current.smoothedApy.toFixed(2)}%) → ${best.coin} (${best.smoothedApy.toFixed(2)}%) | payback: ${hours.toFixed(1)}h`,
         );
