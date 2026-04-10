@@ -13,9 +13,3 @@ services:
         limits:
           memory: 256M
     network_mode: "host"
-    networks:
-      - workspace_app_network
-
-networks:
-  workspace_app_network:
-    external: true
