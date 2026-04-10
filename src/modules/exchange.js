@@ -296,6 +296,20 @@ export async function getAccountSummary() {
 }
 
 /**
+ * Возвращает ПОЛНЫЙ срез clearinghouseState (равен ответу info-API).
+ * Используется как "тяжёлый" final check в reconciler — даёт всё:
+ * marginSummary, assetPositions, withdrawable, crossMarginSummary и т.п.
+ *
+ * @returns {Promise<Object>}
+ */
+export async function getClearinghouseStateFull() {
+  return retryWithBackoff(
+    () => sdk.info.perpetuals.getClearinghouseState(config.wallet.address),
+    { label: "get-clearinghouse-state-full", maxRetries: 3 },
+  );
+}
+
+/**
  * Получает метаданные рынка (для определения assetIndex, szDecimals и т.д.).
  *
  * @returns {Promise<Object>}

@@ -3,14 +3,49 @@
 // ─────────────────────────────────────────────────
 
 import { logger } from '../../core/logger.js';
-import { getPositions } from '../exchange.js';
+import { getPositions, getClearinghouseStateFull } from '../exchange.js';
 import { sendMessage } from '../reporter.js';
 import {
   RECONCILIATION_TOLERANCE_PCT,
   RECONCILE_INITIAL_DELAY_MS,
-  RECONCILE_RETRY_DELAY_MS,
   RECONCILE_MAX_RETRIES,
+  RECONCILE_BACKOFF_BASE_MS,
+  RECONCILE_BACKOFF_CAP_MS,
 } from './math.js';
+
+/**
+ * Exponential backoff с потолком.
+ * attempt=1 → BASE, 2 → 2×BASE, 3 → 4×BASE, ... (но не больше CAP).
+ */
+function backoffMs(attempt) {
+  const exp = RECONCILE_BACKOFF_BASE_MS * 2 ** (attempt - 1);
+  return Math.min(exp, RECONCILE_BACKOFF_CAP_MS);
+}
+
+/**
+ * "Тяжёлый" final check: тащит ПОЛНЫЙ clearinghouseState и ищет монету.
+ * Используется ТОЛЬКО когда обычный polling не нашёл позицию после всех retry —
+ * прежде чем поднимать тревогу, делаем последний срез на всякий случай
+ * (вдруг indexer лагал именно на лёгком эндпоинте).
+ *
+ * @param {string} coin
+ * @returns {Promise<{ hasPos: boolean, szi: number, posData: Object|null, equity: number, posCount: number }>}
+ */
+async function fetchPositionStateHeavy(coin) {
+  const fullState = await getClearinghouseStateFull();
+  const assetPositions = fullState?.assetPositions ?? [];
+  const equity = parseFloat(fullState?.marginSummary?.accountValue ?? '0');
+  const posCount = assetPositions.length;
+
+  const pos = assetPositions.find((ap) => {
+    const p = ap?.position ?? ap;
+    return p?.coin === coin;
+  });
+  const posData = pos?.position ?? pos ?? null;
+  const szi = posData ? parseFloat(posData.szi ?? '0') : 0;
+
+  return { hasPos: szi !== 0, szi, posData, equity, posCount };
+}
 
 export function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -54,6 +89,9 @@ export async function reconcile(coin, operation, checks) {
     let state;
     let matched = false;
 
+    // ── Polling с экспоненциальной задержкой ──
+    // attempt=1 → попытка → backoff(1)=1s → attempt=2 → backoff(2)=2s → ...
+    // 10 попыток, суммарное ожидание ~95с (cap 16s).
     for (let attempt = 1; attempt <= RECONCILE_MAX_RETRIES; attempt++) {
       state = await fetchPositionState(coin);
 
@@ -67,40 +105,87 @@ export async function reconcile(coin, operation, checks) {
       }
 
       if (attempt < RECONCILE_MAX_RETRIES) {
+        const wait = backoffMs(attempt);
         logger.info(
           `[Reconcile] ${operation} #${coin} — ` +
-            `waiting for position to index… (attempt ${attempt}/${RECONCILE_MAX_RETRIES})`,
+            `waiting for position to index… (attempt ${attempt}/${RECONCILE_MAX_RETRIES}, next in ${wait}ms)`,
         );
-        await sleep(RECONCILE_RETRY_DELAY_MS);
+        await sleep(wait);
       }
     }
 
-    // Ожидали позицию, но не нашли
+    // ── Final Check: тяжёлый запрос полного среза ──
+    // Если polling не сошёлся — перед алертом делаем один "правдивый" срез
+    // через clearinghouseState. Возможно, лёгкий эндпоинт лагал, а полный
+    // покажет реальное состояние. Это спасёт от ложных тревог.
+    if (!matched) {
+      logger.warn(
+        `[Reconcile] ${operation} #${coin} — polling exhausted, running heavy final check via clearinghouseState…`,
+      );
+
+      let heavy;
+      try {
+        heavy = await fetchPositionStateHeavy(coin);
+        logger.info(
+          `[Reconcile] ${operation} #${coin} — final check: ` +
+            `equity=$${heavy.equity.toFixed(2)} | total positions=${heavy.posCount} | ` +
+            `#${coin} szi=${heavy.szi} hasPos=${heavy.hasPos}`,
+        );
+      } catch (err) {
+        logger.error(
+          `[Reconcile] ${operation} #${coin} — final check FAILED: ${err.message}. ` +
+            `Proceeding with last polling result.`,
+        );
+        heavy = null;
+      }
+
+      // Если final check вернул другой результат — используем его как истину
+      const finalState = heavy ?? state;
+
+      if (checks.expectPosition === true && finalState.hasPos) {
+        logger.info(
+          `[Reconcile] ✅ ${operation} #${coin} — position FOUND via final check (was lagging on light endpoint)`,
+        );
+        state = finalState;
+        matched = true;
+      } else if (checks.expectPosition === false && !finalState.hasPos) {
+        logger.info(
+          `[Reconcile] ✅ ${operation} #${coin} — position absent confirmed via final check`,
+        );
+        state = finalState;
+        matched = true;
+      } else {
+        // Final check подтвердил расхождение → шлём алерт
+        state = finalState;
+      }
+    }
+
+    // Ожидали позицию, но не нашли (даже final check не помог)
     if (checks.expectPosition === true && !state.hasPos) {
       logger.error(
-        `[Reconcile] ❌ ${operation} #${coin} — expected position on exchange but found NONE ` +
-          `after ${RECONCILE_MAX_RETRIES} retries (~${((RECONCILE_INITIAL_DELAY_MS + RECONCILE_MAX_RETRIES * RECONCILE_RETRY_DELAY_MS) / 1000).toFixed(0)}s)!`,
+        `[Reconcile] ❌ ${operation} #${coin} — expected position but found NONE ` +
+          `after ${RECONCILE_MAX_RETRIES} retries + final clearinghouseState check!`,
       );
       await sendMessage(
         `⚠️ <b>[RECONCILE] #${coin}</b>\n` +
           `После ${operation}: позиция не найдена на бирже\n` +
-          `после ${RECONCILE_MAX_RETRIES} попыток!\n` +
+          `после ${RECONCILE_MAX_RETRIES} попыток + final check!\n` +
           `🔍 Проверь вручную.`,
         true,
       );
       return;
     }
 
-    // Ожидали закрытие, но позиция ещё висит
+    // Ожидали закрытие, но позиция ещё висит (даже final check показал)
     if (checks.expectPosition === false && state.hasPos) {
       logger.warn(
         `[Reconcile] ⚠️ ${operation} #${coin} — expected NO position but found szi=${state.szi} ` +
-          `after ${RECONCILE_MAX_RETRIES} retries`,
+          `after ${RECONCILE_MAX_RETRIES} retries + final check`,
       );
       await sendMessage(
         `⚠️ <b>[RECONCILE] #${coin}</b>\n` +
           `После ${operation}: позиция всё ещё открыта (szi=${state.szi})\n` +
-          `после ${RECONCILE_MAX_RETRIES} попыток!\n` +
+          `после ${RECONCILE_MAX_RETRIES} попыток + final check!\n` +
           `🔍 Возможно, частичный fill. Проверь вручную.`,
         true,
       );

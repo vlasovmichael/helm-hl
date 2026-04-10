@@ -16,8 +16,11 @@ export const SLIPPAGE_BAN_PCT    = 1.5;      // бан
 // ── Reconciliation ─────────────────────────────
 export const RECONCILIATION_TOLERANCE_PCT = 2.0;
 export const RECONCILE_INITIAL_DELAY_MS   = 3_000;
-export const RECONCILE_RETRY_DELAY_MS     = 3_000;
-export const RECONCILE_MAX_RETRIES        = 5;
+export const RECONCILE_MAX_RETRIES        = 10;
+// Exponential backoff: 1с → 2с → 4с → 8с → 16с (cap).
+// Сумма всех ожиданий между 10 попытками: 1+2+4+8+16+16+16+16+16 = 95с (~1.5 мин).
+export const RECONCILE_BACKOFF_BASE_MS    = 1_000;
+export const RECONCILE_BACKOFF_CAP_MS     = 16_000;
 
 /**
  * Округление вниз до заданного числа десятичных знаков.
