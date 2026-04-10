@@ -71,8 +71,10 @@ function isSilentHour() {
 export async function sendMessage(text, critical = false) {
   if (!TG_API || !config.telegram.chatId) return;
 
-  // ── Throttle check (critical обходит) ──────────
-  if (!critical) {
+  // ── Throttle check (critical обходит, а также системные уведомления) ──
+  const isLifecycle = text.includes('[SYSTEM]') || text.includes('[SYNC]') || text.includes('запущен');
+
+  if (!critical && !isLifecycle) {
     const key = text.slice(0, THROTTLE_KEY_LEN);
     const lastSent = throttleCache.get(key);
     const now = Date.now();

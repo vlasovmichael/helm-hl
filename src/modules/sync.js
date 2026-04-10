@@ -7,6 +7,8 @@ import { sendMessage } from './reporter.js';
 import { checkAccountLeverage } from './exchange.js';
 import { restoreCircuitBreaker } from './executor/state.js';
 
+import { state as appState } from '../app/state.js';
+
 const HL_API         = 'https://api.hyperliquid.xyz/info';
 const BOT_STATE_PATH = 'data/bot_state.json';
 
@@ -86,12 +88,14 @@ async function loadBotState() {
     );
   }
 
-  // Восстанавливаем Circuit Breaker (recent_losses + broken_until)
-  // Толерантно к старым state-файлам без поля circuit_breaker.
-  try {
-    restoreCircuitBreaker(state.circuit_breaker);
-  } catch (err) {
-    logger.warn(`[Sync] Failed to restore circuit breaker (non-critical): ${err.message}`);
+  // Восстанавливаем Smart Alerts состояние (предотвращает повторный Recap/FOMO на рестарте)
+  if (state.daily_recap_sent_date) {
+    appState.dailyRecapSentDate = state.daily_recap_sent_date;
+    logger.info(`[Sync] Restored dailyRecapSentDate: ${appState.dailyRecapSentDate}`);
+  }
+  if (state.last_fomo_alert) {
+    appState.lastFomoAlert = state.last_fomo_alert;
+    logger.info(`[Sync] Restored lastFomoAlert: ${new Date(appState.lastFomoAlert).toLocaleTimeString()}`);
   }
 
   return state;

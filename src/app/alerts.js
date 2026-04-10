@@ -29,6 +29,8 @@ import {
  */
 export async function runSmartAlerts(scoutData, signal, activePosition) {
   const now = Date.now();
+  const uptimeMs = now - state.botStartedAt;
+  const skipNoisy = uptimeMs < 60_000; // Пропускаем Recap/FOMO в первые 60с
 
   // ── 1. Аномалия APY (только при открытой позиции) ─────────────────
   if (activePosition) {
@@ -44,13 +46,14 @@ export async function runSmartAlerts(scoutData, signal, activePosition) {
     }
   }
 
-  // Обновляем карту APY для следующего тика
+  // Обновляем карту APY для следующего тика (важно даже в первые 60с)
   for (const m of scoutData) {
     state.prevApyMap.set(m.coin, m.smoothedApy);
   }
 
   // ── 2. FOMO-алерт (позиция открыта, ротация невыгодна) ───────────
   if (
+    !skipNoisy &&
     activePosition &&
     signal.action === 'HOLD' &&
     now - state.lastFomoAlert >= FOMO_COOLDOWN_MS
@@ -109,7 +112,9 @@ export async function runSmartAlerts(scoutData, signal, activePosition) {
   }
 
   // ── 4. Daily Recap ───────────────────────────────────────────────
-  await checkDailyRecap();
+  if (!skipNoisy) {
+    await checkDailyRecap();
+  }
 }
 
 /**

@@ -49,6 +49,8 @@ export async function saveBotState(activePosition, reason) {
     mode:       config.mode,
     uptime_min: parseFloat(((Date.now() - state.startedAt) / 60_000).toFixed(1)),
     session_start_equity: state.sessionStartEquity,
+    daily_recap_sent_date: state.dailyRecapSentDate,
+    last_fomo_alert: state.lastFomoAlert,
     circuit_breaker: serializeCircuitBreaker(),
     active_position: activePosition
       ? {
