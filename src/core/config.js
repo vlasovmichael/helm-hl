@@ -108,6 +108,14 @@ function loadConfig() {
       silentStartHour: parseInt(process.env.SILENT_START_HOUR ?? '22', 10),
       silentEndHour:   parseInt(process.env.SILENT_END_HOUR   ?? '9',  10),
     },
+
+    // ── Binance (read-only, для Tax Collector) ──
+    // Модуль taxCollector сам проверяет наличие ключей через isConfigured()
+    // и тихо отключается, если их нет. Не блокируем старт бота.
+    binance: {
+      apiKey:    process.env.BINANCE_API_KEY    || null,
+      apiSecret: process.env.BINANCE_API_SECRET || null,
+    },
   };
 }
 

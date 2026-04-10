@@ -13,6 +13,7 @@ import { getActivePosition, getHistorySince } from "../../core/database.js";
 import { getAccountSummary } from "../exchange.js";
 import { getAvailableBalance } from "../wallet.js";
 import { state } from "../../app/state.js";
+import { getTaxSummary } from "../taxCollector/index.js";
 
 const HOST = "0.0.0.0";
 const PORT = 3010;
@@ -113,6 +114,22 @@ function handleHistory(_req, res) {
   }
 }
 
+/**
+ * GET /api/tax-summary?year=YYYY
+ * PIT-38 агрегат за год: расходы, доходы, прибыль в PLN.
+ */
+async function handleTaxSummary(req, res) {
+  try {
+    const yearParam = req.query.year ? parseInt(req.query.year, 10) : null;
+    const year = (yearParam && !isNaN(yearParam)) ? yearParam : new Date().getFullYear();
+    const summary = await getTaxSummary(year);
+    res.json(summary);
+  } catch (err) {
+    logger.warn(`[Dashboard] /api/tax-summary error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+}
+
 // ─────────────────────────────────────────────────
 //  Lifecycle
 // ─────────────────────────────────────────────────
@@ -133,6 +150,7 @@ export function startDashboard() {
 
   app.get("/api/status", handleStatus);
   app.get("/api/history", handleHistory);
+  app.get("/api/tax-summary", handleTaxSummary);
 
   app.use(express.static(PUBLIC_DIR));
 

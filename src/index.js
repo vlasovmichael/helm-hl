@@ -2,6 +2,7 @@
 //  HL Paper Scanner — entry point
 // ─────────────────────────────────────────────────
 
+import cron from 'node-cron';
 import { config } from './core/config.js';
 import { logger } from './core/logger.js';
 import { initDB, getActivePosition } from './core/database.js';
@@ -10,6 +11,7 @@ import { getAvailableBalance } from './modules/wallet.js';
 import { sendStartupNotification, setStatusCollector, startCallbackPolling } from './modules/reporter.js';
 import { syncWithExchange } from './modules/sync.js';
 import { startDashboard } from './modules/dashboard/server.js';
+import { dailyJob as taxDailyJob } from './modules/taxCollector/index.js';
 import { state, TICK_INTERVAL_MS, INTEGRITY_GRACE_PERIOD_MS, SHUTDOWN_TIMEOUT_MS } from './app/state.js';
 import { tick } from './app/tick.js';
 import { shutdown } from './app/lifecycle.js';
@@ -65,6 +67,19 @@ async function main() {
 
   // ── Web Dashboard (localhost:3000) ─────────────
   startDashboard();
+
+  // ── Tax Collector — ежедневный сбор PIT-38 в 03:00 (Europe/Warsaw) ──
+  // Fail-soft: модуль сам отключается, если BINANCE_API_KEY не задан.
+  cron.schedule(
+    '0 3 * * *',
+    () => {
+      taxDailyJob().catch((err) => {
+        logger.error(`[Tax] Cron job crashed: ${err.message}`);
+      });
+    },
+    { timezone: 'Europe/Warsaw' },
+  );
+  logger.info('[System] Tax collector cron scheduled: 03:00 Europe/Warsaw daily');
 
   // Grace period для integrityCheck
   state.botStartedAt = Date.now();

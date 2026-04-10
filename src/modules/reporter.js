@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
+import { formatTaxSummaryForTelegram } from './taxCollector/index.js';
 
 const TG_BASE = config.telegram.token
   ? `https://api.telegram.org/bot${config.telegram.token}`
@@ -452,6 +453,26 @@ export function startCallbackPolling() {
 
           logger.info(`[Reporter] /status command from ${msg.from?.username ?? msg.from?.id}`);
           await handleStatusCallback(null); // null = нет callback_query_id, просто шлём ответ
+          continue;
+        }
+
+        // ── Текстовая команда /tax [year] ────────
+        if (msg?.text?.startsWith('/tax')) {
+          if (String(msg.chat.id) !== String(config.telegram.chatId)) continue;
+
+          logger.info(`[Reporter] /tax command from ${msg.from?.username ?? msg.from?.id}`);
+
+          // /tax 2025 — опциональный год
+          const parts = msg.text.trim().split(/\s+/);
+          const year  = parts[1] ? parseInt(parts[1], 10) : null;
+
+          try {
+            const text = await formatTaxSummaryForTelegram(year || undefined);
+            await sendMessage(text);
+          } catch (err) {
+            logger.warn(`[Reporter] /tax handler failed: ${err.message}`);
+            await sendMessage(`⚠️ Tax summary error: ${err.message}`);
+          }
         }
       }
     } catch (err) {
