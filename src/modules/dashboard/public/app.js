@@ -5,6 +5,21 @@
 const REFRESH_MS = 5_000;
 let chart = null;
 let lastSuccessAt = 0;
+let currentRangeHours = 24;
+
+// ── Range Selectors ─────────────────────────────
+
+function setupRangeButtons() {
+    document.querySelectorAll('.range-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const active = document.querySelector('.range-btn.active');
+            if (active) active.classList.remove('active');
+            btn.classList.add('active');
+            currentRangeHours = parseInt(btn.dataset.hours, 10);
+            tick(); // Немедленно обновляем график
+        });
+    });
+}
 
 // ── Helpers ─────────────────────────────────────
 
@@ -26,7 +41,12 @@ function fmtPct(n) {
 }
 
 function fmtTime(ts) {
-    return new Date(ts).toLocaleTimeString("en-GB", { hour: '2-digit', minute: '2-digit' });
+    const d = new Date(ts);
+    if (currentRangeHours <= 24) {
+        return d.toLocaleTimeString("en-GB", { hour: '2-digit', minute: '2-digit' });
+    }
+    return d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short' }) + ' ' + 
+           d.toLocaleTimeString("en-GB", { hour: '2-digit', minute: '2-digit' });
 }
 
 // ── Chart setup ─────────────────────────────────
@@ -122,6 +142,43 @@ async function fetchJson(path) {
 }
 
 // ── Renderers ───────────────────────────────────
+
+function renderBans(status) {
+    const container = document.getElementById("bans-container");
+    if (!status.runtimeBans || status.runtimeBans.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="font-size:12px;">No active restrictions</div>';
+        return;
+    }
+
+    container.innerHTML = status.runtimeBans.map(coin => `
+        <div style="display:inline-block; background:rgba(239, 68, 68, 0.1); color:var(--red); border:1px solid rgba(239, 68, 68, 0.2); padding:4px 10px; border-radius:6px; font-size:11px; font-family:var(--font-mono); font-weight:600; margin:0 8px 8px 0;">
+            #${coin}
+        </div>
+    `).join('');
+}
+
+function renderActivity(history) {
+    const container = document.getElementById("activity-container");
+    const points = [...(history.points || [])].reverse().slice(0, 5);
+    
+    if (points.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="font-size:12px;">Waiting for first trade...</div>';
+        return;
+    }
+
+    container.innerHTML = points.map(p => `
+        <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #1F1F23; font-size:12px;">
+            <div style="font-family:var(--font-mono)">
+                <span style="color:var(--text-secondary)">${fmtTime(p.ts)}</span>
+                <span style="color:var(--accent); font-weight:600; margin-left:8px;">#${p.coin}</span>
+                <span style="color:var(--text-secondary); margin-left:4px;">${p.reason}</span>
+            </div>
+            <div style="font-family:var(--font-mono); font-weight:600; color:${p.pnl >= 0 ? 'var(--green)' : 'var(--red)'}">
+                ${p.pnl >= 0 ? '+' : ''}${p.pnl.toFixed(2)}
+            </div>
+        </div>
+    `).join('');
+}
 
 function renderHeader(status) {
     document.getElementById("equity-value").textContent = fmtUsd(status.equity);
@@ -222,13 +279,15 @@ async function tick() {
     try {
         const [status, history, tax] = await Promise.all([
             fetchJson("/api/status"),
-            fetchJson("/api/history"),
+            fetchJson(`/api/history?hours=${currentRangeHours}`),
             fetchJson("/api/tax-summary"),
         ]);
         renderHeader(status);
         renderPosition(status.activePosition);
         renderChart(history);
         renderTax(tax);
+        renderActivity(history);
+        renderBans(status);
         lastSuccessAt = Date.now();
     } catch (err) {
         console.error("[Dashboard]", err);
@@ -236,6 +295,7 @@ async function tick() {
     renderFooter();
 }
 
+setupRangeButtons();
 initChart();
 tick();
 setInterval(tick, REFRESH_MS);

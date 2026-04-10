@@ -14,6 +14,7 @@ import { getAccountSummary } from "../exchange.js";
 import { getAvailableBalance } from "../wallet.js";
 import { state } from "../../app/state.js";
 import { getTaxSummary } from "../taxCollector/index.js";
+import { getRuntimeBlacklist } from "../executor/index.js";
 
 const HOST = "0.0.0.0";
 const PORT = 3010;
@@ -59,6 +60,7 @@ async function handleStatus(_req, res) {
       sessionProfit:
         state.sessionStartEquity > 0 ? equity - state.sessionStartEquity : 0,
       uptimeMin: Math.round((Date.now() - state.startedAt) / 60_000),
+      runtimeBans: [...getRuntimeBlacklist()],
       activePosition: position
         ? {
             coin: position.coin,
@@ -78,16 +80,17 @@ async function handleStatus(_req, res) {
 }
 
 /**
- * GET /api/history
- * Последние 50 закрытых сделок за 24ч + кумулятивная кривая equity.
+ * GET /api/history?hours=N
+ * Последние закрытые сделки за N часов + кумулятивная кривая equity.
  */
-function handleHistory(_req, res) {
+function handleHistory(req, res) {
   try {
-    const since = Date.now() - 24 * 3_600_000;
+    const hours = req.query.hours ? parseInt(req.query.hours, 10) : 24;
+    const since = Date.now() - hours * 3_600_000;
     const rows = getHistorySince(since);
 
     // rows отсортированы DESC по closed_at — переворачиваем для cumsum
-    const asc = [...rows].reverse().slice(-50);
+    const asc = [...rows].reverse();
 
     const baseline = state.sessionStartEquity || 0;
     let running = baseline;
@@ -104,7 +107,7 @@ function handleHistory(_req, res) {
 
     res.json({
       baseline,
-      windowHours: 24,
+      windowHours: hours,
       count: points.length,
       points,
     });

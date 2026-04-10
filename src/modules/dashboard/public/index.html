@@ -220,12 +220,56 @@
 
         <section class="card">
             <div class="card-header">
-                <div class="card-title">Performance — 24h</div>
+                <div class="card-title">Performance</div>
+                <div class="time-ranges">
+                    <button class="range-btn" data-hours="1">1h</button>
+                    <button class="range-btn active" data-hours="24">24h</button>
+                    <button class="range-btn" data-hours="168">7d</button>
+                    <button class="range-btn" data-hours="720">30d</button>
+                </div>
             </div>
             <div class="chart-container">
                 <canvas id="equity-chart"></canvas>
             </div>
         </section>
+
+        <style>
+            .time-ranges {
+                display: flex;
+                background: #1F1F23;
+                padding: 2px;
+                border-radius: 6px;
+            }
+            .range-btn {
+                background: transparent;
+                border: none;
+                color: var(--text-secondary);
+                padding: 4px 10px;
+                font-size: 11px;
+                font-weight: 600;
+                border-radius: 4px;
+                cursor: pointer;
+                transition: all 0.2s;
+            }
+            .range-btn:hover { color: var(--text-primary); }
+            .range-btn.active {
+                background: var(--card-bg);
+                color: var(--text-primary);
+                box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+            }
+        </style>
+
+        <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 24px; margin-bottom: 24px;">
+            <section class="card" style="margin-bottom: 0;">
+                <div class="card-header"><div class="card-title">Active Bans / Cooldowns</div></div>
+                <div id="bans-container"><div class="empty-state">No active restrictions</div></div>
+            </section>
+            
+            <section class="card" style="margin-bottom: 0;">
+                <div class="card-header"><div class="card-title">Recent Activity</div></div>
+                <div id="activity-container"><div class="empty-state">No recent events</div></div>
+            </section>
+        </div>
 
         <section class="card">
             <div class="card-header">
