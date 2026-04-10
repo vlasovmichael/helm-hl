@@ -14,7 +14,7 @@ import { getAccountSummary } from "../exchange.js";
 import { getAvailableBalance } from "../wallet.js";
 import { state } from "../../app/state.js";
 
-const HOST = "0.0.0.0";
+const HOST = "127.0.0.1";
 const PORT = 3010;
 
 const __filename = fileURLToPath(import.meta.url);

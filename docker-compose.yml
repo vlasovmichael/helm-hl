@@ -12,4 +12,11 @@ services:
       resources:
         limits:
           memory: 256M
-    network_mode: "host"
+    ports:
+      - "127.0.0.1:3010:3010"
+    networks:
+      - workspace_app_network
+
+networks:
+  workspace_app_network:
+    external: true
