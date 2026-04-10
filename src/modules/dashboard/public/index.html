@@ -1,246 +1,271 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HL Scanner — Dashboard</title>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HL Scanner — Terminal</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-      :root {
-        --bg: #000000;
-        --bg-card: #0a0f0a;
-        --border: #143514;
-        --text: #97fce4;
-        --accent: #50d2c1;
-        --green: #5fffa7;
-        --red: #ff5f6d;
-        --dim: #4a8a7a;
-      }
-
-      * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
-
-      html,
-      body {
-        background: var(--bg);
-        color: var(--text);
-        font-family: "SF Mono", "Menlo", "Monaco", "Consolas", monospace;
-        font-size: 14px;
-        min-height: 100vh;
-      }
-
-      .container {
-        max-width: 1100px;
-        margin: 0 auto;
-        padding: 24px;
-      }
-
-      /* ── Header ── */
-      .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 24px 28px;
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        margin-bottom: 20px;
-      }
-
-      .equity-block .label {
-        font-size: 11px;
-        color: var(--dim);
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 6px;
-      }
-      .equity-block .value {
-        font-size: 38px;
-        font-weight: 700;
-        color: var(--green);
-        text-shadow: 0 0 12px rgba(95, 255, 167, 0.3);
-        letter-spacing: -0.5px;
-      }
-      .equity-block .delta {
-        font-size: 13px;
-        margin-top: 4px;
-      }
-      .delta.positive {
-        color: var(--green);
-      }
-      .delta.negative {
-        color: var(--red);
-      }
-
-      .status-block {
-        text-align: right;
-      }
-      .status-pill {
-        display: inline-block;
-        padding: 6px 14px;
-        background: rgba(95, 255, 167, 0.1);
-        border: 1px solid var(--green);
-        border-radius: 20px;
-        color: var(--green);
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 1px;
-      }
-      .status-pill.paper {
-        background: rgba(151, 252, 228, 0.1);
-        border-color: var(--accent);
-        color: var(--accent);
-      }
-      .status-meta {
-        margin-top: 10px;
-        font-size: 11px;
-        color: var(--dim);
-      }
-
-      /* ── Card ── */
-      .card {
-        background: var(--bg-card);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 20px 24px;
-        margin-bottom: 20px;
-      }
-      .card-title {
-        font-size: 11px;
-        color: var(--dim);
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 14px;
-      }
-
-      /* ── Chart ── */
-      #equity-chart {
-        width: 100% !important;
-        height: 280px !important;
-      }
-
-      /* ── Position grid ── */
-      .pos-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 16px;
-      }
-      .pos-cell .pos-label {
-        font-size: 10px;
-        color: var(--dim);
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 6px;
-      }
-      .pos-cell .pos-value {
-        font-size: 18px;
-        color: var(--text);
-        font-weight: 600;
-      }
-      .pos-cell .pos-value.coin {
-        color: var(--green);
-      }
-
-      .empty-state {
-        text-align: center;
-        padding: 30px;
-        color: var(--dim);
-        font-style: italic;
-      }
-
-      /* ── Footer ── */
-      .footer {
-        text-align: center;
-        color: var(--dim);
-        font-size: 11px;
-        margin-top: 16px;
-      }
-      .footer .stale {
-        color: var(--red);
-      }
-
-      @media (max-width: 700px) {
-        .pos-grid {
-          grid-template-columns: repeat(2, 1fr);
+        :root {
+            --bg: #0A0A0B;
+            --card-bg: #131316;
+            --accent: #635BFF;
+            --border: #27272A;
+            --text-primary: #FFFFFF;
+            --text-secondary: #A1A1AA;
+            --green: #22C55E;
+            --red: #EF4444;
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --font-mono: 'SF Mono', 'Fira Code', 'Menlo', 'Monaco', 'Consolas', monospace;
         }
-        .equity-block .value {
-          font-size: 28px;
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
-        .header {
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 16px;
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-primary);
+            font-family: var(--font-sans);
+            font-size: 14px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
         }
-        .status-block {
-          text-align: left;
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px 24px;
         }
-      }
+
+        /* ── Header ── */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 48px;
+        }
+
+        .equity-group .label {
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        .equity-group .value {
+            font-size: 42px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            font-family: var(--font-mono);
+            margin-bottom: 4px;
+        }
+
+        .equity-group .delta {
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .delta.positive { color: var(--green); }
+        .delta.negative { color: var(--red); }
+
+        .meta-group {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 12px;
+        }
+
+        .status-pill {
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 12px;
+            font-weight: 600;
+            background: rgba(99, 91, 255, 0.1);
+            color: var(--accent);
+            border: 1px solid rgba(99, 91, 255, 0.2);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .status-pill.prod {
+            background: rgba(34, 197, 94, 0.1);
+            color: var(--green);
+            border-color: rgba(34, 197, 94, 0.2);
+        }
+
+        .meta-info {
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-family: var(--font-mono);
+            display: flex;
+            gap: 16px;
+        }
+
+        /* ── Cards ── */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 32px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+
+        .card-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* ── Chart ── */
+        .chart-container {
+            height: 300px;
+            width: 100%;
+        }
+
+        /* ── Grid ── */
+        .data-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 24px;
+        }
+
+        .grid-item .item-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .grid-item .item-value {
+            font-size: 18px;
+            font-weight: 600;
+            font-family: var(--font-mono);
+        }
+
+        .item-value.highlight {
+            color: var(--accent);
+        }
+
+        .empty-state {
+            color: var(--text-secondary);
+            font-style: italic;
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        /* ── Footer ── */
+        footer {
+            margin-top: 48px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-family: var(--font-mono);
+        }
+
+        .stale-warning {
+            color: var(--red);
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            header {
+                flex-direction: column;
+                gap: 24px;
+            }
+            .meta-group {
+                align-items: flex-start;
+            }
+            .data-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .equity-group .value {
+                font-size: 32px;
+            }
+        }
     </style>
-  </head>
-  <body>
+</head>
+<body>
     <div class="container">
-      <!-- Header: Equity + Status -->
-      <div class="header">
-        <div class="equity-block">
-          <div class="label">Equity</div>
-          <div class="value" id="equity-value">$—</div>
-          <div class="delta" id="equity-delta">—</div>
-        </div>
-        <div class="status-block">
-          <div class="status-pill" id="mode-pill">—</div>
-          <div class="status-meta" id="status-meta">Loading…</div>
-        </div>
-      </div>
-
-      <!-- Equity chart 24h -->
-      <div class="card">
-        <div class="card-title">Equity — Last 24h</div>
-        <canvas id="equity-chart"></canvas>
-      </div>
-
-      <!-- Active position -->
-      <div class="card">
-        <div class="card-title">Active Position</div>
-        <div id="position-container">
-          <div class="empty-state">Loading…</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">
-          Tax Summary (PIT-38)
-          <span id="tax-year" style="color: var(--dim); float: right"
-            >2026</span
-          >
-        </div>
-        <div class="pos-grid" id="tax-container">
-          <div class="pos-cell">
-            <div class="pos-label">Koszty (Расходы)</div>
-            <div class="pos-value" id="tax-costs">0.00 PLN</div>
-          </div>
-          <div class="pos-cell">
-            <div class="pos-label">Przychody (Доходы)</div>
-            <div class="pos-value" id="tax-revenue">0.00 PLN</div>
-          </div>
-          <div class="pos-cell">
-            <div class="pos-label">Profit / Loss</div>
-            <div class="pos-value" id="tax-profit">0.00 PLN</div>
-          </div>
-          <div class="pos-cell">
-            <div class="pos-label">Est. Tax (19%)</div>
-            <div class="pos-value" id="tax-est" style="color: var(--red)">
-              0.00 PLN
+        <header>
+            <div class="equity-group">
+                <div class="label">Total Equity</div>
+                <div class="value" id="equity-value">$0.00</div>
+                <div class="delta" id="equity-delta">—</div>
             </div>
-          </div>
-        </div>
-      </div>
+            <div class="meta-group">
+                <div id="mode-pill" class="status-pill">Loading</div>
+                <div class="meta-info">
+                    <span id="uptime-val">Uptime: 0h</span>
+                    <span id="available-val">Available: $0.00</span>
+                </div>
+            </div>
+        </header>
 
-      <div class="footer" id="footer">Auto-refresh every 5s</div>
+        <section class="card">
+            <div class="card-header">
+                <div class="card-title">Performance — 24h</div>
+            </div>
+            <div class="chart-container">
+                <canvas id="equity-chart"></canvas>
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="card-header">
+                <div class="card-title">Active Position</div>
+            </div>
+            <div id="position-container">
+                <div class="empty-state">No active positions</div>
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="card-header">
+                <div class="card-title">Tax Summary (PIT-38)</div>
+                <div id="tax-year" style="color: var(--text-secondary); font-family: var(--font-mono); font-size: 13px;">2026</div>
+            </div>
+            <div class="data-grid">
+                <div class="grid-item">
+                    <div class="item-label">Koszty (Costs)</div>
+                    <div class="item-value" id="tax-costs">0.00 PLN</div>
+                </div>
+                <div class="grid-item">
+                    <div class="item-label">Przychody (Revenue)</div>
+                    <div class="item-value" id="tax-revenue">0.00 PLN</div>
+                </div>
+                <div class="grid-item">
+                    <div class="item-label">Profit / Loss</div>
+                    <div class="item-value" id="tax-profit">0.00 PLN</div>
+                </div>
+                <div class="grid-item">
+                    <div class="item-label">Est. Tax (19%)</div>
+                    <div class="item-value" id="tax-est" style="color: var(--green);">0.00 PLN</div>
+                </div>
+            </div>
+        </section>
+
+        <footer id="footer-status">
+            Connecting to core...
+        </footer>
     </div>
 
     <script src="app.js"></script>
-  </body>
+</body>
 </html>
