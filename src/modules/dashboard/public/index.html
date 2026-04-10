@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HL Scanner — Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:        #000000;
+      --bg-card:   #0a0f0a;
+      --border:    #143514;
+      --text:      #97fce4;
+      --accent:    #50d2c1;
+      --green:     #5fffa7;
+      --red:       #ff5f6d;
+      --dim:       #4a8a7a;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'SF Mono', 'Menlo', 'Monaco', 'Consolas', monospace;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 24px 28px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+
+    .equity-block .label {
+      font-size: 11px;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .equity-block .value {
+      font-size: 38px;
+      font-weight: 700;
+      color: var(--green);
+      text-shadow: 0 0 12px rgba(95, 255, 167, 0.3);
+      letter-spacing: -0.5px;
+    }
+    .equity-block .delta {
+      font-size: 13px;
+      margin-top: 4px;
+    }
+    .delta.positive { color: var(--green); }
+    .delta.negative { color: var(--red); }
+
+    .status-block {
+      text-align: right;
+    }
+    .status-pill {
+      display: inline-block;
+      padding: 6px 14px;
+      background: rgba(95, 255, 167, 0.1);
+      border: 1px solid var(--green);
+      border-radius: 20px;
+      color: var(--green);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1px;
+    }
+    .status-pill.paper {
+      background: rgba(151, 252, 228, 0.1);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .status-meta {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--dim);
+    }
+
+    /* ── Card ── */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .card-title {
+      font-size: 11px;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 14px;
+    }
+
+    /* ── Chart ── */
+    #equity-chart {
+      width: 100% !important;
+      height: 280px !important;
+    }
+
+    /* ── Position grid ── */
+    .pos-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    .pos-cell .pos-label {
+      font-size: 10px;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+    }
+    .pos-cell .pos-value {
+      font-size: 18px;
+      color: var(--text);
+      font-weight: 600;
+    }
+    .pos-cell .pos-value.coin { color: var(--green); }
+
+    .empty-state {
+      text-align: center;
+      padding: 30px;
+      color: var(--dim);
+      font-style: italic;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      color: var(--dim);
+      font-size: 11px;
+      margin-top: 16px;
+    }
+    .footer .stale { color: var(--red); }
+
+    @media (max-width: 700px) {
+      .pos-grid { grid-template-columns: repeat(2, 1fr); }
+      .equity-block .value { font-size: 28px; }
+      .header { flex-direction: column; align-items: flex-start; gap: 16px; }
+      .status-block { text-align: left; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header: Equity + Status -->
+    <div class="header">
+      <div class="equity-block">
+        <div class="label">Equity</div>
+        <div class="value" id="equity-value">$—</div>
+        <div class="delta" id="equity-delta">—</div>
+      </div>
+      <div class="status-block">
+        <div class="status-pill" id="mode-pill">—</div>
+        <div class="status-meta" id="status-meta">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Equity chart 24h -->
+    <div class="card">
+      <div class="card-title">Equity — Last 24h</div>
+      <canvas id="equity-chart"></canvas>
+    </div>
+
+    <!-- Active position -->
+    <div class="card">
+      <div class="card-title">Active Position</div>
+      <div id="position-container">
+        <div class="empty-state">Loading…</div>
+      </div>
+    </div>
+
+    <div class="footer" id="footer">Auto-refresh every 5s</div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

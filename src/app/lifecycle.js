@@ -10,6 +10,7 @@ import { getActivePosition } from '../core/database.js';
 import { disconnectExchange } from '../modules/exchange.js';
 import { sendMessage, stopCallbackPolling } from '../modules/reporter.js';
 import { serializeCircuitBreaker } from '../modules/executor/state.js';
+import { stopDashboard } from '../modules/dashboard/server.js';
 import { state, BOT_STATE_PATH } from './state.js';
 
 /**
@@ -141,14 +142,19 @@ export async function shutdown(signal) {
   logger.info(`[System] ${signal} — graceful shutdown BEGIN`);
   logger.info('───────────────────────────────────────────────');
 
-  // ── [1/6] Остановить тик-лупу + polling ──────
-  logger.info('[System] [1/6] Stopping tick loop & polling…');
+  // ── [1/6] Остановить тик-лупу + polling + dashboard ──
+  logger.info('[System] [1/6] Stopping tick loop & polling & dashboard…');
   if (state.tickTimer) {
     clearInterval(state.tickTimer);
     state.tickTimer = null;
   }
   stopCallbackPolling();
-  logger.info('[System] [1/6] ✅ Tick loop & polling stopped');
+  try {
+    await stopDashboard();
+  } catch (err) {
+    logger.warn(`[System] Dashboard stop error: ${err.message}`);
+  }
+  logger.info('[System] [1/6] ✅ Tick loop & polling & dashboard stopped');
 
   // ── [2/6] Дождаться завершения текущего тика ─
   logger.info('[System] [2/6] Waiting for active tick to finish…');

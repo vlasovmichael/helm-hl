@@ -9,6 +9,7 @@ import { initExchange, getAccountSummary } from './modules/exchange.js';
 import { getAvailableBalance } from './modules/wallet.js';
 import { sendStartupNotification, setStatusCollector, startCallbackPolling } from './modules/reporter.js';
 import { syncWithExchange } from './modules/sync.js';
+import { startDashboard } from './modules/dashboard/server.js';
 import { state, TICK_INTERVAL_MS, INTEGRITY_GRACE_PERIOD_MS, SHUTDOWN_TIMEOUT_MS } from './app/state.js';
 import { tick } from './app/tick.js';
 import { shutdown } from './app/lifecycle.js';
@@ -61,6 +62,9 @@ async function main() {
 
   // ── Запуск callback polling для inline-кнопок ──
   startCallbackPolling();
+
+  // ── Web Dashboard (localhost:3000) ─────────────
+  startDashboard();
 
   // Grace period для integrityCheck
   state.botStartedAt = Date.now();
