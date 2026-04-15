@@ -1,12 +1,21 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 
-// Комиссии Hyperliquid (taker) + запас на проскальзывание
-const FEE_RATE   = 0.0002;  // 0.02% taker
-const SLIPPAGE   = 0.0001;  // 0.01%
-const ROUND_TRIP = (FEE_RATE + SLIPPAGE) * 2; // вход + выход
+// Round-trip издержки (вход + выход): taker-комиссия обеих ног + запас на
+// проскальзывание. 0.1% заложено намеренно с запасом — пока нет whitelist
+// ТОП-50 по ликвидности, на тонких монетах спред может съесть edge.
+// После итерации 2 (liquidity filter) можно будет ужать до ~0.06%.
+const ROUND_TRIP = 0.001;
 
-const MAX_PAYBACK_HOURS = 4;
+// Ротация разрешена только если разница APY окупит round-trip за этот
+// горизонт. Симметрично с MAX_BREAKEVEN_HOURS на входе — мы не готовы
+// платить комиссию за «улучшение», которое будет отбиваться больше суток.
+const MAX_PAYBACK_HOURS = 24;
+
+// Fee-aware entry gate: не входим, если накопленный фандинг не покроет
+// round-trip издержки за этот горизонт. При 0.1% round-trip это отсекает
+// всё, что даёт меньше ~36.5% APY, — ниже этого порога окупаемость >24ч.
+const MAX_BREAKEVEN_HOURS = 24;
 
 // Гистерезис: negative funding должен держаться N тиков подряд
 // перед закрытием. При 15с тике, 2 тика = 30с.
@@ -65,10 +74,37 @@ export function calculatePaybackHours(currentApy, targetApy) {
 }
 
 /**
+ * За сколько часов чистый фандинг при данном APY покроет round-trip
+ * издержки (вход + выход). Используется как fee-gate при открытии.
+ */
+export function hoursToBreakeven(apy) {
+  const hourlyRate = apy / 100 / 365 / 24;
+  if (hourlyRate <= 0) return Infinity;
+  return ROUND_TRIP / hourlyRate;
+}
+
+/**
  * Сколько минут позиция уже открыта.
  */
 function heldMinutes(activePosition) {
   return (Date.now() - activePosition.entry_time) / 60_000;
+}
+
+/**
+ * Динамический min-hold: позиция обязана сидеть как минимум столько,
+ * сколько нужно, чтобы фандинг при её entry_apy окупил round-trip,
+ * но не меньше конфигурационного пола и не больше MAX_BREAKEVEN_HOURS
+ * (иначе глюк с entry_apy ≈ 0 залочит позицию навсегда — верхний кап
+ * как страховка).
+ *
+ * Критично: на этот гейт завязаны только soft-exits. Экстренные выходы
+ * (delist, price spike, negative funding) проверяются выше по функции
+ * analyze() и возвращаются раньше, чем мы вообще смотрим на min-hold.
+ */
+function effectiveMinHold(entryApy) {
+  const feeBasedMinutes = hoursToBreakeven(entryApy) * 60;
+  const capMinutes      = MAX_BREAKEVEN_HOURS * 60;
+  return Math.max(minHoldMinutes, Math.min(feeBasedMinutes, capMinutes));
 }
 
 /**
@@ -101,7 +137,20 @@ export function analyze(scoutData, activePosition) {
       return { action: 'HOLD' };
     }
 
-    logger.info(`[Strategist] OPEN — ${best.coin} @ ${best.smoothedApy.toFixed(2)}%`);
+    // Fee-aware entry gate: round-trip должен окупиться за MAX_BREAKEVEN_HOURS
+    // чистым фандингом. Это наш защитный механизм от «суеты» на слабых сигналах.
+    const breakevenH = hoursToBreakeven(best.smoothedApy);
+    if (breakevenH > MAX_BREAKEVEN_HOURS) {
+      logger.info(
+        `[Strategist] HOLD (fee-gate) — ${best.coin} @ ${best.smoothedApy.toFixed(2)}% ` +
+          `→ breakeven ${breakevenH.toFixed(1)}h > ${MAX_BREAKEVEN_HOURS}h`,
+      );
+      return { action: 'HOLD' };
+    }
+
+    logger.info(
+      `[Strategist] OPEN — ${best.coin} @ ${best.smoothedApy.toFixed(2)}% | breakeven ${breakevenH.toFixed(1)}h`,
+    );
     return {
       action: 'OPEN',
       coin:   best.coin,
@@ -177,8 +226,12 @@ export function analyze(scoutData, activePosition) {
 
   // ── Обычные выходы (только после minHold) ─────
   // Используем slowApy — глубокое сглаживание, без паники.
+  // minHold динамический: = max(60, hoursToBreakeven(entryApy) * 60).
+  // То есть позиция обязана сидеть ровно столько, сколько нужно её
+  // фандингу, чтобы покрыть round-trip комиссий.
+  const minHold = effectiveMinHold(activePosition.entry_apy);
 
-  if (held >= minHoldMinutes) {
+  if (held >= minHold) {
     // APY упал ниже (minApy − exitBuffer)
     // Пример: minApy=30, exitBuffer=5 → выходим только ниже 25%
     if (current.slowApy < effectiveExitApy) {
@@ -203,13 +256,24 @@ export function analyze(scoutData, activePosition) {
     }
   } else {
     logger.info(
-      `[Strategist] ${currentCoin} slowApy=${current.slowApy.toFixed(2)}% | hold lock: ${held.toFixed(0)}/${minHoldMinutes} min`,
+      `[Strategist] ${currentCoin} slowApy=${current.slowApy.toFixed(2)}% | hold lock: ${held.toFixed(0)}/${minHold.toFixed(0)} min (dynamic, entryApy=${activePosition.entry_apy.toFixed(1)}%)`,
     );
   }
 
-  // ── Ротация (только после breathing) ──────────
-  // Первые breathingMinutes — игнорируем любые «лучшие» монеты.
-  // Даём позиции стабилизироваться.
+  // ── Ротация (fee-recovery guard + breathing) ──
+  // Симметричный гейт: ротация запрещена, пока текущая позиция не
+  // окупила свой round-trip (оценка через entry_apy и held time).
+  // Это строго сильнее старого breathingMinutes — то остаётся
+  // декоративным нижним полом, но его руками не трогаем.
+  const rotationMinHold = effectiveMinHold(activePosition.entry_apy);
+
+  if (held < rotationMinHold) {
+    logger.debug(
+      `[Strategist] ${currentCoin} rotation locked: ${held.toFixed(0)}/${rotationMinHold.toFixed(0)} min ` +
+        `(fee-recovery, entryApy=${activePosition.entry_apy.toFixed(1)}%)`,
+    );
+    return { action: 'HOLD' };
+  }
 
   if (held >= breathingMinutes) {
     const best = scoutData.find((m) => m.coin !== currentCoin);

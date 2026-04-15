@@ -47,6 +47,21 @@ function loadConfig() {
   }
 
   // ── Risk management ──
+  // ── Liquidity whitelist (Scout) ──
+  const liquidTopN       = parseInt(process.env.LIQUID_TOP_N        || '50', 10);
+  const liquidMinVolume  = parseFloat(process.env.LIQUID_MIN_VOLUME || '10000000'); // $10M/24h
+  const liquidCacheHours = parseFloat(process.env.LIQUID_CACHE_HOURS || '6');
+
+  if (isNaN(liquidTopN) || liquidTopN < 1) {
+    throw new Error(`LIQUID_TOP_N must be integer ≥ 1. Got: "${process.env.LIQUID_TOP_N}"`);
+  }
+  if (isNaN(liquidMinVolume) || liquidMinVolume < 0) {
+    throw new Error(`LIQUID_MIN_VOLUME must be non-negative number. Got: "${process.env.LIQUID_MIN_VOLUME}"`);
+  }
+  if (isNaN(liquidCacheHours) || liquidCacheHours <= 0) {
+    throw new Error(`LIQUID_CACHE_HOURS must be positive number. Got: "${process.env.LIQUID_CACHE_HOURS}"`);
+  }
+
   const maxDrawdownPct = parseFloat(process.env.MAX_DRAWDOWN_PCT || '10');
   const cbMaxLosses    = parseInt(process.env.CB_MAX_LOSSES      || '3', 10);
   const cbPauseHours   = parseFloat(process.env.CB_PAUSE_HOURS   || '2');
@@ -93,6 +108,9 @@ function loadConfig() {
           .map((s) => s.trim().toUpperCase())
           .filter(Boolean),
       ),
+      liquidTopN,
+      liquidMinVolume,
+      liquidCacheMs: liquidCacheHours * 3_600_000,
     },
 
     risk: {

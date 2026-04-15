@@ -15,6 +15,14 @@ const PREDICTED_FUNDING_CACHE_MS = 5 * 60_000; // биржа обновляет 
 
 let predictedCache = { ts: 0, map: new Map() };
 
+// ── Liquidity whitelist ────────────────────────
+// Хранит Set из UPPERCASE-имён монет, прошедших двойной фильтр:
+//   (1) dayNtlVlm ≥ LIQUID_MIN_VOLUME (hard floor)
+//   (2) top-N по dayNtlVlm среди уцелевших
+// Ребилдится не чаще, чем раз в LIQUID_CACHE_HOURS — чтобы сам whitelist
+// не «дёргался» и позиции не вылетали из-за транзиентных изменений объёма.
+let liquidCache = { ts: 0, set: new Set() };
+
 // Предыдущие значения — логируем INFO только при изменении
 let prevFilterSnapshot = '';
 let prevTopCoin = '';
@@ -65,6 +73,55 @@ function refreshUniverse(universe) {
   }
 
   setUniverse(universe);
+}
+
+/**
+ * Ребилдит whitelist ликвидных монет при истечении кеша.
+ * Читает dayNtlVlm из assetCtxs (строка в USDC), применяет пол и top-N.
+ *
+ * На первом тике (ts=0) отработает сразу. В дальнейшем — раз в
+ * config.trading.liquidCacheMs. Fail-safe: если в свежем снэпшоте
+ * ни одна монета не прошла фильтр, старый кеш НЕ трогаем — иначе
+ * временный сбой данных обнулит whitelist и Scout вернёт пусто.
+ */
+function refreshLiquidWhitelist(universe, assetCtxs) {
+  const { liquidTopN, liquidMinVolume, liquidCacheMs } = config.trading;
+
+  if (Date.now() - liquidCache.ts < liquidCacheMs && liquidCache.set.size > 0) {
+    return liquidCache.set;
+  }
+
+  const candidates = [];
+  for (let i = 0; i < universe.length; i++) {
+    const coin = universe[i]?.name;
+    const vol  = parseFloat(assetCtxs[i]?.dayNtlVlm ?? 0);
+    if (!coin || isNaN(vol)) continue;
+    if (vol < liquidMinVolume) continue;
+    candidates.push({ coin: coin.toUpperCase(), vol });
+  }
+
+  if (candidates.length === 0) {
+    logger.warn(
+      `[Scout] Liquid whitelist: no coins passed floor $${(liquidMinVolume / 1e6).toFixed(0)}M — ` +
+      `keeping previous whitelist (${liquidCache.set.size} coins)`,
+    );
+    return liquidCache.set;
+  }
+
+  candidates.sort((a, b) => b.vol - a.vol);
+  const top = candidates.slice(0, liquidTopN);
+  const set = new Set(top.map((c) => c.coin));
+
+  liquidCache = { ts: Date.now(), set };
+
+  const cutoffVol = top[top.length - 1].vol;
+  logger.info(
+    `[Scout] Liquid whitelist refreshed: ${set.size}/${candidates.length} coins | ` +
+    `floor $${(liquidMinVolume / 1e6).toFixed(0)}M | cutoff $${(cutoffVol / 1e6).toFixed(1)}M | ` +
+    `next refresh in ${(liquidCacheMs / 3_600_000).toFixed(1)}h`,
+  );
+
+  return set;
 }
 
 /**
@@ -171,29 +228,32 @@ export async function scan() {
   // Обновляем ОБЩИЙ кеш universe — Executor будет читать отсюда же
   refreshUniverse(universe);
 
+  // Liquid whitelist (6ч кеш, fail-safe если снэпшот пуст)
+  const liquidSet = refreshLiquidWhitelist(universe, assetCtxs);
+
   // Predictive funding (5min cache, fail-open)
   const predictedFundings = await fetchPredictedFundings();
 
-  // ── Защита: блэклист + universe + runtime + OI cap ──
+  // ── Защита: блэклист + universe + runtime + OI cap + liquidity ──
   const tradeable       = getTradeableSet(); // из core/universe.js
   const blacklist       = config.trading.coinBlacklist;
   const runtimeBlocked  = getRuntimeBlacklist();
   const oiCapBlocked    = getOiCapBans();
 
   // Логируем фильтры на INFO только при изменении, иначе debug
-  const filterSnap = `${universe.length}|${tradeable.size}|${blacklist.size}|${runtimeBlocked.size}|${oiCapBlocked.size}`;
+  const filterSnap = `${universe.length}|${tradeable.size}|${blacklist.size}|${runtimeBlocked.size}|${oiCapBlocked.size}|${liquidSet.size}`;
   if (filterSnap !== prevFilterSnapshot) {
     prevFilterSnapshot = filterSnap;
     logger.info(
       `[Scout] Filters: API universe=${universe.length} | tradeable=${tradeable.size} | ` +
       `blacklist=${blacklist.size} | runtime-banned=${runtimeBlocked.size} | ` +
-      `oi-cap-banned=${oiCapBlocked.size}`,
+      `oi-cap-banned=${oiCapBlocked.size} | liquid=${liquidSet.size}`,
     );
   } else {
     logger.debug(
       `[Scout] Filters: API universe=${universe.length} | tradeable=${tradeable.size} | ` +
       `blacklist=${blacklist.size} | runtime-banned=${runtimeBlocked.size} | ` +
-      `oi-cap-banned=${oiCapBlocked.size}`,
+      `oi-cap-banned=${oiCapBlocked.size} | liquid=${liquidSet.size}`,
     );
   }
 
@@ -203,6 +263,7 @@ export async function scan() {
   let skippedRuntime       = 0;
   let skippedOiCap         = 0;
   let skippedPredictedDrop = 0;
+  let skippedIlliquid      = 0;
 
   for (let i = 0; i < universe.length; i++) {
     const asset = universe[i];
@@ -239,6 +300,14 @@ export async function scan() {
       continue;
     }
 
+    // Фильтр 4: liquidity whitelist — только ликвидный ТОП-N по dayNtlVlm.
+    // Если кеш ещё не наполнен (первый тик, пустой Set) — пропускаем
+    // фильтр, чтобы не вернуть нулевой результат при холодном старте.
+    if (liquidSet.size > 0 && !liquidSet.has(coinUpper)) {
+      skippedIlliquid++;
+      continue;
+    }
+
     const price       = parseFloat(ctx.markPx  ?? ctx.midPx ?? 0);
     const fundingRate = parseFloat(ctx.funding  ?? 0);
 
@@ -271,11 +340,11 @@ export async function scan() {
     results.push({ coin, price, fundingRate, rawApy, smoothedApy: fast, slowApy: slow });
   }
 
-  if (skippedBlacklist > 0 || skippedUntradeable > 0 || skippedRuntime > 0 || skippedOiCap > 0 || skippedPredictedDrop > 0) {
+  if (skippedBlacklist > 0 || skippedUntradeable > 0 || skippedRuntime > 0 || skippedOiCap > 0 || skippedPredictedDrop > 0 || skippedIlliquid > 0) {
     logger.debug(
       `[Scout] Filtered out: ${skippedBlacklist} blacklisted, ${skippedUntradeable} untradeable, ` +
       `${skippedRuntime} runtime-blocked, ${skippedOiCap} oi-cap-blocked, ` +
-      `${skippedPredictedDrop} predicted-drop`,
+      `${skippedPredictedDrop} predicted-drop, ${skippedIlliquid} illiquid`,
     );
   }
 
