@@ -1,11 +1,13 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 
-const ROUND_TRIP = 0.001;
-const DELIST_CONFIRM_TICKS = 3;
-const DELIST_COOLDOWN_MINUTES = 30;
-const NEGATIVE_FUNDING_TICKS = 2;
-const FUNDING_GATE_MINUTES = 10;
+const {
+  roundTrip: ROUND_TRIP,
+  negativeFundingTicks: NEGATIVE_FUNDING_TICKS,
+  delistConfirmTicks: DELIST_CONFIRM_TICKS,
+  delistCooldownMinutes: DELIST_COOLDOWN_MINUTES,
+  fundingGateMinutes: FUNDING_GATE_MINUTES,
+} = config.trading;
 
 let negativeFundingStreak = 0;
 let disappearedStreak = 0;

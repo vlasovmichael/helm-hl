@@ -64,9 +64,8 @@ export async function runSmartAlerts(scoutData, signal, activePosition) {
     const best        = scoutData.find((m) => m.coin !== currentCoin);
 
     if (current && best && best.smoothedApy >= current.smoothedApy * FOMO_UPLIFT_MIN) {
-      const ROUND_TRIP   = (0.0002 + 0.0001) * 2;
       const deltaHourly  = (best.smoothedApy - current.smoothedApy) / 100 / 365 / 24;
-      const paybackHours = deltaHourly > 0 ? ROUND_TRIP / (0.5 * deltaHourly) : Infinity;
+      const paybackHours = deltaHourly > 0 ? config.trading.roundTrip / (0.5 * deltaHourly) : Infinity;
 
       if (paybackHours > 6) {
         await sendFomoAlert(currentCoin, best.coin, current.smoothedApy, best.smoothedApy, paybackHours);

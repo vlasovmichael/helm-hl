@@ -62,6 +62,17 @@ function loadConfig() {
     throw new Error(`LIQUID_CACHE_HOURS must be positive number. Got: "${process.env.LIQUID_CACHE_HOURS}"`);
   }
 
+  // ── Strategy constants (shared by carry + fade) ──
+  const roundTrip             = parseFloat(process.env.ROUND_TRIP              || '0.001');
+  const maxPaybackHours       = parseFloat(process.env.MAX_PAYBACK_HOURS       || '24');
+  const maxBreakevenHours     = parseFloat(process.env.MAX_BREAKEVEN_HOURS     || '24');
+  const negativeFundingTicks  = parseInt(process.env.NEGATIVE_FUNDING_TICKS    || '2',  10);
+  const delistConfirmTicks    = parseInt(process.env.DELIST_CONFIRM_TICKS      || '3',  10);
+  const delistCooldownMinutes = parseInt(process.env.DELIST_COOLDOWN_MINUTES   || '30', 10);
+  const minEntryApyFloor      = parseFloat(process.env.MIN_ENTRY_APY_FLOOR    || '10');
+  const predictedDropThreshold = parseFloat(process.env.PREDICTED_DROP_THRESHOLD || '30') / 100;
+  const fundingGateMinutes    = parseInt(process.env.FUNDING_GATE_MINUTES      || '10', 10);
+
   // ── Fade strategy (Predicted Funding Fade) ──
   const fadeMaxHoldMinutes = parseInt(process.env.FADE_MAX_HOLD_MINUTES  || '120', 10);
   const fadeMinCurrentApy  = parseFloat(process.env.FADE_MIN_CURRENT_APY || '200');
@@ -114,6 +125,15 @@ function loadConfig() {
           .map((s) => s.trim().toUpperCase())
           .filter(Boolean),
       ),
+      roundTrip,
+      maxPaybackHours,
+      maxBreakevenHours,
+      negativeFundingTicks,
+      delistConfirmTicks,
+      delistCooldownMinutes,
+      minEntryApyFloor,
+      predictedDropThreshold,
+      fundingGateMinutes,
       liquidTopN,
       liquidMinVolume,
       liquidCacheMs: liquidCacheHours * 3_600_000,

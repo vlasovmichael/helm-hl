@@ -1,51 +1,17 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 
-// Round-trip издержки (вход + выход): taker-комиссия обеих ног + запас на
-// проскальзывание. 0.1% заложено намеренно с запасом — пока нет whitelist
-// ТОП-50 по ликвидности, на тонких монетах спред может съесть edge.
-// После итерации 2 (liquidity filter) можно будет ужать до ~0.06%.
-const ROUND_TRIP = 0.001;
-
-// Ротация разрешена только если разница APY окупит round-trip за этот
-// горизонт. Симметрично с MAX_BREAKEVEN_HOURS на входе — мы не готовы
-// платить комиссию за «улучшение», которое будет отбиваться больше суток.
-const MAX_PAYBACK_HOURS = 24;
-
-// Fee-aware entry gate: не входим, если накопленный фандинг не покроет
-// round-trip издержки за этот горизонт. При 0.1% round-trip это отсекает
-// всё, что даёт меньше ~36.5% APY, — ниже этого порога окупаемость >24ч.
-const MAX_BREAKEVEN_HOURS = 24;
-
-// Гистерезис: negative funding должен держаться N тиков подряд
-// перед закрытием. При 15с тике, 2 тика = 30с.
-const NEGATIVE_FUNDING_TICKS = 2;
-
-// Гистерезис на «исчезновение» монеты из scout data.
-// API Hyperliquid иногда пропускает монету на 1-2 тика (intermittent data).
-// Без гистерезиса каждый такой пропуск = ложный delisted → закрытие → комиссия.
-// 3 тика × 15с = 45с — достаточно, чтобы проглотить мерцание API,
-// но реальный делистинг (минуты/часы) всё равно поймается.
-const DELIST_CONFIRM_TICKS = 3;
-
-// Cooldown: после закрытия по delisted не входим в ту же монету N минут.
-// Защита от цикла "исчезла → закрыли → вернулась → вошли → исчезла"
-// (FARTCOIN/MAVIA паттерн — $0.05+ потерь за каждый цикл).
-const DELIST_COOLDOWN_MINUTES = 30;
-
-// Минимальный APY для входа — защитный порог.
-// Даже если entryApy=60%, но текущий APY упал до 8%, не входим.
-const MIN_ENTRY_APY_FLOOR = 10;
-
-// Predicted-drop filter: если predicted APY упадёт более чем на 30% от текущего,
-// не входим — carry-стратегия рассчитана на стабильный фандинг, не на спайки.
-const PREDICTED_DROP_THRESHOLD = 0.30;
-
-// Funding-Aware Exit Gate: Hyperliquid платит фандинг каждый час в HH:00 UTC.
-// Закрытие позиции за N минут до выплаты = потеря накопленного за окно фандинга.
-// Блокируем soft-exits (APY below threshold, rotation) в этом окне.
-// Emergency-exits (delist, price spike, negative funding) гейт игнорируют.
-const FUNDING_GATE_MINUTES = 10;
+const {
+  roundTrip: ROUND_TRIP,
+  maxPaybackHours: MAX_PAYBACK_HOURS,
+  maxBreakevenHours: MAX_BREAKEVEN_HOURS,
+  negativeFundingTicks: NEGATIVE_FUNDING_TICKS,
+  delistConfirmTicks: DELIST_CONFIRM_TICKS,
+  delistCooldownMinutes: DELIST_COOLDOWN_MINUTES,
+  minEntryApyFloor: MIN_ENTRY_APY_FLOOR,
+  predictedDropThreshold: PREDICTED_DROP_THRESHOLD,
+  fundingGateMinutes: FUNDING_GATE_MINUTES,
+} = config.trading;
 
 /**
  * Сколько минут осталось до ближайшей выплаты фандинга (HH:00 UTC).
