@@ -39,12 +39,15 @@ function loadConfig() {
   const walletAddress = requireEnv('PUBLIC_WALLET_ADDRESS');
 
   // ── Mode presets ──
-  // AGGRESSIVE_MODE=true switches to tighter fees and lower APY thresholds.
-  // Individual env vars still override presets if set explicitly.
+  // AGGRESSIVE_MODE=true uses AGG_* defaults. Individual env vars override if set.
   const aggressive = (process.env.AGGRESSIVE_MODE || 'false').toLowerCase() === 'true';
 
-  const minApy   = parseFloat(process.env.MIN_APY_THRESHOLD   || (aggressive ? '15' : '30'));
-  const entryApy = parseFloat(process.env.ENTRY_APY_THRESHOLD || (aggressive ? '25' : '60'));
+  const aggMinApy    = parseFloat(process.env.AGG_MIN_APY            || '15');
+  const aggEntryApy  = parseFloat(process.env.AGG_ENTRY_APY         || '25');
+  const aggRoundTrip = parseFloat(process.env.AGG_ROUND_TRIP        || '0.0006');
+
+  const minApy   = parseFloat(process.env.MIN_APY_THRESHOLD   || String(aggressive ? aggMinApy   : 30));
+  const entryApy = parseFloat(process.env.ENTRY_APY_THRESHOLD || String(aggressive ? aggEntryApy : 60));
   const leverage = parseFloat(process.env.LEVERAGE             || '1');
 
   if (isNaN(minApy) || isNaN(entryApy) || isNaN(leverage)) {
@@ -68,7 +71,7 @@ function loadConfig() {
   }
 
   // ── Strategy constants (shared by carry + fade) ──
-  const roundTrip             = parseFloat(process.env.ROUND_TRIP              || (aggressive ? '0.0006' : '0.001'));
+  const roundTrip             = parseFloat(process.env.ROUND_TRIP              || String(aggressive ? aggRoundTrip : 0.001));
   const maxPaybackHours       = parseFloat(process.env.MAX_PAYBACK_HOURS       || '24');
   const maxBreakevenHours     = parseFloat(process.env.MAX_BREAKEVEN_HOURS     || '24');
   const negativeFundingTicks  = parseInt(process.env.NEGATIVE_FUNDING_TICKS    || '2',  10);
