@@ -383,11 +383,12 @@ export async function sendStartupNotification({ balance, activePosition }) {
   }
 
   await sendMessageWithButton(
-    `🚀 <b>${config.mode} запущен</b>\n` +
+    `🚀 <b>${config.mode} запущен</b>${config.aggressive ? ' ⚡️ AGGRESSIVE' : ''}\n` +
     `<code>─────────────────────</code>\n` +
     `💵 Баланс: <b>$${balance.toFixed(2)}</b>\n` +
     `🎯 Цель: APY &gt; <b>${config.trading.entryApy}%</b>\n` +
     `🛡 Выход: APY &lt; <b>${config.trading.minApy - config.trading.exitBuffer}%</b>\n` +
+    `💸 Round-trip: <b>${(config.trading.roundTrip * 100).toFixed(2)}%</b>\n` +
     `<code>─────────────────────</code>\n` +
     `${posLine}`,
     // critical=false: startup — штатная операция, тишина ночью
