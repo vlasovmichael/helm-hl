@@ -4,7 +4,7 @@
 
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
-import { getActivePosition, getHistory, getHistorySince, archiveAndClearHistory } from '../core/database.js';
+import { getActivePosition, getHistory, getHistorySince, getArchivedHistorySince, archiveAndClearHistory } from '../core/database.js';
 import { getAccountSummary, getMarkPrice } from '../modules/exchange.js';
 import { getAvailableBalance } from '../modules/wallet.js';
 import {
@@ -12,6 +12,7 @@ import {
   sendAnomalyAlert,
   sendFomoAlert,
   sendDailySummary,
+  sendPeriodSummary,
   sendPnlAlert,
 } from '../modules/reporter.js';
 import {
@@ -171,7 +172,36 @@ async function checkDailyRecap() {
   state.dailyRecapSentDate = today;
   logger.info(`[System] Daily Recap sent for ${today}`);
 
+  // Weekly recap: по понедельникам
+  const dayOfWeek = new Date().getDay(); // 0=Sun, 1=Mon
+  if (dayOfWeek === 1) {
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).getTime();
+    await sendPeriodRecap('📊 Неделя', weekStart, equity);
+  }
+
+  // Monthly recap: 1-го числа
+  const dayOfMonth = now.getDate();
+  if (dayOfMonth === 1) {
+    const monthStart = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate()).getTime();
+    await sendPeriodRecap('📅 Месяц', monthStart, equity);
+  }
+
   await maybeAutoCleanup(equity);
+}
+
+/**
+ * Сводка за период (неделя/месяц): данные из БД + архива.
+ */
+async function sendPeriodRecap(label, sinceMs, equity) {
+  try {
+    const dbTrades      = getHistorySince(sinceMs);
+    const archiveTrades = getArchivedHistorySince(sinceMs);
+    const allTrades     = [...archiveTrades, ...dbTrades];
+
+    await sendPeriodSummary({ label, trades: allTrades, equity });
+  } catch (err) {
+    logger.error(`[System] ${label} recap failed: ${err.message}`);
+  }
 }
 
 /**

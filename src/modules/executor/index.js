@@ -150,10 +150,11 @@ async function handleOpen(signal) {
     return { ok: false };
   }
 
+  const strategyId = signal.strategy_id || 'carry';
   if (config.isProduction) {
-    return productionOpen(signal.coin, signal.price, signal.apy);
+    return productionOpen(signal.coin, signal.price, signal.apy, false, strategyId);
   }
-  return paperOpen(signal.coin, signal.price, signal.apy);
+  return paperOpen(signal.coin, signal.price, signal.apy, false, strategyId);
 }
 
 async function handleClose(signal, position) {
@@ -221,6 +222,7 @@ async function paperRotate(signal, position) {
     signal.openPrice,
     signal.openApy,
     true, // silent
+    signal.strategy_id || 'carry',
   );
 
   if (!openResult.ok) {

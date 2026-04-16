@@ -61,7 +61,7 @@ const OI_CAP_REGEX = /open\s*interest|oi\s*cap/i;
  * @param {boolean} [silent=false]
  * @returns {Promise<{ ok: boolean, positionId?: number, sizeUsd?: number }>}
  */
-export async function productionOpen(coin, price, apy, silent = false) {
+export async function productionOpen(coin, price, apy, silent = false, strategyId = 'carry') {
   const exchange = getExchange();
 
   // ── 1. Баланс (с retry при подозрительно малом значении) ──
@@ -271,6 +271,7 @@ export async function productionOpen(coin, price, apy, silent = false) {
     entry_apy: apy,
     entry_time: Date.now(),
     mode: "PRODUCTION",
+    strategy_id: strategyId,
   });
 
   logger.info(

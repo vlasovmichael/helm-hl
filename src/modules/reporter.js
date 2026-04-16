@@ -3,6 +3,27 @@ import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { formatTaxSummaryForTelegram } from './taxCollector/index.js';
 
+/**
+ * Форматирует длительность в минутах в человеко-читаемую строку.
+ * 45 → "45 мин", 90 → "1ч 30м", 1500 → "1д 1ч", 10100 → "1н 0д"
+ */
+export function formatUptime(minutes) {
+  if (minutes < 60) return `${Math.round(minutes)} мин`;
+  if (minutes < 1440) {
+    const h = Math.floor(minutes / 60);
+    const m = Math.round(minutes % 60);
+    return m > 0 ? `${h}ч ${m}м` : `${h}ч`;
+  }
+  if (minutes < 10080) {
+    const d = Math.floor(minutes / 1440);
+    const h = Math.round((minutes % 1440) / 60);
+    return h > 0 ? `${d}д ${h}ч` : `${d}д`;
+  }
+  const w = Math.floor(minutes / 10080);
+  const d = Math.round((minutes % 10080) / 1440);
+  return d > 0 ? `${w}н ${d}д` : `${w}н`;
+}
+
 const TG_BASE = config.telegram.token
   ? `https://api.telegram.org/bot${config.telegram.token}`
   : null;
@@ -248,6 +269,64 @@ export async function sendDailySummary(stats) {
   );
 }
 
+/**
+ * Сводка за период (неделя/месяц).
+ *
+ * @param {{ label: string, trades: Array, equity: number }} stats
+ */
+export async function sendPeriodSummary({ label, trades, equity }) {
+  if (!trades || trades.length === 0) {
+    logger.info(`[Reporter] ${label} recap skipped — no trades in period`);
+    return;
+  }
+
+  const totalTrades = trades.length;
+  const winTrades   = trades.filter((t) => t.realized_pnl > 0).length;
+  const totalPnl    = trades.reduce((s, t) => s + t.realized_pnl, 0);
+  const totalFees   = trades.reduce((s, t) => s + t.fee_paid, 0);
+  const net         = totalPnl - totalFees;
+  const winRate     = ((winTrades / totalTrades) * 100).toFixed(1);
+  const pnlSign     = totalPnl >= 0 ? '+' : '';
+  const netSign     = net >= 0 ? '+' : '';
+  const pnlEmoji    = totalPnl >= 0 ? '📈' : '📉';
+
+  const carryTrades = trades.filter((t) => (t.strategy_id || 'carry') === 'carry').length;
+  const fadeTrades  = trades.filter((t) => t.strategy_id === 'fade').length;
+  const stratLine   = fadeTrades > 0
+    ? `🏷 Carry: <b>${carryTrades}</b> | Fade: <b>${fadeTrades}</b>\n`
+    : '';
+
+  const bestTrade = trades.reduce(
+    (best, t) => (!best || t.realized_pnl > best.realized_pnl ? t : best),
+    null,
+  );
+  const bestSign = bestTrade && bestTrade.realized_pnl >= 0 ? '+' : '';
+  const bestLine = bestTrade
+    ? `<b>#${bestTrade.coin}</b> ${bestSign}$${bestTrade.realized_pnl.toFixed(4)}`
+    : '—';
+
+  const balanceLine = equity > 0
+    ? `💰 Баланс: <b>$${equity.toFixed(2)}</b>\n`
+    : '';
+
+  logger.info(
+    `[Reporter] ${label} recap: trades=${totalTrades} PnL=${pnlSign}$${totalPnl.toFixed(4)} net=${netSign}$${net.toFixed(4)}`,
+  );
+
+  await sendMessage(
+    `${label} <b>Сводка</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `🔁 Сделок: <b>${totalTrades}</b>  |  Win-rate: <b>${winRate}%</b>\n` +
+      `${stratLine}` +
+      `${pnlEmoji} PnL: <b>${pnlSign}$${totalPnl.toFixed(4)}</b>\n` +
+      `🏷 Комиссии: <b>$${totalFees.toFixed(4)}</b>\n` +
+      `💎 Чистый: <b>${netSign}$${net.toFixed(4)}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `${balanceLine}` +
+      `🏆 Лучшая: ${bestLine}`,
+  );
+}
+
 // ─────────────────────────────────────────────────
 //  Сообщение с inline-кнопкой "Статус"
 // ─────────────────────────────────────────────────
@@ -390,7 +469,7 @@ async function handleStatusCallback(callbackQueryId) {
       `📊 <b>Статус бота</b>\n` +
       `<code>─────────────────────</code>\n` +
       `📡 Режим: <b>${config.mode}</b>\n` +
-      `⏱ Uptime: <b>${status.uptimeMin} мин</b>\n` +
+      `⏱ Uptime: <b>${formatUptime(status.uptimeMin)}</b>\n` +
       `<code>─────────────────────</code>\n` +
       `💰 Эквити: <b>$${status.equity.toFixed(2)}</b>\n` +
       `💵 Доступно: <b>$${status.available.toFixed(2)}</b>\n` +

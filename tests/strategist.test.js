@@ -33,11 +33,12 @@ const HOUR_MS = 3_600_000;
 function makeScoutItem(coin, smoothedApy, opts = {}) {
   return {
     coin,
-    price:       opts.price       ?? 100,
-    fundingRate: opts.fundingRate ?? smoothedApy / 100 / 365 / 24,
-    rawApy:      opts.rawApy      ?? smoothedApy,
+    price:        opts.price        ?? 100,
+    fundingRate:  opts.fundingRate  ?? smoothedApy / 100 / 365 / 24,
+    rawApy:       opts.rawApy       ?? smoothedApy,
     smoothedApy,
-    slowApy:     opts.slowApy     ?? smoothedApy,
+    slowApy:      opts.slowApy      ?? smoothedApy,
+    predictedApy: opts.predictedApy ?? smoothedApy,
   };
 }
 
@@ -148,12 +149,66 @@ test('OPEN: открывает лучшую монету ≥ entryApy', () => {
 //  Сценарий Б: экстренные выходы
 // ═══════════════════════════════════════════════
 
-test('Emergency: монета пропала из scoutData → CLOSE delisted (даже сразу после входа)', () => {
+test('Delist hysteresis: 1 тик пропадания → HOLD (не паникуем)', () => {
   resetState();
-  const pos = makePosition('OLDCOIN', 50, { entry_time: Date.now() - 60_000 }); // 1 мин назад
+  const pos = makePosition('OLDCOIN', 50, { entry_time: Date.now() - 60_000 });
   const r = analyze([makeScoutItem('BTC', 50)], pos);
+  assert.equal(r.action, 'HOLD');
+});
+
+test('Delist hysteresis: 2 тика пропадания → всё ещё HOLD', () => {
+  resetState();
+  const pos = makePosition('OLDCOIN', 50, { entry_time: Date.now() - 60_000 });
+  analyze([makeScoutItem('BTC', 50)], pos); // streak=1
+  const r = analyze([makeScoutItem('BTC', 50)], pos); // streak=2
+  assert.equal(r.action, 'HOLD');
+});
+
+test('Delist hysteresis: 3 тика пропадания → CLOSE delisted', () => {
+  resetState();
+  const pos = makePosition('OLDCOIN', 50, { entry_time: Date.now() - 60_000 });
+  analyze([makeScoutItem('BTC', 50)], pos); // streak=1
+  analyze([makeScoutItem('BTC', 50)], pos); // streak=2
+  const r = analyze([makeScoutItem('BTC', 50)], pos); // streak=3 → close
   assert.equal(r.action, 'CLOSE');
   assert.equal(r.reason, 'delisted');
+});
+
+test('Delist hysteresis: возвращение сбрасывает streak', () => {
+  resetState();
+  const pos = makePosition('OLDCOIN', 50, { entry_time: Date.now() - 60_000 });
+  analyze([makeScoutItem('BTC', 50)], pos);   // streak=1 (OLDCOIN missing)
+  analyze([makeScoutItem('BTC', 50)], pos);   // streak=2
+  analyze([makeScoutItem('OLDCOIN', 50)], pos); // reappeared → reset
+  analyze([makeScoutItem('BTC', 50)], pos);   // streak=1 again
+  const r = analyze([makeScoutItem('BTC', 50)], pos); // streak=2
+  assert.equal(r.action, 'HOLD'); // не 3, не закрываем
+});
+
+test('Delist cooldown: после delisted не входим в ту же монету 30 мин', () => {
+  resetState();
+  const pos = makePosition('FART', 50, { entry_time: Date.now() - 60_000 });
+  // Выводим в delist
+  analyze([makeScoutItem('BTC', 50)], pos); // streak 1
+  analyze([makeScoutItem('BTC', 50)], pos); // streak 2
+  analyze([makeScoutItem('BTC', 50)], pos); // streak 3 → CLOSE
+
+  // Теперь без позиции — FART лучшая монета, но на cooldown
+  const r = analyze([makeScoutItem('FART', 50)], undefined);
+  assert.equal(r.action, 'HOLD');
+});
+
+test('Delist cooldown: другая монета не на cooldown', () => {
+  resetState();
+  const pos = makePosition('FART', 50, { entry_time: Date.now() - 60_000 });
+  analyze([makeScoutItem('BTC', 50)], pos);
+  analyze([makeScoutItem('BTC', 50)], pos);
+  analyze([makeScoutItem('BTC', 50)], pos); // FART delisted
+
+  // BTC — другая монета, cooldown не мешает
+  const r = analyze([makeScoutItem('BTC', 50)], undefined);
+  assert.equal(r.action, 'OPEN');
+  assert.equal(r.coin, 'BTC');
 });
 
 test('Emergency: цена выросла >10% → CLOSE price_spike (даже в hold lock)', () => {

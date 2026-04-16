@@ -5,7 +5,7 @@
 import { logger } from '../core/logger.js';
 import { getActivePosition } from '../core/database.js';
 import { scan } from '../modules/scout.js';
-import { analyze } from '../modules/strategist.js';
+import { coordinate } from '../modules/coordinator.js';
 import { execute } from '../modules/executor/index.js';
 import { runSmartAlerts } from './alerts.js';
 import { integrityCheck } from './integrity.js';
@@ -39,7 +39,7 @@ export async function tick() {
       state.lastIdleAt = 0;
     }
 
-    const signal = analyze(scoutData, activePosition);
+    const signal = coordinate(scoutData, activePosition);
 
     if (signal.action !== 'HOLD') {
       await execute(signal, activePosition);

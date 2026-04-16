@@ -8,7 +8,7 @@ import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getActivePosition } from '../core/database.js';
 import { disconnectExchange } from '../modules/exchange.js';
-import { sendMessage, stopCallbackPolling } from '../modules/reporter.js';
+import { sendMessage, stopCallbackPolling, formatUptime } from '../modules/reporter.js';
 import { serializeCircuitBreaker } from '../modules/executor/state.js';
 import { stopDashboard } from '../modules/dashboard/server.js';
 import { state, BOT_STATE_PATH } from './state.js';
@@ -105,7 +105,7 @@ export async function ensureExchangeProtection(activePosition) {
  * Отправляет Telegram-уведомление о завершении работы.
  */
 async function sendShutdownNotification(activePosition, reason) {
-  const uptimeMin = ((Date.now() - state.startedAt) / 60_000).toFixed(0);
+  const uptimeMin = (Date.now() - state.startedAt) / 60_000;
 
   let status = '💤 Нет открытых позиций';
   if (activePosition) {
@@ -121,7 +121,7 @@ async function sendShutdownNotification(activePosition, reason) {
     `🛑 <b>[SYSTEM] Бот остановлен</b>\n` +
       `<code>─────────────────────</code>\n` +
       `📡 Сигнал: <b>${reason}</b>\n` +
-      `⏱ Uptime: ${uptimeMin} мин\n` +
+      `⏱ Uptime: ${formatUptime(uptimeMin)}\n` +
       `<code>─────────────────────</code>\n` +
       `${status}\n` +
       `<code>─────────────────────</code>\n` +

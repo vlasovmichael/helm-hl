@@ -45,7 +45,7 @@ async function getPaperBalance() {
  * @param {boolean} [silent=false]
  * @returns {Promise<{ ok: boolean, positionId?: number, sizeUsd?: number }>}
  */
-export async function paperOpen(coin, price, apy, silent = false) {
+export async function paperOpen(coin, price, apy, silent = false, strategyId = 'carry') {
   const balance = await getPaperBalance();
 
   if (balance <= 0) {
@@ -71,6 +71,7 @@ export async function paperOpen(coin, price, apy, silent = false) {
     entry_apy: apy,
     entry_time: Date.now(),
     mode: "PAPER",
+    strategy_id: strategyId,
   });
 
   logger.info(

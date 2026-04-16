@@ -2,6 +2,23 @@
 //  HL Scanner Dashboard — Stripe-style Frontend
 // ─────────────────────────────────────────────────
 
+function formatUptime(minutes) {
+  if (minutes < 60) return `${Math.round(minutes)} мин`;
+  if (minutes < 1440) {
+    const h = Math.floor(minutes / 60);
+    const m = Math.round(minutes % 60);
+    return m > 0 ? `${h}ч ${m}м` : `${h}ч`;
+  }
+  if (minutes < 10080) {
+    const d = Math.floor(minutes / 1440);
+    const h = Math.round((minutes % 1440) / 60);
+    return h > 0 ? `${d}д ${h}ч` : `${d}д`;
+  }
+  const w = Math.floor(minutes / 10080);
+  const d = Math.round((minutes % 10080) / 1440);
+  return d > 0 ? `${w}н ${d}д` : `${w}н`;
+}
+
 const REFRESH_MS = 5_000;
 let chart = null;
 let lastSuccessAt = 0;
@@ -219,8 +236,7 @@ function renderHeader(status) {
   pill.textContent = status.mode;
   pill.className = `status-pill ${status.mode === "PRODUCTION" ? "prod" : ""}`;
 
-  const uptimeH = (status.uptimeMin / 60).toFixed(1);
-  document.getElementById("uptime-val").textContent = `Uptime: ${uptimeH}h`;
+  document.getElementById("uptime-val").textContent = `Uptime: ${formatUptime(status.uptimeMin)}`;
   document.getElementById("available-val").textContent =
     `Available: ${fmtUsd(status.available)}`;
 }

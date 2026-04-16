@@ -8,9 +8,6 @@ const HL_API   = 'https://api.hyperliquid.xyz/info';
 const RTT_LIMIT_MS = 10_000; // отклоняем ответы медленнее 10 с
 
 // ── Predictive Funding ─────────────────────────
-// Если у кандидата (rawApy >= ENTRY_APY_THRESHOLD) предсказанный фандинг
-// упадёт более чем на этот процент — пропускаем монету.
-const PREDICTED_DROP_THRESHOLD   = 0.30;
 const PREDICTED_FUNDING_CACHE_MS = 5 * 60_000; // биржа обновляет раз в час, кеш 5 мин
 
 let predictedCache = { ts: 0, map: new Map() };
@@ -262,7 +259,6 @@ export async function scan() {
   let skippedUntradeable   = 0;
   let skippedRuntime       = 0;
   let skippedOiCap         = 0;
-  let skippedPredictedDrop = 0;
   let skippedIlliquid      = 0;
 
   for (let i = 0; i < universe.length; i++) {
@@ -315,36 +311,21 @@ export async function scan() {
 
     const rawApy = fundingRate * 24 * 365 * 100;
 
-    // Predictive Funding filter — только для серьёзных кандидатов.
-    // Если currentApy ниже порога входа — нам всё равно, мы туда не пойдём.
-    if (rawApy >= config.trading.entryApy) {
-      const predictedRate = predictedFundings.get(coin);
-      if (predictedRate != null) {
-        const predictedApy = predictedRate * 24 * 365 * 100;
-        const drop = (rawApy - predictedApy) / rawApy;
-        if (drop > PREDICTED_DROP_THRESHOLD) {
-          skippedPredictedDrop++;
-          logger.debug(
-            `[Scout] #${coin} APY ${rawApy.toFixed(0)}% → predicted ${predictedApy.toFixed(0)}% ` +
-            `(-${(drop * 100).toFixed(0)}%) — skip (predicted drop > ${(PREDICTED_DROP_THRESHOLD * 100).toFixed(0)}%)`,
-          );
-          continue;
-        }
-      }
-    }
-
     const { fast, slow } = updateEma(coin, rawApy);
 
     if (fast <= 0) continue;
 
-    results.push({ coin, price, fundingRate, rawApy, smoothedApy: fast, slowApy: slow });
+    const predictedRate = predictedFundings.get(coin);
+    const predictedApy  = predictedRate != null ? predictedRate * 24 * 365 * 100 : null;
+
+    results.push({ coin, price, fundingRate, rawApy, smoothedApy: fast, slowApy: slow, predictedApy });
   }
 
-  if (skippedBlacklist > 0 || skippedUntradeable > 0 || skippedRuntime > 0 || skippedOiCap > 0 || skippedPredictedDrop > 0 || skippedIlliquid > 0) {
+  if (skippedBlacklist > 0 || skippedUntradeable > 0 || skippedRuntime > 0 || skippedOiCap > 0 || skippedIlliquid > 0) {
     logger.debug(
       `[Scout] Filtered out: ${skippedBlacklist} blacklisted, ${skippedUntradeable} untradeable, ` +
       `${skippedRuntime} runtime-blocked, ${skippedOiCap} oi-cap-blocked, ` +
-      `${skippedPredictedDrop} predicted-drop, ${skippedIlliquid} illiquid`,
+      `${skippedIlliquid} illiquid`,
     );
   }
 

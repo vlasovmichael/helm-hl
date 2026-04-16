@@ -21,9 +21,25 @@ const MAX_BREAKEVEN_HOURS = 24;
 // перед закрытием. При 15с тике, 2 тика = 30с.
 const NEGATIVE_FUNDING_TICKS = 2;
 
+// Гистерезис на «исчезновение» монеты из scout data.
+// API Hyperliquid иногда пропускает монету на 1-2 тика (intermittent data).
+// Без гистерезиса каждый такой пропуск = ложный delisted → закрытие → комиссия.
+// 3 тика × 15с = 45с — достаточно, чтобы проглотить мерцание API,
+// но реальный делистинг (минуты/часы) всё равно поймается.
+const DELIST_CONFIRM_TICKS = 3;
+
+// Cooldown: после закрытия по delisted не входим в ту же монету N минут.
+// Защита от цикла "исчезла → закрыли → вернулась → вошли → исчезла"
+// (FARTCOIN/MAVIA паттерн — $0.05+ потерь за каждый цикл).
+const DELIST_COOLDOWN_MINUTES = 30;
+
 // Минимальный APY для входа — защитный порог.
 // Даже если entryApy=60%, но текущий APY упал до 8%, не входим.
 const MIN_ENTRY_APY_FLOOR = 10;
+
+// Predicted-drop filter: если predicted APY упадёт более чем на 30% от текущего,
+// не входим — carry-стратегия рассчитана на стабильный фандинг, не на спайки.
+const PREDICTED_DROP_THRESHOLD = 0.30;
 
 // Funding-Aware Exit Gate: Hyperliquid платит фандинг каждый час в HH:00 UTC.
 // Закрытие позиции за N минут до выплаты = потеря накопленного за окно фандинга.
@@ -51,6 +67,12 @@ function isInFundingGate() {
 
 // Счётчик: сколько тиков подряд funding < 0
 let negativeFundingStreak = 0;
+
+// Счётчик: сколько тиков подряд монета отсутствует в scoutData
+let disappearedStreak = 0;
+
+// Cooldown после delisted: { coin, until (timestamp) }
+let delistCooldown = { coin: null, until: 0 };
 
 const {
   minApy,
@@ -117,8 +139,9 @@ export function analyze(scoutData, activePosition) {
   //  Сценарий А: нет позиции — ищем вход
   // ═══════════════════════════════════════════════
   if (!activePosition) {
-    // Сбрасываем счётчик negative funding — нет позиции
+    // Сбрасываем счётчики — нет позиции
     negativeFundingStreak = 0;
+    disappearedStreak = 0;
 
     const best = scoutData[0]; // отсортированы по smoothedApy desc
 
@@ -148,6 +171,31 @@ export function analyze(scoutData, activePosition) {
       return { action: 'HOLD' };
     }
 
+    // Predicted-drop filter: carry не входит при прогнозируемом падении фандинга
+    if (best.predictedApy != null && best.rawApy > 0) {
+      const drop = (best.rawApy - best.predictedApy) / best.rawApy;
+      if (drop > PREDICTED_DROP_THRESHOLD) {
+        logger.info(
+          `[Strategist] HOLD (predicted drop) — ${best.coin} APY ${best.rawApy.toFixed(0)}% → ` +
+            `predicted ${best.predictedApy.toFixed(0)}% (-${(drop * 100).toFixed(0)}%)`,
+        );
+        return { action: 'HOLD' };
+      }
+    }
+
+    // Delist cooldown: не входим в монету, которая недавно «исчезла».
+    // Защита от цикла delisted → re-entry → delisted (FARTCOIN/MAVIA паттерн).
+    if (
+      delistCooldown.coin === best.coin &&
+      Date.now() < delistCooldown.until
+    ) {
+      const remainMin = ((delistCooldown.until - Date.now()) / 60_000).toFixed(0);
+      logger.info(
+        `[Strategist] HOLD (delist cooldown) — ${best.coin} recently delisted, ${remainMin}min remaining`,
+      );
+      return { action: 'HOLD' };
+    }
+
     logger.info(
       `[Strategist] OPEN — ${best.coin} @ ${best.smoothedApy.toFixed(2)}% | breakeven ${breakevenH.toFixed(1)}h`,
     );
@@ -169,15 +217,39 @@ export function analyze(scoutData, activePosition) {
   // ── Экстренные выходы (игнорируют minHold) ────
   // Эти проверки срабатывают ВСЕГДА — даже через 1 секунду.
 
-  // 1. Монета исчезла
+  // 1. Монета исчезла — с гистерезисом.
+  //    API Hyperliquid иногда «мерцает» — пропускает монету на 1-2 тика.
+  //    Закрываем только после DELIST_CONFIRM_TICKS подряд.
   if (!current) {
-    logger.warn(`[Strategist] CLOSE — ${currentCoin} disappeared`);
-    return {
-      action: 'CLOSE',
-      coin:   currentCoin,
-      price:  activePosition.entry_price,
-      reason: 'delisted',
-    };
+    disappearedStreak++;
+    logger.warn(
+      `[Strategist] ${currentCoin} disappeared — streak: ${disappearedStreak}/${DELIST_CONFIRM_TICKS}`,
+    );
+
+    if (disappearedStreak >= DELIST_CONFIRM_TICKS) {
+      disappearedStreak = 0;
+      delistCooldown = { coin: currentCoin, until: Date.now() + DELIST_COOLDOWN_MINUTES * 60_000 };
+      logger.warn(
+        `[Strategist] CLOSE — ${currentCoin} confirmed delisted (${DELIST_CONFIRM_TICKS} ticks) | ` +
+          `cooldown ${DELIST_COOLDOWN_MINUTES}min`,
+      );
+      return {
+        action: 'CLOSE',
+        coin:   currentCoin,
+        price:  activePosition.entry_price,
+        reason: 'delisted',
+      };
+    }
+
+    return { action: 'HOLD' };
+  }
+
+  // Монета вернулась в scoutData — сброс счётчика
+  if (disappearedStreak > 0) {
+    logger.info(
+      `[Strategist] ${currentCoin} reappeared after ${disappearedStreak} tick(s) — streak reset`,
+    );
+    disappearedStreak = 0;
   }
 
   // 2. Цена выросла >10% — защита шорта от убытка

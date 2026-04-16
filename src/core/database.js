@@ -40,6 +40,18 @@ export function initDB() {
     );
   `);
 
+  // Migration: strategy_id column for multi-strategy support
+  const posColumns = db.pragma('table_info(positions)');
+  if (!posColumns.find(c => c.name === 'strategy_id')) {
+    db.exec("ALTER TABLE positions ADD COLUMN strategy_id TEXT NOT NULL DEFAULT 'carry'");
+    logger.info('[DB] Migration: added strategy_id to positions');
+  }
+  const histColumns = db.pragma('table_info(history)');
+  if (!histColumns.find(c => c.name === 'strategy_id')) {
+    db.exec("ALTER TABLE history ADD COLUMN strategy_id TEXT NOT NULL DEFAULT 'carry'");
+    logger.info('[DB] Migration: added strategy_id to history');
+  }
+
   logger.info(`[DB] Initialized at ${DB_PATH}`);
   return db;
 }
@@ -51,14 +63,15 @@ function getDb() {
 
 /**
  * Сохраняет новую открытую позицию и возвращает её id.
- * @param {{ coin, size_usd, entry_price, entry_apy, entry_time, mode }} data
+ * @param {{ coin, size_usd, entry_price, entry_apy, entry_time, mode, strategy_id? }} data
  */
 export function savePosition(data) {
+  const row = { strategy_id: 'carry', ...data };
   const stmt = getDb().prepare(`
-    INSERT INTO positions (coin, size_usd, entry_price, entry_apy, entry_time, mode)
-    VALUES (@coin, @size_usd, @entry_price, @entry_apy, @entry_time, @mode)
+    INSERT INTO positions (coin, size_usd, entry_price, entry_apy, entry_time, mode, strategy_id)
+    VALUES (@coin, @size_usd, @entry_price, @entry_apy, @entry_time, @mode, @strategy_id)
   `);
-  const result = stmt.run(data);
+  const result = stmt.run(row);
   return result.lastInsertRowid;
 }
 
@@ -77,8 +90,8 @@ export function closePosition(id, data) {
   }
 
   const insertHistory = getDb().prepare(`
-    INSERT INTO history (coin, entry_price, close_price, realized_pnl, fee_paid, mode, closed_at, reason)
-    VALUES (@coin, @entry_price, @close_price, @realized_pnl, @fee_paid, @mode, @closed_at, @reason)
+    INSERT INTO history (coin, entry_price, close_price, realized_pnl, fee_paid, mode, closed_at, reason, strategy_id)
+    VALUES (@coin, @entry_price, @close_price, @realized_pnl, @fee_paid, @mode, @closed_at, @reason, @strategy_id)
   `);
 
   const updatePosition = getDb().prepare(
@@ -96,6 +109,7 @@ export function closePosition(id, data) {
       mode:         position.mode,
       closed_at:    Date.now(),
       reason:       data.reason,
+      strategy_id:  position.strategy_id || 'carry',
     });
     updatePosition.run('CLOSED', id);
   });

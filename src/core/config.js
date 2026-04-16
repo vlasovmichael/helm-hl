@@ -62,6 +62,12 @@ function loadConfig() {
     throw new Error(`LIQUID_CACHE_HOURS must be positive number. Got: "${process.env.LIQUID_CACHE_HOURS}"`);
   }
 
+  // ── Fade strategy (Predicted Funding Fade) ──
+  const fadeMaxHoldMinutes = parseInt(process.env.FADE_MAX_HOLD_MINUTES  || '120', 10);
+  const fadeMinCurrentApy  = parseFloat(process.env.FADE_MIN_CURRENT_APY || '200');
+  const fadeMinDropPct     = parseFloat(process.env.FADE_MIN_DROP_PCT    || '40') / 100;
+  const fadeEnabled        = (process.env.FADE_ENABLED || 'true').toLowerCase() === 'true';
+
   const maxDrawdownPct = parseFloat(process.env.MAX_DRAWDOWN_PCT || '10');
   const cbMaxLosses    = parseInt(process.env.CB_MAX_LOSSES      || '3', 10);
   const cbPauseHours   = parseFloat(process.env.CB_PAUSE_HOURS   || '2');
@@ -111,6 +117,10 @@ function loadConfig() {
       liquidTopN,
       liquidMinVolume,
       liquidCacheMs: liquidCacheHours * 3_600_000,
+      fadeEnabled,
+      fadeMaxHoldMinutes,
+      fadeMinCurrentApy,
+      fadeMinDropPct,
     },
 
     risk: {
