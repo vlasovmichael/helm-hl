@@ -145,35 +145,33 @@ async function checkDailyRecap() {
 
   const sessionProfit = state.sessionStartEquity > 0 ? equity - state.sessionStartEquity : 0;
 
-  if (todayHistory.length === 0) {
+  // Daily recap — только если были сделки за день
+  if (todayHistory.length > 0) {
+    const totalTrades = todayHistory.length;
+    const winTrades   = todayHistory.filter((t) => t.realized_pnl > 0).length;
+    const totalPnl    = todayHistory.reduce((s, t) => s + t.realized_pnl, 0);
+    const totalFees   = todayHistory.reduce((s, t) => s + t.fee_paid, 0);
+    const bestTrade   = todayHistory.reduce(
+      (best, t) => (!best || t.realized_pnl > best.realized_pnl ? t : best),
+      null,
+    );
+
+    const activePosition = getActivePosition();
+
+    await sendDailySummary({
+      totalTrades, winTrades, totalPnl, totalFees,
+      bestTrade, activePosition, equity,
+      sessionProfit, sessionStartEquity: state.sessionStartEquity,
+    });
+    logger.info(`[System] Daily Recap sent for ${today}`);
+  } else {
     logger.info('[System] Daily Recap skipped — no trades today');
-    state.dailyRecapSentDate = today;
-    await maybeAutoCleanup(equity);
-    return;
   }
 
-  const totalTrades = todayHistory.length;
-  const winTrades   = todayHistory.filter((t) => t.realized_pnl > 0).length;
-  const totalPnl    = todayHistory.reduce((s, t) => s + t.realized_pnl, 0);
-  const totalFees   = todayHistory.reduce((s, t) => s + t.fee_paid, 0);
-  const bestTrade   = todayHistory.reduce(
-    (best, t) => (!best || t.realized_pnl > best.realized_pnl ? t : best),
-    null,
-  );
-
-  const activePosition = getActivePosition();
-
-  await sendDailySummary({
-    totalTrades, winTrades, totalPnl, totalFees,
-    bestTrade, activePosition, equity,
-    sessionProfit, sessionStartEquity: state.sessionStartEquity,
-  });
-
   state.dailyRecapSentDate = today;
-  logger.info(`[System] Daily Recap sent for ${today}`);
 
-  // Weekly recap: по понедельникам
-  const dayOfWeek = new Date().getDay(); // 0=Sun, 1=Mon
+  // Weekly recap: по понедельникам (отправляется даже если за день не было сделок)
+  const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon
   if (dayOfWeek === 1) {
     const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).getTime();
     await sendPeriodRecap('📊 Неделя', weekStart, equity);

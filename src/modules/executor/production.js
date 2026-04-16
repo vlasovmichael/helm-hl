@@ -562,6 +562,7 @@ export async function productionRotate(signal, position) {
     signal.openPrice,
     signal.openApy,
     true, // silent
+    signal.strategy_id || 'carry',
   );
 
   if (!openResult.ok) {
