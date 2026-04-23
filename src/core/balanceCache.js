@@ -10,22 +10,84 @@
 //
 // Решение: единый кэш {accountValue, withdrawable, unrealizedPnl}, общий
 // для PAPER (raw axios в wallet.js) и PROD (SDK в exchange.js).
+// Кэш персистится на диск, чтобы пережить рестарт во время глитча.
 //
 // Политика:
-//   1. Живой ответ (хоть одно из полей > 0) → обновляем кэш, возвращаем.
+//   1. Живой ответ (хоть одно из полей > 0) → обновляем кэш (+диск), возвращаем.
 //   2. Ответ "всё по нулям" при наличии свежего кэша (<6ч) →
 //      возвращаем кэш, WARN, одноразовый TG-алерт.
 //   3. Сетевая ошибка при наличии свежего кэша → возвращаем кэш, WARN.
 //   4. Иначе (нет кэша / кэш старый / реально пустой счёт) → возвращаем нули.
 
+import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'fs';
+import { join } from 'path';
 import { logger } from './logger.js';
 import { sendMessage } from '../modules/reporter.js';
 
 const STALE_MAX_AGE_MS = 6 * 60 * 60_000; // 6 часов
+const CACHE_FILE = join('data', 'balance_cache.json');
 
 let lastGood = null;         // { value: {accountValue, withdrawable, unrealizedPnl}, ts }
 let zeroStreakStart = 0;     // когда начался эпизод $0
 let freezeAlerted = false;   // одноразовый TG-алерт на эпизод
+let diskLoaded = false;      // попытались ли уже загрузить с диска
+
+/**
+ * Ленивая загрузка кэша с диска при первом обращении.
+ * Sync — файл крошечный (~100 байт), это одноразовое действие при старте.
+ */
+function loadFromDisk() {
+  if (diskLoaded) return;
+  diskLoaded = true;
+
+  try {
+    const raw = readFileSync(CACHE_FILE, 'utf-8');
+    const data = JSON.parse(raw);
+
+    if (
+      typeof data?.ts === 'number' &&
+      data?.value &&
+      typeof data.value.accountValue === 'number'
+    ) {
+      const ageMs = Date.now() - data.ts;
+      if (ageMs < STALE_MAX_AGE_MS) {
+        lastGood = { value: data.value, ts: data.ts };
+        const ageMin = (ageMs / 60_000).toFixed(0);
+        logger.info(
+          `[BalanceCache] Loaded from disk: $${data.value.accountValue.toFixed(2)} ` +
+            `(${ageMin}min old)`,
+        );
+      } else {
+        logger.info(
+          `[BalanceCache] Disk cache too old (${(ageMs / 3_600_000).toFixed(1)}h) — ignored`,
+        );
+      }
+    }
+  } catch (err) {
+    if (err.code !== 'ENOENT') {
+      logger.warn(`[BalanceCache] Failed to load disk cache: ${err.message}`);
+    }
+    // ENOENT — ок, просто первый запуск
+  }
+}
+
+/**
+ * Атомарная запись на диск (tmp + rename). Fire-and-forget — никакой await.
+ */
+function persistToDisk() {
+  if (!lastGood) return;
+
+  const payload = JSON.stringify({ value: lastGood.value, ts: lastGood.ts });
+  const tmpPath = `${CACHE_FILE}.${process.pid}.tmp`;
+
+  try {
+    mkdirSync('data', { recursive: true });
+    writeFileSync(tmpPath, payload, 'utf-8');
+    renameSync(tmpPath, CACHE_FILE);
+  } catch (err) {
+    logger.warn(`[BalanceCache] Failed to persist cache: ${err.message}`);
+  }
+}
 
 /**
  * Оборачивает fetcher защитой от stale/glitched ответов.
@@ -34,6 +96,8 @@ let freezeAlerted = false;   // одноразовый TG-алерт на эпи
  * @returns {Promise<{ accountValue: number, withdrawable: number, unrealizedPnl: number, stale: boolean }>}
  */
 export async function getCachedBalance(fetcher) {
+  loadFromDisk();
+
   let fresh;
   try {
     fresh = await fetcher();
@@ -49,7 +113,6 @@ export async function getCachedBalance(fetcher) {
     throw err;
   }
 
-  // Нормализуем: unrealizedPnl может быть undefined (wallet.js его не достаёт)
   const normalized = {
     accountValue:  Number(fresh.accountValue) || 0,
     withdrawable:  Number(fresh.withdrawable) || 0,
@@ -60,6 +123,7 @@ export async function getCachedBalance(fetcher) {
 
   if (!isZero) {
     lastGood = { value: normalized, ts: Date.now() };
+    persistToDisk();
     if (zeroStreakStart > 0) {
       const durMin = ((Date.now() - zeroStreakStart) / 60_000).toFixed(1);
       logger.info(`[BalanceCache] ✅ API recovered after ${durMin}min of $0 responses`);
@@ -96,8 +160,6 @@ export async function getCachedBalance(fetcher) {
     return { ...lastGood.value, stale: true };
   }
 
-  // Нет свежего кэша — либо бот только что стартовал, либо $0 длится >6ч,
-  // либо кошелёк реально пуст. Возвращаем как есть.
   const cacheInfo = lastGood
     ? `cache age ${((Date.now() - lastGood.ts) / 60_000 / 60).toFixed(1)}h`
     : 'cache empty';
@@ -107,12 +169,13 @@ export async function getCachedBalance(fetcher) {
 }
 
 /**
- * Для тестов — сброс состояния кэша.
+ * Для тестов — сброс состояния кэша (включая флаг загрузки с диска).
  */
 export function _resetBalanceCache() {
   lastGood = null;
   zeroStreakStart = 0;
   freezeAlerted = false;
+  diskLoaded = false;
 }
 
 /**
