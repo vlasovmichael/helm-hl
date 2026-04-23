@@ -15,8 +15,8 @@ services:
     ports:
       - "127.0.0.1:3010:3010"
     networks:
-      - workspace_app_network
+      - proxy_net
 
 networks:
-  workspace_app_network:
+  proxy_net:
     external: true
