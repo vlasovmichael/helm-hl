@@ -11,7 +11,7 @@ import { config } from "../../core/config.js";
 import { logger } from "../../core/logger.js";
 import { getActivePosition, getHistorySince, getArchivedHistorySince } from "../../core/database.js";
 import { getAccountSummary, getPositions } from "../exchange.js";
-import { getAvailableBalance } from "../wallet.js";
+import { getAvailableBalance, getAccountEquity } from "../wallet.js";
 import { state } from "../../app/state.js";
 import { getTaxSummary } from "../taxCollector/index.js";
 import { getRuntimeBlacklist } from "../executor/index.js";
@@ -46,7 +46,7 @@ async function handleStatus(_req, res) {
         available = summary.available;
       } else {
         available = await getAvailableBalance();
-        equity = available;
+        equity    = await getAccountEquity();
       }
     } catch {
       // показываем 0 — UI пометит как stale
@@ -103,7 +103,7 @@ async function handleHistory(req, res) {
         const summary = await getAccountSummary();
         currentEquity = summary.equity;
       } else {
-        currentEquity = await getAvailableBalance();
+        currentEquity = await getAccountEquity();
       }
     } catch {
       currentEquity = state.sessionStartEquity || 0;

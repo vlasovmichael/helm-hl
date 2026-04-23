@@ -7,7 +7,7 @@ import { config } from './core/config.js';
 import { logger } from './core/logger.js';
 import { initDB, getActivePosition } from './core/database.js';
 import { initExchange, getAccountSummary } from './modules/exchange.js';
-import { getAvailableBalance } from './modules/wallet.js';
+import { getAccountEquity } from './modules/wallet.js';
 import { sendStartupNotification, setStatusCollector, startCallbackPolling } from './modules/reporter.js';
 import { syncWithExchange } from './modules/sync.js';
 import { startDashboard } from './modules/dashboard/server.js';
@@ -42,7 +42,7 @@ async function main() {
       const summary = await getAccountSummary();
       startupBalance = summary.equity;
     } else {
-      startupBalance = await getAvailableBalance();
+      startupBalance = await getAccountEquity();
     }
   } catch {
     // не критично — покажем $0

@@ -7,7 +7,7 @@ import { config } from '../../core/config.js';
 import { logger } from '../../core/logger.js';
 import { state as appState } from '../../app/state.js';
 import { getAccountSummary } from '../exchange.js';
-import { getAvailableBalance } from '../wallet.js';
+import { getAccountEquity } from '../wallet.js';
 import { checkVolatility } from '../volatility.js';
 import { paperOpen, paperClose } from './paper.js';
 import { productionOpen, productionClose, productionRotate } from './production.js';
@@ -82,7 +82,9 @@ async function preflightChecks(coin, smoothedApy = null) {
         const summary = await getAccountSummary();
         equity = summary.equity;
       } else {
-        equity = await getAvailableBalance();
+        // accountValue (equity), не withdrawable: открытая позиция занимает маржу,
+        // withdrawable падает до ~0 и даёт false-positive drawdown breach.
+        equity = await getAccountEquity();
       }
     } catch (err) {
       logger.warn(`[Executor] Drawdown check: failed to get equity: ${err.message}`);

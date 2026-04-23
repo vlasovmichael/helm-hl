@@ -17,6 +17,7 @@ import { Hyperliquid } from "hyperliquid";
 import { config } from "../core/config.js";
 import { logger } from "../core/logger.js";
 import { retryWithBackoff } from "../core/retry.js";
+import { getCachedBalance } from "../core/balanceCache.js";
 
 let sdk = null;
 
@@ -257,26 +258,10 @@ export async function getPositions() {
 }
 
 /**
- * Получает текущий свободный баланс.
- *
- * @returns {Promise<number>}
+ * Fetcher для balanceCache: дёргает SDK и нормализует ответ в
+ * {accountValue, withdrawable, unrealizedPnl}. Retry — только на сеть.
  */
-export async function getBalance() {
-  return retryWithBackoff(
-    () =>
-      sdk.info.perpetuals
-        .getClearinghouseState(config.wallet.address)
-        .then((state) => parseFloat(state?.withdrawable ?? "0")),
-    { label: "get-balance", maxRetries: 3 },
-  );
-}
-
-/**
- * Получает полную сводку аккаунта: equity, available, unrealizedPnl.
- *
- * @returns {Promise<{ equity: number, available: number, unrealizedPnl: number }>}
- */
-export async function getAccountSummary() {
+async function fetchBalanceFromSdk() {
   return retryWithBackoff(
     () =>
       sdk.info.perpetuals
@@ -284,15 +269,41 @@ export async function getAccountSummary() {
         .then((state) => {
           const ms = state?.marginSummary ?? {};
           return {
-            equity: parseFloat(ms.accountValue ?? "0"),
-            available: parseFloat(state?.withdrawable ?? "0"),
+            accountValue:  parseFloat(ms.accountValue ?? "0"),
+            withdrawable:  parseFloat(state?.withdrawable ?? "0"),
             unrealizedPnl: parseFloat(
               ms.totalUnrealizedPnl ?? ms.unrealizedPnl ?? "0",
             ),
           };
         }),
-    { label: "get-account-summary", maxRetries: 3 },
+    { label: "exchange-get-balance", maxRetries: 3 },
   );
+}
+
+/**
+ * Получает текущий свободный баланс (withdrawable).
+ * Защищён stale-cache'ом от API-глитчей.
+ *
+ * @returns {Promise<number>}
+ */
+export async function getBalance() {
+  const snap = await getCachedBalance(fetchBalanceFromSdk);
+  return snap.withdrawable;
+}
+
+/**
+ * Получает полную сводку аккаунта: equity, available, unrealizedPnl.
+ * Защищён stale-cache'ом от API-глитчей.
+ *
+ * @returns {Promise<{ equity: number, available: number, unrealizedPnl: number }>}
+ */
+export async function getAccountSummary() {
+  const snap = await getCachedBalance(fetchBalanceFromSdk);
+  return {
+    equity:        snap.accountValue,
+    available:     snap.withdrawable,
+    unrealizedPnl: snap.unrealizedPnl,
+  };
 }
 
 /**

@@ -6,7 +6,7 @@ import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getActivePosition, getHistory, getHistorySince, getArchivedHistorySince, archiveAndClearHistory } from '../core/database.js';
 import { getAccountSummary, getMarkPrice } from '../modules/exchange.js';
-import { getAvailableBalance } from '../modules/wallet.js';
+import { getAccountEquity } from '../modules/wallet.js';
 import {
   sendMessage,
   sendAnomalyAlert,
@@ -88,7 +88,7 @@ export async function runSmartAlerts(scoutData, signal, activePosition) {
             const summary = await getAccountSummary();
             equity = summary.equity;
           } else {
-            equity = await getAvailableBalance();
+            equity = await getAccountEquity();
           }
         } catch { /* fallback to size_usd */ }
 
@@ -138,7 +138,7 @@ async function checkDailyRecap() {
       const summary = await getAccountSummary();
       equity = summary.equity;
     } else {
-      equity = await getAvailableBalance();
+      equity = await getAccountEquity();
     }
   } catch { /* покажем $0 */ }
 
@@ -214,6 +214,19 @@ async function maybeAutoCleanup(currentEquity) {
 
   const allHistory = getHistory(10_000);
   if (allHistory.length === 0) return;
+
+  // Guard: если API вернул подозрительный $0 или equity схлопнулся (>50% падения),
+  // не трогаем baseline — это почти наверняка глитч индексатора, а не реальный убыток.
+  // Сделок всё равно нет (IDLE), так что Auto-Cleanup подождёт до следующего Daily Recap.
+  const baseline = state.sessionStartEquity;
+  if (currentEquity <= 0 || (baseline > 0 && currentEquity < baseline * 0.5)) {
+    logger.warn(
+      `[System] Auto-Cleanup skipped: equity looks suspicious ` +
+        `($${currentEquity.toFixed(2)} vs baseline $${baseline.toFixed(2)}). ` +
+        `Не сбрасываю baseline — возможно API-глитч.`,
+    );
+    return;
+  }
 
   logger.info(
     `[System] Auto-Cleanup: IDLE for ${((Date.now() - state.lastIdleAt) / 60_000).toFixed(0)}min, ` +

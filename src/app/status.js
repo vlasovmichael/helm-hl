@@ -5,7 +5,7 @@
 import { config } from '../core/config.js';
 import { getActivePosition, getHistory } from '../core/database.js';
 import { getAccountSummary, getMarkPrice } from '../modules/exchange.js';
-import { getAvailableBalance } from '../modules/wallet.js';
+import { getAvailableBalance, getAccountEquity } from '../modules/wallet.js';
 import { state } from './state.js';
 
 /**
@@ -25,7 +25,7 @@ export function createStatusCollector() {
         available = summary.available;
       } else {
         available = await getAvailableBalance();
-        equity    = available;
+        equity    = await getAccountEquity();
       }
     } catch {
       // покажем $0
