@@ -7,6 +7,7 @@ import { getActivePosition } from '../core/database.js';
 import { scan } from '../modules/scout.js';
 import { coordinate } from '../modules/coordinator.js';
 import { execute } from '../modules/executor/index.js';
+import { tickSniper } from '../modules/executor/sniper.js';
 import { runSmartAlerts } from './alerts.js';
 import { integrityCheck } from './integrity.js';
 import { state } from './state.js';
@@ -29,6 +30,11 @@ export async function tick() {
       logger.info('[Tick] Scout returned empty data — skipping');
       return;
     }
+
+    // Sniper (PAPER): попытка maker-fill / fallback-таймаут ДО coordinator'а,
+    // чтобы если снайпер закрыл позицию этим тиком — координатор увидел IDLE
+    // и мог сразу открыть новую сделку, не теряя тик.
+    await tickSniper(scoutData);
 
     const activePosition = getActivePosition();
 

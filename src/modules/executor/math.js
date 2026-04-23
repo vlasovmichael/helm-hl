@@ -5,6 +5,7 @@
 
 // ── Торговые константы ─────────────────────────
 export const FEE_RATE            = 0.0002;   // 0.02% taker
+export const MAKER_FEE_RATE      = 0.00003;  // 0.003% maker (HL baseline tier, 0.3 bps)
 export const SLIPPAGE            = 0.0001;   // 0.01%
 export const ONE_LEG             = FEE_RATE + SLIPPAGE;  // 0.03% за одну сторону
 export const BALANCE_UTILIZATION = 0.95;     // 95% от баланса
@@ -12,6 +13,15 @@ export const MIN_ORDER_USD       = 11;       // Hyperliquid min ~$10, с зап�
 export const MARKET_SLIPPAGE     = 0.03;     // 3% потолок IoC
 export const SLIPPAGE_WARN_PCT   = 0.5;      // предупреждение
 export const SLIPPAGE_BAN_PCT    = 1.5;      // бан
+
+// ── Sniper Mode (maker-only exits на soft-причинах) ─────
+export const SNIPER_WINDOW_MS    = 15 * 60_000;  // 15 мин окно maker-выхода
+// Soft-причины → идут через Sniper. Emergency (delisted, price_spike_protection,
+// negative_funding) и ROTATE (better_apy) остаются market, чтобы не терять скорость.
+export const SNIPER_SOFT_REASONS = new Set([
+  'apy_below_threshold',   // grandfather carry exit
+  'fade_time_stop',        // fade 120min time-stop
+]);
 
 // ── Reconciliation ─────────────────────────────
 export const RECONCILIATION_TOLERANCE_PCT = 2.0;
@@ -78,6 +88,22 @@ export function checkSlippage(expectedPrice, fillPrice, side) {
     ban:  absPct > SLIPPAGE_BAN_PCT,
     label,
   };
+}
+
+/**
+ * Чистый расчёт PnL/комиссий для PAPER-закрытия.
+ * Нет pricePnl (в paper-режиме цена закрытия условна).
+ * @param {Object} position — {size_usd, entry_apy}
+ * @param {number} holdHours
+ * @param {number} [exitFeeRate=ONE_LEG] — ставка комиссии выхода (ONE_LEG для market, MAKER_FEE_RATE для sniper-fill)
+ * @returns {{ fundingPnl: number, totalFee: number, realizedPnl: number }}
+ */
+export function calcPaperClose(position, holdHours, exitFeeRate = ONE_LEG) {
+  const hourlyRate = position.entry_apy / 100 / 365 / 24;
+  const fundingPnl = position.size_usd * hourlyRate * holdHours;
+  // Вход всегда ONE_LEG (taker+slippage), выход — по exitFeeRate.
+  const totalFee   = position.size_usd * (ONE_LEG + exitFeeRate);
+  return { fundingPnl, totalFee, realizedPnl: fundingPnl - totalFee };
 }
 
 /**

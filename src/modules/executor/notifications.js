@@ -97,6 +97,46 @@ export async function notifyProductionClose({ coin, holdHours, entryPrice, avgPx
   );
 }
 
+// ── SNIPER (maker-only exits, PAPER) ──────────
+
+export async function notifySniperArmed({ coin, armPrice, reason, windowMinutes }) {
+  await sendMessage(
+    `🎯 <b>[SNIPER ARMED] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `📍 Limit @ <b>$${armPrice}</b>\n` +
+      `📈 Причина: <b>${reason}</b>\n` +
+      `⏱ Окно: <b>${windowMinutes}мин</b>\n` +
+      `<i>Ждём maker-fill. Если не зальётся — fallback на market.</i>`
+  );
+}
+
+export async function notifySniperFilled({ coin, armPrice, waitMinutes, reason, pnl, fee, feeSavedVsMarket }) {
+  const sign = pnl >= 0 ? "+" : "";
+  const savedSign = feeSavedVsMarket >= 0 ? "+" : "";
+  await sendMessage(
+    `🎯✅ <b>[SNIPER FILLED] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `📈 Причина: <b>${reason}</b>\n` +
+      `📍 Fill @ $${armPrice} (waited ${waitMinutes}мин)\n` +
+      `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
+      `🏷 Fee: $${fee.toFixed(4)}\n` +
+      `💎 Saved vs market: <b>${savedSign}$${feeSavedVsMarket.toFixed(4)}</b>`
+  );
+}
+
+export async function notifySniperTimeout({ coin, armPrice, fallbackPrice, reason, pnl, fee }) {
+  const sign = pnl >= 0 ? "+" : "";
+  await sendMessage(
+    `🎯⏰ <b>[SNIPER TIMEOUT → MARKET] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `📈 Причина: <b>${reason}</b>\n` +
+      `📍 Arm @ $${armPrice} → fallback @ $${fallbackPrice}\n` +
+      `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
+      `🏷 Fee: $${fee.toFixed(4)}\n` +
+      `<i>Maker-limit не залился за 15мин — ушли в market.</i>`
+  );
+}
+
 // ── ROTATE ─────────────────────────────────────
 
 export async function notifyRotate({ closeCoin, openCoin, holdHours, closePnl, openSizeUsd, openApy, paybackHours, isProd }) {

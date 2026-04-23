@@ -14,11 +14,14 @@ import { productionOpen, productionClose, productionRotate } from './production.
 import {
   notifyRotate, notifyRotateFailed,
   notifyOpenBlocked, notifyDrawdownBreached,
+  notifySniperArmed,
 } from './notifications.js';
 import {
   getCircuitBreakerStatus, checkDrawdown,
   CB_PAUSE_MS, isOiCapBanned, OI_CAP_BAN_TTL_MS,
+  armSniper, getSniper, clearSniper, hasSniper,
 } from './state.js';
+import { SNIPER_SOFT_REASONS, SNIPER_WINDOW_MS } from './math.js';
 import { notify } from './hooks.js';
 
 // Re-exports для внешних модулей
@@ -166,6 +169,56 @@ async function handleClose(signal, position) {
     );
     return { ok: false };
   }
+
+  // ── Sniper routing (PAPER-only в Iter 2; PROD — Iter 3) ─────────
+  const isSoft = SNIPER_SOFT_REASONS.has(signal.reason);
+  const sniperActive = hasSniper();
+
+  if (!config.isProduction && isSoft) {
+    // Dup soft-signal при армированном снайпере → silent skip: снайпер уже работает.
+    if (sniperActive) {
+      const slot = getSniper();
+      if (slot.coin === position.coin) {
+        return { ok: true };
+      }
+      // Разные монеты — странное состояние, но лучше не ломать: снимаем и армимся заново.
+      logger.warn(
+        `[Executor] Sniper armed on #${slot.coin}, but close signal for #${position.coin} — clearing stale slot`,
+      );
+      clearSniper();
+    }
+
+    armSniper({
+      positionId: position.id,
+      coin:       position.coin,
+      reason:     signal.reason,
+      armPrice:   signal.price,
+      side:       'BUY',  // закрываем short → покупаем обратно
+      signal,
+    });
+    const windowMinutes = Math.round(SNIPER_WINDOW_MS / 60_000);
+    logger.info(
+      `[Executor] 🎯 Sniper ARMED #${position.coin} @ $${signal.price} ` +
+        `(reason: ${signal.reason}) — maker-fill окно ${windowMinutes}мин`,
+    );
+    await notifySniperArmed({
+      coin: position.coin,
+      armPrice: signal.price,
+      reason: signal.reason,
+      windowMinutes,
+    });
+    return { ok: true };
+  }
+
+  // Emergency reason при армированном снайпере → отменяем снайпер, идём в market.
+  if (sniperActive) {
+    const slot = getSniper();
+    logger.warn(
+      `[Executor] ⚡ Emergency reason "${signal.reason}" — abort Sniper on #${slot.coin}`,
+    );
+    clearSniper();
+  }
+
   if (config.isProduction) {
     return productionClose(signal, position);
   }

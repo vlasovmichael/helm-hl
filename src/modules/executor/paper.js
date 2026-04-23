@@ -9,7 +9,7 @@ import {
   closePosition as dbClosePosition,
 } from '../../core/database.js';
 import { getAvailableBalance } from '../wallet.js';
-import { calcSize, ONE_LEG, MIN_ORDER_USD } from './math.js';
+import { calcSize, calcPaperClose, ONE_LEG, MIN_ORDER_USD } from './math.js';
 import {
   setCooldown, REENTRY_COOLDOWN_MS,
   recordLoss, CB_PAUSE_MS,
@@ -91,25 +91,28 @@ export async function paperOpen(coin, price, apy, silent = false, strategyId = '
  * Закрывает виртуальную позицию.
  *
  * Paper PnL = fundingPnl − fees (без pricePnl, т.к. нет реального fill).
- * Fee = size_usd × ONE_LEG × 2 (вход + выход, включая оценку slippage).
+ * Fee по умолчанию = size_usd × ONE_LEG × 2 (taker+slippage на обе ноги).
+ *
+ * opts используется Sniper-симуляцией (Iter 2): при maker-fill exit идёт
+ * по MAKER_FEE_RATE без slippage, close_price = armPrice (наш limit).
  *
  * @param {{ price: number, reason: string }} signal
  * @param {Object} position — строка из БД
  * @param {boolean} [silent=false]
+ * @param {Object} [opts]
+ * @param {number} [opts.closePrice] — override signal.price (например, armPrice Sniper)
+ * @param {number} [opts.exitFeeRate] — override ставки комиссии выхода (default: ONE_LEG)
  * @returns {Promise<{ ok: boolean, pnl: number, holdHours: number }>}
  */
-export async function paperClose(signal, position, silent = false) {
+export async function paperClose(signal, position, silent = false, opts = {}) {
   const holdMs    = Date.now() - position.entry_time;
   const holdHours = holdMs / 3_600_000;
-  const closePrice = signal.price;
+  const closePrice = opts.closePrice ?? signal.price;
+  const exitFeeRate = opts.exitFeeRate ?? ONE_LEG;
 
-  // Funding PnL: голый шорт — 100% позиции получает фандинг
-  const hourlyRate  = position.entry_apy / 100 / 365 / 24;
-  const fundingPnl  = position.size_usd * hourlyRate * holdHours;
-
-  // Комиссии: вход + выход (с учётом slippage оценки)
-  const totalFee    = position.size_usd * ONE_LEG * 2;
-  const realizedPnl = fundingPnl - totalFee;
+  const { fundingPnl, totalFee, realizedPnl } = calcPaperClose(
+    position, holdHours, exitFeeRate,
+  );
 
   dbClosePosition(position.id, {
     close_price:  closePrice,
@@ -159,5 +162,5 @@ export async function paperClose(signal, position, silent = false) {
     reason: signal.reason, mode: 'PAPER',
   });
 
-  return { ok: true, pnl: realizedPnl, holdHours };
+  return { ok: true, pnl: realizedPnl, fee: totalFee, holdHours };
 }
