@@ -130,6 +130,11 @@ function isRetryable(err) {
   // ── Таймаут axios ──────────────────────────────
   if (err.code === 'ECONNABORTED') return true;
 
+  // ── Специальные случаи (бизнес-логика, которую стоит ретраить) ──
+  if (err.message && err.message.includes('possibly indexer lag')) {
+    return true;
+  }
+
   // ── По умолчанию: не ретраим неизвестные ошибки ─
   return false;
 }
