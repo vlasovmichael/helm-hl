@@ -20,6 +20,7 @@ let predictedCache = { ts: 0, map: new Map() };
 // Ребилдится не чаще, чем раз в LIQUID_CACHE_HOURS — чтобы сам whitelist
 // не «дёргался» и позиции не вылетали из-за транзиентных изменений объёма.
 let liquidCache = { ts: 0, set: new Set() };
+let hunterCache = { ts: 0, set: new Set() };
 
 // Предыдущие значения — логируем INFO только при изменении
 let prevFilterSnapshot = '';
@@ -117,6 +118,44 @@ function refreshLiquidWhitelist(universe, assetCtxs) {
     `[Scout] Liquid whitelist refreshed: ${set.size}/${candidates.length} coins | ` +
     `floor $${(liquidMinVolume / 1e6).toFixed(0)}M | cutoff $${(cutoffVol / 1e6).toFixed(1)}M | ` +
     `next refresh in ${(liquidCacheMs / 3_600_000).toFixed(1)}h`,
+  );
+
+  return set;
+}
+
+/**
+ * Отдельный whitelist для Sniper-Hunter. Более мягкий volume-floor
+ * (HUNTER_MIN_VOLUME, default $1M), без top-N cap — Hunter готов охотиться
+ * на более волатильных mid-cap перпах, carry/fade туда не полезут.
+ * Тот же cache-period, что и у основного liquidSet.
+ */
+function refreshHunterWhitelist(universe, assetCtxs) {
+  const { hunterMinVolume, liquidCacheMs } = config.trading;
+
+  if (Date.now() - hunterCache.ts < liquidCacheMs && hunterCache.set.size > 0) {
+    return hunterCache.set;
+  }
+
+  const set = new Set();
+  for (let i = 0; i < universe.length; i++) {
+    const coin = universe[i]?.name;
+    const vol  = parseFloat(assetCtxs[i]?.dayNtlVlm ?? 0);
+    if (!coin || isNaN(vol)) continue;
+    if (vol < hunterMinVolume) continue;
+    set.add(coin.toUpperCase());
+  }
+
+  if (set.size === 0) {
+    logger.warn(
+      `[Scout] Hunter whitelist: no coins passed floor $${(hunterMinVolume / 1e6).toFixed(1)}M — ` +
+      `keeping previous (${hunterCache.set.size} coins)`,
+    );
+    return hunterCache.set;
+  }
+
+  hunterCache = { ts: Date.now(), set };
+  logger.info(
+    `[Scout] Hunter whitelist refreshed: ${set.size} coins | floor $${(hunterMinVolume / 1e6).toFixed(1)}M`,
   );
 
   return set;
@@ -226,8 +265,10 @@ export async function scan() {
   // Обновляем ОБЩИЙ кеш universe — Executor будет читать отсюда же
   refreshUniverse(universe);
 
-  // Liquid whitelist (6ч кеш, fail-safe если снэпшот пуст)
+  // Liquid whitelist (6ч кеш, fail-safe если снэпшот пуст) — для carry/fade
   const liquidSet = refreshLiquidWhitelist(universe, assetCtxs);
+  // Hunter whitelist (более мягкий volume-floor) — только для Strategy #3
+  const hunterSet = refreshHunterWhitelist(universe, assetCtxs);
 
   // Predictive funding (5min cache, fail-open)
   const predictedFundings = await fetchPredictedFundings();
@@ -255,7 +296,8 @@ export async function scan() {
     );
   }
 
-  const results = [];
+  const results       = [];  // для carry/fade (узкая liquid-вселенная)
+  const hunterResults = [];  // для Hunter (шире — по hunterSet)
   let skippedBlacklist     = 0;
   let skippedUntradeable   = 0;
   let skippedRuntime       = 0;
@@ -270,6 +312,8 @@ export async function scan() {
     if (!coin || !ctx) continue;
 
     const coinUpper = coin.toUpperCase();
+
+    // ── Safety-фильтры (применяются и к carry/fade, и к Hunter) ──
 
     // Фильтр 1: ручной блэклист из .env (STBL и подобные)
     if (blacklist.has(coinUpper)) {
@@ -290,40 +334,40 @@ export async function scan() {
     }
 
     // Фильтр 3: нет в общем universe → не перп-контракт
-    // Пропускаем если tradeable пустой (первый тик) —
-    // лучше пропустить мусор в Executor, чем забанить всё живое
     if (tradeable.size > 0 && !tradeable.has(coinUpper)) {
       skippedUntradeable++;
       continue;
     }
 
-    // Фильтр 4: liquidity whitelist — только ликвидный ТОП-N по dayNtlVlm.
-    // Если кеш ещё не наполнен (первый тик, пустой Set) — пропускаем
-    // фильтр, чтобы не вернуть нулевой результат при холодном старте.
+    const price = parseFloat(ctx.markPx ?? ctx.midPx ?? 0);
+    if (isNaN(price)) continue;
+
+    // ── Hunter scope: shirоkий volume-floor, отдельная вселенная ──
+    const inHunterSet = hunterSet.size === 0 || hunterSet.has(coinUpper);
+    if (inHunterSet) {
+      hunterResults.push({ coin, price });
+      // Hunter читает priceHistory для детекции спайков — наполняем её
+      // для всего hunter-scope (шире, чем carry/fade видят).
+      pushPriceHistory(coin, price);
+    }
+
+    // ── Carry/Fade scope: тот же price + funding, но только для liquidSet ──
     if (liquidSet.size > 0 && !liquidSet.has(coinUpper)) {
       skippedIlliquid++;
       continue;
     }
 
-    const price       = parseFloat(ctx.markPx  ?? ctx.midPx ?? 0);
-    const fundingRate = parseFloat(ctx.funding  ?? 0);
-
-    if (isNaN(price) || isNaN(fundingRate)) continue;
+    const fundingRate = parseFloat(ctx.funding ?? 0);
+    if (isNaN(fundingRate)) continue;
 
     const rawApy = fundingRate * 24 * 365 * 100;
-
     const { fast, slow } = updateEma(coin, rawApy);
-
     if (fast <= 0) continue;
 
     const predictedRate = predictedFundings.get(coin);
     const predictedApy  = predictedRate != null ? predictedRate * 24 * 365 * 100 : null;
 
     results.push({ coin, price, fundingRate, rawApy, smoothedApy: fast, slowApy: slow, predictedApy });
-
-    // Hunter: накапливаем историю цен для детекции спайков (≥5%/2мин).
-    // Auto-prune до 10мин окна внутри модуля. Для carry/fade безвредно.
-    pushPriceHistory(coin, price);
   }
 
   if (skippedBlacklist > 0 || skippedUntradeable > 0 || skippedRuntime > 0 || skippedOiCap > 0 || skippedIlliquid > 0) {
@@ -347,5 +391,5 @@ export async function scan() {
     logger.debug(topLine);
   }
 
-  return results;
+  return { scoutData: results, hunterData: hunterResults };
 }

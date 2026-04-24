@@ -11,7 +11,8 @@
 // Iter A.1: только analyzeHunter (чистая функция). В coordinator НЕ подключён.
 // Наполнение priceHistory — в Iter A.3 через scout.js.
 
-import { getPriceNMinAgo } from '../core/priceHistory.js';
+import { logger } from '../core/logger.js';
+import { getPriceNMinAgo, getBufferLength } from '../core/priceHistory.js';
 
 // ── Конфигурация Iter A (захардкожена; в env переедет при необходимости) ──
 export const HUNTER_SPIKE_PCT        = 5.0;           // pump ≥ 5%
@@ -19,14 +20,17 @@ export const HUNTER_SPIKE_WINDOW_MIN = 2;             // окно 2 мин
 export const HUNTER_SL_PCT           = 2.0;           // SL +2% от entry (для short = stop вверх)
 export const HUNTER_TP_PCT           = 3.0;           // TP -3% от entry (для short = profit вниз)
 export const HUNTER_COOLDOWN_MS      = 2 * 60_000;    // 2 мин re-detect cooldown per coin
+export const HUNTER_HEARTBEAT_MS     = 5 * 60_000;    // heartbeat в лог раз в 5 мин
 
 // Per-coin cooldown state. Модульный — в A.3 переедет в executor/state.js,
 // чтобы переживать рестарт/сохранение в bot_state.json (если понадобится).
 const hunterCooldownMap = new Map();  // coin → last-signal timestamp
+let lastHeartbeatAt = 0;
 
-/** Тестовый helper — сброс cooldown'ов. */
+/** Тестовый helper — сброс cooldown'ов + heartbeat timer. */
 export function resetHunterCooldowns() {
   hunterCooldownMap.clear();
+  lastHeartbeatAt = 0;
 }
 
 /**
@@ -53,16 +57,21 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
     return checkHunterExit(activePosition, scoutData);
   }
 
-  // ── Вход невозможен если slot занят другой стратегией (Iter A без эвикшена) ──
-  if (activePosition) return { action: 'HOLD' };
-
-  // ── Детекция спайка: выбираем максимум среди qualifying ──
+  // ── Детекция спайка: проходим весь список, считаем best-кандидата ──
+  // Делаем это даже если slot занят чужой стратегией — нужно для heartbeat'а
+  // (видимость "насколько близки к сигналу" при занятом слоте).
   let best = null;  // { coin, price, past, pct }
-  for (const item of scoutData ?? []) {
+  let bestUnqualified = null;  // лучший по pct даже если ниже порога / в cooldown — для heartbeat
+  const data = scoutData ?? [];
+  for (const item of data) {
     const past = getPriceNMinAgo(item.coin, HUNTER_SPIKE_WINDOW_MIN, now);
     if (past === null) continue;  // недостаточно истории
 
     const pct = ((item.price - past) / past) * 100;
+    if (!bestUnqualified || pct > bestUnqualified.pct) {
+      bestUnqualified = { coin: item.coin, pct };
+    }
+
     if (pct < HUNTER_SPIKE_PCT) continue;  // pump слабый или dump (short-only → игнор)
 
     const lastFired = hunterCooldownMap.get(item.coin) ?? 0;
@@ -72,6 +81,15 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
       best = { coin: item.coin, price: item.price, past, pct };
     }
   }
+
+  // ── Heartbeat: раз в 5 мин показываем что Hunter жив + ближайший к порогу ──
+  if (now - lastHeartbeatAt >= HUNTER_HEARTBEAT_MS) {
+    emitHeartbeat(data, activePosition, bestUnqualified, now);
+    lastHeartbeatAt = now;
+  }
+
+  // ── Вход невозможен если slot занят другой стратегией (Iter A без эвикшена) ──
+  if (activePosition) return { action: 'HOLD' };
 
   if (!best) return { action: 'HOLD' };
 
@@ -90,6 +108,40 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
     sl, tp,
     spikePct:    best.pct,
   };
+}
+
+/**
+ * Heartbeat-лог: подтверждение что Hunter жив + ближайший к порогу кандидат.
+ * Показывает сколько монет в отслеживании, slot-status, и best spike (даже если в cooldown / ниже порога).
+ */
+function emitHeartbeat(data, activePosition, bestUnqualified, now) {
+  const tracked = data.length;
+  // Сколько монет накопили 2-мин историю (реально "видимы" для детектора)
+  let withHistory = 0;
+  for (const item of data) {
+    if (getPriceNMinAgo(item.coin, HUNTER_SPIKE_WINDOW_MIN, now) !== null) withHistory++;
+  }
+
+  let slotStatus;
+  if (!activePosition) slotStatus = 'IDLE';
+  else slotStatus = `occupied by ${activePosition.strategy_id || 'carry'} #${activePosition.coin}`;
+
+  const cooldownActive = hunterCooldownMap.size;
+
+  let bestLine;
+  if (bestUnqualified) {
+    const sign = bestUnqualified.pct >= 0 ? '+' : '';
+    bestLine = `best: ${sign}${bestUnqualified.pct.toFixed(2)}% on #${bestUnqualified.coin} (need ≥${HUNTER_SPIKE_PCT}%)`;
+  } else if (tracked === 0) {
+    bestLine = 'no hunter-scope coins';
+  } else {
+    bestLine = `no 2min-history yet (${withHistory}/${tracked} ready)`;
+  }
+
+  logger.info(
+    `[Hunter] 💓 tracked=${tracked} (${withHistory} w/history) | ${bestLine} | ` +
+      `slot=${slotStatus} | cooldowns=${cooldownActive}`,
+  );
 }
 
 /**

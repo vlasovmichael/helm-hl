@@ -16,17 +16,18 @@ import { analyzeHunter } from './strategistSniper.js';
  *
  * Iter A: без эвикшена. Если slot занят carry/fade — Hunter ждёт. Эвикшен в Iter B.
  *
- * @param {Array} scoutData
+ * @param {Array} scoutData — carry/fade scope (узкая ликвидная вселенная)
  * @param {Object|undefined} activePosition
+ * @param {Array} [hunterData] — Hunter scope (шире, low-liq monеты тоже). Default: scoutData.
  * @returns {{ action: string, strategy_id?: string, [key: string]: any }}
  */
-export function coordinate(scoutData, activePosition) {
+export function coordinate(scoutData, activePosition, hunterData = scoutData) {
   if (activePosition) {
     const sid = activePosition.strategy_id || 'carry';
 
     if (sid === 'hunter') {
       // Hunter exit через SL/TP — analyzeHunter умеет оба пути (entry + exit).
-      return analyzeHunter(scoutData, activePosition);
+      return analyzeHunter(hunterData, activePosition);
     }
 
     if (sid === 'fade') {
@@ -43,7 +44,7 @@ export function coordinate(scoutData, activePosition) {
   // No position — query strategies in priority order.
   // Hunter первый: "прибыль Снайпера — приоритет №1" (hunter_plan.md).
   if (config.trading.hunterEnabled) {
-    const hunterSignal = analyzeHunter(scoutData, undefined);
+    const hunterSignal = analyzeHunter(hunterData, undefined);
     if (hunterSignal.action !== 'HOLD') {
       logger.debug(`[Coordinator] hunter → ${hunterSignal.action} ${hunterSignal.coin}`);
       return hunterSignal;

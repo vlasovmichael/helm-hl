@@ -24,9 +24,9 @@ export async function tick() {
       return;
     }
 
-    const scoutData = await scan();
+    const { scoutData, hunterData } = await scan();
 
-    if (scoutData.length === 0) {
+    if (scoutData.length === 0 && hunterData.length === 0) {
       logger.info('[Tick] Scout returned empty data — skipping');
       return;
     }
@@ -45,7 +45,7 @@ export async function tick() {
       state.lastIdleAt = 0;
     }
 
-    const signal = coordinate(scoutData, activePosition);
+    const signal = coordinate(scoutData, activePosition, hunterData);
 
     if (signal.action !== 'HOLD') {
       await execute(signal, activePosition);

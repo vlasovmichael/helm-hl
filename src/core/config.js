@@ -90,6 +90,10 @@ function loadConfig() {
   // ── Sniper-Hunter strategy (Volatility Spike Mean-Reversion) ──
   // Default false: включить вручную через HUNTER_ENABLED=true, когда будем готовы тестировать в PAPER.
   const hunterEnabled = (process.env.HUNTER_ENABLED || 'false').toLowerCase() === 'true';
+  // Hunter хантит на более широкой вселенной, чем carry/fade (им нужна высокая ликвидность для
+  // минимального slippage, Hunter'у — вариативность). Default $1M — захватывает 30–50 монет на HL
+  // вместо ~12. PAPER-безопасно; для PROD (Iter C) потребуется size-cap и осторожность.
+  const hunterMinVolume = parseFloat(process.env.HUNTER_MIN_VOLUME || '1000000');
 
   const maxDrawdownPct = parseFloat(process.env.MAX_DRAWDOWN_PCT || '10');
   const cbMaxLosses    = parseInt(process.env.CB_MAX_LOSSES      || '3', 10);
@@ -156,6 +160,7 @@ function loadConfig() {
       fadeMinCurrentApy,
       fadeMinDropPct,
       hunterEnabled,
+      hunterMinVolume,
     },
 
     risk: {
