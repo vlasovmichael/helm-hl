@@ -9,13 +9,19 @@ import {
   closePosition as dbClosePosition,
 } from '../../core/database.js';
 import { getAvailableBalance } from '../wallet.js';
-import { calcSize, calcPaperClose, ONE_LEG, MIN_ORDER_USD } from './math.js';
+import {
+  calcSize, calcPaperClose,
+  ONE_LEG, MIN_ORDER_USD, HUNTER_BALANCE_UTILIZATION,
+} from './math.js';
 import {
   setCooldown, REENTRY_COOLDOWN_MS,
   recordLoss, CB_PAUSE_MS,
 } from './state.js';
 import { notify } from './hooks.js';
-import { notifyPaperOpen, notifyPaperClose, notifyCircuitBreaker } from './notifications.js';
+import {
+  notifyPaperOpen, notifyPaperClose, notifyCircuitBreaker,
+  notifyHunterOpen, notifyHunterSL, notifyHunterTP,
+} from './notifications.js';
 
 /**
  * Определяет баланс для расчёта размера позиции.
@@ -88,6 +94,72 @@ export async function paperOpen(coin, price, apy, silent = false, strategyId = '
 }
 
 /**
+ * Открывает виртуальную позицию для Sniper-Hunter (Strategy #3).
+ *
+ * Отличия от paperOpen:
+ *  - Размер = 50% баланса (HUNTER_BALANCE_UTILIZATION), не 95%.
+ *  - Записывает sl_price / tp_price в БД (триггеры симулируются в strategistSniper.analyzeHunter).
+ *  - strategy_id = 'hunter', entry_apy = 0 (Hunter не получает funding).
+ *  - Направление в Iter A — всегда SHORT (short-after-pump).
+ *
+ * Telegram-нотификация появится в Iter A.4.
+ *
+ * @param {string} coin
+ * @param {number} price — цена входа
+ * @param {number} spikePct — величина пампа на входе (для лога/аналитики)
+ * @param {number} sl — stop-loss price (для SHORT: > price)
+ * @param {number} tp — take-profit price (для SHORT: < price)
+ * @param {boolean} [silent=false]
+ * @returns {Promise<{ ok: boolean, positionId?: number, sizeUsd?: number }>}
+ */
+export async function hunterPaperOpen(coin, price, spikePct, sl, tp, silent = false) {
+  const balance = await getPaperBalance();
+
+  if (balance <= 0) {
+    logger.warn(`[Executor] [HUNTER] Cannot open — balance is $${balance.toFixed(2)}`);
+    return { ok: false };
+  }
+
+  const { sizeUsd, tooSmall } = calcSize(balance, price, 0, HUNTER_BALANCE_UTILIZATION);
+
+  if (tooSmall) {
+    logger.warn(
+      `[Executor] [HUNTER SKIP] #${coin} — size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min (50% баланса $${balance.toFixed(2)})`,
+    );
+    return { ok: false };
+  }
+
+  const fee = sizeUsd * ONE_LEG;
+
+  const id = savePosition({
+    coin,
+    size_usd:    sizeUsd,
+    entry_price: price,
+    entry_apy:   0,                // Hunter не funding-based
+    entry_time:  Date.now(),
+    mode:        "PAPER",
+    strategy_id: 'hunter',
+    sl_price:    sl,
+    tp_price:    tp,
+  });
+
+  logger.info(
+    `[Executor] 🎯 HUNTER OPEN SHORT #${coin} | $${sizeUsd.toFixed(2)} (of $${balance.toFixed(2)}) @ $${price} ` +
+      `| spike +${spikePct.toFixed(2)}% | SL $${sl.toFixed(4)} / TP $${tp.toFixed(4)} | fee $${fee.toFixed(4)} | id: ${id}`,
+  );
+
+  if (!silent) {
+    await notifyHunterOpen({ coin, sizeUsd, balance, price, spikePct, sl, tp, fee });
+  }
+
+  notify('afterOpen', {
+    coin, price, sizeUsd, positionId: Number(id), mode: 'PAPER', strategy: 'hunter',
+  });
+
+  return { ok: true, positionId: Number(id), sizeUsd };
+}
+
+/**
  * Закрывает виртуальную позицию.
  *
  * Paper PnL = fundingPnl − fees (без pricePnl, т.к. нет реального fill).
@@ -110,9 +182,18 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
   const closePrice = opts.closePrice ?? signal.price;
   const exitFeeRate = opts.exitFeeRate ?? ONE_LEG;
 
-  const { fundingPnl, totalFee, realizedPnl } = calcPaperClose(
+  const { fundingPnl, totalFee, realizedPnl: baseRealized } = calcPaperClose(
     position, holdHours, exitFeeRate,
   );
+
+  // Для hunter-позиций закрытие идёт по SL/TP уровню — это реальная цена fill'а,
+  // значит pricePnl имеет смысл (в отличие от carry/fade, где close_price условен).
+  // Iter A: Hunter всегда SHORT → pricePnl = (entry − close)/entry × size.
+  let pricePnl = 0;
+  if (position.strategy_id === 'hunter') {
+    pricePnl = (position.size_usd * (position.entry_price - closePrice)) / position.entry_price;
+  }
+  const realizedPnl = baseRealized + pricePnl;
 
   dbClosePosition(position.id, {
     close_price:  closePrice,
@@ -134,11 +215,32 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
   );
 
   if (!silent) {
-    await notifyPaperClose({
-      coin: position.coin, holdHours,
-      reason: signal.reason,
-      pnl: realizedPnl, fee: totalFee,
-    });
+    // Hunter-закрытие по SL/TP имеет собственный формат с entry→level + hold в минутах.
+    if (position.strategy_id === 'hunter' && signal.reason === 'hunter_sl') {
+      await notifyHunterSL({
+        coin:        position.coin,
+        entryPrice:  position.entry_price,
+        slPrice:     closePrice,
+        pnl:         realizedPnl,
+        fee:         totalFee,
+        holdMinutes: Math.round(holdHours * 60),
+      });
+    } else if (position.strategy_id === 'hunter' && signal.reason === 'hunter_tp') {
+      await notifyHunterTP({
+        coin:        position.coin,
+        entryPrice:  position.entry_price,
+        tpPrice:     closePrice,
+        pnl:         realizedPnl,
+        fee:         totalFee,
+        holdMinutes: Math.round(holdHours * 60),
+      });
+    } else {
+      await notifyPaperClose({
+        coin: position.coin, holdHours,
+        reason: signal.reason,
+        pnl: realizedPnl, fee: totalFee,
+      });
+    }
   }
 
   // Circuit breaker: фиксируем убыток

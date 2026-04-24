@@ -52,6 +52,16 @@ export function initDB() {
     logger.info('[DB] Migration: added strategy_id to history');
   }
 
+  // Migration: sl_price / tp_price для hunter-позиций (nullable — carry/fade их не имеют)
+  if (!posColumns.find(c => c.name === 'sl_price')) {
+    db.exec('ALTER TABLE positions ADD COLUMN sl_price REAL');
+    logger.info('[DB] Migration: added sl_price to positions');
+  }
+  if (!posColumns.find(c => c.name === 'tp_price')) {
+    db.exec('ALTER TABLE positions ADD COLUMN tp_price REAL');
+    logger.info('[DB] Migration: added tp_price to positions');
+  }
+
   logger.info(`[DB] Initialized at ${DB_PATH}`);
   return db;
 }
@@ -63,13 +73,18 @@ function getDb() {
 
 /**
  * Сохраняет новую открытую позицию и возвращает её id.
- * @param {{ coin, size_usd, entry_price, entry_apy, entry_time, mode, strategy_id? }} data
+ * @param {{ coin, size_usd, entry_price, entry_apy, entry_time, mode, strategy_id?, sl_price?, tp_price? }} data
  */
 export function savePosition(data) {
-  const row = { strategy_id: 'carry', ...data };
+  const row = {
+    strategy_id: 'carry',
+    sl_price:    null,
+    tp_price:    null,
+    ...data,
+  };
   const stmt = getDb().prepare(`
-    INSERT INTO positions (coin, size_usd, entry_price, entry_apy, entry_time, mode, strategy_id)
-    VALUES (@coin, @size_usd, @entry_price, @entry_apy, @entry_time, @mode, @strategy_id)
+    INSERT INTO positions (coin, size_usd, entry_price, entry_apy, entry_time, mode, strategy_id, sl_price, tp_price)
+    VALUES (@coin, @size_usd, @entry_price, @entry_apy, @entry_time, @mode, @strategy_id, @sl_price, @tp_price)
   `);
   const result = stmt.run(row);
   return result.lastInsertRowid;

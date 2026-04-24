@@ -3,6 +3,7 @@ import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { setUniverse, getTradeableSet } from '../core/universe.js';
 import { getRuntimeBlacklist, getOiCapBans } from './executor/index.js';
+import { push as pushPriceHistory } from '../core/priceHistory.js';
 
 const HL_API   = 'https://api.hyperliquid.xyz/info';
 const RTT_LIMIT_MS = 10_000; // отклоняем ответы медленнее 10 с
@@ -319,6 +320,10 @@ export async function scan() {
     const predictedApy  = predictedRate != null ? predictedRate * 24 * 365 * 100 : null;
 
     results.push({ coin, price, fundingRate, rawApy, smoothedApy: fast, slowApy: slow, predictedApy });
+
+    // Hunter: накапливаем историю цен для детекции спайков (≥5%/2мин).
+    // Auto-prune до 10мин окна внутри модуля. Для carry/fade безвредно.
+    pushPriceHistory(coin, price);
   }
 
   if (skippedBlacklist > 0 || skippedUntradeable > 0 || skippedRuntime > 0 || skippedOiCap > 0 || skippedIlliquid > 0) {

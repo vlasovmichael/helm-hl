@@ -9,7 +9,7 @@ import { state as appState } from '../../app/state.js';
 import { getAccountSummary } from '../exchange.js';
 import { getAccountEquity } from '../wallet.js';
 import { checkVolatility } from '../volatility.js';
-import { paperOpen, paperClose } from './paper.js';
+import { paperOpen, paperClose, hunterPaperOpen } from './paper.js';
 import { productionOpen, productionClose, productionRotate } from './production.js';
 import {
   notifyRotate, notifyRotateFailed,
@@ -149,13 +149,34 @@ async function preflightChecks(coin, smoothedApy = null) {
 // ── Роутинг paper ↔ production ─────────────────
 
 async function handleOpen(signal) {
+  const strategyId = signal.strategy_id || 'carry';
+
+  // Hunter route: отдельный путь, свой размер, SL/TP в БД.
+  if (strategyId === 'hunter') {
+    // Volatility-filter отключаем (Hunter сам ловит волатильность). Остальные гарды применяются.
+    const pre = await preflightChecks(signal.coin, null);
+    if (!pre.allowed) {
+      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
+      return { ok: false };
+    }
+    if (config.isProduction) {
+      // Iter C TODO: реальные trigger-ордера SL/TP на бирже. Пока — защитный noop.
+      logger.warn(
+        `[Executor] Hunter PROD-путь не реализован (Iter C pending). Сигнал #${signal.coin} пропущен.`,
+      );
+      return { ok: false };
+    }
+    return hunterPaperOpen(
+      signal.coin, signal.price, signal.spikePct, signal.sl, signal.tp, false,
+    );
+  }
+
   const pre = await preflightChecks(signal.coin, signal.apy);
   if (!pre.allowed) {
     await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
     return { ok: false };
   }
 
-  const strategyId = signal.strategy_id || 'carry';
   if (config.isProduction) {
     return productionOpen(signal.coin, signal.price, signal.apy, false, strategyId);
   }

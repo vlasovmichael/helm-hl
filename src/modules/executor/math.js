@@ -8,7 +8,8 @@ export const FEE_RATE            = 0.0002;   // 0.02% taker
 export const MAKER_FEE_RATE      = 0.00003;  // 0.003% maker (HL baseline tier, 0.3 bps)
 export const SLIPPAGE            = 0.0001;   // 0.01%
 export const ONE_LEG             = FEE_RATE + SLIPPAGE;  // 0.03% за одну сторону
-export const BALANCE_UTILIZATION = 0.95;     // 95% от баланса
+export const BALANCE_UTILIZATION = 0.95;     // 95% от баланса (carry/fade)
+export const HUNTER_BALANCE_UTILIZATION = 0.50;  // 50% от баланса (Sniper-Hunter — агрессивнее, подушка нужна)
 export const MIN_ORDER_USD       = 11;       // Hyperliquid min ~$10, с запасом
 export const MARKET_SLIPPAGE     = 0.03;     // 3% потолок IoC
 export const SLIPPAGE_WARN_PCT   = 0.5;      // предупреждение
@@ -46,10 +47,12 @@ export function roundDown(value, decimals) {
  * @param {number} balance  — свободный баланс
  * @param {number} price    — текущая цена
  * @param {number} szDecimals — кол-во десятичных знаков для округления
+ * @param {number} [utilization=BALANCE_UTILIZATION] — доля баланса к использованию
+ *   (0.95 для carry/fade, 0.50 для hunter).
  * @returns {{ sizeUsd: number, sz: number, tooSmall: boolean }}
  */
-export function calcSize(balance, price, szDecimals) {
-  const sizeUsd = balance * BALANCE_UTILIZATION;
+export function calcSize(balance, price, szDecimals, utilization = BALANCE_UTILIZATION) {
+  const sizeUsd = balance * utilization;
   if (sizeUsd < MIN_ORDER_USD) {
     return { sizeUsd, sz: 0, tooSmall: true };
   }

@@ -87,6 +87,10 @@ function loadConfig() {
   const fadeMinDropPct     = parseFloat(process.env.FADE_MIN_DROP_PCT    || '40') / 100;
   const fadeEnabled        = (process.env.FADE_ENABLED || 'true').toLowerCase() === 'true';
 
+  // ── Sniper-Hunter strategy (Volatility Spike Mean-Reversion) ──
+  // Default false: включить вручную через HUNTER_ENABLED=true, когда будем готовы тестировать в PAPER.
+  const hunterEnabled = (process.env.HUNTER_ENABLED || 'false').toLowerCase() === 'true';
+
   const maxDrawdownPct = parseFloat(process.env.MAX_DRAWDOWN_PCT || '10');
   const cbMaxLosses    = parseInt(process.env.CB_MAX_LOSSES      || '3', 10);
   const cbPauseHours   = parseFloat(process.env.CB_PAUSE_HOURS   || '2');
@@ -151,6 +155,7 @@ function loadConfig() {
       fadeMaxHoldMinutes,
       fadeMinCurrentApy,
       fadeMinDropPct,
+      hunterEnabled,
     },
 
     risk: {

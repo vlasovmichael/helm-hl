@@ -137,6 +137,47 @@ export async function notifySniperTimeout({ coin, armPrice, fallbackPrice, reaso
   );
 }
 
+// ── SNIPER-HUNTER (Strategy #3: Volatility Spike Mean-Reversion) ──
+
+export async function notifyHunterOpen({ coin, sizeUsd, balance, price, spikePct, sl, tp, fee }) {
+  await sendMessage(
+    `🎯 <b>[HUNTER OPEN SHORT] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `💥 Спайк: <b>+${spikePct.toFixed(2)}%</b> за 2мин\n` +
+      `💰 Размер: <b>$${sizeUsd.toFixed(2)}</b> (50% от $${balance.toFixed(2)})\n` +
+      `💵 Entry: <b>$${price}</b>\n` +
+      `🛑 SL: $${sl.toFixed(6)} <i>(+2%)</i>\n` +
+      `🎯 TP: $${tp.toFixed(6)} <i>(-3%)</i>\n` +
+      `🏷 Entry fee: $${fee.toFixed(4)}`
+  );
+}
+
+export async function notifyHunterSL({ coin, entryPrice, slPrice, pnl, fee, holdMinutes }) {
+  const sign = pnl >= 0 ? "+" : "";
+  await sendMessage(
+    `🎯🛑 <b>[HUNTER SL] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `💵 Entry: $${entryPrice} → SL: $${slPrice.toFixed(6)}\n` +
+      `⏳ Hold: <b>${holdMinutes}мин</b>\n` +
+      `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
+      `🏷 Fees: $${fee.toFixed(4)}\n` +
+      `<i>Цена пошла против шорта — режем убыток.</i>`
+  );
+}
+
+export async function notifyHunterTP({ coin, entryPrice, tpPrice, pnl, fee, holdMinutes }) {
+  const sign = pnl >= 0 ? "+" : "";
+  await sendMessage(
+    `🎯✅ <b>[HUNTER TP] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `💵 Entry: $${entryPrice} → TP: $${tpPrice.toFixed(6)}\n` +
+      `⏳ Hold: <b>${holdMinutes}мин</b>\n` +
+      `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
+      `🏷 Fees: $${fee.toFixed(4)}\n` +
+      `<i>Mean-reversion отработал. Охотник доволен.</i>`
+  );
+}
+
 // ── ROTATE ─────────────────────────────────────
 
 export async function notifyRotate({ closeCoin, openCoin, holdHours, closePnl, openSizeUsd, openApy, paybackHours, isProd }) {
