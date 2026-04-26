@@ -18,10 +18,11 @@ export const SLIPPAGE_BAN_PCT    = 1.5;      // бан
 // ── Sniper Mode (maker-only exits на soft-причинах) ─────
 export const SNIPER_WINDOW_MS    = 15 * 60_000;  // 15 мин окно maker-выхода
 // Soft-причины → идут через Sniper. Emergency (delisted, price_spike_protection,
-// negative_funding) и ROTATE (better_apy) остаются market, чтобы не терять скорость.
+// negative_funding в минус) и ROTATE (better_apy) остаются market, чтобы не терять скорость.
 export const SNIPER_SOFT_REASONS = new Set([
-  'apy_below_threshold',   // grandfather carry exit
-  'fade_time_stop',        // fade 120min time-stop
+  'apy_below_threshold',         // grandfather carry exit
+  'fade_time_stop',              // fade 120min time-stop
+  'negative_funding_softexit',   // negative_funding но позиция в плюсе ≥ NEGATIVE_FUNDING_SOFT_EXIT_MIN_PNL_PCT
 ]);
 
 // ── Reconciliation ─────────────────────────────

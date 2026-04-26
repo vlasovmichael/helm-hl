@@ -11,6 +11,10 @@ const {
   minEntryApyFloor: MIN_ENTRY_APY_FLOOR,
   predictedDropThreshold: PREDICTED_DROP_THRESHOLD,
   fundingGateMinutes: FUNDING_GATE_MINUTES,
+  carryTrailEnabled: CARRY_TRAIL_ENABLED,
+  carryTrailArmPct: CARRY_TRAIL_ARM_PCT,
+  carryTrailGiveBackPct: CARRY_TRAIL_GIVE_BACK_PCT,
+  negativeFundingSoftExitMinPnlPct: NEG_FUND_SOFT_MIN_PNL_PCT,
 } = config.trading;
 
 /**
@@ -39,6 +43,11 @@ let disappearedStreak = 0;
 
 // Cooldown после delisted: { coin, until (timestamp) }
 let delistCooldown = { coin: null, until: 0 };
+
+// Trailing TP: пик unrealized PnL% по каждой монете. Активируется только
+// когда unrealized ≥ ARM_PCT — защита от шума (мелкие колебания не должны
+// арм-ить trailing). При закрытии позиции / возврате в Сценарий А — clear.
+const peakUnrealizedPct = new Map();
 
 const {
   minApy,
@@ -108,6 +117,7 @@ export function analyze(scoutData, activePosition) {
     // Сбрасываем счётчики — нет позиции
     negativeFundingStreak = 0;
     disappearedStreak = 0;
+    peakUnrealizedPct.clear();
 
     const best = scoutData[0]; // отсортированы по smoothedApy desc
 
@@ -195,6 +205,7 @@ export function analyze(scoutData, activePosition) {
     if (disappearedStreak >= DELIST_CONFIRM_TICKS) {
       disappearedStreak = 0;
       delistCooldown = { coin: currentCoin, until: Date.now() + DELIST_COOLDOWN_MINUTES * 60_000 };
+      peakUnrealizedPct.delete(currentCoin);
       logger.warn(
         `[Strategist] CLOSE — ${currentCoin} confirmed delisted (${DELIST_CONFIRM_TICKS} ticks) | ` +
           `cooldown ${DELIST_COOLDOWN_MINUTES}min`,
@@ -221,6 +232,7 @@ export function analyze(scoutData, activePosition) {
   // 2. Цена выросла >10% — защита шорта от убытка
   const priceSpike = ((current.price - activePosition.entry_price) / activePosition.entry_price) * 100;
   if (priceSpike > 10) {
+    peakUnrealizedPct.delete(currentCoin);
     logger.warn(`[Strategist] CLOSE — ${currentCoin} price spiked +${priceSpike.toFixed(2)}% (short at risk)`);
     return {
       action: 'CLOSE',
@@ -230,7 +242,41 @@ export function analyze(scoutData, activePosition) {
     };
   }
 
-  // 3. Фандинг стал отрицательным (мы платим, а не нам)
+  // 3. Trailing TP: фиксируем прибыль когда позиция сдала GIVE_BACK% от пика.
+  //    Carry — short, поэтому unrealized PnL = (entry − current) / entry * 100.
+  //    Идёт ВЫШЕ negative_funding: цель — выйти на просадке от пика, пока funding
+  //    ещё положительный. Игнорирует minHold (это защитный, не soft-выход).
+  if (CARRY_TRAIL_ENABLED) {
+    const unrealizedPct = ((activePosition.entry_price - current.price) / activePosition.entry_price) * 100;
+
+    if (unrealizedPct >= CARRY_TRAIL_ARM_PCT) {
+      const prevPeak = peakUnrealizedPct.get(currentCoin) ?? 0;
+      if (unrealizedPct > prevPeak) {
+        peakUnrealizedPct.set(currentCoin, unrealizedPct);
+      }
+    }
+
+    const peak = peakUnrealizedPct.get(currentCoin) ?? 0;
+    if (peak >= CARRY_TRAIL_ARM_PCT) {
+      const giveBack          = peak - unrealizedPct;
+      const giveBackThreshold = peak * (CARRY_TRAIL_GIVE_BACK_PCT / 100);
+      if (giveBack >= giveBackThreshold) {
+        logger.warn(
+          `[Strategist] CLOSE — ${currentCoin} trailing TP: peak +${peak.toFixed(2)}% → ` +
+            `now +${unrealizedPct.toFixed(2)}% (gave back ${(giveBack / peak * 100).toFixed(0)}% ≥ ${CARRY_TRAIL_GIVE_BACK_PCT}%)`,
+        );
+        peakUnrealizedPct.delete(currentCoin);
+        return {
+          action: 'CLOSE',
+          coin:   currentCoin,
+          price:  current.price,
+          reason: 'trailing_tp',
+        };
+      }
+    }
+  }
+
+  // 4. Фандинг стал отрицательным (мы платим, а не нам)
   //    Гистерезис: закрываем только если negative N тиков подряд.
   //    При 15с тике, 2 тика = 30с — фильтрует мгновенные выбросы.
   if (current.fundingRate < 0) {
@@ -241,15 +287,23 @@ export function analyze(scoutData, activePosition) {
     );
 
     if (negativeFundingStreak >= NEGATIVE_FUNDING_TICKS) {
+      // Soft путь (через snайпера): funding ушёл в минус, но позиция в плюсе ≥ X% —
+      // не теряем время, но экономим maker-комиссию. В минусе → market, чтоб резать.
+      const unrealizedPct = ((activePosition.entry_price - current.price) / activePosition.entry_price) * 100;
+      const useSoftExit   = unrealizedPct >= NEG_FUND_SOFT_MIN_PNL_PCT;
+      const reason        = useSoftExit ? 'negative_funding_softexit' : 'negative_funding';
+
       logger.warn(
-        `[Strategist] CLOSE — ${currentCoin} funding negative ${negativeFundingStreak} ticks in a row`,
+        `[Strategist] CLOSE — ${currentCoin} funding negative ${negativeFundingStreak} ticks ` +
+          `(unrealized ${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(2)}% → ${useSoftExit ? 'soft via sniper' : 'market'})`,
       );
       negativeFundingStreak = 0; // сброс
+      peakUnrealizedPct.delete(currentCoin); // позиция закрывается → пик не нужен
       return {
         action: 'CLOSE',
         coin:   currentCoin,
         price:  current.price,
-        reason: 'negative_funding',
+        reason,
       };
     }
   } else {
@@ -285,6 +339,7 @@ export function analyze(scoutData, activePosition) {
       logger.warn(
         `[Strategist] CLOSE — ${currentCoin} slowApy ${current.slowApy.toFixed(2)}% < effectiveExit ${effectiveExitApy}% (held ${held.toFixed(0)}min)`,
       );
+      peakUnrealizedPct.delete(currentCoin);
       return {
         action: 'CLOSE',
         coin:   currentCoin,
@@ -332,6 +387,7 @@ export function analyze(scoutData, activePosition) {
         logger.info(
           `[Strategist] ROTATE — ${currentCoin} (${current.smoothedApy.toFixed(2)}%) → ${best.coin} (${best.smoothedApy.toFixed(2)}%) | payback: ${hours.toFixed(1)}h`,
         );
+        peakUnrealizedPct.delete(currentCoin);
         return {
           action:       'ROTATE',
           closeCoin:    currentCoin,

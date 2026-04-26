@@ -87,6 +87,21 @@ function loadConfig() {
   const fadeMinDropPct     = parseFloat(process.env.FADE_MIN_DROP_PCT    || '40') / 100;
   const fadeEnabled        = (process.env.FADE_ENABLED || 'true').toLowerCase() === 'true';
 
+  // ── Carry trailing take-profit ──
+  // Защита от сценария «unrealized PnL вырос до +20%, но дед ждёт negative_funding
+  // и закрывается в ноль». Триггерим выход, когда позиция сдала GIVE_BACK% от пика.
+  // ARM_PCT = пока unrealized < этого порога, peak не трекаем (фильтр шума).
+  const carryTrailEnabled     = (process.env.CARRY_TRAIL_ENABLED || 'true').toLowerCase() === 'true';
+  const carryTrailArmPct      = parseFloat(process.env.CARRY_TRAIL_ARM_PCT       || '5');
+  const carryTrailGiveBackPct = parseFloat(process.env.CARRY_TRAIL_GIVE_BACK_PCT || '30');
+
+  if (isNaN(carryTrailArmPct) || carryTrailArmPct <= 0) {
+    throw new Error(`CARRY_TRAIL_ARM_PCT must be positive number. Got: "${process.env.CARRY_TRAIL_ARM_PCT}"`);
+  }
+  if (isNaN(carryTrailGiveBackPct) || carryTrailGiveBackPct <= 0 || carryTrailGiveBackPct >= 100) {
+    throw new Error(`CARRY_TRAIL_GIVE_BACK_PCT must be in (0, 100). Got: "${process.env.CARRY_TRAIL_GIVE_BACK_PCT}"`);
+  }
+
   // ── Sniper-Hunter strategy (Volatility Spike Mean-Reversion) ──
   // Default false: включить вручную через HUNTER_ENABLED=true, когда будем готовы тестировать в PAPER.
   const hunterEnabled = (process.env.HUNTER_ENABLED || 'false').toLowerCase() === 'true';
@@ -94,6 +109,42 @@ function loadConfig() {
   // минимального slippage, Hunter'у — вариативность). Default $1M — захватывает 30–50 монет на HL
   // вместо ~12. PAPER-безопасно; для PROD (Iter C) потребуется size-cap и осторожность.
   const hunterMinVolume = parseFloat(process.env.HUNTER_MIN_VOLUME || '1000000');
+
+  // Anti-trend filter: не шортим если цена N мин назад была ниже current на ≥M%
+  // (значит за N мин уже был устойчивый рост — это тренд, не reversion-кандидат).
+  const hunterTrendLookbackMin = parseFloat(process.env.HUNTER_TREND_LOOKBACK_MIN || '15');
+  const hunterTrendMaxRisePct  = parseFloat(process.env.HUNTER_TREND_MAX_RISE_PCT || '8');
+  // Post-SL cooldown: после SL Hunter блокирует эту монету на N минут.
+  // Защита от паттерна APE 17:27→17:56→18:23 — повторные входы по более высокой цене.
+  const hunterPostSlCooldownMin = parseFloat(process.env.HUNTER_POST_SL_COOLDOWN_MIN || '30');
+  // Time-stop: позиция Hunter не должна висеть вечно. Mean-reversion обычно отрабатывает
+  // за минуты-десятки. Если за HUNTER_TIME_STOP_MIN ни SL ни TP — закрываем по market.
+  const hunterTimeStopMin = parseFloat(process.env.HUNTER_TIME_STOP_MIN || '60');
+
+  if (isNaN(hunterTrendLookbackMin) || hunterTrendLookbackMin <= 0 || hunterTrendLookbackMin > 20) {
+    throw new Error(`HUNTER_TREND_LOOKBACK_MIN must be in (0, 20]. Got: "${process.env.HUNTER_TREND_LOOKBACK_MIN}"`);
+  }
+  if (isNaN(hunterTrendMaxRisePct) || hunterTrendMaxRisePct <= 0) {
+    throw new Error(`HUNTER_TREND_MAX_RISE_PCT must be positive. Got: "${process.env.HUNTER_TREND_MAX_RISE_PCT}"`);
+  }
+  if (isNaN(hunterPostSlCooldownMin) || hunterPostSlCooldownMin <= 0) {
+    throw new Error(`HUNTER_POST_SL_COOLDOWN_MIN must be positive. Got: "${process.env.HUNTER_POST_SL_COOLDOWN_MIN}"`);
+  }
+  if (isNaN(hunterTimeStopMin) || hunterTimeStopMin <= 0) {
+    throw new Error(`HUNTER_TIME_STOP_MIN must be positive. Got: "${process.env.HUNTER_TIME_STOP_MIN}"`);
+  }
+
+  // ── Carry: soft-sniper exit on negative_funding when in profit ──
+  // Если funding ушёл в минус, но позиция в плюсе ≥X% — закрываем через snайпера
+  // (maker, экономия 0.02% комиссии). Иначе — market (чтоб не терять время).
+  const negativeFundingSoftExitMinPnlPct = parseFloat(
+    process.env.NEGATIVE_FUNDING_SOFT_EXIT_MIN_PNL_PCT || '2',
+  );
+  if (isNaN(negativeFundingSoftExitMinPnlPct) || negativeFundingSoftExitMinPnlPct < 0) {
+    throw new Error(
+      `NEGATIVE_FUNDING_SOFT_EXIT_MIN_PNL_PCT must be ≥ 0. Got: "${process.env.NEGATIVE_FUNDING_SOFT_EXIT_MIN_PNL_PCT}"`,
+    );
+  }
 
   const maxDrawdownPct = parseFloat(process.env.MAX_DRAWDOWN_PCT || '10');
   const cbMaxLosses    = parseInt(process.env.CB_MAX_LOSSES      || '3', 10);
@@ -161,6 +212,14 @@ function loadConfig() {
       fadeMinDropPct,
       hunterEnabled,
       hunterMinVolume,
+      hunterTrendLookbackMin,
+      hunterTrendMaxRisePct,
+      hunterPostSlCooldownMin,
+      hunterTimeStopMin,
+      carryTrailEnabled,
+      carryTrailArmPct,
+      carryTrailGiveBackPct,
+      negativeFundingSoftExitMinPnlPct,
     },
 
     risk: {

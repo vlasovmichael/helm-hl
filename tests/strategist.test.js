@@ -429,3 +429,174 @@ test('Rotation: блокируется funding-gate', () => {
     restore();
   }
 });
+
+// ═══════════════════════════════════════════════
+//  Trailing TP (carry)
+//  Defaults: ARM=5%, GIVE_BACK=30%
+//  Шорт — unrealized = (entry − current)/entry * 100.
+// ═══════════════════════════════════════════════
+
+test('Trailing: peak < ARM → не активируется', () => {
+  resetState();
+  const pos = makePosition('CHIP', 40, { entry_price: 100 });
+  // unrealized +3% (price 97, entry 100) — ниже ARM=5%
+  const r = analyze(
+    [makeScoutItem('CHIP', 40, { price: 97, slowApy: 40 })],
+    pos,
+  );
+  assert.equal(r.action, 'HOLD');
+});
+
+test('Trailing: peak ≥ ARM, give-back < threshold → HOLD', () => {
+  resetState();
+  const pos = makePosition('CHIP', 40, { entry_price: 100 });
+  // Тик 1: +10% (price 90) → peak=10%
+  analyze([makeScoutItem('CHIP', 40, { price: 90, slowApy: 40 })], pos);
+  // Тик 2: +8% (price 92) → gave back 2/10 = 20% < 30%
+  const r = analyze(
+    [makeScoutItem('CHIP', 40, { price: 92, slowApy: 40 })],
+    pos,
+  );
+  assert.equal(r.action, 'HOLD');
+});
+
+test('Trailing: give-back ≥ 30% от пика → CLOSE trailing_tp', () => {
+  resetState();
+  const pos = makePosition('CHIP', 40, { entry_price: 100 });
+  // Тик 1: peak +20% (price 80)
+  analyze([makeScoutItem('CHIP', 40, { price: 80, slowApy: 40 })], pos);
+  // Тик 2: +13% (price 87) → gave back 7/20 = 35% ≥ 30%
+  const r = analyze(
+    [makeScoutItem('CHIP', 40, { price: 87, slowApy: 40 })],
+    pos,
+  );
+  assert.equal(r.action, 'CLOSE');
+  assert.equal(r.reason, 'trailing_tp');
+  assert.equal(r.coin, 'CHIP');
+});
+
+test('Trailing: воспроизводит инцидент CHIP — peak +20.7% → exit при +14.5%', () => {
+  // Реальный сценарий из temp/2.txt: бот сидел при пике +20.7%, закрылся на +0.1%.
+  // С трейлингом должен был выйти примерно на +14.5%.
+  resetState();
+  const pos = makePosition('CHIP', 40, { entry_price: 0.086557 });
+  // Peak 26.04 07:07: mark $0.067723 → unrealized +21.76%
+  analyze([makeScoutItem('CHIP', 40, { price: 0.067723, slowApy: 40 })], pos);
+  // Откат к +14.5% (mark ~$0.074002): gave back 33% → должен сработать.
+  const r = analyze(
+    [makeScoutItem('CHIP', 40, { price: 0.074002, slowApy: 40 })],
+    pos,
+  );
+  assert.equal(r.action, 'CLOSE');
+  assert.equal(r.reason, 'trailing_tp');
+});
+
+test('Trailing: peak persists across ticks (не падает с ценой)', () => {
+  resetState();
+  const pos = makePosition('CHIP', 40, { entry_price: 100 });
+  // Tick 1: peak +10% (price 90)
+  analyze([makeScoutItem('CHIP', 40, { price: 90, slowApy: 40 })], pos);
+  // Tick 2: +8% (price 92) — gave back 2/10=20% < 30% → HOLD. Peak остаётся 10%.
+  const r2 = analyze(
+    [makeScoutItem('CHIP', 40, { price: 92, slowApy: 40 })],
+    pos,
+  );
+  assert.equal(r2.action, 'HOLD');
+  // Tick 3: +3% (price 97) — gave back 7/10=70% ≥ 30% → CLOSE
+  // (peak от tick 1 пережил tick 2, иначе пик «забылся» бы и trailing не сработал)
+  const r3 = analyze(
+    [makeScoutItem('CHIP', 40, { price: 97, slowApy: 40 })],
+    pos,
+  );
+  assert.equal(r3.action, 'CLOSE');
+  assert.equal(r3.reason, 'trailing_tp');
+});
+
+test('Trailing: state очищается при переходе к новой позиции', () => {
+  resetState();
+  // Старая позиция с пиком
+  const oldPos = makePosition('CHIP', 40, { entry_price: 100 });
+  analyze([makeScoutItem('CHIP', 40, { price: 80, slowApy: 40 })], oldPos);
+  // Возврат в Сценарий А → должен очистить peakUnrealizedPct
+  resetState();
+  // Новая позиция CHIP с тем же entry_price, но без истории пика
+  const newPos = makePosition('CHIP', 40, { entry_price: 100 });
+  // При +6% (peak только что зарегистрировался) trailing не должен срабатывать
+  const r = analyze(
+    [makeScoutItem('CHIP', 40, { price: 94, slowApy: 40 })],
+    newPos,
+  );
+  assert.equal(r.action, 'HOLD');
+});
+
+// ═══════════════════════════════════════════════
+//  Negative funding: soft (через snайпера) vs hard (market)
+//  Default: NEGATIVE_FUNDING_SOFT_EXIT_MIN_PNL_PCT=2
+//  В плюсе ≥+2% → soft (reason='negative_funding_softexit')
+//  В минусе или ниже +2% → hard (reason='negative_funding')
+// ═══════════════════════════════════════════════
+
+test('Negative funding: позиция в плюсе ≥+2% → soft exit', () => {
+  resetState();
+  const pos = makePosition('BTC', 40, { entry_price: 100 });
+  // unrealized = (100 - 95)/100 = +5% >= +2%
+  // funding negative → нужно 2 тика подряд
+  const tick1 = analyze(
+    [makeScoutItem('BTC', 40, { price: 95, slowApy: 40, fundingRate: -1e-6 })],
+    pos,
+  );
+  assert.equal(tick1.action, 'HOLD');  // streak=1, нужно 2
+  const tick2 = analyze(
+    [makeScoutItem('BTC', 40, { price: 95, slowApy: 40, fundingRate: -1e-6 })],
+    pos,
+  );
+  assert.equal(tick2.action, 'CLOSE');
+  assert.equal(tick2.reason, 'negative_funding_softexit');
+});
+
+test('Negative funding: позиция в минусе → hard exit (market)', () => {
+  resetState();
+  const pos = makePosition('BTC', 40, { entry_price: 100 });
+  // unrealized = (100 - 103)/100 = -3% (короткий в минусе) < +2%
+  analyze(
+    [makeScoutItem('BTC', 40, { price: 103, slowApy: 40, fundingRate: -1e-6 })],
+    pos,
+  );
+  const r = analyze(
+    [makeScoutItem('BTC', 40, { price: 103, slowApy: 40, fundingRate: -1e-6 })],
+    pos,
+  );
+  assert.equal(r.action, 'CLOSE');
+  assert.equal(r.reason, 'negative_funding');
+});
+
+test('Negative funding: позиция чуть-чуть в плюсе (<2%) → hard exit', () => {
+  resetState();
+  const pos = makePosition('BTC', 40, { entry_price: 100 });
+  // unrealized = (100 - 99)/100 = +1% < +2%
+  analyze(
+    [makeScoutItem('BTC', 40, { price: 99, slowApy: 40, fundingRate: -1e-6 })],
+    pos,
+  );
+  const r = analyze(
+    [makeScoutItem('BTC', 40, { price: 99, slowApy: 40, fundingRate: -1e-6 })],
+    pos,
+  );
+  assert.equal(r.action, 'CLOSE');
+  assert.equal(r.reason, 'negative_funding');
+});
+
+test('Trailing: emergency-выходы имеют приоритет над trailing', () => {
+  resetState();
+  const pos = makePosition('CHIP', 40, { entry_price: 100 });
+  // Пик +10%
+  analyze([makeScoutItem('CHIP', 40, { price: 90, slowApy: 40 })], pos);
+  // Цена скачком +11% (price 111) — это price_spike_protection (>10%)
+  // и одновременно give-back 100% от пика. Должен выйти по price_spike, не trailing.
+  const r = analyze(
+    [makeScoutItem('CHIP', 40, { price: 111, slowApy: 40 })],
+    pos,
+  );
+  assert.equal(r.action, 'CLOSE');
+  assert.equal(r.reason, 'price_spike_protection');
+});

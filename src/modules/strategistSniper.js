@@ -11,6 +11,7 @@
 // Iter A.1: только analyzeHunter (чистая функция). В coordinator НЕ подключён.
 // Наполнение priceHistory — в Iter A.3 через scout.js.
 
+import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getPriceNMinAgo, getBufferLength } from '../core/priceHistory.js';
 
@@ -22,14 +23,22 @@ export const HUNTER_TP_PCT           = 3.0;           // TP -3% от entry (дл
 export const HUNTER_COOLDOWN_MS      = 2 * 60_000;    // 2 мин re-detect cooldown per coin
 export const HUNTER_HEARTBEAT_MS     = 5 * 60_000;    // heartbeat в лог раз в 5 мин
 
+// Анти-тренд + post-SL cooldown + time-stop берутся из config (env-overrideable).
+const HUNTER_TREND_LOOKBACK_MIN  = config.trading.hunterTrendLookbackMin;
+const HUNTER_TREND_MAX_RISE_PCT  = config.trading.hunterTrendMaxRisePct;
+const HUNTER_POST_SL_COOLDOWN_MS = config.trading.hunterPostSlCooldownMin * 60_000;
+const HUNTER_TIME_STOP_MS        = config.trading.hunterTimeStopMin * 60_000;
+
 // Per-coin cooldown state. Модульный — в A.3 переедет в executor/state.js,
 // чтобы переживать рестарт/сохранение в bot_state.json (если понадобится).
-const hunterCooldownMap = new Map();  // coin → last-signal timestamp
+const hunterCooldownMap   = new Map();  // coin → last-signal timestamp (re-detect debounce)
+const hunterPostSlCooldown = new Map(); // coin → SL timestamp (длинный cooldown после SL)
 let lastHeartbeatAt = 0;
 
 /** Тестовый helper — сброс cooldown'ов + heartbeat timer. */
 export function resetHunterCooldowns() {
   hunterCooldownMap.clear();
+  hunterPostSlCooldown.clear();
   lastHeartbeatAt = 0;
 }
 
@@ -76,6 +85,25 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
 
     const lastFired = hunterCooldownMap.get(item.coin) ?? 0;
     if (now - lastFired < HUNTER_COOLDOWN_MS) continue;  // per-coin cooldown
+
+    // Post-SL cooldown: после SL не возвращаемся к этой монете N минут (default 30).
+    const lastSl = hunterPostSlCooldown.get(item.coin) ?? 0;
+    if (now - lastSl < HUNTER_POST_SL_COOLDOWN_MS) continue;
+
+    // Anti-trend filter: если за HUNTER_TREND_LOOKBACK_MIN цена выросла на ≥
+    // HUNTER_TREND_MAX_RISE_PCT — это устойчивый pump, не reversion-кандидат.
+    // Если истории нет (свежий старт / новая монета) — пропускаем фильтр.
+    const trendPast = getPriceNMinAgo(item.coin, HUNTER_TREND_LOOKBACK_MIN, now);
+    if (trendPast !== null) {
+      const trendRise = ((item.price - trendPast) / trendPast) * 100;
+      if (trendRise >= HUNTER_TREND_MAX_RISE_PCT) {
+        logger.info(
+          `[Hunter] ⛔ #${item.coin} спайк +${pct.toFixed(2)}%/2мин ` +
+            `пропущен: тренд +${trendRise.toFixed(2)}% за ${HUNTER_TREND_LOOKBACK_MIN}мин ≥ ${HUNTER_TREND_MAX_RISE_PCT}%`,
+        );
+        continue;
+      }
+    }
 
     if (!best || pct > best.pct) {
       best = { coin: item.coin, price: item.price, past, pct };
@@ -157,6 +185,8 @@ function checkHunterExit(position, scoutData) {
   if (!item) return { action: 'HOLD' };  // нет свежей цены — ждём следующий тик
 
   if (position.sl_price != null && item.price >= position.sl_price) {
+    // Регистрируем post-SL cooldown — Hunter не вернётся к этой монете N мин.
+    hunterPostSlCooldown.set(position.coin, Date.now());
     return {
       action: 'CLOSE',
       coin:   position.coin,
@@ -170,6 +200,21 @@ function checkHunterExit(position, scoutData) {
       coin:   position.coin,
       price:  position.tp_price,
       reason: 'hunter_tp',
+    };
+  }
+
+  // Time-stop: mean-reversion должен отработать за минуты-десятки. Если позиция
+  // болтается между SL/TP уже HUNTER_TIME_STOP_MIN — сценарий не сработал, выходим.
+  // Регистрируем cooldown как при SL: монета "не отыгрывает", не лезем обратно.
+  if (position.entry_time && Date.now() - position.entry_time >= HUNTER_TIME_STOP_MS) {
+    hunterPostSlCooldown.set(position.coin, Date.now());
+    const heldMin = Math.round((Date.now() - position.entry_time) / 60_000);
+    return {
+      action: 'CLOSE',
+      coin:   position.coin,
+      price:  item.price,
+      reason: 'hunter_time_stop',
+      heldMin,
     };
   }
 
