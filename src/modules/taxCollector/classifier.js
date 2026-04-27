@@ -28,36 +28,17 @@ export function classifyEvent(raw) {
 // ─────────────────────────────────────────────────
 //  /sapi/v1/fiat/orders — банковские переводы
 // ─────────────────────────────────────────────────
-// Поля: orderNo, fiatCurrency, indicatedAmount, amount, totalFee, method, status, createTime
-// status === 'Successful' — только успешные
+// Депозит/withdraw фиата на биржу — это НЕ налоговое событие для PIT-38.
+// Это просто перемещение твоих денег между банком и Binance, без обмена крипта↔фиат.
+// Налог возникает только в момент сделки (Card Buy/Sell, P2P, Convert) — её ловят
+// другие источники. Классификация fiat_orders как COST/REVENUE приводила к двойному
+// счёту (депозит 100 PLN + Convert этих 100 PLN в USDT = 200 PLN расхода вместо 100).
+//
+// Поэтому всегда возвращаем null. Тип параметра остаётся, чтобы классификатор был
+// устойчив к добавлению этого источника в будущем.
 
-function classifyFiatOrder(raw) {
-  if (raw.status !== 'Successful') return null;
-
-  const fiatCurrency = (raw.fiatCurrency || '').toUpperCase();
-  if (!FIAT_CURRENCIES.has(fiatCurrency)) return null;
-
-  // amount = чистая сумма в фиате после комиссий
-  const fiatVal = parseFloat(raw.amount);
-  if (!isFinite(fiatVal) || fiatVal <= 0) return null;
-
-  // _txType: 0 = deposit (фиат пришёл на Binance — это COST потенциальный, но без покупки крипты — просто пополнение)
-  // 1 = withdraw (фиат ушёл с Binance — REVENUE если перед этим продали крипту)
-  //
-  // Простая интерпретация: deposit фиата = намерение купить крипту → COST.
-  // withdraw фиата = крипта была продана → REVENUE.
-  const type = raw._txType === 0 ? 'COST' : 'REVENUE';
-
-  return {
-    tx_id:        `fiat_orders_${raw.orderNo}`,
-    date:         new Date(raw.createTime).toISOString(),
-    type,
-    asset:        fiatCurrency, // для bank transfers asset = сама фиат-валюта
-    fiat_val:     fiatVal,
-    fiat_currency: fiatCurrency,
-    source:       'fiat_orders',
-    comment:      raw._txType === 0 ? 'Binance Fiat Deposit' : 'Binance Fiat Withdraw',
-  };
+function classifyFiatOrder(_raw) {
+  return null;
 }
 
 // ─────────────────────────────────────────────────

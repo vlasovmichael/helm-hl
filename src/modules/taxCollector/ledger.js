@@ -118,6 +118,9 @@ export async function getYearSummary(year) {
   for (const e of entries) {
     const pln = parseFloat(e.pln_total);
     if (!isFinite(pln)) continue;
+    // Старые записи fiat_orders (банковские переводы) могут быть в ledger
+    // от предыдущих версий — игнорируем их в агрегате (они не налоговое событие).
+    if (e.source === 'fiat_orders') continue;
     if (e.type === 'COST')         totalCostsPLN   += pln;
     else if (e.type === 'REVENUE') totalRevenuePLN += pln;
   }
