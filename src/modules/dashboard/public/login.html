@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign in — HL Scanner</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem('hl-scanner-theme') || 'auto';
+          var theme;
+          if (stored === 'auto') {
+            theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          } else {
+            theme = stored === 'light' ? 'light' : 'dark';
+          }
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (_) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .login-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 40px 36px;
+        width: 100%;
+        max-width: 380px;
+        box-shadow: var(--shadow);
+      }
+      .login-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 28px;
+      }
+      .login-brand-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 12px rgba(99, 91, 255, 0.6);
+      }
+      .login-brand-text {
+        font-family: var(--font-mono);
+        font-weight: 600;
+        font-size: 13px;
+        color: var(--text-secondary);
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .login-title {
+        font-size: 26px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin-bottom: 6px;
+      }
+      .login-subtitle {
+        color: var(--text-secondary);
+        font-size: 14px;
+        margin-bottom: 28px;
+      }
+      .login-form {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .login-field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .login-field label {
+        font-size: 12px;
+        color: var(--text-secondary);
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+      }
+      .login-input {
+        background: var(--card-bg-elev);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 11px 14px;
+        color: var(--text-primary);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        transition: border-color 0.15s, background 0.15s;
+        width: 100%;
+      }
+      .login-input:focus {
+        outline: none;
+        border-color: var(--accent);
+        background: var(--card-bg);
+      }
+      .login-button {
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        padding: 12px 16px;
+        font-family: var(--font-sans);
+        font-weight: 600;
+        font-size: 14px;
+        cursor: pointer;
+        transition: background 0.15s;
+        margin-top: 8px;
+      }
+      .login-button:hover {
+        background: var(--accent-hover);
+      }
+      .login-button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .login-error {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.25);
+        color: var(--red);
+        padding: 10px 14px;
+        border-radius: 8px;
+        font-size: 13px;
+        margin-bottom: 16px;
+        display: none;
+      }
+      .login-error.visible { display: block; }
+      .login-footer {
+        margin-top: 24px;
+        text-align: center;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--text-muted);
+        letter-spacing: 0.04em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="login-card">
+      <div class="login-brand">
+        <div class="login-brand-dot"></div>
+        <div class="login-brand-text">HL Scanner</div>
+      </div>
+      <div class="login-title">Sign in</div>
+      <div class="login-subtitle">Enter your dashboard credentials.</div>
+
+      <div class="login-error" id="login-error"></div>
+
+      <form class="login-form" id="login-form" method="POST" action="/login">
+        <div class="login-field">
+          <label for="user">Username</label>
+          <input
+            class="login-input"
+            type="text"
+            id="user"
+            name="user"
+            autocomplete="username"
+            autofocus
+            required
+          />
+        </div>
+        <div class="login-field">
+          <label for="pass">Password</label>
+          <input
+            class="login-input"
+            type="password"
+            id="pass"
+            name="pass"
+            autocomplete="current-password"
+            required
+          />
+        </div>
+        <button class="login-button" type="submit" id="login-submit">
+          Sign in
+        </button>
+      </form>
+
+      <div class="login-footer">Terminal access · single user</div>
+    </div>
+
+    <script>
+      (function () {
+        const form = document.getElementById('login-form');
+        const errEl = document.getElementById('login-error');
+        const btn = document.getElementById('login-submit');
+
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('error') === '1') {
+          errEl.textContent = 'Invalid username or password.';
+          errEl.classList.add('visible');
+        }
+
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          errEl.classList.remove('visible');
+          btn.disabled = true;
+          btn.textContent = 'Signing in…';
+          try {
+            const body = new URLSearchParams({
+              user: document.getElementById('user').value,
+              pass: document.getElementById('pass').value,
+            });
+            const r = await fetch('/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body,
+              redirect: 'manual',
+            });
+            if (r.status === 204 || r.type === 'opaqueredirect') {
+              const next = params.get('next') || '/';
+              window.location.href = next;
+              return;
+            }
+            const data = await r.json().catch(() => ({}));
+            errEl.textContent = data.error || 'Invalid username or password.';
+            errEl.classList.add('visible');
+          } catch (_) {
+            errEl.textContent = 'Network error. Try again.';
+            errEl.classList.add('visible');
+          } finally {
+            btn.disabled = false;
+            btn.textContent = 'Sign in';
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

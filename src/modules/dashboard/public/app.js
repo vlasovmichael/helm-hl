@@ -23,6 +23,8 @@ const REFRESH_MS = 5_000;
 let chart = null;
 let lastSuccessAt = 0;
 let currentRangeHours = 24;
+let chartLoaded = false;
+let activityLoaded = false;
 
 // ── Theme ───────────────────────────────────────
 
@@ -34,17 +36,14 @@ function getStoredTheme() {
 
 function applyTheme(mode) {
   const root = document.documentElement;
-  if (mode === 'auto') {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    root.dataset.theme = prefersDark ? 'dark' : 'light';
-  } else {
-    root.dataset.theme = mode;
-  }
-  // Reflect active button
+  const resolved =
+    mode === 'auto'
+      ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+      : (mode === 'light' ? 'light' : 'dark');
+  root.setAttribute('data-theme', resolved);
   document.querySelectorAll('.theme-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.theme === mode);
   });
-  // Re-render chart so colors update
   if (chart) {
     applyChartTheme();
     chart.update('none');
@@ -52,8 +51,7 @@ function applyTheme(mode) {
 }
 
 function setupThemeSwitcher() {
-  const stored = getStoredTheme();
-  applyTheme(stored);
+  applyTheme(getStoredTheme());
   document.querySelectorAll('.theme-btn').forEach((b) => {
     b.addEventListener('click', () => {
       const mode = b.dataset.theme;
@@ -61,7 +59,6 @@ function setupThemeSwitcher() {
       applyTheme(mode);
     });
   });
-  // React to system theme changes when in auto mode
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
     if (getStoredTheme() === 'auto') applyTheme('auto');
   });
@@ -80,9 +77,37 @@ function setupRangeButtons() {
       if (active) active.classList.remove('active');
       btn.classList.add('active');
       currentRangeHours = parseInt(btn.dataset.hours, 10);
+      // При смене окна показываем лоадер заново для chart + activity
+      chartLoaded = false;
+      activityLoaded = false;
+      showChartLoader();
+      showActivitySkeleton();
       tick();
     });
   });
+}
+
+// ── Local loaders ───────────────────────────────
+
+function showChartLoader() {
+  const el = document.getElementById('chart-loader');
+  if (el) el.classList.remove('hidden');
+}
+function hideChartLoader() {
+  const el = document.getElementById('chart-loader');
+  if (el) el.classList.add('hidden');
+}
+function showActivitySkeleton() {
+  const c = document.getElementById('activity-container');
+  if (!c) return;
+  c.innerHTML = `
+    <div class="activity-skeleton">
+      <div class="skeleton-row"></div>
+      <div class="skeleton-row"></div>
+      <div class="skeleton-row"></div>
+      <div class="skeleton-row"></div>
+    </div>
+  `;
 }
 
 // ── Helpers ─────────────────────────────────────
@@ -123,6 +148,16 @@ function fmtTime(ts) {
     ' ' +
     d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
   );
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 // ── Chart setup ─────────────────────────────────
@@ -213,8 +248,8 @@ function initChart() {
           borderWidth: 1,
           titleColor: '#A1A1AA',
           bodyColor: '#FFFFFF',
-          titleFont: { size: 14, family: 'Inter' },
-          bodyFont: { size: 14, weight: '600', family: 'SF Mono' },
+          titleFont: { size: 14, family: 'Plus Jakarta Sans' },
+          bodyFont: { size: 14, weight: '600', family: 'JetBrains Mono' },
           padding: 12,
           displayColors: false,
           callbacks: {
@@ -226,7 +261,7 @@ function initChart() {
         x: {
           ticks: {
             color: '#71717A',
-            font: { family: 'Inter', size: 14 },
+            font: { family: 'JetBrains Mono', size: 12 },
             maxRotation: 0,
             autoSkip: true,
             maxTicksLimit: 8,
@@ -237,7 +272,7 @@ function initChart() {
         y: {
           ticks: {
             color: '#71717A',
-            font: { family: 'Inter', size: 14 },
+            font: { family: 'JetBrains Mono', size: 12 },
             callback: (v) => `$${v.toFixed(2)}`,
             maxTicksLimit: 6,
           },
@@ -255,6 +290,10 @@ function initChart() {
 
 async function fetchJson(path) {
   const r = await fetch(path);
+  if (r.status === 401) {
+    window.location.href = '/login';
+    throw new Error('unauthorized');
+  }
   if (!r.ok) throw new Error(`${path} → HTTP ${r.status}`);
   return r.json();
 }
@@ -273,7 +312,7 @@ function renderBans(status) {
     .map(
       (coin) => `
         <div style="display:inline-block; background:rgba(239, 68, 68, 0.1); color:var(--red); border:1px solid rgba(239, 68, 68, 0.2); padding:4px 10px; border-radius:6px; font-size:11px; font-family:var(--font-mono); font-weight:600; margin:0 8px 8px 0;">
-            #${coin}
+            #${escapeHtml(coin)}
         </div>
     `,
     )
@@ -282,7 +321,16 @@ function renderBans(status) {
 
 function renderActivity(activity) {
   const container = document.getElementById('activity-container');
-  const events = activity?.events || [];
+  const rawEvents = activity?.events || [];
+
+  // Защита: пропускаем мусорные события (нет coin, неизвестный kind,
+  // или служебные anchor-точки которые не должны попадать в feed).
+  const events = rawEvents.filter((e) => {
+    if (!e || !e.coin) return false;
+    if (e.kind !== 'open' && e.kind !== 'close') return false;
+    if (e.reason === 'now' || e.reason === 'window_start') return false;
+    return true;
+  });
 
   if (events.length === 0) {
     container.innerHTML =
@@ -293,19 +341,20 @@ function renderActivity(activity) {
   container.innerHTML = events
     .map((e) => {
       if (e.kind === 'open') {
+        const strat = escapeHtml((e.strategy_id || 'carry').toUpperCase());
+        const apy = e.entryApy != null ? fmtPct(e.entryApy) : '';
         return `
           <div class="activity-item">
             <div>
               <span class="activity-kind open">OPEN</span>
               <span class="activity-time">${fmtTime(e.ts)}</span>
-              <span class="activity-coin">#${e.coin}</span>
-              <span class="activity-reason">${(e.strategy_id || 'carry').toUpperCase()} · ${e.entryApy != null ? fmtPct(e.entryApy) : ''}</span>
+              <span class="activity-coin">#${escapeHtml(e.coin)}</span>
+              <span class="activity-reason">${strat} · ${apy}</span>
             </div>
             <div class="activity-pnl" style="color:var(--text-secondary)">${fmtUsd(e.sizeUsd)}</div>
           </div>
         `;
       }
-      // close
       const cls = e.pnl >= 0 ? 'positive' : 'negative';
       const sign = e.pnl >= 0 ? '+' : '';
       return `
@@ -313,10 +362,10 @@ function renderActivity(activity) {
           <div>
             <span class="activity-kind close">CLOSE</span>
             <span class="activity-time">${fmtTime(e.ts)}</span>
-            <span class="activity-coin">#${e.coin}</span>
-            <span class="activity-reason">${e.reason}</span>
+            <span class="activity-coin">#${escapeHtml(e.coin)}</span>
+            <span class="activity-reason">${escapeHtml(e.reason)}</span>
           </div>
-          <div class="activity-pnl ${cls}">${sign}${e.pnl.toFixed(4)}</div>
+          <div class="activity-pnl ${cls}">${sign}${(e.pnl || 0).toFixed(4)}</div>
         </div>
       `;
     })
@@ -341,6 +390,10 @@ function renderHeader(status) {
   document.getElementById('uptime-val').textContent = `Uptime: ${formatUptime(status.uptimeMin)}`;
   document.getElementById('available-val').textContent =
     `Available: ${fmtUsd(status.available)}`;
+
+  if (status.authEnabled) {
+    document.getElementById('logout-link').style.display = '';
+  }
 }
 
 function renderPosition(pos) {
@@ -355,7 +408,7 @@ function renderPosition(pos) {
         <div class="data-grid">
             <div class="grid-item">
                 <div class="item-label">Coin</div>
-                <div class="item-value highlight">#${pos.coin}</div>
+                <div class="item-value highlight">#${escapeHtml(pos.coin)}</div>
             </div>
             <div class="grid-item">
                 <div class="item-label">Size</div>
@@ -406,7 +459,8 @@ function renderTax(tax) {
 }
 
 function renderFooter() {
-  const footer = document.getElementById('footer-status');
+  const footer = document.getElementById('footer-status').querySelector('span');
+  if (!footer) return;
   if (lastSuccessAt === 0) {
     footer.textContent = 'Connecting to core terminal...';
     return;
@@ -437,10 +491,12 @@ async function tick() {
     renderActivity(activity);
     renderBans(status);
     lastSuccessAt = Date.now();
-    // Снимаем лоадер при первом успешном tick'е
-    if (document.body.classList.contains('loading')) {
-      document.body.classList.remove('loading');
+
+    if (!chartLoaded) {
+      hideChartLoader();
+      chartLoaded = true;
     }
+    activityLoaded = true;
   } catch (err) {
     console.error('[Dashboard]', err);
   }

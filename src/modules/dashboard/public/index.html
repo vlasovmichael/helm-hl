@@ -8,12 +8,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <script>
-      // Выставляем тему ДО загрузки CSS — иначе будет вспышка неправильной темы
-      // при первом рендере (FOUC). Логика повторяет applyTheme() в app.js.
       (function () {
         try {
           var stored = localStorage.getItem('hl-scanner-theme') || 'auto';
@@ -29,380 +27,21 @@
         }
       })();
     </script>
-    <style>
-      :root {
-        --accent: #635bff;
-        --green: #22c55e;
-        --red: #ef4444;
-        --font-sans:
-          "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          sans-serif;
-        --font-mono:
-          "SF Mono", "Fira Code", "Menlo", "Monaco", "Consolas", monospace;
-      }
-
-      /* Themes — выставляются через [data-theme] на <html>.
-         Init-скрипт в <head> ставит атрибут до загрузки CSS, чтобы не было flicker'а. */
-      html[data-theme="dark"] {
-        --bg: #0a0a0b;
-        --card-bg: #131316;
-        --card-bg-elev: #1f1f23;
-        --border: #27272a;
-        --text-primary: #ffffff;
-        --text-secondary: #a1a1aa;
-        --text-muted: #71717a;
-        --grid-line: #1f1f23;
-        --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-      }
-
-      html[data-theme="light"] {
-        --bg: #fafafa;
-        --card-bg: #ffffff;
-        --card-bg-elev: #f4f4f5;
-        --border: #e4e4e7;
-        --text-primary: #18181b;
-        --text-secondary: #52525b;
-        --text-muted: #a1a1aa;
-        --grid-line: #f4f4f5;
-        --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
-      }
-
-      * {
-        box-sizing: border-box;
-        margin: 0;
-        padding: 0;
-      }
-
-      body {
-        background-color: var(--bg);
-        color: var(--text-primary);
-        font-family: var(--font-sans);
-        font-size: 14px;
-        line-height: 1.5;
-        -webkit-font-smoothing: antialiased;
-        min-height: 100vh;
-      }
-
-      .container {
-        max-width: 1000px;
-        margin: 0 auto;
-        padding: 40px 24px;
-      }
-
-      /* ── Header ── */
-      header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 48px;
-      }
-
-      .equity-group .label {
-        color: var(--text-secondary);
-        font-weight: 500;
-        font-size: 13px;
-        margin-bottom: 8px;
-      }
-
-      .equity-group .value {
-        font-size: 42px;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-        font-family: var(--font-mono);
-        margin-bottom: 4px;
-      }
-
-      .equity-group .delta {
-        font-size: 14px;
-        font-weight: 500;
-      }
-
-      .delta.positive {
-        color: var(--green);
-      }
-      .delta.negative {
-        color: var(--red);
-      }
-
-      .meta-group {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-end;
-        gap: 12px;
-      }
-
-      .status-pill {
-        padding: 4px 12px;
-        border-radius: 9999px;
-        font-size: 14px;
-        font-weight: 600;
-        background: rgba(99, 91, 255, 0.1);
-        color: var(--accent);
-        border: 1px solid rgba(99, 91, 255, 0.2);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-
-      .status-pill.prod {
-        background: rgba(34, 197, 94, 0.1);
-        color: var(--green);
-        border-color: rgba(34, 197, 94, 0.2);
-      }
-
-      .meta-info {
-        color: var(--text-secondary);
-        font-size: 13px;
-        font-family: var(--font-mono);
-        display: flex;
-        gap: 16px;
-      }
-
-      /* ── Cards ── */
-      .card-wrapper {
-        display: grid;
-        grid-template-columns: 1fr 1.5fr;
-        gap: 24px;
-        margin-bottom: 24px;
-      }
-
-      .card {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 32px;
-        margin-bottom: 24px;
-        box-shadow:
-          0 4px 6px -1px rgba(0, 0, 0, 0.1),
-          0 2px 4px -1px rgba(0, 0, 0, 0.06);
-      }
-
-      .card-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 24px;
-      }
-
-      .card-title {
-        font-size: 16px;
-        font-weight: 600;
-        color: var(--text-secondary);
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-
-      .cart-cooldowns {
-        margin-bottom: 0;
-      }
-
-      /* ── Chart ── */
-      .chart-container {
-        height: 300px;
-        width: 100%;
-      }
-
-      /* ── Grid ── */
-      .data-grid {
-        display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 24px;
-      }
-
-      .grid-item .item-label {
-        font-size: 14px;
-        color: var(--text-secondary);
-        margin-bottom: 8px;
-        font-weight: 500;
-      }
-
-      .grid-item .item-value {
-        font-size: 18px;
-        font-weight: 600;
-        font-family: var(--font-mono);
-      }
-
-      .item-value.highlight {
-        color: var(--accent);
-      }
-
-      .empty-state {
-        color: var(--text-secondary);
-        font-style: italic;
-        text-align: center;
-        padding: 20px 0;
-      }
-
-      /* ── Loader: top progress bar (visible until first successful tick) ── */
-      .top-loader {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 2px;
-        background: transparent;
-        z-index: 9999;
-        overflow: hidden;
-        pointer-events: none;
-        opacity: 0;
-        transition: opacity 0.2s;
-      }
-      body.loading .top-loader {
-        opacity: 1;
-      }
-      .top-loader::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        height: 100%;
-        width: 40%;
-        background: var(--accent);
-        animation: top-loader-slide 1.2s ease-in-out infinite;
-      }
-      @keyframes top-loader-slide {
-        0%   { transform: translateX(-100%); }
-        100% { transform: translateX(350%); }
-      }
-
-      /* ── Skeleton shimmer for placeholder values during initial load ── */
-      body.loading .skeleton {
-        display: inline-block;
-        background: linear-gradient(
-          90deg,
-          var(--card-bg-elev) 0%,
-          var(--border) 50%,
-          var(--card-bg-elev) 100%
-        );
-        background-size: 200% 100%;
-        animation: skeleton-shimmer 1.4s ease-in-out infinite;
-        border-radius: 4px;
-        color: transparent !important;
-        user-select: none;
-      }
-      @keyframes skeleton-shimmer {
-        0%   { background-position: 200% 0; }
-        100% { background-position: -200% 0; }
-      }
-      /* Once loaded — instantly remove skeleton effect */
-      body:not(.loading) .skeleton {
-        background: none;
-        animation: none;
-        color: inherit !important;
-      }
-
-      /* ── Theme switcher ── */
-      .theme-switcher {
-        display: inline-flex;
-        background: var(--card-bg-elev);
-        padding: 2px;
-        border-radius: 6px;
-        gap: 0;
-      }
-      .theme-btn {
-        background: transparent;
-        border: none;
-        color: var(--text-secondary);
-        padding: 4px 10px;
-        font-size: 12px;
-        font-weight: 600;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: all 0.2s;
-        font-family: var(--font-sans);
-      }
-      .theme-btn:hover {
-        color: var(--text-primary);
-      }
-      .theme-btn.active {
-        background: var(--card-bg);
-        color: var(--text-primary);
-        box-shadow: var(--shadow);
-      }
-
-      /* ── Activity item ── */
-      .activity-item {
-        display: flex;
-        justify-content: space-between;
-        padding: 8px 0;
-        border-bottom: 1px solid var(--grid-line);
-        font-size: 12px;
-      }
-      .activity-item:last-child { border-bottom: none; }
-      .activity-time { color: var(--text-secondary); }
-      .activity-coin { color: var(--accent); font-weight: 600; margin-left: 8px; }
-      .activity-reason { color: var(--text-secondary); margin-left: 4px; }
-      .activity-pnl { font-family: var(--font-mono); font-weight: 600; }
-      .activity-pnl.positive { color: var(--green); }
-      .activity-pnl.negative { color: var(--red); }
-      .activity-kind {
-        font-size: 10px;
-        font-weight: 700;
-        padding: 1px 6px;
-        border-radius: 4px;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        margin-right: 6px;
-      }
-      .activity-kind.open {
-        background: rgba(99, 91, 255, 0.15);
-        color: var(--accent);
-      }
-      .activity-kind.close {
-        background: rgba(161, 161, 170, 0.15);
-        color: var(--text-secondary);
-      }
-
-      /* ── Footer ── */
-      footer {
-        margin-top: 48px;
-        text-align: center;
-        color: var(--text-secondary);
-        font-size: 14px;
-        font-family: var(--font-mono);
-      }
-
-      .stale-warning {
-        color: var(--red);
-        font-weight: 600;
-      }
-
-      @media (max-width: 768px) {
-        header {
-          flex-direction: column;
-          gap: 24px;
-        }
-        .meta-group {
-          align-items: flex-start;
-        }
-        .data-grid {
-          grid-template-columns: repeat(2, 1fr);
-        }
-        .equity-group .value {
-          font-size: 32px;
-        }
-        .card-wrapper {
-          display: block;
-        }
-        .cart-cooldowns {
-          margin-bottom: 24px;
-        }
-      }
-    </style>
+    <link rel="stylesheet" href="/styles.css" />
   </head>
-  <body class="loading">
-    <div class="top-loader" aria-hidden="true"></div>
+  <body>
     <div class="container">
       <header>
         <div class="equity-group">
           <div class="label">Total Equity</div>
-          <div class="value" id="equity-value"><span class="skeleton">$0,000.00</span></div>
+          <div class="value" id="equity-value">—</div>
           <div class="delta" id="equity-delta">—</div>
         </div>
         <div class="meta-group">
-          <div id="mode-pill" class="status-pill"><span class="skeleton">PAPER</span></div>
+          <div id="mode-pill" class="status-pill">—</div>
           <div class="meta-info">
-            <span id="uptime-val"><span class="skeleton">Uptime: 0h</span></span>
-            <span id="available-val"><span class="skeleton">Available: $0.00</span></span>
+            <span id="uptime-val">Uptime: —</span>
+            <span id="available-val">Available: —</span>
           </div>
           <div class="theme-switcher" role="group" aria-label="Theme">
             <button class="theme-btn" data-theme="auto" title="Auto (system)">Auto</button>
@@ -422,39 +61,13 @@
             <button class="range-btn" data-hours="720">30d</button>
           </div>
         </div>
-        <div class="chart-container">
+        <div class="chart-container" id="chart-container">
           <canvas id="equity-chart"></canvas>
+          <div class="local-loader" id="chart-loader">
+            <div class="loader-spinner"></div>
+          </div>
         </div>
       </section>
-
-      <style>
-        .time-ranges {
-          display: flex;
-          background: var(--card-bg-elev);
-          padding: 2px;
-          border-radius: 6px;
-        }
-        .range-btn {
-          background: transparent;
-          border: none;
-          color: var(--text-secondary);
-          padding: 4px 10px;
-          font-size: 11px;
-          font-weight: 600;
-          border-radius: 4px;
-          cursor: pointer;
-          transition: all 0.2s;
-          font-family: var(--font-sans);
-        }
-        .range-btn:hover {
-          color: var(--text-primary);
-        }
-        .range-btn.active {
-          background: var(--card-bg);
-          color: var(--text-primary);
-          box-shadow: var(--shadow);
-        }
-      </style>
 
       <div class="card-wrapper">
         <section class="card cart-cooldowns">
@@ -471,7 +84,12 @@
             <div class="card-title">Recent Activity</div>
           </div>
           <div id="activity-container">
-            <div class="empty-state">No recent events</div>
+            <div class="activity-skeleton">
+              <div class="skeleton-row"></div>
+              <div class="skeleton-row"></div>
+              <div class="skeleton-row"></div>
+              <div class="skeleton-row"></div>
+            </div>
           </div>
         </section>
       </div>
@@ -488,16 +106,7 @@
       <section class="card">
         <div class="card-header">
           <div class="card-title">Tax Summary (PIT-38)</div>
-          <div
-            id="tax-year"
-            style="
-              color: var(--text-secondary);
-              font-family: var(--font-mono);
-              font-size: 14px;
-            "
-          >
-            2026
-          </div>
+          <div id="tax-year" class="tax-year-label">2026</div>
         </div>
         <div class="data-grid">
           <div class="grid-item">
@@ -521,7 +130,10 @@
         </div>
       </section>
 
-      <footer id="footer-status">Connecting to core...</footer>
+      <footer id="footer-status">
+        <span>Connecting to core...</span>
+        <a href="/logout" class="logout-link" id="logout-link" style="display:none">Sign out</a>
+      </footer>
     </div>
 
     <script src="app.js"></script>

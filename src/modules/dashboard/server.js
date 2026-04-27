@@ -1,10 +1,11 @@
 // ─────────────────────────────────────────────────
-//  Dashboard Server — Express, localhost-only
+//  Dashboard Server — Express
 // ─────────────────────────────────────────────────
-// Слушает 127.0.0.1:3010. НЕ доступен из внешней сети.
-// Никакой авторизации (доступ только с локальной машины).
+// Слушает 0.0.0.0:3010. Доступ снаружи — через Cloudflare Tunnel + Access.
+// Auth: optional cookie-based session (DASHBOARD_USER / DASHBOARD_PASS).
 
 import express from "express";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { config } from "../../core/config.js";
@@ -19,27 +20,89 @@ import { getRuntimeBlacklist } from "../executor/index.js";
 const HOST = "0.0.0.0";
 const PORT = 3010;
 
-// Basic Auth: если в .env заданы DASHBOARD_USER и DASHBOARD_PASS — требуем
-// логин/пароль. Иначе (default) — без auth, полагаемся на сетевой слой
-// (Cloudflare Access / VPN / loopback). Удобный fallback для случаев,
-// когда внешний auth-слой не настроен.
+// Auth: если в .env заданы DASHBOARD_USER и DASHBOARD_PASS — требуем
+// логин через отдельную страницу /login (cookie-based session).
+// Иначе (default) — без auth, полагаемся на сетевой слой
+// (Cloudflare Access / VPN / loopback).
 const AUTH_USER = process.env.DASHBOARD_USER || '';
 const AUTH_PASS = process.env.DASHBOARD_PASS || '';
 const AUTH_ENABLED = AUTH_USER.length > 0 && AUTH_PASS.length > 0;
 
-function basicAuthMiddleware(req, res, next) {
-  const header = req.headers.authorization || '';
-  const expected = 'Basic ' + Buffer.from(`${AUTH_USER}:${AUTH_PASS}`).toString('base64');
-  // Constant-time compare для защиты от timing attacks
-  if (header.length === expected.length) {
-    let diff = 0;
-    for (let i = 0; i < header.length; i++) {
-      diff |= header.charCodeAt(i) ^ expected.charCodeAt(i);
+// Session secret — производный от пароля. Меняется при смене пароля
+// (что инвалидирует все существующие cookies — это хорошо).
+const SESSION_SECRET = crypto
+  .createHash('sha256')
+  .update(`${AUTH_PASS}::hl-dashboard-session-v1`)
+  .digest();
+const SESSION_COOKIE = 'hl-session';
+const SESSION_MAX_AGE_SEC = 7 * 24 * 60 * 60;
+
+function signSession(user, expiresAt) {
+  const payload = `${user}:${expiresAt}`;
+  const h = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex');
+  return `${expiresAt}.${h}`;
+}
+
+function verifySession(token, user) {
+  if (!token || typeof token !== 'string') return false;
+  const idx = token.indexOf('.');
+  if (idx === -1) return false;
+  const expiresAt = parseInt(token.slice(0, idx), 10);
+  const sig = token.slice(idx + 1);
+  if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) return false;
+  const expected = crypto
+    .createHmac('sha256', SESSION_SECRET)
+    .update(`${user}:${expiresAt}`)
+    .digest('hex');
+  if (sig.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+}
+
+function parseCookies(req) {
+  const out = {};
+  const header = req.headers.cookie;
+  if (!header) return out;
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx === -1) continue;
+    const k = part.slice(0, idx).trim();
+    const v = part.slice(idx + 1).trim();
+    try {
+      out[k] = decodeURIComponent(v);
+    } catch {
+      out[k] = v;
     }
-    if (diff === 0) return next();
   }
-  res.set('WWW-Authenticate', 'Basic realm="HL Scanner Dashboard"');
-  res.status(401).send('Authentication required');
+  return out;
+}
+
+function constantTimeStringEqual(a, b) {
+  if (a.length !== b.length) return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+function isAuthenticated(req) {
+  if (!AUTH_ENABLED) return true;
+  const cookies = parseCookies(req);
+  return verifySession(cookies[SESSION_COOKIE], AUTH_USER);
+}
+
+// Whitelist путей, которые доступны без auth (login UI + его статика).
+const PUBLIC_PATHS = new Set(['/login', '/styles.css', '/favicon.ico']);
+
+function authGate(req, res, next) {
+  if (!AUTH_ENABLED) return next();
+  if (PUBLIC_PATHS.has(req.path)) return next();
+  if (isAuthenticated(req)) return next();
+
+  // API → 401 JSON; обычные страницы → редирект на /login
+  if (req.path.startsWith('/api/')) {
+    return res.status(401).json({ error: 'unauthorized' });
+  }
+  const next_ = encodeURIComponent(req.originalUrl || '/');
+  res.redirect(302, `/login?next=${next_}`);
 }
 
 const __filename = fileURLToPath(import.meta.url);
@@ -52,10 +115,6 @@ let server = null;
 //  Routes
 // ─────────────────────────────────────────────────
 
-/**
- * GET /api/status
- * Текущее equity, available, активная позиция, режим, uptime.
- */
 async function handleStatus(_req, res) {
   try {
     const position = getActivePosition();
@@ -84,6 +143,7 @@ async function handleStatus(_req, res) {
         state.sessionStartEquity > 0 ? equity - state.sessionStartEquity : 0,
       uptimeMin: Math.round((Date.now() - state.startedAt) / 60_000),
       runtimeBans: [...getRuntimeBlacklist()],
+      authEnabled: AUTH_ENABLED,
       activePosition: position
         ? {
             coin: position.coin,
@@ -102,24 +162,17 @@ async function handleStatus(_req, res) {
   }
 }
 
-/**
- * GET /api/history?hours=N
- * Последние закрытые сделки за N часов + кумулятивная кривая equity.
- */
 async function handleHistory(req, res) {
   try {
     const hours = req.query.hours ? parseInt(req.query.hours, 10) : 24;
     const since = Date.now() - hours * 3_600_000;
 
-    // 1. Собираем сделки из БД + Архива
     const dbRows = getHistorySince(since);
     const archRows = getArchivedHistorySince(since);
 
-    // Объединяем и сортируем по времени (старые -> новые)
     const allTrades = [...dbRows, ...archRows]
       .sort((a, b) => a.closed_at - b.closed_at);
 
-    // 2. Получаем ТЕКУЩЕЕ equity для точки отсчета "назад"
     let currentEquity = 0;
     try {
       if (config.isProduction) {
@@ -132,8 +185,6 @@ async function handleHistory(req, res) {
       currentEquity = state.sessionStartEquity || 0;
     }
 
-    // 3. Строим кривую, работая "назад" от текущего момента
-    // Нам нужно знать финальную сумму всех PnL, чтобы найти начальную точку Equity
     const totalPnlInWindow = allTrades.reduce((sum, t) => sum + t.realized_pnl, 0);
     let runningEquity = currentEquity - totalPnlInWindow;
     const baseline = runningEquity;
@@ -149,9 +200,6 @@ async function handleHistory(req, res) {
       };
     });
 
-    // Anchor points: даже если за окно нет сделок, рисуем плоскую линию,
-    // чтобы UI не пустовал (бот может сидеть в позиции дольше окна).
-    // Левый якорь — старт окна, правый — текущий момент.
     const now = Date.now();
     const points = [
       { ts: since, coin: null, pnl: 0, equity: baseline, reason: 'window_start' },
@@ -173,10 +221,6 @@ async function handleHistory(req, res) {
   }
 }
 
-/**
- * GET /api/activity?hours=N&limit=L
- * Лента событий: открытия позиций + закрытия. Сортировка от новых к старым.
- */
 function handleActivity(req, res) {
   try {
     const hours = req.query.hours ? parseInt(req.query.hours, 10) : 24;
@@ -185,8 +229,8 @@ function handleActivity(req, res) {
 
     const events = [];
 
-    // 1. Закрытия — из БД + архива
     for (const t of getHistorySince(since)) {
+      if (!t.coin) continue;
       events.push({
         kind:        'close',
         ts:          t.closed_at,
@@ -197,6 +241,7 @@ function handleActivity(req, res) {
       });
     }
     for (const t of getArchivedHistorySince(since)) {
+      if (!t.coin) continue;
       events.push({
         kind:        'close',
         ts:          t.closed_at,
@@ -207,9 +252,8 @@ function handleActivity(req, res) {
       });
     }
 
-    // 2. Открытие текущей активной позиции (если в окне)
     const open = getActivePosition();
-    if (open && open.entry_time >= since) {
+    if (open && open.coin && open.entry_time >= since) {
       events.push({
         kind:        'open',
         ts:          open.entry_time,
@@ -221,7 +265,6 @@ function handleActivity(req, res) {
       });
     }
 
-    // Сортировка по убыванию + срез
     events.sort((a, b) => b.ts - a.ts);
     res.json({
       windowHours: hours,
@@ -234,10 +277,6 @@ function handleActivity(req, res) {
   }
 }
 
-/**
- * GET /api/tax-summary?year=YYYY
- * PIT-38 агрегат за год: расходы, доходы, прибыль в PLN.
- */
 async function handleTaxSummary(req, res) {
   try {
     const yearParam = req.query.year ? parseInt(req.query.year, 10) : null;
@@ -248,6 +287,47 @@ async function handleTaxSummary(req, res) {
     logger.warn(`[Dashboard] /api/tax-summary error: ${err.message}`);
     res.status(500).json({ error: err.message });
   }
+}
+
+// ─────────────────────────────────────────────────
+//  Auth routes
+// ─────────────────────────────────────────────────
+
+function handleLoginGet(req, res) {
+  if (!AUTH_ENABLED) return res.redirect(302, '/');
+  if (isAuthenticated(req)) return res.redirect(302, '/');
+  res.sendFile(join(PUBLIC_DIR, 'login.html'));
+}
+
+function handleLoginPost(req, res) {
+  if (!AUTH_ENABLED) return res.redirect(302, '/');
+
+  const user = (req.body?.user || '').toString();
+  const pass = (req.body?.pass || '').toString();
+
+  // Constant-time compare
+  const userOk = user.length === AUTH_USER.length && constantTimeStringEqual(user, AUTH_USER);
+  const passOk = pass.length === AUTH_PASS.length && constantTimeStringEqual(pass, AUTH_PASS);
+
+  if (!userOk || !passOk) {
+    return res.status(401).json({ error: 'Invalid username or password.' });
+  }
+
+  const expiresAt = Date.now() + SESSION_MAX_AGE_SEC * 1000;
+  const token = signSession(AUTH_USER, expiresAt);
+  res.setHeader(
+    'Set-Cookie',
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE_SEC}`,
+  );
+  res.status(204).end();
+}
+
+function handleLogout(_req, res) {
+  res.setHeader(
+    'Set-Cookie',
+    `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
+  );
+  res.redirect(302, '/login');
 }
 
 // ─────────────────────────────────────────────────
@@ -262,19 +342,25 @@ export function startDashboard() {
 
   const app = express();
 
-  // Auth (если включён) — раньше всех остальных middleware
+  app.use(express.urlencoded({ extended: false, limit: '4kb' }));
+
+  // Гейт идёт ПЕРЕД API/static. Login-страница и её ассеты в whitelist.
+  app.use(authGate);
+
   if (AUTH_ENABLED) {
-    app.use(basicAuthMiddleware);
-    logger.info(`[Dashboard] 🔒 Basic Auth enabled (user: ${AUTH_USER})`);
+    logger.info(`[Dashboard] 🔒 Session auth enabled (user: ${AUTH_USER})`);
   } else {
-    logger.info('[Dashboard] ⚠️  Basic Auth disabled (DASHBOARD_USER/PASS not set) — relying on network-level protection');
+    logger.info('[Dashboard] ⚠️  Auth disabled (DASHBOARD_USER/PASS not set) — relying on network-level protection');
   }
 
-  // Сразу запрещаем кэширование API
   app.use("/api", (_req, res, next) => {
     res.set("Cache-Control", "no-store");
     next();
   });
+
+  app.get("/login", handleLoginGet);
+  app.post("/login", handleLoginPost);
+  app.get("/logout", handleLogout);
 
   app.get("/api/status", handleStatus);
   app.get("/api/history", handleHistory);
