@@ -11,6 +11,24 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
+    <script>
+      // Выставляем тему ДО загрузки CSS — иначе будет вспышка неправильной темы
+      // при первом рендере (FOUC). Логика повторяет applyTheme() в app.js.
+      (function () {
+        try {
+          var stored = localStorage.getItem('hl-scanner-theme') || 'auto';
+          var theme;
+          if (stored === 'auto') {
+            theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          } else {
+            theme = stored === 'light' ? 'light' : 'dark';
+          }
+          document.documentElement.setAttribute('data-theme', theme);
+        } catch (_) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
     <style>
       :root {
         --accent: #635bff;
@@ -23,8 +41,9 @@
           "SF Mono", "Fira Code", "Menlo", "Monaco", "Consolas", monospace;
       }
 
-      /* Dark theme (default) */
-      :root, [data-theme="dark"] {
+      /* Themes — выставляются через [data-theme] на <html>.
+         Init-скрипт в <head> ставит атрибут до загрузки CSS, чтобы не было flicker'а. */
+      html[data-theme="dark"] {
         --bg: #0a0a0b;
         --card-bg: #131316;
         --card-bg-elev: #1f1f23;
@@ -32,12 +51,11 @@
         --text-primary: #ffffff;
         --text-secondary: #a1a1aa;
         --text-muted: #71717a;
-        --grid-line: #1F1F23;
+        --grid-line: #1f1f23;
         --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
       }
 
-      /* Light theme */
-      [data-theme="light"] {
+      html[data-theme="light"] {
         --bg: #fafafa;
         --card-bg: #ffffff;
         --card-bg-elev: #f4f4f5;
@@ -214,6 +232,64 @@
         padding: 20px 0;
       }
 
+      /* ── Loader: top progress bar (visible until first successful tick) ── */
+      .top-loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: transparent;
+        z-index: 9999;
+        overflow: hidden;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      body.loading .top-loader {
+        opacity: 1;
+      }
+      .top-loader::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 40%;
+        background: var(--accent);
+        animation: top-loader-slide 1.2s ease-in-out infinite;
+      }
+      @keyframes top-loader-slide {
+        0%   { transform: translateX(-100%); }
+        100% { transform: translateX(350%); }
+      }
+
+      /* ── Skeleton shimmer for placeholder values during initial load ── */
+      body.loading .skeleton {
+        display: inline-block;
+        background: linear-gradient(
+          90deg,
+          var(--card-bg-elev) 0%,
+          var(--border) 50%,
+          var(--card-bg-elev) 100%
+        );
+        background-size: 200% 100%;
+        animation: skeleton-shimmer 1.4s ease-in-out infinite;
+        border-radius: 4px;
+        color: transparent !important;
+        user-select: none;
+      }
+      @keyframes skeleton-shimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+      }
+      /* Once loaded — instantly remove skeleton effect */
+      body:not(.loading) .skeleton {
+        background: none;
+        animation: none;
+        color: inherit !important;
+      }
+
       /* ── Theme switcher ── */
       .theme-switcher {
         display: inline-flex;
@@ -313,19 +389,20 @@
       }
     </style>
   </head>
-  <body>
+  <body class="loading">
+    <div class="top-loader" aria-hidden="true"></div>
     <div class="container">
       <header>
         <div class="equity-group">
           <div class="label">Total Equity</div>
-          <div class="value" id="equity-value">$0.00</div>
+          <div class="value" id="equity-value"><span class="skeleton">$0,000.00</span></div>
           <div class="delta" id="equity-delta">—</div>
         </div>
         <div class="meta-group">
-          <div id="mode-pill" class="status-pill">Loading</div>
+          <div id="mode-pill" class="status-pill"><span class="skeleton">PAPER</span></div>
           <div class="meta-info">
-            <span id="uptime-val">Uptime: 0h</span>
-            <span id="available-val">Available: $0.00</span>
+            <span id="uptime-val"><span class="skeleton">Uptime: 0h</span></span>
+            <span id="available-val"><span class="skeleton">Available: $0.00</span></span>
           </div>
           <div class="theme-switcher" role="group" aria-label="Theme">
             <button class="theme-btn" data-theme="auto" title="Auto (system)">Auto</button>

@@ -437,6 +437,10 @@ async function tick() {
     renderActivity(activity);
     renderBans(status);
     lastSuccessAt = Date.now();
+    // Снимаем лоадер при первом успешном tick'е
+    if (document.body.classList.contains('loading')) {
+      document.body.classList.remove('loading');
+    }
   } catch (err) {
     console.error('[Dashboard]', err);
   }
