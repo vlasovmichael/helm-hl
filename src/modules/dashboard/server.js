@@ -358,6 +358,16 @@ export function startDashboard() {
     next();
   });
 
+  // Статика (HTML/JS/CSS) обновляется при каждом деплое — ETag-валидация
+  // через no-cache (не путать с no-store: браузер кеширует, но всегда
+  // делает conditional GET). Решает проблему "обновил код, оператор видит старое".
+  app.use((req, res, next) => {
+    if (/\.(html|js|css)$/.test(req.path) || req.path === '/') {
+      res.set('Cache-Control', 'no-cache');
+    }
+    next();
+  });
+
   app.get("/login", handleLoginGet);
   app.post("/login", handleLoginPost);
   app.get("/logout", handleLogout);

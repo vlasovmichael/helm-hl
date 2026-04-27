@@ -477,29 +477,54 @@ function renderFooter() {
 // ── Main loop ───────────────────────────────────
 
 async function tick() {
-  try {
-    const [status, history, activity, tax] = await Promise.all([
-      fetchJson('/api/status'),
-      fetchJson(`/api/history?hours=${currentRangeHours}`),
-      fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
-      fetchJson('/api/tax-summary'),
-    ]);
-    renderHeader(status);
-    renderPosition(status.activePosition);
-    renderChart(history);
-    renderTax(tax);
-    renderActivity(activity);
-    renderBans(status);
-    lastSuccessAt = Date.now();
+  // Делаем запросы независимо — отказ одного API не должен блокировать остальные.
+  const [statusR, historyR, activityR, taxR] = await Promise.allSettled([
+    fetchJson('/api/status'),
+    fetchJson(`/api/history?hours=${currentRangeHours}`),
+    fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
+    fetchJson('/api/tax-summary'),
+  ]);
 
-    if (!chartLoaded) {
-      hideChartLoader();
-      chartLoaded = true;
-    }
-    activityLoaded = true;
-  } catch (err) {
-    console.error('[Dashboard]', err);
+  let anyOk = false;
+
+  if (statusR.status === 'fulfilled') {
+    try {
+      renderHeader(statusR.value);
+      renderPosition(statusR.value.activePosition);
+      renderBans(statusR.value);
+      anyOk = true;
+    } catch (err) { console.error('[Dashboard] header render', err); }
+  } else {
+    console.error('[Dashboard] /api/status', statusR.reason);
   }
+
+  if (historyR.status === 'fulfilled') {
+    try {
+      renderChart(historyR.value);
+      anyOk = true;
+    } catch (err) { console.error('[Dashboard] chart render', err); }
+    if (!chartLoaded) { hideChartLoader(); chartLoaded = true; }
+  } else {
+    console.error('[Dashboard] /api/history', historyR.reason);
+  }
+
+  if (activityR.status === 'fulfilled') {
+    try {
+      renderActivity(activityR.value);
+      anyOk = true;
+    } catch (err) { console.error('[Dashboard] activity render', err); }
+  } else {
+    console.error('[Dashboard] /api/activity', activityR.reason);
+  }
+
+  if (taxR.status === 'fulfilled') {
+    try { renderTax(taxR.value); anyOk = true; }
+    catch (err) { console.error('[Dashboard] tax render', err); }
+  } else {
+    console.error('[Dashboard] /api/tax-summary', taxR.reason);
+  }
+
+  if (anyOk) lastSuccessAt = Date.now();
   renderFooter();
 }
 
