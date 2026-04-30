@@ -352,6 +352,24 @@ header {
   color: var(--text-secondary);
 }
 
+/* ── Animated Number (Reel style) ── */
+.animated-value {
+  display: inline-flex;
+  overflow: hidden;
+}
+
+.digit-reel {
+  display: inline-flex;
+  flex-direction: column;
+  transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.digit-reel span {
+  display: inline-block;
+  height: 1em;
+  line-height: 1em;
+}
+
 /* ── Footer ── */
 footer {
   margin-top: 48px;

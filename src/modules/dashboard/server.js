@@ -1,11 +1,11 @@
 // ─────────────────────────────────────────────────
-//  Dashboard Server — Express
+//  Dashboard Server — Express + WebSocket
 // ─────────────────────────────────────────────────
 // Слушает 0.0.0.0:3010. Доступ снаружи — через Cloudflare Tunnel + Access.
-// Auth: optional cookie-based session (DASHBOARD_USER / DASHBOARD_PASS).
 
 import express from "express";
 import crypto from "crypto";
+import { WebSocketServer } from "ws";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { config } from "../../core/config.js";
@@ -21,16 +21,10 @@ import { getRuntimeBlacklist } from "../executor/index.js";
 const HOST = "0.0.0.0";
 const PORT = 3010;
 
-// Auth: если в .env заданы DASHBOARD_USER и DASHBOARD_PASS — требуем
-// логин через отдельную страницу /login (cookie-based session).
-// Иначе (default) — без auth, полагаемся на сетевой слой
-// (Cloudflare Access / VPN / loopback).
 const AUTH_USER = process.env.DASHBOARD_USER || '';
 const AUTH_PASS = process.env.DASHBOARD_PASS || '';
 const AUTH_ENABLED = AUTH_USER.length > 0 && AUTH_PASS.length > 0;
 
-// Session secret — производный от пароля. Меняется при смене пароля
-// (что инвалидирует все существующие cookies — это хорошо).
 const SESSION_SECRET = crypto
   .createHash('sha256')
   .update(`${AUTH_PASS}::hl-dashboard-session-v1`)
@@ -90,7 +84,6 @@ function isAuthenticated(req) {
   return verifySession(cookies[SESSION_COOKIE], AUTH_USER);
 }
 
-// Whitelist путей, которые доступны без auth (login UI + его статика).
 const PUBLIC_PATHS = new Set(['/login', '/styles.css', '/favicon.ico']);
 
 function authGate(req, res, next) {
@@ -98,7 +91,6 @@ function authGate(req, res, next) {
   if (PUBLIC_PATHS.has(req.path)) return next();
   if (isAuthenticated(req)) return next();
 
-  // API → 401 JSON; обычные страницы → редирект на /login
   if (req.path.startsWith('/api/')) {
     return res.status(401).json({ error: 'unauthorized' });
   }
@@ -111,6 +103,85 @@ const __dirname = dirname(__filename);
 const PUBLIC_DIR = join(__dirname, "public");
 
 let server = null;
+let wss = null;
+let broadcastTimer = null;
+
+// ─────────────────────────────────────────────────
+//  Status Logic (Shared)
+// ─────────────────────────────────────────────────
+
+async function getStatusData() {
+  const position = getActivePosition();
+
+  let equity = 0;
+  let available = 0;
+  try {
+    if (config.isProduction) {
+      const summary = await getAccountSummary();
+      equity = summary.equity;
+      available = summary.available;
+    } else {
+      available = await getAvailableBalance();
+      equity = await getAccountEquity();
+    }
+  } catch {
+    // fine
+  }
+
+  let currentPnl = null;
+  if (position && config.isProduction) {
+    try {
+      const exPositions = await getPositions();
+      const target = position.coin.toLowerCase();
+      const ourPos = exPositions.find((ap) => {
+        const c = (ap?.position?.coin ?? "").toLowerCase();
+        return c === target || c === `${target}-perp` || c === `@${target}` || c.replace("-perp", "") === target;
+      });
+      if (ourPos?.position) {
+        const pricePnl = parseFloat(ourPos.position.unrealizedPnl ?? "0");
+        const sinceOpen = parseFloat(ourPos.position.cumFunding?.sinceOpen);
+        const fundingPnl = Number.isFinite(sinceOpen) ? -sinceOpen : 0;
+        const entryFee = position.size_usd * FEE_RATE;
+        const exitFeeMarket = position.size_usd * FEE_RATE;
+        const exitFeeMaker = position.size_usd * MAKER_FEE_RATE;
+        currentPnl = {
+          price: pricePnl,
+          funding: fundingPnl,
+          entryFee,
+          exitFeeMarket,
+          exitFeeMaker,
+          netMarket: pricePnl + fundingPnl - entryFee - exitFeeMarket,
+          netMaker: pricePnl + fundingPnl - entryFee - exitFeeMaker,
+        };
+      }
+    } catch (err) {
+      logger.warn(`[Dashboard] currentPnl calc failed: ${err.message}`);
+    }
+  }
+
+  return {
+    mode: config.mode,
+    equity,
+    available,
+    sessionStartEquity: state.sessionStartEquity,
+    sessionProfit: state.sessionStartEquity > 0 ? equity - state.sessionStartEquity : 0,
+    uptimeMin: Math.round((Date.now() - state.startedAt) / 60_000),
+    runtimeBans: [...getRuntimeBlacklist()],
+    authEnabled: AUTH_ENABLED,
+    activePosition: position
+      ? {
+          coin: position.coin,
+          sizeUsd: position.size_usd,
+          entryPrice: position.entry_price,
+          entryApy: position.entry_apy,
+          entryTime: position.entry_time,
+          heldHours: (Date.now() - position.entry_time) / 3_600_000,
+          currentPnl,
+        }
+      : null,
+    ts: Date.now(),
+  };
+}
 
 // ─────────────────────────────────────────────────
 //  Routes
@@ -118,89 +189,8 @@ let server = null;
 
 async function handleStatus(_req, res) {
   try {
-    const position = getActivePosition();
-
-    let equity = 0;
-    let available = 0;
-    try {
-      if (config.isProduction) {
-        const summary = await getAccountSummary();
-        equity = summary.equity;
-        available = summary.available;
-      } else {
-        available = await getAvailableBalance();
-        equity    = await getAccountEquity();
-      }
-    } catch {
-      // показываем 0 — UI пометит как stale
-    }
-
-    // ── Net PnL текущей позиции (PROD only) ──
-    // pricePnl: unrealizedPnl с биржи (mark-to-market vs entry).
-    // fundingPnl: -cumFunding.sinceOpen (для шорта инвертируется).
-    // entryFee: уже заплачен при открытии (size_usd × FEE_RATE).
-    // exitFeeEstMaker / exitFeeEstMarket: оценка комиссии выхода.
-    // net = price + funding − entryFee − exitFeeEst.
-    let currentPnl = null;
-    if (position && config.isProduction) {
-      try {
-        const exPositions = await getPositions();
-        // Tolerant coin match: HL может вернуть "DOGE", "DOGE-PERP" или "@DOGE".
-        const target = position.coin.toLowerCase();
-        const ourPos = exPositions.find((ap) => {
-          const c = (ap?.position?.coin ?? '').toLowerCase();
-          return c === target || c === `${target}-perp` || c === `@${target}` || c.replace('-perp', '') === target;
-        });
-        if (!ourPos?.position) {
-          logger.warn(
-            `[Dashboard] currentPnl: position #${position.coin} not found in ${exPositions.length} exchange positions ` +
-              `(coins: [${exPositions.map((p) => p?.position?.coin).join(', ')}])`,
-          );
-        } else {
-          const pricePnl   = parseFloat(ourPos.position.unrealizedPnl ?? '0');
-          const sinceOpen  = parseFloat(ourPos.position.cumFunding?.sinceOpen);
-          const fundingPnl = Number.isFinite(sinceOpen) ? -sinceOpen : 0;
-          const entryFee     = position.size_usd * FEE_RATE;
-          const exitFeeMarket = position.size_usd * FEE_RATE;
-          const exitFeeMaker  = position.size_usd * MAKER_FEE_RATE;
-          currentPnl = {
-            price:    pricePnl,
-            funding:  fundingPnl,
-            entryFee,
-            exitFeeMarket,
-            exitFeeMaker,
-            netMarket: pricePnl + fundingPnl - entryFee - exitFeeMarket,
-            netMaker:  pricePnl + fundingPnl - entryFee - exitFeeMaker,
-          };
-        }
-      } catch (err) {
-        logger.warn(`[Dashboard] currentPnl calc failed: ${err.message}`);
-      }
-    }
-
-    res.json({
-      mode: config.mode,
-      equity,
-      available,
-      sessionStartEquity: state.sessionStartEquity,
-      sessionProfit:
-        state.sessionStartEquity > 0 ? equity - state.sessionStartEquity : 0,
-      uptimeMin: Math.round((Date.now() - state.startedAt) / 60_000),
-      runtimeBans: [...getRuntimeBlacklist()],
-      authEnabled: AUTH_ENABLED,
-      activePosition: position
-        ? {
-            coin: position.coin,
-            sizeUsd: position.size_usd,
-            entryPrice: position.entry_price,
-            entryApy: position.entry_apy,
-            entryTime: position.entry_time,
-            heldHours: (Date.now() - position.entry_time) / 3_600_000,
-            currentPnl,
-          }
-        : null,
-      ts: Date.now(),
-    });
+    const data = await getStatusData();
+    res.json(data);
   } catch (err) {
     logger.warn(`[Dashboard] /api/status error: ${err.message}`);
     res.status(500).json({ error: err.message });
@@ -211,12 +201,9 @@ async function handleHistory(req, res) {
   try {
     const hours = req.query.hours ? parseInt(req.query.hours, 10) : 24;
     const since = Date.now() - hours * 3_600_000;
-
     const dbRows = getHistorySince(since);
     const archRows = getArchivedHistorySince(since);
-
-    const allTrades = [...dbRows, ...archRows]
-      .sort((a, b) => a.closed_at - b.closed_at);
+    const allTrades = [...dbRows, ...archRows].sort((a, b) => a.closed_at - b.closed_at);
 
     let currentEquity = 0;
     try {
@@ -236,13 +223,7 @@ async function handleHistory(req, res) {
 
     const tradePoints = allTrades.map((t) => {
       runningEquity += t.realized_pnl;
-      return {
-        ts: t.closed_at,
-        coin: t.coin,
-        pnl: t.realized_pnl,
-        equity: runningEquity,
-        reason: t.reason,
-      };
+      return { ts: t.closed_at, coin: t.coin, pnl: t.realized_pnl, equity: runningEquity, reason: t.reason };
     });
 
     const now = Date.now();
@@ -252,14 +233,7 @@ async function handleHistory(req, res) {
       { ts: now, coin: null, pnl: 0, equity: currentEquity, reason: 'now' },
     ];
 
-    res.json({
-      baseline,
-      currentEquity,
-      windowHours: hours,
-      tradeCount: tradePoints.length,
-      count: points.length,
-      points,
-    });
+    res.json({ baseline, currentEquity, windowHours: hours, tradeCount: tradePoints.length, count: points.length, points });
   } catch (err) {
     logger.warn(`[Dashboard] /api/history error: ${err.message}`);
     res.status(500).json({ error: err.message });
@@ -271,51 +245,24 @@ function handleActivity(req, res) {
     const hours = req.query.hours ? parseInt(req.query.hours, 10) : 24;
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : 20;
     const since = Date.now() - hours * 3_600_000;
-
     const events = [];
 
     for (const t of getHistorySince(since)) {
       if (!t.coin) continue;
-      events.push({
-        kind:        'close',
-        ts:          t.closed_at,
-        coin:        t.coin,
-        pnl:         t.realized_pnl,
-        reason:      t.reason,
-        strategy_id: t.strategy_id || 'carry',
-      });
+      events.push({ kind: 'close', ts: t.closed_at, coin: t.coin, pnl: t.realized_pnl, reason: t.reason, strategy_id: t.strategy_id || 'carry' });
     }
     for (const t of getArchivedHistorySince(since)) {
       if (!t.coin) continue;
-      events.push({
-        kind:        'close',
-        ts:          t.closed_at,
-        coin:        t.coin,
-        pnl:         t.realized_pnl,
-        reason:      t.reason,
-        strategy_id: t.strategy_id || 'carry',
-      });
+      events.push({ kind: 'close', ts: t.closed_at, coin: t.coin, pnl: t.realized_pnl, reason: t.reason, strategy_id: t.strategy_id || 'carry' });
     }
 
     const open = getActivePosition();
     if (open && open.coin && open.entry_time >= since) {
-      events.push({
-        kind:        'open',
-        ts:          open.entry_time,
-        coin:        open.coin,
-        sizeUsd:     open.size_usd,
-        entryPrice:  open.entry_price,
-        entryApy:    open.entry_apy,
-        strategy_id: open.strategy_id || 'carry',
-      });
+      events.push({ kind: 'open', ts: open.entry_time, coin: open.coin, sizeUsd: open.size_usd, entryPrice: open.entry_price, entryApy: open.entry_apy, strategy_id: open.strategy_id || 'carry' });
     }
 
     events.sort((a, b) => b.ts - a.ts);
-    res.json({
-      windowHours: hours,
-      count:       events.length,
-      events:      events.slice(0, limit),
-    });
+    res.json({ windowHours: hours, count: events.length, events: events.slice(0, limit) });
   } catch (err) {
     logger.warn(`[Dashboard] /api/activity error: ${err.message}`);
     res.status(500).json({ error: err.message });
@@ -334,10 +281,6 @@ async function handleTaxSummary(req, res) {
   }
 }
 
-// ─────────────────────────────────────────────────
-//  Auth routes
-// ─────────────────────────────────────────────────
-
 function handleLoginGet(req, res) {
   if (!AUTH_ENABLED) return res.redirect(302, '/');
   if (isAuthenticated(req)) return res.redirect(302, '/');
@@ -346,32 +289,19 @@ function handleLoginGet(req, res) {
 
 function handleLoginPost(req, res) {
   if (!AUTH_ENABLED) return res.redirect(302, '/');
-
   const user = (req.body?.user || '').toString();
   const pass = (req.body?.pass || '').toString();
-
-  // Constant-time compare
   const userOk = user.length === AUTH_USER.length && constantTimeStringEqual(user, AUTH_USER);
   const passOk = pass.length === AUTH_PASS.length && constantTimeStringEqual(pass, AUTH_PASS);
-
-  if (!userOk || !passOk) {
-    return res.status(401).json({ error: 'Invalid username or password.' });
-  }
-
+  if (!userOk || !passOk) return res.status(401).json({ error: 'Invalid username or password.' });
   const expiresAt = Date.now() + SESSION_MAX_AGE_SEC * 1000;
   const token = signSession(AUTH_USER, expiresAt);
-  res.setHeader(
-    'Set-Cookie',
-    `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE_SEC}`,
-  );
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE_SEC}`);
   res.status(204).end();
 }
 
 function handleLogout(_req, res) {
-  res.setHeader(
-    'Set-Cookie',
-    `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
-  );
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
   res.redirect(302, '/login');
 }
 
@@ -386,26 +316,14 @@ export function startDashboard() {
   }
 
   const app = express();
-
   app.use(express.urlencoded({ extended: false, limit: '4kb' }));
-
-  // Гейт идёт ПЕРЕД API/static. Login-страница и её ассеты в whitelist.
   app.use(authGate);
-
-  if (AUTH_ENABLED) {
-    logger.info(`[Dashboard] 🔒 Session auth enabled (user: ${AUTH_USER})`);
-  } else {
-    logger.info('[Dashboard] ⚠️  Auth disabled (DASHBOARD_USER/PASS not set) — relying on network-level protection');
-  }
 
   app.use("/api", (_req, res, next) => {
     res.set("Cache-Control", "no-store");
     next();
   });
 
-  // Статика (HTML/JS/CSS) обновляется при каждом деплое — ETag-валидация
-  // через no-cache (не путать с no-store: браузер кеширует, но всегда
-  // делает conditional GET). Решает проблему "обновил код, оператор видит старое".
   app.use((req, res, next) => {
     if (/\.(html|js|css)$/.test(req.path) || req.path === '/') {
       res.set('Cache-Control', 'no-cache');
@@ -416,17 +334,61 @@ export function startDashboard() {
   app.get("/login", handleLoginGet);
   app.post("/login", handleLoginPost);
   app.get("/logout", handleLogout);
-
   app.get("/api/status", handleStatus);
   app.get("/api/history", handleHistory);
   app.get("/api/activity", handleActivity);
   app.get("/api/tax-summary", handleTaxSummary);
 
+  app.get("/api/candles", async (req, res) => {
+    try {
+      const coin = req.query.coin;
+      if (!coin) return res.status(400).json({ error: "Missing coin" });
+
+      const now = Date.now();
+      const startTime = now - 4 * 3600_000; // 4 часа истории
+
+      const response = await axios.post("https://api.hyperliquid.xyz/info", {
+        type: "frontendCandles",
+        coin: coin.toUpperCase(),
+        interval: "1m",
+        startTime
+      });
+
+      res.json(response.data || []);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   app.use(express.static(PUBLIC_DIR));
+
 
   server = app.listen(PORT, HOST, () => {
     logger.info(`[Dashboard] ✅ Listening on http://${HOST}:${PORT}`);
   });
+
+  wss = new WebSocketServer({ server });
+  wss.on("connection", async (ws) => {
+    try {
+      const data = await getStatusData();
+      ws.send(JSON.stringify({ type: "status", data }));
+    } catch (err) {
+      logger.error(`[Dashboard] WS initial send failed: ${err.message}`);
+    }
+  });
+
+  broadcastTimer = setInterval(async () => {
+    if (!wss || wss.clients.size === 0) return;
+    try {
+      const data = await getStatusData();
+      const msg = JSON.stringify({ type: "status", data });
+      for (const client of wss.clients) {
+        if (client.readyState === 1) client.send(msg);
+      }
+    } catch (err) {
+      logger.debug(`[Dashboard] WS broadcast failed: ${err.message}`);
+    }
+  }, 2000);
 
   server.on("error", (err) => {
     logger.error(`[Dashboard] Server error: ${err.message}`);
@@ -434,8 +396,10 @@ export function startDashboard() {
 }
 
 export function stopDashboard() {
+  if (broadcastTimer) clearInterval(broadcastTimer);
   if (!server) return;
   return new Promise((resolve) => {
+    if (wss) wss.close();
     server.close(() => {
       logger.info("[Dashboard] ✅ Server stopped");
       server = null;

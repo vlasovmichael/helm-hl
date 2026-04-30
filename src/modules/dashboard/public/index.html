@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>HL Scanner — Terminal</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -34,7 +35,7 @@
       <header>
         <div class="equity-group">
           <div class="label">Total Equity</div>
-          <div class="value" id="equity-value">—</div>
+          <div class="value animated-value" id="equity-value">$0.00</div>
           <div class="delta" id="equity-delta">—</div>
         </div>
         <div class="meta-group">
@@ -66,6 +67,16 @@
           <div class="local-loader" id="chart-loader">
             <div class="loader-spinner"></div>
           </div>
+        </div>
+      </section>
+
+      <section class="card" id="price-card" style="display: none;">
+        <div class="card-header">
+          <div class="card-title" id="price-title">Price Performance</div>
+          <div id="price-meta" class="tax-year-label" style="font-family: var(--font-mono)">$0.00</div>
+        </div>
+        <div class="chart-container" style="height: 240px;">
+          <canvas id="price-chart"></canvas>
         </div>
       </section>
 
