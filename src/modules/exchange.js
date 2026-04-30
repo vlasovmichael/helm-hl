@@ -367,3 +367,29 @@ export async function getMarkPrice(coin) {
     return null;
   }
 }
+
+/**
+ * Live trade-side price для дашборда. Предпочитает midPx (близко к last trade),
+ * фолбэк — markPx. Используется только для отображения "Now" линии на графике
+ * чтобы цена совпадала с close последней свечи.
+ */
+export async function getLivePrice(coin) {
+  try {
+    const { data } = await axios.post(
+      "https://api.hyperliquid.xyz/info",
+      { type: "metaAndAssetCtxs" },
+      { timeout: 10_000 },
+    );
+    const [meta, ctxs] = data ?? [];
+    const universe = meta?.universe;
+    if (!Array.isArray(universe) || !Array.isArray(ctxs)) return null;
+    const upperCoin = coin.toUpperCase();
+    const idx = universe.findIndex((a) => (a.name ?? "").toUpperCase() === upperCoin);
+    if (idx === -1 || !ctxs[idx]) return null;
+    const px = parseFloat(ctxs[idx].midPx ?? ctxs[idx].markPx ?? "0");
+    return px > 0 ? px : null;
+  } catch (err) {
+    logger.debug(`[Exchange] getLivePrice(${coin}) failed: ${err.message}`);
+    return null;
+  }
+}

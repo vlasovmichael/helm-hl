@@ -11,7 +11,7 @@ import { dirname, join } from "path";
 import { config } from "../../core/config.js";
 import { logger } from "../../core/logger.js";
 import { getActivePosition, getHistorySince, getArchivedHistorySince } from "../../core/database.js";
-import { getAccountSummary, getPositions, getMarkPrice } from "../exchange.js";
+import { getAccountSummary, getPositions, getLivePrice } from "../exchange.js";
 import { FEE_RATE, MAKER_FEE_RATE } from "../executor/math.js";
 import { getAvailableBalance, getAccountEquity } from "../wallet.js";
 import { state } from "../../app/state.js";
@@ -132,7 +132,7 @@ async function getStatusData() {
   let currentPrice = null;
   if (position) {
     try {
-      currentPrice = await getMarkPrice(position.coin);
+      currentPrice = await getLivePrice(position.coin);
     } catch {
       // оставляем null, фронт фолбэкнется на entry или pnl-derived
     }
@@ -348,10 +348,20 @@ export function startDashboard() {
   app.get("/api/activity", handleActivity);
   app.get("/api/tax-summary", handleTaxSummary);
 
+  const ALLOWED_INTERVALS = {
+    "1m": 4 * 3600_000,
+    "5m": 16 * 3600_000,
+    "15m": 48 * 3600_000,
+    "1h": 7 * 24 * 3600_000,
+    "4h": 30 * 24 * 3600_000,
+  };
+
   app.get("/api/candles", async (req, res) => {
     try {
       const coin = req.query.coin;
       if (!coin) return res.status(400).json({ error: "Missing coin" });
+      const interval = ALLOWED_INTERVALS[req.query.interval] ? req.query.interval : "1m";
+      const windowMs = ALLOWED_INTERVALS[interval];
 
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 5000);
@@ -362,8 +372,8 @@ export function startDashboard() {
           type: "candleSnapshot",
           req: {
             coin: coin.toUpperCase(),
-            interval: "1m",
-            startTime: Date.now() - 4 * 3600_000,
+            interval,
+            startTime: Date.now() - windowMs,
             endTime: Date.now(),
           },
         }),

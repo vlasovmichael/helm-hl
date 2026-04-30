@@ -26,12 +26,15 @@ let priceSeries = null;
 let entryPriceLine = null;
 let currentPriceLine = null;
 let liveCandle = null; // {time, open, high, low, close}
+let currentInterval = '1m';
+const INTERVAL_SECONDS = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400 };
 let lastSuccessAt = 0;
 let currentRangeHours = 24;
 let chartLoaded = false;
 let socket = null;
 const lastAnimatedValues = new Map();
 let currentCoinInPos = null;
+let lastPos = null;
 
 // ── WebSocket ───────────────────────────────────
 
@@ -109,9 +112,11 @@ async function handlePriceChartUpdate(pos) {
   if (!pos) {
     card.style.display = 'none';
     currentCoinInPos = null;
+    lastPos = null;
     if (priceChart) { priceChart.remove(); priceChart = null; priceSeries = null; entryPriceLine = null; currentPriceLine = null; }
     return;
   }
+  lastPos = pos;
 
   card.style.display = 'block';
   document.getElementById('price-title').textContent = `Price Performance: #${pos.coin}`;
@@ -137,7 +142,7 @@ async function handlePriceChartUpdate(pos) {
 
 async function fetchAndRenderCandles(pos, currentPrice) {
   try {
-    const candles = await fetchJson(`/api/candles?coin=${pos.coin}`);
+    const candles = await fetchJson(`/api/candles?coin=${pos.coin}&interval=${currentInterval}`);
     if (!Array.isArray(candles) || candles.length === 0) return;
 
     const data = candles
@@ -242,17 +247,18 @@ function updateCurrentLine(price) {
 
 function tickLiveCandle(price, pos) {
   if (!priceSeries || !Number.isFinite(price)) return;
+  const step = INTERVAL_SECONDS[currentInterval] || 60;
   const now = Math.floor(Date.now() / 1000);
-  const bucket = now - (now % 60);
+  const bucket = now - (now % step);
 
-  if (!liveCandle || bucket > liveCandle.time + 60) {
+  if (!liveCandle || bucket > liveCandle.time + step) {
     // окно сильно сдвинулось — рефетчим (подтянем все пропущенные свечи)
     fetchAndRenderCandles(pos, price);
     return;
   }
 
   if (bucket > liveCandle.time) {
-    // новая минута — стартуем свечу с close предыдущей
+    // новый bucket — стартуем свечу с close предыдущей
     liveCandle = { time: bucket, open: liveCandle.close, high: price, low: price, close: price };
   } else {
     liveCandle.high = Math.max(liveCandle.high, price);
@@ -509,11 +515,23 @@ function renderFooter() {
 }
 
 document.querySelectorAll('.theme-btn').forEach(b => b.addEventListener('click', () => { localStorage.setItem(THEME_KEY, b.dataset.theme); applyTheme(b.dataset.theme); }));
-document.querySelectorAll('.range-btn').forEach(b => b.addEventListener('click', () => { 
-  document.querySelectorAll('.range-btn').forEach(r => r.classList.remove('active'));
+document.querySelectorAll('.range-btn[data-hours]').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.range-btn[data-hours]').forEach(r => r.classList.remove('active'));
   b.classList.add('active');
   currentRangeHours = b.dataset.hours;
   tick();
+}));
+
+document.querySelectorAll('#price-intervals .range-btn').forEach(b => b.addEventListener('click', async () => {
+  if (b.dataset.iv === currentInterval) return;
+  document.querySelectorAll('#price-intervals .range-btn').forEach(r => r.classList.remove('active'));
+  b.classList.add('active');
+  currentInterval = b.dataset.iv;
+  liveCandle = null;
+  if (lastPos) {
+    const px = Number.isFinite(lastPos.currentPrice) && lastPos.currentPrice > 0 ? lastPos.currentPrice : lastPos.entryPrice;
+    await fetchAndRenderCandles(lastPos, px);
+  }
 }));
 
 applyTheme(getStoredTheme());
