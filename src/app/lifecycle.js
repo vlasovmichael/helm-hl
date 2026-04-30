@@ -9,7 +9,7 @@ import { logger } from '../core/logger.js';
 import { getActivePosition } from '../core/database.js';
 import { disconnectExchange } from '../modules/exchange.js';
 import { sendMessage, stopCallbackPolling, formatUptime } from '../modules/reporter.js';
-import { serializeCircuitBreaker } from '../modules/executor/state.js';
+import { serializeCircuitBreaker, serializeSniper } from '../modules/executor/state.js';
 import { stopDashboard } from '../modules/dashboard/server.js';
 import { state, BOT_STATE_PATH } from './state.js';
 
@@ -52,6 +52,7 @@ export async function saveBotState(activePosition, reason) {
     daily_recap_sent_date: state.dailyRecapSentDate,
     last_fomo_alert: state.lastFomoAlert,
     circuit_breaker: serializeCircuitBreaker(),
+    sniper: serializeSniper(),
     active_position: activePosition
       ? {
           id:           activePosition.id,

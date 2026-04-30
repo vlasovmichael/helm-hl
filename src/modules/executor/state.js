@@ -263,6 +263,31 @@ export function hasSniper() {
   return pendingSniper !== null;
 }
 
+/**
+ * Сериализует Sniper-слот для bot_state.json. Возвращает null если слота нет.
+ * Live order на бирже (orderId) переживает рестарт — после restart мы продолжаем
+ * поллить статус и закроем как только биржа исполнит / истечёт окно.
+ */
+export function serializeSniper() {
+  if (!pendingSniper) return null;
+  return { ...pendingSniper };
+}
+
+/**
+ * Восстанавливает Sniper-слот из bot_state.json. Толерантен к null/мусору.
+ * Если слот старый (armedAt + window < now), просто игнорируем — на бирже
+ * ордер либо уже исполнен, либо отменён по TIF, sync позаботится о позиции.
+ */
+export function restoreSniper(saved) {
+  if (!saved || typeof saved !== 'object') return;
+  if (typeof saved.armedAt !== 'number' || !saved.coin) return;
+  pendingSniper = { ...saved };
+  logger.info(
+    `[Executor] 🎯 Sniper RESTORED from state — #${saved.coin} @ $${saved.armPrice} ` +
+      `(mode: ${saved.mode ?? 'PAPER'}, oid: ${saved.orderId ?? 'n/a'}, age: ${Math.round((Date.now() - saved.armedAt) / 60_000)}min)`,
+  );
+}
+
 // ── Dashboard API ──────────────────────────────
 
 /** Полный snapshot стейта для Dashboard. */

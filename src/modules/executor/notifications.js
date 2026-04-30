@@ -137,6 +137,90 @@ export async function notifySniperTimeout({ coin, armPrice, fallbackPrice, reaso
   );
 }
 
+// ── SNIPER (PROD — реальный Alo на бирже, Iter 3) ──
+
+export async function notifySniperArmedProd({ coin, armPrice, orderId, sz, reason, windowMinutes }) {
+  await sendMessage(
+    `🎯 <b>[PROD SNIPER ARMED] #${coin}</b>\n` +
+      `<code>═════════════════════</code>\n` +
+      `📍 Alo BUY reduce_only @ <b>$${armPrice}</b>\n` +
+      `📦 Size: ${sz} ${coin}\n` +
+      `🔑 OID: <code>${orderId}</code>\n` +
+      `📈 Причина: <b>${reason}</b>\n` +
+      `⏱ Окно: <b>${windowMinutes}мин</b>\n` +
+      `<i>Maker-only post. Если зальётся — экономим taker fee + slippage.\n` +
+      `Если нет — fallback на market.</i>`,
+    true,
+  );
+}
+
+export async function notifySniperFilledProd({
+  coin, armPrice, fillPx, waitMinutes, reason, holdHours,
+  pricePnl, fundingPnl, fee, pnl, fundingSource, feeSavedVsMarket,
+}) {
+  const sign = pnl >= 0 ? '+' : '';
+  const fSign = fundingPnl >= 0 ? '+' : '';
+  const pSign = pricePnl >= 0 ? '+' : '';
+  const sSign = feeSavedVsMarket >= 0 ? '+' : '';
+  await sendMessage(
+    `🎯✅ <b>[PROD SNIPER FILLED] #${coin}</b>\n` +
+      `<code>═════════════════════</code>\n` +
+      `📈 Причина: <b>${reason}</b>\n` +
+      `📍 Arm $${armPrice} → Fill <b>$${fillPx}</b>\n` +
+      `⏱ Wait: ${waitMinutes}мин | Hold: ${holdHours.toFixed(1)}ч\n` +
+      `<code>─────────────────────</code>\n` +
+      `📊 Price PnL: ${pSign}$${pricePnl.toFixed(4)}\n` +
+      `💰 Funding PnL: ${fSign}$${fundingPnl.toFixed(4)} (${fundingSource})\n` +
+      `🏷 Fee (entry taker + exit maker): $${fee.toFixed(4)}\n` +
+      `<b>💎 Итого: ${sign}$${pnl.toFixed(4)}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `💎 Saved vs market: <b>${sSign}$${feeSavedVsMarket.toFixed(4)}</b>`,
+    true,
+  );
+}
+
+export async function notifySniperTimeoutProd({ coin, armPrice, fallbackPrice, reason, pnl, holdHours }) {
+  const sign = pnl >= 0 ? '+' : '';
+  await sendMessage(
+    `🎯⏰ <b>[PROD SNIPER TIMEOUT → MARKET] #${coin}</b>\n` +
+      `<code>═════════════════════</code>\n` +
+      `📈 Причина: <b>${reason}</b>\n` +
+      `📍 Arm $${armPrice} → fallback @ $${fallbackPrice}\n` +
+      `⏳ Hold: ${holdHours.toFixed(1)}ч\n` +
+      `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
+      `<i>Maker-limit не залился за окно — ушли в market.</i>`,
+    true,
+  );
+}
+
+export async function notifySniperAdverseAbort({
+  coin, armPrice, currentPrice, driftBps, reason, waitMinutes, pnl, isProd,
+}) {
+  const sign = pnl >= 0 ? '+' : '';
+  const tag = isProd ? 'PROD SNIPER ADVERSE' : 'SNIPER ADVERSE';
+  await sendMessage(
+    `🎯📉 <b>[${tag} → MARKET] #${coin}</b>\n` +
+      `<code>═════════════════════</code>\n` +
+      `📈 Причина: <b>${reason}</b>\n` +
+      `📍 Arm $${armPrice} → mark $${currentPrice}\n` +
+      `📊 Drift: <b>+${driftBps.toFixed(1)}bps</b> (порог ${30}bps)\n` +
+      `⏱ Wait: ${waitMinutes}мин\n` +
+      `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
+      `<i>Цена ушла против шорта — режем maker-окно, идём в market не дожидаясь таймаута.</i>`,
+    true,
+  );
+}
+
+export async function notifySniperArmFailed({ coin, reason }) {
+  await sendMessage(
+    `⚠️ <b>[PROD SNIPER ARM FAILED] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `Причина: <code>${reason}</code>\n` +
+      `<i>Откатываюсь на market-close (productionClose).</i>`,
+    true,
+  );
+}
+
 // ── SNIPER-HUNTER (Strategy #3: Volatility Spike Mean-Reversion) ──
 
 export async function notifyHunterOpen({ coin, sizeUsd, balance, price, spikePct, sl, tp, fee }) {

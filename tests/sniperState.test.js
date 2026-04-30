@@ -30,8 +30,8 @@ test('MAKER_FEE_RATE меньше FEE_RATE (maker дешевле taker)', () => 
   assert.ok(MAKER_FEE_RATE >= 0, 'MAKER_FEE_RATE не должен быть отрицательным (rebate-тиров пока не моделируем)');
 });
 
-test('SNIPER_WINDOW_MS — 15 минут', () => {
-  assert.equal(SNIPER_WINDOW_MS, 15 * 60_000);
+test('SNIPER_WINDOW_MS — 5 минут', () => {
+  assert.equal(SNIPER_WINDOW_MS, 5 * 60_000);
 });
 
 test('SNIPER_SOFT_REASONS содержит soft-причины', () => {

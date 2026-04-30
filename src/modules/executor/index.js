@@ -11,6 +11,8 @@ import { getAccountEquity } from '../wallet.js';
 import { checkVolatility } from '../volatility.js';
 import { paperOpen, paperClose, hunterPaperOpen } from './paper.js';
 import { productionOpen, productionClose, productionRotate } from './production.js';
+import { productionArmSniper, finalizeProdSniperPartial } from './sniper.js';
+import { getExchange } from '../exchange.js';
 import {
   notifyRotate, notifyRotateFailed,
   notifyOpenBlocked, notifyDrawdownBreached,
@@ -191,11 +193,11 @@ async function handleClose(signal, position) {
     return { ok: false };
   }
 
-  // ── Sniper routing (PAPER-only в Iter 2; PROD — Iter 3) ─────────
+  // ── Sniper routing (soft-причины → maker-only exit) ─────────
   const isSoft = SNIPER_SOFT_REASONS.has(signal.reason);
   const sniperActive = hasSniper();
 
-  if (!config.isProduction && isSoft) {
+  if (isSoft) {
     // Dup soft-signal при армированном снайпере → silent skip: снайпер уже работает.
     if (sniperActive) {
       const slot = getSniper();
@@ -206,15 +208,30 @@ async function handleClose(signal, position) {
       logger.warn(
         `[Executor] Sniper armed on #${slot.coin}, but close signal for #${position.coin} — clearing stale slot`,
       );
+      // PROD-слот мог иметь живой ордер — пробуем отменить.
+      if (slot.mode === 'PROD' && slot.orderId) {
+        try {
+          await getExchange().exchange.cancelOrder({ coin: `${slot.coin}-PERP`, o: slot.orderId });
+          logger.info(`[Executor] cancelled stale Sniper oid=${slot.orderId} on #${slot.coin}`);
+        } catch (err) {
+          logger.warn(`[Executor] failed to cancel stale Sniper oid=${slot.orderId}: ${err.message}`);
+        }
+      }
       clearSniper();
     }
 
+    if (config.isProduction) {
+      return productionArmSniper(signal, position);
+    }
+
+    // PAPER путь — оставляем как было.
     armSniper({
       positionId: position.id,
       coin:       position.coin,
       reason:     signal.reason,
       armPrice:   signal.price,
-      side:       'BUY',  // закрываем short → покупаем обратно
+      side:       'BUY',
+      mode:       'PAPER',
       signal,
     });
     const windowMinutes = Math.round(SNIPER_WINDOW_MS / 60_000);
@@ -232,12 +249,29 @@ async function handleClose(signal, position) {
   }
 
   // Emergency reason при армированном снайпере → отменяем снайпер, идём в market.
+  let emergencySlot = null;
   if (sniperActive) {
-    const slot = getSniper();
+    emergencySlot = getSniper();
     logger.warn(
-      `[Executor] ⚡ Emergency reason "${signal.reason}" — abort Sniper on #${slot.coin}`,
+      `[Executor] ⚡ Emergency reason "${signal.reason}" — abort Sniper on #${emergencySlot.coin}`,
     );
+    if (emergencySlot.mode === 'PROD' && emergencySlot.orderId) {
+      try {
+        await getExchange().exchange.cancelOrder({ coin: `${emergencySlot.coin}-PERP`, o: emergencySlot.orderId });
+        logger.info(`[Executor] emergency cancel of Sniper oid=${emergencySlot.orderId} on #${emergencySlot.coin}`);
+      } catch (err) {
+        logger.warn(`[Executor] emergency cancelOrder failed (oid=${emergencySlot.orderId}): ${err.message}`);
+      }
+    }
     clearSniper();
+  }
+
+  // Если был partial-fill PROD-снайпера → используем комбинированную бухгалтерию вместо чистого market.
+  if (config.isProduction && emergencySlot?.mode === 'PROD' && (emergencySlot.partialFilledSz ?? 0) > 0) {
+    logger.info(
+      `[Executor] emergency #${position.coin} с partial-fill (${emergencySlot.partialFilledSz}/${emergencySlot.armSzi}) — combined accounting`,
+    );
+    return finalizeProdSniperPartial(position, emergencySlot, signal.reason);
   }
 
   if (config.isProduction) {

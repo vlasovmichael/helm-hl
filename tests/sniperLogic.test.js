@@ -116,13 +116,23 @@ test('decideSniperAction: нет scout-данных + окно НЕ истекл
   assert.equal(r.kind, 'wait');
 });
 
-test('decideSniperAction: цена выше armPrice → wait', () => {
+test('decideSniperAction: цена чуть выше armPrice (< 30bps) → wait', () => {
   const r = decideSniperAction(
     slot(), pos(),
-    [{ coin: 'kPEPE', price: 0.001005 }],  // выше armPrice=0.001
+    [{ coin: 'kPEPE', price: 0.0010020 }],  // +20bps от armPrice=0.001
     now,
   );
   assert.equal(r.kind, 'wait');
+});
+
+test('decideSniperAction: adverse drift > 30bps → adverse-abort', () => {
+  const r = decideSniperAction(
+    slot(), pos(),
+    [{ coin: 'kPEPE', price: 0.001005 }],  // +50bps от armPrice=0.001
+    now,
+  );
+  assert.equal(r.kind, 'adverse-abort');
+  assert.ok(r.driftBps > 30);
 });
 
 test('decideSniperAction: цена = armPrice → fill (граничный случай)', () => {

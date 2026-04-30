@@ -5,7 +5,7 @@ import { logger } from '../core/logger.js';
 import { getActivePosition, savePosition, closePosition as dbClosePosition } from '../core/database.js';
 import { sendMessage } from './reporter.js';
 import { checkAccountLeverage } from './exchange.js';
-import { restoreCircuitBreaker } from './executor/state.js';
+import { restoreCircuitBreaker, restoreSniper } from './executor/state.js';
 
 import { state as appState } from '../app/state.js';
 
@@ -488,6 +488,15 @@ export async function syncWithExchange() {
   logger.info('───────────────────────────────────────────────');
 
   try {
+    // Восстанавливаем executor-state из bot_state.json (если есть).
+    const savedForRestore = await loadBotState();
+    if (savedForRestore?.circuit_breaker) {
+      restoreCircuitBreaker(savedForRestore.circuit_breaker);
+    }
+    if (savedForRestore?.sniper) {
+      restoreSniper(savedForRestore.sniper);
+    }
+
     if (config.isProduction) {
       await syncProduction();
       await checkLeverageSettings();
