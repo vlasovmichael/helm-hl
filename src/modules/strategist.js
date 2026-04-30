@@ -1,5 +1,6 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
+import { getCachedAccountValueSync } from '../core/balanceCache.js';
 
 const {
   roundTrip: ROUND_TRIP,
@@ -13,6 +14,7 @@ const {
   fundingGateMinutes: FUNDING_GATE_MINUTES,
   carryTrailEnabled: CARRY_TRAIL_ENABLED,
   carryTrailArmPct: CARRY_TRAIL_ARM_PCT,
+  carryTrailArmPctEquity: CARRY_TRAIL_ARM_PCT_EQUITY,
   carryTrailGiveBackPct: CARRY_TRAIL_GIVE_BACK_PCT,
   negativeFundingSoftExitMinPnlPct: NEG_FUND_SOFT_MIN_PNL_PCT,
 } = config.trading;
@@ -47,7 +49,15 @@ let delistCooldown = { coin: null, until: 0 };
 // Trailing TP: пик unrealized PnL% по каждой монете. Активируется только
 // когда unrealized ≥ ARM_PCT — защита от шума (мелкие колебания не должны
 // арм-ить trailing). При закрытии позиции / возврате в Сценарий А — clear.
+//
+// Два независимых пика на одну позицию:
+//   - peakUnrealizedPct  — % движения цены от entry (price-based, без funding)
+//   - peakEquityPct      — price-PnL в $ как % equity (масштаб «реальной прибыли»)
+// Carry зарабатывает на funding, поэтому % движения цены может быть < 1%, а
+// PnL в $ — несколько % от депо. Чтобы trail срабатывал и в этом случае,
+// мониторим оба сигнала параллельно: arm/close по тому, который сработал первым.
 const peakUnrealizedPct = new Map();
+const peakEquityPct     = new Map();
 
 const {
   minApy,
@@ -118,6 +128,7 @@ export function analyze(scoutData, activePosition) {
     negativeFundingStreak = 0;
     disappearedStreak = 0;
     peakUnrealizedPct.clear();
+    peakEquityPct.clear();
 
     const best = scoutData[0]; // отсортированы по smoothedApy desc
 
@@ -206,6 +217,7 @@ export function analyze(scoutData, activePosition) {
       disappearedStreak = 0;
       delistCooldown = { coin: currentCoin, until: Date.now() + DELIST_COOLDOWN_MINUTES * 60_000 };
       peakUnrealizedPct.delete(currentCoin);
+      peakEquityPct.delete(currentCoin);
       logger.warn(
         `[Strategist] CLOSE — ${currentCoin} confirmed delisted (${DELIST_CONFIRM_TICKS} ticks) | ` +
           `cooldown ${DELIST_COOLDOWN_MINUTES}min`,
@@ -233,6 +245,7 @@ export function analyze(scoutData, activePosition) {
   const priceSpike = ((current.price - activePosition.entry_price) / activePosition.entry_price) * 100;
   if (priceSpike > 10) {
     peakUnrealizedPct.delete(currentCoin);
+    peakEquityPct.delete(currentCoin);
     logger.warn(`[Strategist] CLOSE — ${currentCoin} price spiked +${priceSpike.toFixed(2)}% (short at risk)`);
     return {
       action: 'CLOSE',
@@ -243,34 +256,77 @@ export function analyze(scoutData, activePosition) {
   }
 
   // 3. Trailing TP: фиксируем прибыль когда позиция сдала GIVE_BACK% от пика.
-  //    Carry — short, поэтому unrealized PnL = (entry − current) / entry * 100.
+  //    Carry — short, поэтому price-PnL = (entry − current) / entry * 100.
+  //    Параллельно мониторим два сигнала, либой может зафайрить close:
+  //      (a) % движения цены ≥ CARRY_TRAIL_ARM_PCT (классический)
+  //      (b) price-PnL$ как % equity ≥ CARRY_TRAIL_ARM_PCT_EQUITY — нужен для
+  //          carry, где цена дрейфует на 0.5–1%, но $ от funding'а — несколько
+  //          процентов депо. Без (b) на маленьких позициях trail не армится.
   //    Идёт ВЫШЕ negative_funding: цель — выйти на просадке от пика, пока funding
   //    ещё положительный. Игнорирует minHold (это защитный, не soft-выход).
   if (CARRY_TRAIL_ENABLED) {
     const unrealizedPct = ((activePosition.entry_price - current.price) / activePosition.entry_price) * 100;
 
+    // Path A: price-move %
     if (unrealizedPct >= CARRY_TRAIL_ARM_PCT) {
       const prevPeak = peakUnrealizedPct.get(currentCoin) ?? 0;
-      if (unrealizedPct > prevPeak) {
-        peakUnrealizedPct.set(currentCoin, unrealizedPct);
+      if (unrealizedPct > prevPeak) peakUnrealizedPct.set(currentCoin, unrealizedPct);
+    }
+
+    // Path B: equity %. Equity берём из balance cache (sync). Если кэша нет —
+    // path B молча disabled (path A продолжает работать).
+    const equity = getCachedAccountValueSync();
+    let equityPct = null;
+    if (equity && equity > 0) {
+      const qty    = activePosition.size_usd / activePosition.entry_price;
+      const pnlUsd = (activePosition.entry_price - current.price) * qty;
+      equityPct    = (pnlUsd / equity) * 100;
+
+      if (equityPct >= CARRY_TRAIL_ARM_PCT_EQUITY) {
+        const prevPeakEq = peakEquityPct.get(currentCoin) ?? 0;
+        if (equityPct > prevPeakEq) peakEquityPct.set(currentCoin, equityPct);
       }
     }
 
-    const peak = peakUnrealizedPct.get(currentCoin) ?? 0;
-    if (peak >= CARRY_TRAIL_ARM_PCT) {
-      const giveBack          = peak - unrealizedPct;
-      const giveBackThreshold = peak * (CARRY_TRAIL_GIVE_BACK_PCT / 100);
+    const peakPrice  = peakUnrealizedPct.get(currentCoin) ?? 0;
+    const peakEquity = peakEquityPct.get(currentCoin) ?? 0;
+
+    // Path A trigger
+    if (peakPrice >= CARRY_TRAIL_ARM_PCT) {
+      const giveBack          = peakPrice - unrealizedPct;
+      const giveBackThreshold = peakPrice * (CARRY_TRAIL_GIVE_BACK_PCT / 100);
       if (giveBack >= giveBackThreshold) {
         logger.warn(
-          `[Strategist] CLOSE — ${currentCoin} trailing TP: peak +${peak.toFixed(2)}% → ` +
-            `now +${unrealizedPct.toFixed(2)}% (gave back ${(giveBack / peak * 100).toFixed(0)}% ≥ ${CARRY_TRAIL_GIVE_BACK_PCT}%)`,
+          `[Strategist] CLOSE — ${currentCoin} trailing TP (price): peak +${peakPrice.toFixed(2)}% → ` +
+            `now +${unrealizedPct.toFixed(2)}% (gave back ${(giveBack / peakPrice * 100).toFixed(0)}% ≥ ${CARRY_TRAIL_GIVE_BACK_PCT}%)`,
         );
         peakUnrealizedPct.delete(currentCoin);
+        peakEquityPct.delete(currentCoin);
         return {
           action: 'CLOSE',
           coin:   currentCoin,
           price:  current.price,
           reason: 'trailing_tp',
+        };
+      }
+    }
+
+    // Path B trigger
+    if (peakEquity >= CARRY_TRAIL_ARM_PCT_EQUITY && equityPct !== null) {
+      const giveBack          = peakEquity - equityPct;
+      const giveBackThreshold = peakEquity * (CARRY_TRAIL_GIVE_BACK_PCT / 100);
+      if (giveBack >= giveBackThreshold) {
+        logger.warn(
+          `[Strategist] CLOSE — ${currentCoin} trailing TP (equity): peak +${peakEquity.toFixed(2)}% eq → ` +
+            `now +${equityPct.toFixed(2)}% eq (gave back ${(giveBack / peakEquity * 100).toFixed(0)}% ≥ ${CARRY_TRAIL_GIVE_BACK_PCT}%)`,
+        );
+        peakUnrealizedPct.delete(currentCoin);
+        peakEquityPct.delete(currentCoin);
+        return {
+          action: 'CLOSE',
+          coin:   currentCoin,
+          price:  current.price,
+          reason: 'trailing_tp_equity',
         };
       }
     }
@@ -299,6 +355,7 @@ export function analyze(scoutData, activePosition) {
       );
       negativeFundingStreak = 0; // сброс
       peakUnrealizedPct.delete(currentCoin); // позиция закрывается → пик не нужен
+      peakEquityPct.delete(currentCoin);
       return {
         action: 'CLOSE',
         coin:   currentCoin,
@@ -340,6 +397,7 @@ export function analyze(scoutData, activePosition) {
         `[Strategist] CLOSE — ${currentCoin} slowApy ${current.slowApy.toFixed(2)}% < effectiveExit ${effectiveExitApy}% (held ${held.toFixed(0)}min)`,
       );
       peakUnrealizedPct.delete(currentCoin);
+      peakEquityPct.delete(currentCoin);
       return {
         action: 'CLOSE',
         coin:   currentCoin,
@@ -388,6 +446,7 @@ export function analyze(scoutData, activePosition) {
           `[Strategist] ROTATE — ${currentCoin} (${current.smoothedApy.toFixed(2)}%) → ${best.coin} (${best.smoothedApy.toFixed(2)}%) | payback: ${hours.toFixed(1)}h`,
         );
         peakUnrealizedPct.delete(currentCoin);
+        peakEquityPct.delete(currentCoin);
         return {
           action:       'ROTATE',
           closeCoin:    currentCoin,

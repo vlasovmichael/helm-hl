@@ -13,6 +13,10 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync, unlinkSync } from 'fs';
+import { join } from 'path';
+
+const BALANCE_CACHE_FILE = join('data', 'balance_cache.json');
 
 // ── ENV до импорта модуля ─────────────────────
 process.env.TRADING_MODE          = 'PAPER';
@@ -26,6 +30,8 @@ process.env.LEVERAGE              = '1';
 
 const { analyze, hoursToBreakeven, calculatePaybackHours } =
   await import('../src/modules/strategist.js');
+const { _resetBalanceCache, _seedBalanceCache } =
+  await import('../src/core/balanceCache.js');
 
 // ── Хелперы ───────────────────────────────────
 const HOUR_MS = 3_600_000;
@@ -584,6 +590,63 @@ test('Negative funding: позиция чуть-чуть в плюсе (<2%) →
   );
   assert.equal(r.action, 'CLOSE');
   assert.equal(r.reason, 'negative_funding');
+});
+
+// ── Equity-based trailing (path B) — FARTCOIN регрессия ──
+//   PnL +$1.80 на equity $44 = +4.1% eq, при движении цены ~0.8% (плечо ~5x).
+//   Path A (5% price) не армится; path B (2% equity) должен.
+
+test('Trailing equity: peak equity-PnL ≥ ARM_PCT_EQUITY → arm path B', () => {
+  _resetBalanceCache();
+  _seedBalanceCache(44);
+  resetState();
+  // size $200 (плечо ~5x на $44), entry $1.00 → qty=200
+  // price $0.991 → pnl=(1.0-0.991)*200=$1.80 → 4.09% equity (≥ ARM 2%)
+  const pos = makePosition('FART', 40, { entry_price: 1.0 });
+  pos.size_usd = 200;
+  // Тик 1: peak +4.09% equity (но всего 0.9% движения цены — path A не армится)
+  analyze([makeScoutItem('FART', 40, { price: 0.991, slowApy: 40 })], pos);
+  // Тик 2: цена откатилась к 0.9938 → pnl=$1.24 → 2.82% eq.
+  // Gave back (4.09-2.82)/4.09 = 31% ≥ 30% → CLOSE trailing_tp_equity
+  const r = analyze(
+    [makeScoutItem('FART', 40, { price: 0.9938, slowApy: 40 })],
+    pos,
+  );
+  assert.equal(r.action, 'CLOSE');
+  assert.equal(r.reason, 'trailing_tp_equity');
+  assert.equal(r.coin, 'FART');
+});
+
+test('Trailing equity: без кэша equity → path B молча disabled', () => {
+  _resetBalanceCache();
+  // Также удаляем дисковый кэш — иначе предыдущий тестовый прогон
+  // (например, wallet.test.js) оставит файл и loadFromDisk поднимет его.
+  if (existsSync(BALANCE_CACHE_FILE)) unlinkSync(BALANCE_CACHE_FILE);
+  // НЕ сидим кэш → getCachedAccountValueSync() → null
+  resetState();
+  const pos = makePosition('FART', 40, { entry_price: 1.0 });
+  pos.size_usd = 200;
+  // Тот же сценарий что выше — но без equity path B не должен сработать.
+  analyze([makeScoutItem('FART', 40, { price: 0.991, slowApy: 40 })], pos);
+  const r = analyze(
+    [makeScoutItem('FART', 40, { price: 0.9938, slowApy: 40 })],
+    pos,
+  );
+  assert.equal(r.action, 'HOLD');
+});
+
+test('Trailing equity: equityPct < ARM_PCT_EQUITY → path B не армится', () => {
+  _resetBalanceCache();
+  _seedBalanceCache(100); // большой equity → 1.80/100 = 1.8% < 2% ARM
+  resetState();
+  const pos = makePosition('FART', 40, { entry_price: 1.0 });
+  pos.size_usd = 200;
+  analyze([makeScoutItem('FART', 40, { price: 0.991, slowApy: 40 })], pos);
+  const r = analyze(
+    [makeScoutItem('FART', 40, { price: 0.9938, slowApy: 40 })],
+    pos,
+  );
+  assert.equal(r.action, 'HOLD');
 });
 
 test('Trailing: emergency-выходы имеют приоритет над trailing', () => {

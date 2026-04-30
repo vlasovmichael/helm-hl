@@ -169,6 +169,20 @@ export async function getCachedBalance(fetcher) {
 }
 
 /**
+ * Sync-доступ к закэшированному equity (accountValue). Возвращает null,
+ * если кэша ещё нет / он устарел. Используется в sync-местах (например,
+ * strategist analyze()) — fetcher запускать оттуда нельзя.
+ *
+ * @returns {number|null}
+ */
+export function getCachedAccountValueSync() {
+  loadFromDisk();
+  if (!lastGood) return null;
+  if (Date.now() - lastGood.ts >= STALE_MAX_AGE_MS) return null;
+  return lastGood.value.accountValue;
+}
+
+/**
  * Для тестов — сброс состояния кэша (включая флаг загрузки с диска).
  */
 export function _resetBalanceCache() {
@@ -176,6 +190,17 @@ export function _resetBalanceCache() {
   zeroStreakStart = 0;
   freezeAlerted = false;
   diskLoaded = false;
+}
+
+/**
+ * Для тестов — заполнить кэш заданным accountValue, минуя диск.
+ */
+export function _seedBalanceCache(accountValue) {
+  diskLoaded = true; // блокируем чтение диска
+  lastGood = {
+    value: { accountValue, withdrawable: accountValue, unrealizedPnl: 0 },
+    ts:    Date.now(),
+  };
 }
 
 /**

@@ -91,12 +91,16 @@ function loadConfig() {
   // Защита от сценария «unrealized PnL вырос до +20%, но дед ждёт negative_funding
   // и закрывается в ноль». Триггерим выход, когда позиция сдала GIVE_BACK% от пика.
   // ARM_PCT = пока unrealized < этого порога, peak не трекаем (фильтр шума).
-  const carryTrailEnabled     = (process.env.CARRY_TRAIL_ENABLED || 'true').toLowerCase() === 'true';
-  const carryTrailArmPct      = parseFloat(process.env.CARRY_TRAIL_ARM_PCT       || '5');
-  const carryTrailGiveBackPct = parseFloat(process.env.CARRY_TRAIL_GIVE_BACK_PCT || '30');
+  const carryTrailEnabled       = (process.env.CARRY_TRAIL_ENABLED || 'true').toLowerCase() === 'true';
+  const carryTrailArmPct        = parseFloat(process.env.CARRY_TRAIL_ARM_PCT        || '5');
+  const carryTrailArmPctEquity  = parseFloat(process.env.CARRY_TRAIL_ARM_PCT_EQUITY || '2');
+  const carryTrailGiveBackPct   = parseFloat(process.env.CARRY_TRAIL_GIVE_BACK_PCT  || '30');
 
   if (isNaN(carryTrailArmPct) || carryTrailArmPct <= 0) {
     throw new Error(`CARRY_TRAIL_ARM_PCT must be positive number. Got: "${process.env.CARRY_TRAIL_ARM_PCT}"`);
+  }
+  if (isNaN(carryTrailArmPctEquity) || carryTrailArmPctEquity <= 0) {
+    throw new Error(`CARRY_TRAIL_ARM_PCT_EQUITY must be positive number. Got: "${process.env.CARRY_TRAIL_ARM_PCT_EQUITY}"`);
   }
   if (isNaN(carryTrailGiveBackPct) || carryTrailGiveBackPct <= 0 || carryTrailGiveBackPct >= 100) {
     throw new Error(`CARRY_TRAIL_GIVE_BACK_PCT must be in (0, 100). Got: "${process.env.CARRY_TRAIL_GIVE_BACK_PCT}"`);
@@ -218,6 +222,7 @@ function loadConfig() {
       hunterTimeStopMin,
       carryTrailEnabled,
       carryTrailArmPct,
+      carryTrailArmPctEquity,
       carryTrailGiveBackPct,
       negativeFundingSoftExitMinPnlPct,
     },
