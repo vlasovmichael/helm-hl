@@ -407,34 +407,34 @@ function renderPosition(pos) {
   const pnl = pos.currentPnl;
   let pnlBlock = '';
   if (pnl) {
-    const netMarketCls = pnl.netMarket >= 0 ? 'positive' : 'negative';
-    const netMakerCls  = pnl.netMaker  >= 0 ? 'positive' : 'negative';
-    const sgn = (v) => (v >= 0 ? '+' : '');
+    const cls = (v) => (v >= 0 ? 'positive' : 'negative');
+    const sgn = (v) => (v >= 0 ? '+' : '−');
+    const abs = (v) => Math.abs(v).toFixed(4);
     pnlBlock = `
         <div class="data-grid" style="margin-top:0.75rem">
             <div class="grid-item">
                 <div class="item-label">Net (if exit market)</div>
-                <div class="item-value ${netMarketCls}">${sgn(pnl.netMarket)}$${pnl.netMarket.toFixed(4)}</div>
+                <div class="item-value ${cls(pnl.netMarket)}">${sgn(pnl.netMarket)}$${abs(pnl.netMarket)}</div>
             </div>
             <div class="grid-item">
                 <div class="item-label">Net (if exit maker)</div>
-                <div class="item-value ${netMakerCls}">${sgn(pnl.netMaker)}$${pnl.netMaker.toFixed(4)}</div>
+                <div class="item-value ${cls(pnl.netMaker)}">${sgn(pnl.netMaker)}$${abs(pnl.netMaker)}</div>
             </div>
             <div class="grid-item">
                 <div class="item-label">Price PnL</div>
-                <div class="item-value">${sgn(pnl.price)}$${pnl.price.toFixed(4)}</div>
+                <div class="item-value ${cls(pnl.price)}">${sgn(pnl.price)}$${abs(pnl.price)}</div>
             </div>
             <div class="grid-item">
                 <div class="item-label">Funding</div>
-                <div class="item-value">${sgn(pnl.funding)}$${pnl.funding.toFixed(4)}</div>
+                <div class="item-value ${cls(pnl.funding)}">${sgn(pnl.funding)}$${abs(pnl.funding)}</div>
             </div>
             <div class="grid-item">
                 <div class="item-label">Entry fee (paid)</div>
-                <div class="item-value">−$${pnl.entryFee.toFixed(4)}</div>
+                <div class="item-value negative">−$${pnl.entryFee.toFixed(4)}</div>
             </div>
             <div class="grid-item">
                 <div class="item-label">Exit fee est. (mkt / mkr)</div>
-                <div class="item-value">−$${pnl.exitFeeMarket.toFixed(4)} / −$${pnl.exitFeeMaker.toFixed(4)}</div>
+                <div class="item-value negative">−$${pnl.exitFeeMarket.toFixed(4)} / −$${pnl.exitFeeMaker.toFixed(4)}</div>
             </div>
         </div>
     `;

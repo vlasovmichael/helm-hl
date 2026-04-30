@@ -219,6 +219,8 @@ header {
 }
 
 .item-value.highlight { color: var(--accent); }
+.item-value.positive  { color: var(--green); }
+.item-value.negative  { color: var(--red); }
 
 .empty-state {
   color: var(--text-secondary);
