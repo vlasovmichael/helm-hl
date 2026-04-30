@@ -22,6 +22,10 @@ function formatUptime(minutes) {
 const REFRESH_MS = 10_000;
 let equityChart = null;
 let priceChart = null;
+let priceSeries = null;
+let entryPriceLine = null;
+let currentPriceLine = null;
+let liveCandle = null; // {time, open, high, low, close}
 let lastSuccessAt = 0;
 let currentRangeHours = 24;
 let chartLoaded = false;
@@ -105,12 +109,13 @@ async function handlePriceChartUpdate(pos) {
   if (!pos) {
     card.style.display = 'none';
     currentCoinInPos = null;
+    if (priceChart) { priceChart.remove(); priceChart = null; priceSeries = null; entryPriceLine = null; currentPriceLine = null; }
     return;
   }
-  
+
   card.style.display = 'block';
   document.getElementById('price-title').textContent = `Price Performance: #${pos.coin}`;
-  
+
   let currentPrice = pos.entryPrice;
   if (Number.isFinite(pos.currentPrice) && pos.currentPrice > 0) {
     currentPrice = pos.currentPrice;
@@ -118,17 +123,15 @@ async function handlePriceChartUpdate(pos) {
     const qty = pos.sizeUsd / pos.entryPrice;
     currentPrice = pos.entryPrice + (pos.currentPnl.price / qty);
   }
-  
+
   document.getElementById('price-meta').textContent = `$${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
 
   if (currentCoinInPos !== pos.coin) {
     currentCoinInPos = pos.coin;
-    if (priceChart) { priceChart.destroy(); priceChart = null; }
     await fetchAndRenderCandles(pos, currentPrice);
-  } else if (priceChart) {
-    priceChart.options.plugins.annotation.annotations.currentLine.yMin = currentPrice;
-    priceChart.options.plugins.annotation.annotations.currentLine.yMax = currentPrice;
-    priceChart.update('none');
+  } else if (priceSeries) {
+    tickLiveCandle(currentPrice, pos);
+    updateCurrentLine(currentPrice);
   }
 }
 
@@ -136,67 +139,127 @@ async function fetchAndRenderCandles(pos, currentPrice) {
   try {
     const candles = await fetchJson(`/api/candles?coin=${pos.coin}`);
     if (!Array.isArray(candles) || candles.length === 0) return;
-    
-    const labels = candles.map(c => new Date(c.t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
-    const prices = candles.map(c => parseFloat(c.c));
-    const entryPrice = pos.entryPrice;
 
-    initPriceChart(labels, prices, entryPrice, currentPrice);
+    const data = candles
+      .map(c => ({
+        time: Math.floor(c.t / 1000),
+        open: parseFloat(c.o),
+        high: parseFloat(c.h),
+        low: parseFloat(c.l),
+        close: parseFloat(c.c),
+      }))
+      .filter(d => Number.isFinite(d.open) && Number.isFinite(d.close))
+      .sort((a, b) => a.time - b.time);
+
+    initPriceChart();
+    priceSeries.setData(data);
+    const last = data[data.length - 1];
+    liveCandle = { time: last.time, open: last.open, high: last.high, low: last.low, close: last.close };
+    setEntryLine(pos.entryPrice);
+    setCurrentLine(currentPrice);
+    priceChart.timeScale().fitContent();
   } catch (err) { console.error('[PriceChart] fetch error:', err); }
 }
 
-function initPriceChart(labels, data, entryPx, currentPx) {
-  const canvas = document.getElementById('price-chart');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-  
-  priceChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        data,
-        borderColor: accent,
-        borderWidth: 1.5,
-        tension: 0.1,
-        pointRadius: 0,
-        fill: false
-      }]
+function initPriceChart() {
+  const container = document.getElementById('price-chart');
+  if (!container) return;
+  if (priceChart) { priceChart.remove(); priceChart = null; }
+
+  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const textColor = css('--text-muted') || (isDark ? '#71717A' : '#52525B');
+  const gridColor = css('--grid-line') || (isDark ? '#1F1F23' : '#E4E4E7');
+  const bgColor = css('--card-bg') || (isDark ? '#131316' : '#FFFFFF');
+
+  priceChart = LightweightCharts.createChart(container, {
+    width: container.clientWidth,
+    height: container.clientHeight,
+    layout: {
+      background: { type: 'solid', color: bgColor },
+      textColor,
+      fontFamily: 'JetBrains Mono, monospace',
     },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: { duration: 0 },
-      plugins: {
-        legend: { display: false },
-        annotation: {
-          annotations: {
-            entryLine: {
-              type: 'line',
-              yMin: entryPx, yMax: entryPx,
-              borderColor: '#71717A', borderDash: [5, 5], borderWidth: 1,
-              label: { display: true, content: 'Entry', position: 'start', backgroundColor: 'rgba(0,0,0,0.5)', font: { size: 10 } }
-            },
-            currentLine: {
-              type: 'line',
-              yMin: currentPx, yMax: currentPx,
-              borderColor: accent, borderWidth: 1,
-              label: { display: true, content: 'Now', position: 'end', backgroundColor: accent, font: { size: 10, weight: 'bold' } }
-            }
-          }
-        }
-      },
-      scales: {
-        x: { display: false },
-        y: { 
-          position: 'right',
-          grid: { color: '#1F1F23' },
-          ticks: { color: '#71717A', font: { family: 'JetBrains Mono', size: 10 } }
-        }
-      }
-    }
+    grid: {
+      vertLines: { color: gridColor },
+      horzLines: { color: gridColor },
+    },
+    rightPriceScale: { borderColor: gridColor },
+    timeScale: { borderColor: gridColor, timeVisible: true, secondsVisible: false },
+    crosshair: { mode: 0 },
+    handleScroll: true,
+    handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
   });
+
+  priceSeries = priceChart.addCandlestickSeries({
+    upColor: '#22C55E',
+    downColor: '#EF4444',
+    borderUpColor: '#22C55E',
+    borderDownColor: '#EF4444',
+    wickUpColor: '#22C55E',
+    wickDownColor: '#EF4444',
+  });
+
+  if (!window.__priceChartResizeBound) {
+    window.__priceChartResizeBound = true;
+    window.addEventListener('resize', () => {
+      if (priceChart && container) priceChart.resize(container.clientWidth, container.clientHeight);
+    });
+  }
+}
+
+function setEntryLine(price) {
+  if (!priceSeries || !Number.isFinite(price)) return;
+  if (entryPriceLine) priceSeries.removePriceLine(entryPriceLine);
+  entryPriceLine = priceSeries.createPriceLine({
+    price,
+    color: '#71717A',
+    lineWidth: 1,
+    lineStyle: 2,
+    axisLabelVisible: true,
+    title: 'Entry',
+  });
+}
+
+function setCurrentLine(price) {
+  if (!priceSeries || !Number.isFinite(price)) return;
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#635BFF';
+  if (currentPriceLine) priceSeries.removePriceLine(currentPriceLine);
+  currentPriceLine = priceSeries.createPriceLine({
+    price,
+    color: accent,
+    lineWidth: 1,
+    lineStyle: 0,
+    axisLabelVisible: true,
+    title: 'Now',
+  });
+}
+
+function updateCurrentLine(price) {
+  if (!currentPriceLine || !Number.isFinite(price)) return setCurrentLine(price);
+  currentPriceLine.applyOptions({ price });
+}
+
+function tickLiveCandle(price, pos) {
+  if (!priceSeries || !Number.isFinite(price)) return;
+  const now = Math.floor(Date.now() / 1000);
+  const bucket = now - (now % 60);
+
+  if (!liveCandle || bucket > liveCandle.time + 60) {
+    // окно сильно сдвинулось — рефетчим (подтянем все пропущенные свечи)
+    fetchAndRenderCandles(pos, price);
+    return;
+  }
+
+  if (bucket > liveCandle.time) {
+    // новая минута — стартуем свечу с close предыдущей
+    liveCandle = { time: bucket, open: liveCandle.close, high: price, low: price, close: price };
+  } else {
+    liveCandle.high = Math.max(liveCandle.high, price);
+    liveCandle.low = Math.min(liveCandle.low, price);
+    liveCandle.close = price;
+  }
+  priceSeries.update(liveCandle);
 }
 
 // ── Performance Chart (EQUITY) — RESTORING ORIGINAL STYLE ──

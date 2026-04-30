@@ -6,6 +6,7 @@
     <title>HL Scanner — Terminal</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -68,9 +69,7 @@
           <div class="card-title" id="price-title">Price Performance</div>
           <div id="price-meta" class="tax-year-label" style="font-family: var(--font-mono)">$0.00</div>
         </div>
-        <div class="chart-container" style="height: 240px;">
-          <canvas id="price-chart"></canvas>
-        </div>
+        <div id="price-chart" style="height: 280px; width: 100%;"></div>
       </section>
 
       <!-- Performance (Equity Chart) -->
