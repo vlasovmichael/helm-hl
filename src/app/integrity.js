@@ -69,11 +69,21 @@ export async function integrityCheck() {
     let equity = 0;
     let withdrawable = 0;
     let estimatedPnl = 0;
+    let pnlAccurate = false;
     try {
       const summary = await getAccountSummary();
       equity       = summary.equity;
       withdrawable = summary.available;
-      estimatedPnl = equity - dbPosition.size_usd;
+      // Корректная оценка PnL = equity_now − equity_at_open. Старая формула
+      // (equity − size_usd) сравнивала несравнимое и врала на десятки центов.
+      if (Number.isFinite(dbPosition.entry_equity) && dbPosition.entry_equity > 0) {
+        estimatedPnl = equity - dbPosition.entry_equity;
+        pnlAccurate = true;
+      } else {
+        // Fallback для старых позиций (до миграции entry_equity): не показываем число
+        estimatedPnl = 0;
+        pnlAccurate = false;
+      }
     } catch {
       // PnL неизвестен
     }
@@ -113,6 +123,10 @@ export async function integrityCheck() {
 
     const pnlSign  = estimatedPnl >= 0 ? '+' : '';
     const pnlEmoji = estimatedPnl >= 0 ? '📈' : '📉';
+    const pnlLine = pnlAccurate
+      ? `${pnlEmoji} PnL (equity Δ): <b>${pnlSign}$${estimatedPnl.toFixed(4)}</b> ($${dbPosition.entry_equity.toFixed(2)} → $${equity.toFixed(2)})\n`
+      : `📊 PnL: <i>точная оценка недоступна (нет entry_equity для этой позиции)</i>\n` +
+        `   Смотри Hyperliquid UI или сравни с предыдущим equity вручную.\n`;
 
     await sendMessage(
       `⚠️ <b>ВНЕШНЕЕ ЗАКРЫТИЕ ПОЗИЦИИ</b>\n` +
@@ -124,7 +138,7 @@ export async function integrityCheck() {
         `💰 Размер: <b>$${dbPosition.size_usd.toFixed(2)}</b>\n` +
         `💵 Entry: <b>$${dbPosition.entry_price}</b>\n` +
         `⏳ Удержание: <b>${holdHours.toFixed(1)}ч</b>\n` +
-        `${pnlEmoji} PnL (оценка): <b>${pnlSign}$${estimatedPnl.toFixed(4)}</b>\n` +
+        pnlLine +
         `💰 Equity: <b>$${equity.toFixed(2)}</b> | Withdrawable: <b>$${withdrawable.toFixed(2)}</b>\n` +
         `<code>═════════════════════</code>\n` +
         `🤖 Бот переведён в режим <b>IDLE</b>.\n` +

@@ -64,6 +64,15 @@ const OI_CAP_REGEX = /open\s*interest|oi\s*cap/i;
 export async function productionOpen(coin, price, apy, silent = false, strategyId = 'carry') {
   const exchange = getExchange();
 
+  // ── 0. Equity ДО ордера — для корректной оценки PnL при external close ──
+  let entryEquity = null;
+  try {
+    const summary = await getAccountSummary();
+    entryEquity = summary.equity;
+  } catch (err) {
+    logger.warn(`[Executor] PROD OPEN #${coin} — failed to capture entry equity: ${err.message}`);
+  }
+
   // ── 1. Баланс (с retry при подозрительно малом значении) ──
   let balance;
   try {
@@ -272,6 +281,7 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
     entry_time: Date.now(),
     mode: "PRODUCTION",
     strategy_id: strategyId,
+    entry_equity: entryEquity,
   });
 
   logger.info(
@@ -376,7 +386,11 @@ export async function productionClose(signal, position, silent = false) {
       try {
         const summary = await getAccountSummary();
         equity = summary.equity;
-        estimatedPnl = equity - position.size_usd;
+        // PnL ≈ equity_now − equity_at_open. Если entry_equity не сохранён
+        // (старая позиция) — оставим 0, чтобы не врать.
+        if (Number.isFinite(position.entry_equity) && position.entry_equity > 0) {
+          estimatedPnl = equity - position.entry_equity;
+        }
       } catch { /* PnL неизвестен */ }
 
       try {

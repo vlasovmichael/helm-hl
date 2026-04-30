@@ -62,6 +62,14 @@ export function initDB() {
     logger.info('[DB] Migration: added tp_price to positions');
   }
 
+  // Migration: entry_equity — equity аккаунта в момент OPEN.
+  // Используется в integrity.js для корректной оценки PnL при external close
+  // (старая формула equity − size_usd была математически неверной).
+  if (!posColumns.find(c => c.name === 'entry_equity')) {
+    db.exec('ALTER TABLE positions ADD COLUMN entry_equity REAL');
+    logger.info('[DB] Migration: added entry_equity to positions');
+  }
+
   logger.info(`[DB] Initialized at ${DB_PATH}`);
   return db;
 }
@@ -77,14 +85,15 @@ function getDb() {
  */
 export function savePosition(data) {
   const row = {
-    strategy_id: 'carry',
-    sl_price:    null,
-    tp_price:    null,
+    strategy_id:  'carry',
+    sl_price:     null,
+    tp_price:     null,
+    entry_equity: null,
     ...data,
   };
   const stmt = getDb().prepare(`
-    INSERT INTO positions (coin, size_usd, entry_price, entry_apy, entry_time, mode, strategy_id, sl_price, tp_price)
-    VALUES (@coin, @size_usd, @entry_price, @entry_apy, @entry_time, @mode, @strategy_id, @sl_price, @tp_price)
+    INSERT INTO positions (coin, size_usd, entry_price, entry_apy, entry_time, mode, strategy_id, sl_price, tp_price, entry_equity)
+    VALUES (@coin, @size_usd, @entry_price, @entry_apy, @entry_time, @mode, @strategy_id, @sl_price, @tp_price, @entry_equity)
   `);
   const result = stmt.run(row);
   return result.lastInsertRowid;
