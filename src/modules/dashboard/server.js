@@ -11,7 +11,7 @@ import { dirname, join } from "path";
 import { config } from "../../core/config.js";
 import { logger } from "../../core/logger.js";
 import { getActivePosition, getHistorySince, getArchivedHistorySince } from "../../core/database.js";
-import { getAccountSummary, getPositions } from "../exchange.js";
+import { getAccountSummary, getPositions, getMarkPrice } from "../exchange.js";
 import { FEE_RATE, MAKER_FEE_RATE } from "../executor/math.js";
 import { getAvailableBalance, getAccountEquity } from "../wallet.js";
 import { state } from "../../app/state.js";
@@ -129,6 +129,14 @@ async function getStatusData() {
   }
 
   let currentPnl = null;
+  let currentPrice = null;
+  if (position) {
+    try {
+      currentPrice = await getMarkPrice(position.coin);
+    } catch {
+      // оставляем null, фронт фолбэкнется на entry или pnl-derived
+    }
+  }
   if (position && config.isProduction) {
     try {
       const exPositions = await getPositions();
@@ -177,6 +185,7 @@ async function getStatusData() {
           entryTime: position.entry_time,
           heldHours: (Date.now() - position.entry_time) / 3_600_000,
           currentPnl,
+          currentPrice,
         }
       : null,
     ts: Date.now(),
@@ -344,22 +353,29 @@ export function startDashboard() {
       const coin = req.query.coin;
       if (!coin) return res.status(400).json({ error: "Missing coin" });
 
-      const response = await axios.post("https://api.hyperliquid.xyz/info", {
-        type: "frontendCandles",
-        coin: coin.toUpperCase(),
-        interval: "1m",
-        startTime: Date.now() - 4 * 3600_000
-      }, { timeout: 5000 });
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 5000);
+      const r = await fetch("https://api.hyperliquid.xyz/info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "candleSnapshot",
+          req: {
+            coin: coin.toUpperCase(),
+            interval: "1m",
+            startTime: Date.now() - 4 * 3600_000,
+            endTime: Date.now(),
+          },
+        }),
+        signal: ctrl.signal,
+      }).finally(() => clearTimeout(t));
 
-      // Hyperliquid может вернуть { error: "..." } внутри 200 OK или массив
-      if (response.data && response.data.error) {
-        throw new Error(response.data.error);
-      }
-
-      res.json(Array.isArray(response.data) ? response.data : []);
+      const data = await r.json();
+      if (data && data.error) throw new Error(data.error);
+      res.json(Array.isArray(data) ? data : []);
     } catch (err) {
       logger.debug(`[Dashboard] Candles fetch failed for ${req.query.coin}: ${err.message}`);
-      res.json([]); // Возвращаем пустой массив, чтобы фронт не падал
+      res.json([]);
     }
   });
 
@@ -370,7 +386,15 @@ export function startDashboard() {
     logger.info(`[Dashboard] ✅ Listening on http://${HOST}:${PORT}`);
   });
 
-  wss = new WebSocketServer({ server });
+  wss = new WebSocketServer({ noServer: true });
+  server.on("upgrade", (req, socket, head) => {
+    if (AUTH_ENABLED && !isAuthenticated(req)) {
+      socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+  });
   wss.on("connection", async (ws) => {
     try {
       const data = await getStatusData();

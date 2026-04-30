@@ -62,6 +62,17 @@
         </div>
       </section>
 
+      <!-- Price Performance (Candles) -->
+      <section class="card" id="price-card" style="display: none;">
+        <div class="card-header">
+          <div class="card-title" id="price-title">Price Performance</div>
+          <div id="price-meta" class="tax-year-label" style="font-family: var(--font-mono)">$0.00</div>
+        </div>
+        <div class="chart-container" style="height: 240px;">
+          <canvas id="price-chart"></canvas>
+        </div>
+      </section>
+
       <!-- Performance (Equity Chart) -->
       <section class="card">
         <div class="card-header">
@@ -78,17 +89,6 @@
           <div class="local-loader" id="chart-loader">
             <div class="loader-spinner"></div>
           </div>
-        </div>
-      </section>
-
-      <!-- Price Performance (Candles) -->
-      <section class="card" id="price-card" style="display: none;">
-        <div class="card-header">
-          <div class="card-title" id="price-title">Price Performance</div>
-          <div id="price-meta" class="tax-year-label" style="font-family: var(--font-mono)">$0.00</div>
-        </div>
-        <div class="chart-container" style="height: 240px;">
-          <canvas id="price-chart"></canvas>
         </div>
       </section>
 

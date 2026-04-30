@@ -26,7 +26,7 @@ let lastSuccessAt = 0;
 let currentRangeHours = 24;
 let chartLoaded = false;
 let socket = null;
-let lastEquityValue = "";
+const lastAnimatedValues = new Map();
 let currentCoinInPos = null;
 
 // ── WebSocket ───────────────────────────────────
@@ -56,10 +56,11 @@ function initWebSocket() {
 function updateAnimatedNumber(elId, newValueStr) {
   const el = document.getElementById(elId);
   if (!el) return;
-  if (lastEquityValue === newValueStr) return;
+  const prev = lastAnimatedValues.get(elId) || "";
+  if (prev === newValueStr) return;
 
-  const oldStr = lastEquityValue || newValueStr;
-  lastEquityValue = newValueStr;
+  const oldStr = prev || newValueStr;
+  lastAnimatedValues.set(elId, newValueStr);
   
   el.innerHTML = "";
   const maxLength = Math.max(oldStr.length, newValueStr.length);
@@ -111,9 +112,11 @@ async function handlePriceChartUpdate(pos) {
   document.getElementById('price-title').textContent = `Price Performance: #${pos.coin}`;
   
   let currentPrice = pos.entryPrice;
-  if (pos.currentPnl && pos.sizeUsd > 0) {
+  if (Number.isFinite(pos.currentPrice) && pos.currentPrice > 0) {
+    currentPrice = pos.currentPrice;
+  } else if (pos.currentPnl && pos.sizeUsd > 0 && pos.entryPrice > 0) {
     const qty = pos.sizeUsd / pos.entryPrice;
-    currentPrice = pos.entryPrice - (pos.currentPnl.price / qty);
+    currentPrice = pos.entryPrice + (pos.currentPnl.price / qty);
   }
   
   document.getElementById('price-meta').textContent = `$${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
