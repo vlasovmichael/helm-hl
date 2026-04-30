@@ -344,19 +344,22 @@ export function startDashboard() {
       const coin = req.query.coin;
       if (!coin) return res.status(400).json({ error: "Missing coin" });
 
-      const now = Date.now();
-      const startTime = now - 4 * 3600_000; // 4 часа истории
-
       const response = await axios.post("https://api.hyperliquid.xyz/info", {
         type: "frontendCandles",
         coin: coin.toUpperCase(),
         interval: "1m",
-        startTime
-      });
+        startTime: Date.now() - 4 * 3600_000
+      }, { timeout: 5000 });
 
-      res.json(response.data || []);
+      // Hyperliquid может вернуть { error: "..." } внутри 200 OK или массив
+      if (response.data && response.data.error) {
+        throw new Error(response.data.error);
+      }
+
+      res.json(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
-      res.status(500).json({ error: err.message });
+      logger.debug(`[Dashboard] Candles fetch failed for ${req.query.coin}: ${err.message}`);
+      res.json([]); // Возвращаем пустой массив, чтобы фронт не падал
     }
   });
 

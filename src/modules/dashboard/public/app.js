@@ -77,16 +77,18 @@ function updateAnimatedNumber(elId, newValueStr) {
     } else if (/[0-9]/.test(charNew)) {
       const reel = document.createElement("div");
       reel.className = "digit-reel";
-      const digits = charOld === " " ? [charNew] : [charOld, charNew];
+      const digits = (/[0-9]/.test(charOld)) ? [charOld, charNew] : [charNew];
       digits.forEach(d => {
         const s = document.createElement("span");
         s.textContent = d;
         reel.appendChild(s);
       });
       el.appendChild(reel);
-      requestAnimationFrame(() => {
-        reel.style.transform = `translateY(-${digits.length - 1}em)`;
-      });
+      if (digits.length > 1) {
+        requestAnimationFrame(() => {
+          reel.style.transform = `translateY(-1.1em)`;
+        });
+      }
     } else {
       const s = document.createElement("span");
       s.textContent = charNew;
@@ -108,46 +110,42 @@ async function handlePriceChartUpdate(pos) {
   card.style.display = 'block';
   document.getElementById('price-title').textContent = `Price Performance: #${pos.coin}`;
   
-  const currentPrice = pos.currentPnl ? (pos.entryPrice + (pos.currentPnl.price / (pos.sizeUsd / pos.entryPrice))) : pos.entryPrice;
-  document.getElementById('price-meta').textContent = `$${currentPrice.toLocaleString()}`;
+  let currentPrice = pos.entryPrice;
+  if (pos.currentPnl && pos.sizeUsd > 0) {
+    const qty = pos.sizeUsd / pos.entryPrice;
+    currentPrice = pos.entryPrice - (pos.currentPnl.price / qty);
+  }
+  
+  document.getElementById('price-meta').textContent = `$${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
 
   if (currentCoinInPos !== pos.coin) {
     currentCoinInPos = pos.coin;
-    await fetchAndRenderCandles(pos);
+    if (priceChart) { priceChart.destroy(); priceChart = null; }
+    await fetchAndRenderCandles(pos, currentPrice);
   } else if (priceChart) {
-    // Обновляем только линию текущей цены
     priceChart.options.plugins.annotation.annotations.currentLine.yMin = currentPrice;
     priceChart.options.plugins.annotation.annotations.currentLine.yMax = currentPrice;
     priceChart.update('none');
   }
 }
 
-async function fetchAndRenderCandles(pos) {
+async function fetchAndRenderCandles(pos, currentPrice) {
   try {
     const candles = await fetchJson(`/api/candles?coin=${pos.coin}`);
-    if (!candles || candles.length === 0) return;
+    if (!Array.isArray(candles) || candles.length === 0) return;
     
     const labels = candles.map(c => new Date(c.t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }));
     const prices = candles.map(c => parseFloat(c.c));
     const entryPrice = pos.entryPrice;
-    const currentPrice = prices[prices.length - 1];
 
-    if (!priceChart) {
-      initPriceChart(labels, prices, entryPrice, currentPrice);
-    } else {
-      priceChart.data.labels = labels;
-      priceChart.data.datasets[0].data = prices;
-      priceChart.options.plugins.annotation.annotations.entryLine.yMin = entryPrice;
-      priceChart.options.plugins.annotation.annotations.entryLine.yMax = entryPrice;
-      priceChart.options.plugins.annotation.annotations.currentLine.yMin = currentPrice;
-      priceChart.options.plugins.annotation.annotations.currentLine.yMax = currentPrice;
-      priceChart.update();
-    }
+    initPriceChart(labels, prices, entryPrice, currentPrice);
   } catch (err) { console.error('[PriceChart] fetch error:', err); }
 }
 
 function initPriceChart(labels, data, entryPx, currentPx) {
-  const ctx = document.getElementById('price-chart').getContext('2d');
+  const canvas = document.getElementById('price-chart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
   
   priceChart = new Chart(ctx, {
@@ -166,6 +164,7 @@ function initPriceChart(labels, data, entryPx, currentPx) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: { duration: 0 },
       plugins: {
         legend: { display: false },
         annotation: {
@@ -197,6 +196,131 @@ function initPriceChart(labels, data, entryPx, currentPx) {
   });
 }
 
+// ── Performance Chart (EQUITY) — RESTORING ORIGINAL STYLE ──
+
+function makeGradient(ctx) {
+  const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+  const accent = cssVar('--accent') || '#635BFF';
+  gradient.addColorStop(0, hexToRgba(accent, 0.18));
+  gradient.addColorStop(1, hexToRgba(accent, 0));
+  return gradient;
+}
+
+function hexToRgba(hex, alpha) {
+  const h = hex.replace('#', '');
+  const bigint = parseInt(h, 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function applyChartTheme() {
+  if (!equityChart) return;
+  const ctx = equityChart.ctx;
+  const accent = cssVar('--accent');
+  const textMuted = cssVar('--text-muted');
+  const grid = cssVar('--grid-line');
+  const cardBg = cssVar('--card-bg');
+  const border = cssVar('--border');
+  const textSec = cssVar('--text-secondary');
+  const textPri = cssVar('--text-primary');
+
+  equityChart.data.datasets[0].borderColor = accent;
+  equityChart.data.datasets[0].backgroundColor = makeGradient(ctx);
+  equityChart.data.datasets[0].pointBackgroundColor = accent;
+  equityChart.data.datasets[0].pointBorderColor = cardBg;
+
+  equityChart.options.plugins.tooltip.backgroundColor = cardBg;
+  equityChart.options.plugins.tooltip.borderColor = border;
+  equityChart.options.plugins.tooltip.titleColor = textSec;
+  equityChart.options.plugins.tooltip.bodyColor = textPri;
+
+  equityChart.options.scales.x.ticks.color = textMuted;
+  equityChart.options.scales.y.ticks.color = textMuted;
+  equityChart.options.scales.y.grid.color = grid;
+}
+
+function initEquityChart() {
+  const canvas = document.getElementById('equity-chart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  equityChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'Equity',
+          data: [],
+          borderColor: '#635BFF',
+          backgroundColor: makeGradient(ctx),
+          borderWidth: 2,
+          tension: 0.3,
+          fill: true,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          pointHitRadius: 10,
+          pointBackgroundColor: '#635BFF',
+          pointBorderColor: '#FFFFFF',
+          pointBorderWidth: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 400 },
+      interaction: {
+        intersect: false,
+        mode: 'index',
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#131316',
+          borderColor: '#27272A',
+          borderWidth: 1,
+          titleColor: '#A1A1AA',
+          bodyColor: '#FFFFFF',
+          titleFont: { size: 14, family: 'Plus Jakarta Sans' },
+          bodyFont: { size: 14, weight: '600', family: 'JetBrains Mono' },
+          padding: 12,
+          displayColors: false,
+          callbacks: {
+            label: (ctx) => `Equity: $${ctx.parsed.y.toFixed(2)}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: '#71717A',
+            font: { family: 'JetBrains Mono', size: 12 },
+            maxRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 8,
+          },
+          grid: { display: false },
+          border: { display: false },
+        },
+        y: {
+          ticks: {
+            color: '#71717A',
+            font: { family: 'JetBrains Mono', size: 12 },
+            callback: (v) => `$${v.toFixed(2)}`,
+            maxTicksLimit: 6,
+          },
+          grid: { color: '#1F1F23' },
+          border: { display: false },
+        },
+      },
+    },
+  });
+  applyChartTheme();
+}
+
 // ── Theme & Helpers ──────────────────────────────
 
 const THEME_KEY = 'hl-scanner-theme';
@@ -209,19 +333,18 @@ function applyTheme(mode) {
   if (equityChart) { applyChartTheme(); equityChart.update('none'); }
 }
 
-function applyChartTheme() {
-  if (!equityChart) return;
-  const accent = cssVar('--accent');
-  const textMuted = cssVar('--text-muted');
-  equityChart.data.datasets[0].borderColor = accent;
-  equityChart.options.scales.x.ticks.color = textMuted;
-  equityChart.options.scales.y.ticks.color = textMuted;
-}
-
 function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 function fmtUsd(n) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0); }
 function fmtPct(n) { return `${(n || 0).toFixed(2)}%`; }
 function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+function fmtTime(ts) {
+  const d = new Date(ts);
+  if (currentRangeHours <= 24) {
+    return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  }
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+}
 
 // ── Renderers ───────────────────────────────────
 
@@ -241,7 +364,7 @@ function renderHeader(status) {
 
 function renderPosition(pos) {
   const container = document.getElementById('position-container');
-  if (!pos) { container.innerHTML = '<div class="empty-state">No active positions</div>'; return; }
+  if (!pos) { container.innerHTML = '<div class="empty-state">No active positions — bot is IDLE</div>'; return; }
   const pnl = pos.currentPnl;
   let pnlBlock = '';
   if (pnl) {
@@ -270,15 +393,6 @@ function renderBans(status) {
   container.innerHTML = status.runtimeBans.map(c => `<div style="display:inline-block; background:rgba(239,68,68,0.1); color:var(--red); border:1px solid rgba(239,68,68,0.2); padding:4px 10px; border-radius:6px; font-size:11px; font-family:var(--font-mono); font-weight:600; margin:0 8px 8px 0;">#${c}</div>`).join('');
 }
 
-function initEquityChart() {
-  const ctx = document.getElementById('equity-chart').getContext('2d');
-  equityChart = new Chart(ctx, {
-    type: 'line',
-    data: { labels: [], datasets: [{ label: 'Equity', data: [], borderColor: '#635BFF', borderWidth: 2, tension: 0.3, fill: true, pointRadius: 0 }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: '#1F1F23' }, ticks: { color: '#71717A' } } } }
-  });
-}
-
 async function fetchJson(path) { const r = await fetch(path); if (r.status === 401) window.location.href = '/login'; return r.json(); }
 
 async function tick() {
@@ -287,8 +401,8 @@ async function tick() {
     fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
     fetchJson('/api/tax-summary'),
   ]);
-  if (historyR.status === 'fulfilled') {
-    equityChart.data.labels = historyR.value.points.map(p => new Date(p.ts).toLocaleTimeString());
+  if (historyR.status === 'fulfilled' && historyR.value?.points) {
+    equityChart.data.labels = historyR.value.points.map(p => fmtTime(p.ts));
     equityChart.data.datasets[0].data = historyR.value.points.map(p => p.equity);
     equityChart.update();
     if (!chartLoaded) { document.getElementById('chart-loader').classList.add('hidden'); chartLoaded = true; }
