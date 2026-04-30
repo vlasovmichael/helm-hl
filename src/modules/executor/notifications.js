@@ -149,7 +149,9 @@ export async function notifySniperArmedProd({ coin, armPrice, orderId, sz, reaso
       `📈 Причина: <b>${reason}</b>\n` +
       `⏱ Окно: <b>${windowMinutes}мин</b>\n` +
       `<i>Maker-only post. Если зальётся — экономим taker fee + slippage.\n` +
-      `Если нет — fallback на market.</i>`,
+      `Если нет — fallback на market.</i>\n` +
+      `<code>─────────────────────</code>\n` +
+      `⚠️ <b>Если хочешь закрыть руками — сначала отмени ордер <code>${orderId}</code> в Hyperliquid UI</b>, иначе бот запишет в БД неправильный PnL (думая что наш Alo залился по $${armPrice}).`,
     true,
   );
 }

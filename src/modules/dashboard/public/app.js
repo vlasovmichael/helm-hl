@@ -404,6 +404,42 @@ function renderPosition(pos) {
     return;
   }
 
+  const pnl = pos.currentPnl;
+  let pnlBlock = '';
+  if (pnl) {
+    const netMarketCls = pnl.netMarket >= 0 ? 'positive' : 'negative';
+    const netMakerCls  = pnl.netMaker  >= 0 ? 'positive' : 'negative';
+    const sgn = (v) => (v >= 0 ? '+' : '');
+    pnlBlock = `
+        <div class="data-grid" style="margin-top:0.75rem">
+            <div class="grid-item">
+                <div class="item-label">Net (if exit market)</div>
+                <div class="item-value ${netMarketCls}">${sgn(pnl.netMarket)}$${pnl.netMarket.toFixed(4)}</div>
+            </div>
+            <div class="grid-item">
+                <div class="item-label">Net (if exit maker)</div>
+                <div class="item-value ${netMakerCls}">${sgn(pnl.netMaker)}$${pnl.netMaker.toFixed(4)}</div>
+            </div>
+            <div class="grid-item">
+                <div class="item-label">Price PnL</div>
+                <div class="item-value">${sgn(pnl.price)}$${pnl.price.toFixed(4)}</div>
+            </div>
+            <div class="grid-item">
+                <div class="item-label">Funding</div>
+                <div class="item-value">${sgn(pnl.funding)}$${pnl.funding.toFixed(4)}</div>
+            </div>
+            <div class="grid-item">
+                <div class="item-label">Entry fee (paid)</div>
+                <div class="item-value">−$${pnl.entryFee.toFixed(4)}</div>
+            </div>
+            <div class="grid-item">
+                <div class="item-label">Exit fee est. (mkt / mkr)</div>
+                <div class="item-value">−$${pnl.exitFeeMarket.toFixed(4)} / −$${pnl.exitFeeMaker.toFixed(4)}</div>
+            </div>
+        </div>
+    `;
+  }
+
   container.innerHTML = `
         <div class="data-grid">
             <div class="grid-item">
@@ -422,7 +458,7 @@ function renderPosition(pos) {
                 <div class="item-label">APY · Held</div>
                 <div class="item-value">${fmtPct(pos.entryApy)} · ${pos.heldHours.toFixed(1)}h</div>
             </div>
-        </div>
+        </div>${pnlBlock}
     `;
 }
 

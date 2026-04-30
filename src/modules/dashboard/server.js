@@ -12,6 +12,7 @@ import { config } from "../../core/config.js";
 import { logger } from "../../core/logger.js";
 import { getActivePosition, getHistorySince, getArchivedHistorySince } from "../../core/database.js";
 import { getAccountSummary, getPositions } from "../exchange.js";
+import { FEE_RATE, MAKER_FEE_RATE } from "../executor/math.js";
 import { getAvailableBalance, getAccountEquity } from "../wallet.js";
 import { state } from "../../app/state.js";
 import { getTaxSummary } from "../taxCollector/index.js";
@@ -134,6 +135,39 @@ async function handleStatus(_req, res) {
       // показываем 0 — UI пометит как stale
     }
 
+    // ── Net PnL текущей позиции (PROD only) ──
+    // pricePnl: unrealizedPnl с биржи (mark-to-market vs entry).
+    // fundingPnl: -cumFunding.sinceOpen (для шорта инвертируется).
+    // entryFee: уже заплачен при открытии (size_usd × FEE_RATE).
+    // exitFeeEstMaker / exitFeeEstMarket: оценка комиссии выхода.
+    // net = price + funding − entryFee − exitFeeEst.
+    let currentPnl = null;
+    if (position && config.isProduction) {
+      try {
+        const exPositions = await getPositions();
+        const ourPos = exPositions.find((ap) => (ap?.position?.coin) === position.coin);
+        if (ourPos?.position) {
+          const pricePnl   = parseFloat(ourPos.position.unrealizedPnl ?? '0');
+          const sinceOpen  = parseFloat(ourPos.position.cumFunding?.sinceOpen);
+          const fundingPnl = Number.isFinite(sinceOpen) ? -sinceOpen : 0;
+          const entryFee     = position.size_usd * FEE_RATE;
+          const exitFeeMarket = position.size_usd * FEE_RATE;
+          const exitFeeMaker  = position.size_usd * MAKER_FEE_RATE;
+          currentPnl = {
+            price:    pricePnl,
+            funding:  fundingPnl,
+            entryFee,
+            exitFeeMarket,
+            exitFeeMaker,
+            netMarket: pricePnl + fundingPnl - entryFee - exitFeeMarket,
+            netMaker:  pricePnl + fundingPnl - entryFee - exitFeeMaker,
+          };
+        }
+      } catch (err) {
+        logger.debug(`[Dashboard] currentPnl calc failed: ${err.message}`);
+      }
+    }
+
     res.json({
       mode: config.mode,
       equity,
@@ -152,6 +186,7 @@ async function handleStatus(_req, res) {
             entryApy: position.entry_apy,
             entryTime: position.entry_time,
             heldHours: (Date.now() - position.entry_time) / 3_600_000,
+            currentPnl,
           }
         : null,
       ts: Date.now(),
