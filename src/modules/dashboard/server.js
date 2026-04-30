@@ -145,8 +145,18 @@ async function handleStatus(_req, res) {
     if (position && config.isProduction) {
       try {
         const exPositions = await getPositions();
-        const ourPos = exPositions.find((ap) => (ap?.position?.coin) === position.coin);
-        if (ourPos?.position) {
+        // Tolerant coin match: HL может вернуть "DOGE", "DOGE-PERP" или "@DOGE".
+        const target = position.coin.toLowerCase();
+        const ourPos = exPositions.find((ap) => {
+          const c = (ap?.position?.coin ?? '').toLowerCase();
+          return c === target || c === `${target}-perp` || c === `@${target}` || c.replace('-perp', '') === target;
+        });
+        if (!ourPos?.position) {
+          logger.warn(
+            `[Dashboard] currentPnl: position #${position.coin} not found in ${exPositions.length} exchange positions ` +
+              `(coins: [${exPositions.map((p) => p?.position?.coin).join(', ')}])`,
+          );
+        } else {
           const pricePnl   = parseFloat(ourPos.position.unrealizedPnl ?? '0');
           const sinceOpen  = parseFloat(ourPos.position.cumFunding?.sinceOpen);
           const fundingPnl = Number.isFinite(sinceOpen) ? -sinceOpen : 0;
@@ -164,7 +174,7 @@ async function handleStatus(_req, res) {
           };
         }
       } catch (err) {
-        logger.debug(`[Dashboard] currentPnl calc failed: ${err.message}`);
+        logger.warn(`[Dashboard] currentPnl calc failed: ${err.message}`);
       }
     }
 
