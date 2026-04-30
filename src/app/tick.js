@@ -9,7 +9,7 @@ import { coordinate } from '../modules/coordinator.js';
 import { execute } from '../modules/executor/index.js';
 import { tickSniper } from '../modules/executor/sniper.js';
 import { runSmartAlerts } from './alerts.js';
-import { integrityCheck } from './integrity.js';
+import { integrityCheck, orphanCheck } from './integrity.js';
 import { state } from './state.js';
 
 export async function tick() {
@@ -21,6 +21,13 @@ export async function tick() {
     const externalClose = await integrityCheck();
     if (externalClose) {
       logger.info('[Tick] Skipping after external close detection');
+      return;
+    }
+
+    // ── Orphan Check: детекция ручной покупки на бирже ──
+    const adopted = await orphanCheck();
+    if (adopted) {
+      logger.info('[Tick] Adopted orphan position — coordinator подхватит на следующем тике');
       return;
     }
 

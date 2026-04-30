@@ -120,7 +120,7 @@ async function loadBotState() {
  *
  * @returns {Promise<Array<{ coin, szi, entryPx, positionValue, unrealizedPnl }>>}
  */
-async function fetchExchangePositions() {
+export async function fetchExchangePositions() {
   const wallet = config.wallet.address;
   logger.info(`[Sync] Querying clearinghouseState for ${wallet.slice(0, 8)}…`);
 
@@ -276,7 +276,7 @@ async function handleMismatch(dbPosition) {
  *   - entry_apy = 0 — стратегист использует live slowApy для решений
  *     о выходе, entry_apy влияет только на расчёт PnL при закрытии.
  */
-async function handleOrphaned(exchangePos) {
+export async function handleOrphaned(exchangePos) {
   const sizeUsd = Math.abs(exchangePos.szi) * exchangePos.entryPx;
   const side    = exchangePos.szi < 0 ? 'SHORT' : 'LONG';
 
