@@ -844,7 +844,7 @@ footer {
 }
 .signals-table td.num-pos-weak,
 .signals-table td.num-pos-weak * {
-  color: var(--green);
+  color: #4ade80;
   font-weight: 500;
 }
 .signals-table td.num-neg-strong,
@@ -859,7 +859,7 @@ footer {
 }
 .signals-table td.num-neg-weak,
 .signals-table td.num-neg-weak * {
-  color: var(--red);
+  color: #f87171;
   font-weight: 500;
 }
 .signals-table td.num-muted,

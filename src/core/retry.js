@@ -135,6 +135,12 @@ function isRetryable(err) {
     return true;
   }
 
+  // Hyperliquid SDK иногда отвечает "An unknown error occurred" на транзиентах —
+  // обычно гасится 1-2 ретраями.
+  if (err.message && err.message.toLowerCase().includes('unknown error')) {
+    return true;
+  }
+
   // ── По умолчанию: не ретраим неизвестные ошибки ─
   return false;
 }
