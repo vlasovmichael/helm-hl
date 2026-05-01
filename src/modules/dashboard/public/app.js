@@ -585,12 +585,21 @@ function renderSignals(payload) {
     const sign = v >= 0 ? '+' : '';
     return `${sign}${v.toFixed(digits)}%`;
   };
-  const spikeClass = (v) => {
-    if (v == null) return 'signals-apy-low';
-    if (v >= (th.spikePct ?? 5)) return 'signals-apy-good';
-    if (v >= (th.spikePct ?? 5) * 0.6) return 'signals-apy-mid';
-    if (v <= -(th.spikePct ?? 5) * 0.6) return 'signals-drop-warn';
-    return 'signals-apy-low';
+  const arrow = (v) => (v == null ? '' : v > 0 ? '▲' : v < 0 ? '▼' : '·');
+  // Сила окраски (alpha) шкалируется относительно spike-порога: на пороге alpha=0.18,
+  // в 2× порога — 0.36, кэп 0.45.
+  const tintRow = (v, kind) => {
+    if (v == null) return '';
+    const ratio = Math.min(Math.abs(v) / (th.spikePct ?? 5), 2.5);
+    const alpha = Math.min(0.06 + ratio * 0.12, 0.45);
+    const rgb = kind === 'pump' ? '239, 68, 68' : '34, 197, 94';
+    return `background: linear-gradient(90deg, rgba(${rgb}, ${alpha.toFixed(2)}), transparent 60%);`;
+  };
+  const numberClass = (v, threshold) => {
+    if (v == null) return 'num-muted';
+    if (Math.abs(v) >= threshold) return v > 0 ? 'num-pos-strong' : 'num-neg-strong';
+    if (Math.abs(v) >= threshold * 0.6) return v > 0 ? 'num-pos' : 'num-neg';
+    return v > 0 ? 'num-pos-weak' : v < 0 ? 'num-neg-weak' : 'num-muted';
   };
 
   tbody.innerHTML = signals.map((s) => {
@@ -598,9 +607,9 @@ function renderSignals(payload) {
     if ((s.signal === 'SHORT' || s.signal === 'LONG') && s.blocked) {
       suggested = `<span class="signals-status blocked" title="${s.blocked}">${s.signal} (gated)</span>`;
     } else if (s.signal === 'SHORT') {
-      suggested = '<span class="signals-status tradable">SHORT</span>';
+      suggested = '<span class="signals-status tradable">▼ SHORT</span>';
     } else if (s.signal === 'LONG') {
-      suggested = '<span class="signals-status long">LONG</span>';
+      suggested = '<span class="signals-status long">▲ LONG</span>';
     } else if (s.signal === 'WATCH') {
       suggested = '<span class="signals-status active">WATCH</span>';
     } else if (s.signal === 'WARMUP') {
@@ -609,20 +618,29 @@ function renderSignals(payload) {
       suggested = '<span class="signals-status blocked">—</span>';
     }
     const slTpCell = s.sl != null
-      ? `<span class="signals-apy-low">${fmtPrice(s.sl)} / ${fmtPrice(s.tp)}</span>`
-      : '—';
+      ? `<span class="num-neg" title="Stop-loss">${fmtPrice(s.sl)}</span> <span class="sep">/</span> <span class="num-pos" title="Take-profit">${fmtPrice(s.tp)}</span>`
+      : '<span class="num-muted">—</span>';
+    const trendThreshold = th.trendMaxRisePct ?? 8;
+    const trendOver = s.trendPct != null && Math.abs(s.trendPct) >= trendThreshold;
     const trendCell = s.trendPct != null
-      ? `<span class="${s.trendPct >= (th.trendMaxRisePct ?? 8) ? 'signals-drop-warn' : 'signals-apy-low'}">${fmtPct(s.trendPct, 1)} / ${th.trendLookbackMin}m</span>`
-      : '—';
+      ? `<span class="${numberClass(s.trendPct, trendThreshold)}${trendOver ? ' num-warn-glow' : ''}">${arrow(s.trendPct)} ${fmtPct(s.trendPct, 1)}</span> <span class="num-muted">/ ${th.trendLookbackMin}m</span>`
+      : '<span class="num-muted">—</span>';
+    const spikeKind = s.signal === 'SHORT' ? 'pump' : (s.signal === 'LONG' ? 'dump' : null);
+    const rowStyle = spikeKind && !s.blocked ? tintRow(s.spikePct, spikeKind) : '';
+    const rowCls = [
+      s.isActive ? 'is-active' : '',
+      s.signal === 'SHORT' ? 'row-short' : '',
+      s.signal === 'LONG' ? 'row-long' : '',
+    ].filter(Boolean).join(' ');
     return `
-      <tr class="${s.isActive ? 'is-active' : ''}">
-        <td>${s.rank}</td>
+      <tr class="${rowCls}" style="${rowStyle}">
+        <td class="num-muted">${s.rank}</td>
         <td class="signals-coin">${s.pair}</td>
-        <td>${fmtPrice(s.price)}</td>
-        <td class="${spikeClass(s.spikePct)}">${fmtPct(s.spikePct)}</td>
+        <td class="signals-price">${fmtPrice(s.price)}</td>
+        <td class="${numberClass(s.spikePct, th.spikePct ?? 5)}">${arrow(s.spikePct)} ${fmtPct(s.spikePct)}</td>
         <td>${trendCell}</td>
         <td>${suggested}</td>
-        <td>${slTpCell}</td>
+        <td class="signals-sltp">${slTpCell}</td>
       </tr>`;
   }).join('');
 }

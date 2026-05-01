@@ -672,3 +672,37 @@ footer {
 .signals-status.blocked  { background: rgba(120, 120, 130, 0.12); color: var(--text-muted); }
 .signals-status.active   { background: rgba(99, 91, 255, 0.14); color: var(--accent); }
 .signals-drop-warn { color: var(--red); }
+
+/* Sign-based number colors (intensity by magnitude) */
+.num-pos-strong { color: var(--green); font-weight: 700; }
+.num-pos        { color: var(--green); font-weight: 600; }
+.num-pos-weak   { color: rgba(34, 197, 94, 0.65); font-weight: 500; }
+.num-neg-strong { color: var(--red); font-weight: 700; }
+.num-neg        { color: var(--red); font-weight: 600; }
+.num-neg-weak   { color: rgba(239, 68, 68, 0.65); font-weight: 500; }
+.num-muted      { color: var(--text-muted); }
+.num-warn-glow  { text-shadow: 0 0 8px rgba(239, 68, 68, 0.4); }
+.signals-table .signals-price { font-weight: 600; color: var(--text-primary); }
+.signals-table .signals-sltp { white-space: nowrap; }
+.signals-table .signals-sltp .sep { color: var(--text-muted); margin: 0 4px; }
+
+/* Row left-stripe by suggested side */
+.signals-table tr.row-short td:first-child { box-shadow: inset 3px 0 0 var(--red); }
+.signals-table tr.row-long  td:first-child { box-shadow: inset 3px 0 0 var(--green); }
+.signals-table tr.is-active td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+
+/* Animated dot before live timestamp */
+.signals-meta::before {
+  content: '';
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  margin-right: 6px;
+  vertical-align: middle;
+  animation: pulse-dot 1.6s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.35; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.15); }
+}
