@@ -521,7 +521,7 @@ export function startDashboard() {
         body: JSON.stringify({
           type: "candleSnapshot",
           req: {
-            coin: coin.toUpperCase(),
+            coin: /^k[A-Z]/.test(coin) ? coin : coin.toUpperCase(),
             interval,
             startTime: Date.now() - windowMs,
             endTime: Date.now(),
