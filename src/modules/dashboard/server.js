@@ -146,33 +146,65 @@ async function getStatusData() {
       // оставляем null, фронт фолбэкнется на entry или pnl-derived
     }
   }
-  if (position && config.isProduction) {
+
+  let manualPositions = [];
+  if (config.isProduction) {
     try {
       const exPositions = await getPositions();
-      const target = position.coin.toLowerCase();
-      const ourPos = exPositions.find((ap) => {
-        const c = (ap?.position?.coin ?? "").toLowerCase();
-        return c === target || c === `${target}-perp` || c === `@${target}` || c.replace("-perp", "") === target;
-      });
-      if (ourPos?.position) {
-        const pricePnl = parseFloat(ourPos.position.unrealizedPnl ?? "0");
-        const sinceOpen = parseFloat(ourPos.position.cumFunding?.sinceOpen);
-        const fundingPnl = Number.isFinite(sinceOpen) ? -sinceOpen : 0;
-        const entryFee = position.size_usd * FEE_RATE;
-        const exitFeeMarket = position.size_usd * FEE_RATE;
-        const exitFeeMaker = position.size_usd * MAKER_FEE_RATE;
-        currentPnl = {
-          price: pricePnl,
-          funding: fundingPnl,
-          entryFee,
-          exitFeeMarket,
-          exitFeeMaker,
-          netMarket: pricePnl + fundingPnl - entryFee - exitFeeMarket,
-          netMaker: pricePnl + fundingPnl - entryFee - exitFeeMaker,
-        };
+      const botCoin = position?.coin?.toLowerCase() ?? null;
+      const matchesBot = (c) => {
+        if (!botCoin) return false;
+        const lc = (c ?? "").toLowerCase();
+        return lc === botCoin || lc === `${botCoin}-perp` || lc === `@${botCoin}` || lc.replace("-perp", "") === botCoin;
+      };
+
+      if (position) {
+        const ourPos = exPositions.find((ap) => matchesBot(ap?.position?.coin));
+        if (ourPos?.position) {
+          const pricePnl = parseFloat(ourPos.position.unrealizedPnl ?? "0");
+          const sinceOpen = parseFloat(ourPos.position.cumFunding?.sinceOpen);
+          const fundingPnl = Number.isFinite(sinceOpen) ? -sinceOpen : 0;
+          const entryFee = position.size_usd * FEE_RATE;
+          const exitFeeMarket = position.size_usd * FEE_RATE;
+          const exitFeeMaker = position.size_usd * MAKER_FEE_RATE;
+          currentPnl = {
+            price: pricePnl,
+            funding: fundingPnl,
+            entryFee,
+            exitFeeMarket,
+            exitFeeMaker,
+            netMarket: pricePnl + fundingPnl - entryFee - exitFeeMarket,
+            netMaker: pricePnl + fundingPnl - entryFee - exitFeeMaker,
+          };
+        }
+      }
+
+      for (const ap of exPositions) {
+        const p = ap?.position;
+        if (!p?.coin) continue;
+        if (matchesBot(p.coin)) continue;
+        const szi = parseFloat(p.szi ?? "0");
+        const entryPx = parseFloat(p.entryPx ?? "0");
+        if (!Number.isFinite(szi) || szi === 0) continue;
+        const sizeUsd = Math.abs(szi) * entryPx;
+        const liqPx = p.liquidationPx != null ? parseFloat(p.liquidationPx) : null;
+        const lev = p.leverage?.value != null ? parseFloat(p.leverage.value) : null;
+        let livePrice = null;
+        try { livePrice = await getLivePrice(p.coin); } catch { /* ignore */ }
+        manualPositions.push({
+          coin: p.coin,
+          side: szi < 0 ? "SHORT" : "LONG",
+          szi: Math.abs(szi),
+          entryPrice: entryPx,
+          sizeUsd,
+          unrealizedPnl: parseFloat(p.unrealizedPnl ?? "0"),
+          liquidationPrice: Number.isFinite(liqPx) ? liqPx : null,
+          leverage: Number.isFinite(lev) ? lev : null,
+          currentPrice: livePrice,
+        });
       }
     } catch (err) {
-      logger.warn(`[Dashboard] currentPnl calc failed: ${err.message}`);
+      logger.warn(`[Dashboard] positions fetch failed: ${err.message}`);
     }
   }
 
@@ -197,6 +229,7 @@ async function getStatusData() {
           currentPrice,
         }
       : null,
+    manualPositions,
     ts: Date.now(),
   };
 }

@@ -51,6 +51,7 @@ function initWebSocket() {
       if (msg.type === 'status') {
         renderHeader(msg.data);
         renderPosition(msg.data.activePosition);
+        renderManualPositions(msg.data.manualPositions);
         renderBans(msg.data);
         handlePriceChartUpdate(msg.data.activePosition);
         lastSuccessAt = Date.now();
@@ -528,6 +529,36 @@ function renderPosition(pos) {
       <div class="grid-item"><div class="item-label">Entry</div><div class="item-value">$${pos.entryPrice}</div></div>
       <div class="grid-item"><div class="item-label">APY · Held</div><div class="item-value">${fmtPct(pos.entryApy)} · ${pos.heldHours.toFixed(1)}h</div></div>
     </div>${pnlBlock}`;
+}
+
+function renderManualPositions(list) {
+  const container = document.getElementById('manual-positions-container');
+  if (!container) return;
+  if (!Array.isArray(list) || list.length === 0) { container.innerHTML = ''; return; }
+  const cls = v => v >= 0 ? 'positive' : 'negative';
+  const sgn = v => v >= 0 ? '+' : '−';
+  const blocks = list.map(p => {
+    const sideCls = p.side === 'SHORT' ? 'negative' : 'positive';
+    const liq = p.liquidationPrice != null ? `$${p.liquidationPrice}` : '—';
+    const lev = p.leverage != null ? `${p.leverage}x` : '—';
+    const cur = p.currentPrice != null ? `$${p.currentPrice}` : '—';
+    return `
+      <div style="margin-top:0.75rem; padding:0.75rem; border:1px dashed var(--border); border-radius:8px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:0.5rem;">
+          <span style="background:rgba(234,179,8,0.12); color:var(--yellow,#eab308); border:1px solid rgba(234,179,8,0.3); padding:2px 8px; border-radius:6px; font-size:11px; font-family:var(--font-mono); font-weight:700;">HANDS-OFF · MANUAL</span>
+          <span class="item-value highlight">#${p.coin}</span>
+          <span class="item-value ${sideCls}">${p.side}</span>
+        </div>
+        <div class="data-grid">
+          <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}</div></div>
+          <div class="grid-item"><div class="item-label">Entry · Now</div><div class="item-value">$${p.entryPrice} · ${cur}</div></div>
+          <div class="grid-item"><div class="item-label">uPnL</div><div class="item-value ${cls(p.unrealizedPnl)}">${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}</div></div>
+          <div class="grid-item"><div class="item-label">Liq</div><div class="item-value">${liq}</div></div>
+        </div>
+        <div style="margin-top:0.5rem; font-size:11px; color:var(--text-muted, #888);">Открыта вручную — бот не управляет. Закрой на бирже, чтобы продолжил работу.</div>
+      </div>`;
+  }).join('');
+  container.innerHTML = blocks;
 }
 
 function renderBans(status) {
