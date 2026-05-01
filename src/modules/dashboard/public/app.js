@@ -37,6 +37,7 @@ let socket = null;
 const lastAnimatedValues = new Map();
 let currentCoinInPos = null;
 let lastPos = null;
+let chartViewKey = null; // coin+interval — для сохранения зума при тех же данных
 
 // ── WebSocket ───────────────────────────────────
 
@@ -198,7 +199,11 @@ async function fetchAndRenderIdleCandles(coin) {
 
     document.getElementById('price-meta').textContent = `$${last.close.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
 
-    priceChart.timeScale().fitContent();
+    const newKey = `idle:${coin}:${currentInterval}`;
+    if (chartViewKey !== newKey) {
+      priceChart.timeScale().fitContent();
+      chartViewKey = newKey;
+    }
   } catch (err) { console.error('[PriceChart/idle] fetch error:', err); }
 }
 
@@ -224,14 +229,18 @@ async function fetchAndRenderCandles(pos, currentPrice) {
     liveCandle = { time: last.time, open: last.open, high: last.high, low: last.low, close: last.close };
     setEntryLine(pos.entryPrice);
     setCurrentLine(currentPrice);
-    priceChart.timeScale().fitContent();
+    const newKey = `pos:${pos.coin}:${currentInterval}`;
+    if (chartViewKey !== newKey) {
+      priceChart.timeScale().fitContent();
+      chartViewKey = newKey;
+    }
   } catch (err) { console.error('[PriceChart] fetch error:', err); }
 }
 
 function initPriceChart() {
   const container = document.getElementById('price-chart');
   if (!container) return;
-  if (priceChart) { priceChart.remove(); priceChart = null; }
+  if (priceChart) return; // не пересоздаём, иначе теряется зум/пан
 
   const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
   const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
@@ -682,6 +691,7 @@ document.querySelectorAll('#price-intervals .range-btn').forEach(b => b.addEvent
   b.classList.add('active');
   currentInterval = b.dataset.iv;
   liveCandle = null;
+  chartViewKey = null; // смена ТФ → fitContent под новые данные
   if (lastPos) {
     const px = Number.isFinite(lastPos.currentPrice) && lastPos.currentPrice > 0 ? lastPos.currentPrice : lastPos.entryPrice;
     await fetchAndRenderCandles(lastPos, px);
