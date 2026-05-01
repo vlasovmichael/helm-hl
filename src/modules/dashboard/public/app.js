@@ -152,15 +152,29 @@ async function handlePriceChartUpdate(pos) {
   }
 }
 
-async function renderIdleChart() {
-  // Определяем монету: последняя сделка из истории или BTC по умолчанию
-  let coin = idleChartCoin;
-  if (!coin) {
-    try {
-      const act = await fetchJson('/api/activity?hours=720&limit=1');
-      coin = act?.events?.[0]?.coin || 'BTC';
-    } catch { coin = 'BTC'; }
+async function getLatestActivityCoin() {
+  try {
+    const act = await fetchJson('/api/activity?hours=720&limit=1');
+    return act?.events?.[0]?.coin || 'BTC';
+  } catch { return 'BTC'; }
+}
+
+async function refreshIdleTick() {
+  const coin = await getLatestActivityCoin();
+  if (coin !== idleChartCoin) {
     idleChartCoin = coin;
+    chartViewKey = null; // принудительно перецентрировать график на новой монете
+    document.getElementById('price-title').textContent = `Price Performance: #${coin}`;
+  }
+  await fetchAndRenderIdleCandles(idleChartCoin);
+}
+
+async function renderIdleChart() {
+  // Определяем актуальную монету каждый раз — последнюю сделку из истории
+  const coin = await getLatestActivityCoin();
+  if (coin !== idleChartCoin) {
+    idleChartCoin = coin;
+    chartViewKey = null;
   }
 
   document.getElementById('price-title').textContent = `Price Performance: #${coin}`;
@@ -168,7 +182,7 @@ async function renderIdleChart() {
   await fetchAndRenderIdleCandles(coin);
 
   if (!idleChartTimer) {
-    idleChartTimer = setInterval(() => fetchAndRenderIdleCandles(idleChartCoin), 60_000);
+    idleChartTimer = setInterval(refreshIdleTick, 30_000);
   }
 }
 
