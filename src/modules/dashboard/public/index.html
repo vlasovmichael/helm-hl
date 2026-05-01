@@ -63,6 +63,31 @@
         </div>
       </section>
 
+      <!-- Live Logs -->
+      <section class="card" id="logs-card">
+        <div class="card-header">
+          <div class="card-title">Live Logs</div>
+          <div class="logs-controls">
+            <input type="search" id="logs-search" placeholder="Search…" autocomplete="off" spellcheck="false" />
+            <div class="logs-filters" id="logs-filters">
+              <button class="logs-filter-btn active" data-level="all">All</button>
+              <button class="logs-filter-btn" data-level="info">Info</button>
+              <button class="logs-filter-btn" data-level="warn">Warn</button>
+              <button class="logs-filter-btn" data-level="error">Err</button>
+            </div>
+            <button class="logs-pause-btn" id="logs-pause" title="Pause autoscroll">⏸</button>
+          </div>
+        </div>
+        <div class="logs-viewport" id="logs-viewport">
+          <div class="logs-empty" id="logs-empty">Waiting for logs…</div>
+          <div class="logs-list" id="logs-list"></div>
+        </div>
+        <div class="logs-meta" id="logs-meta">
+          <span id="logs-count">0 lines</span>
+          <span id="logs-status">live</span>
+        </div>
+      </section>
+
       <!-- Price Performance (Candles) -->
       <section class="card" id="price-card" style="display: none;">
         <div class="card-header">

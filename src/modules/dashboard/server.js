@@ -9,7 +9,7 @@ import { WebSocketServer } from "ws";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { config } from "../../core/config.js";
-import { logger } from "../../core/logger.js";
+import { logger, getLogBuffer, subscribeLogs } from "../../core/logger.js";
 import { getActivePosition, getHistorySince, getArchivedHistorySince } from "../../core/database.js";
 import { getAccountSummary, getPositions, getLivePrice } from "../exchange.js";
 import { FEE_RATE, MAKER_FEE_RATE } from "../executor/math.js";
@@ -105,6 +105,7 @@ const PUBLIC_DIR = join(__dirname, "public");
 let server = null;
 let wss = null;
 let broadcastTimer = null;
+let unsubscribeLogs = null;
 
 // ─────────────────────────────────────────────────
 //  Status Logic (Shared)
@@ -278,6 +279,21 @@ function handleActivity(req, res) {
   }
 }
 
+function handleLogs(req, res) {
+  try {
+    const limit = req.query.limit ? Math.max(1, Math.min(2000, parseInt(req.query.limit, 10))) : 500;
+    const sinceId = req.query.sinceId ? parseInt(req.query.sinceId, 10) : 0;
+    let entries = getLogBuffer();
+    if (Number.isFinite(sinceId) && sinceId > 0) {
+      entries = entries.filter((e) => e.id > sinceId);
+    }
+    if (entries.length > limit) entries = entries.slice(entries.length - limit);
+    res.json({ count: entries.length, entries });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
 async function handleTaxSummary(req, res) {
   try {
     const yearParam = req.query.year ? parseInt(req.query.year, 10) : null;
@@ -346,6 +362,7 @@ export function startDashboard() {
   app.get("/api/status", handleStatus);
   app.get("/api/history", handleHistory);
   app.get("/api/activity", handleActivity);
+  app.get("/api/logs", handleLogs);
   app.get("/api/tax-summary", handleTaxSummary);
 
   const ALLOWED_INTERVALS = {
@@ -409,8 +426,17 @@ export function startDashboard() {
     try {
       const data = await getStatusData();
       ws.send(JSON.stringify({ type: "status", data }));
+      ws.send(JSON.stringify({ type: "logs:init", entries: getLogBuffer() }));
     } catch (err) {
       logger.error(`[Dashboard] WS initial send failed: ${err.message}`);
+    }
+  });
+
+  unsubscribeLogs = subscribeLogs((entry) => {
+    if (!wss || wss.clients.size === 0) return;
+    const msg = JSON.stringify({ type: "log", entry });
+    for (const client of wss.clients) {
+      if (client.readyState === 1) client.send(msg);
     }
   });
 
@@ -434,6 +460,7 @@ export function startDashboard() {
 
 export function stopDashboard() {
   if (broadcastTimer) clearInterval(broadcastTimer);
+  if (unsubscribeLogs) { unsubscribeLogs(); unsubscribeLogs = null; }
   if (!server) return;
   return new Promise((resolve) => {
     if (wss) wss.close();
