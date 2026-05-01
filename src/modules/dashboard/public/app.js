@@ -620,13 +620,16 @@ function renderSignals(payload) {
       suggested = '<span class="signals-status blocked">—</span>';
     }
     const slTpCell = s.sl != null
-      ? `<span class="num-neg" title="Stop-loss">${fmtPrice(s.sl)}</span> <span class="sep">/</span> <span class="num-pos" title="Take-profit">${fmtPrice(s.tp)}</span>`
-      : '<span class="num-muted">—</span>';
+      ? `<span class="num-inline-neg" title="Stop-loss">${fmtPrice(s.sl)}</span> <span class="sep">/</span> <span class="num-inline-pos" title="Take-profit">${fmtPrice(s.tp)}</span>`
+      : '<span class="num-inline-muted">—</span>';
     const trendThreshold = th.trendMaxRisePct ?? 8;
     const trendOver = s.trendPct != null && Math.abs(s.trendPct) >= trendThreshold;
+    const trendInlineCls = s.trendPct == null
+      ? 'num-inline-muted'
+      : (s.trendPct > 0 ? 'num-inline-pos' : 'num-inline-neg');
     const trendCell = s.trendPct != null
-      ? `<span class="${numberClass(s.trendPct, trendThreshold)}${trendOver ? ' num-warn-glow' : ''}">${arrow(s.trendPct)} ${fmtPct(s.trendPct, 1)}</span> <span class="num-muted">/ ${th.trendLookbackMin}m</span>`
-      : '<span class="num-muted">—</span>';
+      ? `<span class="${trendInlineCls}${trendOver ? ' num-warn-glow' : ''}">${arrow(s.trendPct)} ${fmtPct(s.trendPct, 1)}</span> <span class="num-inline-muted">/ ${th.trendLookbackMin}m</span>`
+      : '<span class="num-inline-muted">—</span>';
     const spikeKind = s.signal === 'SHORT' ? 'pump' : (s.signal === 'LONG' ? 'dump' : null);
     const rowStyle = spikeKind && !s.blocked ? tintRow(s.spikePct, spikeKind) : '';
     const rowCls = [
