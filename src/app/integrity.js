@@ -10,7 +10,7 @@ import { logger } from '../core/logger.js';
 import { getActivePosition, closePosition as dbClosePosition } from '../core/database.js';
 import { getPositions, getAccountSummary } from '../modules/exchange.js';
 import { sendMessage } from '../modules/reporter.js';
-import { fetchExchangePositions, handleOrphaned } from '../modules/sync.js';
+import { fetchExchangePositions } from '../modules/sync.js';
 import {
   state,
   INTEGRITY_CHECK_INTERVAL_MS,
@@ -155,78 +155,99 @@ export async function integrityCheck() {
 }
 
 // ─────────────────────────────────────────────────
-//  Orphan Check — детектор ручной покупки на бирже
+//  Manual Position Check — hands-off режим
 // ─────────────────────────────────────────────────
-// Каждый тик проверяет: если в БД нет OPEN-позиции, но на бирже есть SHORT —
-// это ты вручную купил/шортанул. Бот "усыновляет" такую позицию (записывает в БД)
-// и начинает сопровождать как обычную carry-сделку. LONG-позиции пропускаются:
-// carry-стратегия рассчитана на шорты, а лонг бот не сможет корректно вести.
+// Каждый тик проверяет: если на бирже есть позиция, которой нет в БД бота —
+// это ты торгуешь вручную (LONG или SHORT). Бот в этом случае:
+//   • НЕ усыновляет позицию (ты сам управляешь exit'ом)
+//   • НЕ открывает свою параллельно (паузится)
+//   • Шлёт throttled-уведомление о входе в hands-off режим
+// Когда ручная позиция исчезает с биржи → бот автоматом возвращается к торговле.
 
-const longWarningThrottle = new Map();  // coin → last alert ts
-const LONG_WARNING_THROTTLE_MS = 30 * 60_000;  // 30 мин
+const MANUAL_WARNING_THROTTLE_MS = 30 * 60_000;  // 30 мин
 
 let lastOrphanCheck = 0;
 const ORPHAN_CHECK_INTERVAL_MS = 60_000;  // 60с — реже чем тик чтобы не спамить API
 
 /**
- * @returns {Promise<boolean>} true если приняли orphan-позицию
+ * @returns {Promise<'paused'|false>} 'paused' если бот должен пропустить тик
  */
 export async function orphanCheck() {
   if (!config.isProduction) return false;
 
   const now = Date.now();
-  if (now - lastOrphanCheck < ORPHAN_CHECK_INTERVAL_MS) return false;
+  if (now - lastOrphanCheck < ORPHAN_CHECK_INTERVAL_MS) {
+    // throttle активен, но если флаг уже стоит — продолжаем паузить тик
+    return state.manualPositionActive ? 'paused' : false;
+  }
   lastOrphanCheck = now;
 
-  // Если в БД есть OPEN — у нас уже есть позиция, не лезем (это работа integrityCheck в обратную сторону)
+  // Если в БД есть OPEN — это позиция бота, manualCheck не нужен
+  // (integrityCheck уже отработал; если бы оператор открыл вторую позу на другой
+  // монете — она попала бы в getPositions(), но текущая single-slot архитектура
+  // запрещает второй параллельный ордер от бота, см. coordinator).
   const dbPosition = getActivePosition();
-  if (dbPosition) return false;
 
   let exchangePositions;
   try {
     exchangePositions = await fetchExchangePositions();
   } catch (err) {
-    logger.debug(`[Orphan] fetchExchangePositions failed: ${err.message}`);
+    logger.debug(`[Manual] fetchExchangePositions failed: ${err.message}`);
+    return state.manualPositionActive ? 'paused' : false;
+  }
+
+  // Отфильтровываем позицию бота (если есть) — остаётся только "ручное"
+  const manualPositions = dbPosition
+    ? exchangePositions.filter((p) => p.coin !== dbPosition.coin)
+    : exchangePositions;
+
+  // ── Ручных позиций нет ─────────────────────────
+  if (manualPositions.length === 0) {
+    if (state.manualPositionActive) {
+      // Юзер закрыл всё руками → возврат в работу
+      const coins = [...state.manualPositionCoins].join(', ');
+      logger.info(`[Manual] ✅ Manual position(s) gone (${coins}) — resuming normal trading`);
+      await sendMessage(
+        `✅ <b>Ручные позиции закрыты</b>\n` +
+          `<code>─────────────────────</code>\n` +
+          `Бот возвращается к автоматической торговле.`,
+        true,
+      ).catch(() => {});
+      state.manualPositionActive = false;
+      state.manualPositionCoins.clear();
+      state.manualWarningThrottle.clear();
+    }
     return false;
   }
 
-  if (exchangePositions.length === 0) return false;
+  // ── Ручные позиции есть → hands-off режим ─────
+  state.manualPositionActive = true;
+  const currentCoins = new Set(manualPositions.map((p) => p.coin));
+  state.manualPositionCoins = currentCoins;
 
-  let adopted = false;
-  for (const exPos of exchangePositions) {
-    if (exPos.szi < 0) {
-      // SHORT → adopt
-      logger.info(
-        `[Orphan] 🔍 Manual SHORT detected #${exPos.coin} szi=${exPos.szi} entry=$${exPos.entryPx} — adopting`,
+  // Throttled-уведомление по каждой монете отдельно
+  for (const exPos of manualPositions) {
+    const last = state.manualWarningThrottle.get(exPos.coin);
+    if (!last || now - last >= MANUAL_WARNING_THROTTLE_MS) {
+      state.manualWarningThrottle.set(exPos.coin, now);
+      const side = exPos.szi < 0 ? 'SHORT' : 'LONG';
+      const sizeUsd = Math.abs(exPos.szi) * exPos.entryPx;
+      logger.warn(
+        `[Manual] 🖐 Manual ${side} detected #${exPos.coin} szi=${exPos.szi} entry=$${exPos.entryPx} — bot paused`,
       );
-      try {
-        await handleOrphaned(exPos);
-        adopted = true;
-      } catch (err) {
-        logger.error(`[Orphan] Failed to adopt #${exPos.coin}: ${err.message}`);
-      }
-    } else {
-      // LONG → не трогаем, throttled-предупреждение
-      const last = longWarningThrottle.get(exPos.coin);
-      if (!last || now - last >= LONG_WARNING_THROTTLE_MS) {
-        longWarningThrottle.set(exPos.coin, now);
-        logger.warn(
-          `[Orphan] ⚠️ Manual LONG detected #${exPos.coin} szi=${exPos.szi} — NOT adopting (carry стратегия для шортов)`,
-        );
-        await sendMessage(
-          `⚠️ <b>Ручной LONG на бирже #${exPos.coin}</b>\n` +
-            `<code>─────────────────────</code>\n` +
-            `📐 Размер: ${exPos.szi} ${exPos.coin} (~$${(exPos.szi * exPos.entryPx).toFixed(2)})\n` +
-            `💵 Entry: $${exPos.entryPx}\n` +
-            `💰 uPnL: $${exPos.unrealizedPnl.toFixed(4)}\n` +
-            `<code>─────────────────────</code>\n` +
-            `🤖 Бот <b>не берёт</b> в управление: carry-стратегия рассчитана на SHORT.\n` +
-            `Закрой вручную или конвертируй позицию, чтобы бот мог торговать.`,
-          true,
-        );
-      }
+      await sendMessage(
+        `🖐 <b>Ручная позиция #${exPos.coin} (${side})</b>\n` +
+          `<code>─────────────────────</code>\n` +
+          `📐 Размер: <b>${Math.abs(exPos.szi)} ${exPos.coin}</b> (~$${sizeUsd.toFixed(2)})\n` +
+          `💵 Entry: <b>$${exPos.entryPx}</b>\n` +
+          `💰 uPnL: <b>$${exPos.unrealizedPnl.toFixed(4)}</b>\n` +
+          `<code>─────────────────────</code>\n` +
+          `🤖 Бот в режиме <b>HANDS-OFF</b>: не лезет в твою позицию и не открывает свою.\n` +
+          `Закрой руками — бот автоматом вернётся к работе.`,
+        true,
+      ).catch(() => {});
     }
   }
 
-  return adopted;
+  return 'paused';
 }

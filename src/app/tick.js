@@ -24,10 +24,10 @@ export async function tick() {
       return;
     }
 
-    // ── Orphan Check: детекция ручной покупки на бирже ──
-    const adopted = await orphanCheck();
-    if (adopted) {
-      logger.info('[Tick] Adopted orphan position — coordinator подхватит на следующем тике');
+    // ── Manual Position Check: hands-off режим если оператор торгует вручную ──
+    const manualState = await orphanCheck();
+    if (manualState === 'paused') {
+      logger.debug('[Tick] HANDS-OFF: manual position active, skipping tick');
       return;
     }
 

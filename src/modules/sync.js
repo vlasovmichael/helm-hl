@@ -2,7 +2,7 @@ import { readFile } from 'fs/promises';
 import axios from 'axios';
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
-import { getActivePosition, savePosition, closePosition as dbClosePosition } from '../core/database.js';
+import { getActivePosition, closePosition as dbClosePosition } from '../core/database.js';
 import { sendMessage } from './reporter.js';
 import { checkAccountLeverage } from './exchange.js';
 import { restoreCircuitBreaker, restoreSniper } from './executor/state.js';
@@ -265,63 +265,42 @@ async function handleMismatch(dbPosition) {
 }
 
 /**
- * Orphaned Position: на бирже есть позиция, а в БД нет.
- * Создаём запись в БД чтобы бот мог сопровождать её.
- *
- * Ключевые решения:
- *   - size_usd = |szi| × entryPx (стоимость НА ВХОДЕ, не текущая рыночная)
- *   - entry_time = Date.now() — реальное время входа неизвестно,
- *     но это безопаснее чем ставить прошлое: minHoldMinutes защитит от
- *     мгновенного закрытия пока бот оценит ситуацию.
- *   - entry_apy = 0 — стратегист использует live slowApy для решений
- *     о выходе, entry_apy влияет только на расчёт PnL при закрытии.
+ * Orphaned Position: на бирже есть позиция, которой нет под управлением бота.
+ * Hands-off режим: НЕ усыновляем, флагируем как "ручную" — бот паузится
+ * до тех пор, пока оператор не закроет позицию руками.
  */
 export async function handleOrphaned(exchangePos) {
   const sizeUsd = Math.abs(exchangePos.szi) * exchangePos.entryPx;
   const side    = exchangePos.szi < 0 ? 'SHORT' : 'LONG';
 
   logger.warn(
-    `[Sync] 🔍 ORPHANED — #${exchangePos.coin} found on exchange ` +
-    `(${side} szi=${exchangePos.szi}, entry=$${exchangePos.entryPx}, ` +
-    `size=$${sizeUsd.toFixed(2)}, uPnL=$${exchangePos.unrealizedPnl.toFixed(4)}) ` +
-    `but no local position. Adopting…`,
+    `[Sync] 🖐 Manual ${side} detected on startup — #${exchangePos.coin} ` +
+    `szi=${exchangePos.szi} entry=$${exchangePos.entryPx} size=$${sizeUsd.toFixed(2)} ` +
+    `uPnL=$${exchangePos.unrealizedPnl.toFixed(4)} — bot paused (hands-off)`,
   );
 
-  // Создаём позицию в БД для сопровождения
-  const id = savePosition({
-    coin:        exchangePos.coin,
-    size_usd:    sizeUsd,
-    entry_price: exchangePos.entryPx,
-    entry_apy:   0,
-    entry_time:  Date.now(),
-    mode:        config.mode,
-  });
-
-  logger.info(
-    `[Sync] ✅ Adopted #${exchangePos.coin} as DB id=${id} | ` +
-    `size: $${sizeUsd.toFixed(2)} | entry: $${exchangePos.entryPx} | ` +
-    `liq: ${exchangePos.liquidationPx != null ? `$${exchangePos.liquidationPx}` : 'N/A'}`,
-  );
+  appState.manualPositionActive = true;
+  appState.manualPositionCoins.add(exchangePos.coin);
+  appState.manualWarningThrottle.set(exchangePos.coin, Date.now());
 
   const liqLine = exchangePos.liquidationPx != null
     ? `🔻 Ликвидация: <b>$${exchangePos.liquidationPx}</b>\n`
     : '';
 
   await sendMessage(
-    `⚠️ <b>Обнаружена неучтённая позиция #${exchangePos.coin}</b>\n` +
+    `🖐 <b>Ручная позиция #${exchangePos.coin} (${side})</b>\n` +
     `<code>═════════════════════</code>\n` +
-    `📌 Монета: <b>#${exchangePos.coin}</b> (${side})\n` +
     `📐 Размер: <b>${Math.abs(exchangePos.szi)} ${exchangePos.coin}</b> (~$${sizeUsd.toFixed(2)})\n` +
-    `💵 Entry Price: <b>$${exchangePos.entryPx}</b>\n` +
+    `💵 Entry: <b>$${exchangePos.entryPx}</b>\n` +
     `${liqLine}` +
-    `💰 Unrealized PnL: <b>$${exchangePos.unrealizedPnl.toFixed(4)}</b>\n` +
+    `💰 uPnL: <b>$${exchangePos.unrealizedPnl.toFixed(4)}</b>\n` +
     `<code>═════════════════════</code>\n` +
-    `🤖 Взята под контроль (id=${id}).\n` +
-    `<i>APY будет определён на следующем тике.</i>`,
+    `🤖 Бот в режиме <b>HANDS-OFF</b>: не управляет твоей позицией и не открывает свою.\n` +
+    `Закрой руками — бот автоматом продолжит работу.`,
     true,
   );
 
-  return id;
+  return null;
 }
 
 // ─────────────────────────────────────────────────

@@ -34,4 +34,8 @@ export const state = {
   sessionStartEquity:  0,
   lastIdleAt:          0,
   prevApyMap:          new Map(),
+  // Hands-off режим: оператор торгует вручную → бот паузится, не трогает позицию
+  manualPositionActive: false,
+  manualPositionCoins:  new Set(),   // тикеры, которые сейчас под ручным контролем
+  manualWarningThrottle: new Map(),  // coin → last alert ts
 };
