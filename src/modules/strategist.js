@@ -16,6 +16,7 @@ const {
   carryTrailArmPct: CARRY_TRAIL_ARM_PCT,
   carryTrailArmPctEquity: CARRY_TRAIL_ARM_PCT_EQUITY,
   carryTrailGiveBackPct: CARRY_TRAIL_GIVE_BACK_PCT,
+  carrySpikeProtectionPct: CARRY_SPIKE_PROTECTION_PCT,
   negativeFundingSoftExitMinPnlPct: NEG_FUND_SOFT_MIN_PNL_PCT,
 } = config.trading;
 
@@ -241,9 +242,9 @@ export function analyze(scoutData, activePosition) {
     disappearedStreak = 0;
   }
 
-  // 2. Цена выросла >10% — защита шорта от убытка
+  // 2. Цена выросла > CARRY_SPIKE_PROTECTION_PCT — защита шорта от убытка
   const priceSpike = ((current.price - activePosition.entry_price) / activePosition.entry_price) * 100;
-  if (priceSpike > 10) {
+  if (priceSpike > CARRY_SPIKE_PROTECTION_PCT) {
     peakUnrealizedPct.delete(currentCoin);
     peakEquityPct.delete(currentCoin);
     logger.warn(`[Strategist] CLOSE — ${currentCoin} price spiked +${priceSpike.toFixed(2)}% (short at risk)`);

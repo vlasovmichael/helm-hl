@@ -17,6 +17,7 @@ const {
   fadeMaxHoldMinutes,
   fadeMinCurrentApy,
   fadeMinDropPct,
+  carrySpikeProtectionPct: CARRY_SPIKE_PROTECTION_PCT,
 } = config.trading;
 
 function hoursToBreakeven(apy) {
@@ -132,10 +133,10 @@ export function analyzeFade(scoutData, activePosition) {
     disappearedStreak = 0;
   }
 
-  // Emergency: price spike >10%
+  // Emergency: price spike > CARRY_SPIKE_PROTECTION_PCT
   const spike =
     ((current.price - activePosition.entry_price) / activePosition.entry_price) * 100;
-  if (spike > 10) {
+  if (spike > CARRY_SPIKE_PROTECTION_PCT) {
     logger.warn(
       `[Fade] CLOSE — ${currentCoin} price spiked +${spike.toFixed(2)}%`,
     );

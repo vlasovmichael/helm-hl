@@ -92,9 +92,10 @@ function loadConfig() {
   // и закрывается в ноль». Триггерим выход, когда позиция сдала GIVE_BACK% от пика.
   // ARM_PCT = пока unrealized < этого порога, peak не трекаем (фильтр шума).
   const carryTrailEnabled       = (process.env.CARRY_TRAIL_ENABLED || 'true').toLowerCase() === 'true';
-  const carryTrailArmPct        = parseFloat(process.env.CARRY_TRAIL_ARM_PCT        || '5');
-  const carryTrailArmPctEquity  = parseFloat(process.env.CARRY_TRAIL_ARM_PCT_EQUITY || '2');
-  const carryTrailGiveBackPct   = parseFloat(process.env.CARRY_TRAIL_GIVE_BACK_PCT  || '30');
+  const carryTrailArmPct        = parseFloat(process.env.CARRY_TRAIL_ARM_PCT        || '3');
+  const carryTrailArmPctEquity  = parseFloat(process.env.CARRY_TRAIL_ARM_PCT_EQUITY || '1.5');
+  const carryTrailGiveBackPct   = parseFloat(process.env.CARRY_TRAIL_GIVE_BACK_PCT  || '25');
+  const carrySpikeProtectionPct = parseFloat(process.env.CARRY_SPIKE_PROTECTION_PCT || '6');
 
   if (isNaN(carryTrailArmPct) || carryTrailArmPct <= 0) {
     throw new Error(`CARRY_TRAIL_ARM_PCT must be positive number. Got: "${process.env.CARRY_TRAIL_ARM_PCT}"`);
@@ -104,6 +105,9 @@ function loadConfig() {
   }
   if (isNaN(carryTrailGiveBackPct) || carryTrailGiveBackPct <= 0 || carryTrailGiveBackPct >= 100) {
     throw new Error(`CARRY_TRAIL_GIVE_BACK_PCT must be in (0, 100). Got: "${process.env.CARRY_TRAIL_GIVE_BACK_PCT}"`);
+  }
+  if (isNaN(carrySpikeProtectionPct) || carrySpikeProtectionPct <= 0 || carrySpikeProtectionPct >= 100) {
+    throw new Error(`CARRY_SPIKE_PROTECTION_PCT must be in (0, 100). Got: "${process.env.CARRY_SPIKE_PROTECTION_PCT}"`);
   }
 
   // ── Sniper-Hunter strategy (Volatility Spike Mean-Reversion) ──
@@ -224,6 +228,7 @@ function loadConfig() {
       carryTrailArmPct,
       carryTrailArmPctEquity,
       carryTrailGiveBackPct,
+      carrySpikeProtectionPct,
       negativeFundingSoftExitMinPnlPct,
     },
 
