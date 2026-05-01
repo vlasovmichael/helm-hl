@@ -38,7 +38,7 @@ export const state = {
   manualPositionActive: false,
   manualPositionCoins:  new Set(),   // тикеры, которые сейчас под ручным контролем
   manualWarningThrottle: new Map(),  // coin → last alert ts
-  // Последний снапшот scoutData (для дашборда). Не используется в торговой логике.
-  latestScout:        [],
-  latestScoutAt:      0,
+  // Последний снапшот hunter-scope (для дашборда). Не используется в торговой логике.
+  latestHunter:       [],
+  latestHunterAt:     0,
 };

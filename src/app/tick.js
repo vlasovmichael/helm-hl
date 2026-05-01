@@ -33,8 +33,8 @@ export async function tick() {
 
     const { scoutData, hunterData } = await scan();
 
-    state.latestScout   = scoutData;
-    state.latestScoutAt = Date.now();
+    state.latestHunter   = hunterData;
+    state.latestHunterAt = Date.now();
 
     if (scoutData.length === 0 && hunterData.length === 0) {
       logger.info('[Tick] Scout returned empty data — skipping');

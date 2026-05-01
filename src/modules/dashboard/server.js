@@ -17,7 +17,13 @@ import { getAvailableBalance, getAccountEquity } from "../wallet.js";
 import { state } from "../../app/state.js";
 import { getTaxSummary } from "../taxCollector/index.js";
 import { getRuntimeBlacklist } from "../executor/index.js";
-import { hoursToBreakeven } from "../strategist.js";
+import { getPriceNMinAgo } from "../../core/priceHistory.js";
+import {
+  HUNTER_SPIKE_PCT,
+  HUNTER_SPIKE_WINDOW_MIN,
+  HUNTER_SL_PCT,
+  HUNTER_TP_PCT,
+} from "../strategistSniper.js";
 
 const HOST = "0.0.0.0";
 const PORT = 3010;
@@ -282,57 +288,81 @@ function handleActivity(req, res) {
 
 function handleSignals(req, res) {
   try {
-    const limit = req.query.limit ? Math.max(1, Math.min(50, parseInt(req.query.limit, 10))) : 10;
-    const data = Array.isArray(state.latestScout) ? state.latestScout : [];
-    const {
-      entryApy,
-      minApy,
-      exitBuffer,
-      minEntryApyFloor,
-      maxBreakevenHours,
-      predictedDropThreshold,
-    } = config.trading;
-    const effectiveExitApy = minApy - exitBuffer;
+    const limit = req.query.limit ? Math.max(1, Math.min(50, parseInt(req.query.limit, 10))) : 12;
+    const data = Array.isArray(state.latestHunter) ? state.latestHunter : [];
+    const now = state.latestHunterAt || Date.now();
+    const trendLookback = config.trading.hunterTrendLookbackMin;
+    const trendMaxRise  = config.trading.hunterTrendMaxRisePct;
     const activeCoin = getActivePosition()?.coin ?? null;
 
-    const top = data.slice(0, limit).map((m, idx) => {
-      const breakevenH = hoursToBreakeven(m.smoothedApy);
-      let predictedDrop = null;
-      let predictedDropFlag = false;
-      if (m.predictedApy != null && m.rawApy > 0) {
-        const drop = (m.rawApy - m.predictedApy) / m.rawApy;
-        predictedDrop = drop;
-        predictedDropFlag = drop > predictedDropThreshold;
-      }
-      const passesEntryFloor = m.smoothedApy >= minEntryApyFloor;
-      const passesEntryGate  = m.smoothedApy >= entryApy;
-      const passesFeeGate    = breakevenH <= maxBreakevenHours;
-      const tradable = passesEntryFloor && passesEntryGate && passesFeeGate && !predictedDropFlag;
+    const enriched = data.map((item) => {
+      const past = getPriceNMinAgo(item.coin, HUNTER_SPIKE_WINDOW_MIN, now);
+      const spikePct = past != null ? ((item.price - past) / past) * 100 : null;
+      const trendPast = getPriceNMinAgo(item.coin, trendLookback, now);
+      const trendPct = trendPast != null ? ((item.price - trendPast) / trendPast) * 100 : null;
+      return { coin: item.coin, price: item.price, spikePct, trendPct };
+    });
 
+    // Сортировка: по абсолютной величине 2m Δ — самые заметные движения наверху.
+    enriched.sort((a, b) => {
+      const ax = a.spikePct == null ? -Infinity : Math.abs(a.spikePct);
+      const bx = b.spikePct == null ? -Infinity : Math.abs(b.spikePct);
+      return bx - ax;
+    });
+
+    const watchThreshold = HUNTER_SPIKE_PCT * 0.6;
+
+    const top = enriched.slice(0, limit).map((m, idx) => {
+      let signal = 'NEUTRAL';
+      let blocked = null;
+      let sl = null;
+      let tp = null;
+      if (m.spikePct == null) {
+        signal = 'WARMUP';
+      } else if (m.spikePct >= HUNTER_SPIKE_PCT) {
+        signal = 'SHORT';
+        if (m.trendPct != null && m.trendPct >= trendMaxRise) {
+          blocked = `trend +${m.trendPct.toFixed(1)}%/${trendLookback}m`;
+        }
+        sl = m.price * (1 + HUNTER_SL_PCT / 100);
+        tp = m.price * (1 - HUNTER_TP_PCT / 100);
+      } else if (m.spikePct <= -HUNTER_SPIKE_PCT) {
+        signal = 'LONG';
+        if (m.trendPct != null && m.trendPct <= -trendMaxRise) {
+          blocked = `trend ${m.trendPct.toFixed(1)}%/${trendLookback}m`;
+        }
+        sl = m.price * (1 - HUNTER_SL_PCT / 100);
+        tp = m.price * (1 + HUNTER_TP_PCT / 100);
+      } else if (Math.abs(m.spikePct) >= watchThreshold) {
+        signal = 'WATCH';
+      }
       return {
         rank: idx + 1,
         coin: m.coin,
+        pair: `${m.coin}/USDC`,
         price: m.price,
-        fundingRate: m.fundingRate,
-        rawApy: m.rawApy,
-        smoothedApy: m.smoothedApy,
-        slowApy: m.slowApy,
-        predictedApy: m.predictedApy ?? null,
-        predictedDropPct: predictedDrop,
-        breakevenHours: Number.isFinite(breakevenH) ? breakevenH : null,
-        tradable,
+        spikePct: m.spikePct,
+        trendPct: m.trendPct,
+        signal,
+        blocked,
+        sl, tp,
+        slPct: sl != null ? HUNTER_SL_PCT : null,
+        tpPct: tp != null ? HUNTER_TP_PCT : null,
         isActive: activeCoin && m.coin === activeCoin,
       };
     });
 
     res.json({
-      ts: state.latestScoutAt || 0,
+      ts: state.latestHunterAt || 0,
       thresholds: {
-        entryApy,
-        effectiveExitApy,
-        minEntryApyFloor,
-        maxBreakevenHours,
+        spikePct: HUNTER_SPIKE_PCT,
+        spikeWindowMin: HUNTER_SPIKE_WINDOW_MIN,
+        slPct: HUNTER_SL_PCT,
+        tpPct: HUNTER_TP_PCT,
+        trendLookbackMin: trendLookback,
+        trendMaxRisePct: trendMaxRise,
       },
+      universeSize: data.length,
       activeCoin,
       count: top.length,
       signals: top,

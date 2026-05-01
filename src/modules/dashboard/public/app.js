@@ -567,38 +567,62 @@ function renderSignals(payload) {
   const signals = payload?.signals || [];
   const th = payload?.thresholds || {};
   meta.textContent = payload?.ts
-    ? `entry ≥ ${th.entryApy}% · floor ${th.minEntryApyFloor}% · breakeven ≤ ${th.maxBreakevenHours}h · updated ${fmtTime(payload.ts)}`
+    ? `pump ≥ ${th.spikePct}%/${th.spikeWindowMin}m · SL +${th.slPct}% · TP -${th.tpPct}% · scope ${payload.universeSize} · updated ${fmtTime(payload.ts)}`
     : '—';
   if (!signals.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Waiting for scout…</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Waiting for hunter scope…</td></tr>';
     return;
   }
-  const apyClass = (apy) => {
-    if (apy >= (th.entryApy ?? 30)) return 'signals-apy-good';
-    if (apy >= (th.minEntryApyFloor ?? 15)) return 'signals-apy-mid';
+
+  const fmtPrice = (p) => {
+    if (p == null) return '—';
+    if (p >= 100) return p.toFixed(2);
+    if (p >= 1)   return p.toFixed(4);
+    return p.toPrecision(4);
+  };
+  const fmtPct = (v, digits = 2) => {
+    if (v == null) return '—';
+    const sign = v >= 0 ? '+' : '';
+    return `${sign}${v.toFixed(digits)}%`;
+  };
+  const spikeClass = (v) => {
+    if (v == null) return 'signals-apy-low';
+    if (v >= (th.spikePct ?? 5)) return 'signals-apy-good';
+    if (v >= (th.spikePct ?? 5) * 0.6) return 'signals-apy-mid';
+    if (v <= -(th.spikePct ?? 5) * 0.6) return 'signals-drop-warn';
     return 'signals-apy-low';
   };
-  const fmtFunding = (r) => (r * 100).toFixed(4) + '%';
-  const fmtPct = (v) => (v == null ? '—' : (v * 100).toFixed(0) + '%');
-  const fmtBe  = (h) => (h == null ? '—' : h.toFixed(1) + 'h');
 
   tbody.innerHTML = signals.map((s) => {
-    const dropCell = s.predictedDropPct != null
-      ? `<span class="${s.predictedDropPct > 0.3 ? 'signals-drop-warn' : ''}">${s.predictedApy != null ? s.predictedApy.toFixed(0) + '% (' + (s.predictedDropPct >= 0 ? '-' : '+') + Math.abs(s.predictedDropPct * 100).toFixed(0) + '%)' : '—'}</span>`
+    let suggested;
+    if ((s.signal === 'SHORT' || s.signal === 'LONG') && s.blocked) {
+      suggested = `<span class="signals-status blocked" title="${s.blocked}">${s.signal} (gated)</span>`;
+    } else if (s.signal === 'SHORT') {
+      suggested = '<span class="signals-status tradable">SHORT</span>';
+    } else if (s.signal === 'LONG') {
+      suggested = '<span class="signals-status long">LONG</span>';
+    } else if (s.signal === 'WATCH') {
+      suggested = '<span class="signals-status active">WATCH</span>';
+    } else if (s.signal === 'WARMUP') {
+      suggested = '<span class="signals-status blocked">WARMUP</span>';
+    } else {
+      suggested = '<span class="signals-status blocked">—</span>';
+    }
+    const slTpCell = s.sl != null
+      ? `<span class="signals-apy-low">${fmtPrice(s.sl)} / ${fmtPrice(s.tp)}</span>`
       : '—';
-    let statusBadge;
-    if (s.isActive)      statusBadge = '<span class="signals-status active">ACTIVE</span>';
-    else if (s.tradable) statusBadge = '<span class="signals-status tradable">PASS</span>';
-    else                 statusBadge = '<span class="signals-status blocked">GATED</span>';
+    const trendCell = s.trendPct != null
+      ? `<span class="${s.trendPct >= (th.trendMaxRisePct ?? 8) ? 'signals-drop-warn' : 'signals-apy-low'}">${fmtPct(s.trendPct, 1)} / ${th.trendLookbackMin}m</span>`
+      : '—';
     return `
       <tr class="${s.isActive ? 'is-active' : ''}">
         <td>${s.rank}</td>
-        <td class="signals-coin">#${s.coin}</td>
-        <td class="${apyClass(s.smoothedApy)}">${s.smoothedApy.toFixed(1)}%</td>
-        <td>${fmtFunding(s.fundingRate)}</td>
-        <td>${dropCell}</td>
-        <td>${fmtBe(s.breakevenHours)}</td>
-        <td>${statusBadge}</td>
+        <td class="signals-coin">${s.pair}</td>
+        <td>${fmtPrice(s.price)}</td>
+        <td class="${spikeClass(s.spikePct)}">${fmtPct(s.spikePct)}</td>
+        <td>${trendCell}</td>
+        <td>${suggested}</td>
+        <td>${slTpCell}</td>
       </tr>`;
   }).join('');
 }
