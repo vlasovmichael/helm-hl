@@ -12,6 +12,7 @@ import { sendStartupNotification, setStatusCollector, startCallbackPolling } fro
 import { syncWithExchange } from './modules/sync.js';
 import { startDashboard } from './modules/dashboard/server.js';
 import { dailyJob as taxDailyJob } from './modules/taxCollector/index.js';
+import { drainOutbox as taxDrainOutbox } from './modules/taxCollector/pusher.js';
 import { state, TICK_INTERVAL_MS, INTEGRITY_GRACE_PERIOD_MS, SHUTDOWN_TIMEOUT_MS } from './app/state.js';
 import { tick } from './app/tick.js';
 import { shutdown } from './app/lifecycle.js';
@@ -80,6 +81,15 @@ async function main() {
     { timezone: 'Europe/Warsaw' },
   );
   logger.info('[System] Tax collector cron scheduled: 03:00 Europe/Warsaw daily');
+
+  // ── Tax Outbox pusher — каждые 15 минут ──
+  // Драйнит tax_outbox в tax-manager. Fail-soft: если env не задан — skip.
+  cron.schedule('*/15 * * * *', () => {
+    taxDrainOutbox().catch((err) => {
+      logger.error(`[TaxPusher] Cron crashed: ${err.message}`);
+    });
+  });
+  logger.info('[System] Tax outbox pusher scheduled: every 15 min');
 
   // Grace period для integrityCheck
   state.botStartedAt = Date.now();

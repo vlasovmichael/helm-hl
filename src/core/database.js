@@ -70,8 +70,34 @@ export function initDB() {
     logger.info('[DB] Migration: added entry_equity to positions');
   }
 
+  // tax_outbox — outbox для tax-manager (см. INTEGRATION.md).
+  // Бизнес-код пишет сюда, pusher cron драйнит в HTTPS+HMAC.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tax_outbox (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id      TEXT    NOT NULL UNIQUE,
+      occurred_at   TEXT    NOT NULL,
+      kind          TEXT    NOT NULL,
+      amount        REAL    NOT NULL,
+      currency      TEXT    NOT NULL,
+      counterparty  TEXT,
+      doc_no        TEXT,
+      raw           TEXT,
+      created_at    INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+      pushed_at     INTEGER,
+      push_attempts INTEGER NOT NULL DEFAULT 0,
+      last_error    TEXT
+    );
+    CREATE INDEX IF NOT EXISTS tax_outbox_unpushed_idx
+      ON tax_outbox (created_at) WHERE pushed_at IS NULL;
+  `);
+
   logger.info(`[DB] Initialized at ${DB_PATH}`);
   return db;
+}
+
+export function getRawDb() {
+  return getDb();
 }
 
 function getDb() {

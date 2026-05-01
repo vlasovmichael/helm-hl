@@ -7,6 +7,7 @@
 import { readFile, writeFile, mkdir, rename } from 'fs/promises';
 import { join } from 'path';
 import { logger } from '../../core/logger.js';
+import { emitTaxEvent } from './outbox.js';
 
 const TAX_DIR = 'data/tax';
 
@@ -95,6 +96,22 @@ export async function appendEntries(newEntries) {
       await persistLedger(year, merged);
       totalAdded += fresh.length;
       logger.info(`[Ledger] ${year}: +${fresh.length} new entries (${merged.length} total)`);
+
+      for (const entry of fresh) {
+        try {
+          emitTaxEvent({
+            event_id:     entry.tx_id,
+            occurred_at:  entry.date,
+            kind:         entry.type === 'COST' ? 'crypto.cost' : 'crypto.revenue',
+            amount:       entry.fiat_val,
+            currency:     entry.fiat_currency,
+            counterparty: 'Binance',
+            raw:          entry,
+          });
+        } catch (err) {
+          logger.warn(`[Ledger] tax_outbox emit failed for ${entry.tx_id}: ${err.message}`);
+        }
+      }
     } else {
       logger.debug(`[Ledger] ${year}: no new entries`);
     }

@@ -16,6 +16,7 @@ services:
       - "127.0.0.1:3010:3010"
     networks:
       - proxy_net
+      - tax-net
 
   cloudflared:
     image: cloudflare/cloudflared:latest
@@ -27,4 +28,6 @@ services:
 
 networks:
   proxy_net:
+    external: true
+  tax-net:
     external: true
