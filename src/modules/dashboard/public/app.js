@@ -53,7 +53,7 @@ function initWebSocket() {
         renderPosition(msg.data.activePosition);
         renderManualPositions(msg.data.manualPositions);
         renderBans(msg.data);
-        handlePriceChartUpdate(msg.data.activePosition);
+        handlePriceChartUpdate(msg.data.activePosition, msg.data.manualPositions);
         lastSuccessAt = Date.now();
         renderFooter();
       } else if (msg.type === 'logs:init') {
@@ -115,9 +115,30 @@ function updateAnimatedNumber(elId, newValueStr) {
 
 // ── Price Chart Logic ────────────────────────────
 
-async function handlePriceChartUpdate(pos) {
+function manualToPos(mp) {
+  if (!mp) return null;
+  const sizeUsd = Number.isFinite(mp.sizeUsd) ? mp.sizeUsd : 0;
+  const entry = Number.isFinite(mp.entryPrice) ? mp.entryPrice : 0;
+  const live = Number.isFinite(mp.currentPrice) ? mp.currentPrice : null;
+  const pnlPrice = Number.isFinite(mp.unrealizedPnl) ? mp.unrealizedPnl : 0;
+  return {
+    coin: mp.coin,
+    sizeUsd,
+    entryPrice: entry,
+    currentPrice: live,
+    currentPnl: { price: pnlPrice, funding: 0, entryFee: 0, exitFeeMarket: 0, exitFeeMaker: 0, netMarket: pnlPrice, netMaker: pnlPrice },
+    _manual: true,
+  };
+}
+
+async function handlePriceChartUpdate(pos, manualPositions) {
   const card = document.getElementById('price-card');
   card.style.display = 'block';
+
+  // Если бот-позиции нет, но есть ручная — показываем её на графике
+  if (!pos && Array.isArray(manualPositions) && manualPositions.length > 0) {
+    pos = manualToPos(manualPositions[0]);
+  }
 
   if (!pos) {
     lastPos = null;
