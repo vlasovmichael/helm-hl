@@ -231,14 +231,14 @@ test('Emergency: цена выросла >10% → CLOSE price_spike (даже в
   assert.equal(r.reason, 'price_spike_protection');
 });
 
-test('Emergency: цена выросла на 9% → НЕ закрываем', () => {
+test('Emergency: цена выросла на 5% → НЕ закрываем (под порогом spike protection)', () => {
   resetState();
   const pos = makePosition('BTC', 50, {
     entry_price: 100,
     entry_time:  Date.now() - 60_000,
   });
   const r = analyze(
-    [makeScoutItem('BTC', 50, { price: 109, slowApy: 50 })],
+    [makeScoutItem('BTC', 50, { price: 105, slowApy: 50 })],
     pos,
   );
   assert.notEqual(r.action, 'CLOSE');
@@ -637,7 +637,7 @@ test('Trailing equity: без кэша equity → path B молча disabled', (
 
 test('Trailing equity: equityPct < ARM_PCT_EQUITY → path B не армится', () => {
   _resetBalanceCache();
-  _seedBalanceCache(100); // большой equity → 1.80/100 = 1.8% < 2% ARM
+  _seedBalanceCache(200); // equity=200, pnl 1.80 / 200 = 0.9% < 1.5% ARM
   resetState();
   const pos = makePosition('FART', 40, { entry_price: 1.0 });
   pos.size_usd = 200;
