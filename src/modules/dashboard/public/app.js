@@ -530,10 +530,11 @@ function renderBans(status) {
 async function fetchJson(path) { const r = await fetch(path); if (r.status === 401) window.location.href = '/login'; return r.json(); }
 
 async function tick() {
-  const [historyR, activityR, taxR] = await Promise.allSettled([
+  const [historyR, activityR, taxR, signalsR] = await Promise.allSettled([
     fetchJson(`/api/history?hours=${currentRangeHours}`),
     fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
     fetchJson('/api/tax-summary'),
+    fetchJson('/api/signals?limit=10'),
   ]);
   if (historyR.status === 'fulfilled' && historyR.value?.points) {
     equityChart.data.labels = historyR.value.points.map(p => fmtTime(p.ts));
@@ -543,6 +544,7 @@ async function tick() {
   }
   if (activityR.status === 'fulfilled') renderActivity(activityR.value);
   if (taxR.status === 'fulfilled') renderTax(taxR.value);
+  if (signalsR.status === 'fulfilled') renderSignals(signalsR.value);
   lastSuccessAt = Date.now();
   renderFooter();
 }
@@ -556,6 +558,49 @@ function renderActivity(activity) {
       <div><span class="activity-kind ${e.kind}">${e.kind.toUpperCase()}</span><span class="activity-coin">#${e.coin}</span></div>
       <div class="activity-pnl ${e.pnl >= 0 ? 'positive' : 'negative'}">${e.pnl >= 0 ? '+' : ''}${(e.pnl || 0).toFixed(4)}</div>
     </div>`).join('');
+}
+
+function renderSignals(payload) {
+  const tbody = document.getElementById('signals-tbody');
+  const meta  = document.getElementById('signals-meta');
+  if (!tbody || !meta) return;
+  const signals = payload?.signals || [];
+  const th = payload?.thresholds || {};
+  meta.textContent = payload?.ts
+    ? `entry ≥ ${th.entryApy}% · floor ${th.minEntryApyFloor}% · breakeven ≤ ${th.maxBreakevenHours}h · updated ${fmtTime(payload.ts)}`
+    : '—';
+  if (!signals.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Waiting for scout…</td></tr>';
+    return;
+  }
+  const apyClass = (apy) => {
+    if (apy >= (th.entryApy ?? 30)) return 'signals-apy-good';
+    if (apy >= (th.minEntryApyFloor ?? 15)) return 'signals-apy-mid';
+    return 'signals-apy-low';
+  };
+  const fmtFunding = (r) => (r * 100).toFixed(4) + '%';
+  const fmtPct = (v) => (v == null ? '—' : (v * 100).toFixed(0) + '%');
+  const fmtBe  = (h) => (h == null ? '—' : h.toFixed(1) + 'h');
+
+  tbody.innerHTML = signals.map((s) => {
+    const dropCell = s.predictedDropPct != null
+      ? `<span class="${s.predictedDropPct > 0.3 ? 'signals-drop-warn' : ''}">${s.predictedApy != null ? s.predictedApy.toFixed(0) + '% (' + (s.predictedDropPct >= 0 ? '-' : '+') + Math.abs(s.predictedDropPct * 100).toFixed(0) + '%)' : '—'}</span>`
+      : '—';
+    let statusBadge;
+    if (s.isActive)      statusBadge = '<span class="signals-status active">ACTIVE</span>';
+    else if (s.tradable) statusBadge = '<span class="signals-status tradable">PASS</span>';
+    else                 statusBadge = '<span class="signals-status blocked">GATED</span>';
+    return `
+      <tr class="${s.isActive ? 'is-active' : ''}">
+        <td>${s.rank}</td>
+        <td class="signals-coin">#${s.coin}</td>
+        <td class="${apyClass(s.smoothedApy)}">${s.smoothedApy.toFixed(1)}%</td>
+        <td>${fmtFunding(s.fundingRate)}</td>
+        <td>${dropCell}</td>
+        <td>${fmtBe(s.breakevenHours)}</td>
+        <td>${statusBadge}</td>
+      </tr>`;
+  }).join('');
 }
 
 function renderTax(tax) {

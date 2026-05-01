@@ -17,6 +17,7 @@ import { getAvailableBalance, getAccountEquity } from "../wallet.js";
 import { state } from "../../app/state.js";
 import { getTaxSummary } from "../taxCollector/index.js";
 import { getRuntimeBlacklist } from "../executor/index.js";
+import { hoursToBreakeven } from "../strategist.js";
 
 const HOST = "0.0.0.0";
 const PORT = 3010;
@@ -279,6 +280,68 @@ function handleActivity(req, res) {
   }
 }
 
+function handleSignals(req, res) {
+  try {
+    const limit = req.query.limit ? Math.max(1, Math.min(50, parseInt(req.query.limit, 10))) : 10;
+    const data = Array.isArray(state.latestScout) ? state.latestScout : [];
+    const {
+      entryApy,
+      minApy,
+      exitBuffer,
+      minEntryApyFloor,
+      maxBreakevenHours,
+      predictedDropThreshold,
+    } = config.trading;
+    const effectiveExitApy = minApy - exitBuffer;
+    const activeCoin = getActivePosition()?.coin ?? null;
+
+    const top = data.slice(0, limit).map((m, idx) => {
+      const breakevenH = hoursToBreakeven(m.smoothedApy);
+      let predictedDrop = null;
+      let predictedDropFlag = false;
+      if (m.predictedApy != null && m.rawApy > 0) {
+        const drop = (m.rawApy - m.predictedApy) / m.rawApy;
+        predictedDrop = drop;
+        predictedDropFlag = drop > predictedDropThreshold;
+      }
+      const passesEntryFloor = m.smoothedApy >= minEntryApyFloor;
+      const passesEntryGate  = m.smoothedApy >= entryApy;
+      const passesFeeGate    = breakevenH <= maxBreakevenHours;
+      const tradable = passesEntryFloor && passesEntryGate && passesFeeGate && !predictedDropFlag;
+
+      return {
+        rank: idx + 1,
+        coin: m.coin,
+        price: m.price,
+        fundingRate: m.fundingRate,
+        rawApy: m.rawApy,
+        smoothedApy: m.smoothedApy,
+        slowApy: m.slowApy,
+        predictedApy: m.predictedApy ?? null,
+        predictedDropPct: predictedDrop,
+        breakevenHours: Number.isFinite(breakevenH) ? breakevenH : null,
+        tradable,
+        isActive: activeCoin && m.coin === activeCoin,
+      };
+    });
+
+    res.json({
+      ts: state.latestScoutAt || 0,
+      thresholds: {
+        entryApy,
+        effectiveExitApy,
+        minEntryApyFloor,
+        maxBreakevenHours,
+      },
+      activeCoin,
+      count: top.length,
+      signals: top,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
 function handleLogs(req, res) {
   try {
     const limit = req.query.limit ? Math.max(1, Math.min(2000, parseInt(req.query.limit, 10))) : 500;
@@ -363,6 +426,7 @@ export function startDashboard() {
   app.get("/api/history", handleHistory);
   app.get("/api/activity", handleActivity);
   app.get("/api/logs", handleLogs);
+  app.get("/api/signals", handleSignals);
   app.get("/api/tax-summary", handleTaxSummary);
 
   const ALLOWED_INTERVALS = {

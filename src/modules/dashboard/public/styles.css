@@ -622,3 +622,52 @@ footer {
   .logs-viewport { height: 240px; font-size: 11px; }
   .log-row { grid-template-columns: 54px 44px 1fr; }
 }
+
+/* Top Signals */
+.signals-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.signals-table-wrap { overflow-x: auto; }
+.signals-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.signals-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.signals-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--grid-line);
+  color: var(--text-primary);
+}
+.signals-table tbody tr:hover { background: var(--card-bg-elev); }
+.signals-table tr.is-active { background: rgba(99, 91, 255, 0.08); }
+.signals-table tr.is-active td:first-child { border-left: 2px solid var(--accent); }
+.signals-coin { font-weight: 600; }
+.signals-apy-good { color: var(--green); font-weight: 600; }
+.signals-apy-mid { color: var(--text-primary); }
+.signals-apy-low { color: var(--text-muted); }
+.signals-status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.signals-status.tradable { background: rgba(34, 197, 94, 0.12); color: var(--green); }
+.signals-status.blocked  { background: rgba(239, 68, 68, 0.10); color: var(--red); }
+.signals-status.active   { background: rgba(99, 91, 255, 0.14); color: var(--accent); }
+.signals-drop-warn { color: var(--red); }
