@@ -508,8 +508,11 @@ export function startDashboard() {
 
   app.get("/api/candles", async (req, res) => {
     try {
-      const coin = req.query.coin;
-      if (!coin) return res.status(400).json({ error: "Missing coin" });
+      const rawCoin = req.query.coin;
+      if (!rawCoin) return res.status(400).json({ error: "Missing coin" });
+      // Hyperliquid candleSnapshot ждёт базовый тикер ("ZEC"), а позиции отдают "ZEC-PERP"
+      const stripped = rawCoin.replace(/-PERP$/i, "").replace(/^@/, "");
+      const coin = /^k[A-Z]/.test(stripped) ? stripped : stripped.toUpperCase();
       const interval = ALLOWED_INTERVALS[req.query.interval] ? req.query.interval : "5m";
       const windowMs = ALLOWED_INTERVALS[interval];
 
@@ -521,7 +524,7 @@ export function startDashboard() {
         body: JSON.stringify({
           type: "candleSnapshot",
           req: {
-            coin: /^k[A-Z]/.test(coin) ? coin : coin.toUpperCase(),
+            coin,
             interval,
             startTime: Date.now() - windowMs,
             endTime: Date.now(),

@@ -121,8 +121,9 @@ function manualToPos(mp) {
   const entry = Number.isFinite(mp.entryPrice) ? mp.entryPrice : 0;
   const live = Number.isFinite(mp.currentPrice) ? mp.currentPrice : null;
   const pnlPrice = Number.isFinite(mp.unrealizedPnl) ? mp.unrealizedPnl : 0;
+  const cleanCoin = String(mp.coin || '').replace(/-PERP$/i, '').replace(/^@/, '');
   return {
-    coin: mp.coin,
+    coin: cleanCoin,
     sizeUsd,
     entryPrice: entry,
     currentPrice: live,
