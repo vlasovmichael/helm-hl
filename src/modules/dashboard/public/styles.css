@@ -833,35 +833,67 @@ footer {
 /* Sign-based number colors (intensity by magnitude).
    Specificity bumped via `.signals-table td.X` because plain td rule sets color. */
 .signals-table td.num-pos-strong,
-.signals-table td.num-pos-strong * { color: var(--green); font-weight: 700; }
+.signals-table td.num-pos-strong * {
+  color: var(--green);
+  font-weight: 700;
+}
 .signals-table td.num-pos,
-.signals-table td.num-pos * { color: var(--green); font-weight: 600; }
+.signals-table td.num-pos * {
+  color: var(--green);
+  font-weight: 600;
+}
 .signals-table td.num-pos-weak,
-.signals-table td.num-pos-weak * { color: #4ade80; font-weight: 500; }
+.signals-table td.num-pos-weak * {
+  color: var(--green);
+  font-weight: 500;
+}
 .signals-table td.num-neg-strong,
-.signals-table td.num-neg-strong * { color: var(--red); font-weight: 700; }
+.signals-table td.num-neg-strong * {
+  color: var(--red);
+  font-weight: 700;
+}
 .signals-table td.num-neg,
-.signals-table td.num-neg * { color: var(--red); font-weight: 600; }
+.signals-table td.num-neg * {
+  color: var(--red);
+  font-weight: 600;
+}
 .signals-table td.num-neg-weak,
-.signals-table td.num-neg-weak * { color: #f87171; font-weight: 500; }
+.signals-table td.num-neg-weak * {
+  color: var(--red);
+  font-weight: 500;
+}
 .signals-table td.num-muted,
-.signals-table td.num-muted * { color: var(--text-muted); }
+.signals-table td.num-muted * {
+  color: var(--text-muted);
+}
 
 /* Exchange-style price-change pill */
-.signals-table td.num-pos-strong, .signals-table td.num-pos {
-  background: rgba(34, 197, 94, 0.10);
+.signals-table td.num-pos-strong,
+.signals-table td.num-pos {
+  background: rgba(34, 197, 94, 0.1);
   border-radius: 6px;
 }
-.signals-table td.num-neg-strong, .signals-table td.num-neg {
-  background: rgba(239, 68, 68, 0.10);
+.signals-table td.num-neg-strong,
+.signals-table td.num-neg {
+  background: rgba(239, 68, 68, 0.1);
   border-radius: 6px;
 }
 
-.num-warn-glow { text-shadow: 0 0 8px rgba(239, 68, 68, 0.45); }
+.num-warn-glow {
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.45);
+}
 /* Inline number colors for spans inside trend/sltp cells (not the whole td) */
-.signals-table .num-inline-pos { color: var(--green); font-weight: 600; }
-.signals-table .num-inline-neg { color: var(--red); font-weight: 600; }
-.signals-table .num-inline-muted { color: var(--text-muted); }
+.signals-table .num-inline-pos {
+  color: var(--green);
+  font-weight: 600;
+}
+.signals-table .num-inline-neg {
+  color: var(--red);
+  font-weight: 600;
+}
+.signals-table .num-inline-muted {
+  color: var(--text-muted);
+}
 .signals-table .signals-price {
   font-weight: 600;
   color: var(--text-primary);
