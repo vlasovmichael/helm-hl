@@ -613,7 +613,9 @@ function renderSignals(payload) {
     } else if (s.signal === 'WATCH') {
       suggested = '<span class="signals-status active">WATCH</span>';
     } else if (s.signal === 'WARMUP') {
-      suggested = '<span class="signals-status blocked">WARMUP</span>';
+      const have = Math.min(s.bufferLen ?? 0, s.bufferNeeded ?? 0);
+      const need = s.bufferNeeded ?? 0;
+      suggested = `<span class="signals-status blocked" title="Need ${need} ticks (~${(need * 15 / 60).toFixed(1)}min) of price history">WARMUP ${have}/${need}</span>`;
     } else {
       suggested = '<span class="signals-status blocked">—</span>';
     }

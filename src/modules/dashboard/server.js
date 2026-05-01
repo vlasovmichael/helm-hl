@@ -17,7 +17,8 @@ import { getAvailableBalance, getAccountEquity } from "../wallet.js";
 import { state } from "../../app/state.js";
 import { getTaxSummary } from "../taxCollector/index.js";
 import { getRuntimeBlacklist } from "../executor/index.js";
-import { getPriceNMinAgo } from "../../core/priceHistory.js";
+import { getPriceNMinAgo, getBufferLength } from "../../core/priceHistory.js";
+import { TICK_INTERVAL_MS } from "../../app/state.js";
 import {
   HUNTER_SPIKE_PCT,
   HUNTER_SPIKE_WINDOW_MIN,
@@ -295,12 +296,15 @@ function handleSignals(req, res) {
     const trendMaxRise  = config.trading.hunterTrendMaxRisePct;
     const activeCoin = getActivePosition()?.coin ?? null;
 
+    const ticksNeeded = Math.max(2, Math.ceil((HUNTER_SPIKE_WINDOW_MIN * 60_000) / TICK_INTERVAL_MS));
+
     const enriched = data.map((item) => {
       const past = getPriceNMinAgo(item.coin, HUNTER_SPIKE_WINDOW_MIN, now);
       const spikePct = past != null ? ((item.price - past) / past) * 100 : null;
       const trendPast = getPriceNMinAgo(item.coin, trendLookback, now);
       const trendPct = trendPast != null ? ((item.price - trendPast) / trendPast) * 100 : null;
-      return { coin: item.coin, price: item.price, spikePct, trendPct };
+      const bufLen = getBufferLength(item.coin);
+      return { coin: item.coin, price: item.price, spikePct, trendPct, bufLen };
     });
 
     // Сортировка: по абсолютной величине 2m Δ — самые заметные движения наверху.
@@ -348,6 +352,8 @@ function handleSignals(req, res) {
         sl, tp,
         slPct: sl != null ? HUNTER_SL_PCT : null,
         tpPct: tp != null ? HUNTER_TP_PCT : null,
+        bufferLen: m.bufLen,
+        bufferNeeded: ticksNeeded,
         isActive: activeCoin && m.coin === activeCoin,
       };
     });
