@@ -26,8 +26,10 @@ let priceSeries = null;
 let entryPriceLine = null;
 let currentPriceLine = null;
 let liveCandle = null; // {time, open, high, low, close}
-let currentInterval = '1m';
-const INTERVAL_SECONDS = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400 };
+let currentInterval = '5m';
+const INTERVAL_SECONDS = { '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400 };
+let idleChartCoin = null;
+let idleChartTimer = null;
 let lastSuccessAt = 0;
 let currentRangeHours = 24;
 let chartLoaded = false;
@@ -113,16 +115,20 @@ function updateAnimatedNumber(elId, newValueStr) {
 
 async function handlePriceChartUpdate(pos) {
   const card = document.getElementById('price-card');
+  card.style.display = 'block';
+
   if (!pos) {
-    card.style.display = 'none';
-    currentCoinInPos = null;
     lastPos = null;
-    if (priceChart) { priceChart.remove(); priceChart = null; priceSeries = null; entryPriceLine = null; currentPriceLine = null; }
+    currentCoinInPos = null;
+    await renderIdleChart();
     return;
   }
-  lastPos = pos;
 
-  card.style.display = 'block';
+  // Позиция появилась → выключаем idle-режим
+  if (idleChartTimer) { clearInterval(idleChartTimer); idleChartTimer = null; }
+  idleChartCoin = null;
+
+  lastPos = pos;
   document.getElementById('price-title').textContent = `Price Performance: #${pos.coin}`;
 
   let currentPrice = pos.entryPrice;
@@ -142,6 +148,58 @@ async function handlePriceChartUpdate(pos) {
     tickLiveCandle(currentPrice, pos);
     updateCurrentLine(currentPrice);
   }
+}
+
+async function renderIdleChart() {
+  // Определяем монету: последняя сделка из истории или BTC по умолчанию
+  let coin = idleChartCoin;
+  if (!coin) {
+    try {
+      const act = await fetchJson('/api/activity?hours=720&limit=1');
+      coin = act?.events?.[0]?.coin || 'BTC';
+    } catch { coin = 'BTC'; }
+    idleChartCoin = coin;
+  }
+
+  document.getElementById('price-title').textContent = `Price Performance: #${coin}`;
+
+  await fetchAndRenderIdleCandles(coin);
+
+  if (!idleChartTimer) {
+    idleChartTimer = setInterval(() => fetchAndRenderIdleCandles(idleChartCoin), 60_000);
+  }
+}
+
+async function fetchAndRenderIdleCandles(coin) {
+  if (!coin) return;
+  try {
+    const candles = await fetchJson(`/api/candles?coin=${coin}&interval=${currentInterval}`);
+    if (!Array.isArray(candles) || candles.length === 0) return;
+
+    const data = candles
+      .map(c => ({
+        time: Math.floor(c.t / 1000),
+        open: parseFloat(c.o),
+        high: parseFloat(c.h),
+        low: parseFloat(c.l),
+        close: parseFloat(c.c),
+      }))
+      .filter(d => Number.isFinite(d.open) && Number.isFinite(d.close))
+      .sort((a, b) => a.time - b.time);
+
+    initPriceChart();
+    priceSeries.setData(data);
+    const last = data[data.length - 1];
+    liveCandle = { time: last.time, open: last.open, high: last.high, low: last.low, close: last.close };
+
+    // В idle-режиме убираем линии entry/now
+    if (entryPriceLine) { priceSeries.removePriceLine(entryPriceLine); entryPriceLine = null; }
+    if (currentPriceLine) { priceSeries.removePriceLine(currentPriceLine); currentPriceLine = null; }
+
+    document.getElementById('price-meta').textContent = `$${last.close.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
+
+    priceChart.timeScale().fitContent();
+  } catch (err) { console.error('[PriceChart/idle] fetch error:', err); }
 }
 
 async function fetchAndRenderCandles(pos, currentPrice) {
@@ -535,6 +593,8 @@ document.querySelectorAll('#price-intervals .range-btn').forEach(b => b.addEvent
   if (lastPos) {
     const px = Number.isFinite(lastPos.currentPrice) && lastPos.currentPrice > 0 ? lastPos.currentPrice : lastPos.entryPrice;
     await fetchAndRenderCandles(lastPos, px);
+  } else if (idleChartCoin) {
+    await fetchAndRenderIdleCandles(idleChartCoin);
   }
 }));
 

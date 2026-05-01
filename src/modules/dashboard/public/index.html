@@ -63,6 +63,24 @@
         </div>
       </section>
 
+      <!-- Price Performance (Candles) -->
+      <section class="card" id="price-card">
+        <div class="card-header">
+          <div class="card-title" id="price-title">Price Performance</div>
+          <div style="display:flex; align-items:center; gap:0.75rem;">
+            <div id="price-meta" class="tax-year-label" style="font-family: var(--font-mono)">$0.00</div>
+            <div class="time-ranges" id="price-intervals">
+              <button class="range-btn active" data-iv="5m">5m</button>
+              <button class="range-btn" data-iv="15m">15m</button>
+              <button class="range-btn" data-iv="1h">1h</button>
+              <button class="range-btn" data-iv="4h">4h</button>
+              <button class="range-btn" data-iv="1d">1d</button>
+            </div>
+          </div>
+        </div>
+        <div id="price-chart" style="height: 280px; width: 100%;"></div>
+      </section>
+
       <!-- Live Logs -->
       <section class="card" id="logs-card">
         <div class="card-header">
@@ -86,24 +104,6 @@
           <span id="logs-count">0 lines</span>
           <span id="logs-status">live</span>
         </div>
-      </section>
-
-      <!-- Price Performance (Candles) -->
-      <section class="card" id="price-card" style="display: none;">
-        <div class="card-header">
-          <div class="card-title" id="price-title">Price Performance</div>
-          <div style="display:flex; align-items:center; gap:0.75rem;">
-            <div id="price-meta" class="tax-year-label" style="font-family: var(--font-mono)">$0.00</div>
-            <div class="time-ranges" id="price-intervals">
-              <button class="range-btn active" data-iv="1m">1m</button>
-              <button class="range-btn" data-iv="5m">5m</button>
-              <button class="range-btn" data-iv="15m">15m</button>
-              <button class="range-btn" data-iv="1h">1h</button>
-              <button class="range-btn" data-iv="4h">4h</button>
-            </div>
-          </div>
-        </div>
-        <div id="price-chart" style="height: 280px; width: 100%;"></div>
       </section>
 
       <!-- Performance (Equity Chart) -->

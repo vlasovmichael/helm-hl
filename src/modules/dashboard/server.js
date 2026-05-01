@@ -366,18 +366,18 @@ export function startDashboard() {
   app.get("/api/tax-summary", handleTaxSummary);
 
   const ALLOWED_INTERVALS = {
-    "1m": 4 * 3600_000,
     "5m": 16 * 3600_000,
     "15m": 48 * 3600_000,
     "1h": 7 * 24 * 3600_000,
     "4h": 30 * 24 * 3600_000,
+    "1d": 180 * 24 * 3600_000,
   };
 
   app.get("/api/candles", async (req, res) => {
     try {
       const coin = req.query.coin;
       if (!coin) return res.status(400).json({ error: "Missing coin" });
-      const interval = ALLOWED_INTERVALS[req.query.interval] ? req.query.interval : "1m";
+      const interval = ALLOWED_INTERVALS[req.query.interval] ? req.query.interval : "5m";
       const windowMs = ALLOWED_INTERVALS[interval];
 
       const ctrl = new AbortController();
