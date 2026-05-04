@@ -15,7 +15,7 @@ services:
     ports:
       - "127.0.0.1:3010:3010"
     networks:
-      - proxy_net
+      - gateway_net
       - tax_net
 
   cloudflared:
@@ -24,10 +24,12 @@ services:
     restart: unless-stopped
     command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
     networks:
-      - proxy_net
+      - gateway_net
 
 networks:
-  proxy_net:
+  gateway_net:
+    name: gateway_net
     external: true
   tax_net:
+    name: tax_net
     external: true
