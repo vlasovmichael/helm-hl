@@ -1,6 +1,7 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getCachedAccountValueSync } from '../core/balanceCache.js';
+import { getPriceNMinAgo } from '../core/priceHistory.js';
 
 const {
   roundTrip: ROUND_TRIP,
@@ -19,6 +20,9 @@ const {
   carrySpikeProtectionPct: CARRY_SPIKE_PROTECTION_PCT,
   negativeFundingSoftExitMinPnlPct: NEG_FUND_SOFT_MIN_PNL_PCT,
 } = config.trading;
+
+// Market-Regime params — читаем из config.trading в рантайме (а не destructure
+// при импорте), чтобы тесты могли переключать флаг без перезагрузки модуля.
 
 /**
  * Сколько минут осталось до ближайшей выплаты фандинга (HH:00 UTC).
@@ -186,6 +190,32 @@ export function analyze(scoutData, activePosition) {
         `[Strategist] HOLD (delist cooldown) — ${best.coin} recently delisted, ${remainMin}min remaining`,
       );
       return { action: 'HOLD' };
+    }
+
+    // Market Regime velocity gate: не лезем в шорт против только что
+    // pumpанувшей монеты (и зеркально — в long против падающей).
+    // Если истории < lookback мин (старт бота / новый коин) — пропускаем
+    // монету: безопаснее упустить вход, чем войти вслепую.
+    if (config.trading.marketRegimeVelocityEnabled) {
+      const side = best.side || 'short';
+      const pastPrice = getPriceNMinAgo(best.coin, config.trading.marketRegimeLookbackMin);
+      if (pastPrice == null) {
+        logger.info(
+          `[Strategist] HOLD (velocity gate) — ${best.coin} no ${config.trading.marketRegimeLookbackMin}min history yet`,
+        );
+        return { action: 'HOLD' };
+      }
+      const movePct = ((best.price - pastPrice) / pastPrice) * 100;
+      // short: блокируем pump вверх; long: блокируем dump вниз
+      const adverse = side === 'short' ? movePct : -movePct;
+      if (adverse > config.trading.marketRegimeCoinPumpPct) {
+        const dir = side === 'short' ? 'pumped' : 'dumped';
+        logger.info(
+          `[Strategist] HOLD (velocity gate) — ${best.coin} ${dir} ${movePct >= 0 ? '+' : ''}${movePct.toFixed(2)}% in ${config.trading.marketRegimeLookbackMin}min ` +
+            `(threshold ${config.trading.marketRegimeCoinPumpPct}%, side=${side})`,
+        );
+        return { action: 'HOLD' };
+      }
     }
 
     logger.info(
@@ -450,6 +480,27 @@ export function analyze(scoutData, activePosition) {
               `but ${minutesUntilNextFunding().toFixed(1)}min to funding payout`,
           );
           return { action: 'HOLD' };
+        }
+
+        // Market Regime velocity gate тоже на ротации — целевая монета
+        // может pumpить (для short) или dumpить (для long).
+        if (config.trading.marketRegimeVelocityEnabled) {
+          const pastPrice = getPriceNMinAgo(best.coin, config.trading.marketRegimeLookbackMin);
+          if (pastPrice == null) {
+            logger.info(
+              `[Strategist] HOLD (velocity gate) — would rotate to ${best.coin} but no ${config.trading.marketRegimeLookbackMin}min history`,
+            );
+            return { action: 'HOLD' };
+          }
+          const movePct = ((best.price - pastPrice) / pastPrice) * 100;
+          const adverse = activeSide === 'short' ? movePct : -movePct;
+          if (adverse > config.trading.marketRegimeCoinPumpPct) {
+            const dir = activeSide === 'short' ? 'pumped' : 'dumped';
+            logger.info(
+              `[Strategist] HOLD (velocity gate) — would rotate to ${best.coin} but it ${dir} ${movePct >= 0 ? '+' : ''}${movePct.toFixed(2)}% in ${config.trading.marketRegimeLookbackMin}min`,
+            );
+            return { action: 'HOLD' };
+          }
         }
 
         logger.info(

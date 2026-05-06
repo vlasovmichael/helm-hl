@@ -117,6 +117,26 @@ function loadConfig() {
   // (Iter 1.0–1.4); пока флаг выключен — поведение идентично прежнему.
   const carryLongEnabled = (process.env.CARRY_LONG_ENABLED || 'false').toLowerCase() === 'true';
 
+  // ── Market Regime: per-coin velocity entry gate (Iter A) ──
+  // Защита от «шорта в зелёный рынок»: перед OPEN смотрим, что монета сделала
+  // за последние N минут. Если выросла > pump% (для short) или упала > pump%
+  // (для long) — skip entry. Default off — включается флагом.
+  const marketRegimeVelocityEnabled =
+    (process.env.MARKET_REGIME_VELOCITY_ENABLED || 'false').toLowerCase() === 'true';
+  const marketRegimeCoinPumpPct = parseFloat(process.env.MARKET_REGIME_COIN_PUMP_PCT || '3');
+  const marketRegimeLookbackMin = parseFloat(process.env.MARKET_REGIME_LOOKBACK_MIN || '30');
+
+  if (isNaN(marketRegimeCoinPumpPct) || marketRegimeCoinPumpPct <= 0) {
+    throw new Error(
+      `MARKET_REGIME_COIN_PUMP_PCT must be positive. Got: "${process.env.MARKET_REGIME_COIN_PUMP_PCT}"`,
+    );
+  }
+  if (isNaN(marketRegimeLookbackMin) || marketRegimeLookbackMin <= 0 || marketRegimeLookbackMin > 60) {
+    throw new Error(
+      `MARKET_REGIME_LOOKBACK_MIN must be in (0, 60]. Got: "${process.env.MARKET_REGIME_LOOKBACK_MIN}"`,
+    );
+  }
+
   // ── Sniper-Hunter strategy (Volatility Spike Mean-Reversion) ──
   // Default false: включить вручную через HUNTER_ENABLED=true, когда будем готовы тестировать в PAPER.
   const hunterEnabled = (process.env.HUNTER_ENABLED || 'false').toLowerCase() === 'true';
@@ -237,6 +257,9 @@ function loadConfig() {
       carryTrailGiveBackPct,
       carrySpikeProtectionPct,
       carryLongEnabled,
+      marketRegimeVelocityEnabled,
+      marketRegimeCoinPumpPct,
+      marketRegimeLookbackMin,
       negativeFundingSoftExitMinPnlPct,
     },
 

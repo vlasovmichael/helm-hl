@@ -5,11 +5,12 @@
 // спайков (|Δprice| за N минут). Iter A.1: только API, без интеграции.
 // Наполнение из scout.js добавится в Iter A.3.
 //
-// Окно буфера — 20 мин: 2-мин детектор спайка + до 15-мин anti-trend lookback.
+// Окно буфера — 60 мин: покрывает Hunter (2-мин спайк + до 15-мин anti-trend)
+// и Market-Regime velocity gate (lookback до 60 мин).
 // В памяти: Map<coin, Array<{ts, price}>>, сэмплы ASC по ts.
-// Restart: буфер пуст, первые 2 мин после старта Hunter спит.
+// Restart: буфер пуст, первые N мин после старта strategist/hunter спит.
 
-const HISTORY_WINDOW_MS = 20 * 60_000;
+const HISTORY_WINDOW_MS = 60 * 60_000;
 
 const buffers = new Map();
 
