@@ -70,6 +70,19 @@ export function initDB() {
     logger.info('[DB] Migration: added entry_equity to positions');
   }
 
+  // Migration: side — направление позиции ('short' | 'long').
+  // Carry исторически шортил всегда (положительный funding); default 'short'
+  // сохраняет совместимость со всеми существующими записями.
+  // Long-сторона активируется через CARRY_LONG_ENABLED (см. config.js).
+  if (!posColumns.find(c => c.name === 'side')) {
+    db.exec("ALTER TABLE positions ADD COLUMN side TEXT NOT NULL DEFAULT 'short' CHECK (side IN ('short', 'long'))");
+    logger.info('[DB] Migration: added side to positions');
+  }
+  if (!histColumns.find(c => c.name === 'side')) {
+    db.exec("ALTER TABLE history ADD COLUMN side TEXT NOT NULL DEFAULT 'short' CHECK (side IN ('short', 'long'))");
+    logger.info('[DB] Migration: added side to history');
+  }
+
   // tax_outbox — outbox для tax-manager (см. INTEGRATION.md).
   // Бизнес-код пишет сюда, pusher cron драйнит в HTTPS+HMAC.
   db.exec(`
@@ -115,11 +128,12 @@ export function savePosition(data) {
     sl_price:     null,
     tp_price:     null,
     entry_equity: null,
+    side:         'short',
     ...data,
   };
   const stmt = getDb().prepare(`
-    INSERT INTO positions (coin, size_usd, entry_price, entry_apy, entry_time, mode, strategy_id, sl_price, tp_price, entry_equity)
-    VALUES (@coin, @size_usd, @entry_price, @entry_apy, @entry_time, @mode, @strategy_id, @sl_price, @tp_price, @entry_equity)
+    INSERT INTO positions (coin, size_usd, entry_price, entry_apy, entry_time, mode, strategy_id, sl_price, tp_price, entry_equity, side)
+    VALUES (@coin, @size_usd, @entry_price, @entry_apy, @entry_time, @mode, @strategy_id, @sl_price, @tp_price, @entry_equity, @side)
   `);
   const result = stmt.run(row);
   return result.lastInsertRowid;
@@ -140,8 +154,8 @@ export function closePosition(id, data) {
   }
 
   const insertHistory = getDb().prepare(`
-    INSERT INTO history (coin, entry_price, close_price, realized_pnl, fee_paid, mode, closed_at, reason, strategy_id)
-    VALUES (@coin, @entry_price, @close_price, @realized_pnl, @fee_paid, @mode, @closed_at, @reason, @strategy_id)
+    INSERT INTO history (coin, entry_price, close_price, realized_pnl, fee_paid, mode, closed_at, reason, strategy_id, side)
+    VALUES (@coin, @entry_price, @close_price, @realized_pnl, @fee_paid, @mode, @closed_at, @reason, @strategy_id, @side)
   `);
 
   const updatePosition = getDb().prepare(
@@ -160,6 +174,7 @@ export function closePosition(id, data) {
       closed_at:    Date.now(),
       reason:       data.reason,
       strategy_id:  position.strategy_id || 'carry',
+      side:         position.side || 'short',
     });
     updatePosition.run('CLOSED', id);
   });

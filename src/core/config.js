@@ -110,6 +110,13 @@ function loadConfig() {
     throw new Error(`CARRY_SPIKE_PROTECTION_PCT must be in (0, 100). Got: "${process.env.CARRY_SPIKE_PROTECTION_PCT}"`);
   }
 
+  // ── Carry long side (symmetric to short on negative funding) ──
+  // Default false: исторически Grandfather только шортил при положительном
+  // funding. Long-ветка зеркальна: при отрицательном funding (шорты платят
+  // лонгам) открываем long. Активируется ПОСЛЕ полного staged rollout
+  // (Iter 1.0–1.4); пока флаг выключен — поведение идентично прежнему.
+  const carryLongEnabled = (process.env.CARRY_LONG_ENABLED || 'false').toLowerCase() === 'true';
+
   // ── Sniper-Hunter strategy (Volatility Spike Mean-Reversion) ──
   // Default false: включить вручную через HUNTER_ENABLED=true, когда будем готовы тестировать в PAPER.
   const hunterEnabled = (process.env.HUNTER_ENABLED || 'false').toLowerCase() === 'true';
@@ -229,6 +236,7 @@ function loadConfig() {
       carryTrailArmPctEquity,
       carryTrailGiveBackPct,
       carrySpikeProtectionPct,
+      carryLongEnabled,
       negativeFundingSoftExitMinPnlPct,
     },
 
