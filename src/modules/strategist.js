@@ -131,7 +131,11 @@ export function analyze(scoutData, activePosition) {
     peakUnrealizedPct.clear();
     peakEquityPct.clear();
 
-    const best = scoutData[0]; // отсортированы по smoothedApy desc
+    // Iter 1.1: scout может вернуть и long-кандидатов под флагом carryLongEnabled.
+    // Логика выбора long-входа появится в Iter 1.2; пока strategist берёт
+    // лучший short — это сохраняет старое поведение под любым флагом.
+    // Fallback `|| 'short'`: тесты передают scoutData без поля side.
+    const best = scoutData.find((c) => (c.side || 'short') === 'short');
 
     if (!best || best.smoothedApy < entryApy) {
       logger.info(
@@ -428,7 +432,12 @@ export function analyze(scoutData, activePosition) {
   }
 
   if (held >= breathingMinutes) {
-    const best = scoutData.find((m) => m.coin !== currentCoin);
+    // Ротация только в пределах того же side (Iter 1.1). Без флага у всех
+    // активных позиций side='short' (миграция 1.0), поведение идентично.
+    const activeSide = activePosition.side || 'short';
+    const best = scoutData.find(
+      (m) => m.coin !== currentCoin && (m.side || 'short') === activeSide,
+    );
 
     if (best && best.smoothedApy > current.smoothedApy) {
       const hours = calculatePaybackHours(current.smoothedApy, best.smoothedApy);

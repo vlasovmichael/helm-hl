@@ -362,12 +362,21 @@ export async function scan() {
 
     const rawApy = fundingRate * 24 * 365 * 100;
     const { fast, slow } = updateEma(coin, rawApy);
-    if (fast <= 0) continue;
+
+    // Под флагом carryLongEnabled пускаем и отрицательный fast (long-сторона).
+    // Без флага — старое поведение: только положительный funding (short).
+    if (config.trading.carryLongEnabled) {
+      if (fast === 0) continue;
+    } else {
+      if (fast <= 0) continue;
+    }
+
+    const side = fast >= 0 ? 'short' : 'long';
 
     const predictedRate = predictedFundings.get(coin);
     const predictedApy  = predictedRate != null ? predictedRate * 24 * 365 * 100 : null;
 
-    results.push({ coin, price, fundingRate, rawApy, smoothedApy: fast, slowApy: slow, predictedApy });
+    results.push({ coin, price, fundingRate, rawApy, smoothedApy: fast, slowApy: slow, predictedApy, side });
   }
 
   if (skippedBlacklist > 0 || skippedUntradeable > 0 || skippedRuntime > 0 || skippedOiCap > 0 || skippedIlliquid > 0) {
@@ -378,7 +387,13 @@ export async function scan() {
     );
   }
 
-  results.sort((a, b) => b.smoothedApy - a.smoothedApy);
+  // Под флагом carryLongEnabled сортируем по абсолютному APY (long-сторона
+  // тоже годится), без флага — по знаку (только short-кандидаты).
+  if (config.trading.carryLongEnabled) {
+    results.sort((a, b) => Math.abs(b.smoothedApy) - Math.abs(a.smoothedApy));
+  } else {
+    results.sort((a, b) => b.smoothedApy - a.smoothedApy);
+  }
 
   // INFO при смене лидера, иначе debug — не забиваем консоль
   const topCoin = results[0]?.coin ?? '—';

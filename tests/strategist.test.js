@@ -663,3 +663,75 @@ test('Trailing: emergency-выходы имеют приоритет над trai
   assert.equal(r.action, 'CLOSE');
   assert.equal(r.reason, 'price_spike_protection');
 });
+
+// ═══════════════════════════════════════════════
+//  Iter 1.1: side-aware entry & rotation
+// ═══════════════════════════════════════════════
+
+test('Iter 1.1: OPEN — strategist игнорирует long-кандидатов и берёт лучший short', () => {
+  resetState();
+  // Под флагом carryLongEnabled scout может вернуть mixed sides, отсортированных по abs(apy).
+  // Strategist в Iter 1.1 ещё не умеет открывать long — должен взять лучший short.
+  const r = analyze(
+    [
+      { ...makeScoutItem('LONGY', -80), side: 'long' }, // abs выше, но long
+      { ...makeScoutItem('BTC',   50), side: 'short' },
+      { ...makeScoutItem('ETH',   45), side: 'short' },
+    ],
+    undefined,
+  );
+  assert.equal(r.action, 'OPEN');
+  assert.equal(r.coin,   'BTC');
+});
+
+test('Iter 1.1: OPEN — все кандидаты long → HOLD (Iter 1.2 включит логику)', () => {
+  resetState();
+  const r = analyze(
+    [
+      { ...makeScoutItem('LONGY', -80), side: 'long' },
+      { ...makeScoutItem('LONG2', -60), side: 'long' },
+    ],
+    undefined,
+  );
+  assert.equal(r.action, 'HOLD');
+});
+
+test('Iter 1.1: ROTATE — не ротируется в long-кандидата даже при выше abs(APY)', () => {
+  resetState();
+  const restore = freezeTime(2026, 3, 15, 12, 30);
+  try {
+    const pos = makePosition('BTC', 40, { entry_time: Date.now() - 50 * HOUR_MS });
+    const r = analyze(
+      [
+        { ...makeScoutItem('BTC',  40, { slowApy: 40 }), side: 'short' },
+        { ...makeScoutItem('LONGY', -120, { slowApy: -120 }), side: 'long' },
+      ],
+      pos,
+    );
+    // Нет лучшего short → HOLD (long игнорируется)
+    assert.equal(r.action, 'HOLD');
+  } finally {
+    restore();
+  }
+});
+
+test('Iter 1.1: ROTATE — переходит на лучший short, игнорируя long с большим abs', () => {
+  resetState();
+  const restore = freezeTime(2026, 3, 15, 12, 30);
+  try {
+    const pos = makePosition('BTC', 40, { entry_time: Date.now() - 50 * HOUR_MS });
+    const r = analyze(
+      [
+        { ...makeScoutItem('BTC',   40, { slowApy: 40 }),  side: 'short' },
+        { ...makeScoutItem('LONGY', -200, { slowApy: -200 }), side: 'long' },
+        { ...makeScoutItem('ETH',   120, { slowApy: 120 }),  side: 'short' },
+      ],
+      pos,
+    );
+    assert.equal(r.action,    'ROTATE');
+    assert.equal(r.openCoin,  'ETH');
+    assert.equal(r.closeCoin, 'BTC');
+  } finally {
+    restore();
+  }
+});
