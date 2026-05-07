@@ -51,19 +51,20 @@ test('getPriceNMinAgo: ровно на границе targetTs попадает 
   assert.equal(getPriceNMinAgo('BTC', 2, t0 + 2 * MIN), 50000);
 });
 
-test('автоматический prune: сэмплы старше 60мин удаляются', () => {
+test('автоматический prune: сэмплы старше 4ч удаляются', () => {
   clearAll();
   const t0 = 1_000_000_000_000;
+  const H = 60 * MIN;
   push('BTC', 100, t0);                   // t0
-  push('BTC', 200, t0 + 30 * MIN);        // +30мин
+  push('BTC', 200, t0 + 2 * H);           // +2ч
   assert.equal(getBufferLength('BTC'), 2);
-  push('BTC', 300, t0 + 61 * MIN);        // +61мин → t0 должен быть срезан (>60мин старше)
-  assert.equal(getBufferLength('BTC'), 2);  // [+30мин, +61мин]
+  push('BTC', 300, t0 + 4 * H + MIN);     // +4ч 1мин → t0 должен быть срезан (>4ч старше)
+  assert.equal(getBufferLength('BTC'), 2);  // [+2ч, +4ч1мин]
 
-  // t0 (цена 100) должна исчезнуть → запрос 60мин назад от +61мин (=+1мин) даёт null
-  assert.equal(getPriceNMinAgo('BTC', 60, t0 + 61 * MIN), null);
-  // Но 31 мин назад от +61мин (=+30мин) даёт уцелевший сэмпл 200
-  assert.equal(getPriceNMinAgo('BTC', 31, t0 + 61 * MIN), 200);
+  // t0 (цена 100) должна исчезнуть → запрос 4ч назад от +4ч1мин (=+1мин) даёт null
+  assert.equal(getPriceNMinAgo('BTC', 4 * 60, t0 + 4 * H + MIN), null);
+  // Но 2ч 1мин назад от +4ч1мин (=+2ч) даёт уцелевший сэмпл 200
+  assert.equal(getPriceNMinAgo('BTC', 2 * 60 + 1, t0 + 4 * H + MIN), 200);
 });
 
 test('невалидные цены (0, NaN, отрицательные) silent-ignore', () => {

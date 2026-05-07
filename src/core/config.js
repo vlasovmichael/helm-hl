@@ -123,17 +123,33 @@ function loadConfig() {
   // (для long) — skip entry. Default off — включается флагом.
   const marketRegimeVelocityEnabled =
     (process.env.MARKET_REGIME_VELOCITY_ENABLED || 'false').toLowerCase() === 'true';
+  // Bucket 1: быстрый спайк (default 30мин/3%)
   const marketRegimeCoinPumpPct = parseFloat(process.env.MARKET_REGIME_COIN_PUMP_PCT || '3');
   const marketRegimeLookbackMin = parseFloat(process.env.MARKET_REGIME_LOOKBACK_MIN || '30');
+  // Bucket 2: медленный pump→plateau (default 2ч/5%). XMR/TON-паттерн: pump за 2ч, потом
+  // плато → 30-мин bucket пропускает, нужен второй уровень. Set MARKET_REGIME_LOOKBACK2_MIN=0
+  // чтобы отключить второй bucket.
+  const marketRegimeCoinPumpPct2 = parseFloat(process.env.MARKET_REGIME_COIN_PUMP_PCT2 || '5');
+  const marketRegimeLookback2Min = parseFloat(process.env.MARKET_REGIME_LOOKBACK2_MIN || '120');
 
   if (isNaN(marketRegimeCoinPumpPct) || marketRegimeCoinPumpPct <= 0) {
     throw new Error(
       `MARKET_REGIME_COIN_PUMP_PCT must be positive. Got: "${process.env.MARKET_REGIME_COIN_PUMP_PCT}"`,
     );
   }
-  if (isNaN(marketRegimeLookbackMin) || marketRegimeLookbackMin <= 0 || marketRegimeLookbackMin > 60) {
+  if (isNaN(marketRegimeLookbackMin) || marketRegimeLookbackMin <= 0 || marketRegimeLookbackMin > 240) {
     throw new Error(
-      `MARKET_REGIME_LOOKBACK_MIN must be in (0, 60]. Got: "${process.env.MARKET_REGIME_LOOKBACK_MIN}"`,
+      `MARKET_REGIME_LOOKBACK_MIN must be in (0, 240]. Got: "${process.env.MARKET_REGIME_LOOKBACK_MIN}"`,
+    );
+  }
+  if (isNaN(marketRegimeCoinPumpPct2) || marketRegimeCoinPumpPct2 <= 0) {
+    throw new Error(
+      `MARKET_REGIME_COIN_PUMP_PCT2 must be positive. Got: "${process.env.MARKET_REGIME_COIN_PUMP_PCT2}"`,
+    );
+  }
+  if (isNaN(marketRegimeLookback2Min) || marketRegimeLookback2Min < 0 || marketRegimeLookback2Min > 240) {
+    throw new Error(
+      `MARKET_REGIME_LOOKBACK2_MIN must be in [0, 240]. Got: "${process.env.MARKET_REGIME_LOOKBACK2_MIN}"`,
     );
   }
 
@@ -260,6 +276,8 @@ function loadConfig() {
       marketRegimeVelocityEnabled,
       marketRegimeCoinPumpPct,
       marketRegimeLookbackMin,
+      marketRegimeCoinPumpPct2,
+      marketRegimeLookback2Min,
       negativeFundingSoftExitMinPnlPct,
     },
 

@@ -120,6 +120,44 @@ function effectiveMinHold(entryApy) {
 }
 
 /**
+ * Market-Regime velocity gate. Двухбакетный: bucket 1 ловит быстрый спайк
+ * (default 30мин/3%), bucket 2 — медленный pump→plateau (default 2ч/5%).
+ * Bucket 2 отключается через MARKET_REGIME_LOOKBACK2_MIN=0.
+ *
+ * @returns {{ block: true, reason: string } | { block: false, diag: string }}
+ *   - block=true: гейт сработал, вызывающему вернуть HOLD
+ *   - block=false: pass-through, diag — строка для диагностического лога
+ */
+function evaluateVelocityGate(coin, side, currentPrice) {
+  const t = config.trading;
+  const buckets = [
+    { mins: t.marketRegimeLookbackMin,  threshold: t.marketRegimeCoinPumpPct,  tag: 'b1' },
+  ];
+  if (t.marketRegimeLookback2Min > 0) {
+    buckets.push({ mins: t.marketRegimeLookback2Min, threshold: t.marketRegimeCoinPumpPct2, tag: 'b2' });
+  }
+
+  const moves = [];
+  for (const b of buckets) {
+    const past = getPriceNMinAgo(coin, b.mins);
+    if (past == null) {
+      return { block: true, reason: `no ${b.mins}min history yet` };
+    }
+    const movePct = ((currentPrice - past) / past) * 100;
+    const adverse = side === 'short' ? movePct : -movePct;
+    if (adverse > b.threshold) {
+      const dir = side === 'short' ? 'pumped' : 'dumped';
+      return {
+        block: true,
+        reason: `${dir} ${movePct >= 0 ? '+' : ''}${movePct.toFixed(2)}% in ${b.mins}min (${b.tag} threshold ${b.threshold}%)`,
+      };
+    }
+    moves.push(`${b.mins}m=${movePct >= 0 ? '+' : ''}${movePct.toFixed(2)}%`);
+  }
+  return { block: false, diag: moves.join(' ') };
+}
+
+/**
  * @param {Array<{coin, price, fundingRate, rawApy, smoothedApy, slowApy}>} scoutData
  * @param {Object|undefined} activePosition — строка из таблицы positions
  * @returns {{ action: string, [key: string]: any }}
@@ -192,30 +230,20 @@ export function analyze(scoutData, activePosition) {
       return { action: 'HOLD' };
     }
 
-    // Market Regime velocity gate: не лезем в шорт против только что
-    // pumpанувшей монеты (и зеркально — в long против падающей).
-    // Если истории < lookback мин (старт бота / новый коин) — пропускаем
-    // монету: безопаснее упустить вход, чем войти вслепую.
+    // Market Regime velocity gate (двухбакетный): не лезем в шорт против
+    // только что pumpанувшей монеты (и зеркально — в long против падающей).
     if (config.trading.marketRegimeVelocityEnabled) {
       const side = best.side || 'short';
-      const pastPrice = getPriceNMinAgo(best.coin, config.trading.marketRegimeLookbackMin);
-      if (pastPrice == null) {
+      const gate = evaluateVelocityGate(best.coin, side, best.price);
+      if (gate.block) {
         logger.info(
-          `[Strategist] HOLD (velocity gate) — ${best.coin} no ${config.trading.marketRegimeLookbackMin}min history yet`,
+          `[Strategist] HOLD (velocity gate) — ${best.coin} ${gate.reason} (side=${side})`,
         );
         return { action: 'HOLD' };
       }
-      const movePct = ((best.price - pastPrice) / pastPrice) * 100;
-      // short: блокируем pump вверх; long: блокируем dump вниз
-      const adverse = side === 'short' ? movePct : -movePct;
-      if (adverse > config.trading.marketRegimeCoinPumpPct) {
-        const dir = side === 'short' ? 'pumped' : 'dumped';
-        logger.info(
-          `[Strategist] HOLD (velocity gate) — ${best.coin} ${dir} ${movePct >= 0 ? '+' : ''}${movePct.toFixed(2)}% in ${config.trading.marketRegimeLookbackMin}min ` +
-            `(threshold ${config.trading.marketRegimeCoinPumpPct}%, side=${side})`,
-        );
-        return { action: 'HOLD' };
-      }
+      logger.info(
+        `[Strategist] velocity gate PASS — ${best.coin} ${gate.diag} (side=${side})`,
+      );
     }
 
     logger.info(
@@ -485,22 +513,16 @@ export function analyze(scoutData, activePosition) {
         // Market Regime velocity gate тоже на ротации — целевая монета
         // может pumpить (для short) или dumpить (для long).
         if (config.trading.marketRegimeVelocityEnabled) {
-          const pastPrice = getPriceNMinAgo(best.coin, config.trading.marketRegimeLookbackMin);
-          if (pastPrice == null) {
+          const gate = evaluateVelocityGate(best.coin, activeSide, best.price);
+          if (gate.block) {
             logger.info(
-              `[Strategist] HOLD (velocity gate) — would rotate to ${best.coin} but no ${config.trading.marketRegimeLookbackMin}min history`,
+              `[Strategist] HOLD (velocity gate) — would rotate to ${best.coin} but ${gate.reason}`,
             );
             return { action: 'HOLD' };
           }
-          const movePct = ((best.price - pastPrice) / pastPrice) * 100;
-          const adverse = activeSide === 'short' ? movePct : -movePct;
-          if (adverse > config.trading.marketRegimeCoinPumpPct) {
-            const dir = activeSide === 'short' ? 'pumped' : 'dumped';
-            logger.info(
-              `[Strategist] HOLD (velocity gate) — would rotate to ${best.coin} but it ${dir} ${movePct >= 0 ? '+' : ''}${movePct.toFixed(2)}% in ${config.trading.marketRegimeLookbackMin}min`,
-            );
-            return { action: 'HOLD' };
-          }
+          logger.info(
+            `[Strategist] velocity gate PASS (rotate→${best.coin}) — ${gate.diag}`,
+          );
         }
 
         logger.info(
