@@ -179,10 +179,12 @@ async function handleOpen(signal) {
     return { ok: false };
   }
 
+  const side = signal.side || 'short';
+
   if (config.isProduction) {
-    return productionOpen(signal.coin, signal.price, signal.apy, false, strategyId);
+    return productionOpen(signal.coin, signal.price, signal.apy, false, strategyId, side);
   }
-  return paperOpen(signal.coin, signal.price, signal.apy, false, strategyId);
+  return paperOpen(signal.coin, signal.price, signal.apy, false, strategyId, side);
 }
 
 async function handleClose(signal, position) {
@@ -290,6 +292,7 @@ async function handleRotate(signal, position) {
       coin: signal.openCoin,
       price: signal.openPrice,
       apy: signal.openApy,
+      side: signal.openSide || 'short',
     });
   }
 
@@ -333,6 +336,7 @@ async function paperRotate(signal, position) {
     signal.openApy,
     true, // silent
     signal.strategy_id || 'carry',
+    signal.openSide || position.side || 'short',
   );
 
   if (!openResult.ok) {

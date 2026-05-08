@@ -107,7 +107,10 @@ export function checkSlippage(expectedPrice, fillPrice, side) {
  * @returns {{ fundingPnl: number, totalFee: number, realizedPnl: number }}
  */
 export function calcPaperClose(position, holdHours, exitFeeRate = ONE_LEG) {
-  const hourlyRate = position.entry_apy / 100 / 365 / 24;
+  // entry_apy сохраняется как abs (см. paper.js / production.js на open):
+  // carry-edge всегда положительный, направление задаёт position.side.
+  // Math.abs здесь — страховка для исторических записей и тестов с подписанным значением.
+  const hourlyRate = Math.abs(position.entry_apy) / 100 / 365 / 24;
   const fundingPnl = position.size_usd * hourlyRate * holdHours;
   // Вход всегда ONE_LEG (taker+slippage), выход — по exitFeeRate.
   const totalFee   = position.size_usd * (ONE_LEG + exitFeeRate);
@@ -126,15 +129,27 @@ export function calcPaperClose(position, holdHours, exitFeeRate = ONE_LEG) {
  * @returns {{ pricePnl: number, fundingPnl: number, totalFee: number, realizedPnl: number, fundingSource: string }}
  */
 export function calcPnl(position, fillPrice, holdHours, realFundingUsd = null, exitFeeRate = FEE_RATE) {
-  const pricePnl   = (position.size_usd * (position.entry_price - fillPrice)) / position.entry_price;
+  // Side-aware pricePnl. short: (entry−fill); long: (fill−entry). Берём из
+  // position.side, дефолт 'short' для исторических записей.
+  const side = position.side || 'short';
+  const priceDelta = side === 'long'
+    ? fillPrice - position.entry_price
+    : position.entry_price - fillPrice;
+  const pricePnl   = (position.size_usd * priceDelta) / position.entry_price;
 
   let fundingPnl;
   let fundingSource;
   if (realFundingUsd != null && Number.isFinite(realFundingUsd)) {
+    // Hyperliquid cumFunding.sinceOpen: отрицательный когда трейдер получал
+    // фандинг (для shorts при положительной ставке, для longs при отрицательной).
+    // Формула realFundingUsd = -sinceOpen side-agnostic — высчитывается выше.
     fundingPnl    = realFundingUsd;
     fundingSource = 'cumFunding';
   } else {
-    const hourlyRate = position.entry_apy / 100 / 365 / 24;
+    // Fallback estimate: carry-edge всегда положительный (entry_apy сохраняется
+    // как abs), направление задаёт side; для carry оба side зарабатывают
+    // funding на open-снимке.
+    const hourlyRate = Math.abs(position.entry_apy) / 100 / 365 / 24;
     fundingPnl    = position.size_usd * hourlyRate * holdHours;
     fundingSource = 'estimate';
   }

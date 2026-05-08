@@ -573,6 +573,7 @@ export function analyze(scoutData, activePosition) {
           openCoin:     best.coin,
           openPrice:    best.price,
           openApy:      best.smoothedApy,
+          openSide:     activeSide, // ротация всегда same-side
           paybackHours: parseFloat(hours.toFixed(1)),
           reason:       'better_apy',
         };

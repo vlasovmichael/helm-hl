@@ -61,8 +61,11 @@ const OI_CAP_REGEX = /open\s*interest|oi\s*cap/i;
  * @param {boolean} [silent=false]
  * @returns {Promise<{ ok: boolean, positionId?: number, sizeUsd?: number }>}
  */
-export async function productionOpen(coin, price, apy, silent = false, strategyId = 'carry') {
+export async function productionOpen(coin, price, apy, silent = false, strategyId = 'carry', side = 'short') {
   const exchange = getExchange();
+  const isLong   = side === 'long';
+  const orderLabel = isLong ? 'BUY' : 'SELL';
+  const isBuy    = isLong; // is_buy=true → BUY (long), false → SELL (short)
 
   // ── 0. Equity ДО ордера — для корректной оценки PnL при external close ──
   let entryEquity = null;
@@ -156,7 +159,7 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
 
   // ── 4. Отправляем ордер ──────────────────────
   logger.info(
-    `[Executor] PROD OPEN #${coin} — placing market SELL | ` +
+    `[Executor] PROD OPEN ${side.toUpperCase()} #${coin} — placing market ${orderLabel} | ` +
       `sz: ${sz} (~$${(sz * price).toFixed(2)}) | markPrice: $${price} | slippage: ${MARKET_SLIPPAGE * 100}%`,
   );
 
@@ -166,7 +169,7 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
       () =>
         exchange.custom.marketOpen(
           `${coin}-PERP`,
-          false, // is_buy=false → SELL (short)
+          isBuy, // is_buy: long=true (BUY), short=false (SELL)
           sz,
           undefined, // px: SDK берёт midPrice
           MARKET_SLIPPAGE,
@@ -238,12 +241,12 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
   }
 
   // ── 6. Slippage guard ────────────────────────
-  const slip = checkSlippage(price, fill.avgPx, "SELL");
+  const slip = checkSlippage(price, fill.avgPx, orderLabel);
 
   if (slip.ban) {
     banSlippage(coin);
     logger.error(
-      `[Executor] 🚫 SLIPPAGE BAN #${coin} SELL: ${slip.label} (>${1.5}%) — ` +
+      `[Executor] 🚫 SLIPPAGE BAN #${coin} ${orderLabel}: ${slip.label} (>${1.5}%) — ` +
         `trading paused for ${SLIPPAGE_BAN_TTL_MS / 60_000}min`,
     );
     await notifySlippageBan({
@@ -252,10 +255,10 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
     });
   } else if (slip.warn) {
     logger.warn(
-      `[Executor] ⚠️ SLIPPAGE #${coin} SELL: expected $${price} → fill $${fill.avgPx} (${slip.label})`,
+      `[Executor] ⚠️ SLIPPAGE #${coin} ${orderLabel}: expected $${price} → fill $${fill.avgPx} (${slip.label})`,
     );
   } else {
-    logger.debug(`[Executor] Slippage #${coin} SELL: ${slip.label}`);
+    logger.debug(`[Executor] Slippage #${coin} ${orderLabel}: ${slip.label}`);
   }
 
   // ── 7. Сохраняем в БД ────────────────────────
@@ -273,19 +276,21 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
     logger.warn(`[Executor] Failed to calc effective leverage: ${err.message}`);
   }
 
+  // entry_apy всегда сохраняется как abs — carry-edge magnitude. Знак заложен в side.
   const id = savePosition({
     coin,
     size_usd: fillUsd,
     entry_price: fill.avgPx,
-    entry_apy: apy,
+    entry_apy: Math.abs(apy),
     entry_time: Date.now(),
     mode: "PRODUCTION",
     strategy_id: strategyId,
     entry_equity: entryEquity,
+    side,
   });
 
   logger.info(
-    `[Executor] ✅ PROD OPEN #${coin} | Leverage: ${effectiveLeverage} | oid: ${fill.oid} | ` +
+    `[Executor] ✅ PROD OPEN ${side.toUpperCase()} #${coin} | Leverage: ${effectiveLeverage} | oid: ${fill.oid} | ` +
       `filled: ${fill.totalSz} @ $${fill.avgPx} ($${fillUsd.toFixed(2)}) | ` +
       `slippage: ${slip.label} | APY: ${apy.toFixed(2)}% | id: ${id}`,
   );
@@ -325,20 +330,24 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
 export async function productionClose(signal, position, silent = false) {
   const exchange = getExchange();
   const coin = position.coin;
+  // Close-направление инвертируется к open: short→BUY, long→SELL.
+  const posSide      = position.side || 'short';
+  const closeLabel   = posSide === 'long' ? 'SELL' : 'BUY';
 
   const holdMs = Date.now() - position.entry_time;
   const holdHours = holdMs / 3_600_000;
 
   logger.info(
-    `[Executor] PROD CLOSE #${coin} — reason: ${signal.reason} | ` +
+    `[Executor] PROD CLOSE ${posSide.toUpperCase()} #${coin} — reason: ${signal.reason} | ` +
       `held: ${holdHours.toFixed(1)}h | markPrice: $${signal.price}`,
   );
 
   // ── 0. Снимаем реальный накопленный фандинг ДО закрытия ─
   // После marketClose позиция исчезнет из clearinghouseState и cumFunding пропадёт.
-  // Hyperliquid: для shorts sinceOpen отрицателен, когда мы получали фандинг (профит).
-  // Знак инвертируется → realFundingUsd = -sinceOpen.
-  // Подтверждено эмпирически на PURR: sinceOpen=-0.009869 → +$0.009869 профита.
+  // HL convention (side-agnostic): cumFunding.sinceOpen — сколько трейдер заплатил
+  // (signed). Получал фандинг → отрицательный → realFundingUsd = -sinceOpen положительный.
+  // Платил → положительный → realFundingUsd отрицательный.
+  // Подтверждено эмпирически на PURR (short): sinceOpen=-0.009869 → +$0.009869 профита.
   let realFundingUsd = null;
   try {
     const positions = await getPositions();
@@ -438,12 +447,12 @@ export async function productionClose(signal, position, silent = false) {
   }
 
   // ── 3. Slippage guard ────────────────────────
-  const slip = checkSlippage(signal.price, fill.avgPx, "BUY");
+  const slip = checkSlippage(signal.price, fill.avgPx, closeLabel);
 
   if (slip.ban) {
     banSlippage(coin);
     logger.error(
-      `[Executor] 🚫 SLIPPAGE BAN #${coin} BUY: ${slip.label} (>${1.5}%) — ` +
+      `[Executor] 🚫 SLIPPAGE BAN #${coin} ${closeLabel}: ${slip.label} (>${1.5}%) — ` +
         `trading paused for ${SLIPPAGE_BAN_TTL_MS / 60_000}min`,
     );
     await notifySlippageBan({
@@ -452,10 +461,10 @@ export async function productionClose(signal, position, silent = false) {
     });
   } else if (slip.warn) {
     logger.warn(
-      `[Executor] ⚠️ SLIPPAGE #${coin} BUY: expected $${signal.price} → fill $${fill.avgPx} (${slip.label})`,
+      `[Executor] ⚠️ SLIPPAGE #${coin} ${closeLabel}: expected $${signal.price} → fill $${fill.avgPx} (${slip.label})`,
     );
   } else {
-    logger.debug(`[Executor] Slippage #${coin} BUY: ${slip.label}`);
+    logger.debug(`[Executor] Slippage #${coin} ${closeLabel}: ${slip.label}`);
   }
 
   // ── 3.5. Re-entry cooldown ──────────────────
@@ -577,6 +586,7 @@ export async function productionRotate(signal, position) {
     signal.openApy,
     true, // silent
     signal.strategy_id || 'carry',
+    signal.openSide || position.side || 'short',
   );
 
   if (!openResult.ok) {

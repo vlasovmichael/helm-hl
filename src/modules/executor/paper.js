@@ -51,7 +51,7 @@ async function getPaperBalance() {
  * @param {boolean} [silent=false]
  * @returns {Promise<{ ok: boolean, positionId?: number, sizeUsd?: number }>}
  */
-export async function paperOpen(coin, price, apy, silent = false, strategyId = 'carry') {
+export async function paperOpen(coin, price, apy, silent = false, strategyId = 'carry', side = 'short') {
   const balance = await getPaperBalance();
 
   if (balance <= 0) {
@@ -70,18 +70,20 @@ export async function paperOpen(coin, price, apy, silent = false, strategyId = '
 
   const fee = sizeUsd * ONE_LEG;
 
+  // entry_apy всегда сохраняется как abs — carry-edge magnitude. Знак заложен в side.
   const id = savePosition({
     coin,
     size_usd: sizeUsd,
     entry_price: price,
-    entry_apy: apy,
+    entry_apy: Math.abs(apy),
     entry_time: Date.now(),
     mode: "PAPER",
     strategy_id: strategyId,
+    side,
   });
 
   logger.info(
-    `[Executor] PAPER OPEN #${coin} | $${sizeUsd.toFixed(2)} (of $${balance.toFixed(2)}) @ $${price} | APY: ${apy.toFixed(2)}% | fee: $${fee.toFixed(4)} | id: ${id}`,
+    `[Executor] PAPER OPEN ${side.toUpperCase()} #${coin} | $${sizeUsd.toFixed(2)} (of $${balance.toFixed(2)}) @ $${price} | APY: ${apy.toFixed(2)}% | fee: $${fee.toFixed(4)} | id: ${id}`,
   );
 
   if (!silent) {
