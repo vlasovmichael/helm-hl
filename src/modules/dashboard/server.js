@@ -321,6 +321,25 @@ function handleActivity(req, res) {
   }
 }
 
+// Multi-window spike scoring (Hunter Signals A+B).
+// 2m остаётся «нативным» Hunter-окном (бот всё ещё триггерит по нему); остальные —
+// только для дашборда, чтобы оператор видел сигналы на разных горизонтах.
+const HUNTER_SIGNAL_WINDOWS = [
+  { mins: 2,  threshold: HUNTER_SPIKE_PCT, label: '2m' },
+  { mins: 5,  threshold: 6,                label: '5m' },
+  { mins: 15, threshold: 8,                label: '15m' },
+  { mins: 60, threshold: 12,               label: '1h' },
+];
+
+const TIER_RANK = { STRONG: 3, NORMAL: 2, WEAK: 1, NEUTRAL: 0 };
+
+function computeTier(absPct, threshold) {
+  if (absPct >= threshold * 1.5) return 'STRONG';
+  if (absPct >= threshold)       return 'NORMAL';
+  if (absPct >= threshold * 0.6) return 'WEAK';
+  return 'NEUTRAL';
+}
+
 function handleSignals(req, res) {
   try {
     const limit = req.query.limit ? Math.max(1, Math.min(50, parseInt(req.query.limit, 10))) : 12;
@@ -333,53 +352,99 @@ function handleSignals(req, res) {
     const ticksNeeded = Math.max(2, Math.ceil((HUNTER_SPIKE_WINDOW_MIN * 60_000) / TICK_INTERVAL_MS));
 
     const enriched = data.map((item) => {
-      const past = getPriceNMinAgo(item.coin, HUNTER_SPIKE_WINDOW_MIN, now);
-      const spikePct = past != null ? ((item.price - past) / past) * 100 : null;
+      // Считаем спайки по всем окнам.
+      const windows = HUNTER_SIGNAL_WINDOWS.map((w) => {
+        const past = getPriceNMinAgo(item.coin, w.mins, now);
+        if (past == null) return { ...w, spikePct: null, tier: null, side: null, ratio: 0 };
+        const spikePct = ((item.price - past) / past) * 100;
+        const absPct   = Math.abs(spikePct);
+        const tier     = computeTier(absPct, w.threshold);
+        const side     = spikePct >= 0 ? 'SHORT' : 'LONG'; // pump → fade short, dump → fade long
+        return { ...w, spikePct, tier, side, ratio: absPct / w.threshold };
+      });
+
+      // Best signal: STRONG > NORMAL > WEAK; tiebreak — наибольший ratio (насколько выше порога).
+      const ranked = windows
+        .filter((w) => w.tier && w.tier !== 'NEUTRAL')
+        .sort((a, b) => (TIER_RANK[b.tier] - TIER_RANK[a.tier]) || (b.ratio - a.ratio));
+      const best = ranked[0] ?? null;
+
       const trendPast = getPriceNMinAgo(item.coin, trendLookback, now);
       const trendPct = trendPast != null ? ((item.price - trendPast) / trendPast) * 100 : null;
       const bufLen = getBufferLength(item.coin);
-      return { coin: item.coin, price: item.price, spikePct, trendPct, bufLen };
+      const native2m = windows.find((w) => w.mins === HUNTER_SPIKE_WINDOW_MIN);
+      return {
+        coin: item.coin, price: item.price,
+        spikePct: native2m?.spikePct ?? null, // обратная совместимость: старое поле = 2m
+        windows, best, trendPct, bufLen,
+      };
     });
 
-    // Сортировка: по абсолютной величине 2m Δ — самые заметные движения наверху.
+    // Сортировка: best tier rank desc → ratio desc → 2m abs desc (для пустых).
     enriched.sort((a, b) => {
-      const ax = a.spikePct == null ? -Infinity : Math.abs(a.spikePct);
-      const bx = b.spikePct == null ? -Infinity : Math.abs(b.spikePct);
-      return bx - ax;
+      const aRank = a.best ? TIER_RANK[a.best.tier] : 0;
+      const bRank = b.best ? TIER_RANK[b.best.tier] : 0;
+      if (bRank !== aRank) return bRank - aRank;
+      const aRatio = a.best?.ratio ?? 0;
+      const bRatio = b.best?.ratio ?? 0;
+      if (bRatio !== aRatio) return bRatio - aRatio;
+      const a2 = a.spikePct == null ? -Infinity : Math.abs(a.spikePct);
+      const b2 = b.spikePct == null ? -Infinity : Math.abs(b.spikePct);
+      return b2 - a2;
     });
-
-    const watchThreshold = HUNTER_SPIKE_PCT * 0.6;
 
     const top = enriched.slice(0, limit).map((m, idx) => {
       let signal = 'NEUTRAL';
       let blocked = null;
       let sl = null;
       let tp = null;
-      if (m.spikePct == null) {
+      let tier = null;
+      let windowLabel = null;
+      let windowMin = null;
+      let signalSpikePct = null;
+
+      const noHistoryAtAll = m.windows.every((w) => w.spikePct == null);
+      if (noHistoryAtAll) {
         signal = 'WARMUP';
-      } else if (m.spikePct >= HUNTER_SPIKE_PCT) {
-        signal = 'SHORT';
-        if (m.trendPct != null && m.trendPct >= trendMaxRise) {
-          blocked = `trend +${m.trendPct.toFixed(1)}%/${trendLookback}m`;
+      } else if (m.best) {
+        const b = m.best;
+        tier = b.tier;
+        windowLabel = b.label;
+        windowMin   = b.mins;
+        signalSpikePct = b.spikePct;
+        // SHORT/LONG для NORMAL+ (торгуемое), WATCH для WEAK (только наблюдение).
+        if (b.tier === 'WEAK') {
+          signal = 'WATCH';
+        } else {
+          signal = b.side; // 'SHORT' или 'LONG'
+          // Anti-trend gate применяется только к торгуемым тирам.
+          if (b.side === 'SHORT' && m.trendPct != null && m.trendPct >= trendMaxRise) {
+            blocked = `trend +${m.trendPct.toFixed(1)}%/${trendLookback}m`;
+          } else if (b.side === 'LONG' && m.trendPct != null && m.trendPct <= -trendMaxRise) {
+            blocked = `trend ${m.trendPct.toFixed(1)}%/${trendLookback}m`;
+          }
+          if (b.side === 'SHORT') {
+            sl = m.price * (1 + HUNTER_SL_PCT / 100);
+            tp = m.price * (1 - HUNTER_TP_PCT / 100);
+          } else {
+            sl = m.price * (1 - HUNTER_SL_PCT / 100);
+            tp = m.price * (1 + HUNTER_TP_PCT / 100);
+          }
         }
-        sl = m.price * (1 + HUNTER_SL_PCT / 100);
-        tp = m.price * (1 - HUNTER_TP_PCT / 100);
-      } else if (m.spikePct <= -HUNTER_SPIKE_PCT) {
-        signal = 'LONG';
-        if (m.trendPct != null && m.trendPct <= -trendMaxRise) {
-          blocked = `trend ${m.trendPct.toFixed(1)}%/${trendLookback}m`;
-        }
-        sl = m.price * (1 - HUNTER_SL_PCT / 100);
-        tp = m.price * (1 + HUNTER_TP_PCT / 100);
-      } else if (Math.abs(m.spikePct) >= watchThreshold) {
-        signal = 'WATCH';
       }
+
       return {
         rank: idx + 1,
         coin: m.coin,
         pair: `${m.coin}/USDC`,
         price: m.price,
-        spikePct: m.spikePct,
+        spikePct: m.spikePct,        // legacy: 2m спайк
+        signalSpikePct,              // спайк для выбранного окна
+        windowLabel, windowMin, tier,
+        windows: m.windows.map((w) => ({
+          label: w.label, mins: w.mins, threshold: w.threshold,
+          spikePct: w.spikePct, tier: w.tier, side: w.side,
+        })),
         trendPct: m.trendPct,
         signal,
         blocked,
@@ -401,6 +466,7 @@ function handleSignals(req, res) {
         tpPct: HUNTER_TP_PCT,
         trendLookbackMin: trendLookback,
         trendMaxRisePct: trendMaxRise,
+        windows: HUNTER_SIGNAL_WINDOWS.map((w) => ({ mins: w.mins, threshold: w.threshold, label: w.label })),
       },
       universeSize: data.length,
       activeCoin,

@@ -120,9 +120,9 @@
                 <th>#</th>
                 <th>Pair</th>
                 <th>Price</th>
-                <th title="Изменение цены за последние 2 минуты — основной триггер Hunter'а">2m Δ</th>
-                <th title="Изменение цены за длинное окно (anti-trend фильтр). Если совпадает по знаку с 2m Δ выше порога — это устойчивый тренд, не reversion → сигнал блокируется.">Trend</th>
-                <th title="Рекомендуемое направление сделки: SHORT после pump'а, LONG после dump'а, WATCH если близко к порогу, WARMUP пока копится история, gated если режет anti-trend.">Suggested</th>
+                <th title="Изменение цены в самом «горячем» из окон 2m/5m/15m/1h. Метка слева — выбранное окно. В тултипе — все окна.">Spike</th>
+                <th title="Изменение цены за длинное окно (anti-trend фильтр). Если совпадает по знаку со спайком выше порога — это устойчивый тренд, не reversion → сигнал блокируется.">Trend</th>
+                <th title="Tier (WEAK/NORMAL/STRONG) + направление + окно. WEAK=наблюдение, NORMAL/STRONG=торгуемо. WARMUP пока копится история, gated если режет anti-trend.">Suggested</th>
                 <th title="Stop-loss / Take-profit уровни от текущей цены: SL ±2%, TP ∓3%">SL / TP</th>
               </tr>
             </thead>

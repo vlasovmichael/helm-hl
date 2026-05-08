@@ -644,8 +644,11 @@ function renderSignals(payload) {
   if (!tbody || !meta) return;
   const signals = payload?.signals || [];
   const th = payload?.thresholds || {};
+  const winSummary = Array.isArray(th.windows) && th.windows.length
+    ? th.windows.map((w) => `${w.label}≥${w.threshold}%`).join(' · ')
+    : `${th.spikePct}%/${th.spikeWindowMin}m`;
   meta.textContent = payload?.ts
-    ? `pump ≥ ${th.spikePct}%/${th.spikeWindowMin}m · SL +${th.slPct}% · TP -${th.tpPct}% · scope ${payload.universeSize} · updated ${fmtTime(payload.ts)}`
+    ? `windows: ${winSummary} · SL ${th.slPct}% · TP ${th.tpPct}% · scope ${payload.universeSize} · updated ${fmtTime(payload.ts)}`
     : '—';
   if (!signals.length) {
     tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Waiting for hunter scope…</td></tr>';
@@ -680,22 +683,35 @@ function renderSignals(payload) {
     return v > 0 ? 'num-pos-weak' : v < 0 ? 'num-neg-weak' : 'num-muted';
   };
 
+  // Tooltip-сводка по всем окнам — для просмотра «как разные таймфреймы видят монету».
+  const windowsTooltip = (windows) => {
+    if (!Array.isArray(windows)) return '';
+    return windows.map((w) => {
+      const v = w.spikePct == null ? '—' : `${w.spikePct >= 0 ? '+' : ''}${w.spikePct.toFixed(2)}%`;
+      const tag = w.tier && w.tier !== 'NEUTRAL' ? ` ${w.tier}` : '';
+      return `${w.label}: ${v}${tag} (≥${w.threshold}%)`;
+    }).join(' | ');
+  };
+
   tbody.innerHTML = signals.map((s) => {
+    const winLabel = s.windowLabel || `${th.spikeWindowMin}m`;
+    const winTitle = windowsTooltip(s.windows);
+    const tierLabel = s.tier && s.tier !== 'NEUTRAL' ? `${s.tier} ` : '';
     let suggested;
     if ((s.signal === 'SHORT' || s.signal === 'LONG') && s.blocked) {
-      suggested = `<span class="signals-status blocked" title="${s.blocked}">${s.signal} (gated)</span>`;
+      suggested = `<span class="signals-status blocked" title="${s.blocked}">${tierLabel}${s.signal} ${winLabel} (gated)</span>`;
     } else if (s.signal === 'SHORT') {
-      suggested = '<span class="signals-status tradable">▼ SHORT</span>';
+      suggested = `<span class="signals-status tradable" title="${winTitle}">${tierLabel}▼ SHORT <span class="num-inline-muted">${winLabel}</span></span>`;
     } else if (s.signal === 'LONG') {
-      suggested = '<span class="signals-status long">▲ LONG</span>';
+      suggested = `<span class="signals-status long" title="${winTitle}">${tierLabel}▲ LONG <span class="num-inline-muted">${winLabel}</span></span>`;
     } else if (s.signal === 'WATCH') {
-      suggested = '<span class="signals-status active">WATCH</span>';
+      suggested = `<span class="signals-status active" title="${winTitle}">WATCH <span class="num-inline-muted">${winLabel}</span></span>`;
     } else if (s.signal === 'WARMUP') {
       const have = Math.min(s.bufferLen ?? 0, s.bufferNeeded ?? 0);
       const need = s.bufferNeeded ?? 0;
       suggested = `<span class="signals-status blocked" title="Need ${need} ticks (~${(need * 15 / 60).toFixed(1)}min) of price history">WARMUP ${have}/${need}</span>`;
     } else {
-      suggested = '<span class="signals-status blocked">—</span>';
+      suggested = `<span class="signals-status blocked" title="${winTitle}">—</span>`;
     }
     const slTpCell = s.sl != null
       ? `<span class="num-inline-neg" title="Stop-loss">${fmtPrice(s.sl)}</span> <span class="sep">/</span> <span class="num-inline-pos" title="Take-profit">${fmtPrice(s.tp)}</span>`
@@ -708,19 +724,29 @@ function renderSignals(payload) {
     const trendCell = s.trendPct != null
       ? `<span class="${trendInlineCls}${trendOver ? ' num-warn-glow' : ''}">${arrow(s.trendPct)} ${fmtPct(s.trendPct, 1)}</span> <span class="num-inline-muted">/ ${th.trendLookbackMin}m</span>`
       : '<span class="num-inline-muted">—</span>';
+    // Spike-колонка теперь отражает выбранное окно (signalSpikePct), fallback на 2m.
+    const displaySpike = s.signalSpikePct != null ? s.signalSpikePct : s.spikePct;
+    const displayThreshold = (() => {
+      const w = s.windows?.find((x) => x.label === s.windowLabel);
+      return w?.threshold ?? th.spikePct ?? 5;
+    })();
     const spikeKind = s.signal === 'SHORT' ? 'pump' : (s.signal === 'LONG' ? 'dump' : null);
-    const rowStyle = spikeKind && !s.blocked ? tintRow(s.spikePct, spikeKind) : '';
+    const rowStyle = spikeKind && !s.blocked ? tintRow(displaySpike, spikeKind) : '';
     const rowCls = [
       s.isActive ? 'is-active' : '',
       s.signal === 'SHORT' ? 'row-short' : '',
       s.signal === 'LONG' ? 'row-long' : '',
+      s.tier === 'STRONG' ? 'tier-strong' : '',
     ].filter(Boolean).join(' ');
+    const spikeCellLabel = s.windowLabel
+      ? `<span class="num-inline-muted">${s.windowLabel}</span> ${arrow(displaySpike)} ${fmtPct(displaySpike)}`
+      : `${arrow(displaySpike)} ${fmtPct(displaySpike)}`;
     return `
       <tr class="${rowCls}" style="${rowStyle}">
         <td class="num-muted">${s.rank}</td>
         <td class="signals-coin">${s.pair}</td>
         <td class="signals-price">${fmtPrice(s.price)}</td>
-        <td class="${numberClass(s.spikePct, th.spikePct ?? 5)}">${arrow(s.spikePct)} ${fmtPct(s.spikePct)}</td>
+        <td class="${numberClass(displaySpike, displayThreshold)}" title="${winTitle}">${spikeCellLabel}</td>
         <td>${trendCell}</td>
         <td>${suggested}</td>
         <td class="signals-sltp">${slTpCell}</td>
