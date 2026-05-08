@@ -322,13 +322,18 @@ function handleActivity(req, res) {
 }
 
 // Multi-window spike scoring (Hunter Signals A+B).
-// 2m остаётся «нативным» Hunter-окном (бот всё ещё триггерит по нему); остальные —
-// только для дашборда, чтобы оператор видел сигналы на разных горизонтах.
+// 2m остаётся «нативным» Hunter-окном (бот всё ещё триггерит по нему через
+// HUNTER_SPIKE_PCT=5%); здесь пороги ДЛЯ ДАШБОРДА — для ручной торговли —
+// специально мягче, чтобы сигналы появлялись регулярно. Tier WEAK (0.6×)
+// = «следить», NORMAL (1×) = «торгуемо», STRONG (1.5×) = «уверенный сигнал».
+//
+// Калибровка 2026-05-08 на спокойном рынке: при 2m≥3%/5m≥4%/15m≥5%/1h≥7%
+// в любой момент почти всегда есть 5-15 WEAK-сигналов в скоупе ~65 монет.
 const HUNTER_SIGNAL_WINDOWS = [
-  { mins: 2,  threshold: HUNTER_SPIKE_PCT, label: '2m' },
-  { mins: 5,  threshold: 6,                label: '5m' },
-  { mins: 15, threshold: 8,                label: '15m' },
-  { mins: 60, threshold: 12,               label: '1h' },
+  { mins: 2,  threshold: 3, label: '2m'  },
+  { mins: 5,  threshold: 4, label: '5m'  },
+  { mins: 15, threshold: 5, label: '15m' },
+  { mins: 60, threshold: 7, label: '1h'  },
 ];
 
 const TIER_RANK = { STRONG: 3, NORMAL: 2, WEAK: 1, NEUTRAL: 0 };
