@@ -558,9 +558,11 @@ function renderPosition(pos) {
         <div class="grid-item"><div class="item-label">Funding</div><div class="item-value ${cls(pnl.funding)}">${sgn(pnl.funding)}$${Math.abs(pnl.funding).toFixed(4)}</div></div>
       </div>`;
   }
+  const side = (pos.side || 'SHORT').toUpperCase();
+  const sideCls = side === 'SHORT' ? 'negative' : 'positive';
   container.innerHTML = `
     <div class="data-grid">
-      <div class="grid-item"><div class="item-label">Coin</div><div class="item-value highlight">#${pos.coin}</div></div>
+      <div class="grid-item"><div class="item-label">Coin · Side</div><div class="item-value highlight">#${pos.coin} <span class="${sideCls}" style="font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px; margin-left:4px;">${side}</span></div></div>
       <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(pos.sizeUsd)}</div></div>
       <div class="grid-item"><div class="item-label">Entry</div><div class="item-value">$${pos.entryPrice}</div></div>
       <div class="grid-item"><div class="item-label">APY · Held</div><div class="item-value">${fmtPct(pos.entryApy)} · ${pos.heldHours.toFixed(1)}h</div></div>

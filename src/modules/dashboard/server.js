@@ -220,6 +220,7 @@ async function getStatusData() {
     activePosition: position
       ? {
           coin: position.coin,
+          side: (position.side || 'short').toUpperCase(),
           sizeUsd: position.size_usd,
           entryPrice: position.entry_price,
           entryApy: position.entry_apy,

@@ -87,7 +87,7 @@ export async function paperOpen(coin, price, apy, silent = false, strategyId = '
   );
 
   if (!silent) {
-    await notifyPaperOpen({ coin, sizeUsd, balance, price, apy, fee });
+    await notifyPaperOpen({ coin, sizeUsd, balance, price, apy, fee, side });
   }
 
   notify('afterOpen', { coin, price, apy, sizeUsd, positionId: Number(id), mode: 'PAPER' });
@@ -241,6 +241,7 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
         coin: position.coin, holdHours,
         reason: signal.reason,
         pnl: realizedPnl, fee: totalFee,
+        side: position.side || 'short',
       });
     }
   }

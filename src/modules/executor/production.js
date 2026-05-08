@@ -303,7 +303,7 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
     await notifyProductionOpen({
       coin, fillUsd, totalSz: fill.totalSz, avgPx: fill.avgPx,
       markPrice: price, apy, slip, effectiveLeverage,
-      oid: fill.oid, dbId: id,
+      oid: fill.oid, dbId: id, side,
     });
   }
 
@@ -504,7 +504,7 @@ export async function productionClose(signal, position, silent = false) {
       coin, holdHours, entryPrice: position.entry_price,
       avgPx: fill.avgPx, slip, pricePnl, fundingPnl,
       totalFee, realizedPnl, reason: signal.reason,
-      oid: fill.oid,
+      oid: fill.oid, side: posSide,
     });
   }
 

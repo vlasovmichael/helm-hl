@@ -38,10 +38,11 @@ function shouldThrottle(key) {
 
 // ── OPEN ───────────────────────────────────────
 
-export async function notifyPaperOpen({ coin, sizeUsd, balance, price, apy, fee }) {
+export async function notifyPaperOpen({ coin, sizeUsd, balance, price, apy, fee, side = 'short' }) {
   const fire = apy > 100 ? "🔥🔥🔥 " : "";
+  const sideTag = side.toUpperCase();
   await sendMessage(
-    `${fire}🟢 <b>[OPEN] #${coin}</b>\n` +
+    `${fire}🟢 <b>[OPEN ${sideTag}] #${coin}</b>\n` +
       `💰 Размер: <b>$${sizeUsd.toFixed(2)}</b> (${(0.95 * 100).toFixed(0)}% от $${balance.toFixed(2)})\n` +
       `📊 APY: <b>${apy.toFixed(2)}%</b>\n` +
       `💵 Цена: $${price}\n` +
@@ -49,11 +50,12 @@ export async function notifyPaperOpen({ coin, sizeUsd, balance, price, apy, fee 
   );
 }
 
-export async function notifyProductionOpen({ coin, fillUsd, totalSz, avgPx, markPrice, apy, slip, effectiveLeverage, oid, dbId }) {
+export async function notifyProductionOpen({ coin, fillUsd, totalSz, avgPx, markPrice, apy, slip, effectiveLeverage, oid, dbId, side = 'short' }) {
   const slipWarn = slip.warn ? "⚠️ " : "";
   const fire = apy > 100 ? "🔥🔥🔥 " : "";
+  const sideTag = side.toUpperCase();
   await sendMessage(
-    `${fire}🟢 <b>[PROD OPEN] #${coin}</b>\n` +
+    `${fire}🟢 <b>[PROD OPEN ${sideTag}] #${coin}</b>\n` +
       `<code>─────────────────────</code>\n` +
       `💰 Размер: <b>$${fillUsd.toFixed(2)}</b> (${totalSz} ${coin})\n` +
       `💵 Fill: <b>$${avgPx}</b> (mark: $${markPrice})\n` +
@@ -66,10 +68,11 @@ export async function notifyProductionOpen({ coin, fillUsd, totalSz, avgPx, mark
 
 // ── CLOSE ──────────────────────────────────────
 
-export async function notifyPaperClose({ coin, holdHours, reason, pnl, fee }) {
+export async function notifyPaperClose({ coin, holdHours, reason, pnl, fee, side = 'short' }) {
   const sign = pnl >= 0 ? "+" : "";
+  const sideTag = side.toUpperCase();
   await sendMessage(
-    `🔴 <b>[CLOSE] #${coin}</b>\n` +
+    `🔴 <b>[CLOSE ${sideTag}] #${coin}</b>\n` +
       `📈 Причина: <b>${reason}</b>\n` +
       `⏳ Удержание: ${holdHours.toFixed(1)}ч\n` +
       `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
@@ -77,11 +80,12 @@ export async function notifyPaperClose({ coin, holdHours, reason, pnl, fee }) {
   );
 }
 
-export async function notifyProductionClose({ coin, holdHours, entryPrice, avgPx, slip, pricePnl, fundingPnl, totalFee, realizedPnl, reason, oid }) {
+export async function notifyProductionClose({ coin, holdHours, entryPrice, avgPx, slip, pricePnl, fundingPnl, totalFee, realizedPnl, reason, oid, side = 'short' }) {
   const slipWarn = slip.warn ? "⚠️ " : "";
   const sign = realizedPnl >= 0 ? "+" : "";
+  const sideTag = side.toUpperCase();
   await sendMessage(
-    `🔴 <b>[PROD CLOSE] #${coin}</b>\n` +
+    `🔴 <b>[PROD CLOSE ${sideTag}] #${coin}</b>\n` +
       `<code>─────────────────────</code>\n` +
       `📈 Причина: <b>${reason}</b>\n` +
       `⏳ Удержание: ${holdHours.toFixed(1)}ч\n` +
@@ -89,7 +93,7 @@ export async function notifyProductionClose({ coin, holdHours, entryPrice, avgPx
       `💵 Entry: $${entryPrice} → Exit: $${avgPx}\n` +
       `${slipWarn}📉 Slippage: <b>${slip.label}</b>\n` +
       `📊 Price PnL: ${pricePnl >= 0 ? "+" : ""}$${pricePnl.toFixed(4)}\n` +
-      `💰 Funding PnL: +$${fundingPnl.toFixed(4)}\n` +
+      `💰 Funding PnL: ${fundingPnl >= 0 ? "+" : ""}$${fundingPnl.toFixed(4)}\n` +
       `🏷 Fees: $${totalFee.toFixed(4)}\n` +
       `<b>💎 Итого: ${sign}$${realizedPnl.toFixed(4)}</b>\n` +
       `<code>─────────────────────</code>\n` +
