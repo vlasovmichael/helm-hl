@@ -25,6 +25,24 @@ const {
 // при импорте), чтобы тесты могли переключать флаг без перезагрузки модуля.
 
 /**
+ * Side-aware unrealized PnL в процентах от entry. Не учитывает funding.
+ *   short: цена упала → плюс
+ *   long:  цена выросла → плюс
+ */
+function unrealizedPct(side, entryPrice, currentPrice) {
+  const raw = ((currentPrice - entryPrice) / entryPrice) * 100;
+  return side === 'long' ? raw : -raw;
+}
+
+/**
+ * Side-aware unrealized PnL в долларах.
+ */
+function unrealizedUsd(side, entryPrice, currentPrice, qty) {
+  const raw = (currentPrice - entryPrice) * qty;
+  return side === 'long' ? raw : -raw;
+}
+
+/**
  * Сколько минут осталось до ближайшей выплаты фандинга (HH:00 UTC).
  * @returns {number} число с дробной частью, например 9.5
  */
@@ -173,13 +191,17 @@ export function analyze(scoutData, activePosition) {
     peakUnrealizedPct.clear();
     peakEquityPct.clear();
 
-    // Iter 1.1: scout может вернуть и long-кандидатов под флагом carryLongEnabled.
-    // Логика выбора long-входа появится в Iter 1.2; пока strategist берёт
-    // лучший short — это сохраняет старое поведение под любым флагом.
+    // Iter 1.2: под флагом CARRY_LONG_ENABLED берём top-by-abs(apy) — scout
+    // уже отсортировал. Без флага — только short (сохраняет старое поведение).
     // Fallback `|| 'short'`: тесты передают scoutData без поля side.
-    const best = scoutData.find((c) => (c.side || 'short') === 'short');
+    const best = config.trading.carryLongEnabled
+      ? scoutData[0]
+      : scoutData.find((c) => (c.side || 'short') === 'short');
 
-    if (!best || best.smoothedApy < entryApy) {
+    const bestSide = best?.side || 'short';
+    const bestAbsApy = best ? Math.abs(best.smoothedApy) : 0;
+
+    if (!best || bestAbsApy < entryApy) {
       logger.info(
         `[Strategist] HOLD — no coin ≥ ${entryApy}% | best: ${best?.coin ?? '—'} @ ${best?.smoothedApy.toFixed(2) ?? 0}%`,
       );
@@ -187,7 +209,7 @@ export function analyze(scoutData, activePosition) {
     }
 
     // Защитный порог: не входим если APY ниже пола
-    if (best.smoothedApy < MIN_ENTRY_APY_FLOOR) {
+    if (bestAbsApy < MIN_ENTRY_APY_FLOOR) {
       logger.info(
         `[Strategist] HOLD — ${best.coin} APY ${best.smoothedApy.toFixed(2)}% < floor ${MIN_ENTRY_APY_FLOOR}%`,
       );
@@ -196,7 +218,7 @@ export function analyze(scoutData, activePosition) {
 
     // Fee-aware entry gate: round-trip должен окупиться за MAX_BREAKEVEN_HOURS
     // чистым фандингом. Это наш защитный механизм от «суеты» на слабых сигналах.
-    const breakevenH = hoursToBreakeven(best.smoothedApy);
+    const breakevenH = hoursToBreakeven(bestAbsApy);
     if (breakevenH > MAX_BREAKEVEN_HOURS) {
       logger.info(
         `[Strategist] HOLD (fee-gate) — ${best.coin} @ ${best.smoothedApy.toFixed(2)}% ` +
@@ -205,9 +227,12 @@ export function analyze(scoutData, activePosition) {
       return { action: 'HOLD' };
     }
 
-    // Predicted-drop filter: carry не входит при прогнозируемом падении фандинга
-    if (best.predictedApy != null && best.rawApy > 0) {
-      const drop = (best.rawApy - best.predictedApy) / best.rawApy;
+    // Predicted-drop filter: carry не входит при прогнозируемом падении
+    // фандинга. Для long-стороны APY отрицательные → сравниваем abs-значения.
+    if (best.predictedApy != null && best.rawApy !== 0) {
+      const rawAbs       = Math.abs(best.rawApy);
+      const predictedAbs = Math.abs(best.predictedApy);
+      const drop = (rawAbs - predictedAbs) / rawAbs;
       if (drop > PREDICTED_DROP_THRESHOLD) {
         logger.info(
           `[Strategist] HOLD (predicted drop) — ${best.coin} APY ${best.rawApy.toFixed(0)}% → ` +
@@ -233,27 +258,27 @@ export function analyze(scoutData, activePosition) {
     // Market Regime velocity gate (двухбакетный): не лезем в шорт против
     // только что pumpанувшей монеты (и зеркально — в long против падающей).
     if (config.trading.marketRegimeVelocityEnabled) {
-      const side = best.side || 'short';
-      const gate = evaluateVelocityGate(best.coin, side, best.price);
+      const gate = evaluateVelocityGate(best.coin, bestSide, best.price);
       if (gate.block) {
         logger.info(
-          `[Strategist] HOLD (velocity gate) — ${best.coin} ${gate.reason} (side=${side})`,
+          `[Strategist] HOLD (velocity gate) — ${best.coin} ${gate.reason} (side=${bestSide})`,
         );
         return { action: 'HOLD' };
       }
       logger.info(
-        `[Strategist] velocity gate PASS — ${best.coin} ${gate.diag} (side=${side})`,
+        `[Strategist] velocity gate PASS — ${best.coin} ${gate.diag} (side=${bestSide})`,
       );
     }
 
     logger.info(
-      `[Strategist] OPEN — ${best.coin} @ ${best.smoothedApy.toFixed(2)}% | breakeven ${breakevenH.toFixed(1)}h`,
+      `[Strategist] OPEN ${bestSide.toUpperCase()} — ${best.coin} @ ${best.smoothedApy.toFixed(2)}% | breakeven ${breakevenH.toFixed(1)}h`,
     );
     return {
       action: 'OPEN',
       coin:   best.coin,
       apy:    best.smoothedApy,
       price:  best.price,
+      side:   bestSide,
     };
   }
 
@@ -263,6 +288,7 @@ export function analyze(scoutData, activePosition) {
   const currentCoin = activePosition.coin;
   const current     = scoutData.find((m) => m.coin === currentCoin);
   const held        = heldMinutes(activePosition);
+  const posSide     = activePosition.side || 'short';
 
   // ── Экстренные выходы (игнорируют minHold) ────
   // Эти проверки срабатывают ВСЕГДА — даже через 1 секунду.
@@ -304,12 +330,17 @@ export function analyze(scoutData, activePosition) {
     disappearedStreak = 0;
   }
 
-  // 2. Цена выросла > CARRY_SPIKE_PROTECTION_PCT — защита шорта от убытка
-  const priceSpike = ((current.price - activePosition.entry_price) / activePosition.entry_price) * 100;
-  if (priceSpike > CARRY_SPIKE_PROTECTION_PCT) {
+  // 2. Adverse price move > CARRY_SPIKE_PROTECTION_PCT — защита от убытка.
+  //    short: pump против нас. long: dump против нас.
+  const rawMovePct  = ((current.price - activePosition.entry_price) / activePosition.entry_price) * 100;
+  const adverseMove = posSide === 'long' ? -rawMovePct : rawMovePct;
+  if (adverseMove > CARRY_SPIKE_PROTECTION_PCT) {
     peakUnrealizedPct.delete(currentCoin);
     peakEquityPct.delete(currentCoin);
-    logger.warn(`[Strategist] CLOSE — ${currentCoin} price spiked +${priceSpike.toFixed(2)}% (short at risk)`);
+    const dir = posSide === 'long' ? 'dumped' : 'spiked';
+    logger.warn(
+      `[Strategist] CLOSE — ${currentCoin} price ${dir} ${rawMovePct >= 0 ? '+' : ''}${rawMovePct.toFixed(2)}% (${posSide} at risk)`,
+    );
     return {
       action: 'CLOSE',
       coin:   currentCoin,
@@ -328,12 +359,12 @@ export function analyze(scoutData, activePosition) {
   //    Идёт ВЫШЕ negative_funding: цель — выйти на просадке от пика, пока funding
   //    ещё положительный. Игнорирует minHold (это защитный, не soft-выход).
   if (CARRY_TRAIL_ENABLED) {
-    const unrealizedPct = ((activePosition.entry_price - current.price) / activePosition.entry_price) * 100;
+    const unrealizedPctVal = unrealizedPct(posSide, activePosition.entry_price, current.price);
 
     // Path A: price-move %
-    if (unrealizedPct >= CARRY_TRAIL_ARM_PCT) {
+    if (unrealizedPctVal >= CARRY_TRAIL_ARM_PCT) {
       const prevPeak = peakUnrealizedPct.get(currentCoin) ?? 0;
-      if (unrealizedPct > prevPeak) peakUnrealizedPct.set(currentCoin, unrealizedPct);
+      if (unrealizedPctVal > prevPeak) peakUnrealizedPct.set(currentCoin, unrealizedPctVal);
     }
 
     // Path B: equity %. Equity берём из balance cache (sync). Если кэша нет —
@@ -342,7 +373,7 @@ export function analyze(scoutData, activePosition) {
     let equityPct = null;
     if (equity && equity > 0) {
       const qty    = activePosition.size_usd / activePosition.entry_price;
-      const pnlUsd = (activePosition.entry_price - current.price) * qty;
+      const pnlUsd = unrealizedUsd(posSide, activePosition.entry_price, current.price, qty);
       equityPct    = (pnlUsd / equity) * 100;
 
       if (equityPct >= CARRY_TRAIL_ARM_PCT_EQUITY) {
@@ -356,12 +387,12 @@ export function analyze(scoutData, activePosition) {
 
     // Path A trigger
     if (peakPrice >= CARRY_TRAIL_ARM_PCT) {
-      const giveBack          = peakPrice - unrealizedPct;
+      const giveBack          = peakPrice - unrealizedPctVal;
       const giveBackThreshold = peakPrice * (CARRY_TRAIL_GIVE_BACK_PCT / 100);
       if (giveBack >= giveBackThreshold) {
         logger.warn(
           `[Strategist] CLOSE — ${currentCoin} trailing TP (price): peak +${peakPrice.toFixed(2)}% → ` +
-            `now +${unrealizedPct.toFixed(2)}% (gave back ${(giveBack / peakPrice * 100).toFixed(0)}% ≥ ${CARRY_TRAIL_GIVE_BACK_PCT}%)`,
+            `now +${unrealizedPctVal.toFixed(2)}% (gave back ${(giveBack / peakPrice * 100).toFixed(0)}% ≥ ${CARRY_TRAIL_GIVE_BACK_PCT}%)`,
         );
         peakUnrealizedPct.delete(currentCoin);
         peakEquityPct.delete(currentCoin);
@@ -395,26 +426,28 @@ export function analyze(scoutData, activePosition) {
     }
   }
 
-  // 4. Фандинг стал отрицательным (мы платим, а не нам)
-  //    Гистерезис: закрываем только если negative N тиков подряд.
-  //    При 15с тике, 2 тика = 30с — фильтрует мгновенные выбросы.
-  if (current.fundingRate < 0) {
+  // 4. Фандинг развернулся против позиции (мы платим, а не нам).
+  //    short страдает при fundingRate < 0; long — при fundingRate > 0.
+  //    Гистерезис: закрываем только если adverse N тиков подряд.
+  const fundingAdverse =
+    posSide === 'long' ? current.fundingRate > 0 : current.fundingRate < 0;
+  if (fundingAdverse) {
     negativeFundingStreak++;
     logger.warn(
-      `[Strategist] ⚠️ ${currentCoin} funding negative (${current.fundingRate}) — ` +
+      `[Strategist] ⚠️ ${currentCoin} funding adverse for ${posSide} (${current.fundingRate}) — ` +
         `streak: ${negativeFundingStreak}/${NEGATIVE_FUNDING_TICKS}`,
     );
 
     if (negativeFundingStreak >= NEGATIVE_FUNDING_TICKS) {
-      // Soft путь (через snайпера): funding ушёл в минус, но позиция в плюсе ≥ X% —
+      // Soft путь (через snайпера): funding развернулся, но позиция в плюсе ≥ X% —
       // не теряем время, но экономим maker-комиссию. В минусе → market, чтоб резать.
-      const unrealizedPct = ((activePosition.entry_price - current.price) / activePosition.entry_price) * 100;
-      const useSoftExit   = unrealizedPct >= NEG_FUND_SOFT_MIN_PNL_PCT;
-      const reason        = useSoftExit ? 'negative_funding_softexit' : 'negative_funding';
+      const unrealizedPctVal = unrealizedPct(posSide, activePosition.entry_price, current.price);
+      const useSoftExit      = unrealizedPctVal >= NEG_FUND_SOFT_MIN_PNL_PCT;
+      const reason           = useSoftExit ? 'negative_funding_softexit' : 'negative_funding';
 
       logger.warn(
-        `[Strategist] CLOSE — ${currentCoin} funding negative ${negativeFundingStreak} ticks ` +
-          `(unrealized ${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(2)}% → ${useSoftExit ? 'soft via sniper' : 'market'})`,
+        `[Strategist] CLOSE — ${currentCoin} funding adverse ${negativeFundingStreak} ticks ` +
+          `(unrealized ${unrealizedPctVal >= 0 ? '+' : ''}${unrealizedPctVal.toFixed(2)}% → ${useSoftExit ? 'soft via sniper' : 'market'})`,
       );
       negativeFundingStreak = 0; // сброс
       peakUnrealizedPct.delete(currentCoin); // позиция закрывается → пик не нужен
@@ -427,7 +460,7 @@ export function analyze(scoutData, activePosition) {
       };
     }
   } else {
-    // Funding вернулся в плюс — сброс счётчика
+    // Funding снова в нашу пользу — сброс счётчика
     if (negativeFundingStreak > 0) {
       logger.info(
         `[Strategist] ✅ ${currentCoin} funding recovered (${current.fundingRate}) — streak reset`,
@@ -446,7 +479,8 @@ export function analyze(scoutData, activePosition) {
   if (held >= minHold) {
     // APY упал ниже (minApy − exitBuffer)
     // Пример: minApy=30, exitBuffer=5 → выходим только ниже 25%
-    if (current.slowApy < effectiveExitApy) {
+    // Для long-стороны slowApy отрицательный — сравниваем по модулю.
+    if (Math.abs(current.slowApy) < effectiveExitApy) {
       // Funding-Aware Gate: не выходим в окне выплаты — потеряем накопленный фандинг
       if (isInFundingGate()) {
         logger.info(
@@ -492,13 +526,15 @@ export function analyze(scoutData, activePosition) {
   if (held >= breathingMinutes) {
     // Ротация только в пределах того же side (Iter 1.1). Без флага у всех
     // активных позиций side='short' (миграция 1.0), поведение идентично.
-    const activeSide = activePosition.side || 'short';
+    const activeSide = posSide;
     const best = scoutData.find(
       (m) => m.coin !== currentCoin && (m.side || 'short') === activeSide,
     );
 
-    if (best && best.smoothedApy > current.smoothedApy) {
-      const hours = calculatePaybackHours(current.smoothedApy, best.smoothedApy);
+    // Сравниваем по модулю: для long обе цифры отрицательные, более «глубокое»
+    // отрицательное = более выгодный кандидат.
+    if (best && Math.abs(best.smoothedApy) > Math.abs(current.smoothedApy)) {
+      const hours = calculatePaybackHours(Math.abs(current.smoothedApy), Math.abs(best.smoothedApy));
 
       if (hours <= MAX_PAYBACK_HOURS) {
         // Funding-Aware Gate: ротация = close+open, close теряет накопленный фандинг
