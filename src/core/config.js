@@ -153,6 +153,28 @@ function loadConfig() {
     );
   }
 
+  // ── Market Regime: BTC regime entry gate (Iter B) ──
+  // Глобальный гейт: если BTC pumpнул > pct за последние N мин — блокируем
+  // новые short-входы (рынок зелёный). Симметрично: BTC dumpнул > pct → блокируем
+  // long-входы. Дополняет per-coin velocity gate (Iter A): coin может стоять
+  // ровно, но BTC тащит весь рынок — short в зелёный рынок плохая идея.
+  // Default off — включается флагом.
+  const marketRegimeBtcEnabled =
+    (process.env.MARKET_REGIME_BTC_ENABLED || 'false').toLowerCase() === 'true';
+  const marketRegimeBtcPumpPct  = parseFloat(process.env.MARKET_REGIME_BTC_PUMP_PCT  || '2');
+  const marketRegimeBtcLookbackMin = parseFloat(process.env.MARKET_REGIME_BTC_LOOKBACK_MIN || '60');
+
+  if (isNaN(marketRegimeBtcPumpPct) || marketRegimeBtcPumpPct <= 0) {
+    throw new Error(
+      `MARKET_REGIME_BTC_PUMP_PCT must be positive. Got: "${process.env.MARKET_REGIME_BTC_PUMP_PCT}"`,
+    );
+  }
+  if (isNaN(marketRegimeBtcLookbackMin) || marketRegimeBtcLookbackMin <= 0 || marketRegimeBtcLookbackMin > 240) {
+    throw new Error(
+      `MARKET_REGIME_BTC_LOOKBACK_MIN must be in (0, 240]. Got: "${process.env.MARKET_REGIME_BTC_LOOKBACK_MIN}"`,
+    );
+  }
+
   // ── Sniper-Hunter strategy (Volatility Spike Mean-Reversion) ──
   // Default false: включить вручную через HUNTER_ENABLED=true, когда будем готовы тестировать в PAPER.
   const hunterEnabled = (process.env.HUNTER_ENABLED || 'false').toLowerCase() === 'true';
@@ -278,6 +300,9 @@ function loadConfig() {
       marketRegimeLookbackMin,
       marketRegimeCoinPumpPct2,
       marketRegimeLookback2Min,
+      marketRegimeBtcEnabled,
+      marketRegimeBtcPumpPct,
+      marketRegimeBtcLookbackMin,
       negativeFundingSoftExitMinPnlPct,
     },
 

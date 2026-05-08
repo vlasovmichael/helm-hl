@@ -176,6 +176,40 @@ function evaluateVelocityGate(coin, side, currentPrice) {
 }
 
 /**
+ * Market-Regime BTC gate (Iter B). Глобальный фильтр: если BTC двинулся
+ * adversely > порога за окно lookback — блокируем новый вход.
+ *
+ * - short: BTC pumpнул > порога → красный свет (рынок тащит вверх).
+ * - long: BTC dumpнул > порога → красный свет (рынок тащит вниз).
+ *
+ * Источник цены: priceHistory (наполняется из scout.js на каждый тик).
+ * Если истории мало (рестарт <N мин назад) — блокируем (защитный default).
+ *
+ * @returns {{ block: true, reason: string } | { block: false, diag: string }}
+ */
+function evaluateBtcRegime(side) {
+  const t = config.trading;
+  const now = Date.now();
+  const lookback = t.marketRegimeBtcLookbackMin;
+
+  const past    = getPriceNMinAgo('BTC', lookback, now);
+  const current = getPriceNMinAgo('BTC', 0, now);
+  if (past == null || current == null) {
+    return { block: true, reason: `no BTC ${lookback}min history yet` };
+  }
+  const movePct = ((current - past) / past) * 100;
+  const adverse = side === 'short' ? movePct : -movePct;
+  if (adverse > t.marketRegimeBtcPumpPct) {
+    const dir = side === 'short' ? 'pumped' : 'dumped';
+    return {
+      block: true,
+      reason: `BTC ${dir} ${movePct >= 0 ? '+' : ''}${movePct.toFixed(2)}% in ${lookback}min (threshold ${t.marketRegimeBtcPumpPct}%)`,
+    };
+  }
+  return { block: false, diag: `BTC ${lookback}m=${movePct >= 0 ? '+' : ''}${movePct.toFixed(2)}%` };
+}
+
+/**
  * @param {Array<{coin, price, fundingRate, rawApy, smoothedApy, slowApy}>} scoutData
  * @param {Object|undefined} activePosition — строка из таблицы positions
  * @returns {{ action: string, [key: string]: any }}
@@ -268,6 +302,19 @@ export function analyze(scoutData, activePosition) {
       logger.info(
         `[Strategist] velocity gate PASS — ${best.coin} ${gate.diag} (side=${bestSide})`,
       );
+    }
+
+    // Market Regime BTC gate (Iter B): глобальный фон рынка. Coin может стоять
+    // ровно, но BTC тащит весь рынок — short в зелёный bg / long в красный bg плохо.
+    if (config.trading.marketRegimeBtcEnabled) {
+      const gate = evaluateBtcRegime(bestSide);
+      if (gate.block) {
+        logger.info(
+          `[Strategist] HOLD (BTC regime) — ${gate.reason} (side=${bestSide})`,
+        );
+        return { action: 'HOLD' };
+      }
+      logger.info(`[Strategist] BTC regime PASS — ${gate.diag} (side=${bestSide})`);
     }
 
     logger.info(
@@ -558,6 +605,22 @@ export function analyze(scoutData, activePosition) {
           }
           logger.info(
             `[Strategist] velocity gate PASS (rotate→${best.coin}) — ${gate.diag}`,
+          );
+        }
+
+        // BTC regime gate на ротации (Iter B): рынок мог развернуться в красное
+        // для нашей стороны — лучше остаться в текущей и доехать, чем платить
+        // комиссии на ротацию против фона.
+        if (config.trading.marketRegimeBtcEnabled) {
+          const gate = evaluateBtcRegime(activeSide);
+          if (gate.block) {
+            logger.info(
+              `[Strategist] HOLD (BTC regime) — would rotate to ${best.coin} but ${gate.reason}`,
+            );
+            return { action: 'HOLD' };
+          }
+          logger.info(
+            `[Strategist] BTC regime PASS (rotate→${best.coin}) — ${gate.diag}`,
           );
         }
 
