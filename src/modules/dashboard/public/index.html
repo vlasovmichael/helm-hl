@@ -2,15 +2,17 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>HL Scanner — Terminal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0c0a09" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f5f1ea" media="(prefers-color-scheme: light)" />
+    <title>HL Scanner — Trading Terminal</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
     <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <script>
@@ -32,8 +34,15 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <!-- Mobile tape-bar: persistent equity + mode (sticky on small screens) -->
+    <div class="tape-bar" aria-hidden="true">
+      <div class="tape-equity" id="tape-equity">$0.00</div>
+      <div class="tape-delta" id="tape-delta">—</div>
+      <div class="tape-mode" id="tape-mode">—</div>
+    </div>
+
     <div class="container">
-      <header>
+      <header data-edition="">
         <div class="equity-group">
           <div class="label">Total Equity</div>
           <div class="value animated-value" id="equity-value">$0.00</div>
@@ -53,10 +62,10 @@
         </div>
       </header>
 
-      <!-- Active Position — ТЕПЕРЬ ПЕРВАЯ -->
-      <section class="card">
+      <!-- 01 / Active Position -->
+      <section class="card" id="sec-position">
         <div class="card-header">
-          <div class="card-title">Active Position</div>
+          <div class="card-title" data-num="01">Active Position</div>
         </div>
         <div id="position-container">
           <div class="empty-state">No active positions — bot is IDLE</div>
@@ -64,11 +73,11 @@
         <div id="manual-positions-container"></div>
       </section>
 
-      <!-- Price Performance (Candles) -->
-      <section class="card" id="price-card">
+      <!-- 02 / Price Performance (Candles) -->
+      <section class="card" id="sec-charts">
         <div class="card-header">
-          <div class="card-title" id="price-title">Price Performance</div>
-          <div style="display:flex; align-items:center; gap:0.75rem;">
+          <div class="card-title" data-num="02" id="price-title">Price Performance</div>
+          <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
             <div id="price-meta" class="tax-year-label" style="font-family: var(--font-mono)">$0.00</div>
             <div class="time-ranges" id="price-intervals">
               <button class="range-btn active" data-iv="5m">5m</button>
@@ -79,13 +88,15 @@
             </div>
           </div>
         </div>
-        <div id="price-chart" style="height: 280px; width: 100%;"></div>
+        <div id="price-card" style="display:contents;">
+          <div id="price-chart" style="height: 280px; width: 100%;"></div>
+        </div>
       </section>
 
-      <!-- Live Logs -->
-      <section class="card" id="logs-card">
+      <!-- 03 / Live Logs -->
+      <section class="card" id="sec-logs">
         <div class="card-header">
-          <div class="card-title">Live Logs</div>
+          <div class="card-title" data-num="03">Live Logs</div>
           <div class="logs-controls">
             <input type="search" id="logs-search" placeholder="Search…" autocomplete="off" spellcheck="false" />
             <div class="logs-filters" id="logs-filters">
@@ -107,10 +118,10 @@
         </div>
       </section>
 
-      <!-- Hunter Signals (volatility spike scope) -->
+      <!-- 04 / Hunter Signals -->
       <section class="card" id="signals-card">
         <div class="card-header">
-          <div class="card-title">Hunter Signals</div>
+          <div class="card-title" data-num="04">Hunter Signals</div>
           <div class="signals-meta" id="signals-meta">—</div>
         </div>
         <div class="signals-table-wrap">
@@ -120,9 +131,9 @@
                 <th>#</th>
                 <th>Pair</th>
                 <th>Price</th>
-                <th title="Изменение цены в самом «горячем» из окон 2m/5m/15m/1h. Метка слева — выбранное окно. В тултипе — все окна.">Spike</th>
-                <th title="Изменение цены за длинное окно (anti-trend фильтр). Если совпадает по знаку со спайком выше порога — это устойчивый тренд, не reversion → сигнал блокируется.">Trend</th>
-                <th title="Tier (WEAK/NORMAL/STRONG) + направление + окно. WEAK=наблюдение, NORMAL/STRONG=торгуемо. WARMUP пока копится история, gated если режет anti-trend.">Suggested</th>
+                <th title="Изменение цены в самом «горячем» из окон 2m/5m/15m/1h.">Spike</th>
+                <th title="Изменение цены за длинное окно (anti-trend фильтр).">Trend</th>
+                <th title="Tier (WEAK/NORMAL/STRONG) + направление + окно.">Suggested</th>
                 <th title="Stop-loss / Take-profit уровни от текущей цены: SL ±2%, TP ∓3%">SL / TP</th>
               </tr>
             </thead>
@@ -133,10 +144,10 @@
         </div>
       </section>
 
-      <!-- Performance (Equity Chart) -->
+      <!-- 05 / Performance (Equity Chart) -->
       <section class="card">
         <div class="card-header">
-          <div class="card-title">Performance</div>
+          <div class="card-title" data-num="05">Performance</div>
           <div class="time-ranges">
             <button class="range-btn" data-hours="1">1h</button>
             <button class="range-btn active" data-hours="24">24h</button>
@@ -152,10 +163,10 @@
         </div>
       </section>
 
-      <div class="card-wrapper">
+      <div class="card-wrapper" id="sec-activity">
         <section class="card cart-cooldowns">
           <div class="card-header">
-            <div class="card-title">Active Bans / Cooldowns</div>
+            <div class="card-title" data-num="06">Bans / Cooldowns</div>
           </div>
           <div id="bans-container">
             <div class="empty-state">No active restrictions</div>
@@ -164,7 +175,7 @@
 
         <section class="card" style="margin-bottom: 0">
           <div class="card-header">
-            <div class="card-title">Recent Activity</div>
+            <div class="card-title" data-num="07">Recent Activity</div>
           </div>
           <div id="activity-container">
             <div class="activity-skeleton">
@@ -179,7 +190,7 @@
 
       <section class="card">
         <div class="card-header">
-          <div class="card-title">Tax Summary (PIT-38)</div>
+          <div class="card-title" data-num="08">Tax Summary <span style="font-size:14px;color:var(--text-muted);font-family:var(--font-mono);font-style:normal;letter-spacing:0.08em;">PIT-38</span></div>
           <div id="tax-year" class="tax-year-label">2026</div>
         </div>
         <div class="data-grid">
@@ -205,11 +216,106 @@
       </section>
 
       <footer id="footer-status">
-        <span>Connecting to core...</span>
+        <span>Connecting to core…</span>
         <a href="/logout" class="logout-link" id="logout-link" style="display:none">Sign out</a>
       </footer>
     </div>
 
+    <!-- Mobile bottom navigation: scroll-spy across main sections -->
+    <nav class="bottom-nav" aria-label="Sections">
+      <button class="bottom-nav-btn active" data-target="sec-position" aria-label="Position">
+        <span class="nav-icon" aria-hidden="true"></span>
+        <span>Pos</span>
+      </button>
+      <button class="bottom-nav-btn" data-target="sec-charts" aria-label="Charts">
+        <span class="nav-icon" aria-hidden="true"></span>
+        <span>Chart</span>
+      </button>
+      <button class="bottom-nav-btn" data-target="sec-logs" aria-label="Logs">
+        <span class="nav-icon" aria-hidden="true"></span>
+        <span>Logs</span>
+      </button>
+      <button class="bottom-nav-btn" data-target="sec-activity" aria-label="Activity">
+        <span class="nav-icon" aria-hidden="true"></span>
+        <span>Hist</span>
+      </button>
+    </nav>
+
+    <script>
+      // ── Header edition stamp (date) ──
+      (function () {
+        try {
+          var d = new Date();
+          var ed = d.toISOString().slice(0, 10);
+          var hdr = document.querySelector('header[data-edition]');
+          if (hdr) hdr.setAttribute('data-edition', ed);
+        } catch (_) {}
+      })();
+
+      // ── Mobile tape-bar mirror ──
+      // Keeps the sticky equity bar in sync with the hero values without touching app.js.
+      (function () {
+        var heroValue = document.getElementById('equity-value');
+        var heroDelta = document.getElementById('equity-delta');
+        var modePill  = document.getElementById('mode-pill');
+        var tapeValue = document.getElementById('tape-equity');
+        var tapeDelta = document.getElementById('tape-delta');
+        var tapeMode  = document.getElementById('tape-mode');
+        if (!heroValue || !tapeValue) return;
+
+        function sync() {
+          if (heroValue && tapeValue) tapeValue.textContent = heroValue.textContent.trim();
+          if (heroDelta && tapeDelta) {
+            tapeDelta.textContent = heroDelta.textContent.trim();
+            tapeDelta.className = 'tape-delta ' +
+              (heroDelta.classList.contains('positive') ? 'positive' :
+               heroDelta.classList.contains('negative') ? 'negative' : '');
+          }
+          if (modePill && tapeMode) tapeMode.textContent = modePill.textContent.trim();
+        }
+
+        var mo = new MutationObserver(sync);
+        mo.observe(heroValue, { childList: true, characterData: true, subtree: true });
+        if (heroDelta) mo.observe(heroDelta, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+        if (modePill)  mo.observe(modePill,  { childList: true, characterData: true, subtree: true });
+        sync();
+      })();
+
+      // ── Bottom-nav scroll-spy ──
+      (function () {
+        var nav = document.querySelector('.bottom-nav');
+        if (!nav) return;
+        var btns = Array.prototype.slice.call(nav.querySelectorAll('[data-target]'));
+        var sections = btns
+          .map(function (b) { return document.getElementById(b.dataset.target); })
+          .filter(Boolean);
+
+        btns.forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var el = document.getElementById(btn.dataset.target);
+            if (!el) return;
+            var y = el.getBoundingClientRect().top + window.pageYOffset - 70;
+            window.scrollTo({ top: y, behavior: 'smooth' });
+          });
+        });
+
+        if (!('IntersectionObserver' in window)) return;
+
+        var observer = new IntersectionObserver(function (entries) {
+          // Pick the entry closest to top of viewport that is currently intersecting.
+          var visible = entries
+            .filter(function (e) { return e.isIntersecting; })
+            .sort(function (a, b) { return a.boundingClientRect.top - b.boundingClientRect.top; })[0];
+          if (!visible) return;
+          var id = visible.target.id;
+          btns.forEach(function (b) {
+            b.classList.toggle('active', b.dataset.target === id);
+          });
+        }, { rootMargin: '-30% 0px -55% 0px', threshold: 0 });
+
+        sections.forEach(function (s) { observer.observe(s); });
+      })();
+    </script>
     <script src="app.js"></script>
   </body>
 </html>
