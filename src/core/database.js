@@ -62,6 +62,18 @@ export function initDB() {
     logger.info('[DB] Migration: added tp_price to positions');
   }
 
+  // Migration (Iter C): hunter_sl_oid / hunter_tp_oid — id'шники trigger-ордеров на бирже.
+  // Заполняются только для hunter PROD-позиций. Используются reconciler'ом для определения,
+  // какой именно триггер сработал (или для cancel'ов при soft-exit).
+  if (!posColumns.find(c => c.name === 'hunter_sl_oid')) {
+    db.exec('ALTER TABLE positions ADD COLUMN hunter_sl_oid INTEGER');
+    logger.info('[DB] Migration: added hunter_sl_oid to positions');
+  }
+  if (!posColumns.find(c => c.name === 'hunter_tp_oid')) {
+    db.exec('ALTER TABLE positions ADD COLUMN hunter_tp_oid INTEGER');
+    logger.info('[DB] Migration: added hunter_tp_oid to positions');
+  }
+
   // Migration: entry_equity — equity аккаунта в момент OPEN.
   // Используется в integrity.js для корректной оценки PnL при external close
   // (старая формула equity − size_usd была математически неверной).
@@ -120,23 +132,35 @@ function getDb() {
 
 /**
  * Сохраняет новую открытую позицию и возвращает её id.
- * @param {{ coin, size_usd, entry_price, entry_apy, entry_time, mode, strategy_id?, sl_price?, tp_price? }} data
+ * @param {{ coin, size_usd, entry_price, entry_apy, entry_time, mode, strategy_id?, sl_price?, tp_price?, hunter_sl_oid?, hunter_tp_oid? }} data
  */
 export function savePosition(data) {
   const row = {
-    strategy_id:  'carry',
-    sl_price:     null,
-    tp_price:     null,
-    entry_equity: null,
-    side:         'short',
+    strategy_id:   'carry',
+    sl_price:      null,
+    tp_price:      null,
+    entry_equity:  null,
+    side:          'short',
+    hunter_sl_oid: null,
+    hunter_tp_oid: null,
     ...data,
   };
   const stmt = getDb().prepare(`
-    INSERT INTO positions (coin, size_usd, entry_price, entry_apy, entry_time, mode, strategy_id, sl_price, tp_price, entry_equity, side)
-    VALUES (@coin, @size_usd, @entry_price, @entry_apy, @entry_time, @mode, @strategy_id, @sl_price, @tp_price, @entry_equity, @side)
+    INSERT INTO positions (coin, size_usd, entry_price, entry_apy, entry_time, mode, strategy_id, sl_price, tp_price, entry_equity, side, hunter_sl_oid, hunter_tp_oid)
+    VALUES (@coin, @size_usd, @entry_price, @entry_apy, @entry_time, @mode, @strategy_id, @sl_price, @tp_price, @entry_equity, @side, @hunter_sl_oid, @hunter_tp_oid)
   `);
   const result = stmt.run(row);
   return result.lastInsertRowid;
+}
+
+/**
+ * Обновляет id'шники Hunter trigger-ордеров для активной позиции.
+ * Используется productionHunterOpen после placeOrder триггеров.
+ */
+export function updateHunterTriggerOids(id, { hunter_sl_oid, hunter_tp_oid }) {
+  getDb()
+    .prepare('UPDATE positions SET hunter_sl_oid = ?, hunter_tp_oid = ? WHERE id = ?')
+    .run(hunter_sl_oid ?? null, hunter_tp_oid ?? null, id);
 }
 
 /**

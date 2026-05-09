@@ -22,6 +22,8 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared
     restart: unless-stopped
+    mem_limit: 512m
+    mem_reservation: 256m
     command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
     networks:
       - gateway_net
