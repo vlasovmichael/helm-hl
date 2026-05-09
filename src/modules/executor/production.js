@@ -7,6 +7,7 @@ import { retryWithBackoff } from '../../core/retry.js';
 import {
   savePosition,
   closePosition as dbClosePosition,
+  updateHunterTriggerOids,
 } from '../../core/database.js';
 import {
   getExchange,
@@ -16,7 +17,11 @@ import {
   setLeverage,
 } from '../exchange.js';
 import { resolveAsset, parseFillResponse } from './fill-parser.js';
-import { calcSize, calcPnl, checkSlippage, MARKET_SLIPPAGE, MIN_ORDER_USD, FEE_RATE } from './math.js';
+import {
+  calcSize, calcPnl, checkSlippage,
+  MARKET_SLIPPAGE, MIN_ORDER_USD, FEE_RATE, ONE_LEG,
+  HUNTER_BALANCE_UTILIZATION,
+} from './math.js';
 import {
   banRuntime, banSlippage, setCooldown,
   getLastRejectedAlert, setRejectedAlert,
@@ -38,6 +43,7 @@ import {
   notifyRotate, notifyRotateFailed,
   notifyCircuitBreaker,
   notifyOiCapBan, notifyOiCapAfterRotate,
+  notifyHunterOpenProd, notifyHunterOpenFailed,
 } from './notifications.js';
 
 // Регэксп для детекции "open interest at cap" в ответе биржи.
@@ -313,6 +319,268 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
   });
 
   return { ok: true, positionId: Number(id), sizeUsd: fillUsd };
+}
+
+// ─────────────────────────────────────────────────
+//  HUNTER OPEN (Iter C — реальные trigger-ордера на HL)
+// ─────────────────────────────────────────────────
+
+/**
+ * Размещает trigger-ордер (SL или TP) для закрытия Hunter SHORT-позиции.
+ * Возвращает orderId или throw'ает.
+ *
+ * @param {string} coin
+ * @param {number} sz — размер позиции (фактический fill)
+ * @param {number} triggerPx — цена срабатывания
+ * @param {'sl'|'tp'} tpsl
+ */
+async function placeHunterTrigger(coin, sz, triggerPx, tpsl) {
+  const exchange = getExchange();
+  const result = await retryWithBackoff(
+    () =>
+      exchange.exchange.placeOrder({
+        coin: `${coin}-PERP`,
+        is_buy: true, // закрытие SHORT → BUY reduce_only
+        sz,
+        // limit_px при isMarket=true игнорируется как цена исполнения, но HL требует поле.
+        // Используем triggerPx как безопасный плейсхолдер.
+        limit_px: triggerPx,
+        order_type: { trigger: { triggerPx, isMarket: true, tpsl } },
+        reduce_only: true,
+      }),
+    { label: `hunter-${tpsl}-${coin}`, maxRetries: 2, baseDelayMs: 1000 },
+  );
+
+  const status = result?.response?.data?.statuses?.[0];
+  if (!status) {
+    throw new Error(`empty statuses: ${JSON.stringify(result).slice(0, 200)}`);
+  }
+  if (typeof status === 'string') {
+    throw new Error(status);
+  }
+  if (status.error) {
+    throw new Error(status.error);
+  }
+  // Trigger-ордер не должен сразу исполниться — HL вернёт resting.
+  if (status.resting?.oid) {
+    return status.resting.oid;
+  }
+  throw new Error(`unexpected status: ${JSON.stringify(status).slice(0, 200)}`);
+}
+
+/**
+ * Открывает реальную Hunter SHORT с триггерами SL/TP на бирже.
+ *
+ * Поток: setLeverage(1) → market SELL → save position → placeOrder SL trigger →
+ * placeOrder TP trigger → updateHunterTriggerOids. Любой fail после market open →
+ * cancel уже размещённых триггеров + market close (rollback).
+ *
+ * @param {string} coin
+ * @param {number} markPrice — цена в момент сигнала (для лога/slippage)
+ * @param {number} spikePct  — величина пампа (для уведомления)
+ * @param {number} sl        — SL price (выше entry для SHORT)
+ * @param {number} tp        — TP price (ниже entry для SHORT)
+ * @param {boolean} [silent=false]
+ */
+export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, silent = false) {
+  const exchange = getExchange();
+
+  // ── 1. Баланс ──
+  let balance;
+  try {
+    balance = await getBalance();
+  } catch (err) {
+    logger.error(`[Executor] PROD HUNTER OPEN #${coin} — getBalance failed: ${err.message}`);
+    if (!silent) await notifyHunterOpenFailed({ coin, stage: 'balance', reason: err.message, rolledBack: false });
+    return { ok: false };
+  }
+  if (balance <= 0) {
+    logger.warn(`[Executor] PROD HUNTER OPEN #${coin} — balance is $${balance.toFixed(2)}`);
+    return { ok: false };
+  }
+
+  // ── 2. szDecimals + размер (50% utilization) ──
+  let szDecimals;
+  try {
+    ({ szDecimals } = resolveAsset(coin));
+  } catch (err) {
+    logger.error(`[Executor] PROD HUNTER OPEN #${coin} — resolveAsset failed: ${err.message}`);
+    if (!silent) await notifyHunterOpenFailed({ coin, stage: 'resolveAsset', reason: err.message, rolledBack: false });
+    return { ok: false };
+  }
+
+  const { sizeUsd, sz, tooSmall } = calcSize(balance, markPrice, szDecimals, HUNTER_BALANCE_UTILIZATION);
+  if (tooSmall) {
+    logger.warn(
+      `[Executor] [HUNTER SKIP] #${coin} — size $${sizeUsd.toFixed(2)} / sz=${sz} (50% от $${balance.toFixed(2)})`,
+    );
+    return { ok: false };
+  }
+
+  // ── 3. Leverage 1x ──
+  try {
+    await setLeverage(coin, 1);
+  } catch (err) {
+    logger.error(`[Executor] PROD HUNTER OPEN #${coin} — setLeverage failed: ${err.message}`);
+    if (!silent) await notifyHunterOpenFailed({ coin, stage: 'setLeverage', reason: err.message, rolledBack: false });
+    return { ok: false };
+  }
+
+  // ── 4. Market SELL (taker) ──
+  logger.info(
+    `[Executor] PROD HUNTER OPEN SHORT #${coin} — placing market SELL | sz=${sz} (~$${(sz * markPrice).toFixed(2)}) | mark=$${markPrice}`,
+  );
+
+  let result;
+  try {
+    result = await retryWithBackoff(
+      () => exchange.custom.marketOpen(`${coin}-PERP`, false, sz, undefined, MARKET_SLIPPAGE),
+      { label: `hunter-open-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
+    );
+  } catch (err) {
+    logger.error(`[Executor] PROD HUNTER OPEN #${coin} — marketOpen failed: ${err.message}`);
+    if (!silent) await notifyHunterOpenFailed({ coin, stage: 'marketOpen', reason: err.message, rolledBack: false });
+    return { ok: false };
+  }
+
+  const fill = parseFillResponse(result, 'OPEN');
+  if (!fill.ok) {
+    logger.error(`[Executor] PROD HUNTER OPEN #${coin} — exchange rejected: ${fill.error}`);
+    if (!silent) await notifyHunterOpenFailed({ coin, stage: 'fill', reason: fill.error, rolledBack: false });
+    return { ok: false };
+  }
+
+  const fillPx  = fill.avgPx;
+  const fillSz  = fill.totalSz;
+  const fillUsd = fillSz * fillPx;
+  const slip    = checkSlippage(markPrice, fillPx, 'SELL');
+  const fee     = fillUsd * ONE_LEG;
+
+  // ── 5. Save position (без oids — обновим после триггеров) ──
+  let entryEquity = null;
+  try {
+    const summary = await getAccountSummary();
+    entryEquity = summary.equity;
+  } catch (err) {
+    logger.warn(`[Executor] PROD HUNTER OPEN #${coin} — entry equity capture failed: ${err.message}`);
+  }
+
+  const id = savePosition({
+    coin,
+    size_usd:     fillUsd,
+    entry_price:  fillPx,
+    entry_apy:    0, // Hunter не funding-based
+    entry_time:   Date.now(),
+    mode:         'PRODUCTION',
+    strategy_id:  'hunter',
+    sl_price:     sl,
+    tp_price:     tp,
+    entry_equity: entryEquity,
+    side:         'short',
+  });
+
+  logger.info(
+    `[Executor] ✅ PROD HUNTER OPEN SHORT #${coin} | oid: ${fill.oid} | filled: ${fillSz} @ $${fillPx} ($${fillUsd.toFixed(2)}) | slip: ${slip.label} | id: ${id}`,
+  );
+
+  // ── 6. Поставить SL trigger ──
+  let slOid;
+  try {
+    slOid = await placeHunterTrigger(coin, fillSz, sl, 'sl');
+    logger.info(`[Executor] PROD HUNTER #${coin} SL trigger armed @ $${sl} | oid=${slOid}`);
+  } catch (err) {
+    logger.error(`[Executor] PROD HUNTER #${coin} SL placeOrder failed: ${err.message} — ROLLBACK market close`);
+    await rollbackHunterOpen(coin, fillSz, id, fillPx, /* triggerOids */ []);
+    if (!silent) await notifyHunterOpenFailed({ coin, stage: 'placeSL', reason: err.message, rolledBack: true });
+    return { ok: false };
+  }
+
+  // ── 7. Поставить TP trigger ──
+  let tpOid;
+  try {
+    tpOid = await placeHunterTrigger(coin, fillSz, tp, 'tp');
+    logger.info(`[Executor] PROD HUNTER #${coin} TP trigger armed @ $${tp} | oid=${tpOid}`);
+  } catch (err) {
+    logger.error(`[Executor] PROD HUNTER #${coin} TP placeOrder failed: ${err.message} — ROLLBACK (cancel SL + market close)`);
+    await rollbackHunterOpen(coin, fillSz, id, fillPx, [slOid]);
+    if (!silent) await notifyHunterOpenFailed({ coin, stage: 'placeTP', reason: err.message, rolledBack: true });
+    return { ok: false };
+  }
+
+  // ── 8. Сохранить oids ──
+  updateHunterTriggerOids(id, { hunter_sl_oid: slOid, hunter_tp_oid: tpOid });
+
+  // ── 9. Notify ──
+  if (!silent) {
+    await notifyHunterOpenProd({
+      coin, sizeUsd: fillUsd, balance,
+      fillPx, markPrice, spikePct, sl, tp,
+      slOid, tpOid, slipLabel: slip.label, fee,
+    });
+  }
+
+  notify('afterOpen', {
+    coin, price: fillPx, sizeUsd: fillUsd, positionId: Number(id),
+    mode: 'PRODUCTION', strategy: 'hunter',
+  });
+
+  return { ok: true, positionId: Number(id), sizeUsd: fillUsd };
+}
+
+/**
+ * Откат при сбое размещения триггеров: cancel поставленных триггеров +
+ * market close открытой позиции + закрытие записи в БД.
+ *
+ * Best-effort: каждый шаг логируется отдельно, любой fail внутри не
+ * прерывает остальные. Главная цель — не оставить позицию без SL.
+ */
+async function rollbackHunterOpen(coin, sz, dbId, fillPx, triggerOids) {
+  const exchange = getExchange();
+
+  // Cancel уже поставленных триггеров (если есть)
+  for (const oid of triggerOids) {
+    try {
+      await exchange.exchange.cancelOrder({ coin: `${coin}-PERP`, o: oid });
+      logger.info(`[Executor] HUNTER ROLLBACK #${coin} — cancelled trigger oid=${oid}`);
+    } catch (err) {
+      logger.error(`[Executor] HUNTER ROLLBACK #${coin} — cancel oid=${oid} failed: ${err.message}`);
+    }
+  }
+
+  // Market close
+  let closeResult;
+  try {
+    closeResult = await retryWithBackoff(
+      () => exchange.custom.marketClose(`${coin}-PERP`, sz, undefined, MARKET_SLIPPAGE),
+      { label: `hunter-rollback-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
+    );
+  } catch (err) {
+    logger.error(`[Executor] HUNTER ROLLBACK #${coin} — marketClose THREW: ${err.message}. РУЧНОЕ ВМЕШАТЕЛЬСТВО!`);
+    return;
+  }
+
+  const closeFill = parseFillResponse(closeResult, 'CLOSE');
+  const closePx = closeFill.ok ? closeFill.avgPx : fillPx;
+  const closeNotional = (closeFill.ok ? closeFill.totalSz : sz) * closePx;
+  const totalFee = closeNotional * ONE_LEG + (sz * fillPx) * ONE_LEG;
+  // pricePnl на short: (entry − close) × sz
+  const pricePnl = sz * (fillPx - closePx);
+
+  try {
+    dbClosePosition(dbId, {
+      close_price:  closePx,
+      realized_pnl: pricePnl - totalFee,
+      fee_paid:     totalFee,
+      reason:       'hunter_rollback',
+    });
+    logger.info(
+      `[Executor] HUNTER ROLLBACK #${coin} closed: entry $${fillPx} → close $${closePx} | pnl $${(pricePnl - totalFee).toFixed(4)}`,
+    );
+  } catch (err) {
+    logger.error(`[Executor] HUNTER ROLLBACK #${coin} — dbClosePosition failed: ${err.message}`);
+  }
+
+  setCooldown(coin);
 }
 
 // ─────────────────────────────────────────────────

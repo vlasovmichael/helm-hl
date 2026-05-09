@@ -242,6 +242,34 @@ export async function notifyHunterOpen({ coin, sizeUsd, balance, price, spikePct
   );
 }
 
+export async function notifyHunterOpenProd({ coin, sizeUsd, balance, fillPx, markPrice, spikePct, sl, tp, slOid, tpOid, slipLabel, fee }) {
+  await sendMessage(
+    `🎯🔫 <b>[HUNTER PROD OPEN SHORT] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `💥 Спайк: <b>+${spikePct.toFixed(2)}%</b> за 2мин\n` +
+      `💰 Размер: <b>$${sizeUsd.toFixed(2)}</b> (50% от $${balance.toFixed(2)})\n` +
+      `💵 Mark→Fill: $${markPrice} → <b>$${fillPx}</b> <i>(${slipLabel})</i>\n` +
+      `🛑 SL: $${sl.toFixed(6)} <i>(+2%, oid=${slOid})</i>\n` +
+      `🎯 TP: $${tp.toFixed(6)} <i>(−3%, oid=${tpOid})</i>\n` +
+      `🏷 Entry fee: $${fee.toFixed(4)}\n` +
+      `<i>Триггеры стоят на бирже. Бот ждёт fill любого.</i>`,
+    true,
+  );
+}
+
+export async function notifyHunterOpenFailed({ coin, stage, reason, rolledBack }) {
+  await sendMessage(
+    `🎯⚠️ <b>[HUNTER PROD FAIL] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `Стадия: <b>${stage}</b>\n` +
+      `Причина: <code>${reason}</code>\n` +
+      (rolledBack
+        ? `<i>Позиция закрыта по market — без SL остаться нельзя.</i>`
+        : `<i>Позиция не открылась — ничего не сделано.</i>`),
+    true,
+  );
+}
+
 export async function notifyHunterSL({ coin, entryPrice, slPrice, pnl, fee, holdMinutes }) {
   const sign = pnl >= 0 ? "+" : "";
   await sendMessage(
