@@ -282,6 +282,27 @@ async function handleClose(signal, position) {
     return finalizeProdSniperPartial(position, emergencySlot, signal.reason);
   }
 
+  // Hunter PROD: перед market-close снимаем висящие SL/TP триггеры, чтобы они не остались
+  // на бирже после закрытия позиции (reduce_only их защищает от двойного fill'а, но это всё
+  // равно мусор и потенциальный риск на следующей позиции).
+  if (
+    config.isProduction &&
+    position.strategy_id === 'hunter' &&
+    position.mode === 'PRODUCTION' &&
+    (position.hunter_sl_oid || position.hunter_tp_oid)
+  ) {
+    const triggerOids = [position.hunter_sl_oid, position.hunter_tp_oid].filter(Boolean);
+    for (const oid of triggerOids) {
+      try {
+        await getExchange().exchange.cancelOrder({ coin: `${position.coin}-PERP`, o: oid });
+        logger.info(`[Executor] HUNTER pre-close cancel #${position.coin} trigger oid=${oid}`);
+      } catch (err) {
+        // Триггер мог уже сработать / быть отменённым reconciler'ом — это OK.
+        logger.debug(`[Executor] HUNTER pre-close cancel oid=${oid} failed (likely gone): ${err.message}`);
+      }
+    }
+  }
+
   if (config.isProduction) {
     return productionClose(signal, position);
   }
