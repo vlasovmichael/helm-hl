@@ -43,6 +43,14 @@ export function resetHunterCooldowns() {
 }
 
 /**
+ * Отметить SL-хит из внешнего пути (Iter C: SL trigger сработал на бирже).
+ * Применяет тот же post-SL cooldown что и tick-driven analyzeHunter.
+ */
+export function recordHunterSlExternal(coin, now = Date.now()) {
+  hunterPostSlCooldown.set(coin, now);
+}
+
+/**
  * Главный анализ Hunter'а.
  *
  * Логика:

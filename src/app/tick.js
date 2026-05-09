@@ -10,6 +10,7 @@ import { execute } from '../modules/executor/index.js';
 import { tickSniper } from '../modules/executor/sniper.js';
 import { runSmartAlerts } from './alerts.js';
 import { integrityCheck, orphanCheck } from './integrity.js';
+import { hunterReconcile } from './hunterReconcile.js';
 import { state } from './state.js';
 
 export async function tick() {
@@ -17,6 +18,16 @@ export async function tick() {
   state.tickRunning = true;
 
   try {
+    // ── Hunter Reconcile: SL/TP trigger fired on exchange? (Iter C) ──
+    // Запускается ДО integrityCheck, чтобы штатно закрыть hunter-позицию с
+    // правильным reason ('hunter_sl_external' / 'hunter_tp_external'),
+    // не отдавая её на откуп generic 'external_close'.
+    const hunterFired = await hunterReconcile();
+    if (hunterFired) {
+      logger.info('[Tick] Skipping after Hunter trigger fill detection');
+      return;
+    }
+
     // ── Integrity Check: детекция внешнего закрытия ──
     const externalClose = await integrityCheck();
     if (externalClose) {
