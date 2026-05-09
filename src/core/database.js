@@ -95,6 +95,44 @@ export function initDB() {
     logger.info('[DB] Migration: added side to history');
   }
 
+  // Migration: Hunter entry features — фичи рынка в момент OPEN, для будущего
+  // dynamic position sizing / leverage scoring. Все nullable; заполняются только
+  // hunter-стратегией. Зеркалятся в обе таблицы, чтобы переживать close.
+  const hunterEntryCols = [
+    ['entry_spike_pct',      'REAL'],  // спайк %/2мин (триггер сигнала)
+    ['entry_trend_15m_pct',  'REAL'],  // anti-trend rise за hunterTrendLookbackMin
+    ['entry_trend_1h_pct',   'REAL'],  // широкий тренд за 60мин
+    ['entry_funding_rate',   'REAL'],  // funding на момент входа
+    ['entry_volume_24h_usd', 'REAL'],  // dayNtlVlm
+    ['entry_oi_usd',         'REAL'],  // openInterest * markPx
+    ['entry_hour_utc',       'INTEGER'], // 0–23
+  ];
+  for (const [col, type] of hunterEntryCols) {
+    if (!posColumns.find(c => c.name === col)) {
+      db.exec(`ALTER TABLE positions ADD COLUMN ${col} ${type}`);
+      logger.info(`[DB] Migration: added ${col} to positions`);
+    }
+    if (!histColumns.find(c => c.name === col)) {
+      db.exec(`ALTER TABLE history ADD COLUMN ${col} ${type}`);
+      logger.info(`[DB] Migration: added ${col} to history`);
+    }
+  }
+
+  // Migration: Hunter exit features — пишутся только при close в history.
+  const hunterExitCols = [
+    ['mfe_usd',       'REAL'],
+    ['mae_usd',       'REAL'],
+    ['mfe_pct',       'REAL'],
+    ['mae_pct',       'REAL'],
+    ['hold_seconds',  'INTEGER'],
+  ];
+  for (const [col, type] of hunterExitCols) {
+    if (!histColumns.find(c => c.name === col)) {
+      db.exec(`ALTER TABLE history ADD COLUMN ${col} ${type}`);
+      logger.info(`[DB] Migration: added ${col} to history`);
+    }
+  }
+
   // tax_outbox — outbox для tax-manager (см. INTEGRATION.md).
   // Бизнес-код пишет сюда, pusher cron драйнит в HTTPS+HMAC.
   db.exec(`
@@ -143,11 +181,30 @@ export function savePosition(data) {
     side:          'short',
     hunter_sl_oid: null,
     hunter_tp_oid: null,
+    entry_spike_pct:      null,
+    entry_trend_15m_pct:  null,
+    entry_trend_1h_pct:   null,
+    entry_funding_rate:   null,
+    entry_volume_24h_usd: null,
+    entry_oi_usd:         null,
+    entry_hour_utc:       null,
     ...data,
   };
   const stmt = getDb().prepare(`
-    INSERT INTO positions (coin, size_usd, entry_price, entry_apy, entry_time, mode, strategy_id, sl_price, tp_price, entry_equity, side, hunter_sl_oid, hunter_tp_oid)
-    VALUES (@coin, @size_usd, @entry_price, @entry_apy, @entry_time, @mode, @strategy_id, @sl_price, @tp_price, @entry_equity, @side, @hunter_sl_oid, @hunter_tp_oid)
+    INSERT INTO positions (
+      coin, size_usd, entry_price, entry_apy, entry_time, mode,
+      strategy_id, sl_price, tp_price, entry_equity, side,
+      hunter_sl_oid, hunter_tp_oid,
+      entry_spike_pct, entry_trend_15m_pct, entry_trend_1h_pct,
+      entry_funding_rate, entry_volume_24h_usd, entry_oi_usd, entry_hour_utc
+    )
+    VALUES (
+      @coin, @size_usd, @entry_price, @entry_apy, @entry_time, @mode,
+      @strategy_id, @sl_price, @tp_price, @entry_equity, @side,
+      @hunter_sl_oid, @hunter_tp_oid,
+      @entry_spike_pct, @entry_trend_15m_pct, @entry_trend_1h_pct,
+      @entry_funding_rate, @entry_volume_24h_usd, @entry_oi_usd, @entry_hour_utc
+    )
   `);
   const result = stmt.run(row);
   return result.lastInsertRowid;
@@ -178,13 +235,25 @@ export function closePosition(id, data) {
   }
 
   const insertHistory = getDb().prepare(`
-    INSERT INTO history (coin, entry_price, close_price, realized_pnl, fee_paid, mode, closed_at, reason, strategy_id, side)
-    VALUES (@coin, @entry_price, @close_price, @realized_pnl, @fee_paid, @mode, @closed_at, @reason, @strategy_id, @side)
+    INSERT INTO history (
+      coin, entry_price, close_price, realized_pnl, fee_paid, mode, closed_at, reason, strategy_id, side,
+      entry_spike_pct, entry_trend_15m_pct, entry_trend_1h_pct,
+      entry_funding_rate, entry_volume_24h_usd, entry_oi_usd, entry_hour_utc,
+      mfe_usd, mae_usd, mfe_pct, mae_pct, hold_seconds
+    )
+    VALUES (
+      @coin, @entry_price, @close_price, @realized_pnl, @fee_paid, @mode, @closed_at, @reason, @strategy_id, @side,
+      @entry_spike_pct, @entry_trend_15m_pct, @entry_trend_1h_pct,
+      @entry_funding_rate, @entry_volume_24h_usd, @entry_oi_usd, @entry_hour_utc,
+      @mfe_usd, @mae_usd, @mfe_pct, @mae_pct, @hold_seconds
+    )
   `);
 
   const updatePosition = getDb().prepare(
     'UPDATE positions SET status = ? WHERE id = ?',
   );
+
+  const exit = data.exitFeatures || {};
 
   // Атомарно: history INSERT + positions UPDATE в одной транзакции
   const tx = getDb().transaction(() => {
@@ -199,6 +268,20 @@ export function closePosition(id, data) {
       reason:       data.reason,
       strategy_id:  position.strategy_id || 'carry',
       side:         position.side || 'short',
+      // Hunter entry features (mirror from positions; null для carry/fade)
+      entry_spike_pct:      position.entry_spike_pct      ?? null,
+      entry_trend_15m_pct:  position.entry_trend_15m_pct  ?? null,
+      entry_trend_1h_pct:   position.entry_trend_1h_pct   ?? null,
+      entry_funding_rate:   position.entry_funding_rate   ?? null,
+      entry_volume_24h_usd: position.entry_volume_24h_usd ?? null,
+      entry_oi_usd:         position.entry_oi_usd         ?? null,
+      entry_hour_utc:       position.entry_hour_utc       ?? null,
+      // Hunter exit features (опциональны — передаются только для hunter)
+      mfe_usd:      exit.mfe_usd      ?? null,
+      mae_usd:      exit.mae_usd      ?? null,
+      mfe_pct:      exit.mfe_pct      ?? null,
+      mae_pct:      exit.mae_pct      ?? null,
+      hold_seconds: exit.hold_seconds ?? null,
     });
     updatePosition.run('CLOSED', id);
   });

@@ -345,7 +345,19 @@ export async function scan() {
     // ── Hunter scope: shirоkий volume-floor, отдельная вселенная ──
     const inHunterSet = hunterSet.size === 0 || hunterSet.has(coinUpper);
     if (inHunterSet) {
-      hunterResults.push({ coin, price });
+      // Доп. фичи рынка для extended-логирования (см. database.js миграция).
+      // Все nullable: при missing в API будут null'ы в БД, не блокируем сигнал.
+      const fundingRate = parseFloat(ctx.funding ?? NaN);
+      const dayNtlVlm   = parseFloat(ctx.dayNtlVlm ?? NaN);
+      const oiCoin      = parseFloat(ctx.openInterest ?? NaN);
+      const oiUsd       = Number.isFinite(oiCoin) ? oiCoin * price : null;
+      hunterResults.push({
+        coin,
+        price,
+        fundingRate:   Number.isFinite(fundingRate) ? fundingRate : null,
+        volume24hUsd:  Number.isFinite(dayNtlVlm)   ? dayNtlVlm   : null,
+        oiUsd,
+      });
       // Hunter читает priceHistory для детекции спайков — наполняем её
       // для всего hunter-scope (шире, чем carry/fade видят).
       pushPriceHistory(coin, price);

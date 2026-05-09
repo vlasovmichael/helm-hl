@@ -171,11 +171,11 @@ async function handleOpen(signal) {
         return { ok: false };
       }
       return productionHunterOpen(
-        signal.coin, signal.price, signal.spikePct, signal.sl, signal.tp, false,
+        signal.coin, signal.price, signal.spikePct, signal.sl, signal.tp, false, signal.entryFeatures,
       );
     }
     return hunterPaperOpen(
-      signal.coin, signal.price, signal.spikePct, signal.sl, signal.tp, false,
+      signal.coin, signal.price, signal.spikePct, signal.sl, signal.tp, false, signal.entryFeatures,
     );
   }
 

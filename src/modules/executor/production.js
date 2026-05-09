@@ -36,6 +36,7 @@ import {
 import { reconcile } from './reconciler.js';
 import { sleep } from './reconciler.js';
 import { gate, notify } from './hooks.js';
+import { consumeHunterMfeMae } from '../strategistSniper.js';
 import {
   notifyProductionOpen, notifyOpenFailed, notifyOpenRejected,
   notifyOpenSkipped, notifySlippageBan,
@@ -383,7 +384,7 @@ async function placeHunterTrigger(coin, sz, triggerPx, tpsl) {
  * @param {number} tp        — TP price (ниже entry для SHORT)
  * @param {boolean} [silent=false]
  */
-export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, silent = false) {
+export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, silent = false, entryFeatures = null) {
   const exchange = getExchange();
 
   // ── 1. Баланс ──
@@ -483,6 +484,7 @@ export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, si
     tp_price:     tp,
     entry_equity: entryEquity,
     side:         'short',
+    ...(entryFeatures || {}),
   });
 
   logger.info(
@@ -752,11 +754,25 @@ export async function productionClose(signal, position, silent = false) {
     calcPnl(position, fill.avgPx, holdHours, realFundingUsd);
 
   // ── 5. Закрываем в БД ────────────────────────
+  // Hunter: подмешиваем MFE/MAE из tick-трекера + hold_seconds.
+  let exitFeatures = null;
+  if (position.strategy_id === 'hunter') {
+    const mm = consumeHunterMfeMae(position.id);
+    exitFeatures = {
+      mfe_usd:      mm?.mfeUsd ?? null,
+      mae_usd:      mm?.maeUsd ?? null,
+      mfe_pct:      mm?.mfePct ?? null,
+      mae_pct:      mm?.maePct ?? null,
+      hold_seconds: Math.round(holdMs / 1000),
+    };
+  }
+
   dbClosePosition(position.id, {
     close_price:  fill.avgPx,
     realized_pnl: realizedPnl,
     fee_paid:     totalFee,
     reason:       signal.reason,
+    exitFeatures,
   });
 
   const sign = realizedPnl >= 0 ? "+" : "";

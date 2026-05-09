@@ -20,7 +20,7 @@ import {
 import { getExchange, getPositions } from '../modules/exchange.js';
 import { ONE_LEG } from '../modules/executor/math.js';
 import { setCooldown } from '../modules/executor/state.js';
-import { recordHunterSlExternal } from '../modules/strategistSniper.js';
+import { recordHunterSlExternal, consumeHunterMfeMae } from '../modules/strategistSniper.js';
 import {
   notifyHunterSL,
   notifyHunterTP,
@@ -72,12 +72,23 @@ async function finalizeHunterTrigger(dbPos, which) {
   const otherOid = isSl ? dbPos.hunter_tp_oid : dbPos.hunter_sl_oid;
   await cancelTriggerSafe(dbPos.coin, otherOid);
 
+  const holdMs = Date.now() - dbPos.entry_time;
+  const mm = consumeHunterMfeMae(dbPos.id);
+  const exitFeatures = {
+    mfe_usd:      mm?.mfeUsd ?? null,
+    mae_usd:      mm?.maeUsd ?? null,
+    mfe_pct:      mm?.mfePct ?? null,
+    mae_pct:      mm?.maePct ?? null,
+    hold_seconds: Math.round(holdMs / 1000),
+  };
+
   try {
     dbClosePosition(dbPos.id, {
       close_price:  closePrice,
       realized_pnl: realizedPnl,
       fee_paid:     totalFee,
       reason,
+      exitFeatures,
     });
   } catch (err) {
     logger.error(`[HunterRecon] dbClosePosition #${dbPos.coin} failed: ${err.message}`);

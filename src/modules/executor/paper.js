@@ -22,6 +22,7 @@ import {
   notifyPaperOpen, notifyPaperClose, notifyCircuitBreaker,
   notifyHunterOpen, notifyHunterSL, notifyHunterTP,
 } from './notifications.js';
+import { consumeHunterMfeMae } from '../strategistSniper.js';
 
 /**
  * Определяет баланс для расчёта размера позиции.
@@ -114,7 +115,7 @@ export async function paperOpen(coin, price, apy, silent = false, strategyId = '
  * @param {boolean} [silent=false]
  * @returns {Promise<{ ok: boolean, positionId?: number, sizeUsd?: number }>}
  */
-export async function hunterPaperOpen(coin, price, spikePct, sl, tp, silent = false) {
+export async function hunterPaperOpen(coin, price, spikePct, sl, tp, silent = false, entryFeatures = null) {
   const balance = await getPaperBalance();
 
   if (balance <= 0) {
@@ -143,6 +144,7 @@ export async function hunterPaperOpen(coin, price, spikePct, sl, tp, silent = fa
     strategy_id: 'hunter',
     sl_price:    sl,
     tp_price:    tp,
+    ...(entryFeatures || {}),
   });
 
   logger.info(
@@ -197,11 +199,26 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
   }
   const realizedPnl = baseRealized + pricePnl;
 
+  // Hunter: подмешиваем MFE/MAE из tick-трекера + hold_seconds.
+  // Для carry/fade — exitFeatures null (поля в history останутся NULL).
+  let exitFeatures = null;
+  if (position.strategy_id === 'hunter') {
+    const mm = consumeHunterMfeMae(position.id);
+    exitFeatures = {
+      mfe_usd:      mm?.mfeUsd ?? null,
+      mae_usd:      mm?.maeUsd ?? null,
+      mfe_pct:      mm?.mfePct ?? null,
+      mae_pct:      mm?.maePct ?? null,
+      hold_seconds: Math.round(holdMs / 1000),
+    };
+  }
+
   dbClosePosition(position.id, {
     close_price:  closePrice,
     realized_pnl: realizedPnl,
     fee_paid:     totalFee,
     reason:       signal.reason,
+    exitFeatures,
   });
 
   // Re-entry cooldown (paper mode тоже)

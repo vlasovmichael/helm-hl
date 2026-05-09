@@ -35,11 +35,57 @@ const hunterCooldownMap   = new Map();  // coin → last-signal timestamp (re-de
 const hunterPostSlCooldown = new Map(); // coin → SL timestamp (длинный cooldown после SL)
 let lastHeartbeatAt = 0;
 
+// MFE/MAE per open hunter position. Обновляется на каждом тике в checkHunterExit,
+// читается paperClose/hunterReconcile при закрытии. Очищается через
+// clearHunterMfeMae(positionId) после INSERT в history.
+// Структура: positionId → { mfeUsd, maeUsd, mfePct, maePct }
+const hunterMfeMaeMap = new Map();
+
+const HUNTER_TREND_1H_MIN = 60;  // окно для entry_trend_1h_pct (логирование, не фильтр)
+
 /** Тестовый helper — сброс cooldown'ов + heartbeat timer. */
 export function resetHunterCooldowns() {
   hunterCooldownMap.clear();
   hunterPostSlCooldown.clear();
+  hunterMfeMaeMap.clear();
   lastHeartbeatAt = 0;
+}
+
+/**
+ * Возвращает накопленные MFE/MAE для hunter-позиции и удаляет запись.
+ * Вызывается из paperClose / hunterReconcile в момент закрытия.
+ *
+ * @param {number} positionId
+ * @returns {{mfeUsd, maeUsd, mfePct, maePct} | null}
+ */
+export function consumeHunterMfeMae(positionId) {
+  const v = hunterMfeMaeMap.get(positionId);
+  if (!v) return null;
+  hunterMfeMaeMap.delete(positionId);
+  return v;
+}
+
+/**
+ * Обновляет MFE/MAE для hunter-позиции по текущей цене.
+ * Hunter — short-only: profit при падении цены, loss при росте.
+ * @param {Object} position — строка БД с id, entry_price, size_usd, side
+ * @param {number} currentPrice
+ */
+function updateMfeMae(position, currentPrice) {
+  if (!position?.id || !position.entry_price || !position.size_usd) return;
+  const entry = position.entry_price;
+  // Hunter SHORT: pnlPct > 0 при падении цены ниже entry.
+  const pnlPct = ((entry - currentPrice) / entry) * 100;
+  const pnlUsd = (position.size_usd * (entry - currentPrice)) / entry;
+
+  let v = hunterMfeMaeMap.get(position.id);
+  if (!v) {
+    v = { mfeUsd: pnlUsd, maeUsd: pnlUsd, mfePct: pnlPct, maePct: pnlPct };
+    hunterMfeMaeMap.set(position.id, v);
+    return;
+  }
+  if (pnlUsd > v.mfeUsd) { v.mfeUsd = pnlUsd; v.mfePct = pnlPct; }
+  if (pnlUsd < v.maeUsd) { v.maeUsd = pnlUsd; v.maePct = pnlPct; }
 }
 
 /**
@@ -77,7 +123,7 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
   // ── Детекция спайка: проходим весь список, считаем best-кандидата ──
   // Делаем это даже если slot занят чужой стратегией — нужно для heartbeat'а
   // (видимость "насколько близки к сигналу" при занятом слоте).
-  let best = null;  // { coin, price, past, pct }
+  let best = null;  // { coin, price, past, pct, item, trend15mPct }
   let bestUnqualified = null;  // лучший по pct даже если ниже порога / в cooldown — для heartbeat
   const data = scoutData ?? [];
   for (const item of data) {
@@ -101,20 +147,21 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
     // Anti-trend filter: если за HUNTER_TREND_LOOKBACK_MIN цена выросла на ≥
     // HUNTER_TREND_MAX_RISE_PCT — это устойчивый pump, не reversion-кандидат.
     // Если истории нет (свежий старт / новая монета) — пропускаем фильтр.
+    let trend15mPct = null;
     const trendPast = getPriceNMinAgo(item.coin, HUNTER_TREND_LOOKBACK_MIN, now);
     if (trendPast !== null) {
-      const trendRise = ((item.price - trendPast) / trendPast) * 100;
-      if (trendRise >= HUNTER_TREND_MAX_RISE_PCT) {
+      trend15mPct = ((item.price - trendPast) / trendPast) * 100;
+      if (trend15mPct >= HUNTER_TREND_MAX_RISE_PCT) {
         logger.info(
           `[Hunter] ⛔ #${item.coin} спайк +${pct.toFixed(2)}%/2мин ` +
-            `пропущен: тренд +${trendRise.toFixed(2)}% за ${HUNTER_TREND_LOOKBACK_MIN}мин ≥ ${HUNTER_TREND_MAX_RISE_PCT}%`,
+            `пропущен: тренд +${trend15mPct.toFixed(2)}% за ${HUNTER_TREND_LOOKBACK_MIN}мин ≥ ${HUNTER_TREND_MAX_RISE_PCT}%`,
         );
         continue;
       }
     }
 
     if (!best || pct > best.pct) {
-      best = { coin: item.coin, price: item.price, past, pct };
+      best = { coin: item.coin, price: item.price, past, pct, item, trend15mPct };
     }
   }
 
@@ -135,6 +182,23 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
   const sl = best.price * (1 + HUNTER_SL_PCT / 100);
   const tp = best.price * (1 - HUNTER_TP_PCT / 100);
 
+  // Extended logging — фичи рынка в момент сигнала.
+  // Все nullable: missing → null в БД, не блокируют сигнал.
+  const trend1hPast = getPriceNMinAgo(best.coin, HUNTER_TREND_1H_MIN, now);
+  const trend1hPct  = trend1hPast != null
+    ? ((best.price - trend1hPast) / trend1hPast) * 100
+    : null;
+
+  const entryFeatures = {
+    entry_spike_pct:      best.pct,
+    entry_trend_15m_pct:  best.trend15mPct,
+    entry_trend_1h_pct:   trend1hPct,
+    entry_funding_rate:   best.item?.fundingRate  ?? null,
+    entry_volume_24h_usd: best.item?.volume24hUsd ?? null,
+    entry_oi_usd:         best.item?.oiUsd        ?? null,
+    entry_hour_utc:       new Date(now).getUTCHours(),
+  };
+
   return {
     action:      'OPEN',
     strategy_id: 'hunter',
@@ -143,6 +207,7 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
     direction:   'SHORT',
     sl, tp,
     spikePct:    best.pct,
+    entryFeatures,
   };
 }
 
@@ -191,6 +256,10 @@ function emitHeartbeat(data, activePosition, bestUnqualified, now) {
 function checkHunterExit(position, scoutData) {
   const item = scoutData?.find((x) => x.coin === position.coin);
   if (!item) return { action: 'HOLD' };  // нет свежей цены — ждём следующий тик
+
+  // Обновляем MFE/MAE на каждом тике (до проверки SL/TP — захватываем краевые
+  // значения тоже). Используется при close для записи в history.
+  updateMfeMae(position, item.price);
 
   if (position.sl_price != null && item.price >= position.sl_price) {
     // Регистрируем post-SL cooldown — Hunter не вернётся к этой монете N мин.
