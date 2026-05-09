@@ -1,8 +1,6 @@
 /* ──────────────────────────────────────────────────────────────────
    HL Scanner — Dashboard
    Aesthetic: calm, GitHub Primer-inspired. Mona Sans + JetBrains Mono.
-   Bricolage Grotesque italic is reserved exclusively for the hero
-   equity number — every other display uses the body sans for consistency.
    ────────────────────────────────────────────────────────────────── */
 
 :root {
@@ -12,8 +10,6 @@
   --font-mono:
     'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo,
     Consolas, 'Liberation Mono', monospace;
-  --font-hero:
-    'Bricolage Grotesque', 'Mona Sans', system-ui, sans-serif;
 
   --radius-sm: 4px;
   --radius:    6px;
@@ -140,10 +136,9 @@ body {
     border-bottom: 1px solid var(--border);
   }
   .tape-bar .tape-equity {
-    font-family: var(--font-hero);
-    font-style: italic;
-    font-weight: 500;
-    font-size: 22px;
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: 18px;
     letter-spacing: -0.02em;
     font-variant-numeric: tabular-nums;
   }
@@ -193,16 +188,14 @@ header {
   margin-bottom: 6px;
 }
 
-/* Hero number — Bricolage italic (preserved per user request) */
 .equity-group .value {
-  font-family: var(--font-hero);
-  font-style: italic;
-  font-weight: 500;
-  font-size: clamp(48px, 7vw, 76px);
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 42px;
   letter-spacing: -0.03em;
-  line-height: 1;
+  line-height: 1.1;
   font-variant-numeric: tabular-nums;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
   color: var(--text-primary);
 }
 
@@ -886,7 +879,7 @@ footer {
     margin-bottom: 24px;
     padding-bottom: 20px;
   }
-  .equity-group .value { font-size: clamp(40px, 12vw, 64px); }
+  .equity-group .value { font-size: 32px; }
 
   .meta-group {
     flex-direction: row;
@@ -934,8 +927,112 @@ footer {
   .grid-item { padding: 12px 14px; }
   .grid-item .item-value { font-size: 16px; }
   .activity-item { font-size: 12px; }
-  .signals-table { font-size: 11px; }
-  .signals-table th, .signals-table td { padding: 6px 8px; }
+}
+
+/* ──────────────────────── Hunter Signals — mobile card layout
+   Table → stacked cards. Each row becomes a 3-row grid. No horizontal scroll. */
+@media (max-width: 720px) {
+  .signals-table-wrap {
+    overflow-x: visible;
+    margin: 0;
+    padding: 0;
+  }
+  .signals-table { display: block; font-size: 12px; }
+  .signals-table thead { display: none; }
+  .signals-table tbody { display: flex; flex-direction: column; gap: 8px; }
+
+  .signals-table tr {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      'rank  pair    price'
+      'spike trend   suggest'
+      'sltp  sltp    sltp';
+    gap: 6px 10px;
+    align-items: center;
+    padding: 11px 12px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    border-left-width: 3px;
+  }
+  .signals-table tr.row-short { border-left-color: var(--red); }
+  .signals-table tr.row-long  { border-left-color: var(--green); }
+  .signals-table tr.is-active {
+    border-left-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  /* Empty-state row: span the whole "card" */
+  .signals-table tr:has(td[colspan]) {
+    display: block;
+    border-left-width: 1px;
+  }
+
+  .signals-table td {
+    display: block;
+    padding: 0;
+    border: none;
+    background: transparent !important;     /* overrides .num-pos / .num-neg pill bg */
+    border-radius: 0 !important;
+  }
+  .signals-table td:first-child { box-shadow: none !important; }
+
+  /* Column → grid area mapping */
+  .signals-table td:nth-child(1) {
+    grid-area: rank;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .signals-table td:nth-child(2) {
+    grid-area: pair;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-primary);
+  }
+  .signals-table td:nth-child(3) {
+    grid-area: price;
+    text-align: right;
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .signals-table td:nth-child(4),
+  .signals-table td:nth-child(5) {
+    /* Spike / Trend — keep coloured pill but inline */
+    font-size: 11px;
+  }
+  .signals-table td:nth-child(4) { grid-area: spike; }
+  .signals-table td:nth-child(5) { grid-area: trend; }
+
+  /* Restore the small coloured-background pill on Spike/Trend cells (mobile) */
+  .signals-table td.num-pos-strong, .signals-table td.num-pos {
+    background: var(--green-soft) !important;
+    border-radius: 4px !important;
+    padding: 2px 6px !important;
+    width: fit-content;
+  }
+  .signals-table td.num-neg-strong, .signals-table td.num-neg {
+    background: var(--red-soft) !important;
+    border-radius: 4px !important;
+    padding: 2px 6px !important;
+    width: fit-content;
+  }
+
+  .signals-table td:nth-child(6) {
+    grid-area: suggest;
+    text-align: right;
+    font-size: 11px;
+  }
+  .signals-table td:nth-child(7) {
+    grid-area: sltp;
+    color: var(--text-muted);
+    font-size: 11px;
+    padding-top: 4px !important;
+    border-top: 1px solid var(--hairline);
+  }
+  /* Re-add small spacing on top edge of sltp row */
+  .signals-table td:nth-child(7).num-pos,
+  .signals-table td:nth-child(7).num-neg { padding-top: 4px !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
