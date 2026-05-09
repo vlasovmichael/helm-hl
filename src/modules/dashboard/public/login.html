@@ -2,12 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sign in — HL Scanner</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <title>Sign in · HL Scanner</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Mona+Sans:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,500&family=JetBrains+Mono:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
     <script>
@@ -33,171 +36,192 @@
         align-items: center;
         justify-content: center;
         padding: 24px;
+        background: var(--canvas-subtle);
+      }
+      .login-shell {
+        width: 100%;
+        max-width: 340px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .login-mark {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 4px;
+      }
+      .login-logo {
+        width: 48px;
+        height: 48px;
+        border-radius: 10px;
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: var(--shadow-sm);
+      }
+      .login-logo svg { display: block; }
+      .login-wordmark {
+        font-family: var(--font-hero);
+        font-style: italic;
+        font-weight: 500;
+        font-size: 22px;
+        letter-spacing: -0.02em;
+        color: var(--text-primary);
       }
       .login-card {
         background: var(--card-bg);
         border: 1px solid var(--border);
-        border-radius: 16px;
-        padding: 40px 36px;
-        width: 100%;
-        max-width: 380px;
-        box-shadow: var(--shadow);
-      }
-      .login-brand {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 28px;
-      }
-      .login-brand-dot {
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background: var(--accent);
-        box-shadow: 0 0 12px rgba(99, 91, 255, 0.6);
-      }
-      .login-brand-text {
-        font-family: var(--font-mono);
-        font-weight: 600;
-        font-size: 13px;
-        color: var(--text-secondary);
-        letter-spacing: 0.05em;
-        text-transform: uppercase;
+        border-radius: var(--radius-lg);
+        padding: 28px 24px;
+        box-shadow: var(--shadow-sm);
       }
       .login-title {
-        font-size: 26px;
-        font-weight: 700;
-        letter-spacing: -0.02em;
-        margin-bottom: 6px;
+        font-size: 22px;
+        font-weight: 500;
+        letter-spacing: -0.01em;
+        margin-bottom: 4px;
+        text-align: center;
+        color: var(--text-primary);
       }
       .login-subtitle {
-        color: var(--text-secondary);
-        font-size: 14px;
-        margin-bottom: 28px;
+        color: var(--text-muted);
+        font-size: 13px;
+        text-align: center;
+        margin-bottom: 22px;
       }
+      .login-error {
+        background: var(--red-soft);
+        border: 1px solid var(--red-line);
+        color: var(--red);
+        padding: 8px 12px;
+        border-radius: var(--radius);
+        font-size: 13px;
+        margin-bottom: 14px;
+        display: none;
+      }
+      .login-error.visible { display: block; }
       .login-form {
         display: flex;
         flex-direction: column;
         gap: 14px;
       }
-      .login-field {
-        display: flex;
-        flex-direction: column;
-        gap: 6px;
-      }
+      .login-field { display: flex; flex-direction: column; gap: 6px; }
       .login-field label {
         font-size: 12px;
-        color: var(--text-secondary);
+        color: var(--text-primary);
         font-weight: 600;
-        letter-spacing: 0.03em;
-        text-transform: uppercase;
       }
       .login-input {
-        background: var(--card-bg-elev);
+        background: var(--card-bg);
         border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 11px 14px;
+        border-radius: 6px;
+        padding: 7px 12px;
         color: var(--text-primary);
         font-family: var(--font-sans);
         font-size: 14px;
-        transition: border-color 0.15s, background 0.15s;
+        line-height: 20px;
+        transition: border-color 0.12s, box-shadow 0.12s;
         width: 100%;
-      }
-      .login-input:focus {
         outline: none;
+      }
+      .login-input::placeholder { color: var(--text-muted); }
+      .login-input:hover { border-color: var(--border-strong); }
+      .login-input:focus {
         border-color: var(--accent);
-        background: var(--card-bg);
+        box-shadow: 0 0 0 3px var(--accent-soft);
       }
       .login-button {
-        background: var(--accent);
-        color: #fff;
-        border: none;
-        border-radius: 8px;
-        padding: 12px 16px;
+        background: var(--green);
+        color: #ffffff;
+        border: 1px solid color-mix(in srgb, var(--green) 70%, #000);
+        border-radius: 6px;
+        padding: 7px 16px;
         font-family: var(--font-sans);
-        font-weight: 600;
+        font-weight: 500;
         font-size: 14px;
+        line-height: 20px;
         cursor: pointer;
-        transition: background 0.15s;
-        margin-top: 8px;
+        transition: background 0.12s, border-color 0.12s, transform 0.06s;
+        margin-top: 4px;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.18),
+          0 1px 0 rgba(31, 35, 40, 0.04);
       }
       .login-button:hover {
-        background: var(--accent-hover);
+        background: color-mix(in srgb, var(--green) 90%, #000);
       }
-      .login-button:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-      .login-error {
-        background: rgba(239, 68, 68, 0.1);
-        border: 1px solid rgba(239, 68, 68, 0.25);
-        color: var(--red);
-        padding: 10px 14px;
-        border-radius: 8px;
-        font-size: 13px;
-        margin-bottom: 16px;
-        display: none;
-      }
-      .login-error.visible { display: block; }
-      .login-footer {
-        margin-top: 24px;
+      .login-button:active { transform: translateY(1px); }
+      .login-button:disabled { opacity: 0.6; cursor: not-allowed; }
+
+      .login-meta {
         text-align: center;
         font-family: var(--font-mono);
         font-size: 11px;
         color: var(--text-muted);
-        letter-spacing: 0.04em;
+        letter-spacing: 0.02em;
       }
+
       @media (max-width: 480px) {
         body { padding: 16px; }
-        .login-card {
-          padding: 28px 22px;
-          border-radius: 12px;
-        }
-        .login-title { font-size: 22px; }
+        .login-shell { max-width: 100%; }
+        .login-card { padding: 22px 18px; border-radius: 10px; }
+        .login-title { font-size: 20px; }
       }
     </style>
   </head>
   <body>
-    <div class="login-card">
-      <div class="login-brand">
-        <div class="login-brand-dot"></div>
-        <div class="login-brand-text">HL Scanner</div>
+    <div class="login-shell">
+      <div class="login-mark">
+        <div class="login-logo" aria-hidden="true">
+          <svg width="28" height="28" viewBox="0 0 32 32">
+            <path d="M5 23 L11 17 L15 19 L21 11 L27 13" fill="none" stroke="var(--green)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="27" cy="13" r="2" fill="var(--green)"/>
+          </svg>
+        </div>
+        <div class="login-wordmark">HL Scanner</div>
       </div>
-      <div class="login-title">Sign in</div>
-      <div class="login-subtitle">Enter your dashboard credentials.</div>
 
-      <div class="login-error" id="login-error"></div>
+      <div class="login-card">
+        <div class="login-title">Sign in</div>
+        <div class="login-subtitle">Trading terminal · single user</div>
 
-      <form class="login-form" id="login-form" method="POST" action="/login">
-        <div class="login-field">
-          <label for="user">Username</label>
-          <input
-            class="login-input"
-            type="text"
-            id="user"
-            name="user"
-            autocomplete="username"
-            autofocus
-            required
-          />
-        </div>
-        <div class="login-field">
-          <label for="pass">Password</label>
-          <input
-            class="login-input"
-            type="password"
-            id="pass"
-            name="pass"
-            autocomplete="current-password"
-            required
-          />
-        </div>
-        <button class="login-button" type="submit" id="login-submit">
-          Sign in
-        </button>
-      </form>
+        <div class="login-error" id="login-error"></div>
 
-      <div class="login-footer">Terminal access · single user</div>
+        <form class="login-form" id="login-form" method="POST" action="/login">
+          <div class="login-field">
+            <label for="user">Username</label>
+            <input
+              class="login-input"
+              type="text"
+              id="user"
+              name="user"
+              autocomplete="username"
+              autofocus
+              required
+            />
+          </div>
+          <div class="login-field">
+            <label for="pass">Password</label>
+            <input
+              class="login-input"
+              type="password"
+              id="pass"
+              name="pass"
+              autocomplete="current-password"
+              required
+            />
+          </div>
+          <button class="login-button" type="submit" id="login-submit">
+            Sign in
+          </button>
+        </form>
+      </div>
+
+      <div class="login-meta">Hyperliquid scanner · v1</div>
     </div>
 
     <script>
