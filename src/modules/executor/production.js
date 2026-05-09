@@ -2,6 +2,7 @@
 //  Production Mode — реальные позиции на Hyperliquid
 // ─────────────────────────────────────────────────
 
+import { config } from '../../core/config.js';
 import { logger } from '../../core/logger.js';
 import { retryWithBackoff } from '../../core/retry.js';
 import {
@@ -409,19 +410,24 @@ export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, si
     return { ok: false };
   }
 
-  const { sizeUsd, sz, tooSmall } = calcSize(balance, markPrice, szDecimals, HUNTER_BALANCE_UTILIZATION);
+  // Leverage расширяет нотиональный размер позиции: effectiveBalance = balance × leverage.
+  // На $100 при util=0.5, lev=3 → $150 поза, маржа всё ещё $50.
+  const leverage = config.trading.hunterLeverage;
+  const effectiveBalance = balance * leverage;
+  const { sizeUsd, sz, tooSmall } = calcSize(effectiveBalance, markPrice, szDecimals, HUNTER_BALANCE_UTILIZATION);
   if (tooSmall) {
     logger.warn(
-      `[Executor] [HUNTER SKIP] #${coin} — size $${sizeUsd.toFixed(2)} / sz=${sz} (50% от $${balance.toFixed(2)})`,
+      `[Executor] [HUNTER SKIP] #${coin} — size $${sizeUsd.toFixed(2)} / sz=${sz} ` +
+        `(50% от $${balance.toFixed(2)} × ${leverage}x lev = $${effectiveBalance.toFixed(2)})`,
     );
     return { ok: false };
   }
 
-  // ── 3. Leverage 1x ──
+  // ── 3. Leverage ──
   try {
-    await setLeverage(coin, 1);
+    await setLeverage(coin, leverage);
   } catch (err) {
-    logger.error(`[Executor] PROD HUNTER OPEN #${coin} — setLeverage failed: ${err.message}`);
+    logger.error(`[Executor] PROD HUNTER OPEN #${coin} — setLeverage(${leverage}) failed: ${err.message}`);
     if (!silent) await notifyHunterOpenFailed({ coin, stage: 'setLeverage', reason: err.message, rolledBack: false });
     return { ok: false };
   }
@@ -513,7 +519,7 @@ export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, si
   // ── 9. Notify ──
   if (!silent) {
     await notifyHunterOpenProd({
-      coin, sizeUsd: fillUsd, balance,
+      coin, sizeUsd: fillUsd, balance, leverage,
       fillPx, markPrice, spikePct, sl, tp,
       slOid, tpOid, slipLabel: slip.label, fee,
     });

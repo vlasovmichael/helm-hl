@@ -242,12 +242,13 @@ export async function notifyHunterOpen({ coin, sizeUsd, balance, price, spikePct
   );
 }
 
-export async function notifyHunterOpenProd({ coin, sizeUsd, balance, fillPx, markPrice, spikePct, sl, tp, slOid, tpOid, slipLabel, fee }) {
+export async function notifyHunterOpenProd({ coin, sizeUsd, balance, leverage, fillPx, markPrice, spikePct, sl, tp, slOid, tpOid, slipLabel, fee }) {
+  const levSuffix = leverage > 1 ? ` × <b>${leverage}x</b>` : '';
   await sendMessage(
     `🎯🔫 <b>[HUNTER PROD OPEN SHORT] #${coin}</b>\n` +
       `<code>─────────────────────</code>\n` +
       `💥 Спайк: <b>+${spikePct.toFixed(2)}%</b> за 2мин\n` +
-      `💰 Размер: <b>$${sizeUsd.toFixed(2)}</b> (50% от $${balance.toFixed(2)})\n` +
+      `💰 Размер: <b>$${sizeUsd.toFixed(2)}</b> (50% от $${balance.toFixed(2)}${levSuffix})\n` +
       `💵 Mark→Fill: $${markPrice} → <b>$${fillPx}</b> <i>(${slipLabel})</i>\n` +
       `🛑 SL: $${sl.toFixed(6)} <i>(+2%, oid=${slOid})</i>\n` +
       `🎯 TP: $${tp.toFixed(6)} <i>(−3%, oid=${tpOid})</i>\n` +

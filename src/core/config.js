@@ -182,6 +182,15 @@ function loadConfig() {
   // в isProduction режиме реальные ордера НЕ отправляются пока HUNTER_PROD_ENABLED=true.
   // Позволяет собирать PAPER-сигналы на боевом боте без риска реального исполнения.
   const hunterProdEnabled = (process.env.HUNTER_PROD_ENABLED || 'false').toLowerCase() === 'true';
+
+  // Hunter-only leverage: умножает РАЗМЕР позиции (а не только маржинальный буфер).
+  // На балансе $100 при utilization=0.5: 1x → $50 поза, 3x → $150, 5x → $250.
+  // SL=2% при 5x = −5% от баланса; ликвидационный буфер уменьшается пропорционально.
+  // Default 1 = поведение Iter C без изменений. Изолировано от carry/fade — там всегда 1x.
+  const hunterLeverage = parseInt(process.env.HUNTER_LEVERAGE || '1', 10);
+  if (!Number.isInteger(hunterLeverage) || hunterLeverage < 1 || hunterLeverage > 10) {
+    throw new Error(`HUNTER_LEVERAGE must be integer in [1, 10]. Got: "${process.env.HUNTER_LEVERAGE}"`);
+  }
   // Hunter хантит на более широкой вселенной, чем carry/fade (им нужна высокая ликвидность для
   // минимального slippage, Hunter'у — вариативность). Default $1M — захватывает 30–50 монет на HL
   // вместо ~12. PAPER-безопасно; для PROD (Iter C) потребуется size-cap и осторожность.
@@ -289,6 +298,7 @@ function loadConfig() {
       fadeMinDropPct,
       hunterEnabled,
       hunterProdEnabled,
+      hunterLeverage,
       hunterMinVolume,
       hunterTrendLookbackMin,
       hunterTrendMaxRisePct,
