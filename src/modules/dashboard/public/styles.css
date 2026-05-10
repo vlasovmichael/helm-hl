@@ -184,18 +184,18 @@ header {
 .equity-group .label {
   color: var(--text-muted);
   font-weight: 500;
-  font-size: 12px;
-  margin-bottom: 6px;
+  font-size: 13px;
+  margin-bottom: 8px;
 }
 
 .equity-group .value {
   font-family: var(--font-mono);
   font-weight: 700;
-  font-size: 42px;
+  font-size: 46px;
   letter-spacing: -0.03em;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   color: var(--text-primary);
 }
 
@@ -204,7 +204,7 @@ header {
   align-items: center;
   gap: 6px;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--text-muted);
@@ -250,7 +250,7 @@ header {
 
 .meta-info {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13px;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   display: flex;
@@ -307,10 +307,10 @@ header {
 
 .card-title {
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--text-primary);
-  letter-spacing: -0.005em;
+  letter-spacing: -0.01em;
 }
 
 .cart-cooldowns { margin-bottom: 0; }
@@ -371,16 +371,16 @@ header {
 }
 
 .grid-item .item-label {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   font-weight: 500;
 }
 
 .grid-item .item-value {
   font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 18px;
+  font-size: 20px;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
@@ -393,7 +393,7 @@ header {
   color: var(--text-muted);
   text-align: center;
   padding: 24px 0;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .tax-year-label {
@@ -455,16 +455,16 @@ header {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 0;
+  padding: 11px 0;
   border-bottom: 1px solid var(--hairline);
-  font-size: 13px;
+  font-size: 14px;
 }
 .activity-item:last-child { border-bottom: none; }
 
 .activity-time {
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   flex-shrink: 0;
 }
 .activity-coin {
@@ -498,23 +498,29 @@ header {
 .activity-kind.open  { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-line); }
 .activity-kind.close { color: var(--text-muted); background: var(--canvas-subtle); border-color: var(--border); }
 
-/* ──────────────────────── Animated number reel */
+/* ──────────────────────── Animated number reel
+   IMPORTANT: app.js translates the reel by -1.1em on digit change, so every
+   layer (.animated-value, .digit-reel, .digit-reel span) MUST be exactly
+   1.1em tall — otherwise static "$" and animated digits sit on different
+   baselines. */
 .animated-value {
   display: inline-flex;
+  align-items: baseline;
   overflow: hidden;
-  height: 1em;
-  line-height: 1;
+  height: 1.1em;
+  line-height: 1.1em;
+  vertical-align: baseline;
 }
 .digit-reel {
   display: inline-flex;
   flex-direction: column;
-  height: 1em;
+  height: 1.1em;
   transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .digit-reel span {
   display: block;
-  height: 1em;
-  line-height: 1;
+  height: 1.1em;
+  line-height: 1.1em;
   text-align: center;
 }
 
@@ -525,7 +531,7 @@ footer {
   border-top: 1px solid var(--border);
   text-align: center;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13px;
   font-family: var(--font-mono);
   display: flex;
   justify-content: space-between;
@@ -565,8 +571,8 @@ footer {
   border: 1px solid var(--border);
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: 12px;
-  padding: 5px 10px;
+  font-size: 13px;
+  padding: 6px 10px;
   border-radius: 6px;
   width: 200px;
   outline: none;
@@ -591,9 +597,9 @@ footer {
   border: none;
   color: var(--text-secondary);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
-  padding: 4px 10px;
+  padding: 5px 11px;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.12s var(--ease);
@@ -632,7 +638,7 @@ footer {
   border-radius: var(--radius);
   padding: 6px 0;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.55;
   scroll-behavior: smooth;
 }
@@ -685,7 +691,7 @@ footer {
   text-align: center;
   color: var(--text-muted);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .logs-meta {
@@ -693,7 +699,7 @@ footer {
   justify-content: space-between;
   margin-top: 8px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 #logs-status { color: var(--green); font-weight: 600; }
@@ -701,7 +707,7 @@ footer {
 /* ──────────────────────── Hunter Signals */
 .signals-meta {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-muted);
 }
 .signals-table-wrap { overflow-x: auto; margin: 0 -8px; padding: 0 8px; }
@@ -709,14 +715,14 @@ footer {
   width: 100%;
   border-collapse: collapse;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 13px;
 }
 .signals-table th {
   text-align: left;
   font-weight: 600;
   color: var(--text-muted);
-  font-size: 11px;
-  padding: 8px 10px;
+  font-size: 12px;
+  padding: 9px 10px;
   border-bottom: 1px solid var(--border);
   background: var(--canvas-subtle);
   position: sticky;
@@ -879,7 +885,7 @@ footer {
     margin-bottom: 24px;
     padding-bottom: 20px;
   }
-  .equity-group .value { font-size: 32px; }
+  .equity-group .value { font-size: 36px; }
 
   .meta-group {
     flex-direction: row;
@@ -925,7 +931,7 @@ footer {
   .container { padding: 12px 12px 96px; }
   .card { padding: 14px; }
   .grid-item { padding: 12px 14px; }
-  .grid-item .item-value { font-size: 16px; }
+  .grid-item .item-value { font-size: 18px; }
   .activity-item { font-size: 12px; }
 }
 
