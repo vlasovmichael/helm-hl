@@ -19,7 +19,7 @@ import {
 } from '../exchange.js';
 import { resolveAsset, parseFillResponse } from './fill-parser.js';
 import {
-  calcSize, calcPnl, checkSlippage,
+  calcSize, calcPnl, checkSlippage, formatHlPrice,
   MARKET_SLIPPAGE, MIN_ORDER_USD, FEE_RATE, ONE_LEG,
   HUNTER_BALANCE_UTILIZATION,
 } from './math.js';
@@ -336,8 +336,12 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
  * @param {number} triggerPx — цена срабатывания
  * @param {'sl'|'tp'} tpsl
  */
-async function placeHunterTrigger(coin, sz, triggerPx, tpsl) {
+async function placeHunterTrigger(coin, sz, triggerPx, tpsl, szDecimals) {
   const exchange = getExchange();
+  // HL отклоняет цены с >5 значащих цифр / >(6−szDecimals) десятичных.
+  // Сырая `entry × 1.02` для низкопрайсовых монет (REZ ~$0.05) даёт 7 sig figs
+  // → "Order has invalid price". Округляем здесь явно.
+  const px = formatHlPrice(triggerPx, szDecimals);
   const result = await retryWithBackoff(
     () =>
       exchange.exchange.placeOrder({
@@ -346,8 +350,8 @@ async function placeHunterTrigger(coin, sz, triggerPx, tpsl) {
         sz,
         // limit_px при isMarket=true игнорируется как цена исполнения, но HL требует поле.
         // Используем triggerPx как безопасный плейсхолдер.
-        limit_px: triggerPx,
-        order_type: { trigger: { triggerPx, isMarket: true, tpsl } },
+        limit_px: px,
+        order_type: { trigger: { triggerPx: px, isMarket: true, tpsl } },
         reduce_only: true,
       }),
     { label: `hunter-${tpsl}-${coin}`, maxRetries: 2, baseDelayMs: 1000 },
@@ -491,27 +495,29 @@ export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, si
     `[Executor] ✅ PROD HUNTER OPEN SHORT #${coin} | oid: ${fill.oid} | filled: ${fillSz} @ $${fillPx} ($${fillUsd.toFixed(2)}) | slip: ${slip.label} | id: ${id}`,
   );
 
+  const fillInfo = { sizeUsd: fillUsd, fillPx, sz: fillSz };
+
   // ── 6. Поставить SL trigger ──
   let slOid;
   try {
-    slOid = await placeHunterTrigger(coin, fillSz, sl, 'sl');
+    slOid = await placeHunterTrigger(coin, fillSz, sl, 'sl', szDecimals);
     logger.info(`[Executor] PROD HUNTER #${coin} SL trigger armed @ $${sl} | oid=${slOid}`);
   } catch (err) {
     logger.error(`[Executor] PROD HUNTER #${coin} SL placeOrder failed: ${err.message} — ROLLBACK market close`);
-    await rollbackHunterOpen(coin, fillSz, id, fillPx, /* triggerOids */ []);
-    if (!silent) await notifyHunterOpenFailed({ coin, stage: 'placeSL', reason: err.message, rolledBack: true });
+    const rb = await rollbackHunterOpen(coin, fillSz, id, fillPx, /* triggerOids */ []);
+    if (!silent) await notifyHunterOpenFailed({ coin, stage: 'placeSL', reason: err.message, rolledBack: true, fill: fillInfo, rollback: rb });
     return { ok: false };
   }
 
   // ── 7. Поставить TP trigger ──
   let tpOid;
   try {
-    tpOid = await placeHunterTrigger(coin, fillSz, tp, 'tp');
+    tpOid = await placeHunterTrigger(coin, fillSz, tp, 'tp', szDecimals);
     logger.info(`[Executor] PROD HUNTER #${coin} TP trigger armed @ $${tp} | oid=${tpOid}`);
   } catch (err) {
     logger.error(`[Executor] PROD HUNTER #${coin} TP placeOrder failed: ${err.message} — ROLLBACK (cancel SL + market close)`);
-    await rollbackHunterOpen(coin, fillSz, id, fillPx, [slOid]);
-    if (!silent) await notifyHunterOpenFailed({ coin, stage: 'placeTP', reason: err.message, rolledBack: true });
+    const rb = await rollbackHunterOpen(coin, fillSz, id, fillPx, [slOid]);
+    if (!silent) await notifyHunterOpenFailed({ coin, stage: 'placeTP', reason: err.message, rolledBack: true, fill: fillInfo, rollback: rb });
     return { ok: false };
   }
 
@@ -564,7 +570,7 @@ async function rollbackHunterOpen(coin, sz, dbId, fillPx, triggerOids) {
     );
   } catch (err) {
     logger.error(`[Executor] HUNTER ROLLBACK #${coin} — marketClose THREW: ${err.message}. РУЧНОЕ ВМЕШАТЕЛЬСТВО!`);
-    return;
+    return null;
   }
 
   const closeFill = parseFillResponse(closeResult, 'CLOSE');
@@ -573,22 +579,24 @@ async function rollbackHunterOpen(coin, sz, dbId, fillPx, triggerOids) {
   const totalFee = closeNotional * ONE_LEG + (sz * fillPx) * ONE_LEG;
   // pricePnl на short: (entry − close) × sz
   const pricePnl = sz * (fillPx - closePx);
+  const realized = pricePnl - totalFee;
 
   try {
     dbClosePosition(dbId, {
       close_price:  closePx,
-      realized_pnl: pricePnl - totalFee,
+      realized_pnl: realized,
       fee_paid:     totalFee,
       reason:       'hunter_rollback',
     });
     logger.info(
-      `[Executor] HUNTER ROLLBACK #${coin} closed: entry $${fillPx} → close $${closePx} | pnl $${(pricePnl - totalFee).toFixed(4)}`,
+      `[Executor] HUNTER ROLLBACK #${coin} closed: entry $${fillPx} → close $${closePx} | pnl $${realized.toFixed(4)}`,
     );
   } catch (err) {
     logger.error(`[Executor] HUNTER ROLLBACK #${coin} — dbClosePosition failed: ${err.message}`);
   }
 
   setCooldown(coin);
+  return { closePx, pnl: realized, fee: totalFee };
 }
 
 // ─────────────────────────────────────────────────

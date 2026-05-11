@@ -258,12 +258,22 @@ export async function notifyHunterOpenProd({ coin, sizeUsd, balance, leverage, f
   );
 }
 
-export async function notifyHunterOpenFailed({ coin, stage, reason, rolledBack }) {
+export async function notifyHunterOpenFailed({ coin, stage, reason, rolledBack, fill = null, rollback = null }) {
+  // fill: { sizeUsd, fillPx, sz } — если успели открыться до фейла
+  // rollback: { closePx, pnl, fee } — если был market close
+  const fillLine = fill
+    ? `📥 Open: <b>${fill.sz}</b> @ $${fill.fillPx} ($${fill.sizeUsd.toFixed(2)})\n`
+    : '';
+  const rbLine = rollback
+    ? `📤 Rollback close @ $${rollback.closePx} | PnL: <b>${rollback.pnl >= 0 ? '+' : ''}$${rollback.pnl.toFixed(4)}</b> (fees $${rollback.fee.toFixed(4)})\n`
+    : '';
   await sendMessage(
     `🎯⚠️ <b>[HUNTER PROD FAIL] #${coin}</b>\n` +
       `<code>─────────────────────</code>\n` +
       `Стадия: <b>${stage}</b>\n` +
       `Причина: <code>${reason}</code>\n` +
+      fillLine +
+      rbLine +
       (rolledBack
         ? `<i>Позиция закрыта по market — без SL остаться нельзя.</i>`
         : `<i>Позиция не открылась — ничего не сделано.</i>`),

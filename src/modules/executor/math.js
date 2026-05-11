@@ -48,6 +48,36 @@ export function roundDown(value, decimals) {
 }
 
 /**
+ * Приводит цену к формату Hyperliquid:
+ *   1) ≤ 5 значащих цифр
+ *   2) ≤ (MAX_DECIMALS − szDecimals) десятичных знаков (MAX_DECIMALS=6 для перпов)
+ *   3) Integer цены разрешены всегда.
+ *
+ * Использовать для триггер-цен SL/TP в `placeOrder` — иначе биржа отвечает
+ * "Order has invalid price" на низкопрайсовых монетах (REZ инцидент 2026-05-11
+ * где `entry * 1.02` давало 7 значащих цифр).
+ *
+ * @param {number} price
+ * @param {number} szDecimals — sz-decimals из universe для этой монеты
+ * @param {number} [maxDecimals=6] — 6 для перпов, 8 для спота
+ * @returns {number}
+ */
+export function formatHlPrice(price, szDecimals, maxDecimals = 6) {
+  if (!Number.isFinite(price) || price <= 0) return price;
+  if (Number.isInteger(price)) return price;
+
+  const SIG_FIGS  = 5;
+  const maxDp     = Math.max(0, maxDecimals - szDecimals);
+  const magnitude = Math.floor(Math.log10(Math.abs(price)));
+  const sigFactor = Math.pow(10, SIG_FIGS - 1 - magnitude);
+  let rounded     = Math.round(price * sigFactor) / sigFactor;
+
+  const dpFactor  = Math.pow(10, maxDp);
+  rounded         = Math.round(rounded * dpFactor) / dpFactor;
+  return rounded;
+}
+
+/**
  * Расчёт размера позиции.
  * @param {number} balance  — свободный баланс
  * @param {number} price    — текущая цена
