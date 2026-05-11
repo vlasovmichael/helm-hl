@@ -249,6 +249,60 @@ function loadConfig() {
     throw new Error(`HUNTER_TRAIL_GIVE_BACK_PCT must be in (0, 100). Got: "${process.env.HUNTER_TRAIL_GIVE_BACK_PCT}"`);
   }
 
+  // ── Hunter Long (Iter E.1) — Long-after-dump, зеркало Hunter SHORT ──
+  // Default false: PAPER-only включается отдельно. Заняла слот после Fade soft-kill.
+  // Все параметры зеркальны HUNTER_* но с собственными дефолтами под dump-сторону:
+  // anti-trend агрессивнее (6% vs 8%) — дампы чаще = real news (delist/scam).
+  const hunterLongEnabled         = (process.env.HUNTER_LONG_ENABLED         || 'false').toLowerCase() === 'true';
+  // Iter E.3: PROD-gate, mirror HUNTER_PROD_ENABLED. Реальные ордера на бирже
+  // только при HUNTER_LONG_PROD_ENABLED=true в isProduction режиме.
+  const hunterLongProdEnabled     = (process.env.HUNTER_LONG_PROD_ENABLED    || 'false').toLowerCase() === 'true';
+  const hunterLongDumpPct         = parseFloat(process.env.HUNTER_LONG_DUMP_PCT         || '3.0');
+  const hunterLongSlPct           = parseFloat(process.env.HUNTER_LONG_SL_PCT           || '2.0');
+  const hunterLongTpPct           = parseFloat(process.env.HUNTER_LONG_TP_PCT           || '3.0');
+  const hunterLongTrendLookbackMin = parseFloat(process.env.HUNTER_LONG_TREND_LOOKBACK_MIN || '15');
+  const hunterLongTrendMaxDropPct = parseFloat(process.env.HUNTER_LONG_TREND_MAX_DROP_PCT || '6');
+  const hunterLongPostSlCooldownMin = parseFloat(process.env.HUNTER_LONG_POST_SL_COOLDOWN_MIN || '60');
+  const hunterLongTimeStopMin     = parseFloat(process.env.HUNTER_LONG_TIME_STOP_MIN     || '60');
+
+  if (isNaN(hunterLongDumpPct) || hunterLongDumpPct <= 0) {
+    throw new Error(`HUNTER_LONG_DUMP_PCT must be positive. Got: "${process.env.HUNTER_LONG_DUMP_PCT}"`);
+  }
+  if (isNaN(hunterLongSlPct) || hunterLongSlPct <= 0 || hunterLongSlPct >= 100) {
+    throw new Error(`HUNTER_LONG_SL_PCT must be in (0, 100). Got: "${process.env.HUNTER_LONG_SL_PCT}"`);
+  }
+  if (isNaN(hunterLongTpPct) || hunterLongTpPct <= 0) {
+    throw new Error(`HUNTER_LONG_TP_PCT must be positive. Got: "${process.env.HUNTER_LONG_TP_PCT}"`);
+  }
+  if (isNaN(hunterLongTrendLookbackMin) || hunterLongTrendLookbackMin <= 0 || hunterLongTrendLookbackMin > 60) {
+    throw new Error(`HUNTER_LONG_TREND_LOOKBACK_MIN must be in (0, 60]. Got: "${process.env.HUNTER_LONG_TREND_LOOKBACK_MIN}"`);
+  }
+  if (isNaN(hunterLongTrendMaxDropPct) || hunterLongTrendMaxDropPct <= 0) {
+    throw new Error(`HUNTER_LONG_TREND_MAX_DROP_PCT must be positive. Got: "${process.env.HUNTER_LONG_TREND_MAX_DROP_PCT}"`);
+  }
+  if (isNaN(hunterLongPostSlCooldownMin) || hunterLongPostSlCooldownMin <= 0) {
+    throw new Error(`HUNTER_LONG_POST_SL_COOLDOWN_MIN must be positive. Got: "${process.env.HUNTER_LONG_POST_SL_COOLDOWN_MIN}"`);
+  }
+  if (isNaN(hunterLongTimeStopMin) || hunterLongTimeStopMin <= 0) {
+    throw new Error(`HUNTER_LONG_TIME_STOP_MIN must be positive. Got: "${process.env.HUNTER_LONG_TIME_STOP_MIN}"`);
+  }
+
+  // Iter E.2: trailing TP для Hunter Long (PAPER). Зеркало HUNTER_TRAIL_*.
+  // ARM_PCT < HUNTER_LONG_TP_PCT — иначе fixed TP сработает раньше trail.
+  const hunterLongTrailEnabled     = (process.env.HUNTER_LONG_TRAIL_ENABLED     || 'false').toLowerCase() === 'true';
+  const hunterLongTrailShadowLog   = (process.env.HUNTER_LONG_TRAIL_SHADOW_LOG  || 'true').toLowerCase() === 'true';
+  const hunterLongTrailArmPct      = parseFloat(process.env.HUNTER_LONG_TRAIL_ARM_PCT      || '2');
+  const hunterLongTrailGiveBackPct = parseFloat(process.env.HUNTER_LONG_TRAIL_GIVE_BACK_PCT || '30');
+
+  if (isNaN(hunterLongTrailArmPct) || hunterLongTrailArmPct <= 0 || hunterLongTrailArmPct >= hunterLongTpPct) {
+    throw new Error(
+      `HUNTER_LONG_TRAIL_ARM_PCT must be in (0, ${hunterLongTpPct}) — strictly less than HUNTER_LONG_TP_PCT. Got: "${process.env.HUNTER_LONG_TRAIL_ARM_PCT}"`,
+    );
+  }
+  if (isNaN(hunterLongTrailGiveBackPct) || hunterLongTrailGiveBackPct <= 0 || hunterLongTrailGiveBackPct >= 100) {
+    throw new Error(`HUNTER_LONG_TRAIL_GIVE_BACK_PCT must be in (0, 100). Got: "${process.env.HUNTER_LONG_TRAIL_GIVE_BACK_PCT}"`);
+  }
+
   // ── Carry: soft-sniper exit on negative_funding when in profit ──
   // Если funding ушёл в минус, но позиция в плюсе ≥X% — закрываем через snайпера
   // (maker, экономия 0.02% комиссии). Иначе — market (чтоб не терять время).
@@ -337,6 +391,19 @@ function loadConfig() {
       hunterTrailShadowLog,
       hunterTrailArmPct,
       hunterTrailGiveBackPct,
+      hunterLongEnabled,
+      hunterLongProdEnabled,
+      hunterLongDumpPct,
+      hunterLongSlPct,
+      hunterLongTpPct,
+      hunterLongTrendLookbackMin,
+      hunterLongTrendMaxDropPct,
+      hunterLongPostSlCooldownMin,
+      hunterLongTimeStopMin,
+      hunterLongTrailEnabled,
+      hunterLongTrailShadowLog,
+      hunterLongTrailArmPct,
+      hunterLongTrailGiveBackPct,
       carryTrailEnabled,
       carryTrailArmPct,
       carryTrailArmPctEquity,

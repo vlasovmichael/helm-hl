@@ -3,6 +3,7 @@ import { logger } from '../core/logger.js';
 import { analyze } from './strategist.js';
 import { analyzeFade } from './strategistFade.js';
 import { analyzeHunter } from './strategistSniper.js';
+import { analyzeHunterLong } from './strategistHunterLong.js';
 
 /**
  * Coordinator: единая точка входа для стратегий.
@@ -11,10 +12,11 @@ import { analyzeHunter } from './strategistSniper.js';
  * Если позиция есть, управление передаётся стратегии-владельцу (strategy_id).
  * Если позиции нет, стратегии опрашиваются по приоритету:
  *   1. Hunter (если HUNTER_ENABLED) — pump ≥ 5% за 2мин → short. Priority #1.
- *   2. Carry (дед) — стабильный фандинг.
- *   3. Fade — спайки с predicted drop.
+ *   2. Hunter Long (если HUNTER_LONG_ENABLED) — dump ≥ X% за 2мин → long. Iter E.1 (PAPER).
+ *   3. Carry (дед) — стабильный фандинг.
+ *   4. Fade (deprecated, по умолчанию выключен) — спайки с predicted drop.
  *
- * Iter A: без эвикшена. Если slot занят carry/fade — Hunter ждёт. Эвикшен в Iter B.
+ * Iter A: без эвикшена. Если slot занят carry/fade — Hunter ждёт.
  *
  * @param {Array} scoutData — carry/fade scope (узкая ликвидная вселенная)
  * @param {Object|undefined} activePosition
@@ -26,8 +28,11 @@ export function coordinate(scoutData, activePosition, hunterData = scoutData) {
     const sid = activePosition.strategy_id || 'carry';
 
     if (sid === 'hunter') {
-      // Hunter exit через SL/TP — analyzeHunter умеет оба пути (entry + exit).
       return analyzeHunter(hunterData, activePosition);
+    }
+
+    if (sid === 'hunter_long') {
+      return analyzeHunterLong(hunterData, activePosition);
     }
 
     if (sid === 'fade') {
@@ -42,12 +47,19 @@ export function coordinate(scoutData, activePosition, hunterData = scoutData) {
   }
 
   // No position — query strategies in priority order.
-  // Hunter первый: "прибыль Снайпера — приоритет №1" (hunter_plan.md).
   if (config.trading.hunterEnabled) {
     const hunterSignal = analyzeHunter(hunterData, undefined);
     if (hunterSignal.action !== 'HOLD') {
       logger.debug(`[Coordinator] hunter → ${hunterSignal.action} ${hunterSignal.coin}`);
       return hunterSignal;
+    }
+  }
+
+  if (config.trading.hunterLongEnabled) {
+    const hunterLongSignal = analyzeHunterLong(hunterData, undefined);
+    if (hunterLongSignal.action !== 'HOLD') {
+      logger.debug(`[Coordinator] hunter_long → ${hunterLongSignal.action} ${hunterLongSignal.coin}`);
+      return hunterLongSignal;
     }
   }
 

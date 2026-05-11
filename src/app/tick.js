@@ -11,6 +11,7 @@ import { tickSniper } from '../modules/executor/sniper.js';
 import { runSmartAlerts } from './alerts.js';
 import { integrityCheck, orphanCheck } from './integrity.js';
 import { hunterReconcile } from './hunterReconcile.js';
+import { hunterLongReconcile } from './hunterLongReconcile.js';
 import { processHunterTrailArm } from './hunterTrailArm.js';
 import { state } from './state.js';
 
@@ -26,6 +27,13 @@ export async function tick() {
     const hunterFired = await hunterReconcile();
     if (hunterFired) {
       logger.info('[Tick] Skipping after Hunter trigger fill detection');
+      return;
+    }
+
+    // ── Hunter LONG Reconcile (Iter E.3): зеркало для hunter_long PROD-позиций ──
+    const hunterLongFired = await hunterLongReconcile();
+    if (hunterLongFired) {
+      logger.info('[Tick] Skipping after Hunter LONG trigger fill detection');
       return;
     }
 

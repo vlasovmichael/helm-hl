@@ -21,8 +21,12 @@ import { notify } from './hooks.js';
 import {
   notifyPaperOpen, notifyPaperClose, notifyCircuitBreaker,
   notifyHunterOpen, notifyHunterSL, notifyHunterTP, notifyHunterTrailTp,
+  notifyHunterLongOpen, notifyHunterLongSL, notifyHunterLongTP, notifyHunterLongTrailTp,
 } from './notifications.js';
 import { consumeHunterMfeMae, clearHunterTrailState, getHunterPeakPct } from '../strategistSniper.js';
+import {
+  consumeHunterLongMfeMae, clearHunterLongTrailState, getHunterLongPeakPct,
+} from '../strategistHunterLong.js';
 
 /**
  * Определяет баланс для расчёта размера позиции.
@@ -164,6 +168,72 @@ export async function hunterPaperOpen(coin, price, spikePct, sl, tp, silent = fa
 }
 
 /**
+ * Открывает виртуальную LONG-позицию для Hunter Long (Strategy #3, Iter E.1).
+ *
+ * Зеркало hunterPaperOpen:
+ *  - Размер = 50% баланса (тот же HUNTER_BALANCE_UTILIZATION).
+ *  - strategy_id='hunter_long', side='long', entry_apy=0.
+ *  - SL/TP инвертированы относительно SHORT: sl < entry < tp.
+ *  - Iter E.1: только PAPER. Notification reuse'им notifyPaperOpen с side='long'.
+ *
+ * @param {string} coin
+ * @param {number} price — цена входа
+ * @param {number} dumpPct — величина дампа на входе (отрицательное число, для лога/аналитики)
+ * @param {number} sl — stop-loss (для LONG: < price)
+ * @param {number} tp — take-profit (для LONG: > price)
+ * @param {boolean} [silent=false]
+ * @param {Object} [entryFeatures=null]
+ */
+export async function hunterLongPaperOpen(coin, price, dumpPct, sl, tp, silent = false, entryFeatures = null) {
+  const balance = await getPaperBalance();
+
+  if (balance <= 0) {
+    logger.warn(`[Executor] [HUNTER_LONG] Cannot open — balance is $${balance.toFixed(2)}`);
+    return { ok: false };
+  }
+
+  const { sizeUsd, tooSmall } = calcSize(balance, price, 0, HUNTER_BALANCE_UTILIZATION);
+
+  if (tooSmall) {
+    logger.warn(
+      `[Executor] [HUNTER_LONG SKIP] #${coin} — size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min (50% баланса $${balance.toFixed(2)})`,
+    );
+    return { ok: false };
+  }
+
+  const fee = sizeUsd * ONE_LEG;
+
+  const id = savePosition({
+    coin,
+    size_usd:    sizeUsd,
+    entry_price: price,
+    entry_apy:   0,
+    entry_time:  Date.now(),
+    mode:        "PAPER",
+    strategy_id: 'hunter_long',
+    side:        'long',
+    sl_price:    sl,
+    tp_price:    tp,
+    ...(entryFeatures || {}),
+  });
+
+  logger.info(
+    `[Executor] 🎯 HUNTER_LONG OPEN LONG #${coin} | $${sizeUsd.toFixed(2)} (of $${balance.toFixed(2)}) @ $${price} ` +
+      `| dump ${dumpPct.toFixed(2)}% | SL $${sl.toFixed(4)} / TP $${tp.toFixed(4)} | fee $${fee.toFixed(4)} | id: ${id}`,
+  );
+
+  if (!silent) {
+    await notifyHunterLongOpen({ coin, sizeUsd, balance, price, dumpPct, sl, tp, fee });
+  }
+
+  notify('afterOpen', {
+    coin, price, sizeUsd, positionId: Number(id), mode: 'PAPER', strategy: 'hunter_long',
+  });
+
+  return { ok: true, positionId: Number(id), sizeUsd };
+}
+
+/**
  * Закрывает виртуальную позицию.
  *
  * Paper PnL = fundingPnl − fees (без pricePnl, т.к. нет реального fill).
@@ -192,14 +262,17 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
 
   // Для hunter-позиций закрытие идёт по SL/TP уровню — это реальная цена fill'а,
   // значит pricePnl имеет смысл (в отличие от carry/fade, где close_price условен).
-  // Iter A: Hunter всегда SHORT → pricePnl = (entry − close)/entry × size.
+  // Hunter SHORT: pricePnl = (entry − close)/entry × size.
+  // Hunter LONG  (Iter E.1): pricePnl = (close − entry)/entry × size (зеркально).
   let pricePnl = 0;
   if (position.strategy_id === 'hunter') {
     pricePnl = (position.size_usd * (position.entry_price - closePrice)) / position.entry_price;
+  } else if (position.strategy_id === 'hunter_long') {
+    pricePnl = (position.size_usd * (closePrice - position.entry_price)) / position.entry_price;
   }
   const realizedPnl = baseRealized + pricePnl;
 
-  // Hunter: подмешиваем MFE/MAE из tick-трекера + hold_seconds.
+  // Hunter / Hunter Long: подмешиваем MFE/MAE из tick-трекера + hold_seconds.
   // Для carry/fade — exitFeatures null (поля в history останутся NULL).
   let exitFeatures = null;
   if (position.strategy_id === 'hunter') {
@@ -211,13 +284,25 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
       mae_pct:      mm?.maePct ?? null,
       hold_seconds: Math.round(holdMs / 1000),
     };
-    // Iter D: для trail-close записываем peak/giveback в features.
     if (signal.reason === 'hunter_trail_tp') {
       exitFeatures.trail_peak_pct      = signal.peakPct ?? getHunterPeakPct(position.id);
       exitFeatures.trail_give_back_pct = signal.giveBackPct ?? null;
     }
-    // Любое закрытие hunter-позиции = снять trail-state.
     clearHunterTrailState(position.id);
+  } else if (position.strategy_id === 'hunter_long') {
+    const mm = consumeHunterLongMfeMae(position.id);
+    exitFeatures = {
+      mfe_usd:      mm?.mfeUsd ?? null,
+      mae_usd:      mm?.maeUsd ?? null,
+      mfe_pct:      mm?.mfePct ?? null,
+      mae_pct:      mm?.maePct ?? null,
+      hold_seconds: Math.round(holdMs / 1000),
+    };
+    if (signal.reason === 'hunter_long_trail_tp') {
+      exitFeatures.trail_peak_pct      = signal.peakPct ?? getHunterLongPeakPct(position.id);
+      exitFeatures.trail_give_back_pct = signal.giveBackPct ?? null;
+    }
+    clearHunterLongTrailState(position.id);
   }
 
   dbClosePosition(position.id, {
@@ -262,6 +347,36 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
       });
     } else if (position.strategy_id === 'hunter' && signal.reason === 'hunter_trail_tp') {
       await notifyHunterTrailTp({
+        coin:         position.coin,
+        entryPrice:   position.entry_price,
+        closePrice,
+        peakPct:      signal.peakPct ?? exitFeatures?.trail_peak_pct ?? 0,
+        giveBackPct:  signal.giveBackPct ?? exitFeatures?.trail_give_back_pct ?? 0,
+        pnl:          realizedPnl,
+        fee:          totalFee,
+        holdMinutes:  Math.round(holdHours * 60),
+        fixedTpPrice: position.tp_price,
+      });
+    } else if (position.strategy_id === 'hunter_long' && signal.reason === 'hunter_long_sl') {
+      await notifyHunterLongSL({
+        coin:        position.coin,
+        entryPrice:  position.entry_price,
+        slPrice:     closePrice,
+        pnl:         realizedPnl,
+        fee:         totalFee,
+        holdMinutes: Math.round(holdHours * 60),
+      });
+    } else if (position.strategy_id === 'hunter_long' && signal.reason === 'hunter_long_tp') {
+      await notifyHunterLongTP({
+        coin:        position.coin,
+        entryPrice:  position.entry_price,
+        tpPrice:     closePrice,
+        pnl:         realizedPnl,
+        fee:         totalFee,
+        holdMinutes: Math.round(holdHours * 60),
+      });
+    } else if (position.strategy_id === 'hunter_long' && signal.reason === 'hunter_long_trail_tp') {
+      await notifyHunterLongTrailTp({
         coin:         position.coin,
         entryPrice:   position.entry_price,
         closePrice,

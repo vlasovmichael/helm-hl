@@ -9,8 +9,11 @@ import { state as appState } from '../../app/state.js';
 import { getAccountSummary } from '../exchange.js';
 import { getAccountEquity } from '../wallet.js';
 import { checkVolatility } from '../volatility.js';
-import { paperOpen, paperClose, hunterPaperOpen } from './paper.js';
-import { productionOpen, productionClose, productionRotate, productionHunterOpen } from './production.js';
+import { paperOpen, paperClose, hunterPaperOpen, hunterLongPaperOpen } from './paper.js';
+import {
+  productionOpen, productionClose, productionRotate,
+  productionHunterOpen, productionHunterLongOpen,
+} from './production.js';
 import { productionArmSniper, finalizeProdSniperPartial } from './sniper.js';
 import { getExchange } from '../exchange.js';
 import {
@@ -179,6 +182,31 @@ async function handleOpen(signal) {
     );
   }
 
+  // Hunter Long route (Iter E.1): PAPER only. PROD путь — Iter E.3.
+  if (strategyId === 'hunter_long') {
+    const pre = await preflightChecks(signal.coin, null);
+    if (!pre.allowed) {
+      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
+      return { ok: false };
+    }
+    if (config.isProduction) {
+      // Двойной gate: HUNTER_LONG_ENABLED=true пускает paper-сигналы, реальные ордера
+      // отправляются только с HUNTER_LONG_PROD_ENABLED=true.
+      if (!config.trading.hunterLongProdEnabled) {
+        logger.warn(
+          `[Executor] Hunter Long PROD-путь выключен (HUNTER_LONG_PROD_ENABLED=false). Сигнал #${signal.coin} пропущен.`,
+        );
+        return { ok: false };
+      }
+      return productionHunterLongOpen(
+        signal.coin, signal.price, signal.dumpPct, signal.sl, signal.tp, false, signal.entryFeatures,
+      );
+    }
+    return hunterLongPaperOpen(
+      signal.coin, signal.price, signal.dumpPct, signal.sl, signal.tp, false, signal.entryFeatures,
+    );
+  }
+
   const pre = await preflightChecks(signal.coin, signal.apy);
   if (!pre.allowed) {
     await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
@@ -287,7 +315,7 @@ async function handleClose(signal, position) {
   // равно мусор и потенциальный риск на следующей позиции).
   if (
     config.isProduction &&
-    position.strategy_id === 'hunter' &&
+    (position.strategy_id === 'hunter' || position.strategy_id === 'hunter_long') &&
     position.mode === 'PRODUCTION' &&
     (position.hunter_sl_oid || position.hunter_tp_oid)
   ) {

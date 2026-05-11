@@ -38,6 +38,9 @@ import { sleep } from './reconciler.js';
 import { gate, notify } from './hooks.js';
 import { consumeHunterMfeMae, clearHunterTrailState, getHunterPeakPct } from '../strategistSniper.js';
 import {
+  consumeHunterLongMfeMae, clearHunterLongTrailState, getHunterLongPeakPct,
+} from '../strategistHunterLong.js';
+import {
   notifyProductionOpen, notifyOpenFailed, notifyOpenRejected,
   notifyOpenSkipped, notifySlippageBan,
   notifyProductionClose, notifyCloseRejected, notifyCloseFailed,
@@ -47,6 +50,7 @@ import {
   notifyOiCapBan, notifyOiCapAfterRotate,
   notifyHunterOpenProd, notifyHunterOpenFailed,
   notifyHunterTrailTp,
+  notifyHunterLongOpenProd, notifyHunterLongOpenFailed, notifyHunterLongTrailTp,
 } from './notifications.js';
 
 // Регэксп для детекции "open interest at cap" в ответе биржи.
@@ -621,6 +625,264 @@ async function rollbackHunterOpen(coin, sz, dbId, fillPx, triggerOids) {
 }
 
 // ─────────────────────────────────────────────────
+//  HUNTER LONG OPEN (Iter E.3 — реальные trigger-ордера, зеркало Hunter SHORT)
+// ─────────────────────────────────────────────────
+
+/**
+ * Trigger-ордер для закрытия Hunter LONG-позиции (reduce_only SELL).
+ * Отличие от placeHunterTrigger: is_buy=false (закрытие LONG → SELL).
+ */
+export async function placeHunterLongTrigger(coin, sz, triggerPx, tpsl, szDecimals) {
+  const exchange = getExchange();
+  const px = formatHlPrice(triggerPx, szDecimals);
+  const result = await retryWithBackoff(
+    () =>
+      exchange.exchange.placeOrder({
+        coin: `${coin}-PERP`,
+        is_buy: false, // закрытие LONG → SELL reduce_only
+        sz,
+        limit_px: px,
+        order_type: { trigger: { triggerPx: px, isMarket: true, tpsl } },
+        reduce_only: true,
+      }),
+    { label: `hunter-long-${tpsl}-${coin}`, maxRetries: 2, baseDelayMs: 1000 },
+  );
+
+  const status = result?.response?.data?.statuses?.[0];
+  if (!status) {
+    throw new Error(`empty statuses: ${JSON.stringify(result).slice(0, 200)}`);
+  }
+  if (typeof status === 'string') {
+    throw new Error(status);
+  }
+  if (status.error) {
+    throw new Error(status.error);
+  }
+  if (status.resting?.oid) {
+    return status.resting.oid;
+  }
+  throw new Error(`unexpected status: ${JSON.stringify(status).slice(0, 200)}`);
+}
+
+/**
+ * Открывает Hunter LONG в проде: market BUY → place SL (ниже) + TP (выше) triggers.
+ * При сбое триггеров — rollback (cancel + market SELL).
+ */
+export async function productionHunterLongOpen(coin, markPrice, dumpPct, sl, tp, silent = false, entryFeatures = null) {
+  const exchange = getExchange();
+
+  let balance;
+  try {
+    balance = await getBalance();
+  } catch (err) {
+    logger.error(`[Executor] PROD HUNTER_LONG OPEN #${coin} — getBalance failed: ${err.message}`);
+    if (!silent) await notifyHunterLongOpenFailed({ coin, stage: 'balance', reason: err.message, rolledBack: false });
+    return { ok: false };
+  }
+  if (balance <= 0) {
+    logger.warn(`[Executor] PROD HUNTER_LONG OPEN #${coin} — balance is $${balance.toFixed(2)}`);
+    return { ok: false };
+  }
+
+  let szDecimals;
+  try {
+    ({ szDecimals } = resolveAsset(coin));
+  } catch (err) {
+    logger.error(`[Executor] PROD HUNTER_LONG OPEN #${coin} — resolveAsset failed: ${err.message}`);
+    if (!silent) await notifyHunterLongOpenFailed({ coin, stage: 'resolveAsset', reason: err.message, rolledBack: false });
+    return { ok: false };
+  }
+
+  const leverage = config.trading.hunterLeverage; // тот же leverage что у Hunter SHORT
+  const effectiveBalance = balance * leverage;
+  const { sizeUsd, sz, tooSmall } = calcSize(effectiveBalance, markPrice, szDecimals, HUNTER_BALANCE_UTILIZATION);
+  if (tooSmall) {
+    logger.warn(
+      `[Executor] [HUNTER_LONG SKIP] #${coin} — size $${sizeUsd.toFixed(2)} / sz=${sz} ` +
+        `(50% от $${balance.toFixed(2)} × ${leverage}x lev = $${effectiveBalance.toFixed(2)})`,
+    );
+    return { ok: false };
+  }
+
+  try {
+    await setLeverage(coin, leverage);
+  } catch (err) {
+    logger.error(`[Executor] PROD HUNTER_LONG OPEN #${coin} — setLeverage(${leverage}) failed: ${err.message}`);
+    if (!silent) await notifyHunterLongOpenFailed({ coin, stage: 'setLeverage', reason: err.message, rolledBack: false });
+    return { ok: false };
+  }
+
+  logger.info(
+    `[Executor] PROD HUNTER_LONG OPEN LONG #${coin} — placing market BUY | sz=${sz} (~$${(sz * markPrice).toFixed(2)}) | mark=$${markPrice}`,
+  );
+
+  let result;
+  try {
+    result = await retryWithBackoff(
+      () => exchange.custom.marketOpen(`${coin}-PERP`, true, sz, undefined, MARKET_SLIPPAGE),
+      { label: `hunter-long-open-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
+    );
+  } catch (err) {
+    if (OI_CAP_REGEX.test(err.message ?? '')) {
+      banOiCap(coin);
+      logger.warn(
+        `[Executor] 🚫 HUNTER_LONG OI CAP BAN #${coin} — ${err.message}. Banned for ${OI_CAP_BAN_TTL_MS / 60_000}min.`,
+      );
+      if (!silent) await notifyOiCapBan({ coin, banMinutes: OI_CAP_BAN_TTL_MS / 60_000 });
+      return { ok: false, reason: 'OI_CAP' };
+    }
+    logger.error(`[Executor] PROD HUNTER_LONG OPEN #${coin} — marketOpen failed: ${err.message}`);
+    if (!silent) await notifyHunterLongOpenFailed({ coin, stage: 'marketOpen', reason: err.message, rolledBack: false });
+    return { ok: false };
+  }
+
+  const fill = parseFillResponse(result, 'OPEN');
+  if (!fill.ok) {
+    if (OI_CAP_REGEX.test(fill.error ?? '')) {
+      banOiCap(coin);
+      logger.warn(`[Executor] 🚫 HUNTER_LONG OI CAP BAN #${coin} — ${fill.error}`);
+      if (!silent) await notifyOiCapBan({ coin, banMinutes: OI_CAP_BAN_TTL_MS / 60_000 });
+      return { ok: false, reason: 'OI_CAP' };
+    }
+    logger.error(`[Executor] PROD HUNTER_LONG OPEN #${coin} — exchange rejected: ${fill.error}`);
+    if (!silent) await notifyHunterLongOpenFailed({ coin, stage: 'fill', reason: fill.error, rolledBack: false });
+    return { ok: false };
+  }
+
+  const fillPx  = fill.avgPx;
+  const fillSz  = fill.totalSz;
+  const fillUsd = fillSz * fillPx;
+  const slip    = checkSlippage(markPrice, fillPx, 'BUY');
+  const fee     = fillUsd * ONE_LEG;
+
+  let entryEquity = null;
+  try {
+    const summary = await getAccountSummary();
+    entryEquity = summary.equity;
+  } catch (err) {
+    logger.warn(`[Executor] PROD HUNTER_LONG OPEN #${coin} — entry equity capture failed: ${err.message}`);
+  }
+
+  const id = savePosition({
+    coin,
+    size_usd:     fillUsd,
+    entry_price:  fillPx,
+    entry_apy:    0,
+    entry_time:   Date.now(),
+    mode:         'PRODUCTION',
+    strategy_id:  'hunter_long',
+    sl_price:     sl,
+    tp_price:     tp,
+    entry_equity: entryEquity,
+    side:         'long',
+    ...(entryFeatures || {}),
+  });
+
+  logger.info(
+    `[Executor] ✅ PROD HUNTER_LONG OPEN LONG #${coin} | oid: ${fill.oid} | filled: ${fillSz} @ $${fillPx} ($${fillUsd.toFixed(2)}) | slip: ${slip.label} | id: ${id}`,
+  );
+
+  const fillInfo = { sizeUsd: fillUsd, fillPx, sz: fillSz };
+
+  // SL trigger (ниже entry для LONG)
+  let slOid;
+  try {
+    slOid = await placeHunterLongTrigger(coin, fillSz, sl, 'sl', szDecimals);
+    logger.info(`[Executor] PROD HUNTER_LONG #${coin} SL trigger armed @ $${sl} | oid=${slOid}`);
+  } catch (err) {
+    logger.error(`[Executor] PROD HUNTER_LONG #${coin} SL placeOrder failed: ${err.message} — ROLLBACK market close`);
+    const rb = await rollbackHunterLongOpen(coin, fillSz, id, fillPx, /* triggerOids */ []);
+    if (!silent) await notifyHunterLongOpenFailed({ coin, stage: 'placeSL', reason: err.message, rolledBack: true, fill: fillInfo, rollback: rb });
+    return { ok: false };
+  }
+
+  // TP trigger (выше entry для LONG)
+  let tpOid;
+  try {
+    tpOid = await placeHunterLongTrigger(coin, fillSz, tp, 'tp', szDecimals);
+    logger.info(`[Executor] PROD HUNTER_LONG #${coin} TP trigger armed @ $${tp} | oid=${tpOid}`);
+  } catch (err) {
+    logger.error(`[Executor] PROD HUNTER_LONG #${coin} TP placeOrder failed: ${err.message} — ROLLBACK (cancel SL + market close)`);
+    const rb = await rollbackHunterLongOpen(coin, fillSz, id, fillPx, [slOid]);
+    if (!silent) await notifyHunterLongOpenFailed({ coin, stage: 'placeTP', reason: err.message, rolledBack: true, fill: fillInfo, rollback: rb });
+    return { ok: false };
+  }
+
+  updateHunterTriggerOids(id, { hunter_sl_oid: slOid, hunter_tp_oid: tpOid });
+
+  if (!silent) {
+    await notifyHunterLongOpenProd({
+      coin, sizeUsd: fillUsd, balance, leverage,
+      fillPx, markPrice, dumpPct, sl, tp,
+      slOid, tpOid, slipLabel: slip.label, fee,
+    });
+  }
+
+  notify('afterOpen', {
+    coin, price: fillPx, sizeUsd: fillUsd, positionId: Number(id),
+    mode: 'PRODUCTION', strategy: 'hunter_long',
+  });
+
+  return { ok: true, positionId: Number(id), sizeUsd: fillUsd };
+}
+
+/**
+ * Откат при сбое триггеров для LONG: cancel triggers + market SELL для закрытия long.
+ */
+async function rollbackHunterLongOpen(coin, sz, dbId, fillPx, triggerOids) {
+  const exchange = getExchange();
+
+  for (const oid of triggerOids) {
+    try {
+      await exchange.exchange.cancelOrder({ coin: `${coin}-PERP`, o: oid });
+      logger.info(`[Executor] HUNTER_LONG ROLLBACK #${coin} — cancelled trigger oid=${oid}`);
+    } catch (err) {
+      logger.error(`[Executor] HUNTER_LONG ROLLBACK #${coin} — cancel oid=${oid} failed: ${err.message}`);
+    }
+  }
+
+  let closeResult;
+  try {
+    closeResult = await retryWithBackoff(
+      () => exchange.custom.marketClose(`${coin}-PERP`, sz, undefined, MARKET_SLIPPAGE),
+      { label: `hunter-long-rollback-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
+    );
+  } catch (err) {
+    logger.error(`[Executor] HUNTER_LONG ROLLBACK #${coin} — marketClose THREW: ${err.message}. РУЧНОЕ ВМЕШАТЕЛЬСТВО!`);
+    return null;
+  }
+
+  const closeFill = parseFillResponse(closeResult, 'CLOSE');
+  if (!closeFill.ok) {
+    logger.error(`[Executor] HUNTER_LONG ROLLBACK #${coin} — close rejected: ${closeFill.error}. РУЧНОЕ ВМЕШАТЕЛЬСТВО!`);
+    return null;
+  }
+  const closePx = closeFill.avgPx;
+  const closeNotional = closeFill.totalSz * closePx;
+  const totalFee = closeNotional * ONE_LEG + (sz * fillPx) * ONE_LEG;
+  // pricePnl на LONG: (close − entry) × sz
+  const pricePnl = sz * (closePx - fillPx);
+  const realized = pricePnl - totalFee;
+
+  try {
+    dbClosePosition(dbId, {
+      close_price:  closePx,
+      realized_pnl: realized,
+      fee_paid:     totalFee,
+      reason:       'hunter_long_rollback',
+    });
+    logger.info(
+      `[Executor] HUNTER_LONG ROLLBACK #${coin} closed: entry $${fillPx} → close $${closePx} | pnl $${realized.toFixed(4)}`,
+    );
+  } catch (err) {
+    logger.error(`[Executor] HUNTER_LONG ROLLBACK #${coin} — dbClosePosition failed: ${err.message}`);
+  }
+
+  setCooldown(coin);
+  return { closePx, pnl: realized, fee: totalFee };
+}
+
+// ─────────────────────────────────────────────────
 //  CLOSE
 // ─────────────────────────────────────────────────
 
@@ -799,6 +1061,20 @@ export async function productionClose(signal, position, silent = false) {
       exitFeatures.trail_give_back_pct = signal.giveBackPct ?? null;
     }
     clearHunterTrailState(position.id);
+  } else if (position.strategy_id === 'hunter_long') {
+    const mm = consumeHunterLongMfeMae(position.id);
+    exitFeatures = {
+      mfe_usd:      mm?.mfeUsd ?? null,
+      mae_usd:      mm?.maeUsd ?? null,
+      mfe_pct:      mm?.mfePct ?? null,
+      mae_pct:      mm?.maePct ?? null,
+      hold_seconds: Math.round(holdMs / 1000),
+    };
+    if (signal.reason === 'hunter_long_trail_tp') {
+      exitFeatures.trail_peak_pct      = signal.peakPct ?? getHunterLongPeakPct(position.id);
+      exitFeatures.trail_give_back_pct = signal.giveBackPct ?? null;
+    }
+    clearHunterLongTrailState(position.id);
   }
 
   dbClosePosition(position.id, {
@@ -826,6 +1102,18 @@ export async function productionClose(signal, position, silent = false) {
   if (!silent) {
     if (position.strategy_id === 'hunter' && signal.reason === 'hunter_trail_tp') {
       await notifyHunterTrailTp({
+        coin,
+        entryPrice:   position.entry_price,
+        closePrice:   fill.avgPx,
+        peakPct:      signal.peakPct ?? exitFeatures?.trail_peak_pct ?? 0,
+        giveBackPct:  signal.giveBackPct ?? exitFeatures?.trail_give_back_pct ?? 0,
+        pnl:          realizedPnl,
+        fee:          totalFee,
+        holdMinutes:  Math.round(holdHours * 60),
+        fixedTpPrice: position.tp_price,
+      });
+    } else if (position.strategy_id === 'hunter_long' && signal.reason === 'hunter_long_trail_tp') {
+      await notifyHunterLongTrailTp({
         coin,
         entryPrice:   position.entry_price,
         closePrice:   fill.avgPx,

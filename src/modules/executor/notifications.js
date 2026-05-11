@@ -326,6 +326,103 @@ export async function notifyHunterTrailTp({ coin, entryPrice, closePrice, peakPc
   );
 }
 
+// ── HUNTER LONG (Strategy #3 mirror: Long-after-dump, Iter E) ──
+
+export async function notifyHunterLongOpen({ coin, sizeUsd, balance, price, dumpPct, sl, tp, fee }) {
+  await sendMessage(
+    `🎯 <b>[HUNTER OPEN LONG] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `📉 Дамп: <b>${dumpPct.toFixed(2)}%</b> за 2мин\n` +
+      `💰 Размер: <b>$${sizeUsd.toFixed(2)}</b> (50% от $${balance.toFixed(2)})\n` +
+      `💵 Entry: <b>$${price}</b>\n` +
+      `🛑 SL: $${sl.toFixed(6)} <i>(−2%)</i>\n` +
+      `🎯 TP: $${tp.toFixed(6)} <i>(+3%)</i>\n` +
+      `🏷 Entry fee: $${fee.toFixed(4)}`
+  );
+}
+
+export async function notifyHunterLongOpenProd({ coin, sizeUsd, balance, leverage, fillPx, markPrice, dumpPct, sl, tp, slOid, tpOid, slipLabel, fee }) {
+  const levSuffix = leverage > 1 ? ` × <b>${leverage}x</b>` : '';
+  await sendMessage(
+    `🎯🔫 <b>[HUNTER PROD OPEN LONG] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `📉 Дамп: <b>${dumpPct.toFixed(2)}%</b> за 2мин\n` +
+      `💰 Размер: <b>$${sizeUsd.toFixed(2)}</b> (50% от $${balance.toFixed(2)}${levSuffix})\n` +
+      `💵 Mark→Fill: $${markPrice} → <b>$${fillPx}</b> <i>(${slipLabel})</i>\n` +
+      `🛑 SL: $${sl.toFixed(6)} <i>(−2%, oid=${slOid})</i>\n` +
+      `🎯 TP: $${tp.toFixed(6)} <i>(+3%, oid=${tpOid})</i>\n` +
+      `🏷 Entry fee: $${fee.toFixed(4)}\n` +
+      `<i>Триггеры стоят на бирже. Бот ждёт отскок.</i>`,
+    true,
+  );
+}
+
+export async function notifyHunterLongOpenFailed({ coin, stage, reason, rolledBack, fill = null, rollback = null }) {
+  const fillLine = fill
+    ? `📥 Open: <b>${fill.sz}</b> @ $${fill.fillPx} ($${fill.sizeUsd.toFixed(2)})\n`
+    : '';
+  const rbLine = rollback
+    ? `📤 Rollback close @ $${rollback.closePx} | PnL: <b>${rollback.pnl >= 0 ? '+' : ''}$${rollback.pnl.toFixed(4)}</b> (fees $${rollback.fee.toFixed(4)})\n`
+    : '';
+  await sendMessage(
+    `🎯⚠️ <b>[HUNTER LONG PROD FAIL] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `Стадия: <b>${stage}</b>\n` +
+      `Причина: <code>${reason}</code>\n` +
+      fillLine +
+      rbLine +
+      (rolledBack
+        ? `<i>Позиция закрыта по market — без SL остаться нельзя.</i>`
+        : `<i>Позиция не открылась — ничего не сделано.</i>`),
+    true,
+  );
+}
+
+export async function notifyHunterLongSL({ coin, entryPrice, slPrice, pnl, fee, holdMinutes }) {
+  const sign = pnl >= 0 ? "+" : "";
+  await sendMessage(
+    `🎯🛑 <b>[HUNTER LONG SL] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `💵 Entry: $${entryPrice} → SL: $${slPrice.toFixed(6)}\n` +
+      `⏳ Hold: <b>${holdMinutes}мин</b>\n` +
+      `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
+      `🏷 Fees: $${fee.toFixed(4)}\n` +
+      `<i>Дамп продолжился — ловили нож. Режем.</i>`
+  );
+}
+
+export async function notifyHunterLongTP({ coin, entryPrice, tpPrice, pnl, fee, holdMinutes }) {
+  const sign = pnl >= 0 ? "+" : "";
+  await sendMessage(
+    `🎯✅ <b>[HUNTER LONG TP] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `💵 Entry: $${entryPrice} → TP: $${tpPrice.toFixed(6)}\n` +
+      `⏳ Hold: <b>${holdMinutes}мин</b>\n` +
+      `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
+      `🏷 Fees: $${fee.toFixed(4)}\n` +
+      `<i>Отскок отработал. Купили дно — продали верх.</i>`
+  );
+}
+
+export async function notifyHunterLongTrailTp({ coin, entryPrice, closePrice, peakPct, giveBackPct, pnl, fee, holdMinutes, fixedTpPrice }) {
+  const sign = pnl >= 0 ? "+" : "";
+  const realPct = entryPrice ? ((closePrice - entryPrice) / entryPrice) * 100 : 0;
+  const fixedTpPct = (fixedTpPrice && entryPrice) ? ((fixedTpPrice - entryPrice) / entryPrice) * 100 : null;
+  const deltaLine = fixedTpPct !== null
+    ? `📊 vs fixed TP: <b>${realPct >= fixedTpPct ? '+' : ''}${(realPct - fixedTpPct).toFixed(2)}пп</b> (peak +${peakPct.toFixed(2)}%, дали ${giveBackPct.toFixed(0)}%)\n`
+    : `📊 peak: +${peakPct.toFixed(2)}% | дали обратно ${giveBackPct.toFixed(0)}%\n`;
+  await sendMessage(
+    `🎯🎢 <b>[HUNTER LONG TRAIL TP] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `💵 Entry: $${entryPrice} → Close: $${closePrice.toFixed(6)} (+${realPct.toFixed(2)}%)\n` +
+      `⏳ Hold: <b>${holdMinutes}мин</b>\n` +
+      `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
+      `🏷 Fees: $${fee.toFixed(4)}\n` +
+      deltaLine +
+      `<i>Trailing TP: отскок ушёл глубже fixed TP, поймали хвост.</i>`
+  );
+}
+
 // ── ROTATE ─────────────────────────────────────
 
 export async function notifyRotate({ closeCoin, openCoin, holdHours, closePnl, openSizeUsd, openApy, paybackHours, isProd }) {
