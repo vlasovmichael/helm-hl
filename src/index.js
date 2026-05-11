@@ -15,6 +15,7 @@ import { dailyJob as taxDailyJob } from './modules/taxCollector/index.js';
 import { drainOutbox as taxDrainOutbox } from './modules/taxCollector/pusher.js';
 import { state, TICK_INTERVAL_MS, INTEGRITY_GRACE_PERIOD_MS, SHUTDOWN_TIMEOUT_MS } from './app/state.js';
 import { tick } from './app/tick.js';
+import { restoreHunterTrailIfNeeded } from './app/hunterTrailArm.js';
 import { shutdown } from './app/lifecycle.js';
 import { createStatusCollector } from './app/status.js';
 
@@ -96,6 +97,13 @@ async function main() {
   logger.info(
     `[System] Integrity check grace period: ${INTEGRITY_GRACE_PERIOD_MS / 1000}s`,
   );
+
+  // Hunter trail restore: если armed-at-shutdown — вернуть exchange TP-trigger.
+  try {
+    await restoreHunterTrailIfNeeded();
+  } catch (err) {
+    logger.warn(`[System] Hunter trail restore failed (non-fatal): ${err.message}`);
+  }
 
   await tick();
 

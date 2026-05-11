@@ -36,7 +36,7 @@ import {
 import { reconcile } from './reconciler.js';
 import { sleep } from './reconciler.js';
 import { gate, notify } from './hooks.js';
-import { consumeHunterMfeMae } from '../strategistSniper.js';
+import { consumeHunterMfeMae, clearHunterTrailState, getHunterPeakPct } from '../strategistSniper.js';
 import {
   notifyProductionOpen, notifyOpenFailed, notifyOpenRejected,
   notifyOpenSkipped, notifySlippageBan,
@@ -46,6 +46,7 @@ import {
   notifyCircuitBreaker,
   notifyOiCapBan, notifyOiCapAfterRotate,
   notifyHunterOpenProd, notifyHunterOpenFailed,
+  notifyHunterTrailTp,
 } from './notifications.js';
 
 // Регэксп для детекции "open interest at cap" в ответе биржи.
@@ -336,7 +337,7 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
  * @param {number} triggerPx — цена срабатывания
  * @param {'sl'|'tp'} tpsl
  */
-async function placeHunterTrigger(coin, sz, triggerPx, tpsl, szDecimals) {
+export async function placeHunterTrigger(coin, sz, triggerPx, tpsl, szDecimals) {
   const exchange = getExchange();
   // HL отклоняет цены с >5 значащих цифр / >(6−szDecimals) десятичных.
   // Сырая `entry × 1.02` для низкопрайсовых монет (REZ ~$0.05) даёт 7 sig figs
@@ -773,6 +774,11 @@ export async function productionClose(signal, position, silent = false) {
       mae_pct:      mm?.maePct ?? null,
       hold_seconds: Math.round(holdMs / 1000),
     };
+    if (signal.reason === 'hunter_trail_tp') {
+      exitFeatures.trail_peak_pct      = signal.peakPct ?? getHunterPeakPct(position.id);
+      exitFeatures.trail_give_back_pct = signal.giveBackPct ?? null;
+    }
+    clearHunterTrailState(position.id);
   }
 
   dbClosePosition(position.id, {
@@ -798,12 +804,26 @@ export async function productionClose(signal, position, silent = false) {
 
   // ── 7. Telegram + hooks ──────────────────────
   if (!silent) {
-    await notifyProductionClose({
-      coin, holdHours, entryPrice: position.entry_price,
-      avgPx: fill.avgPx, slip, pricePnl, fundingPnl,
-      totalFee, realizedPnl, reason: signal.reason,
-      oid: fill.oid, side: posSide,
-    });
+    if (position.strategy_id === 'hunter' && signal.reason === 'hunter_trail_tp') {
+      await notifyHunterTrailTp({
+        coin,
+        entryPrice:   position.entry_price,
+        closePrice:   fill.avgPx,
+        peakPct:      signal.peakPct ?? exitFeatures?.trail_peak_pct ?? 0,
+        giveBackPct:  signal.giveBackPct ?? exitFeatures?.trail_give_back_pct ?? 0,
+        pnl:          realizedPnl,
+        fee:          totalFee,
+        holdMinutes:  Math.round(holdHours * 60),
+        fixedTpPrice: position.tp_price,
+      });
+    } else {
+      await notifyProductionClose({
+        coin, holdHours, entryPrice: position.entry_price,
+        avgPx: fill.avgPx, slip, pricePnl, fundingPnl,
+        totalFee, realizedPnl, reason: signal.reason,
+        oid: fill.oid, side: posSide,
+      });
+    }
   }
 
   // Circuit breaker: фиксируем убыток

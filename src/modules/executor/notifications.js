@@ -307,6 +307,25 @@ export async function notifyHunterTP({ coin, entryPrice, tpPrice, pnl, fee, hold
   );
 }
 
+export async function notifyHunterTrailTp({ coin, entryPrice, closePrice, peakPct, giveBackPct, pnl, fee, holdMinutes, fixedTpPrice }) {
+  const sign = pnl >= 0 ? "+" : "";
+  const realPct = entryPrice ? ((entryPrice - closePrice) / entryPrice) * 100 : 0;
+  const fixedTpPct = (fixedTpPrice && entryPrice) ? ((entryPrice - fixedTpPrice) / entryPrice) * 100 : null;
+  const deltaLine = fixedTpPct !== null
+    ? `📊 vs fixed TP: <b>+${(realPct - fixedTpPct).toFixed(2)}пп</b> (peak +${peakPct.toFixed(2)}%, дали ${giveBackPct.toFixed(0)}%)\n`
+    : `📊 peak: +${peakPct.toFixed(2)}% | дали обратно ${giveBackPct.toFixed(0)}%\n`;
+  await sendMessage(
+    `🎯🎢 <b>[HUNTER TRAIL TP] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `💵 Entry: $${entryPrice} → Close: $${closePrice.toFixed(6)} (+${realPct.toFixed(2)}%)\n` +
+      `⏳ Hold: <b>${holdMinutes}мин</b>\n` +
+      `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
+      `🏷 Fees: $${fee.toFixed(4)}\n` +
+      deltaLine +
+      `<i>Trailing TP: цена ушла глубже fixed TP, поймали хвост.</i>`
+  );
+}
+
 // ── ROTATE ─────────────────────────────────────
 
 export async function notifyRotate({ closeCoin, openCoin, holdHours, closePnl, openSizeUsd, openApy, paybackHours, isProd }) {

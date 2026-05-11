@@ -11,6 +11,7 @@ import { tickSniper } from '../modules/executor/sniper.js';
 import { runSmartAlerts } from './alerts.js';
 import { integrityCheck, orphanCheck } from './integrity.js';
 import { hunterReconcile } from './hunterReconcile.js';
+import { processHunterTrailArm } from './hunterTrailArm.js';
 import { state } from './state.js';
 
 export async function tick() {
@@ -67,6 +68,12 @@ export async function tick() {
     }
 
     const signal = coordinate(scoutData, activePosition, hunterData);
+
+    // Iter D2: если checkHunterExit (внутри coordinate→analyzeHunter) выставил
+    // ARM request — выполняем cancel TP-trigger ДО execute(). Это гарантирует,
+    // что к моменту close (если signal=hunter_trail_tp) executor не будет
+    // дважды дёргать cancel.
+    await processHunterTrailArm(activePosition);
 
     if (signal.action !== 'HOLD') {
       await execute(signal, activePosition);

@@ -20,7 +20,7 @@ import {
 import { getExchange, getPositions } from '../modules/exchange.js';
 import { ONE_LEG } from '../modules/executor/math.js';
 import { setCooldown } from '../modules/executor/state.js';
-import { recordHunterSlExternal, consumeHunterMfeMae } from '../modules/strategistSniper.js';
+import { recordHunterSlExternal, consumeHunterMfeMae, isHunterArmed } from '../modules/strategistSniper.js';
 import {
   notifyHunterSL,
   notifyHunterTP,
@@ -167,11 +167,18 @@ export async function hunterReconcile() {
   // Healthy: позиция жива, оба триггера висят
   if (positionAlive && slOpen && tpOpen) return false;
 
+  // Iter D: если бот сам отменил TP-trigger при ARM (trail-режим), позиция жива
+  // + SL висит + TP пропал — это ОЖИДАЕМОЕ состояние. Не варн, не fire.
+  const armed = isHunterArmed(dbPos.id);
+  if (positionAlive && slOpen && !tpOpen && armed) {
+    return false;
+  }
+
   // Position alive но триггер пропал — аномалия (оператор отменил вручную? или race?)
   if (positionAlive && (!slOpen || !tpOpen)) {
     logger.warn(
       `[HunterRecon] #${dbPos.coin} position ALIVE but trigger missing ` +
-        `(slOpen=${slOpen}, tpOpen=${tpOpen}). Не трогаем — пусть analyzeHunter/integrity разберутся.`,
+        `(slOpen=${slOpen}, tpOpen=${tpOpen}, armed=${armed}). Не трогаем — пусть analyzeHunter/integrity разберутся.`,
     );
     return false;
   }

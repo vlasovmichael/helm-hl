@@ -231,6 +231,24 @@ function loadConfig() {
     throw new Error(`HUNTER_TIME_STOP_MIN must be positive. Got: "${process.env.HUNTER_TIME_STOP_MIN}"`);
   }
 
+  // ── Hunter trailing TP (Iter D) ──
+  // Trail заменяет fixed TP-trigger когда unrealized пересекает ARM_PCT.
+  // ARM_PCT < HUNTER_TP_PCT (3%) — arm раньше, чтобы успеть cancel exchange TP.
+  // GIVE_BACK_PCT — доля peak'а, которую готовы отдать обратно перед close.
+  // SHADOW_LOG: если true — логируем "would-have-trailed" события даже когда
+  // основной флаг false. Используется для оценки эффекта до PROD-активации.
+  const hunterTrailEnabled      = (process.env.HUNTER_TRAIL_ENABLED || 'false').toLowerCase() === 'true';
+  const hunterTrailShadowLog    = (process.env.HUNTER_TRAIL_SHADOW_LOG || 'true').toLowerCase() === 'true';
+  const hunterTrailArmPct       = parseFloat(process.env.HUNTER_TRAIL_ARM_PCT       || '2');
+  const hunterTrailGiveBackPct  = parseFloat(process.env.HUNTER_TRAIL_GIVE_BACK_PCT || '30');
+
+  if (isNaN(hunterTrailArmPct) || hunterTrailArmPct <= 0 || hunterTrailArmPct >= 3) {
+    throw new Error(`HUNTER_TRAIL_ARM_PCT must be in (0, 3) — strictly less than HUNTER_TP_PCT=3. Got: "${process.env.HUNTER_TRAIL_ARM_PCT}"`);
+  }
+  if (isNaN(hunterTrailGiveBackPct) || hunterTrailGiveBackPct <= 0 || hunterTrailGiveBackPct >= 100) {
+    throw new Error(`HUNTER_TRAIL_GIVE_BACK_PCT must be in (0, 100). Got: "${process.env.HUNTER_TRAIL_GIVE_BACK_PCT}"`);
+  }
+
   // ── Carry: soft-sniper exit on negative_funding when in profit ──
   // Если funding ушёл в минус, но позиция в плюсе ≥X% — закрываем через snайпера
   // (maker, экономия 0.02% комиссии). Иначе — market (чтоб не терять время).
@@ -315,6 +333,10 @@ function loadConfig() {
       hunterTrendMaxRisePct,
       hunterPostSlCooldownMin,
       hunterTimeStopMin,
+      hunterTrailEnabled,
+      hunterTrailShadowLog,
+      hunterTrailArmPct,
+      hunterTrailGiveBackPct,
       carryTrailEnabled,
       carryTrailArmPct,
       carryTrailArmPctEquity,

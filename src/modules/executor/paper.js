@@ -20,9 +20,9 @@ import {
 import { notify } from './hooks.js';
 import {
   notifyPaperOpen, notifyPaperClose, notifyCircuitBreaker,
-  notifyHunterOpen, notifyHunterSL, notifyHunterTP,
+  notifyHunterOpen, notifyHunterSL, notifyHunterTP, notifyHunterTrailTp,
 } from './notifications.js';
-import { consumeHunterMfeMae } from '../strategistSniper.js';
+import { consumeHunterMfeMae, clearHunterTrailState, getHunterPeakPct } from '../strategistSniper.js';
 
 /**
  * Определяет баланс для расчёта размера позиции.
@@ -211,6 +211,13 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
       mae_pct:      mm?.maePct ?? null,
       hold_seconds: Math.round(holdMs / 1000),
     };
+    // Iter D: для trail-close записываем peak/giveback в features.
+    if (signal.reason === 'hunter_trail_tp') {
+      exitFeatures.trail_peak_pct      = signal.peakPct ?? getHunterPeakPct(position.id);
+      exitFeatures.trail_give_back_pct = signal.giveBackPct ?? null;
+    }
+    // Любое закрытие hunter-позиции = снять trail-state.
+    clearHunterTrailState(position.id);
   }
 
   dbClosePosition(position.id, {
@@ -252,6 +259,18 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
         pnl:         realizedPnl,
         fee:         totalFee,
         holdMinutes: Math.round(holdHours * 60),
+      });
+    } else if (position.strategy_id === 'hunter' && signal.reason === 'hunter_trail_tp') {
+      await notifyHunterTrailTp({
+        coin:         position.coin,
+        entryPrice:   position.entry_price,
+        closePrice,
+        peakPct:      signal.peakPct ?? exitFeatures?.trail_peak_pct ?? 0,
+        giveBackPct:  signal.giveBackPct ?? exitFeatures?.trail_give_back_pct ?? 0,
+        pnl:          realizedPnl,
+        fee:          totalFee,
+        holdMinutes:  Math.round(holdHours * 60),
+        fixedTpPrice: position.tp_price,
       });
     } else {
       await notifyPaperClose({

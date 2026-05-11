@@ -44,6 +44,64 @@ let lastHeartbeatAt = 0;
 // Структура: positionId → { mfeUsd, maeUsd, mfePct, maePct }
 const hunterMfeMaeMap = new Map();
 
+// ── Iter D: trailing TP state ────────────────────────────────────────────
+// peakUnrealizedPct: positionId → peak unrealized% (SHORT: (entry-current)/entry*100).
+// hunterArmedMap: positionId → true, если ARM_PCT уже пересекали (для D2:
+// сигнализирует, что exchange TP-trigger мы сами cancelнули). Live state,
+// очищается при close. В D1 заполняется но не влияет на PROD-path.
+// hunterArmRequestMap: positionId → true, выставляется в checkHunterExit когда
+// нужно выполнить cancel-TP. tick.js consume'ит и выполняет side-effect.
+const peakUnrealizedPct   = new Map();
+const hunterArmedMap      = new Map();
+const hunterArmRequestMap = new Map();
+
+const HUNTER_TRAIL_ENABLED      = config.trading.hunterTrailEnabled;
+const HUNTER_TRAIL_SHADOW_LOG   = config.trading.hunterTrailShadowLog;
+const HUNTER_TRAIL_ARM_PCT      = config.trading.hunterTrailArmPct;
+const HUNTER_TRAIL_GIVE_BACK_PCT = config.trading.hunterTrailGiveBackPct;
+
+/** Чистит весь trail-state для позиции (вызывается из close-handler'ов). */
+export function clearHunterTrailState(positionId) {
+  if (positionId == null) return;
+  peakUnrealizedPct.delete(positionId);
+  hunterArmedMap.delete(positionId);
+  hunterArmRequestMap.delete(positionId);
+}
+
+/** tick.js: проверить и забрать pending ARM request (one-shot). */
+export function consumeHunterArmRequest(positionId) {
+  if (positionId == null) return false;
+  if (!hunterArmRequestMap.get(positionId)) return false;
+  hunterArmRequestMap.delete(positionId);
+  return true;
+}
+
+/** Возврат ARM request обратно (используется при сбое cancel TP). */
+export function requestHunterArm(positionId) {
+  if (positionId != null) hunterArmRequestMap.set(positionId, true);
+}
+
+/** Проверка armed-флага для D2 (executor/hunterReconcile). Только PROD-armed,
+ * не shadow-sentinel. */
+export function isHunterArmed(positionId) {
+  return hunterArmedMap.get(positionId) === true;
+}
+
+/** D2: помечает позицию armed после успешного cancel exchange TP. */
+export function setHunterArmed(positionId) {
+  if (positionId != null) hunterArmedMap.set(positionId, true);
+}
+
+/** D2 restart-handler: снимает armed-флаг после restore TP. */
+export function clearHunterArmed(positionId) {
+  if (positionId != null) hunterArmedMap.delete(positionId);
+}
+
+/** Возвращает текущий peak unrealized% (для exitFeatures при close). */
+export function getHunterPeakPct(positionId) {
+  return peakUnrealizedPct.get(positionId) ?? 0;
+}
+
 const HUNTER_TREND_1H_MIN = 60;  // окно для entry_trend_1h_pct (логирование, не фильтр)
 
 /** Тестовый helper — сброс cooldown'ов + heartbeat timer. */
@@ -51,6 +109,9 @@ export function resetHunterCooldowns() {
   hunterCooldownMap.clear();
   hunterPostSlCooldown.clear();
   hunterMfeMaeMap.clear();
+  peakUnrealizedPct.clear();
+  hunterArmedMap.clear();
+  hunterArmRequestMap.clear();
   lastHeartbeatAt = 0;
 }
 
@@ -263,6 +324,69 @@ function checkHunterExit(position, scoutData) {
   // Обновляем MFE/MAE на каждом тике (до проверки SL/TP — захватываем краевые
   // значения тоже). Используется при close для записи в history.
   updateMfeMae(position, item.price);
+
+  // ── Iter D: trailing TP ─────────────────────────────────────────────
+  // Track peak unrealized% (SHORT: positive when price falls below entry).
+  // Important: оценка trail'а до SL/TP — если armed + giveback, выходим раньше
+  // чем сработал бы fixed TP (что и даёт upside в кейсах LDO-типа).
+  const unrealizedPct = ((position.entry_price - item.price) / position.entry_price) * 100;
+  const prevPeak = peakUnrealizedPct.get(position.id) ?? 0;
+  if (unrealizedPct > prevPeak) {
+    peakUnrealizedPct.set(position.id, unrealizedPct);
+  }
+  const peak = peakUnrealizedPct.get(position.id) ?? 0;
+
+  // D2 ARM request: peak пересёк ARM_PCT впервые на PROD hunter позиции.
+  // Side-effect (cancel TP-trigger) выполняет tick.js, не этот pure-модуль.
+  if (
+    HUNTER_TRAIL_ENABLED &&
+    config.isProduction &&
+    position.mode === 'PRODUCTION' &&
+    position.strategy_id === 'hunter' &&
+    peak >= HUNTER_TRAIL_ARM_PCT &&
+    prevPeak < HUNTER_TRAIL_ARM_PCT &&
+    hunterArmedMap.get(position.id) !== true &&
+    position.hunter_tp_oid
+  ) {
+    hunterArmRequestMap.set(position.id, true);
+    logger.info(
+      `[Hunter] 🔫 TRAIL ARM REQUEST #${position.coin} (id=${position.id}): peak crossed +${peak.toFixed(2)}% ≥ ${HUNTER_TRAIL_ARM_PCT}%`,
+    );
+  }
+
+  if (peak >= HUNTER_TRAIL_ARM_PCT && unrealizedPct > 0) {
+    const giveBack = peak - unrealizedPct;
+    const giveBackThreshold = peak * (HUNTER_TRAIL_GIVE_BACK_PCT / 100);
+    if (giveBack >= giveBackThreshold) {
+      if (HUNTER_TRAIL_ENABLED) {
+        logger.info(
+          `[Hunter] 🎯 TRAIL CLOSE #${position.coin}: peak +${peak.toFixed(2)}% → now +${unrealizedPct.toFixed(2)}% ` +
+            `(gave back ${(giveBack / peak * 100).toFixed(0)}% ≥ ${HUNTER_TRAIL_GIVE_BACK_PCT}%)`,
+        );
+        return {
+          action: 'CLOSE',
+          coin:   position.coin,
+          price:  item.price,
+          reason: 'hunter_trail_tp',
+          peakPct:     peak,
+          giveBackPct: (giveBack / peak) * 100,
+        };
+      }
+      // Shadow: лог один раз на позицию (отдельный sentinel-флаг, чтобы не
+      // конфликтовать с PROD-armed состоянием из D2).
+      if (HUNTER_TRAIL_SHADOW_LOG && hunterArmedMap.get(position.id) !== 'shadow') {
+        hunterArmedMap.set(position.id, 'shadow');
+        const wouldBePrice = item.price;
+        const tpPrice = position.tp_price;
+        const tpPnl = tpPrice ? (position.entry_price - tpPrice) / position.entry_price * 100 : null;
+        logger.info(
+          `[Hunter SHADOW] would-trail #${position.coin}: peak +${peak.toFixed(2)}% → now +${unrealizedPct.toFixed(2)}% ` +
+            `(giveback ${(giveBack / peak * 100).toFixed(0)}%). Trail-exit ≈ $${wouldBePrice.toFixed(6)} (+${unrealizedPct.toFixed(2)}%) ` +
+            `vs fixed TP ≈ $${tpPrice} (${tpPnl !== null ? '+' + tpPnl.toFixed(2) + '%' : 'n/a'})`,
+        );
+      }
+    }
+  }
 
   if (position.sl_price != null && item.price >= position.sl_price) {
     // Регистрируем post-SL cooldown — Hunter не вернётся к этой монете N мин.
