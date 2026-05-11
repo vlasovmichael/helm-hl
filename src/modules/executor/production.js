@@ -450,6 +450,16 @@ export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, si
       { label: `hunter-open-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
     );
   } catch (err) {
+    // OI cap detection — симметрично с funding-веткой выше
+    if (OI_CAP_REGEX.test(err.message ?? '')) {
+      banOiCap(coin);
+      logger.warn(
+        `[Executor] 🚫 HUNTER OI CAP BAN #${coin} — exchange rejected (${err.message}). ` +
+          `Banned for ${OI_CAP_BAN_TTL_MS / 60_000}min.`,
+      );
+      if (!silent) await notifyOiCapBan({ coin, banMinutes: OI_CAP_BAN_TTL_MS / 60_000 });
+      return { ok: false, reason: 'OI_CAP' };
+    }
     logger.error(`[Executor] PROD HUNTER OPEN #${coin} — marketOpen failed: ${err.message}`);
     if (!silent) await notifyHunterOpenFailed({ coin, stage: 'marketOpen', reason: err.message, rolledBack: false });
     return { ok: false };
@@ -457,6 +467,16 @@ export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, si
 
   const fill = parseFillResponse(result, 'OPEN');
   if (!fill.ok) {
+    // OI cap detection — биржа могла "отклонить" вместо throw
+    if (OI_CAP_REGEX.test(fill.error ?? '')) {
+      banOiCap(coin);
+      logger.warn(
+        `[Executor] 🚫 HUNTER OI CAP BAN #${coin} — exchange rejected (${fill.error}). ` +
+          `Banned for ${OI_CAP_BAN_TTL_MS / 60_000}min.`,
+      );
+      if (!silent) await notifyOiCapBan({ coin, banMinutes: OI_CAP_BAN_TTL_MS / 60_000 });
+      return { ok: false, reason: 'OI_CAP' };
+    }
     logger.error(`[Executor] PROD HUNTER OPEN #${coin} — exchange rejected: ${fill.error}`);
     if (!silent) await notifyHunterOpenFailed({ coin, stage: 'fill', reason: fill.error, rolledBack: false });
     return { ok: false };
