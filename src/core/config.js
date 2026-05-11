@@ -93,9 +93,17 @@ function loadConfig() {
   // ARM_PCT = пока unrealized < этого порога, peak не трекаем (фильтр шума).
   const carryTrailEnabled       = (process.env.CARRY_TRAIL_ENABLED || 'true').toLowerCase() === 'true';
   const carryTrailArmPct        = parseFloat(process.env.CARRY_TRAIL_ARM_PCT        || '3');
-  const carryTrailArmPctEquity  = parseFloat(process.env.CARRY_TRAIL_ARM_PCT_EQUITY || '1.5');
+  // ARM_PCT_EQUITY: 1.5→1.2 (2026-05-11) — фиксируем wins чуть раньше, чтоб
+  // увеличить hit-rate trailing TP против дешёвых проседаний.
+  const carryTrailArmPctEquity  = parseFloat(process.env.CARRY_TRAIL_ARM_PCT_EQUITY || '1.2');
   const carryTrailGiveBackPct   = parseFloat(process.env.CARRY_TRAIL_GIVE_BACK_PCT  || '25');
-  const carrySpikeProtectionPct = parseFloat(process.env.CARRY_SPIKE_PROTECTION_PCT || '6');
+  // SPIKE_PROTECTION_PCT: 6→4 (2026-05-11) — VVV в логах PROD дважды стопанулась
+  // на 6% (-$2.94, -$2.61) и съела 5 wins по +$0.55-0.95. Cap loss до ~$1.5.
+  const carrySpikeProtectionPct = parseFloat(process.env.CARRY_SPIKE_PROTECTION_PCT || '4');
+  // LOSS_COOLDOWN_MIN: после price_spike_protection монета банится на N минут.
+  // Защита от паттерна VVV 2026-05-10/11: stop-out → монета снова #1 по APY →
+  // re-entry через 17ч → второй stop-out. Дефолт 720мин (12ч).
+  const carryLossCooldownMin = parseFloat(process.env.CARRY_LOSS_COOLDOWN_MIN || '720');
 
   if (isNaN(carryTrailArmPct) || carryTrailArmPct <= 0) {
     throw new Error(`CARRY_TRAIL_ARM_PCT must be positive number. Got: "${process.env.CARRY_TRAIL_ARM_PCT}"`);
@@ -108,6 +116,9 @@ function loadConfig() {
   }
   if (isNaN(carrySpikeProtectionPct) || carrySpikeProtectionPct <= 0 || carrySpikeProtectionPct >= 100) {
     throw new Error(`CARRY_SPIKE_PROTECTION_PCT must be in (0, 100). Got: "${process.env.CARRY_SPIKE_PROTECTION_PCT}"`);
+  }
+  if (isNaN(carryLossCooldownMin) || carryLossCooldownMin < 0) {
+    throw new Error(`CARRY_LOSS_COOLDOWN_MIN must be ≥ 0. Got: "${process.env.CARRY_LOSS_COOLDOWN_MIN}"`);
   }
 
   // ── Carry long side (symmetric to short on negative funding) ──
@@ -309,6 +320,7 @@ function loadConfig() {
       carryTrailArmPctEquity,
       carryTrailGiveBackPct,
       carrySpikeProtectionPct,
+      carryLossCooldownMin,
       carryLongEnabled,
       marketRegimeVelocityEnabled,
       marketRegimeCoinPumpPct,

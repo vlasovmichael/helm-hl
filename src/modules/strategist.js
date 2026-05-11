@@ -18,6 +18,7 @@ const {
   carryTrailArmPctEquity: CARRY_TRAIL_ARM_PCT_EQUITY,
   carryTrailGiveBackPct: CARRY_TRAIL_GIVE_BACK_PCT,
   carrySpikeProtectionPct: CARRY_SPIKE_PROTECTION_PCT,
+  carryLossCooldownMin: CARRY_LOSS_COOLDOWN_MIN,
   negativeFundingSoftExitMinPnlPct: NEG_FUND_SOFT_MIN_PNL_PCT,
 } = config.trading;
 
@@ -81,6 +82,27 @@ let delistCooldown = { coin: null, until: 0 };
 // мониторим оба сигнала параллельно: arm/close по тому, который сработал первым.
 const peakUnrealizedPct = new Map();
 const peakEquityPct     = new Map();
+
+// Per-coin loss cooldown: после price_spike_protection блокируем монету
+// на CARRY_LOSS_COOLDOWN_MIN минут. Защита от паттерна VVV 2026-05-10/11:
+// stop-out → монета снова #1 по APY → re-entry через 17ч → второй stop-out.
+// coin → expiry timestamp (ms).
+const carryLossCooldown = new Map();
+
+function isCoinOnLossCooldown(coin, now = Date.now()) {
+  const until = carryLossCooldown.get(coin);
+  if (!until) return false;
+  if (now >= until) {
+    carryLossCooldown.delete(coin);
+    return false;
+  }
+  return true;
+}
+
+/** Test helper: очистить per-coin loss cooldown. Не используется в проде. */
+export function _resetCarryLossCooldown() {
+  carryLossCooldown.clear();
+}
 
 const {
   minApy,
@@ -225,12 +247,27 @@ export function analyze(scoutData, activePosition) {
     peakUnrealizedPct.clear();
     peakEquityPct.clear();
 
+    // Per-coin loss cooldown: после price_spike_protection монета на N мин в бане.
+    // Фильтруем кандидатов ДО выбора best — иначе бот может HOLD'ить на cooldown'нутой
+    // монете, пропуская следующую по списку.
+    const now = Date.now();
+    const eligible = scoutData.filter((c) => {
+      if (isCoinOnLossCooldown(c.coin, now)) {
+        const remainMin = ((carryLossCooldown.get(c.coin) - now) / 60_000).toFixed(0);
+        logger.info(
+          `[Strategist] skip ${c.coin} (loss cooldown, ${remainMin}min remaining)`,
+        );
+        return false;
+      }
+      return true;
+    });
+
     // Iter 1.2: под флагом CARRY_LONG_ENABLED берём top-by-abs(apy) — scout
     // уже отсортировал. Без флага — только short (сохраняет старое поведение).
     // Fallback `|| 'short'`: тесты передают scoutData без поля side.
     const best = config.trading.carryLongEnabled
-      ? scoutData[0]
-      : scoutData.find((c) => (c.side || 'short') === 'short');
+      ? eligible[0]
+      : eligible.find((c) => (c.side || 'short') === 'short');
 
     const bestSide = best?.side || 'short';
     const bestAbsApy = best ? Math.abs(best.smoothedApy) : 0;
@@ -385,8 +422,10 @@ export function analyze(scoutData, activePosition) {
     peakUnrealizedPct.delete(currentCoin);
     peakEquityPct.delete(currentCoin);
     const dir = posSide === 'long' ? 'dumped' : 'spiked';
+    const cooldownUntil = Date.now() + CARRY_LOSS_COOLDOWN_MIN * 60_000;
+    carryLossCooldown.set(currentCoin, cooldownUntil);
     logger.warn(
-      `[Strategist] CLOSE — ${currentCoin} price ${dir} ${rawMovePct >= 0 ? '+' : ''}${rawMovePct.toFixed(2)}% (${posSide} at risk)`,
+      `[Strategist] CLOSE — ${currentCoin} price ${dir} ${rawMovePct >= 0 ? '+' : ''}${rawMovePct.toFixed(2)}% (${posSide} at risk) | cooldown ${CARRY_LOSS_COOLDOWN_MIN}min`,
     );
     return {
       action: 'CLOSE',

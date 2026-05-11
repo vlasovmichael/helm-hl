@@ -46,16 +46,16 @@ test('IDLE + ровный прайс → HOLD', () => {
   assert.equal(r.action, 'HOLD');
 });
 
-test('IDLE + pump < 5% → HOLD', () => {
+test('IDLE + pump < threshold → HOLD', () => {
   reset();
   const now = T0 + 3 * MIN;
   seedHistory('BTC', 50000, now);
-  // +3% за 2мин — недотягивает
-  const r = analyzeHunter([{ coin: 'BTC', price: 51500 }], null, now);
+  // +2% за 2мин — недотягивает (дефолт 3%)
+  const r = analyzeHunter([{ coin: 'BTC', price: 51000 }], null, now);
   assert.equal(r.action, 'HOLD');
 });
 
-test('IDLE + pump ≥ 5% → OPEN SHORT с корректным SL/TP', () => {
+test('IDLE + pump ≥ threshold → OPEN SHORT с корректным SL/TP', () => {
   reset();
   const now = T0 + 3 * MIN;
   seedHistory('BTC', 50000, now);

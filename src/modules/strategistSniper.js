@@ -16,7 +16,10 @@ import { logger } from '../core/logger.js';
 import { getPriceNMinAgo, getBufferLength } from '../core/priceHistory.js';
 
 // ── Конфигурация Iter A (захардкожена; в env переедет при необходимости) ──
-export const HUNTER_SPIKE_PCT        = 5.0;           // pump ≥ 5%
+// HUNTER_SPIKE_PCT: env-overrideable. Дефолт снижен с 5.0 → 3.0 (2026-05-11):
+// за 36ч PAPER при 5% не было НИ ОДНОГО сигнала (best за период = +2.62%),
+// 3% даёт ~несколько сигналов/сутки и нормальное R:R с SL=2%/TP=3%.
+export const HUNTER_SPIKE_PCT        = parseFloat(process.env.HUNTER_SPIKE_PCT || '3.0');
 export const HUNTER_SPIKE_WINDOW_MIN = 2;             // окно 2 мин
 export const HUNTER_SL_PCT           = 2.0;           // SL +2% от entry (для short = stop вверх)
 export const HUNTER_TP_PCT           = 3.0;           // TP -3% от entry (для short = profit вниз)

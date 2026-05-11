@@ -28,7 +28,7 @@ process.env.MIN_HOLD_TIME_MINUTES = '60';
 process.env.BREATHING_MINUTES     = '30';
 process.env.LEVERAGE              = '1';
 
-const { analyze, hoursToBreakeven, calculatePaybackHours } =
+const { analyze, hoursToBreakeven, calculatePaybackHours, _resetCarryLossCooldown } =
   await import('../src/modules/strategist.js');
 const { _resetBalanceCache, _seedBalanceCache } =
   await import('../src/core/balanceCache.js');
@@ -64,6 +64,7 @@ function makePosition(coin, entryApy, opts = {}) {
 // Сброс модульного negativeFundingStreak: вход без позиции его обнуляет.
 function resetState() {
   analyze([], undefined);
+  _resetCarryLossCooldown();
 }
 
 // Подмена глобального Date на фикс времени UTC.
@@ -231,14 +232,52 @@ test('Emergency: цена выросла >10% → CLOSE price_spike (даже в
   assert.equal(r.reason, 'price_spike_protection');
 });
 
-test('Emergency: цена выросла на 5% → НЕ закрываем (под порогом spike protection)', () => {
+test('Loss cooldown: после price_spike_protection та же монета в бане (VVV регрессия)', () => {
+  resetState();
+  // Открыли позицию по VVV @ 14.5, цена скакнула до 15.2 (+4.8% — выше порога 4%)
+  const pos = makePosition('VVV', 50, {
+    entry_price: 14.5,
+    entry_time:  Date.now() - 60_000,
+  });
+  const close = analyze(
+    [makeScoutItem('VVV', 50, { price: 15.2, slowApy: 85 })],
+    pos,
+  );
+  assert.equal(close.action, 'CLOSE');
+  assert.equal(close.reason, 'price_spike_protection');
+
+  // Без позиции: VVV всё ещё лучшая по APY, но должна быть пропущена.
+  // Берётся следующая — BTC (тоже валидна).
+  const r = analyze(
+    [
+      makeScoutItem('VVV', 50, { slowApy: 85 }),
+      makeScoutItem('BTC', 50, { slowApy: 50 }),
+    ],
+    undefined,
+  );
+  assert.equal(r.action, 'OPEN');
+  assert.equal(r.coin, 'BTC');
+});
+
+test('Loss cooldown: единственный кандидат на cooldown → HOLD', () => {
+  resetState();
+  const pos = makePosition('VVV', 50, {
+    entry_price: 14.5,
+    entry_time:  Date.now() - 60_000,
+  });
+  analyze([makeScoutItem('VVV', 50, { price: 15.2, slowApy: 85 })], pos);
+  const r = analyze([makeScoutItem('VVV', 50, { slowApy: 85 })], undefined);
+  assert.equal(r.action, 'HOLD');
+});
+
+test('Emergency: цена выросла на 3% → НЕ закрываем (под порогом spike protection=4%)', () => {
   resetState();
   const pos = makePosition('BTC', 50, {
     entry_price: 100,
     entry_time:  Date.now() - 60_000,
   });
   const r = analyze(
-    [makeScoutItem('BTC', 50, { price: 105, slowApy: 50 })],
+    [makeScoutItem('BTC', 50, { price: 103, slowApy: 50 })],
     pos,
   );
   assert.notEqual(r.action, 'CLOSE');
