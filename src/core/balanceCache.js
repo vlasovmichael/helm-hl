@@ -39,7 +39,7 @@ let diskLoaded = false;      // попытались ли уже загрузи�
 let zeroRecoveryHandler = null;
 let recoveryInFlight = false;
 let recoveryLastAttemptAt = 0;
-const RECOVERY_MIN_INTERVAL_MS = 30_000; // не чаще раза в 30с
+const RECOVERY_MIN_INTERVAL_MS = 5 * 60_000; // не чаще раза в 5 мин
 
 export function registerZeroRecoveryHandler(fn) {
   zeroRecoveryHandler = typeof fn === 'function' ? fn : null;

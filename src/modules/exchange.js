@@ -306,12 +306,26 @@ async function autoTransferSpotToPerp(amount) {
       `[Exchange] 🔄 Auto-transfer SPOT→PERP: $${amount.toFixed(2)} USDC ` +
         `(perp returned $0, spot has funds — likely Unified Account Mode)`,
     );
-    await sdk.exchange.transferBetweenSpotAndPerp(amount, true);
-    logger.info(`[Exchange] ✅ Auto-transfer complete: $${amount.toFixed(2)} → perp`);
+    // HL info-API возвращает {status: "ok"|"err", response: ...} — SDK
+    // не бросает на "err", надо инспектировать тело ответа.
+    const resp = await sdk.exchange.transferBetweenSpotAndPerp(amount, true);
+    const respStr = (() => {
+      try { return JSON.stringify(resp).slice(0, 400); }
+      catch { return String(resp).slice(0, 400); }
+    })();
+    if (resp?.status && resp.status !== 'ok') {
+      logger.error(
+        `[Exchange] ❌ Auto-transfer SPOT→PERP rejected by HL: ${respStr}`,
+      );
+      return false;
+    }
+    logger.info(
+      `[Exchange] ✅ Auto-transfer reply: ${respStr}. Will verify via re-fetch.`,
+    );
     return true;
   } catch (err) {
     logger.error(
-      `[Exchange] ❌ Auto-transfer SPOT→PERP failed: ${err.message}. ` +
+      `[Exchange] ❌ Auto-transfer SPOT→PERP threw: ${err.message}. ` +
         `Manual fix: disable Unified Account Mode + transfer in HL UI.`,
     );
     return false;
