@@ -32,6 +32,19 @@ let zeroStreakStart = 0;     // когда начался эпизод $0
 let freezeAlerted = false;   // одноразовый TG-алерт на эпизод
 let diskLoaded = false;      // попытались ли уже загрузить с диска
 
+// Recovery hook: PROD при старте регистрирует здесь функцию авто-трансфера
+// SPOT→PERP (см. exchange.js). При детекте perp=$0 BalanceCache вызывает
+// её ОДИН раз на эпизод и, если вернулся true (трансфер прошёл), повторяет
+// fetcher. PAPER не регистрирует ничего — там просто fallback к кэшу.
+let zeroRecoveryHandler = null;
+let recoveryInFlight = false;
+let recoveryLastAttemptAt = 0;
+const RECOVERY_MIN_INTERVAL_MS = 30_000; // не чаще раза в 30с
+
+export function registerZeroRecoveryHandler(fn) {
+  zeroRecoveryHandler = typeof fn === 'function' ? fn : null;
+}
+
 /**
  * Ленивая загрузка кэша с диска при первом обращении.
  * Sync — файл крошечный (~100 байт), это одноразовое действие при старте.
@@ -133,8 +146,47 @@ export async function getCachedBalance(fetcher) {
     return { ...normalized, stale: false };
   }
 
-  // API вернул $0 — потенциальный глитч
+  // API вернул $0 — потенциальный глитч ИЛИ funds в spot wallet
   if (zeroStreakStart === 0) zeroStreakStart = Date.now();
+
+  // Recovery: попытка авто-перевода SPOT→PERP, если зарегистрирован handler.
+  // Throttle: не чаще раза в 30с и без параллельных запусков.
+  const canTryRecovery =
+    zeroRecoveryHandler &&
+    !recoveryInFlight &&
+    Date.now() - recoveryLastAttemptAt > RECOVERY_MIN_INTERVAL_MS;
+
+  if (canTryRecovery) {
+    recoveryInFlight = true;
+    recoveryLastAttemptAt = Date.now();
+    try {
+      const recovered = await zeroRecoveryHandler();
+      if (recovered) {
+        logger.info(
+          '[BalanceCache] Zero-recovery handler reported success — re-fetching',
+        );
+        // Перечитываем через fetcher. Если теперь не $0 — обновим кэш.
+        const refetched = await fetcher();
+        const r = {
+          accountValue:  Number(refetched.accountValue) || 0,
+          withdrawable:  Number(refetched.withdrawable) || 0,
+          unrealizedPnl: Number(refetched.unrealizedPnl) || 0,
+        };
+        if (r.accountValue > 0 || r.withdrawable > 0) {
+          lastGood = { value: r, ts: Date.now() };
+          persistToDisk();
+          zeroStreakStart = 0;
+          freezeAlerted = false;
+          recoveryInFlight = false;
+          return { ...r, stale: false };
+        }
+      }
+    } catch (err) {
+      logger.warn(`[BalanceCache] Zero-recovery handler threw: ${err.message}`);
+    } finally {
+      recoveryInFlight = false;
+    }
+  }
 
   const hasFreshCache = lastGood && Date.now() - lastGood.ts < STALE_MAX_AGE_MS;
 

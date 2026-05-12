@@ -17,7 +17,7 @@ import { Hyperliquid } from "hyperliquid";
 import { config } from "../core/config.js";
 import { logger } from "../core/logger.js";
 import { retryWithBackoff } from "../core/retry.js";
-import { getCachedBalance } from "../core/balanceCache.js";
+import { getCachedBalance, registerZeroRecoveryHandler } from "../core/balanceCache.js";
 
 let sdk = null;
 
@@ -63,6 +63,10 @@ export async function initExchange() {
     await sdk.connect();
 
     logger.info("[Exchange] ✅ SDK connected successfully");
+
+    // Регистрируем zero-recovery handler в BalanceCache — единая точка для
+    // обоих балансовых путей (wallet.js raw axios + exchange.js SDK).
+    registerZeroRecoveryHandler(zeroRecoverySpotToPerp);
 
     // Верификация: запрашиваем состояние аккаунта
     await verifyConnection();
@@ -311,53 +315,47 @@ async function autoTransferSpotToPerp(amount) {
 }
 
 /**
- * Fetcher для balanceCache: дёргает SDK и нормализует ответ в
- * {accountValue, withdrawable, unrealizedPnl}. Retry — только на сеть.
+ * Zero-recovery handler — регистрируется в BalanceCache при init PROD.
+ * Вызывается ОДИН РАЗ на эпизод $0 (с throttle в BalanceCache).
+ * Проверяет spot wallet и при наличии USDC делает auto-transfer.
  *
- * Доп. защита: если perp возвращает $0 — проверяем spot wallet,
- * и если там лежит USDC, автоматически переводим в perp и повторно
- * читаем баланс. Это убирает ручной шаг "disable Unified Mode + swap"
- * на бирже.
+ * @returns {Promise<boolean>} — true если трансфер успешно прошёл
  */
-async function fetchBalanceFromSdk() {
-  const readPerp = () =>
-    retryWithBackoff(
-      () =>
-        sdk.info.perpetuals
-          .getClearinghouseState(config.wallet.address)
-          .then((state) => {
-            const ms = state?.marginSummary ?? {};
-            return {
-              accountValue:  parseFloat(ms.accountValue ?? "0"),
-              withdrawable:  parseFloat(state?.withdrawable ?? "0"),
-              unrealizedPnl: parseFloat(
-                ms.totalUnrealizedPnl ?? ms.unrealizedPnl ?? "0",
-              ),
-            };
-          }),
-      { label: "exchange-get-balance", maxRetries: 3 },
-    );
-
-  const first = await readPerp();
-  if (first.accountValue > 0) return first;
-
-  // Perp=$0 — пробуем разрулить через spot wallet
+async function zeroRecoverySpotToPerp() {
   const spotUsdc = await fetchSpotUsdcBalance();
   if (spotUsdc <= 0.5) {
-    // Spot тоже пустой — это либо настоящий $0, либо indexer-glitch.
-    // Возвращаем как есть, balanceCache решит что делать (cache fallback).
-    return first;
+    logger.warn(
+      `[Exchange] Zero-recovery: spot.USDC=$${spotUsdc.toFixed(2)} — ` +
+        `nothing to transfer. Funds may be in vault, sub-account, or ` +
+        `indexer is lagging.`,
+    );
+    return false;
   }
+  return await autoTransferSpotToPerp(spotUsdc);
+}
 
-  // Spot имеет деньги — это та самая ситуация Unified Mode
-  const transferred = await autoTransferSpotToPerp(spotUsdc);
-  if (!transferred) return first;
-
-  // Перечитываем perp после трансфера. HL индексирует трансфер обычно <1с,
-  // но даём небольшой буфер.
-  await new Promise((r) => setTimeout(r, 1500));
-  const second = await readPerp();
-  return second;
+/**
+ * Fetcher для balanceCache: дёргает SDK и нормализует ответ в
+ * {accountValue, withdrawable, unrealizedPnl}. Retry — только на сеть.
+ * Логику spot-recovery теперь делает BalanceCache через handler.
+ */
+async function fetchBalanceFromSdk() {
+  return retryWithBackoff(
+    () =>
+      sdk.info.perpetuals
+        .getClearinghouseState(config.wallet.address)
+        .then((state) => {
+          const ms = state?.marginSummary ?? {};
+          return {
+            accountValue:  parseFloat(ms.accountValue ?? "0"),
+            withdrawable:  parseFloat(state?.withdrawable ?? "0"),
+            unrealizedPnl: parseFloat(
+              ms.totalUnrealizedPnl ?? ms.unrealizedPnl ?? "0",
+            ),
+          };
+        }),
+    { label: "exchange-get-balance", maxRetries: 3 },
+  );
 }
 
 /**
