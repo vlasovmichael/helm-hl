@@ -42,13 +42,15 @@ export async function runBalanceDiag() {
     ).length;
 
     const balances = spot?.balances ?? [];
-    const usdcEntry = balances.find(
-      (b) => (b.coin ?? '').toUpperCase() === 'USDC',
-    );
+    const isUsdc = (c) => {
+      const u = (c ?? '').toUpperCase();
+      return u === 'USDC' || u === 'USDC-SPOT';
+    };
+    const usdcEntry = balances.find((b) => isUsdc(b.coin));
     const spotUsdc = usdcEntry ? parseFloat(usdcEntry.total ?? '0') : 0;
     const spotUsdcHold = usdcEntry ? parseFloat(usdcEntry.hold ?? '0') : 0;
     const otherSpot = balances
-      .filter((b) => (b.coin ?? '').toUpperCase() !== 'USDC')
+      .filter((b) => !isUsdc(b.coin))
       .filter((b) => parseFloat(b.total ?? '0') > 0)
       .map((b) => `${b.coin}=${parseFloat(b.total).toFixed(4)}`);
 

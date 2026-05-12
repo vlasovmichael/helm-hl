@@ -273,9 +273,13 @@ async function fetchSpotUsdcBalance() {
     const state = await sdk.info.spot.getSpotClearinghouseState(
       config.wallet.address,
     );
-    const usdc = (state?.balances ?? []).find(
-      (b) => (b.coin ?? "").toUpperCase() === "USDC",
-    );
+    // SDK маркирует spot-токены суффиксом "-SPOT" чтобы отличать от перп-
+    // тикеров. У живых аккаунтов USDC лежит как "USDC-SPOT". Принимаем
+    // оба варианта на случай разных версий SDK / raw-ответов.
+    const usdc = (state?.balances ?? []).find((b) => {
+      const c = (b.coin ?? "").toUpperCase();
+      return c === "USDC" || c === "USDC-SPOT";
+    });
     if (!usdc) return 0;
     const total = parseFloat(usdc.total ?? "0");
     return Number.isFinite(total) ? total : 0;
