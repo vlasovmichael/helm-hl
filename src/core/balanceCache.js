@@ -143,7 +143,8 @@ export async function getCachedBalance(fetcher) {
     logger.warn(
       `[BalanceCache] ⚠️  API returned $0.00 but cached balance is ` +
         `$${lastGood.value.accountValue.toFixed(2)} (${ageMin}min ago) — ` +
-        `using cache (indexer freeze?)`,
+        `using cache. Likely: funds in spot wallet (Unified Mode) or ` +
+        `indexer lag. Auto-transfer SPOT→PERP will be attempted on next read.`,
     );
 
     if (!freezeAlerted) {

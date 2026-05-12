@@ -964,8 +964,22 @@ export async function productionClose(signal, position, silent = false) {
         equity = summary.equity;
         // PnL ≈ equity_now − equity_at_open. Если entry_equity не сохранён
         // (старая позиция) — оставим 0, чтобы не врать.
-        if (Number.isFinite(position.entry_equity) && position.entry_equity > 0) {
+        // Доп. guard: если equity===0, значит API вернул $0 (Unified Mode
+        // или indexer-glitch) и кэш не помог. В этом случае запись
+        // estimatedPnl = -entry_equity = огромный минус в БД, что портит
+        // аналитику. Лучше записать 0 и пометить как unknown.
+        if (
+          Number.isFinite(position.entry_equity) &&
+          position.entry_equity > 0 &&
+          Number.isFinite(equity) &&
+          equity > 0
+        ) {
           estimatedPnl = equity - position.entry_equity;
+        } else if (equity <= 0) {
+          logger.warn(
+            `[Executor] PROD CLOSE #${coin} — equity unreadable ($${equity}), ` +
+              `est. PnL not computable, writing 0 instead of fake negative.`,
+          );
         }
       } catch { /* PnL неизвестен */ }
 

@@ -258,26 +258,106 @@ export async function getPositions() {
 }
 
 /**
+ * Запрашивает spot-баланс USDC. Используется как диагностика и для
+ * авто-трансфера при ситуации "perp=$0 + spot>0" (типичный случай
+ * Unified Account Mode или после deposit).
+ *
+ * @returns {Promise<number>} — USDC баланс в spot wallet (0 если нет)
+ */
+async function fetchSpotUsdcBalance() {
+  try {
+    const state = await sdk.info.spot.getSpotClearinghouseState(
+      config.wallet.address,
+    );
+    const usdc = (state?.balances ?? []).find(
+      (b) => (b.coin ?? "").toUpperCase() === "USDC",
+    );
+    if (!usdc) return 0;
+    const total = parseFloat(usdc.total ?? "0");
+    return Number.isFinite(total) ? total : 0;
+  } catch (err) {
+    logger.warn(`[Exchange] fetchSpotUsdcBalance failed: ${err.message}`);
+    return 0;
+  }
+}
+
+/**
+ * Авто-трансфер spot → perp когда детектим "perp=$0 + spot>0".
+ * Защищает от потери торговли когда деньги залегли в spot wallet
+ * (Unified Account Mode или после фандинговых выплат на некоторых режимах).
+ *
+ * @param {number} amount — сумма USDC для перевода (обычно весь spot total)
+ * @returns {Promise<boolean>} — true если перевод прошёл
+ */
+async function autoTransferSpotToPerp(amount) {
+  // Защита от dust-трансферов и от того что transferBetweenSpotAndPerp
+  // может потребовать минимум на стороне HL.
+  if (!(amount > 0.5)) return false;
+  try {
+    logger.warn(
+      `[Exchange] 🔄 Auto-transfer SPOT→PERP: $${amount.toFixed(2)} USDC ` +
+        `(perp returned $0, spot has funds — likely Unified Account Mode)`,
+    );
+    await sdk.exchange.transferBetweenSpotAndPerp(amount, true);
+    logger.info(`[Exchange] ✅ Auto-transfer complete: $${amount.toFixed(2)} → perp`);
+    return true;
+  } catch (err) {
+    logger.error(
+      `[Exchange] ❌ Auto-transfer SPOT→PERP failed: ${err.message}. ` +
+        `Manual fix: disable Unified Account Mode + transfer in HL UI.`,
+    );
+    return false;
+  }
+}
+
+/**
  * Fetcher для balanceCache: дёргает SDK и нормализует ответ в
  * {accountValue, withdrawable, unrealizedPnl}. Retry — только на сеть.
+ *
+ * Доп. защита: если perp возвращает $0 — проверяем spot wallet,
+ * и если там лежит USDC, автоматически переводим в perp и повторно
+ * читаем баланс. Это убирает ручной шаг "disable Unified Mode + swap"
+ * на бирже.
  */
 async function fetchBalanceFromSdk() {
-  return retryWithBackoff(
-    () =>
-      sdk.info.perpetuals
-        .getClearinghouseState(config.wallet.address)
-        .then((state) => {
-          const ms = state?.marginSummary ?? {};
-          return {
-            accountValue:  parseFloat(ms.accountValue ?? "0"),
-            withdrawable:  parseFloat(state?.withdrawable ?? "0"),
-            unrealizedPnl: parseFloat(
-              ms.totalUnrealizedPnl ?? ms.unrealizedPnl ?? "0",
-            ),
-          };
-        }),
-    { label: "exchange-get-balance", maxRetries: 3 },
-  );
+  const readPerp = () =>
+    retryWithBackoff(
+      () =>
+        sdk.info.perpetuals
+          .getClearinghouseState(config.wallet.address)
+          .then((state) => {
+            const ms = state?.marginSummary ?? {};
+            return {
+              accountValue:  parseFloat(ms.accountValue ?? "0"),
+              withdrawable:  parseFloat(state?.withdrawable ?? "0"),
+              unrealizedPnl: parseFloat(
+                ms.totalUnrealizedPnl ?? ms.unrealizedPnl ?? "0",
+              ),
+            };
+          }),
+      { label: "exchange-get-balance", maxRetries: 3 },
+    );
+
+  const first = await readPerp();
+  if (first.accountValue > 0) return first;
+
+  // Perp=$0 — пробуем разрулить через spot wallet
+  const spotUsdc = await fetchSpotUsdcBalance();
+  if (spotUsdc <= 0.5) {
+    // Spot тоже пустой — это либо настоящий $0, либо indexer-glitch.
+    // Возвращаем как есть, balanceCache решит что делать (cache fallback).
+    return first;
+  }
+
+  // Spot имеет деньги — это та самая ситуация Unified Mode
+  const transferred = await autoTransferSpotToPerp(spotUsdc);
+  if (!transferred) return first;
+
+  // Перечитываем perp после трансфера. HL индексирует трансфер обычно <1с,
+  // но даём небольшой буфер.
+  await new Promise((r) => setTimeout(r, 1500));
+  const second = await readPerp();
+  return second;
 }
 
 /**

@@ -13,6 +13,7 @@ import { integrityCheck, orphanCheck } from './integrity.js';
 import { hunterReconcile } from './hunterReconcile.js';
 import { hunterLongReconcile } from './hunterLongReconcile.js';
 import { processHunterTrailArm } from './hunterTrailArm.js';
+import { runBalanceDiag } from './balanceDiag.js';
 import { state } from './state.js';
 
 export async function tick() {
@@ -88,6 +89,9 @@ export async function tick() {
     }
 
     await runSmartAlerts(scoutData, signal, activePosition);
+
+    // Балансовая диагностика (PROD-only, дросселирована до раз в 5 мин)
+    await runBalanceDiag();
 
   } catch (err) {
     logger.error(`[Tick] ${err.message}`);
