@@ -31,19 +31,8 @@ let lastGood = null;         // { value: {accountValue, withdrawable, unrealized
 let zeroStreakStart = 0;     // когда начался эпизод $0
 let freezeAlerted = false;   // одноразовый TG-алерт на эпизод
 let diskLoaded = false;      // попытались ли уже загрузить с диска
-
-// Recovery hook: PROD при старте регистрирует здесь функцию авто-трансфера
-// SPOT→PERP (см. exchange.js). При детекте perp=$0 BalanceCache вызывает
-// её ОДИН раз на эпизод и, если вернулся true (трансфер прошёл), повторяет
-// fetcher. PAPER не регистрирует ничего — там просто fallback к кэшу.
-let zeroRecoveryHandler = null;
-let recoveryInFlight = false;
-let recoveryLastAttemptAt = 0;
-const RECOVERY_MIN_INTERVAL_MS = 5 * 60_000; // не чаще раза в 5 мин
-
-export function registerZeroRecoveryHandler(fn) {
-  zeroRecoveryHandler = typeof fn === 'function' ? fn : null;
-}
+let lastZeroWarnAt = 0;      // throttle спамного warning'а
+const ZERO_WARN_INTERVAL_MS = 5 * 60_000;
 
 /**
  * Ленивая загрузка кэша с диска при первом обращении.
@@ -146,59 +135,24 @@ export async function getCachedBalance(fetcher) {
     return { ...normalized, stale: false };
   }
 
-  // API вернул $0 — потенциальный глитч ИЛИ funds в spot wallet
+  // API вернул $0. Возможные причины: indexer-glitch, funds в spot wallet
+  // (Unified Mode — диагностика в BalanceDiag). Авто-фикс не делаем:
+  // usdClassTransfer запрещён для agent wallet на стороне HL.
   if (zeroStreakStart === 0) zeroStreakStart = Date.now();
-
-  // Recovery: попытка авто-перевода SPOT→PERP, если зарегистрирован handler.
-  // Throttle: не чаще раза в 30с и без параллельных запусков.
-  const canTryRecovery =
-    zeroRecoveryHandler &&
-    !recoveryInFlight &&
-    Date.now() - recoveryLastAttemptAt > RECOVERY_MIN_INTERVAL_MS;
-
-  if (canTryRecovery) {
-    recoveryInFlight = true;
-    recoveryLastAttemptAt = Date.now();
-    try {
-      const recovered = await zeroRecoveryHandler();
-      if (recovered) {
-        logger.info(
-          '[BalanceCache] Zero-recovery handler reported success — re-fetching',
-        );
-        // Перечитываем через fetcher. Если теперь не $0 — обновим кэш.
-        const refetched = await fetcher();
-        const r = {
-          accountValue:  Number(refetched.accountValue) || 0,
-          withdrawable:  Number(refetched.withdrawable) || 0,
-          unrealizedPnl: Number(refetched.unrealizedPnl) || 0,
-        };
-        if (r.accountValue > 0 || r.withdrawable > 0) {
-          lastGood = { value: r, ts: Date.now() };
-          persistToDisk();
-          zeroStreakStart = 0;
-          freezeAlerted = false;
-          recoveryInFlight = false;
-          return { ...r, stale: false };
-        }
-      }
-    } catch (err) {
-      logger.warn(`[BalanceCache] Zero-recovery handler threw: ${err.message}`);
-    } finally {
-      recoveryInFlight = false;
-    }
-  }
 
   const hasFreshCache = lastGood && Date.now() - lastGood.ts < STALE_MAX_AGE_MS;
 
   if (hasFreshCache) {
     const ageMin = ((Date.now() - lastGood.ts) / 60_000).toFixed(0);
-    logger.warn(
-      `[BalanceCache] ⚠️  API returned $0.00 but cached balance is ` +
-        `$${lastGood.value.accountValue.toFixed(2)} (${ageMin}min ago) — ` +
-        `using cache. If auto-transfer succeeded, it logged above as ` +
-        `[Exchange] ✅ ...; if it failed/was skipped (spot empty too) — ` +
-        `see [Exchange] ❌ / [BalanceDiag] for the actual perp/spot split.`,
-    );
+    if (Date.now() - lastZeroWarnAt > ZERO_WARN_INTERVAL_MS) {
+      lastZeroWarnAt = Date.now();
+      logger.warn(
+        `[BalanceCache] ⚠️  API returned $0.00 but cached balance is ` +
+          `$${lastGood.value.accountValue.toFixed(2)} (${ageMin}min ago) — ` +
+          `using cache. См. [Exchange] / [BalanceDiag] для деталей. ` +
+          `Throttled to once per 5min.`,
+      );
+    }
 
     if (!freezeAlerted) {
       freezeAlerted = true;

@@ -17,7 +17,7 @@ import { Hyperliquid } from "hyperliquid";
 import { config } from "../core/config.js";
 import { logger } from "../core/logger.js";
 import { retryWithBackoff } from "../core/retry.js";
-import { getCachedBalance, registerZeroRecoveryHandler } from "../core/balanceCache.js";
+import { getCachedBalance } from "../core/balanceCache.js";
 
 let sdk = null;
 
@@ -63,10 +63,6 @@ export async function initExchange() {
     await sdk.connect();
 
     logger.info("[Exchange] ✅ SDK connected successfully");
-
-    // Регистрируем zero-recovery handler в BalanceCache — единая точка для
-    // обоих балансовых путей (wallet.js raw axios + exchange.js SDK).
-    registerZeroRecoveryHandler(zeroRecoverySpotToPerp);
 
     // Верификация: запрашиваем состояние аккаунта
     await verifyConnection();
@@ -262,20 +258,22 @@ export async function getPositions() {
 }
 
 /**
- * Запрашивает spot-баланс USDC. Используется как диагностика и для
- * авто-трансфера при ситуации "perp=$0 + spot>0" (типичный случай
- * Unified Account Mode или после deposit).
+ * Запрашивает spot-баланс USDC. Используется ТОЛЬКО для диагностики
+ * (BalanceDiag, manualSwapAlert). Авто-трансфер не делаем — HL не
+ * разрешает usdClassTransfer от agent wallet (ошибка "Must deposit
+ * before performing actions. User: <agent-address>"). Чтобы починить
+ * нужен main key, который мы боту не даём.
+ *
+ * SDK маркирует spot-токены суффиксом "-SPOT" чтобы отличать от
+ * перп-тикеров — принимаем оба варианта.
  *
  * @returns {Promise<number>} — USDC баланс в spot wallet (0 если нет)
  */
-async function fetchSpotUsdcBalance() {
+export async function fetchSpotUsdcBalance() {
   try {
     const state = await sdk.info.spot.getSpotClearinghouseState(
       config.wallet.address,
     );
-    // SDK маркирует spot-токены суффиксом "-SPOT" чтобы отличать от перп-
-    // тикеров. У живых аккаунтов USDC лежит как "USDC-SPOT". Принимаем
-    // оба варианта на случай разных версий SDK / raw-ответов.
     const usdc = (state?.balances ?? []).find((b) => {
       const c = (b.coin ?? "").toUpperCase();
       return c === "USDC" || c === "USDC-SPOT";
@@ -290,72 +288,8 @@ async function fetchSpotUsdcBalance() {
 }
 
 /**
- * Авто-трансфер spot → perp когда детектим "perp=$0 + spot>0".
- * Защищает от потери торговли когда деньги залегли в spot wallet
- * (Unified Account Mode или после фандинговых выплат на некоторых режимах).
- *
- * @param {number} amount — сумма USDC для перевода (обычно весь spot total)
- * @returns {Promise<boolean>} — true если перевод прошёл
- */
-async function autoTransferSpotToPerp(amount) {
-  // Защита от dust-трансферов и от того что transferBetweenSpotAndPerp
-  // может потребовать минимум на стороне HL.
-  if (!(amount > 0.5)) return false;
-  try {
-    logger.warn(
-      `[Exchange] 🔄 Auto-transfer SPOT→PERP: $${amount.toFixed(2)} USDC ` +
-        `(perp returned $0, spot has funds — likely Unified Account Mode)`,
-    );
-    // HL info-API возвращает {status: "ok"|"err", response: ...} — SDK
-    // не бросает на "err", надо инспектировать тело ответа.
-    const resp = await sdk.exchange.transferBetweenSpotAndPerp(amount, true);
-    const respStr = (() => {
-      try { return JSON.stringify(resp).slice(0, 400); }
-      catch { return String(resp).slice(0, 400); }
-    })();
-    if (resp?.status && resp.status !== 'ok') {
-      logger.error(
-        `[Exchange] ❌ Auto-transfer SPOT→PERP rejected by HL: ${respStr}`,
-      );
-      return false;
-    }
-    logger.info(
-      `[Exchange] ✅ Auto-transfer reply: ${respStr}. Will verify via re-fetch.`,
-    );
-    return true;
-  } catch (err) {
-    logger.error(
-      `[Exchange] ❌ Auto-transfer SPOT→PERP threw: ${err.message}. ` +
-        `Manual fix: disable Unified Account Mode + transfer in HL UI.`,
-    );
-    return false;
-  }
-}
-
-/**
- * Zero-recovery handler — регистрируется в BalanceCache при init PROD.
- * Вызывается ОДИН РАЗ на эпизод $0 (с throttle в BalanceCache).
- * Проверяет spot wallet и при наличии USDC делает auto-transfer.
- *
- * @returns {Promise<boolean>} — true если трансфер успешно прошёл
- */
-async function zeroRecoverySpotToPerp() {
-  const spotUsdc = await fetchSpotUsdcBalance();
-  if (spotUsdc <= 0.5) {
-    logger.warn(
-      `[Exchange] Zero-recovery: spot.USDC=$${spotUsdc.toFixed(2)} — ` +
-        `nothing to transfer. Funds may be in vault, sub-account, or ` +
-        `indexer is lagging.`,
-    );
-    return false;
-  }
-  return await autoTransferSpotToPerp(spotUsdc);
-}
-
-/**
  * Fetcher для balanceCache: дёргает SDK и нормализует ответ в
  * {accountValue, withdrawable, unrealizedPnl}. Retry — только на сеть.
- * Логику spot-recovery теперь делает BalanceCache через handler.
  */
 async function fetchBalanceFromSdk() {
   return retryWithBackoff(

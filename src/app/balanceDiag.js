@@ -12,9 +12,11 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getExchange } from '../modules/exchange.js';
+import { sendMessage } from '../modules/reporter.js';
 
 const DIAG_INTERVAL_MS = 5 * 60_000; // каждые 5 мин
 let lastDiagAt = 0;
+let manualSwapAlerted = false; // одноразовый TG-алерт "сделай свап руками"
 
 export async function runBalanceDiag() {
   if (!config.isProduction) return;
@@ -74,14 +76,28 @@ export async function runBalanceDiag() {
         ` | ${indicators.join(' ')}`,
     );
 
-    // Алерт когда есть существенный split — это та самая ситуация
-    // Unified Mode, для которой работает авто-трансфер.
-    if (spotUsdc > 0.5 && perpAcct > 0) {
-      logger.warn(
-        `[BalanceDiag] ⚠️  Funds split: perp=$${perpAcct.toFixed(2)} ` +
-          `+ spot=$${spotUsdc.toFixed(2)}. Auto-transfer activates only when ` +
-          `perp=$0; current state has both — possibly Unified Mode partial.`,
+    // Алерт когда perp=$0 а в споте есть деньги — нужен РУЧНОЙ свап
+    // на HL UI. Авто-фикс не делаем: HL не разрешает usdClassTransfer
+    // от agent wallet ("Must deposit before performing actions").
+    if (perpAcct <= 0 && spotUsdc > 0.5) {
+      logger.error(
+        `[BalanceDiag] ⚠️  perp=$0, spot=$${spotUsdc.toFixed(2)} USDC — ` +
+          `MANUAL SWAP REQUIRED on app.hyperliquid.xyz (Spot → Transfer to Perp).`,
       );
+      if (!manualSwapAlerted) {
+        manualSwapAlerted = true;
+        sendMessage(
+          `⚠️ <b>Funds в spot wallet — нужен ручной свап</b>\n` +
+            `<code>─────────────────────</code>\n` +
+            `Perp account: $0.00\n` +
+            `Spot USDC: <b>$${spotUsdc.toFixed(2)}</b>\n\n` +
+            `Auto-transfer невозможен (HL не разрешает agent ключу). ` +
+            `Зайди на app.hyperliquid.xyz → Spot → Transfer to Perp.`,
+        ).catch(() => { /* TG недоступен — ок */ });
+      }
+    } else if (perpAcct > 0 && manualSwapAlerted) {
+      // Свап сделан вручную, сбрасываем флаг чтобы алерт сработал в следующий раз
+      manualSwapAlerted = false;
     }
   } catch (err) {
     logger.warn(`[BalanceDiag] failed: ${err.message}`);
