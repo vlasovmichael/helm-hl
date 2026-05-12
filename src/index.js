@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────
-//  HL Paper Scanner — entry point
+//  HL Trading Bot — entry point
 // ─────────────────────────────────────────────────
 
 import cron from 'node-cron';
@@ -21,7 +21,7 @@ import { createStatusCollector } from './app/status.js';
 
 async function main() {
   logger.info('═══════════════════════════════════════════════');
-  logger.info(`  HL Paper Scanner v2.0`);
+  logger.info(`  HL Trading Bot v2.0`);
   logger.info(`  Mode:   ${config.mode}`);
   logger.info(`  Wallet: ${config.wallet.address}`);
   logger.info(`  Entry:  ≥ ${config.trading.entryApy}% APY`);
