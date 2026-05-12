@@ -964,18 +964,23 @@ export async function productionClose(signal, position, silent = false) {
         equity = summary.equity;
         // PnL ≈ equity_now − equity_at_open. Если entry_equity не сохранён
         // (старая позиция) — оставим 0, чтобы не врать.
-        // Доп. guard: если equity===0, значит API вернул $0 (Unified Mode
-        // или indexer-glitch) и кэш не помог. В этом случае запись
-        // estimatedPnl = -entry_equity = огромный минус в БД, что портит
-        // аналитику. Лучше записать 0 и пометить как unknown.
-        if (
-          Number.isFinite(position.entry_equity) &&
-          position.entry_equity > 0 &&
-          Number.isFinite(equity) &&
-          equity > 0
-        ) {
+        const hasEntry = Number.isFinite(position.entry_equity) && position.entry_equity > 0;
+        const equityOk = Number.isFinite(equity) && equity > 0;
+
+        // Guard: API/indexer-glitch может вернуть implausibly low equity
+        // (был кейс TON id=61 2026-05-12: TP реально дал +$0.80, а equity
+        // на момент reconcile показала $0.5x → estPnl получился −$24.48).
+        // Если equity < половины entry_equity — это почти всегда glitch,
+        // настоящий трейд физически не мог уронить equity на 50%+ при lev≤1x.
+        if (hasEntry && equityOk && equity >= position.entry_equity * 0.5) {
           estimatedPnl = equity - position.entry_equity;
-        } else if (equity <= 0) {
+        } else if (hasEntry && equityOk) {
+          logger.warn(
+            `[Executor] PROD CLOSE #${coin} — equity $${equity.toFixed(2)} implausibly low ` +
+              `vs entry_equity $${position.entry_equity.toFixed(2)} (likely API glitch), ` +
+              `writing 0 instead of fake negative. Check Reporter alert for real PnL.`,
+          );
+        } else if (!equityOk) {
           logger.warn(
             `[Executor] PROD CLOSE #${coin} — equity unreadable ($${equity}), ` +
               `est. PnL not computable, writing 0 instead of fake negative.`,

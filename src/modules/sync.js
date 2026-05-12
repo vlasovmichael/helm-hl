@@ -5,7 +5,7 @@ import { logger } from '../core/logger.js';
 import { getActivePosition, closePosition as dbClosePosition } from '../core/database.js';
 import { sendMessage } from './reporter.js';
 import { checkAccountLeverage } from './exchange.js';
-import { restoreCircuitBreaker, restoreSniper } from './executor/state.js';
+import { restoreCircuitBreaker, restoreSniper, restoreOiCapBans } from './executor/state.js';
 
 import { state as appState } from '../app/state.js';
 
@@ -474,6 +474,9 @@ export async function syncWithExchange() {
     }
     if (savedForRestore?.sniper) {
       restoreSniper(savedForRestore.sniper);
+    }
+    if (savedForRestore?.oi_cap_bans) {
+      restoreOiCapBans(savedForRestore.oi_cap_bans);
     }
 
     if (config.isProduction) {

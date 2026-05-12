@@ -81,6 +81,36 @@ export function getOiCapBans() {
   return active;
 }
 
+/**
+ * Сериализует активные OI-cap бан для bot_state.json. Только не-протухшие.
+ * Используется чтобы пережить рестарт — иначе монеты типа SAGA с постоянным
+ * OI-cap получают новый шанс каждые 1-2 мин (см. инцидент 2026-05-12).
+ */
+export function serializeOiCapBans() {
+  const now = Date.now();
+  const out = {};
+  for (const [coin, exp] of oiCapBanMap) {
+    if (exp > now) out[coin] = exp;
+  }
+  return out;
+}
+
+/** Восстанавливает OI-cap баны из bot_state.json. Толерантен к null/мусору. */
+export function restoreOiCapBans(saved) {
+  if (!saved || typeof saved !== 'object') return;
+  const now = Date.now();
+  let restored = 0;
+  for (const [coin, exp] of Object.entries(saved)) {
+    if (typeof exp === 'number' && exp > now) {
+      oiCapBanMap.set(coin, exp);
+      restored++;
+    }
+  }
+  if (restored > 0) {
+    logger.info(`[Executor] OI cap bans restored: ${restored} active`);
+  }
+}
+
 // ── Circuit Breaker ───────────────────────────
 
 /**
