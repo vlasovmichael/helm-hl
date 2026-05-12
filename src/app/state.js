@@ -17,6 +17,7 @@ export const INTEGRITY_CHECK_INTERVAL_MS = 60_000;       // 60с
 export const INTEGRITY_GRACE_PERIOD_MS  = 30_000;        // 30с grace после старта
 export const BOT_STATE_PATH             = 'data/bot_state.json';
 export const SHUTDOWN_TIMEOUT_MS        = 15_000;        // 15с на завершение
+export const BOT_STATE_FLUSH_INTERVAL_MS = 60_000;       // 60с периодический snapshot
 
 // ── Мутабельное состояние ──────────────────────
 
@@ -41,4 +42,6 @@ export const state = {
   // Последний снапшот hunter-scope (для дашборда). Не используется в торговой логике.
   latestHunter:       [],
   latestHunterAt:     0,
+  // Последний успешный saveBotState (для throttle периодического flush из tick'а).
+  lastBotStateSaveAt: 0,
 };

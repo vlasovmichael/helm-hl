@@ -23,7 +23,7 @@ import {
 } from './notifications.js';
 import {
   getCircuitBreakerStatus, checkDrawdown,
-  CB_PAUSE_MS, isOiCapBanned, OI_CAP_BAN_TTL_MS,
+  CB_PAUSE_MS, isOiCapBanned, getOiCapBanRemainMs,
   armSniper, getSniper, clearSniper, hasSniper,
 } from './state.js';
 import { SNIPER_SOFT_REASONS, SNIPER_WINDOW_MS } from './math.js';
@@ -125,11 +125,12 @@ async function preflightChecks(coin, smoothedApy = null) {
 
   // 3. OI Cap Ban (из стейта)
   if (isOiCapBanned(coin)) {
-    logger.warn(`[Executor] ⛔ OI CAP active for #${coin}`);
+    const remainMin = Math.ceil(getOiCapBanRemainMs(coin) / 60_000);
+    logger.warn(`[Executor] ⛔ OI CAP active for #${coin} (${remainMin} мин до снятия)`);
     return {
       allowed: false,
       reason: 'OI Cap reached',
-      details: `Биржа ранее отказала по OI Cap. Бан на <b>${OI_CAP_BAN_TTL_MS / 60_000} мин</b>.`,
+      details: `Биржа ранее отказала по OI Cap. Осталось <b>${remainMin} мин</b> до снятия бана.`,
     };
   }
 

@@ -11,7 +11,7 @@ import { disconnectExchange } from '../modules/exchange.js';
 import { sendMessage, stopCallbackPolling, formatUptime } from '../modules/reporter.js';
 import { serializeCircuitBreaker, serializeSniper, serializeOiCapBans } from '../modules/executor/state.js';
 import { stopDashboard } from '../modules/dashboard/server.js';
-import { state, BOT_STATE_PATH } from './state.js';
+import { state, BOT_STATE_PATH, BOT_STATE_FLUSH_INTERVAL_MS } from './state.js';
 
 /**
  * Ожидает завершения текущего тика.
@@ -88,7 +88,30 @@ export async function saveBotState(activePosition, reason) {
     `[System] ✅ State saved — ${BOT_STATE_PATH} | ${json.length} bytes | ${posLabel} | reason: ${reason}`,
   );
 
+  state.lastBotStateSaveAt = Date.now();
   return botState;
+}
+
+/**
+ * Периодический snapshot из главного tick'а. Throttle: не чаще, чем раз в
+ * BOT_STATE_FLUSH_INTERVAL_MS. Тихий по умолчанию — debug-лог при skip'е,
+ * ошибка не пробрасывается (tick должен продолжаться).
+ *
+ * Why: до этого фикса bot_state.json писался только на SIGTERM → при крэше
+ * (kill -9, OOM) терялись oi_cap_bans и другое сериализуемое состояние,
+ * 64.7h stale на рестарте 2026-05-12.
+ */
+export async function flushBotStatePeriodic() {
+  const now = Date.now();
+  if (now - state.lastBotStateSaveAt < BOT_STATE_FLUSH_INTERVAL_MS) return;
+  if (state.shuttingDown) return;
+
+  try {
+    const activePosition = getActivePosition();
+    await saveBotState(activePosition, 'periodic');
+  } catch (err) {
+    logger.warn(`[System] Periodic state flush failed: ${err.message}`);
+  }
 }
 
 /**

@@ -11,7 +11,11 @@ export const RUNTIME_BAN_TTL_MS    = 30 * 60_000;  // 30 мин
 export const SLIPPAGE_BAN_TTL_MS   = 10 * 60_000;  // 10 мин
 export const REENTRY_COOLDOWN_MS   = 15 * 60_000;  // 15 мин
 export const REJECTED_ALERT_TTL_MS = 30 * 60_000;  // 30 мин
-export const OI_CAP_BAN_TTL_MS     = 30 * 60_000;  // 30 мин
+// OI cap bans используют exponential backoff: 30м → 1ч → 2ч → 4ч (cap).
+// Счётчик сбрасывается если за OI_CAP_REPEAT_RESET_MS не было новых rejection.
+export const OI_CAP_BAN_BASE_MS      = 30 * 60_000;        // tier 1
+export const OI_CAP_BAN_MAX_MS       = 4  * 3_600_000;     // tier ≥4 (cap)
+export const OI_CAP_REPEAT_RESET_MS  = 24 * 3_600_000;     // 24ч тишины → reset
 
 // ── Risk-параметры (из .env через config.risk) ──
 export const CB_WINDOW_MS     = config.risk.cbWindowMs;
@@ -25,6 +29,7 @@ const slippageBanMap   = new Map();  // coin → timestamp
 const cooldownMap      = new Map();  // coin → timestamp
 const rejectedAlertMap = new Map();  // coin → timestamp
 const oiCapBanMap      = new Map();  // coin → expiresAt
+const oiCapRepeatMap   = new Map();  // coin → { count, lastBannedAt } — для backoff
 
 // ── Circuit Breaker state ─────────────────────
 const recentLosses = [];              // [{ ts, pnl, coin }]
@@ -49,11 +54,26 @@ export function getLastRejectedAlert(coin) { return rejectedAlertMap.get(coin); 
 // ── OI Cap Ban ────────────────────────────────
 
 /**
- * Банит монету по OI cap на 30 минут.
- * Используется когда биржа отказала в открытии из-за переполненного open interest.
+ * Банит монету по OI cap с exponential backoff: 30м → 1ч → 2ч → 4ч (cap).
+ * Используется когда биржа отказала в открытии из-за переполненного OI.
+ *
+ * Why: малокапы типа SAGA повторно бьются об cap (см. инцидент 2026-05-12,
+ * 3 rejection'а за сутки). 30-минутного бана недостаточно. Счётчик сбрасывается
+ * если за OI_CAP_REPEAT_RESET_MS (24ч) не было нового OI cap события.
+ *
+ * @returns {{ count: number, ttlMs: number }} tier и фактический TTL — для лога/notify.
  */
 export function banOiCap(coin) {
-  oiCapBanMap.set(coin, Date.now() + OI_CAP_BAN_TTL_MS);
+  const now = Date.now();
+  let rec = oiCapRepeatMap.get(coin);
+  if (rec && now - rec.lastBannedAt > OI_CAP_REPEAT_RESET_MS) {
+    rec = null;
+  }
+  const count = (rec?.count ?? 0) + 1;
+  const ttlMs = Math.min(OI_CAP_BAN_BASE_MS * 2 ** (count - 1), OI_CAP_BAN_MAX_MS);
+  oiCapBanMap.set(coin, now + ttlMs);
+  oiCapRepeatMap.set(coin, { count, lastBannedAt: now });
+  return { count, ttlMs };
 }
 
 /** Проверка по одной монете (с авто-cleanup протухших). */
@@ -65,6 +85,14 @@ export function isOiCapBanned(coin) {
     return false;
   }
   return true;
+}
+
+/** Возвращает оставшееся время бана в мс (0 если бана нет). */
+export function getOiCapBanRemainMs(coin) {
+  const exp = oiCapBanMap.get(coin);
+  if (!exp) return 0;
+  const remain = exp - Date.now();
+  return remain > 0 ? remain : 0;
 }
 
 /** Возвращает Set актуально забаненных монет (с очисткой протухших). */
@@ -85,29 +113,64 @@ export function getOiCapBans() {
  * Сериализует активные OI-cap бан для bot_state.json. Только не-протухшие.
  * Используется чтобы пережить рестарт — иначе монеты типа SAGA с постоянным
  * OI-cap получают новый шанс каждые 1-2 мин (см. инцидент 2026-05-12).
+ *
+ * Возвращает { bans: { coin: exp }, repeat: { coin: { count, lastBannedAt } } }.
+ * Repeat-счётчики сериализуются в свежем окне OI_CAP_REPEAT_RESET_MS — иначе при
+ * рестарте бот забывал бы что SAGA уже три раза билась об cap и начинал с tier 1.
  */
 export function serializeOiCapBans() {
   const now = Date.now();
-  const out = {};
+  const bans = {};
   for (const [coin, exp] of oiCapBanMap) {
-    if (exp > now) out[coin] = exp;
+    if (exp > now) bans[coin] = exp;
   }
-  return out;
+  const repeat = {};
+  for (const [coin, rec] of oiCapRepeatMap) {
+    if (rec && now - rec.lastBannedAt <= OI_CAP_REPEAT_RESET_MS) {
+      repeat[coin] = { count: rec.count, lastBannedAt: rec.lastBannedAt };
+    }
+  }
+  return { bans, repeat };
 }
 
-/** Восстанавливает OI-cap баны из bot_state.json. Толерантен к null/мусору. */
+/**
+ * Восстанавливает OI-cap баны из bot_state.json. Толерантен к null/мусору.
+ * Поддерживает старый flat-формат `{ coin: exp }` (без repeat) для обратной
+ * совместимости с stateы до этого фикса.
+ */
 export function restoreOiCapBans(saved) {
   if (!saved || typeof saved !== 'object') return;
   const now = Date.now();
-  let restored = 0;
-  for (const [coin, exp] of Object.entries(saved)) {
+
+  // Новый формат: { bans, repeat }. Старый: flat { coin: exp }.
+  const isNewFormat = saved.bans && typeof saved.bans === 'object';
+  const bans   = isNewFormat ? saved.bans   : saved;
+  const repeat = isNewFormat ? saved.repeat : null;
+
+  let restoredBans = 0;
+  for (const [coin, exp] of Object.entries(bans)) {
     if (typeof exp === 'number' && exp > now) {
       oiCapBanMap.set(coin, exp);
-      restored++;
+      restoredBans++;
     }
   }
-  if (restored > 0) {
-    logger.info(`[Executor] OI cap bans restored: ${restored} active`);
+
+  let restoredRepeat = 0;
+  if (repeat && typeof repeat === 'object') {
+    for (const [coin, rec] of Object.entries(repeat)) {
+      if (rec && typeof rec.count === 'number' && typeof rec.lastBannedAt === 'number') {
+        if (now - rec.lastBannedAt <= OI_CAP_REPEAT_RESET_MS) {
+          oiCapRepeatMap.set(coin, { count: rec.count, lastBannedAt: rec.lastBannedAt });
+          restoredRepeat++;
+        }
+      }
+    }
+  }
+
+  if (restoredBans > 0 || restoredRepeat > 0) {
+    logger.info(
+      `[Executor] OI cap bans restored: ${restoredBans} active | repeat counters: ${restoredRepeat}`,
+    );
   }
 }
 

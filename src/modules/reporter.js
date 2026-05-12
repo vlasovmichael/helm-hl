@@ -84,25 +84,30 @@ function isSilentHour() {
  *     - FOMO alert
  *
  * Антиспам: идентичные (по первым 120 символам) сообщения
- * отправляются не чаще раза в час. Critical обходит throttle.
+ * отправляются не чаще раза в час. Critical и bypassThrottle обходят throttle.
  *
  * @param {string}  text
- * @param {boolean} [critical=false] — аварийное: всегда со звуком, без throttle
+ * @param {boolean} [critical=false]       — аварийное: всегда со звуком, без throttle
+ * @param {object}  [opts]
+ * @param {boolean} [opts.bypassThrottle]  — пропустить throttle (для trade-событий),
+ *                                            silent-hour при этом сохраняется
  */
-export async function sendMessage(text, critical = false) {
+export async function sendMessage(text, critical = false, opts = {}) {
   if (!TG_API || !config.telegram.chatId) return;
+
+  const bypassThrottle = opts.bypassThrottle === true;
 
   // ── Throttle check (critical обходит, а также системные уведомления) ──
   const isLifecycle = text.includes('[SYSTEM]') || text.includes('[SYNC]') || text.includes('запущен');
 
-  if (!critical && !isLifecycle) {
+  if (!critical && !isLifecycle && !bypassThrottle) {
     const key = text.slice(0, THROTTLE_KEY_LEN);
     const lastSent = throttleCache.get(key);
     const now = Date.now();
 
     if (lastSent && now - lastSent < THROTTLE_COOLDOWN_MS) {
-      logger.debug(
-        `[Reporter] Throttled — same message sent ${Math.round((now - lastSent) / 1000)}s ago`,
+      logger.warn(
+        `[Reporter] Throttled — same message sent ${Math.round((now - lastSent) / 1000)}s ago | preview: ${text.slice(0, 60).replace(/\n/g, ' ')}`,
       );
       return;
     }

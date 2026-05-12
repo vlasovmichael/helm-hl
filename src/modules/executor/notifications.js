@@ -47,6 +47,8 @@ export async function notifyPaperOpen({ coin, sizeUsd, balance, price, apy, fee,
       `📊 APY: <b>${apy.toFixed(2)}%</b>\n` +
       `💵 Цена: $${price}\n` +
       `🏷 Fee: $${fee.toFixed(4)}`,
+    false,
+    { bypassThrottle: true },
   );
 }
 
@@ -63,6 +65,8 @@ export async function notifyProductionOpen({ coin, fillUsd, totalSz, avgPx, mark
       `📊 APY: <b>${apy.toFixed(2)}%</b>\n` +
       `⚖️ Leverage: <b>${effectiveLeverage}</b> (1x isolated)\n` +
       `🔑 OID: <code>${oid}</code> | DB: id=${dbId}`,
+    false,
+    { bypassThrottle: true },
   );
 }
 
@@ -77,6 +81,8 @@ export async function notifyPaperClose({ coin, holdHours, reason, pnl, fee, side
       `⏳ Удержание: ${holdHours.toFixed(1)}ч\n` +
       `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
       `🏷 Fee: $${fee.toFixed(4)}`,
+    false,
+    { bypassThrottle: true },
   );
 }
 
@@ -98,6 +104,8 @@ export async function notifyProductionClose({ coin, holdHours, entryPrice, avgPx
       `<b>💎 Итого: ${sign}$${realizedPnl.toFixed(4)}</b>\n` +
       `<code>─────────────────────</code>\n` +
       `🔑 OID: <code>${oid}</code>`,
+    false,
+    { bypassThrottle: true },
   );
 }
 
@@ -110,7 +118,9 @@ export async function notifySniperArmed({ coin, armPrice, reason, windowMinutes 
       `📍 Limit @ <b>$${armPrice}</b>\n` +
       `📈 Причина: <b>${reason}</b>\n` +
       `⏱ Окно: <b>${windowMinutes}мин</b>\n` +
-      `<i>Ждём maker-fill. Если не зальётся — fallback на market.</i>`
+      `<i>Ждём maker-fill. Если не зальётся — fallback на market.</i>`,
+    false,
+    { bypassThrottle: true },
   );
 }
 
@@ -124,7 +134,9 @@ export async function notifySniperFilled({ coin, armPrice, waitMinutes, reason, 
       `📍 Fill @ $${armPrice} (waited ${waitMinutes}мин)\n` +
       `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
       `🏷 Fee: $${fee.toFixed(4)}\n` +
-      `💎 Saved vs market: <b>${savedSign}$${feeSavedVsMarket.toFixed(4)}</b>`
+      `💎 Saved vs market: <b>${savedSign}$${feeSavedVsMarket.toFixed(4)}</b>`,
+    false,
+    { bypassThrottle: true },
   );
 }
 
@@ -137,7 +149,9 @@ export async function notifySniperTimeout({ coin, armPrice, fallbackPrice, reaso
       `📍 Arm @ $${armPrice} → fallback @ $${fallbackPrice}\n` +
       `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
       `🏷 Fee: $${fee.toFixed(4)}\n` +
-      `<i>Maker-limit не залился за 15мин — ушли в market.</i>`
+      `<i>Maker-limit не залился за 15мин — ушли в market.</i>`,
+    false,
+    { bypassThrottle: true },
   );
 }
 
@@ -238,7 +252,9 @@ export async function notifyHunterOpen({ coin, sizeUsd, balance, price, spikePct
       `💵 Entry: <b>$${price}</b>\n` +
       `🛑 SL: $${sl.toFixed(6)} <i>(+2%)</i>\n` +
       `🎯 TP: $${tp.toFixed(6)} <i>(-3%)</i>\n` +
-      `🏷 Entry fee: $${fee.toFixed(4)}`
+      `🏷 Entry fee: $${fee.toFixed(4)}`,
+    false,
+    { bypassThrottle: true },
   );
 }
 
@@ -290,7 +306,9 @@ export async function notifyHunterSL({ coin, entryPrice, slPrice, pnl, fee, hold
       `⏳ Hold: <b>${holdMinutes}мин</b>\n` +
       `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
       `🏷 Fees: $${fee.toFixed(4)}\n` +
-      `<i>Цена пошла против шорта — режем убыток.</i>`
+      `<i>Цена пошла против шорта — режем убыток.</i>`,
+    false,
+    { bypassThrottle: true },
   );
 }
 
@@ -303,7 +321,9 @@ export async function notifyHunterTP({ coin, entryPrice, tpPrice, pnl, fee, hold
       `⏳ Hold: <b>${holdMinutes}мин</b>\n` +
       `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
       `🏷 Fees: $${fee.toFixed(4)}\n` +
-      `<i>Mean-reversion отработал. Охотник доволен.</i>`
+      `<i>Mean-reversion отработал. Охотник доволен.</i>`,
+    false,
+    { bypassThrottle: true },
   );
 }
 
@@ -322,7 +342,9 @@ export async function notifyHunterTrailTp({ coin, entryPrice, closePrice, peakPc
       `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
       `🏷 Fees: $${fee.toFixed(4)}\n` +
       deltaLine +
-      `<i>Trailing TP: цена ушла глубже fixed TP, поймали хвост.</i>`
+      `<i>Trailing TP: цена ушла глубже fixed TP, поймали хвост.</i>`,
+    false,
+    { bypassThrottle: true },
   );
 }
 
@@ -337,7 +359,9 @@ export async function notifyHunterLongOpen({ coin, sizeUsd, balance, price, dump
       `💵 Entry: <b>$${price}</b>\n` +
       `🛑 SL: $${sl.toFixed(6)} <i>(−2%)</i>\n` +
       `🎯 TP: $${tp.toFixed(6)} <i>(+3%)</i>\n` +
-      `🏷 Entry fee: $${fee.toFixed(4)}`
+      `🏷 Entry fee: $${fee.toFixed(4)}`,
+    false,
+    { bypassThrottle: true },
   );
 }
 
@@ -387,7 +411,9 @@ export async function notifyHunterLongSL({ coin, entryPrice, slPrice, pnl, fee, 
       `⏳ Hold: <b>${holdMinutes}мин</b>\n` +
       `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
       `🏷 Fees: $${fee.toFixed(4)}\n` +
-      `<i>Дамп продолжился — ловили нож. Режем.</i>`
+      `<i>Дамп продолжился — ловили нож. Режем.</i>`,
+    false,
+    { bypassThrottle: true },
   );
 }
 
@@ -400,7 +426,9 @@ export async function notifyHunterLongTP({ coin, entryPrice, tpPrice, pnl, fee, 
       `⏳ Hold: <b>${holdMinutes}мин</b>\n` +
       `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
       `🏷 Fees: $${fee.toFixed(4)}\n` +
-      `<i>Отскок отработал. Купили дно — продали верх.</i>`
+      `<i>Отскок отработал. Купили дно — продали верх.</i>`,
+    false,
+    { bypassThrottle: true },
   );
 }
 
@@ -419,7 +447,9 @@ export async function notifyHunterLongTrailTp({ coin, entryPrice, closePrice, pe
       `💰 PnL: <b>${sign}$${pnl.toFixed(4)}</b>\n` +
       `🏷 Fees: $${fee.toFixed(4)}\n` +
       deltaLine +
-      `<i>Trailing TP: отскок ушёл глубже fixed TP, поймали хвост.</i>`
+      `<i>Trailing TP: отскок ушёл глубже fixed TP, поймали хвост.</i>`,
+    false,
+    { bypassThrottle: true },
   );
 }
 
@@ -439,6 +469,8 @@ export async function notifyRotate({ closeCoin, openCoin, holdHours, closePnl, o
       `💰 Размер: <b>$${openSizeUsd.toFixed(2)}</b>\n` +
       `📊 APY: <b>${openApy.toFixed(2)}%</b>\n` +
       `⏱ Payback: ${paybackHours}h`,
+    false,
+    { bypassThrottle: true },
   );
 }
 

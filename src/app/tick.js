@@ -14,6 +14,7 @@ import { hunterReconcile } from './hunterReconcile.js';
 import { hunterLongReconcile } from './hunterLongReconcile.js';
 import { processHunterTrailArm } from './hunterTrailArm.js';
 import { runBalanceDiag } from './balanceDiag.js';
+import { flushBotStatePeriodic } from './lifecycle.js';
 import { state } from './state.js';
 
 export async function tick() {
@@ -97,5 +98,6 @@ export async function tick() {
     logger.error(`[Tick] ${err.message}`);
   } finally {
     state.tickRunning = false;
+    await flushBotStatePeriodic();
   }
 }

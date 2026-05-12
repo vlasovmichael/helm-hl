@@ -30,7 +30,6 @@ import {
   banOiCap,
   RUNTIME_BAN_TTL_MS, SLIPPAGE_BAN_TTL_MS,
   REENTRY_COOLDOWN_MS, REJECTED_ALERT_TTL_MS,
-  OI_CAP_BAN_TTL_MS,
   CB_PAUSE_MS,
 } from './state.js';
 import { reconcile } from './reconciler.js';
@@ -192,13 +191,14 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
   } catch (err) {
     // OI cap detection — ловим до общей обработки сетевых ошибок
     if (OI_CAP_REGEX.test(err.message ?? '')) {
-      banOiCap(coin);
+      const { count, ttlMs } = banOiCap(coin);
+      const banMin = Math.round(ttlMs / 60_000);
       logger.warn(
         `[Executor] 🚫 OI CAP BAN #${coin} — exchange rejected (${err.message}). ` +
-          `Banned for ${OI_CAP_BAN_TTL_MS / 60_000}min.`,
+          `Banned for ${banMin}min (tier ${count}).`,
       );
-      if (!silent) await notifyOiCapBan({ coin, banMinutes: OI_CAP_BAN_TTL_MS / 60_000 });
-      return { ok: false, reason: 'OI_CAP' };
+      if (!silent) await notifyOiCapBan({ coin, banMinutes: banMin });
+      return { ok: false, reason: 'OI_CAP', ttlMs };
     }
 
     logger.error(
@@ -217,13 +217,14 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
   if (!fill.ok) {
     // OI cap detection — биржа могла "отклонить" вместо throw
     if (OI_CAP_REGEX.test(fill.error ?? '')) {
-      banOiCap(coin);
+      const { count, ttlMs } = banOiCap(coin);
+      const banMin = Math.round(ttlMs / 60_000);
       logger.warn(
         `[Executor] 🚫 OI CAP BAN #${coin} — exchange rejected (${fill.error}). ` +
-          `Banned for ${OI_CAP_BAN_TTL_MS / 60_000}min.`,
+          `Banned for ${banMin}min (tier ${count}).`,
       );
-      if (!silent) await notifyOiCapBan({ coin, banMinutes: OI_CAP_BAN_TTL_MS / 60_000 });
-      return { ok: false, reason: 'OI_CAP' };
+      if (!silent) await notifyOiCapBan({ coin, banMinutes: banMin });
+      return { ok: false, reason: 'OI_CAP', ttlMs };
     }
 
     logger.error(
@@ -456,13 +457,14 @@ export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, si
   } catch (err) {
     // OI cap detection — симметрично с funding-веткой выше
     if (OI_CAP_REGEX.test(err.message ?? '')) {
-      banOiCap(coin);
+      const { count, ttlMs } = banOiCap(coin);
+      const banMin = Math.round(ttlMs / 60_000);
       logger.warn(
         `[Executor] 🚫 HUNTER OI CAP BAN #${coin} — exchange rejected (${err.message}). ` +
-          `Banned for ${OI_CAP_BAN_TTL_MS / 60_000}min.`,
+          `Banned for ${banMin}min (tier ${count}).`,
       );
-      if (!silent) await notifyOiCapBan({ coin, banMinutes: OI_CAP_BAN_TTL_MS / 60_000 });
-      return { ok: false, reason: 'OI_CAP' };
+      if (!silent) await notifyOiCapBan({ coin, banMinutes: banMin });
+      return { ok: false, reason: 'OI_CAP', ttlMs };
     }
     logger.error(`[Executor] PROD HUNTER OPEN #${coin} — marketOpen failed: ${err.message}`);
     if (!silent) await notifyHunterOpenFailed({ coin, stage: 'marketOpen', reason: err.message, rolledBack: false });
@@ -473,13 +475,14 @@ export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, si
   if (!fill.ok) {
     // OI cap detection — биржа могла "отклонить" вместо throw
     if (OI_CAP_REGEX.test(fill.error ?? '')) {
-      banOiCap(coin);
+      const { count, ttlMs } = banOiCap(coin);
+      const banMin = Math.round(ttlMs / 60_000);
       logger.warn(
         `[Executor] 🚫 HUNTER OI CAP BAN #${coin} — exchange rejected (${fill.error}). ` +
-          `Banned for ${OI_CAP_BAN_TTL_MS / 60_000}min.`,
+          `Banned for ${banMin}min (tier ${count}).`,
       );
-      if (!silent) await notifyOiCapBan({ coin, banMinutes: OI_CAP_BAN_TTL_MS / 60_000 });
-      return { ok: false, reason: 'OI_CAP' };
+      if (!silent) await notifyOiCapBan({ coin, banMinutes: banMin });
+      return { ok: false, reason: 'OI_CAP', ttlMs };
     }
     logger.error(`[Executor] PROD HUNTER OPEN #${coin} — exchange rejected: ${fill.error}`);
     if (!silent) await notifyHunterOpenFailed({ coin, stage: 'fill', reason: fill.error, rolledBack: false });
@@ -724,12 +727,13 @@ export async function productionHunterLongOpen(coin, markPrice, dumpPct, sl, tp,
     );
   } catch (err) {
     if (OI_CAP_REGEX.test(err.message ?? '')) {
-      banOiCap(coin);
+      const { count, ttlMs } = banOiCap(coin);
+      const banMin = Math.round(ttlMs / 60_000);
       logger.warn(
-        `[Executor] 🚫 HUNTER_LONG OI CAP BAN #${coin} — ${err.message}. Banned for ${OI_CAP_BAN_TTL_MS / 60_000}min.`,
+        `[Executor] 🚫 HUNTER_LONG OI CAP BAN #${coin} — ${err.message}. Banned for ${banMin}min (tier ${count}).`,
       );
-      if (!silent) await notifyOiCapBan({ coin, banMinutes: OI_CAP_BAN_TTL_MS / 60_000 });
-      return { ok: false, reason: 'OI_CAP' };
+      if (!silent) await notifyOiCapBan({ coin, banMinutes: banMin });
+      return { ok: false, reason: 'OI_CAP', ttlMs };
     }
     logger.error(`[Executor] PROD HUNTER_LONG OPEN #${coin} — marketOpen failed: ${err.message}`);
     if (!silent) await notifyHunterLongOpenFailed({ coin, stage: 'marketOpen', reason: err.message, rolledBack: false });
@@ -739,10 +743,13 @@ export async function productionHunterLongOpen(coin, markPrice, dumpPct, sl, tp,
   const fill = parseFillResponse(result, 'OPEN');
   if (!fill.ok) {
     if (OI_CAP_REGEX.test(fill.error ?? '')) {
-      banOiCap(coin);
-      logger.warn(`[Executor] 🚫 HUNTER_LONG OI CAP BAN #${coin} — ${fill.error}`);
-      if (!silent) await notifyOiCapBan({ coin, banMinutes: OI_CAP_BAN_TTL_MS / 60_000 });
-      return { ok: false, reason: 'OI_CAP' };
+      const { count, ttlMs } = banOiCap(coin);
+      const banMin = Math.round(ttlMs / 60_000);
+      logger.warn(
+        `[Executor] 🚫 HUNTER_LONG OI CAP BAN #${coin} — ${fill.error}. Banned for ${banMin}min (tier ${count}).`,
+      );
+      if (!silent) await notifyOiCapBan({ coin, banMinutes: banMin });
+      return { ok: false, reason: 'OI_CAP', ttlMs };
     }
     logger.error(`[Executor] PROD HUNTER_LONG OPEN #${coin} — exchange rejected: ${fill.error}`);
     if (!silent) await notifyHunterLongOpenFailed({ coin, stage: 'fill', reason: fill.error, rolledBack: false });
@@ -1242,9 +1249,10 @@ export async function productionRotate(signal, position) {
     // Особый случай: новая нога упала по OI cap. Старая позиция уже закрыта,
     // вернуть её не можем. Шлём отдельное уведомление, бан уже выставлен в productionOpen.
     if (openResult.reason === 'OI_CAP') {
+      const banMin = Math.round((openResult.ttlMs ?? 30 * 60_000) / 60_000);
       await notifyOiCapAfterRotate({
         closeCoin: signal.closeCoin, openCoin: signal.openCoin,
-        closePnl: closeResult.pnl, banMinutes: OI_CAP_BAN_TTL_MS / 60_000,
+        closePnl: closeResult.pnl, banMinutes: banMin,
       });
     } else {
       await notifyRotateFailed({
