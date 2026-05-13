@@ -258,6 +258,52 @@ async function getStatusData() {
 //  Routes
 // ─────────────────────────────────────────────────
 
+// Tick считается живым, если завершился не более ~8 интервалов назад.
+// На TICK_INTERVAL_MS=15s это ~2 мин — переживает разовые сетевые ретраи.
+const HEALTH_TICK_STALE_MS = TICK_INTERVAL_MS * 8;
+// Окно от старта процесса, пока ещё ни одного tick не случилось.
+const HEALTH_BOOT_GRACE_MS = 60_000;
+
+function handleHealth(_req, res) {
+  const now = Date.now();
+  const tickAgeMs = state.lastTickAt > 0 ? now - state.lastTickAt : null;
+  const uptimeMs = now - state.startedAt;
+
+  let status = "ok";
+  const reasons = [];
+
+  if (state.shuttingDown) {
+    status = "shutting_down";
+    reasons.push("shutting_down");
+  } else if (state.lastTickAt === 0) {
+    if (uptimeMs > HEALTH_BOOT_GRACE_MS) {
+      status = "no_tick";
+      reasons.push(`no tick within ${HEALTH_BOOT_GRACE_MS}ms of boot`);
+    } else {
+      status = "booting";
+    }
+  } else if (tickAgeMs > HEALTH_TICK_STALE_MS) {
+    status = "stale_tick";
+    reasons.push(`tick stale ${tickAgeMs}ms (>${HEALTH_TICK_STALE_MS}ms)`);
+  }
+
+  const position = getActivePosition();
+  const httpStatus = status === "ok" || status === "booting" ? 200 : 503;
+
+  res.status(httpStatus).json({
+    status,
+    reasons,
+    tickAgeMs,
+    lastTickAt: state.lastTickAt || null,
+    uptimeMs,
+    lastBotStateSaveAt: state.lastBotStateSaveAt || null,
+    slot: position ? "ACTIVE" : "IDLE",
+    slotCoin: position ? position.coin : null,
+    slotStrategy: position ? position.strategy_id || "carry" : null,
+    shuttingDown: state.shuttingDown,
+  });
+}
+
 async function handleStatus(_req, res) {
   try {
     const data = await getStatusData();
@@ -787,24 +833,43 @@ function computeStats(trades) {
       losses: 0,
       winRate: 0,
       avgPnl: 0,
+      avgWin: 0,
+      avgLoss: 0,
+      payoffRatio: 0,
+      expectancy: 0,
       bestPnl: 0,
       worstPnl: 0,
       byStrategy: {},
       totalHoldMs: 0,
+      totalFees: 0,
+      grossPnl: 0,
+      feesPctOfGross: 0,
+      maxDrawdown: 0,
+      maxDrawdownPct: 0,
     };
   }
   let totalPnl = 0,
     wins = 0,
     losses = 0;
+  let winsSum = 0,
+    lossesSum = 0;
   let bestPnl = -Infinity,
     worstPnl = Infinity;
+  let totalFees = 0;
   const byStrategy = {};
   let totalHoldMs = 0;
   for (const t of trades) {
     const pnl = t.realized_pnl || 0;
+    const fee = t.fee_paid || 0;
     totalPnl += pnl;
-    if (pnl > 0) wins++;
-    else if (pnl < 0) losses++;
+    totalFees += fee;
+    if (pnl > 0) {
+      wins++;
+      winsSum += pnl;
+    } else if (pnl < 0) {
+      losses++;
+      lossesSum += pnl;
+    }
     if (pnl > bestPnl) bestPnl = pnl;
     if (pnl < worstPnl) worstPnl = pnl;
     const sid = t.strategy_id || "carry";
@@ -820,17 +885,50 @@ function computeStats(trades) {
   }
   const count = trades.length;
   const winRate = count > 0 ? (wins / count) * 100 : 0;
+  const avgPnl = totalPnl / count;
+  const avgWin = wins > 0 ? winsSum / wins : 0;
+  const avgLoss = losses > 0 ? lossesSum / losses : 0; // negative
+  const payoffRatio = losses > 0 && avgLoss !== 0 ? avgWin / Math.abs(avgLoss) : (wins > 0 ? Infinity : 0);
+  // expectancy = WR·avgWin + LR·avgLoss; математически = avgPnl.
+  // Дублируем explicit как самостоятельную метрику для UI.
+  const expectancy = avgPnl;
+  const grossPnl = totalPnl + totalFees;
+  const feesPctOfGross = grossPnl !== 0 ? (totalFees / Math.abs(grossPnl)) * 100 : 0;
+
+  // Max drawdown по equity-кривой: сортируем по closed_at, считаем cumPnL,
+  // отслеживаем пик и максимальную просадку от пика.
+  const sorted = [...trades].sort((a, b) => (a.closed_at || 0) - (b.closed_at || 0));
+  let cum = 0, peak = 0, maxDD = 0;
+  for (const t of sorted) {
+    cum += t.realized_pnl || 0;
+    if (cum > peak) peak = cum;
+    const dd = peak - cum;
+    if (dd > maxDD) maxDD = dd;
+  }
+  // % от пика: если пик ≤ 0 — приводим к |totalPnl| как референс, иначе 0.
+  const maxDdRef = peak > 0 ? peak : Math.abs(totalPnl) || 1;
+  const maxDrawdownPct = (maxDD / maxDdRef) * 100;
+
   return {
     totalPnl,
     count,
     wins,
     losses,
     winRate,
-    avgPnl: totalPnl / count,
+    avgPnl,
+    avgWin,
+    avgLoss,
+    payoffRatio: Number.isFinite(payoffRatio) ? payoffRatio : null,
+    expectancy,
     bestPnl: bestPnl === -Infinity ? 0 : bestPnl,
     worstPnl: worstPnl === Infinity ? 0 : worstPnl,
     byStrategy,
     totalHoldMs,
+    totalFees,
+    grossPnl,
+    feesPctOfGross,
+    maxDrawdown: maxDD,
+    maxDrawdownPct,
   };
 }
 
@@ -1074,6 +1172,12 @@ export function startDashboard() {
 
   const app = express();
   app.use(express.urlencoded({ extended: false, limit: "4kb" }));
+
+  // /api/health — публичный, до authGate, чтобы Docker HEALTHCHECK из контейнера
+  // мог опрашивать без креденшалов. Возвращает 503 если tick молчит >2 мин или
+  // идёт shutdown — это сигнал оркестратору рестартить контейнер.
+  app.get("/api/health", handleHealth);
+
   app.use(authGate);
 
   app.use("/api", (_req, res, next) => {
@@ -1101,6 +1205,7 @@ export function startDashboard() {
   app.get("/api/trade-markers", handleTradeMarkers);
 
   const ALLOWED_INTERVALS = {
+    "1m": 4 * 3600_000,
     "5m": 16 * 3600_000,
     "15m": 48 * 3600_000,
     "1h": 7 * 24 * 3600_000,

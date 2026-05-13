@@ -27,7 +27,7 @@ let entryPriceLine = null;
 let currentPriceLine = null;
 let liveCandle = null; // {time, open, high, low, close}
 let currentInterval = '5m';
-const INTERVAL_SECONDS = { '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400 };
+const INTERVAL_SECONDS = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400 };
 let idleChartCoin = null;
 let idleChartTimer = null;
 let lastSuccessAt = 0;
@@ -212,7 +212,7 @@ async function renderIdleChart() {
 
 // Окно истории под markers зависит от выбранного TF графика.
 // Берём с запасом — lightweight-charts отрисует только то, что в видимой области.
-const MARKER_WINDOW_HOURS = { '5m': 16, '15m': 48, '1h': 168, '4h': 720, '1d': 720 };
+const MARKER_WINDOW_HOURS = { '1m': 4, '5m': 16, '15m': 48, '1h': 168, '4h': 720, '1d': 720 };
 
 async function applyTradeMarkers(coin) {
   if (!priceSeries || !coin) return;
@@ -774,6 +774,42 @@ function renderPnlSummary() {
   document.getElementById('pnl-best').textContent  = p.count > 0 ? fmtMoney(p.bestPnl) : '—';
   document.getElementById('pnl-worst').textContent = p.count > 0 ? fmtMoney(p.worstPnl) : '—';
   document.getElementById('pnl-wl').textContent    = p.count > 0 ? `${p.wins} / ${p.losses}` : '—';
+
+  const expEl = document.getElementById('pnl-expectancy');
+  if (expEl) {
+    expEl.textContent = p.count > 0 ? fmtMoney(p.expectancy) : '—';
+    expEl.classList.toggle('positive', p.expectancy > 0);
+    expEl.classList.toggle('negative', p.expectancy < 0);
+  }
+  const payoffEl = document.getElementById('pnl-payoff');
+  if (payoffEl) {
+    if (p.count === 0 || p.payoffRatio == null) {
+      payoffEl.textContent = '—';
+    } else {
+      payoffEl.textContent = `${p.payoffRatio.toFixed(2)}×`;
+    }
+  }
+  const ddEl = document.getElementById('pnl-maxdd');
+  if (ddEl) {
+    if (p.count === 0) {
+      ddEl.textContent = '—';
+    } else {
+      const pctTxt = Number.isFinite(p.maxDrawdownPct) ? ` (${p.maxDrawdownPct.toFixed(0)}%)` : '';
+      ddEl.textContent = `${fmtMoney(-Math.abs(p.maxDrawdown))}${pctTxt}`;
+      ddEl.classList.toggle('negative', p.maxDrawdown > 0);
+    }
+  }
+  const feesEl = document.getElementById('pnl-fees');
+  if (feesEl) {
+    if (p.count === 0) {
+      feesEl.textContent = '—';
+    } else {
+      const pctTxt = Number.isFinite(p.feesPctOfGross) && p.grossPnl !== 0
+        ? ` (${p.feesPctOfGross.toFixed(0)}% of gross)`
+        : '';
+      feesEl.textContent = `${fmtMoney(p.totalFees)}${pctTxt}`;
+    }
+  }
 
   // Strategy breakdown — добавляем синтетическую запись 'manual' если есть.
   const stratContainer = document.getElementById('pnl-strategy');

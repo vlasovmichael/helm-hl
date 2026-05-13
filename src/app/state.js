@@ -44,4 +44,6 @@ export const state = {
   latestHunterAt:     0,
   // Последний успешный saveBotState (для throttle периодического flush из tick'а).
   lastBotStateSaveAt: 0,
+  // Метка завершения последнего tick() — для /api/health и Docker HEALTHCHECK.
+  lastTickAt: 0,
 };

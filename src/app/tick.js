@@ -98,6 +98,7 @@ export async function tick() {
     logger.error(`[Tick] ${err.message}`);
   } finally {
     state.tickRunning = false;
+    state.lastTickAt = Date.now();
     await flushBotStatePeriodic();
   }
 }
