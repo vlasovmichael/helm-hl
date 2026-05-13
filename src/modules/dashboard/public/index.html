@@ -2,9 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0c0a09" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#f5f1ea" media="(prefers-color-scheme: light)" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta
+      name="theme-color"
+      content="#0c0a09"
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta
+      name="theme-color"
+      content="#f5f1ea"
+      media="(prefers-color-scheme: light)"
+    />
     <title>HL Scanner</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -19,29 +30,24 @@
     <script>
       (function () {
         try {
-          var stored = localStorage.getItem('hl-scanner-theme') || 'auto';
+          var stored = localStorage.getItem("hl-scanner-theme") || "auto";
           var theme;
-          if (stored === 'auto') {
-            theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          if (stored === "auto") {
+            theme = window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
           } else {
-            theme = stored === 'light' ? 'light' : 'dark';
+            theme = stored === "light" ? "light" : "dark";
           }
-          document.documentElement.setAttribute('data-theme', theme);
+          document.documentElement.setAttribute("data-theme", theme);
         } catch (_) {
-          document.documentElement.setAttribute('data-theme', 'dark');
+          document.documentElement.setAttribute("data-theme", "dark");
         }
       })();
     </script>
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
-    <!-- Mobile tape-bar: persistent equity + mode (sticky on small screens) -->
-    <div class="tape-bar" aria-hidden="true">
-      <div class="tape-equity" id="tape-equity">$0.00</div>
-      <div class="tape-delta" id="tape-delta">—</div>
-      <div class="tape-mode" id="tape-mode">—</div>
-    </div>
-
     <div class="container">
       <header data-edition="">
         <div class="equity-group">
@@ -56,9 +62,15 @@
             <span id="available-val">Available: —</span>
           </div>
           <div class="theme-switcher" role="group" aria-label="Theme">
-            <button class="theme-btn" data-theme="auto" title="Auto (system)">Auto</button>
-            <button class="theme-btn" data-theme="light" title="Light">Light</button>
-            <button class="theme-btn" data-theme="dark" title="Dark">Dark</button>
+            <button class="theme-btn" data-theme="auto" title="Auto (system)">
+              Auto
+            </button>
+            <button class="theme-btn" data-theme="light" title="Light">
+              Light
+            </button>
+            <button class="theme-btn" data-theme="dark" title="Dark">
+              Dark
+            </button>
           </div>
         </div>
       </header>
@@ -77,9 +89,24 @@
       <!-- 02 / Price Performance (Candles) -->
       <section class="card" id="sec-charts">
         <div class="card-header">
-          <div class="card-title" data-num="02" id="price-title">Price Performance</div>
-          <div style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap;">
-            <div id="price-meta" class="tax-year-label" style="font-family: var(--font-mono)">$0.00</div>
+          <div class="card-title" data-num="02" id="price-title">
+            Price Performance
+          </div>
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              gap: 0.75rem;
+              flex-wrap: wrap;
+            "
+          >
+            <div
+              id="price-meta"
+              class="tax-year-label"
+              style="font-family: var(--font-mono)"
+            >
+              $0.00
+            </div>
             <div class="time-ranges" id="price-intervals">
               <button class="range-btn active" data-iv="5m">5m</button>
               <button class="range-btn" data-iv="15m">15m</button>
@@ -89,8 +116,8 @@
             </div>
           </div>
         </div>
-        <div id="price-card" style="display:contents;">
-          <div id="price-chart" style="height: 280px; width: 100%;"></div>
+        <div id="price-card" style="display: contents">
+          <div id="price-chart" style="height: 280px; width: 100%"></div>
         </div>
       </section>
 
@@ -99,14 +126,28 @@
         <div class="card-header">
           <div class="card-title" data-num="03">Live Logs</div>
           <div class="logs-controls">
-            <input type="search" id="logs-search" placeholder="Search…" autocomplete="off" spellcheck="false" />
+            <input
+              type="search"
+              id="logs-search"
+              placeholder="Search…"
+              autocomplete="off"
+              spellcheck="false"
+            />
             <div class="logs-filters" id="logs-filters">
-              <button class="logs-filter-btn active" data-level="all">All</button>
+              <button class="logs-filter-btn active" data-level="all">
+                All
+              </button>
               <button class="logs-filter-btn" data-level="info">Info</button>
               <button class="logs-filter-btn" data-level="warn">Warn</button>
               <button class="logs-filter-btn" data-level="error">Err</button>
             </div>
-            <button class="logs-pause-btn" id="logs-pause" title="Pause autoscroll">⏸</button>
+            <button
+              class="logs-pause-btn"
+              id="logs-pause"
+              title="Pause autoscroll"
+            >
+              ⏸
+            </button>
           </div>
         </div>
         <div class="logs-viewport" id="logs-viewport">
@@ -132,14 +173,30 @@
                 <th>#</th>
                 <th>Pair</th>
                 <th>Price</th>
-                <th title="Изменение цены в самом «горячем» из окон 2m/5m/15m/1h.">Spike</th>
-                <th title="Изменение цены за длинное окно (anti-trend фильтр).">Trend</th>
-                <th title="Tier (WEAK/NORMAL/STRONG) + направление + окно.">Suggested</th>
-                <th title="Stop-loss / Take-profit уровни от текущей цены: SL ±2%, TP ∓3%">SL / TP</th>
+                <th
+                  title="Изменение цены в самом «горячем» из окон 2m/5m/15m/1h."
+                >
+                  Spike
+                </th>
+                <th title="Изменение цены за длинное окно (anti-trend фильтр).">
+                  Trend
+                </th>
+                <th title="Tier (WEAK/NORMAL/STRONG) + направление + окно.">
+                  Suggested
+                </th>
+                <th
+                  title="Stop-loss / Take-profit уровни от текущей цены: SL ±2%, TP ∓3%"
+                >
+                  SL / TP
+                </th>
               </tr>
             </thead>
             <tbody id="signals-tbody">
-              <tr><td colspan="7" class="empty-state">Waiting for hunter scope…</td></tr>
+              <tr>
+                <td colspan="7" class="empty-state">
+                  Waiting for hunter scope…
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -162,7 +219,9 @@
             <div class="pnl-hero-main">
               <div class="item-label">Realized P&amp;L</div>
               <div class="pnl-hero-value" id="pnl-total">$0.00</div>
-              <div class="pnl-hero-sub" id="pnl-stats">— trades · — win rate</div>
+              <div class="pnl-hero-sub" id="pnl-stats">
+                — trades · — win rate
+              </div>
             </div>
             <div class="pnl-hero-side">
               <div class="pnl-mini">
@@ -180,10 +239,22 @@
             </div>
           </div>
           <div class="pnl-grid">
-            <div class="grid-item"><div class="item-label">Avg trade</div><div class="item-value" id="pnl-avg">$0.00</div></div>
-            <div class="grid-item"><div class="item-label">Best trade</div><div class="item-value" id="pnl-best">$0.00</div></div>
-            <div class="grid-item"><div class="item-label">Worst trade</div><div class="item-value" id="pnl-worst">$0.00</div></div>
-            <div class="grid-item"><div class="item-label">Wins / Losses</div><div class="item-value" id="pnl-wl">—</div></div>
+            <div class="grid-item">
+              <div class="item-label">Avg trade</div>
+              <div class="item-value" id="pnl-avg">$0.00</div>
+            </div>
+            <div class="grid-item">
+              <div class="item-label">Best trade</div>
+              <div class="item-value" id="pnl-best">$0.00</div>
+            </div>
+            <div class="grid-item">
+              <div class="item-label">Worst trade</div>
+              <div class="item-value" id="pnl-worst">$0.00</div>
+            </div>
+            <div class="grid-item">
+              <div class="item-label">Wins / Losses</div>
+              <div class="item-value" id="pnl-wl">—</div>
+            </div>
           </div>
           <div class="pnl-strategy" id="pnl-strategy">
             <div class="empty-state">No trades in this period</div>
@@ -237,7 +308,19 @@
 
       <section class="card">
         <div class="card-header">
-          <div class="card-title" data-num="09">Tax Summary <span style="font-size:14px;color:var(--text-muted);font-family:var(--font-mono);font-style:normal;letter-spacing:0.08em;">PIT-38</span></div>
+          <div class="card-title" data-num="09">
+            Tax Summary
+            <span
+              style="
+                font-size: 14px;
+                color: var(--text-muted);
+                font-family: var(--font-mono);
+                font-style: normal;
+                letter-spacing: 0.08em;
+              "
+              >PIT-38</span
+            >
+          </div>
           <div id="tax-year" class="tax-year-label">2026</div>
         </div>
         <div class="data-grid">
@@ -264,17 +347,31 @@
 
       <footer id="footer-status">
         <span>Connecting to core…</span>
-        <a href="/logout" class="logout-link" id="logout-link" style="display:none">Sign out</a>
+        <a
+          href="/logout"
+          class="logout-link"
+          id="logout-link"
+          style="display: none"
+          >Sign out</a
+        >
       </footer>
     </div>
 
     <!-- Mobile bottom navigation: scroll-spy across main sections -->
     <nav class="bottom-nav" aria-label="Sections">
-      <button class="bottom-nav-btn active" data-target="sec-position" aria-label="Position">
+      <button
+        class="bottom-nav-btn active"
+        data-target="sec-position"
+        aria-label="Position"
+      >
         <span class="nav-icon" aria-hidden="true"></span>
         <span>Pos</span>
       </button>
-      <button class="bottom-nav-btn" data-target="sec-charts" aria-label="Charts">
+      <button
+        class="bottom-nav-btn"
+        data-target="sec-charts"
+        aria-label="Charts"
+      >
         <span class="nav-icon" aria-hidden="true"></span>
         <span>Chart</span>
       </button>
@@ -282,7 +379,11 @@
         <span class="nav-icon" aria-hidden="true"></span>
         <span>Logs</span>
       </button>
-      <button class="bottom-nav-btn" data-target="sec-activity" aria-label="Activity">
+      <button
+        class="bottom-nav-btn"
+        data-target="sec-activity"
+        aria-label="Activity"
+      >
         <span class="nav-icon" aria-hidden="true"></span>
         <span>Hist</span>
       </button>
@@ -294,73 +395,108 @@
         try {
           var d = new Date();
           var ed = d.toISOString().slice(0, 10);
-          var hdr = document.querySelector('header[data-edition]');
-          if (hdr) hdr.setAttribute('data-edition', ed);
+          var hdr = document.querySelector("header[data-edition]");
+          if (hdr) hdr.setAttribute("data-edition", ed);
         } catch (_) {}
       })();
 
       // ── Mobile tape-bar mirror ──
       // Keeps the sticky equity bar in sync with the hero values without touching app.js.
       (function () {
-        var heroValue = document.getElementById('equity-value');
-        var heroDelta = document.getElementById('equity-delta');
-        var modePill  = document.getElementById('mode-pill');
-        var tapeValue = document.getElementById('tape-equity');
-        var tapeDelta = document.getElementById('tape-delta');
-        var tapeMode  = document.getElementById('tape-mode');
+        var heroValue = document.getElementById("equity-value");
+        var heroDelta = document.getElementById("equity-delta");
+        var modePill = document.getElementById("mode-pill");
+        var tapeValue = document.getElementById("tape-equity");
+        var tapeDelta = document.getElementById("tape-delta");
+        var tapeMode = document.getElementById("tape-mode");
         if (!heroValue || !tapeValue) return;
 
         function sync() {
-          if (heroValue && tapeValue) tapeValue.textContent = heroValue.textContent.trim();
+          if (heroValue && tapeValue)
+            tapeValue.textContent = heroValue.textContent.trim();
           if (heroDelta && tapeDelta) {
             tapeDelta.textContent = heroDelta.textContent.trim();
-            tapeDelta.className = 'tape-delta ' +
-              (heroDelta.classList.contains('positive') ? 'positive' :
-               heroDelta.classList.contains('negative') ? 'negative' : '');
+            tapeDelta.className =
+              "tape-delta " +
+              (heroDelta.classList.contains("positive")
+                ? "positive"
+                : heroDelta.classList.contains("negative")
+                  ? "negative"
+                  : "");
           }
-          if (modePill && tapeMode) tapeMode.textContent = modePill.textContent.trim();
+          if (modePill && tapeMode)
+            tapeMode.textContent = modePill.textContent.trim();
         }
 
         var mo = new MutationObserver(sync);
-        mo.observe(heroValue, { childList: true, characterData: true, subtree: true });
-        if (heroDelta) mo.observe(heroDelta, { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
-        if (modePill)  mo.observe(modePill,  { childList: true, characterData: true, subtree: true });
+        mo.observe(heroValue, {
+          childList: true,
+          characterData: true,
+          subtree: true,
+        });
+        if (heroDelta)
+          mo.observe(heroDelta, {
+            childList: true,
+            characterData: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ["class"],
+          });
+        if (modePill)
+          mo.observe(modePill, {
+            childList: true,
+            characterData: true,
+            subtree: true,
+          });
         sync();
       })();
 
       // ── Bottom-nav scroll-spy ──
       (function () {
-        var nav = document.querySelector('.bottom-nav');
+        var nav = document.querySelector(".bottom-nav");
         if (!nav) return;
-        var btns = Array.prototype.slice.call(nav.querySelectorAll('[data-target]'));
+        var btns = Array.prototype.slice.call(
+          nav.querySelectorAll("[data-target]"),
+        );
         var sections = btns
-          .map(function (b) { return document.getElementById(b.dataset.target); })
+          .map(function (b) {
+            return document.getElementById(b.dataset.target);
+          })
           .filter(Boolean);
 
         btns.forEach(function (btn) {
-          btn.addEventListener('click', function () {
+          btn.addEventListener("click", function () {
             var el = document.getElementById(btn.dataset.target);
             if (!el) return;
             var y = el.getBoundingClientRect().top + window.pageYOffset - 70;
-            window.scrollTo({ top: y, behavior: 'smooth' });
+            window.scrollTo({ top: y, behavior: "smooth" });
           });
         });
 
-        if (!('IntersectionObserver' in window)) return;
+        if (!("IntersectionObserver" in window)) return;
 
-        var observer = new IntersectionObserver(function (entries) {
-          // Pick the entry closest to top of viewport that is currently intersecting.
-          var visible = entries
-            .filter(function (e) { return e.isIntersecting; })
-            .sort(function (a, b) { return a.boundingClientRect.top - b.boundingClientRect.top; })[0];
-          if (!visible) return;
-          var id = visible.target.id;
-          btns.forEach(function (b) {
-            b.classList.toggle('active', b.dataset.target === id);
-          });
-        }, { rootMargin: '-30% 0px -55% 0px', threshold: 0 });
+        var observer = new IntersectionObserver(
+          function (entries) {
+            // Pick the entry closest to top of viewport that is currently intersecting.
+            var visible = entries
+              .filter(function (e) {
+                return e.isIntersecting;
+              })
+              .sort(function (a, b) {
+                return a.boundingClientRect.top - b.boundingClientRect.top;
+              })[0];
+            if (!visible) return;
+            var id = visible.target.id;
+            btns.forEach(function (b) {
+              b.classList.toggle("active", b.dataset.target === id);
+            });
+          },
+          { rootMargin: "-30% 0px -55% 0px", threshold: 0 },
+        );
 
-        sections.forEach(function (s) { observer.observe(s); });
+        sections.forEach(function (s) {
+          observer.observe(s);
+        });
       })();
     </script>
     <script src="app.js"></script>

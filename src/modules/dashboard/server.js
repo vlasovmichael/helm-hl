@@ -4,22 +4,25 @@
 // Слушает 0.0.0.0:3010. Доступ снаружи — через Cloudflare Tunnel + Access.
 
 import express from "express";
-import crypto from "crypto";
+import crypto from "node:crypto";
 import { WebSocketServer } from "ws";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { config } from "../../core/config.js";
 import { logger, getLogBuffer, subscribeLogs } from "../../core/logger.js";
-import { getActivePosition, getHistorySince, getArchivedHistorySince } from "../../core/database.js";
+import {
+  getActivePosition,
+  getHistorySince,
+  getArchivedHistorySince,
+} from "../../core/database.js";
 import { getAccountSummary, getPositions, getLivePrice } from "../exchange.js";
 import { fetchUserFills, reconstructManualTrades } from "../userFills.js";
 import { FEE_RATE, MAKER_FEE_RATE } from "../executor/math.js";
 import { getAvailableBalance, getAccountEquity } from "../wallet.js";
-import { state } from "../../app/state.js";
 import { getTaxSummary } from "../taxCollector/index.js";
 import { getRuntimeBlacklist } from "../executor/index.js";
 import { getPriceNMinAgo, getBufferLength } from "../../core/priceHistory.js";
-import { TICK_INTERVAL_MS } from "../../app/state.js";
+import { TICK_INTERVAL_MS, state } from "../../app/state.js";
 import {
   HUNTER_SPIKE_PCT,
   HUNTER_SPIKE_WINDOW_MIN,
@@ -30,34 +33,37 @@ import {
 const HOST = "0.0.0.0";
 const PORT = 3010;
 
-const AUTH_USER = process.env.DASHBOARD_USER || '';
-const AUTH_PASS = process.env.DASHBOARD_PASS || '';
+const AUTH_USER = process.env.DASHBOARD_USER || "";
+const AUTH_PASS = process.env.DASHBOARD_PASS || "";
 const AUTH_ENABLED = AUTH_USER.length > 0 && AUTH_PASS.length > 0;
 
 const SESSION_SECRET = crypto
-  .createHash('sha256')
+  .createHash("sha256")
   .update(`${AUTH_PASS}::hl-dashboard-session-v1`)
   .digest();
-const SESSION_COOKIE = 'hl-session';
+const SESSION_COOKIE = "hl-session";
 const SESSION_MAX_AGE_SEC = 7 * 24 * 60 * 60;
 
 function signSession(user, expiresAt) {
   const payload = `${user}:${expiresAt}`;
-  const h = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('hex');
+  const h = crypto
+    .createHmac("sha256", SESSION_SECRET)
+    .update(payload)
+    .digest("hex");
   return `${expiresAt}.${h}`;
 }
 
 function verifySession(token, user) {
-  if (!token || typeof token !== 'string') return false;
-  const idx = token.indexOf('.');
+  if (!token || typeof token !== "string") return false;
+  const idx = token.indexOf(".");
   if (idx === -1) return false;
   const expiresAt = parseInt(token.slice(0, idx), 10);
   const sig = token.slice(idx + 1);
   if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) return false;
   const expected = crypto
-    .createHmac('sha256', SESSION_SECRET)
+    .createHmac("sha256", SESSION_SECRET)
     .update(`${user}:${expiresAt}`)
-    .digest('hex');
+    .digest("hex");
   if (sig.length !== expected.length) return false;
   return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
 }
@@ -66,8 +72,8 @@ function parseCookies(req) {
   const out = {};
   const header = req.headers.cookie;
   if (!header) return out;
-  for (const part of header.split(';')) {
-    const idx = part.indexOf('=');
+  for (const part of header.split(";")) {
+    const idx = part.indexOf("=");
     if (idx === -1) continue;
     const k = part.slice(0, idx).trim();
     const v = part.slice(idx + 1).trim();
@@ -93,17 +99,17 @@ function isAuthenticated(req) {
   return verifySession(cookies[SESSION_COOKIE], AUTH_USER);
 }
 
-const PUBLIC_PATHS = new Set(['/login', '/styles.css', '/favicon.ico']);
+const PUBLIC_PATHS = new Set(["/login", "/styles.css", "/favicon.ico"]);
 
 function authGate(req, res, next) {
   if (!AUTH_ENABLED) return next();
   if (PUBLIC_PATHS.has(req.path)) return next();
   if (isAuthenticated(req)) return next();
 
-  if (req.path.startsWith('/api/')) {
-    return res.status(401).json({ error: 'unauthorized' });
+  if (req.path.startsWith("/api/")) {
+    return res.status(401).json({ error: "unauthorized" });
   }
-  const next_ = encodeURIComponent(req.originalUrl || '/');
+  const next_ = encodeURIComponent(req.originalUrl || "/");
   res.redirect(302, `/login?next=${next_}`);
 }
 
@@ -156,7 +162,12 @@ async function getStatusData() {
       const matchesBot = (c) => {
         if (!botCoin) return false;
         const lc = (c ?? "").toLowerCase();
-        return lc === botCoin || lc === `${botCoin}-perp` || lc === `@${botCoin}` || lc.replace("-perp", "") === botCoin;
+        return (
+          lc === botCoin ||
+          lc === `${botCoin}-perp` ||
+          lc === `@${botCoin}` ||
+          lc.replace("-perp", "") === botCoin
+        );
       };
 
       if (position) {
@@ -188,10 +199,16 @@ async function getStatusData() {
         const entryPx = parseFloat(p.entryPx ?? "0");
         if (!Number.isFinite(szi) || szi === 0) continue;
         const sizeUsd = Math.abs(szi) * entryPx;
-        const liqPx = p.liquidationPx != null ? parseFloat(p.liquidationPx) : null;
-        const lev = p.leverage?.value != null ? parseFloat(p.leverage.value) : null;
+        const liqPx =
+          p.liquidationPx != null ? parseFloat(p.liquidationPx) : null;
+        const lev =
+          p.leverage?.value != null ? parseFloat(p.leverage.value) : null;
         let livePrice = null;
-        try { livePrice = await getLivePrice(p.coin); } catch { /* ignore */ }
+        try {
+          livePrice = await getLivePrice(p.coin);
+        } catch {
+          /* ignore */
+        }
         manualPositions.push({
           coin: p.coin,
           side: szi < 0 ? "SHORT" : "LONG",
@@ -214,14 +231,15 @@ async function getStatusData() {
     equity,
     available,
     sessionStartEquity: state.sessionStartEquity,
-    sessionProfit: state.sessionStartEquity > 0 ? equity - state.sessionStartEquity : 0,
+    sessionProfit:
+      state.sessionStartEquity > 0 ? equity - state.sessionStartEquity : 0,
     uptimeMin: Math.round((Date.now() - state.startedAt) / 60_000),
     runtimeBans: [...getRuntimeBlacklist()],
     authEnabled: AUTH_ENABLED,
     activePosition: position
       ? {
           coin: position.coin,
-          side: (position.side || 'short').toUpperCase(),
+          side: (position.side || "short").toUpperCase(),
           sizeUsd: position.size_usd,
           entryPrice: position.entry_price,
           entryApy: position.entry_apy,
@@ -256,8 +274,12 @@ async function handleHistory(req, res) {
     const since = Date.now() - hours * 3_600_000;
     const dbRows = getHistorySince(since);
     const archRows = getArchivedHistorySince(since);
-    const botTrades = [...dbRows, ...archRows].map(t => ({
-      ts: t.closed_at, coin: t.coin, pnl: t.realized_pnl, reason: t.reason, source: 'bot',
+    const botTrades = [...dbRows, ...archRows].map((t) => ({
+      ts: t.closed_at,
+      coin: t.coin,
+      pnl: t.realized_pnl,
+      reason: t.reason,
+      source: "bot",
     }));
 
     // Manual trades (закрытые в окне) тоже двигают equity — включаем их в график.
@@ -265,13 +287,21 @@ async function handleHistory(req, res) {
     try {
       const manualTrades = await getManualTrades();
       manualTradePoints = manualTrades
-        .filter(m => m.status === 'closed' && m.closeTime >= since)
-        .map(m => ({
-          ts: m.closeTime, coin: m.coin, pnl: m.pnl, reason: 'manual_close', source: 'manual',
+        .filter((m) => m.status === "closed" && m.closeTime >= since)
+        .map((m) => ({
+          ts: m.closeTime,
+          coin: m.coin,
+          pnl: m.pnl,
+          reason: "manual_close",
+          source: "manual",
         }));
-    } catch { /* manual best-effort */ }
+    } catch {
+      /* manual best-effort */
+    }
 
-    const allTrades = [...botTrades, ...manualTradePoints].sort((a, b) => a.ts - b.ts);
+    const allTrades = [...botTrades, ...manualTradePoints].sort(
+      (a, b) => a.ts - b.ts,
+    );
 
     let currentEquity = 0;
     try {
@@ -291,14 +321,27 @@ async function handleHistory(req, res) {
 
     const tradePoints = allTrades.map((t) => {
       runningEquity += t.pnl;
-      return { ts: t.ts, coin: t.coin, pnl: t.pnl, equity: runningEquity, reason: t.reason, source: t.source };
+      return {
+        ts: t.ts,
+        coin: t.coin,
+        pnl: t.pnl,
+        equity: runningEquity,
+        reason: t.reason,
+        source: t.source,
+      };
     });
 
     const now = Date.now();
     const points = [
-      { ts: since, coin: null, pnl: 0, equity: baseline, reason: 'window_start' },
+      {
+        ts: since,
+        coin: null,
+        pnl: 0,
+        equity: baseline,
+        reason: "window_start",
+      },
       ...tradePoints,
-      { ts: now, coin: null, pnl: 0, equity: currentEquity, reason: 'now' },
+      { ts: now, coin: null, pnl: 0, equity: currentEquity, reason: "now" },
     ];
 
     res.json({
@@ -326,16 +369,38 @@ async function handleActivity(req, res) {
 
     for (const t of getHistorySince(since)) {
       if (!t.coin) continue;
-      events.push({ kind: 'close', ts: t.closed_at, coin: t.coin, pnl: t.realized_pnl, reason: t.reason, strategy_id: t.strategy_id || 'carry' });
+      events.push({
+        kind: "close",
+        ts: t.closed_at,
+        coin: t.coin,
+        pnl: t.realized_pnl,
+        reason: t.reason,
+        strategy_id: t.strategy_id || "carry",
+      });
     }
     for (const t of getArchivedHistorySince(since)) {
       if (!t.coin) continue;
-      events.push({ kind: 'close', ts: t.closed_at, coin: t.coin, pnl: t.realized_pnl, reason: t.reason, strategy_id: t.strategy_id || 'carry' });
+      events.push({
+        kind: "close",
+        ts: t.closed_at,
+        coin: t.coin,
+        pnl: t.realized_pnl,
+        reason: t.reason,
+        strategy_id: t.strategy_id || "carry",
+      });
     }
 
     const open = getActivePosition();
     if (open && open.coin && open.entry_time >= since) {
-      events.push({ kind: 'open', ts: open.entry_time, coin: open.coin, sizeUsd: open.size_usd, entryPrice: open.entry_price, entryApy: open.entry_apy, strategy_id: open.strategy_id || 'carry' });
+      events.push({
+        kind: "open",
+        ts: open.entry_time,
+        coin: open.coin,
+        sizeUsd: open.size_usd,
+        entryPrice: open.entry_price,
+        entryApy: open.entry_apy,
+        strategy_id: open.strategy_id || "carry",
+      });
     }
 
     // Manual trades (closed) внутри окна — `kind: 'manual_close'`. Открытые
@@ -344,24 +409,30 @@ async function handleActivity(req, res) {
     try {
       const manualTrades = await getManualTrades();
       for (const m of manualTrades) {
-        if (m.status !== 'closed') continue;
+        if (m.status !== "closed") continue;
         if (m.closeTime < since) continue;
         events.push({
-          kind: 'manual_close',
-          ts:   m.closeTime,
+          kind: "manual_close",
+          ts: m.closeTime,
           coin: m.coin,
-          pnl:  m.pnl,
+          pnl: m.pnl,
           side: m.side,
           entryPrice: m.entryPrice,
           closePrice: m.closePrice,
-          sizeUsd:    m.sizeUsd,
-          strategy_id: 'manual',
+          sizeUsd: m.sizeUsd,
+          strategy_id: "manual",
         });
       }
-    } catch { /* manual best-effort */ }
+    } catch {
+      /* manual best-effort */
+    }
 
     events.sort((a, b) => b.ts - a.ts);
-    res.json({ windowHours: hours, count: events.length, events: events.slice(0, limit) });
+    res.json({
+      windowHours: hours,
+      count: events.length,
+      events: events.slice(0, limit),
+    });
   } catch (err) {
     logger.warn(`[Dashboard] /api/activity error: ${err.message}`);
     res.status(500).json({ error: err.message });
@@ -377,58 +448,71 @@ async function handleActivity(req, res) {
 // Калибровка 2026-05-08 на спокойном рынке: при 2m≥3%/5m≥4%/15m≥5%/1h≥7%
 // в любой момент почти всегда есть 5-15 WEAK-сигналов в скоупе ~65 монет.
 const HUNTER_SIGNAL_WINDOWS = [
-  { mins: 2,  threshold: 3, label: '2m'  },
-  { mins: 5,  threshold: 4, label: '5m'  },
-  { mins: 15, threshold: 5, label: '15m' },
-  { mins: 60, threshold: 7, label: '1h'  },
+  { mins: 2, threshold: 3, label: "2m" },
+  { mins: 5, threshold: 4, label: "5m" },
+  { mins: 15, threshold: 5, label: "15m" },
+  { mins: 60, threshold: 7, label: "1h" },
 ];
 
 const TIER_RANK = { STRONG: 3, NORMAL: 2, WEAK: 1, NEUTRAL: 0 };
 
 function computeTier(absPct, threshold) {
-  if (absPct >= threshold * 1.5) return 'STRONG';
-  if (absPct >= threshold)       return 'NORMAL';
-  if (absPct >= threshold * 0.6) return 'WEAK';
-  return 'NEUTRAL';
+  if (absPct >= threshold * 1.5) return "STRONG";
+  if (absPct >= threshold) return "NORMAL";
+  if (absPct >= threshold * 0.6) return "WEAK";
+  return "NEUTRAL";
 }
 
 function handleSignals(req, res) {
   try {
-    const limit = req.query.limit ? Math.max(1, Math.min(50, parseInt(req.query.limit, 10))) : 12;
+    const limit = req.query.limit
+      ? Math.max(1, Math.min(50, parseInt(req.query.limit, 10)))
+      : 12;
     const data = Array.isArray(state.latestHunter) ? state.latestHunter : [];
     const now = state.latestHunterAt || Date.now();
     const trendLookback = config.trading.hunterTrendLookbackMin;
-    const trendMaxRise  = config.trading.hunterTrendMaxRisePct;
+    const trendMaxRise = config.trading.hunterTrendMaxRisePct;
     const activeCoin = getActivePosition()?.coin ?? null;
 
-    const ticksNeeded = Math.max(2, Math.ceil((HUNTER_SPIKE_WINDOW_MIN * 60_000) / TICK_INTERVAL_MS));
+    const ticksNeeded = Math.max(
+      2,
+      Math.ceil((HUNTER_SPIKE_WINDOW_MIN * 60_000) / TICK_INTERVAL_MS),
+    );
 
     const enriched = data.map((item) => {
       // Считаем спайки по всем окнам.
       const windows = HUNTER_SIGNAL_WINDOWS.map((w) => {
         const past = getPriceNMinAgo(item.coin, w.mins, now);
-        if (past == null) return { ...w, spikePct: null, tier: null, side: null, ratio: 0 };
+        if (past == null)
+          return { ...w, spikePct: null, tier: null, side: null, ratio: 0 };
         const spikePct = ((item.price - past) / past) * 100;
-        const absPct   = Math.abs(spikePct);
-        const tier     = computeTier(absPct, w.threshold);
-        const side     = spikePct >= 0 ? 'SHORT' : 'LONG'; // pump → fade short, dump → fade long
+        const absPct = Math.abs(spikePct);
+        const tier = computeTier(absPct, w.threshold);
+        const side = spikePct >= 0 ? "SHORT" : "LONG"; // pump → fade short, dump → fade long
         return { ...w, spikePct, tier, side, ratio: absPct / w.threshold };
       });
 
       // Best signal: STRONG > NORMAL > WEAK; tiebreak — наибольший ratio (насколько выше порога).
       const ranked = windows
-        .filter((w) => w.tier && w.tier !== 'NEUTRAL')
-        .sort((a, b) => (TIER_RANK[b.tier] - TIER_RANK[a.tier]) || (b.ratio - a.ratio));
+        .filter((w) => w.tier && w.tier !== "NEUTRAL")
+        .sort(
+          (a, b) => TIER_RANK[b.tier] - TIER_RANK[a.tier] || b.ratio - a.ratio,
+        );
       const best = ranked[0] ?? null;
 
       const trendPast = getPriceNMinAgo(item.coin, trendLookback, now);
-      const trendPct = trendPast != null ? ((item.price - trendPast) / trendPast) * 100 : null;
+      const trendPct =
+        trendPast != null ? ((item.price - trendPast) / trendPast) * 100 : null;
       const bufLen = getBufferLength(item.coin);
       const native2m = windows.find((w) => w.mins === HUNTER_SPIKE_WINDOW_MIN);
       return {
-        coin: item.coin, price: item.price,
+        coin: item.coin,
+        price: item.price,
         spikePct: native2m?.spikePct ?? null, // обратная совместимость: старое поле = 2m
-        windows, best, trendPct, bufLen,
+        windows,
+        best,
+        trendPct,
+        bufLen,
       };
     });
 
@@ -446,7 +530,7 @@ function handleSignals(req, res) {
     });
 
     const top = enriched.slice(0, limit).map((m, idx) => {
-      let signal = 'NEUTRAL';
+      let signal = "NEUTRAL";
       let blocked = null;
       let sl = null;
       let tp = null;
@@ -457,25 +541,33 @@ function handleSignals(req, res) {
 
       const noHistoryAtAll = m.windows.every((w) => w.spikePct == null);
       if (noHistoryAtAll) {
-        signal = 'WARMUP';
+        signal = "WARMUP";
       } else if (m.best) {
         const b = m.best;
         tier = b.tier;
         windowLabel = b.label;
-        windowMin   = b.mins;
+        windowMin = b.mins;
         signalSpikePct = b.spikePct;
         // SHORT/LONG для NORMAL+ (торгуемое), WATCH для WEAK (только наблюдение).
-        if (b.tier === 'WEAK') {
-          signal = 'WATCH';
+        if (b.tier === "WEAK") {
+          signal = "WATCH";
         } else {
           signal = b.side; // 'SHORT' или 'LONG'
           // Anti-trend gate применяется только к торгуемым тирам.
-          if (b.side === 'SHORT' && m.trendPct != null && m.trendPct >= trendMaxRise) {
+          if (
+            b.side === "SHORT" &&
+            m.trendPct != null &&
+            m.trendPct >= trendMaxRise
+          ) {
             blocked = `trend +${m.trendPct.toFixed(1)}%/${trendLookback}m`;
-          } else if (b.side === 'LONG' && m.trendPct != null && m.trendPct <= -trendMaxRise) {
+          } else if (
+            b.side === "LONG" &&
+            m.trendPct != null &&
+            m.trendPct <= -trendMaxRise
+          ) {
             blocked = `trend ${m.trendPct.toFixed(1)}%/${trendLookback}m`;
           }
-          if (b.side === 'SHORT') {
+          if (b.side === "SHORT") {
             sl = m.price * (1 + HUNTER_SL_PCT / 100);
             tp = m.price * (1 - HUNTER_TP_PCT / 100);
           } else {
@@ -490,17 +582,24 @@ function handleSignals(req, res) {
         coin: m.coin,
         pair: `${m.coin}/USDC`,
         price: m.price,
-        spikePct: m.spikePct,        // legacy: 2m спайк
-        signalSpikePct,              // спайк для выбранного окна
-        windowLabel, windowMin, tier,
+        spikePct: m.spikePct, // legacy: 2m спайк
+        signalSpikePct, // спайк для выбранного окна
+        windowLabel,
+        windowMin,
+        tier,
         windows: m.windows.map((w) => ({
-          label: w.label, mins: w.mins, threshold: w.threshold,
-          spikePct: w.spikePct, tier: w.tier, side: w.side,
+          label: w.label,
+          mins: w.mins,
+          threshold: w.threshold,
+          spikePct: w.spikePct,
+          tier: w.tier,
+          side: w.side,
         })),
         trendPct: m.trendPct,
         signal,
         blocked,
-        sl, tp,
+        sl,
+        tp,
         slPct: sl != null ? HUNTER_SL_PCT : null,
         tpPct: tp != null ? HUNTER_TP_PCT : null,
         bufferLen: m.bufLen,
@@ -518,7 +617,11 @@ function handleSignals(req, res) {
         tpPct: HUNTER_TP_PCT,
         trendLookbackMin: trendLookback,
         trendMaxRisePct: trendMaxRise,
-        windows: HUNTER_SIGNAL_WINDOWS.map((w) => ({ mins: w.mins, threshold: w.threshold, label: w.label })),
+        windows: HUNTER_SIGNAL_WINDOWS.map((w) => ({
+          mins: w.mins,
+          threshold: w.threshold,
+          label: w.label,
+        })),
       },
       universeSize: data.length,
       activeCoin,
@@ -532,7 +635,9 @@ function handleSignals(req, res) {
 
 function handleLogs(req, res) {
   try {
-    const limit = req.query.limit ? Math.max(1, Math.min(2000, parseInt(req.query.limit, 10))) : 500;
+    const limit = req.query.limit
+      ? Math.max(1, Math.min(2000, parseInt(req.query.limit, 10)))
+      : 500;
     const sinceId = req.query.sinceId ? parseInt(req.query.sinceId, 10) : 0;
     let entries = getLogBuffer();
     if (Number.isFinite(sinceId) && sinceId > 0) {
@@ -557,11 +662,11 @@ function handleLogs(req, res) {
 // по period boundaries. Старые DB-записи funding_collected = NULL — игнорим.
 
 const PERIODS = [
-  { key: 'today',     label: 'Today'     },
-  { key: 'yesterday', label: 'Yesterday' },
-  { key: 'd7',        label: '7d'        },
-  { key: 'd30',       label: '30d'       },
-  { key: 'all',       label: 'All'       },
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "d7", label: "7d" },
+  { key: "d30", label: "30d" },
+  { key: "all", label: "All" },
 ];
 
 function periodBoundaries(now = Date.now()) {
@@ -569,11 +674,11 @@ function periodBoundaries(now = Date.now()) {
   d.setHours(0, 0, 0, 0);
   const todayStart = d.getTime();
   return {
-    today:     { start: todayStart,                   end: now },
-    yesterday: { start: todayStart - 24 * 3600_000,   end: todayStart },
-    d7:        { start: now - 7  * 24 * 3600_000,     end: now },
-    d30:       { start: now - 30 * 24 * 3600_000,     end: now },
-    all:       { start: 0,                            end: now },
+    today: { start: todayStart, end: now },
+    yesterday: { start: todayStart - 24 * 3600_000, end: todayStart },
+    d7: { start: now - 7 * 24 * 3600_000, end: now },
+    d30: { start: now - 30 * 24 * 3600_000, end: now },
+    all: { start: 0, end: now },
   };
 }
 
@@ -581,7 +686,10 @@ const FUNDING_CACHE_TTL_MS = 5 * 60_000;
 let fundingCache = { ts: 0, deltas: [] }; // deltas: [{ts, usdc}]
 
 async function getFundingHistory() {
-  if (Date.now() - fundingCache.ts < FUNDING_CACHE_TTL_MS && fundingCache.deltas.length > 0) {
+  if (
+    Date.now() - fundingCache.ts < FUNDING_CACHE_TTL_MS &&
+    fundingCache.deltas.length > 0
+  ) {
     return fundingCache.deltas;
   }
   // userFunding возвращает все funding-payments (uPnL делится на ts + usdc).
@@ -590,19 +698,25 @@ async function getFundingHistory() {
     const startTime = Date.now() - 60 * 24 * 3600_000;
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 8000);
-    const r = await fetch('https://api.hyperliquid.xyz/info', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'userFunding', user: config.wallet.address, startTime }),
+    const r = await fetch("https://api.hyperliquid.xyz/info", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "userFunding",
+        user: config.wallet.address,
+        startTime,
+      }),
       signal: ctrl.signal,
     }).finally(() => clearTimeout(t));
     const data = await r.json();
     if (!Array.isArray(data)) return fundingCache.deltas;
     // Каждый элемент: { time, hash, delta: { coin, usdc, szi, fundingRate, nSamples } }
-    const deltas = data.map(it => ({
-      ts: it.time,
-      usdc: parseFloat(it.delta?.usdc ?? '0'),
-    })).filter(x => Number.isFinite(x.usdc));
+    const deltas = data
+      .map((it) => ({
+        ts: it.time,
+        usdc: parseFloat(it.delta?.usdc ?? "0"),
+      }))
+      .filter((x) => Number.isFinite(x.usdc));
     fundingCache = { ts: Date.now(), deltas };
     return deltas;
   } catch (err) {
@@ -625,20 +739,34 @@ async function getManualTrades() {
     return manualCache.trades;
   }
   try {
-    const fills = await fetchUserFills(0);  // 60d default
+    const fills = await fetchUserFills(0); // 60d default
     // Bot trades для дедупа: все history (active + archived) + текущий open.
     const botTrades = [
-      ...getHistorySince(0).map(t => ({ coin: t.coin, entry_time: t.entry_time, closed_at: t.closed_at })),
-      ...getArchivedHistorySince(0).map(t => ({ coin: t.coin, entry_time: t.entry_time, closed_at: t.closed_at })),
+      ...getHistorySince(0).map((t) => ({
+        coin: t.coin,
+        entry_time: t.entry_time,
+        closed_at: t.closed_at,
+      })),
+      ...getArchivedHistorySince(0).map((t) => ({
+        coin: t.coin,
+        entry_time: t.entry_time,
+        closed_at: t.closed_at,
+      })),
     ];
     const open = getActivePosition();
-    if (open) botTrades.push({ coin: open.coin, entry_time: open.entry_time, closed_at: null, status: 'OPEN' });
+    if (open)
+      botTrades.push({
+        coin: open.coin,
+        entry_time: open.entry_time,
+        closed_at: null,
+        status: "OPEN",
+      });
     const trades = reconstructManualTrades(fills, botTrades);
     manualCache = { ts: Date.now(), trades };
     return trades;
   } catch (err) {
     logger.debug(`[Dashboard] getManualTrades failed: ${err.message}`);
-    return manualCache.trades;  // stale-OK
+    return manualCache.trades; // stale-OK
   }
 }
 
@@ -653,24 +781,35 @@ function sumFundingInRange(deltas, start, end) {
 function computeStats(trades) {
   if (trades.length === 0) {
     return {
-      totalPnl: 0, count: 0, wins: 0, losses: 0, winRate: 0,
-      avgPnl: 0, bestPnl: 0, worstPnl: 0,
-      byStrategy: {}, totalHoldMs: 0,
+      totalPnl: 0,
+      count: 0,
+      wins: 0,
+      losses: 0,
+      winRate: 0,
+      avgPnl: 0,
+      bestPnl: 0,
+      worstPnl: 0,
+      byStrategy: {},
+      totalHoldMs: 0,
     };
   }
-  let totalPnl = 0, wins = 0, losses = 0;
-  let bestPnl = -Infinity, worstPnl = Infinity;
+  let totalPnl = 0,
+    wins = 0,
+    losses = 0;
+  let bestPnl = -Infinity,
+    worstPnl = Infinity;
   const byStrategy = {};
   let totalHoldMs = 0;
   for (const t of trades) {
     const pnl = t.realized_pnl || 0;
     totalPnl += pnl;
-    if (pnl > 0) wins++; else if (pnl < 0) losses++;
-    if (pnl > bestPnl)  bestPnl  = pnl;
+    if (pnl > 0) wins++;
+    else if (pnl < 0) losses++;
+    if (pnl > bestPnl) bestPnl = pnl;
     if (pnl < worstPnl) worstPnl = pnl;
-    const sid = t.strategy_id || 'carry';
+    const sid = t.strategy_id || "carry";
     if (!byStrategy[sid]) byStrategy[sid] = { pnl: 0, count: 0, wins: 0 };
-    byStrategy[sid].pnl   += pnl;
+    byStrategy[sid].pnl += pnl;
     byStrategy[sid].count += 1;
     if (pnl > 0) byStrategy[sid].wins += 1;
     if (t.entry_time && t.closed_at) {
@@ -679,14 +818,19 @@ function computeStats(trades) {
       totalHoldMs += t.hold_seconds * 1000;
     }
   }
-  const count   = trades.length;
+  const count = trades.length;
   const winRate = count > 0 ? (wins / count) * 100 : 0;
   return {
-    totalPnl, count, wins, losses, winRate,
+    totalPnl,
+    count,
+    wins,
+    losses,
+    winRate,
     avgPnl: totalPnl / count,
     bestPnl: bestPnl === -Infinity ? 0 : bestPnl,
     worstPnl: worstPnl === Infinity ? 0 : worstPnl,
-    byStrategy, totalHoldMs,
+    byStrategy,
+    totalHoldMs,
   };
 }
 
@@ -697,7 +841,7 @@ async function handlePnlSummary(_req, res) {
     const fundingDeltas = await getFundingHistory();
 
     // Один проход — наибольший period (all). Дальше фильтруем in-memory.
-    const allDb   = getHistorySince(0);
+    const allDb = getHistorySince(0);
     const allArch = getArchivedHistorySince(0);
     const allTrades = [...allDb, ...allArch];
 
@@ -709,31 +853,38 @@ async function handlePnlSummary(_req, res) {
     try {
       if (openPos && config.isProduction) {
         const positions = await getPositions();
-        const livePos = positions.find(p => p.coin === openPos.coin);
-        if (livePos) unrealized = parseFloat(livePos.unrealizedPnl ?? '0');
+        const livePos = positions.find((p) => p.coin === openPos.coin);
+        if (livePos) unrealized = parseFloat(livePos.unrealizedPnl ?? "0");
       }
-    } catch { /* leave unrealized=0 */ }
+    } catch {
+      /* leave unrealized=0 */
+    }
 
     const result = {};
     for (const { key } of PERIODS) {
       const { start, end } = bounds[key];
-      const inRange = allTrades.filter(t => t.closed_at >= start && t.closed_at < end);
-      const stats   = computeStats(inRange);
-      const periodMs = key === 'all'
-        ? (allTrades.length > 0 ? (now - Math.min(...allTrades.map(t => t.closed_at))) : 1)
-        : (end - start);
-      const utilizationPct = periodMs > 0
-        ? Math.min(100, (stats.totalHoldMs / periodMs) * 100)
-        : 0;
+      const inRange = allTrades.filter(
+        (t) => t.closed_at >= start && t.closed_at < end,
+      );
+      const stats = computeStats(inRange);
+      const periodMs =
+        key === "all"
+          ? allTrades.length > 0
+            ? now - Math.min(...allTrades.map((t) => t.closed_at))
+            : 1
+          : end - start;
+      const utilizationPct =
+        periodMs > 0 ? Math.min(100, (stats.totalHoldMs / periodMs) * 100) : 0;
       const funding = sumFundingInRange(fundingDeltas, start, end);
 
       // Manual split: trades закрытые в этом окне.
       const manualInRange = manualTrades.filter(
-        (m) => m.status === 'closed' && m.closeTime >= start && m.closeTime < end,
+        (m) =>
+          m.status === "closed" && m.closeTime >= start && m.closeTime < end,
       );
-      const manualPnl   = manualInRange.reduce((s, m) => s + (m.pnl || 0), 0);
+      const manualPnl = manualInRange.reduce((s, m) => s + (m.pnl || 0), 0);
       const manualCount = manualInRange.length;
-      const manualWins  = manualInRange.filter((m) => (m.pnl || 0) > 0).length;
+      const manualWins = manualInRange.filter((m) => (m.pnl || 0) > 0).length;
 
       result[key] = {
         ...stats,
@@ -744,14 +895,14 @@ async function handlePnlSummary(_req, res) {
         pricePnl: stats.totalPnl,
         // Bot vs manual split (2026-05-13): bot = stats (DB), manual = reconstructed.
         bot: {
-          pnl:   stats.totalPnl,
+          pnl: stats.totalPnl,
           count: stats.count,
-          wins:  stats.wins,
+          wins: stats.wins,
         },
         manual: {
-          pnl:   manualPnl,
+          pnl: manualPnl,
           count: manualCount,
-          wins:  manualWins,
+          wins: manualWins,
         },
       };
     }
@@ -776,34 +927,41 @@ async function handlePnlSummary(_req, res) {
 async function handleTradeMarkers(req, res) {
   try {
     const rawCoin = req.query.coin;
-    if (!rawCoin) return res.status(400).json({ error: 'Missing coin' });
-    const coin = rawCoin.replace(/-PERP$/i, '').replace(/^@/, '').toUpperCase();
-    const hours = req.query.hours ? Math.max(1, Math.min(720, parseInt(req.query.hours, 10))) : 168;
+    if (!rawCoin) return res.status(400).json({ error: "Missing coin" });
+    const coin = rawCoin
+      .replace(/-PERP$/i, "")
+      .replace(/^@/, "")
+      .toUpperCase();
+    const hours = req.query.hours
+      ? Math.max(1, Math.min(720, parseInt(req.query.hours, 10)))
+      : 168;
     const since = Date.now() - hours * 3600_000;
 
-    const dbRows   = getHistorySince(since).filter(t => t.coin === coin);
-    const archRows = getArchivedHistorySince(since).filter(t => t.coin === coin);
+    const dbRows = getHistorySince(since).filter((t) => t.coin === coin);
+    const archRows = getArchivedHistorySince(since).filter(
+      (t) => t.coin === coin,
+    );
     const closes = [...dbRows, ...archRows];
 
     const events = [];
     for (const t of closes) {
       if (t.entry_time && t.entry_time >= since) {
         events.push({
-          kind: 'entry',
+          kind: "entry",
           ts: t.entry_time,
           price: t.entry_price,
-          side: t.side || 'short',
-          strategy: t.strategy_id || 'carry',
+          side: t.side || "short",
+          strategy: t.strategy_id || "carry",
         });
       }
       events.push({
-        kind: 'close',
+        kind: "close",
         ts: t.closed_at,
         price: t.close_price,
         pnl: t.realized_pnl,
         reason: t.reason,
-        side: t.side || 'short',
-        strategy: t.strategy_id || 'carry',
+        side: t.side || "short",
+        strategy: t.strategy_id || "carry",
       });
     }
     // Manual trades по этой монете — отдельный strategy='manual' маркер.
@@ -813,36 +971,38 @@ async function handleTradeMarkers(req, res) {
         if (m.coin.toUpperCase() !== coin) continue;
         if (m.entryTime >= since) {
           events.push({
-            kind: 'entry',
+            kind: "entry",
             ts: m.entryTime,
             price: m.entryPrice,
             side: m.side,
-            strategy: 'manual',
+            strategy: "manual",
           });
         }
-        if (m.status === 'closed' && m.closeTime >= since) {
+        if (m.status === "closed" && m.closeTime >= since) {
           events.push({
-            kind: 'close',
+            kind: "close",
             ts: m.closeTime,
             price: m.closePrice,
             pnl: m.pnl,
-            reason: 'manual_close',
+            reason: "manual_close",
             side: m.side,
-            strategy: 'manual',
+            strategy: "manual",
           });
         }
       }
-    } catch { /* manual best-effort */ }
+    } catch {
+      /* manual best-effort */
+    }
 
     // Open position (если по этой же монете) — entry без close
     const open = getActivePosition();
     if (open && open.coin === coin && open.entry_time >= since) {
       events.push({
-        kind: 'entry',
+        kind: "entry",
         ts: open.entry_time,
         price: open.entry_price,
-        side: open.side || 'short',
-        strategy: open.strategy_id || 'carry',
+        side: open.side || "short",
+        strategy: open.strategy_id || "carry",
         active: true,
       });
     }
@@ -857,7 +1017,8 @@ async function handleTradeMarkers(req, res) {
 async function handleTaxSummary(req, res) {
   try {
     const yearParam = req.query.year ? parseInt(req.query.year, 10) : null;
-    const year = (yearParam && !isNaN(yearParam)) ? yearParam : new Date().getFullYear();
+    const year =
+      yearParam && !isNaN(yearParam) ? yearParam : new Date().getFullYear();
     const summary = await getTaxSummary(year);
     res.json(summary);
   } catch (err) {
@@ -867,27 +1028,38 @@ async function handleTaxSummary(req, res) {
 }
 
 function handleLoginGet(req, res) {
-  if (!AUTH_ENABLED) return res.redirect(302, '/');
-  if (isAuthenticated(req)) return res.redirect(302, '/');
-  res.sendFile(join(PUBLIC_DIR, 'login.html'));
+  if (!AUTH_ENABLED) return res.redirect(302, "/");
+  if (isAuthenticated(req)) return res.redirect(302, "/");
+  res.sendFile(join(PUBLIC_DIR, "login.html"));
 }
 
 function handleLoginPost(req, res) {
-  if (!AUTH_ENABLED) return res.redirect(302, '/');
-  const user = (req.body?.user || '').toString();
-  const pass = (req.body?.pass || '').toString();
-  const userOk = user.length === AUTH_USER.length && constantTimeStringEqual(user, AUTH_USER);
-  const passOk = pass.length === AUTH_PASS.length && constantTimeStringEqual(pass, AUTH_PASS);
-  if (!userOk || !passOk) return res.status(401).json({ error: 'Invalid username or password.' });
+  if (!AUTH_ENABLED) return res.redirect(302, "/");
+  const user = (req.body?.user || "").toString();
+  const pass = (req.body?.pass || "").toString();
+  const userOk =
+    user.length === AUTH_USER.length &&
+    constantTimeStringEqual(user, AUTH_USER);
+  const passOk =
+    pass.length === AUTH_PASS.length &&
+    constantTimeStringEqual(pass, AUTH_PASS);
+  if (!userOk || !passOk)
+    return res.status(401).json({ error: "Invalid username or password." });
   const expiresAt = Date.now() + SESSION_MAX_AGE_SEC * 1000;
   const token = signSession(AUTH_USER, expiresAt);
-  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE_SEC}`);
+  res.setHeader(
+    "Set-Cookie",
+    `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_MAX_AGE_SEC}`,
+  );
   res.status(204).end();
 }
 
 function handleLogout(_req, res) {
-  res.setHeader('Set-Cookie', `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
-  res.redirect(302, '/login');
+  res.setHeader(
+    "Set-Cookie",
+    `${SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`,
+  );
+  res.redirect(302, "/login");
 }
 
 // ─────────────────────────────────────────────────
@@ -901,7 +1073,7 @@ export function startDashboard() {
   }
 
   const app = express();
-  app.use(express.urlencoded({ extended: false, limit: '4kb' }));
+  app.use(express.urlencoded({ extended: false, limit: "4kb" }));
   app.use(authGate);
 
   app.use("/api", (_req, res, next) => {
@@ -910,8 +1082,8 @@ export function startDashboard() {
   });
 
   app.use((req, res, next) => {
-    if (/\.(html|js|css)$/.test(req.path) || req.path === '/') {
-      res.set('Cache-Control', 'no-cache');
+    if (/\.(html|js|css)$/.test(req.path) || req.path === "/") {
+      res.set("Cache-Control", "no-cache");
     }
     next();
   });
@@ -943,7 +1115,9 @@ export function startDashboard() {
       // Hyperliquid candleSnapshot ждёт базовый тикер ("ZEC"), а позиции отдают "ZEC-PERP"
       const stripped = rawCoin.replace(/-PERP$/i, "").replace(/^@/, "");
       const coin = /^k[A-Z]/.test(stripped) ? stripped : stripped.toUpperCase();
-      const interval = ALLOWED_INTERVALS[req.query.interval] ? req.query.interval : "5m";
+      const interval = ALLOWED_INTERVALS[req.query.interval]
+        ? req.query.interval
+        : "5m";
       const windowMs = ALLOWED_INTERVALS[interval];
 
       const ctrl = new AbortController();
@@ -967,13 +1141,14 @@ export function startDashboard() {
       if (data && data.error) throw new Error(data.error);
       res.json(Array.isArray(data) ? data : []);
     } catch (err) {
-      logger.debug(`[Dashboard] Candles fetch failed for ${req.query.coin}: ${err.message}`);
+      logger.debug(
+        `[Dashboard] Candles fetch failed for ${req.query.coin}: ${err.message}`,
+      );
       res.json([]);
     }
   });
 
   app.use(express.static(PUBLIC_DIR));
-
 
   server = app.listen(PORT, HOST, () => {
     logger.info(`[Dashboard] ✅ Listening on http://${HOST}:${PORT}`);
@@ -986,7 +1161,9 @@ export function startDashboard() {
       socket.destroy();
       return;
     }
-    wss.handleUpgrade(req, socket, head, (ws) => wss.emit("connection", ws, req));
+    wss.handleUpgrade(req, socket, head, (ws) =>
+      wss.emit("connection", ws, req),
+    );
   });
   wss.on("connection", async (ws) => {
     try {
@@ -1026,7 +1203,10 @@ export function startDashboard() {
 
 export function stopDashboard() {
   if (broadcastTimer) clearInterval(broadcastTimer);
-  if (unsubscribeLogs) { unsubscribeLogs(); unsubscribeLogs = null; }
+  if (unsubscribeLogs) {
+    unsubscribeLogs();
+    unsubscribeLogs = null;
+  }
   if (!server) return;
   return new Promise((resolve) => {
     if (wss) wss.close();
