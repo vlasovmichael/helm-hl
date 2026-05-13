@@ -1,6 +1,8 @@
 FROM node:20-alpine
 
-RUN apk update && apk upgrade --no-cache
+# tzdata нужен чтобы переменная TZ (Europe/Warsaw и т.п.) реально применялась.
+# Без него alpine молча падает на UTC.
+RUN apk update && apk upgrade --no-cache && apk add --no-cache tzdata
 
 WORKDIR /app
 

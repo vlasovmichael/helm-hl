@@ -5,6 +5,8 @@ services:
     container_name: hl-paper-scanner
     restart: unless-stopped
     env_file: .env
+    environment:
+      TZ: ${TZ:-Europe/Warsaw}
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
