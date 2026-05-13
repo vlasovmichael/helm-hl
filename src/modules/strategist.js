@@ -19,6 +19,10 @@ const {
   carryTrailGiveBackPct: CARRY_TRAIL_GIVE_BACK_PCT,
   carrySpikeProtectionPct: CARRY_SPIKE_PROTECTION_PCT,
   carryLossCooldownMin: CARRY_LOSS_COOLDOWN_MIN,
+  carryStaleTimeoutMin: CARRY_STALE_TIMEOUT_MIN,
+  carryStaleMinPnlEquity: CARRY_STALE_MIN_PNL_EQUITY,
+  carryApyDecayExitRatio: CARRY_APY_DECAY_EXIT_RATIO,
+  carryMaxHoldMin: CARRY_MAX_HOLD_MIN,
   negativeFundingSoftExitMinPnlPct: NEG_FUND_SOFT_MIN_PNL_PCT,
 } = config.trading;
 
@@ -156,7 +160,12 @@ function heldMinutes(activePosition) {
 function effectiveMinHold(entryApy) {
   const feeBasedMinutes = hoursToBreakeven(entryApy) * 60;
   const capMinutes      = MAX_BREAKEVEN_HOURS * 60;
-  return Math.max(minHoldMinutes, Math.min(feeBasedMinutes, capMinutes));
+  const dynamicMinutes  = Math.max(minHoldMinutes, Math.min(feeBasedMinutes, capMinutes));
+  // CARRY_MAX_HOLD_MIN: жёсткий потолок поверх dynamic. 0 = выключить кэп.
+  if (CARRY_MAX_HOLD_MIN > 0 && dynamicMinutes > CARRY_MAX_HOLD_MIN) {
+    return CARRY_MAX_HOLD_MIN;
+  }
+  return dynamicMinutes;
 }
 
 /**
@@ -508,6 +517,77 @@ export function analyze(scoutData, activePosition) {
           price:  current.price,
           reason: 'trailing_tp_equity',
         };
+      }
+    }
+  }
+
+  // 3.5 Smart guards против "тихих" carry-позиций (FARTCOIN 2026-05-13).
+  //
+  // Guard A — APY decay exit: если slowApy упал в N раз от entry_apy, нет смысла
+  // дожидаться hold lock — сигнал, на котором заходили, развалился. Игнорим minHold.
+  // 0 = выключено.
+  if (CARRY_APY_DECAY_EXIT_RATIO > 0 && activePosition.entry_apy > 0) {
+    const entryAbs   = Math.abs(activePosition.entry_apy);
+    const currentAbs = Math.abs(current.slowApy);
+    const ratio      = currentAbs / entryAbs;
+    if (ratio < CARRY_APY_DECAY_EXIT_RATIO) {
+      // Funding gate: не выходим в окне выплаты — теряем накопленный funding.
+      if (isInFundingGate()) {
+        logger.info(
+          `[Strategist] HOLD (funding gate) — ${currentCoin} apy_decay ${(ratio * 100).toFixed(0)}% ` +
+            `but ${minutesUntilNextFunding().toFixed(1)}min to funding payout`,
+        );
+      } else {
+        logger.warn(
+          `[Strategist] CLOSE — ${currentCoin} apy_decay: slowApy ${current.slowApy.toFixed(2)}% / ` +
+            `entryApy ${activePosition.entry_apy.toFixed(1)}% = ${(ratio * 100).toFixed(0)}% < ${(CARRY_APY_DECAY_EXIT_RATIO * 100).toFixed(0)}% threshold (held ${held.toFixed(0)}min)`,
+        );
+        peakUnrealizedPct.delete(currentCoin);
+        peakEquityPct.delete(currentCoin);
+        return {
+          action: 'CLOSE',
+          coin:   currentCoin,
+          price:  current.price,
+          reason: 'apy_decay',
+        };
+      }
+    }
+  }
+
+  // Guard B — stale-position timeout: если за CARRY_STALE_TIMEOUT_MIN ни разу
+  // не был достигнут CARRY_STALE_MIN_PNL_EQUITY% от equity (peakEquity всё ещё 0),
+  // позиция бесполезна — закрываем. peakEquity арм-ится в trailing TP блоке выше
+  // (требует unrealized ≥ CARRY_TRAIL_ARM_PCT_EQUITY), здесь сравниваем с
+  // независимым порогом CARRY_STALE_MIN_PNL_EQUITY (обычно ниже trail arm).
+  // 0 = выключено.
+  if (CARRY_STALE_TIMEOUT_MIN > 0 && held >= CARRY_STALE_TIMEOUT_MIN) {
+    const equity = getCachedAccountValueSync();
+    if (equity && equity > 0) {
+      const qty           = activePosition.size_usd / activePosition.entry_price;
+      const pnlUsd        = unrealizedUsd(posSide, activePosition.entry_price, current.price, qty);
+      const equityPctNow  = (pnlUsd / equity) * 100;
+      const peakEquityVal = peakEquityPct.get(currentCoin) ?? 0;
+      const bestEverEqPct = Math.max(equityPctNow, peakEquityVal);
+      if (bestEverEqPct < CARRY_STALE_MIN_PNL_EQUITY) {
+        if (isInFundingGate()) {
+          logger.info(
+            `[Strategist] HOLD (funding gate) — ${currentCoin} stale ${held.toFixed(0)}min but ` +
+              `${minutesUntilNextFunding().toFixed(1)}min to funding payout`,
+          );
+        } else {
+          logger.warn(
+            `[Strategist] CLOSE — ${currentCoin} stale: held ${held.toFixed(0)}min ≥ ${CARRY_STALE_TIMEOUT_MIN}min ` +
+              `but best equity PnL was only ${bestEverEqPct.toFixed(2)}% < ${CARRY_STALE_MIN_PNL_EQUITY}% threshold`,
+          );
+          peakUnrealizedPct.delete(currentCoin);
+          peakEquityPct.delete(currentCoin);
+          return {
+            action: 'CLOSE',
+            coin:   currentCoin,
+            price:  current.price,
+            reason: 'stale_position',
+          };
+        }
       }
     }
   }

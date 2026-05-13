@@ -62,9 +62,12 @@ function makePosition(coin, entryApy, opts = {}) {
 }
 
 // Сброс модульного negativeFundingStreak: вход без позиции его обнуляет.
+// Также сбрасываем balance cache — иначе stale-position guard видит equity
+// с диска (от balanceCache.test.js) и может фолсить на вне-темовых тестах.
 function resetState() {
   analyze([], undefined);
   _resetCarryLossCooldown();
+  _resetBalanceCache();
 }
 
 // Подмена глобального Date на фикс времени UTC.
@@ -314,13 +317,29 @@ test('Emergency: позитивный тик в середине сбрасыв�
 //  Динамический min-hold
 // ═══════════════════════════════════════════════
 
-test('Hold lock: позиция моложе effectiveMinHold → HOLD (даже если slowApy очень низкий)', () => {
+test('Hold lock: позиция моложе effectiveMinHold → HOLD (slowApy в "зоне спокойствия")', () => {
   resetState();
   // entry_apy=50, hoursToBreakeven(50)≈17.5h, minHold=1051 мин
   // Позиция 60 минут — заперта.
+  // slowApy=30 (ratio 0.6 ≥ apy_decay_exit_ratio 0.5 → decay guard не фолсит).
   const pos = makePosition('BTC', 50, { entry_time: Date.now() - 60 * 60_000 });
-  const r = analyze([makeScoutItem('BTC', 50, { slowApy: 5 })], pos);
+  const r = analyze([makeScoutItem('BTC', 50, { slowApy: 30 })], pos);
   assert.equal(r.action, 'HOLD');
+});
+
+test('Smart guard: APY decay exit (новый guard) — overrides hold lock когда slowApy упал вдвое', () => {
+  resetState();
+  // entry_apy=50, slowApy=10 → ratio 0.2 < 0.5 → CLOSE даже на 60-минутной позиции.
+  // Funding-gate: HH:30 (середина часа) — не блокирует.
+  const restore = freezeTime(2026, 3, 15, 12, 30);
+  try {
+    const pos = makePosition('BTC', 50, { entry_time: Date.now() - 60 * 60_000 });
+    const r = analyze([makeScoutItem('BTC', 50, { slowApy: 10 })], pos);
+    assert.equal(r.action, 'CLOSE');
+    assert.equal(r.reason, 'apy_decay');
+  } finally {
+    restore();
+  }
 });
 
 test('Hold lock: ротация тоже заблокирована во время hold lock', () => {
@@ -342,10 +361,12 @@ test('Hold lock: после истечения minHold soft-exit срабаты�
   // Время — HH:30, не в funding-gate
   const restore = freezeTime(2026, 3, 15, 12, 30);
   try {
-    // entry_apy=50, hoursToBreakeven≈17.5h. Позиция 50ч назад — за minHold.
-    const pos = makePosition('BTC', 50, { entry_time: Date.now() - 50 * HOUR_MS });
-    // slowApy=10 << effectiveExit=15 (minApy 20 - exitBuffer 5)
-    const r = analyze([makeScoutItem('BTC', 50, { slowApy: 10 })], pos);
+    // entry_apy=20, hoursToBreakeven≈43h, но capped CARRY_MAX_HOLD_MIN=480.
+    // Позиция 50ч назад — за minHold.
+    // slowApy=14 < effectiveExit=15. ratio 14/20=0.7 ≥ 0.5 → APY decay guard НЕ
+    // фолсит, soft-exit отрабатывает чисто.
+    const pos = makePosition('BTC', 20, { entry_time: Date.now() - 50 * HOUR_MS });
+    const r = analyze([makeScoutItem('BTC', 20, { slowApy: 14 })], pos);
     assert.equal(r.action, 'CLOSE');
     assert.equal(r.reason, 'apy_below_threshold');
   } finally {
@@ -636,9 +657,8 @@ test('Negative funding: позиция чуть-чуть в плюсе (<2%) →
 //   Path A (5% price) не армится; path B (2% equity) должен.
 
 test('Trailing equity: peak equity-PnL ≥ ARM_PCT_EQUITY → arm path B', () => {
-  _resetBalanceCache();
-  _seedBalanceCache(44);
   resetState();
+  _seedBalanceCache(44);
   // size $200 (плечо ~5x на $44), entry $1.00 → qty=200
   // price $0.991 → pnl=(1.0-0.991)*200=$1.80 → 4.09% equity (≥ ARM 2%)
   const pos = makePosition('FART', 40, { entry_price: 1.0 });

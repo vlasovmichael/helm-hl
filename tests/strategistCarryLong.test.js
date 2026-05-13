@@ -165,11 +165,11 @@ test('long: отрицательный funding (наша сторона) → Н�
 
 test('long apy_below_threshold: abs(slowApy) < effectiveExit → CLOSE', () => {
   resetState();
-  const pos = makePosition('LDO', 80, { entry_price: 100, side: 'long' });
-  // effectiveExit = minApy(20) - exitBuffer(5) = 15
-  // slowApy = -10 → abs = 10 < 15 → CLOSE
+  // entry_apy=20, slowApy=-14: ratio 14/20=0.7 ≥ 0.5 (apy_decay не фолсит),
+  // |slowApy|=14 < effectiveExit=15 → soft-exit отрабатывает чисто.
+  const pos = makePosition('LDO', 20, { entry_price: 100, side: 'long' });
   const r = analyze(
-    [makeScoutItem('LDO', -10, { price: 100, slowApy: -10 })],
+    [makeScoutItem('LDO', -14, { price: 100, slowApy: -14 })],
     pos,
   );
   assert.equal(r.action, 'CLOSE');

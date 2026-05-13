@@ -121,6 +121,31 @@ function loadConfig() {
     throw new Error(`CARRY_LOSS_COOLDOWN_MIN must be ≥ 0. Got: "${process.env.CARRY_LOSS_COOLDOWN_MIN}"`);
   }
 
+  // ── Carry "smart guards" против тихих позиций ──
+  // FARTCOIN 2026-05-13: вход @ APY 37%, держал 16h при PnL≈$0 (флэт), trail так и не армился,
+  // dynamic hold lock = 23.5h. Три ортогональные защиты:
+  //   1) STALE_TIMEOUT — если за N мин ни разу не достигли STALE_MIN_PNL_EQUITY% от equity → close
+  //   2) APY_DECAY_EXIT_RATIO — если slowApy/entryApy < ratio → игнорим hold lock, выходим
+  //   3) MAX_HOLD_MIN — hard cap для dynamic hold lock (страховка против APY≈0 глюка + длинных хвостов)
+  // 0 = выключить соответствующий guard.
+  const carryStaleTimeoutMin    = parseFloat(process.env.CARRY_STALE_TIMEOUT_MIN    || '360');
+  const carryStaleMinPnlEquity  = parseFloat(process.env.CARRY_STALE_MIN_PNL_EQUITY || '0.5');
+  const carryApyDecayExitRatio  = parseFloat(process.env.CARRY_APY_DECAY_EXIT_RATIO || '0.5');
+  const carryMaxHoldMin         = parseFloat(process.env.CARRY_MAX_HOLD_MIN         || '480');
+
+  if (isNaN(carryStaleTimeoutMin) || carryStaleTimeoutMin < 0) {
+    throw new Error(`CARRY_STALE_TIMEOUT_MIN must be ≥ 0. Got: "${process.env.CARRY_STALE_TIMEOUT_MIN}"`);
+  }
+  if (isNaN(carryStaleMinPnlEquity) || carryStaleMinPnlEquity < 0) {
+    throw new Error(`CARRY_STALE_MIN_PNL_EQUITY must be ≥ 0. Got: "${process.env.CARRY_STALE_MIN_PNL_EQUITY}"`);
+  }
+  if (isNaN(carryApyDecayExitRatio) || carryApyDecayExitRatio < 0 || carryApyDecayExitRatio >= 1) {
+    throw new Error(`CARRY_APY_DECAY_EXIT_RATIO must be in [0, 1). Got: "${process.env.CARRY_APY_DECAY_EXIT_RATIO}"`);
+  }
+  if (isNaN(carryMaxHoldMin) || carryMaxHoldMin < 0) {
+    throw new Error(`CARRY_MAX_HOLD_MIN must be ≥ 0. Got: "${process.env.CARRY_MAX_HOLD_MIN}"`);
+  }
+
   // ── Carry long side (symmetric to short on negative funding) ──
   // Default false: исторически Grandfather только шортил при положительном
   // funding. Long-ветка зеркальна: при отрицательном funding (шорты платят
@@ -410,6 +435,10 @@ function loadConfig() {
       carryTrailGiveBackPct,
       carrySpikeProtectionPct,
       carryLossCooldownMin,
+      carryStaleTimeoutMin,
+      carryStaleMinPnlEquity,
+      carryApyDecayExitRatio,
+      carryMaxHoldMin,
       carryLongEnabled,
       marketRegimeVelocityEnabled,
       marketRegimeCoinPumpPct,
