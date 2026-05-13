@@ -687,11 +687,20 @@ function renderActivity(activity) {
   const container = document.getElementById('activity-container');
   const events = (activity?.events || []).filter(e => e && e.coin);
   if (!events.length) { container.innerHTML = '<div class="empty-state">No events</div>'; return; }
-  container.innerHTML = events.map(e => `
-    <div class="activity-item">
-      <div><span class="activity-kind ${e.kind}">${e.kind.toUpperCase()}</span><span class="activity-coin">#${e.coin}</span></div>
-      <div class="activity-pnl ${e.pnl >= 0 ? 'positive' : 'negative'}">${e.pnl >= 0 ? '+' : ''}${(e.pnl || 0).toFixed(4)}</div>
-    </div>`).join('');
+  container.innerHTML = events.map(e => {
+    const isManual = e.kind === 'manual_close' || e.strategy_id === 'manual';
+    const kindLabel = e.kind === 'manual_close' ? 'CLOSE' : e.kind.toUpperCase();
+    const kindClass = e.kind === 'manual_close' ? 'close' : e.kind;
+    const manualBadge = isManual
+      ? '<span class="manual-badge" style="background:rgba(234,179,8,0.12); color:var(--yellow,#eab308); border:1px solid rgba(234,179,8,0.3); padding:1px 6px; border-radius:4px; font-size:9px; font-family:var(--font-mono); font-weight:700; margin-left:6px;">MANUAL</span>'
+      : '';
+    const pnlVal = e.pnl || 0;
+    return `
+      <div class="activity-item">
+        <div><span class="activity-kind ${kindClass}">${kindLabel}</span><span class="activity-coin">#${e.coin}</span>${manualBadge}</div>
+        <div class="activity-pnl ${pnlVal >= 0 ? 'positive' : 'negative'}">${pnlVal >= 0 ? '+' : ''}${pnlVal.toFixed(4)}</div>
+      </div>`;
+  }).join('');
 }
 
 function fmtMoney(v, signed = true) {
@@ -714,6 +723,7 @@ function strategyDisplayName(sid) {
   if (sid === 'hunter' || sid === 'hunter_short') return 'Hunter SHORT';
   if (sid === 'hunter_long') return 'Hunter LONG';
   if (sid === 'fade') return 'Fade';
+  if (sid === 'manual') return '🖐 Manual';
   return sid || 'Unknown';
 }
 
@@ -722,13 +732,23 @@ function renderPnlSummary() {
   const p = lastPnlSummary.periods[currentPnlPeriod];
   if (!p) return;
 
+  // Combined PnL = bot + manual; манУальные приходят отдельно через p.manual.
+  const manualPnl   = p.manual?.pnl   || 0;
+  const manualCount = p.manual?.count || 0;
+  const combinedPnl = (p.totalPnl || 0) + manualPnl;
+  const combinedCount = (p.count || 0) + manualCount;
+
   const totalEl = document.getElementById('pnl-total');
-  totalEl.textContent = fmtMoney(p.totalPnl);
-  totalEl.classList.toggle('positive', p.totalPnl > 0);
-  totalEl.classList.toggle('negative', p.totalPnl < 0);
+  totalEl.textContent = fmtMoney(combinedPnl);
+  totalEl.classList.toggle('positive', combinedPnl > 0);
+  totalEl.classList.toggle('negative', combinedPnl < 0);
 
   const wr = p.count > 0 ? `${p.winRate.toFixed(0)}% win` : '—';
-  document.getElementById('pnl-stats').textContent = `${p.count} trade${p.count === 1 ? '' : 's'} · ${wr}`;
+  const manualNote = manualCount > 0
+    ? ` · 🖐 ${manualCount} manual (${fmtMoney(manualPnl)})`
+    : '';
+  document.getElementById('pnl-stats').textContent =
+    `${combinedCount} trade${combinedCount === 1 ? '' : 's'} · ${wr}${manualNote}`;
 
   const fundingEl = document.getElementById('pnl-funding');
   fundingEl.textContent = p.funding ? fmtMoney(p.funding) : '—';
@@ -755,9 +775,12 @@ function renderPnlSummary() {
   document.getElementById('pnl-worst').textContent = p.count > 0 ? fmtMoney(p.worstPnl) : '—';
   document.getElementById('pnl-wl').textContent    = p.count > 0 ? `${p.wins} / ${p.losses}` : '—';
 
-  // Strategy breakdown
+  // Strategy breakdown — добавляем синтетическую запись 'manual' если есть.
   const stratContainer = document.getElementById('pnl-strategy');
   const strategies = Object.entries(p.byStrategy || {});
+  if (manualCount > 0) {
+    strategies.push(['manual', { pnl: manualPnl, count: manualCount, wins: p.manual?.wins || 0 }]);
+  }
   if (strategies.length === 0) {
     stratContainer.innerHTML = '<div class="empty-state">No trades in this period</div>';
   } else {

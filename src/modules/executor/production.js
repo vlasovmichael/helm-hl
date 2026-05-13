@@ -18,6 +18,7 @@ import {
   setLeverage,
 } from '../exchange.js';
 import { resolveAsset, parseFillResponse } from './fill-parser.js';
+import { fetchUserFills, classifyClose } from '../userFills.js';
 import {
   calcSize, calcPnl, checkSlippage, formatHlPrice,
   MARKET_SLIPPAGE, MIN_ORDER_USD, FEE_RATE, ONE_LEG,
@@ -926,17 +927,26 @@ export async function productionClose(signal, position, silent = false) {
   try {
     const positions = await getPositions();
     const found = positions.find((ap) => (ap?.position?.coin) === coin);
-    const sinceOpenRaw = found?.position?.cumFunding?.sinceOpen;
-    const sinceOpen = parseFloat(sinceOpenRaw);
-    if (Number.isFinite(sinceOpen)) {
-      realFundingUsd = -sinceOpen;
+    if (!found) {
+      // Позиции уже нет на бирже — это external close (SL/TP/liq/manual).
+      // marketClose ниже упадёт с "No position found" и уйдёт в external-close ветку,
+      // где cause определяется через userFills. cumFunding читать неоткуда — это нормально.
       logger.info(
-        `[Executor] PROD CLOSE #${coin} — cumFunding.sinceOpen=${sinceOpen} → realFundingUsd=$${realFundingUsd.toFixed(6)}`,
+        `[Executor] PROD CLOSE #${coin} — position absent in clearinghouseState (external close path); skipping cumFunding read`,
       );
     } else {
-      logger.warn(
-        `[Executor] PROD CLOSE #${coin} — cumFunding.sinceOpen unparseable (${sinceOpenRaw}), fallback to APY estimate`,
-      );
+      const sinceOpenRaw = found?.position?.cumFunding?.sinceOpen;
+      const sinceOpen = parseFloat(sinceOpenRaw);
+      if (Number.isFinite(sinceOpen)) {
+        realFundingUsd = -sinceOpen;
+        logger.info(
+          `[Executor] PROD CLOSE #${coin} — cumFunding.sinceOpen=${sinceOpen} → realFundingUsd=$${realFundingUsd.toFixed(6)}`,
+        );
+      } else {
+        logger.warn(
+          `[Executor] PROD CLOSE #${coin} — cumFunding.sinceOpen unparseable (${sinceOpenRaw}), fallback to APY estimate`,
+        );
+      }
     }
   } catch (err) {
     logger.warn(
@@ -995,16 +1005,41 @@ export async function productionClose(signal, position, silent = false) {
         }
       } catch { /* PnL неизвестен */ }
 
+      // Classify cause via userFills: matched oid → TP/SL trigger;
+      // liquidation flag → liquidation; иначе manual_close (оператор закрыл руками
+      // через UI до того, как бот успел отправить marketClose).
+      let classified = { reason: 'external_close_detected_on_exit', pnl: null, closePx: null };
+      try {
+        const fills = await fetchUserFills(position.entry_time - 60_000);
+        const coinFills = fills.filter((f) => f.coin.toUpperCase() === coin.toUpperCase());
+        const c = classifyClose(position, coinFills);
+        if (c.reason !== 'external_unknown') {
+          classified.reason = c.reason;
+        }
+        if (Number.isFinite(c.pnl)) {
+          classified.pnl = c.pnl;
+          estimatedPnl = c.pnl;  // точный PnL из fills предпочтительнее equity-delta
+        }
+        if (Number.isFinite(c.closePx)) classified.closePx = c.closePx;
+        logger.info(
+          `[Executor] PROD CLOSE #${coin} — external classified as '${classified.reason}' | ` +
+            `pnl(fills)=${classified.pnl != null ? '$' + classified.pnl.toFixed(4) : 'n/a'} | ` +
+            `closePx(fills)=${classified.closePx != null ? '$' + classified.closePx : 'n/a'}`,
+        );
+      } catch (clsErr) {
+        logger.debug(`[Executor] classifyClose failed: ${clsErr.message}`);
+      }
+
       try {
         dbClosePosition(position.id, {
-          close_price:  0,
+          close_price:  classified.closePx ?? 0,
           realized_pnl: estimatedPnl,
           fee_paid:     0,
-          reason:       'external_close_detected_on_exit',
+          reason:       classified.reason,
         });
         logger.info(
           `[Executor] ✅ DB synced: #${coin} (id=${position.id}) → CLOSED | ` +
-            `reason: external_close_detected_on_exit | est. PnL: $${estimatedPnl.toFixed(4)}`,
+            `reason: ${classified.reason} | est. PnL: $${estimatedPnl.toFixed(4)}`,
         );
       } catch (dbErr) {
         logger.error(`[Executor] DB close failed: ${dbErr.message}`);

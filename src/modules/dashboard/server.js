@@ -12,6 +12,7 @@ import { config } from "../../core/config.js";
 import { logger, getLogBuffer, subscribeLogs } from "../../core/logger.js";
 import { getActivePosition, getHistorySince, getArchivedHistorySince } from "../../core/database.js";
 import { getAccountSummary, getPositions, getLivePrice } from "../exchange.js";
+import { fetchUserFills, reconstructManualTrades } from "../userFills.js";
 import { FEE_RATE, MAKER_FEE_RATE } from "../executor/math.js";
 import { getAvailableBalance, getAccountEquity } from "../wallet.js";
 import { state } from "../../app/state.js";
@@ -255,7 +256,22 @@ async function handleHistory(req, res) {
     const since = Date.now() - hours * 3_600_000;
     const dbRows = getHistorySince(since);
     const archRows = getArchivedHistorySince(since);
-    const allTrades = [...dbRows, ...archRows].sort((a, b) => a.closed_at - b.closed_at);
+    const botTrades = [...dbRows, ...archRows].map(t => ({
+      ts: t.closed_at, coin: t.coin, pnl: t.realized_pnl, reason: t.reason, source: 'bot',
+    }));
+
+    // Manual trades (закрытые в окне) тоже двигают equity — включаем их в график.
+    let manualTradePoints = [];
+    try {
+      const manualTrades = await getManualTrades();
+      manualTradePoints = manualTrades
+        .filter(m => m.status === 'closed' && m.closeTime >= since)
+        .map(m => ({
+          ts: m.closeTime, coin: m.coin, pnl: m.pnl, reason: 'manual_close', source: 'manual',
+        }));
+    } catch { /* manual best-effort */ }
+
+    const allTrades = [...botTrades, ...manualTradePoints].sort((a, b) => a.ts - b.ts);
 
     let currentEquity = 0;
     try {
@@ -269,13 +285,13 @@ async function handleHistory(req, res) {
       currentEquity = state.sessionStartEquity || 0;
     }
 
-    const totalPnlInWindow = allTrades.reduce((sum, t) => sum + t.realized_pnl, 0);
+    const totalPnlInWindow = allTrades.reduce((sum, t) => sum + t.pnl, 0);
     let runningEquity = currentEquity - totalPnlInWindow;
     const baseline = runningEquity;
 
     const tradePoints = allTrades.map((t) => {
-      runningEquity += t.realized_pnl;
-      return { ts: t.closed_at, coin: t.coin, pnl: t.realized_pnl, equity: runningEquity, reason: t.reason };
+      runningEquity += t.pnl;
+      return { ts: t.ts, coin: t.coin, pnl: t.pnl, equity: runningEquity, reason: t.reason, source: t.source };
     });
 
     const now = Date.now();
@@ -285,14 +301,23 @@ async function handleHistory(req, res) {
       { ts: now, coin: null, pnl: 0, equity: currentEquity, reason: 'now' },
     ];
 
-    res.json({ baseline, currentEquity, windowHours: hours, tradeCount: tradePoints.length, count: points.length, points });
+    res.json({
+      baseline,
+      currentEquity,
+      windowHours: hours,
+      tradeCount: tradePoints.length,
+      botCount: botTrades.length,
+      manualCount: manualTradePoints.length,
+      count: points.length,
+      points,
+    });
   } catch (err) {
     logger.warn(`[Dashboard] /api/history error: ${err.message}`);
     res.status(500).json({ error: err.message });
   }
 }
 
-function handleActivity(req, res) {
+async function handleActivity(req, res) {
   try {
     const hours = req.query.hours ? parseInt(req.query.hours, 10) : 24;
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : 20;
@@ -312,6 +337,28 @@ function handleActivity(req, res) {
     if (open && open.coin && open.entry_time >= since) {
       events.push({ kind: 'open', ts: open.entry_time, coin: open.coin, sizeUsd: open.size_usd, entryPrice: open.entry_price, entryApy: open.entry_apy, strategy_id: open.strategy_id || 'carry' });
     }
+
+    // Manual trades (closed) внутри окна — `kind: 'manual_close'`. Открытые
+    // ручные позиции отдельно не дублируем (status endpoint их уже отдаёт как
+    // manualPositions карточки HANDS-OFF).
+    try {
+      const manualTrades = await getManualTrades();
+      for (const m of manualTrades) {
+        if (m.status !== 'closed') continue;
+        if (m.closeTime < since) continue;
+        events.push({
+          kind: 'manual_close',
+          ts:   m.closeTime,
+          coin: m.coin,
+          pnl:  m.pnl,
+          side: m.side,
+          entryPrice: m.entryPrice,
+          closePrice: m.closePrice,
+          sizeUsd:    m.sizeUsd,
+          strategy_id: 'manual',
+        });
+      }
+    } catch { /* manual best-effort */ }
 
     events.sort((a, b) => b.ts - a.ts);
     res.json({ windowHours: hours, count: events.length, events: events.slice(0, limit) });
@@ -564,6 +611,37 @@ async function getFundingHistory() {
   }
 }
 
+// ─────────────────────────────────────────────────
+//  Manual trades cache — reconstruct from HL userFills
+// ─────────────────────────────────────────────────
+// Тяжёлый запрос (userFills 60d + group), кешируем на 30с.
+
+const MANUAL_CACHE_TTL_MS = 30_000;
+let manualCache = { ts: 0, trades: [] };
+
+async function getManualTrades() {
+  if (!config.isProduction) return [];
+  if (Date.now() - manualCache.ts < MANUAL_CACHE_TTL_MS) {
+    return manualCache.trades;
+  }
+  try {
+    const fills = await fetchUserFills(0);  // 60d default
+    // Bot trades для дедупа: все history (active + archived) + текущий open.
+    const botTrades = [
+      ...getHistorySince(0).map(t => ({ coin: t.coin, entry_time: t.entry_time, closed_at: t.closed_at })),
+      ...getArchivedHistorySince(0).map(t => ({ coin: t.coin, entry_time: t.entry_time, closed_at: t.closed_at })),
+    ];
+    const open = getActivePosition();
+    if (open) botTrades.push({ coin: open.coin, entry_time: open.entry_time, closed_at: null, status: 'OPEN' });
+    const trades = reconstructManualTrades(fills, botTrades);
+    manualCache = { ts: Date.now(), trades };
+    return trades;
+  } catch (err) {
+    logger.debug(`[Dashboard] getManualTrades failed: ${err.message}`);
+    return manualCache.trades;  // stale-OK
+  }
+}
+
 function sumFundingInRange(deltas, start, end) {
   let sum = 0;
   for (const d of deltas) {
@@ -623,6 +701,9 @@ async function handlePnlSummary(_req, res) {
     const allArch = getArchivedHistorySince(0);
     const allTrades = [...allDb, ...allArch];
 
+    // Manual trades (reconstructed from userFills, deduped against bot trades).
+    const manualTrades = await getManualTrades();
+
     const openPos = getActivePosition();
     let unrealized = 0;
     try {
@@ -645,6 +726,15 @@ async function handlePnlSummary(_req, res) {
         ? Math.min(100, (stats.totalHoldMs / periodMs) * 100)
         : 0;
       const funding = sumFundingInRange(fundingDeltas, start, end);
+
+      // Manual split: trades закрытые в этом окне.
+      const manualInRange = manualTrades.filter(
+        (m) => m.status === 'closed' && m.closeTime >= start && m.closeTime < end,
+      );
+      const manualPnl   = manualInRange.reduce((s, m) => s + (m.pnl || 0), 0);
+      const manualCount = manualInRange.length;
+      const manualWins  = manualInRange.filter((m) => (m.pnl || 0) > 0).length;
+
       result[key] = {
         ...stats,
         utilizationPct,
@@ -652,6 +742,17 @@ async function handlePnlSummary(_req, res) {
         // Price-only PnL = realized_pnl − funding_collected. Если funding_collected NULL
         // (старые записи) — fallback: показываем total как есть, отдельно period funding.
         pricePnl: stats.totalPnl,
+        // Bot vs manual split (2026-05-13): bot = stats (DB), manual = reconstructed.
+        bot: {
+          pnl:   stats.totalPnl,
+          count: stats.count,
+          wins:  stats.wins,
+        },
+        manual: {
+          pnl:   manualPnl,
+          count: manualCount,
+          wins:  manualWins,
+        },
       };
     }
 
@@ -672,7 +773,7 @@ async function handlePnlSummary(_req, res) {
 // ─────────────────────────────────────────────────
 //  Trade markers — entry/close events для price chart annotations
 // ─────────────────────────────────────────────────
-function handleTradeMarkers(req, res) {
+async function handleTradeMarkers(req, res) {
   try {
     const rawCoin = req.query.coin;
     if (!rawCoin) return res.status(400).json({ error: 'Missing coin' });
@@ -705,6 +806,34 @@ function handleTradeMarkers(req, res) {
         strategy: t.strategy_id || 'carry',
       });
     }
+    // Manual trades по этой монете — отдельный strategy='manual' маркер.
+    try {
+      const manualTrades = await getManualTrades();
+      for (const m of manualTrades) {
+        if (m.coin.toUpperCase() !== coin) continue;
+        if (m.entryTime >= since) {
+          events.push({
+            kind: 'entry',
+            ts: m.entryTime,
+            price: m.entryPrice,
+            side: m.side,
+            strategy: 'manual',
+          });
+        }
+        if (m.status === 'closed' && m.closeTime >= since) {
+          events.push({
+            kind: 'close',
+            ts: m.closeTime,
+            price: m.closePrice,
+            pnl: m.pnl,
+            reason: 'manual_close',
+            side: m.side,
+            strategy: 'manual',
+          });
+        }
+      }
+    } catch { /* manual best-effort */ }
+
     // Open position (если по этой же монете) — entry без close
     const open = getActivePosition();
     if (open && open.coin === coin && open.entry_time >= since) {

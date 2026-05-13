@@ -11,6 +11,7 @@ import { getActivePosition, closePosition as dbClosePosition } from '../core/dat
 import { getPositions, getAccountSummary } from '../modules/exchange.js';
 import { sendMessage } from '../modules/reporter.js';
 import { fetchExchangePositions } from '../modules/sync.js';
+import { fetchUserFills, classifyClose } from '../modules/userFills.js';
 import {
   state,
   INTEGRITY_CHECK_INTERVAL_MS,
@@ -110,11 +111,36 @@ export async function integrityCheck() {
     const holdMs    = Date.now() - dbPosition.entry_time;
     const holdHours = holdMs / 3_600_000;
 
+    // Classify cause через userFills (TP-trigger / SL-trigger / liquidation /
+    // manual_close). Дефолт 'external_close' если fills не дали ответа.
+    let closeReason = 'external_close';
+    let closePx = 0;
+    try {
+      const fills = await fetchUserFills(dbPosition.entry_time - 60_000);
+      const coinFills = fills.filter(
+        (f) => f.coin.toUpperCase() === dbPosition.coin.toUpperCase(),
+      );
+      const c = classifyClose(dbPosition, coinFills);
+      if (c.reason !== 'external_unknown') closeReason = c.reason;
+      if (Number.isFinite(c.pnl)) {
+        estimatedPnl = c.pnl;
+        pnlAccurate  = true;  // fills дают точное число
+      }
+      if (Number.isFinite(c.closePx)) closePx = c.closePx;
+      logger.info(
+        `[Integrity] #${dbPosition.coin} classified as '${closeReason}' | ` +
+          `pnl(fills)=${Number.isFinite(c.pnl) ? '$' + c.pnl.toFixed(4) : 'n/a'} | ` +
+          `closePx=${closePx ? '$' + closePx : 'n/a'}`,
+      );
+    } catch (clsErr) {
+      logger.debug(`[Integrity] classifyClose failed: ${clsErr.message}`);
+    }
+
     dbClosePosition(dbPosition.id, {
-      close_price:  0,
+      close_price:  closePx,
       realized_pnl: estimatedPnl,
       fee_paid:     0,
-      reason:       'external_close',
+      reason:       closeReason,
     });
 
     logger.info(
