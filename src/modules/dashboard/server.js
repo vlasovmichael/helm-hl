@@ -498,6 +498,233 @@ function handleLogs(req, res) {
   }
 }
 
+// ─────────────────────────────────────────────────
+//  P&L Summary — daily/weekly/etc breakdown for dashboard
+// ─────────────────────────────────────────────────
+//
+// Возвращает агрегаты realized PnL + per-strategy + utilization + funding по
+// 5 периодам (today/yesterday/7d/30d/all). Today/yesterday — server local TZ
+// (как воспринимает пользователь), 7d/30d — rolling N*24h, all — без границы.
+//
+// Funding: query Hyperliquid userFunding API раз в N минут (cache), суммируем
+// по period boundaries. Старые DB-записи funding_collected = NULL — игнорим.
+
+const PERIODS = [
+  { key: 'today',     label: 'Today'     },
+  { key: 'yesterday', label: 'Yesterday' },
+  { key: 'd7',        label: '7d'        },
+  { key: 'd30',       label: '30d'       },
+  { key: 'all',       label: 'All'       },
+];
+
+function periodBoundaries(now = Date.now()) {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  const todayStart = d.getTime();
+  return {
+    today:     { start: todayStart,                   end: now },
+    yesterday: { start: todayStart - 24 * 3600_000,   end: todayStart },
+    d7:        { start: now - 7  * 24 * 3600_000,     end: now },
+    d30:       { start: now - 30 * 24 * 3600_000,     end: now },
+    all:       { start: 0,                            end: now },
+  };
+}
+
+const FUNDING_CACHE_TTL_MS = 5 * 60_000;
+let fundingCache = { ts: 0, deltas: [] }; // deltas: [{ts, usdc}]
+
+async function getFundingHistory() {
+  if (Date.now() - fundingCache.ts < FUNDING_CACHE_TTL_MS && fundingCache.deltas.length > 0) {
+    return fundingCache.deltas;
+  }
+  // userFunding возвращает все funding-payments (uPnL делится на ts + usdc).
+  // Берём за 60 дней — покрывает 30d period с запасом.
+  try {
+    const startTime = Date.now() - 60 * 24 * 3600_000;
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    const r = await fetch('https://api.hyperliquid.xyz/info', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'userFunding', user: config.wallet.address, startTime }),
+      signal: ctrl.signal,
+    }).finally(() => clearTimeout(t));
+    const data = await r.json();
+    if (!Array.isArray(data)) return fundingCache.deltas;
+    // Каждый элемент: { time, hash, delta: { coin, usdc, szi, fundingRate, nSamples } }
+    const deltas = data.map(it => ({
+      ts: it.time,
+      usdc: parseFloat(it.delta?.usdc ?? '0'),
+    })).filter(x => Number.isFinite(x.usdc));
+    fundingCache = { ts: Date.now(), deltas };
+    return deltas;
+  } catch (err) {
+    logger.debug(`[Dashboard] userFunding fetch failed: ${err.message}`);
+    return fundingCache.deltas; // stale-OK
+  }
+}
+
+function sumFundingInRange(deltas, start, end) {
+  let sum = 0;
+  for (const d of deltas) {
+    if (d.ts >= start && d.ts < end) sum += d.usdc;
+  }
+  return sum;
+}
+
+function computeStats(trades) {
+  if (trades.length === 0) {
+    return {
+      totalPnl: 0, count: 0, wins: 0, losses: 0, winRate: 0,
+      avgPnl: 0, bestPnl: 0, worstPnl: 0,
+      byStrategy: {}, totalHoldMs: 0,
+    };
+  }
+  let totalPnl = 0, wins = 0, losses = 0;
+  let bestPnl = -Infinity, worstPnl = Infinity;
+  const byStrategy = {};
+  let totalHoldMs = 0;
+  for (const t of trades) {
+    const pnl = t.realized_pnl || 0;
+    totalPnl += pnl;
+    if (pnl > 0) wins++; else if (pnl < 0) losses++;
+    if (pnl > bestPnl)  bestPnl  = pnl;
+    if (pnl < worstPnl) worstPnl = pnl;
+    const sid = t.strategy_id || 'carry';
+    if (!byStrategy[sid]) byStrategy[sid] = { pnl: 0, count: 0, wins: 0 };
+    byStrategy[sid].pnl   += pnl;
+    byStrategy[sid].count += 1;
+    if (pnl > 0) byStrategy[sid].wins += 1;
+    if (t.entry_time && t.closed_at) {
+      totalHoldMs += Math.max(0, t.closed_at - t.entry_time);
+    } else if (t.hold_seconds) {
+      totalHoldMs += t.hold_seconds * 1000;
+    }
+  }
+  const count   = trades.length;
+  const winRate = count > 0 ? (wins / count) * 100 : 0;
+  return {
+    totalPnl, count, wins, losses, winRate,
+    avgPnl: totalPnl / count,
+    bestPnl: bestPnl === -Infinity ? 0 : bestPnl,
+    worstPnl: worstPnl === Infinity ? 0 : worstPnl,
+    byStrategy, totalHoldMs,
+  };
+}
+
+async function handlePnlSummary(_req, res) {
+  try {
+    const now = Date.now();
+    const bounds = periodBoundaries(now);
+    const fundingDeltas = await getFundingHistory();
+
+    // Один проход — наибольший period (all). Дальше фильтруем in-memory.
+    const allDb   = getHistorySince(0);
+    const allArch = getArchivedHistorySince(0);
+    const allTrades = [...allDb, ...allArch];
+
+    const openPos = getActivePosition();
+    let unrealized = 0;
+    try {
+      if (openPos && config.isProduction) {
+        const positions = await getPositions();
+        const livePos = positions.find(p => p.coin === openPos.coin);
+        if (livePos) unrealized = parseFloat(livePos.unrealizedPnl ?? '0');
+      }
+    } catch { /* leave unrealized=0 */ }
+
+    const result = {};
+    for (const { key } of PERIODS) {
+      const { start, end } = bounds[key];
+      const inRange = allTrades.filter(t => t.closed_at >= start && t.closed_at < end);
+      const stats   = computeStats(inRange);
+      const periodMs = key === 'all'
+        ? (allTrades.length > 0 ? (now - Math.min(...allTrades.map(t => t.closed_at))) : 1)
+        : (end - start);
+      const utilizationPct = periodMs > 0
+        ? Math.min(100, (stats.totalHoldMs / periodMs) * 100)
+        : 0;
+      const funding = sumFundingInRange(fundingDeltas, start, end);
+      result[key] = {
+        ...stats,
+        utilizationPct,
+        funding,
+        // Price-only PnL = realized_pnl − funding_collected. Если funding_collected NULL
+        // (старые записи) — fallback: показываем total как есть, отдельно period funding.
+        pricePnl: stats.totalPnl,
+      };
+    }
+
+    res.json({
+      now,
+      bounds,
+      periods: result,
+      unrealized,
+      activeCoin: openPos?.coin || null,
+      activeStrategy: openPos?.strategy_id || null,
+    });
+  } catch (err) {
+    logger.warn(`[Dashboard] /api/pnl-summary error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// ─────────────────────────────────────────────────
+//  Trade markers — entry/close events для price chart annotations
+// ─────────────────────────────────────────────────
+function handleTradeMarkers(req, res) {
+  try {
+    const rawCoin = req.query.coin;
+    if (!rawCoin) return res.status(400).json({ error: 'Missing coin' });
+    const coin = rawCoin.replace(/-PERP$/i, '').replace(/^@/, '').toUpperCase();
+    const hours = req.query.hours ? Math.max(1, Math.min(720, parseInt(req.query.hours, 10))) : 168;
+    const since = Date.now() - hours * 3600_000;
+
+    const dbRows   = getHistorySince(since).filter(t => t.coin === coin);
+    const archRows = getArchivedHistorySince(since).filter(t => t.coin === coin);
+    const closes = [...dbRows, ...archRows];
+
+    const events = [];
+    for (const t of closes) {
+      if (t.entry_time && t.entry_time >= since) {
+        events.push({
+          kind: 'entry',
+          ts: t.entry_time,
+          price: t.entry_price,
+          side: t.side || 'short',
+          strategy: t.strategy_id || 'carry',
+        });
+      }
+      events.push({
+        kind: 'close',
+        ts: t.closed_at,
+        price: t.close_price,
+        pnl: t.realized_pnl,
+        reason: t.reason,
+        side: t.side || 'short',
+        strategy: t.strategy_id || 'carry',
+      });
+    }
+    // Open position (если по этой же монете) — entry без close
+    const open = getActivePosition();
+    if (open && open.coin === coin && open.entry_time >= since) {
+      events.push({
+        kind: 'entry',
+        ts: open.entry_time,
+        price: open.entry_price,
+        side: open.side || 'short',
+        strategy: open.strategy_id || 'carry',
+        active: true,
+      });
+    }
+    events.sort((a, b) => a.ts - b.ts);
+    res.json({ coin, since, count: events.length, events });
+  } catch (err) {
+    logger.warn(`[Dashboard] /api/trade-markers error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+}
+
 async function handleTaxSummary(req, res) {
   try {
     const yearParam = req.query.year ? parseInt(req.query.year, 10) : null;
@@ -569,6 +796,8 @@ export function startDashboard() {
   app.get("/api/logs", handleLogs);
   app.get("/api/signals", handleSignals);
   app.get("/api/tax-summary", handleTaxSummary);
+  app.get("/api/pnl-summary", handlePnlSummary);
+  app.get("/api/trade-markers", handleTradeMarkers);
 
   const ALLOWED_INTERVALS = {
     "5m": 16 * 3600_000,

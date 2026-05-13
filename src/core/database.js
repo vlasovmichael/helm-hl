@@ -133,6 +133,26 @@ export function initDB() {
     }
   }
 
+  // Migration 2026-05-13: history.entry_time для slot utilization dashboard.
+  // Backfill: для hunter-сделок берём closed_at - hold_seconds*1000; для carry/fade
+  // (где hold_seconds NULL) оставляем NULL — UI отрисует "—".
+  if (!histColumns.find(c => c.name === 'entry_time')) {
+    db.exec('ALTER TABLE history ADD COLUMN entry_time INTEGER');
+    db.exec(`
+      UPDATE history
+      SET entry_time = closed_at - hold_seconds * 1000
+      WHERE entry_time IS NULL AND hold_seconds IS NOT NULL
+    `);
+    logger.info('[DB] Migration: added entry_time to history (+ backfilled from hold_seconds)');
+  }
+
+  // Migration 2026-05-13: funding_collected — best-effort split funding vs price PnL.
+  // Заполняется при close из HL userFunding API (см. closePosition). Старые записи: NULL.
+  if (!histColumns.find(c => c.name === 'funding_collected')) {
+    db.exec('ALTER TABLE history ADD COLUMN funding_collected REAL');
+    logger.info('[DB] Migration: added funding_collected to history');
+  }
+
   // tax_outbox — outbox для tax-manager (см. INTEGRATION.md).
   // Бизнес-код пишет сюда, pusher cron драйнит в HTTPS+HMAC.
   db.exec(`
@@ -239,13 +259,15 @@ export function closePosition(id, data) {
       coin, entry_price, close_price, realized_pnl, fee_paid, mode, closed_at, reason, strategy_id, side,
       entry_spike_pct, entry_trend_15m_pct, entry_trend_1h_pct,
       entry_funding_rate, entry_volume_24h_usd, entry_oi_usd, entry_hour_utc,
-      mfe_usd, mae_usd, mfe_pct, mae_pct, hold_seconds
+      mfe_usd, mae_usd, mfe_pct, mae_pct, hold_seconds,
+      entry_time, funding_collected
     )
     VALUES (
       @coin, @entry_price, @close_price, @realized_pnl, @fee_paid, @mode, @closed_at, @reason, @strategy_id, @side,
       @entry_spike_pct, @entry_trend_15m_pct, @entry_trend_1h_pct,
       @entry_funding_rate, @entry_volume_24h_usd, @entry_oi_usd, @entry_hour_utc,
-      @mfe_usd, @mae_usd, @mfe_pct, @mae_pct, @hold_seconds
+      @mfe_usd, @mae_usd, @mfe_pct, @mae_pct, @hold_seconds,
+      @entry_time, @funding_collected
     )
   `);
 
@@ -282,6 +304,10 @@ export function closePosition(id, data) {
       mfe_pct:      exit.mfe_pct      ?? null,
       mae_pct:      exit.mae_pct      ?? null,
       hold_seconds: exit.hold_seconds ?? null,
+      // Dashboard P&L breakdown (2026-05-13): entry_time для slot utilization,
+      // funding_collected — для funding-vs-price split (best-effort, может быть null).
+      entry_time:        position.entry_time,
+      funding_collected: data.funding_collected ?? null,
     });
     updatePosition.run('CLOSED', id);
   });

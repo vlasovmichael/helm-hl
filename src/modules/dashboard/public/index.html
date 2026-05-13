@@ -145,10 +145,56 @@
         </div>
       </section>
 
-      <!-- 05 / Performance (Equity Chart) -->
+      <!-- 04.5 / P&L Summary -->
+      <section class="card" id="sec-pnl">
+        <div class="card-header">
+          <div class="card-title" data-num="05">P&amp;L Summary</div>
+          <div class="time-ranges" id="pnl-periods">
+            <button class="range-btn active" data-period="today">Today</button>
+            <button class="range-btn" data-period="yesterday">Yesterday</button>
+            <button class="range-btn" data-period="d7">7d</button>
+            <button class="range-btn" data-period="d30">30d</button>
+            <button class="range-btn" data-period="all">All</button>
+          </div>
+        </div>
+        <div id="pnl-summary-container">
+          <div class="pnl-hero">
+            <div class="pnl-hero-main">
+              <div class="item-label">Realized P&amp;L</div>
+              <div class="pnl-hero-value" id="pnl-total">$0.00</div>
+              <div class="pnl-hero-sub" id="pnl-stats">— trades · — win rate</div>
+            </div>
+            <div class="pnl-hero-side">
+              <div class="pnl-mini">
+                <div class="item-label">Funding</div>
+                <div class="pnl-mini-value" id="pnl-funding">$0.00</div>
+              </div>
+              <div class="pnl-mini">
+                <div class="item-label">Unrealized (now)</div>
+                <div class="pnl-mini-value" id="pnl-unrealized">$0.00</div>
+              </div>
+              <div class="pnl-mini">
+                <div class="item-label">Slot utilization</div>
+                <div class="pnl-mini-value" id="pnl-utilization">—</div>
+              </div>
+            </div>
+          </div>
+          <div class="pnl-grid">
+            <div class="grid-item"><div class="item-label">Avg trade</div><div class="item-value" id="pnl-avg">$0.00</div></div>
+            <div class="grid-item"><div class="item-label">Best trade</div><div class="item-value" id="pnl-best">$0.00</div></div>
+            <div class="grid-item"><div class="item-label">Worst trade</div><div class="item-value" id="pnl-worst">$0.00</div></div>
+            <div class="grid-item"><div class="item-label">Wins / Losses</div><div class="item-value" id="pnl-wl">—</div></div>
+          </div>
+          <div class="pnl-strategy" id="pnl-strategy">
+            <div class="empty-state">No trades in this period</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 06 / Performance (Equity Chart) -->
       <section class="card">
         <div class="card-header">
-          <div class="card-title" data-num="05">Performance</div>
+          <div class="card-title" data-num="06">Performance</div>
           <div class="time-ranges">
             <button class="range-btn" data-hours="1">1h</button>
             <button class="range-btn active" data-hours="24">24h</button>
@@ -167,7 +213,7 @@
       <div class="card-wrapper" id="sec-activity">
         <section class="card cart-cooldowns">
           <div class="card-header">
-            <div class="card-title" data-num="06">Bans / Cooldowns</div>
+            <div class="card-title" data-num="07">Bans / Cooldowns</div>
           </div>
           <div id="bans-container">
             <div class="empty-state">No active restrictions</div>
@@ -176,7 +222,7 @@
 
         <section class="card" style="margin-bottom: 0">
           <div class="card-header">
-            <div class="card-title" data-num="07">Recent Activity</div>
+            <div class="card-title" data-num="08">Recent Activity</div>
           </div>
           <div id="activity-container">
             <div class="activity-skeleton">
@@ -191,7 +237,7 @@
 
       <section class="card">
         <div class="card-header">
-          <div class="card-title" data-num="08">Tax Summary <span style="font-size:14px;color:var(--text-muted);font-family:var(--font-mono);font-style:normal;letter-spacing:0.08em;">PIT-38</span></div>
+          <div class="card-title" data-num="09">Tax Summary <span style="font-size:14px;color:var(--text-muted);font-family:var(--font-mono);font-style:normal;letter-spacing:0.08em;">PIT-38</span></div>
           <div id="tax-year" class="tax-year-label">2026</div>
         </div>
         <div class="data-grid">

@@ -1049,3 +1049,118 @@ footer {
   }
   html { scroll-behavior: auto; }
 }
+
+/* ── P&L Summary card (2026-05-13) ── */
+#sec-pnl .pnl-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: stretch;
+  margin-bottom: 1rem;
+}
+#sec-pnl .pnl-hero-main {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.25rem;
+}
+#sec-pnl .pnl-hero-value {
+  font-family: var(--font-mono);
+  font-size: 2.1rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--text);
+}
+#sec-pnl .pnl-hero-value.positive { color: var(--green); }
+#sec-pnl .pnl-hero-value.negative { color: var(--red); }
+#sec-pnl .pnl-hero-sub {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+#sec-pnl .pnl-hero-side {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+#sec-pnl .pnl-mini {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+#sec-pnl .pnl-mini-value {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+#sec-pnl .pnl-mini-value.positive { color: var(--green); }
+#sec-pnl .pnl-mini-value.negative { color: var(--red); }
+#sec-pnl .pnl-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+#sec-pnl .pnl-grid .grid-item {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.75rem;
+}
+#sec-pnl .pnl-strategy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+#sec-pnl .strategy-row {
+  display: grid;
+  grid-template-columns: 110px 1fr auto auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.45rem 0.75rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+#sec-pnl .strategy-name {
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+#sec-pnl .strategy-bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+#sec-pnl .strategy-bar-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: var(--green);
+  border-radius: 3px;
+}
+#sec-pnl .strategy-bar-fill.negative { background: var(--red); }
+#sec-pnl .strategy-pnl { color: var(--text); }
+#sec-pnl .strategy-pnl.positive { color: var(--green); }
+#sec-pnl .strategy-pnl.negative { color: var(--red); }
+#sec-pnl .strategy-meta { color: var(--text-muted); font-size: 0.72rem; }
+
+@media (max-width: 720px) {
+  #sec-pnl .pnl-hero { grid-template-columns: 1fr; gap: 0.75rem; }
+  #sec-pnl .pnl-hero-side { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  #sec-pnl .pnl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #sec-pnl .strategy-row { grid-template-columns: 80px 1fr auto; }
+  #sec-pnl .strategy-meta { display: none; }
+}

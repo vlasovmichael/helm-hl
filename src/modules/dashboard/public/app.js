@@ -33,6 +33,8 @@ let idleChartTimer = null;
 let lastSuccessAt = 0;
 let currentRangeHours = 24;
 let chartLoaded = false;
+let currentPnlPeriod = 'today';
+let lastPnlSummary = null;
 let socket = null;
 const lastAnimatedValues = new Map();
 let currentCoinInPos = null;
@@ -208,6 +210,56 @@ async function renderIdleChart() {
   }
 }
 
+// Окно истории под markers зависит от выбранного TF графика.
+// Берём с запасом — lightweight-charts отрисует только то, что в видимой области.
+const MARKER_WINDOW_HOURS = { '5m': 16, '15m': 48, '1h': 168, '4h': 720, '1d': 720 };
+
+async function applyTradeMarkers(coin) {
+  if (!priceSeries || !coin) return;
+  try {
+    const hours = MARKER_WINDOW_HOURS[currentInterval] || 168;
+    const payload = await fetchJson(`/api/trade-markers?coin=${encodeURIComponent(coin)}&hours=${hours}`);
+    const events = Array.isArray(payload?.events) ? payload.events : [];
+    if (events.length === 0) {
+      priceSeries.setMarkers([]);
+      return;
+    }
+    const markers = events.map(ev => {
+      const time = Math.floor(ev.ts / 1000);
+      if (ev.kind === 'entry') {
+        const isShort = ev.side === 'short';
+        return {
+          time,
+          position: isShort ? 'aboveBar' : 'belowBar',
+          color: isShort ? '#ef4444' : '#22c55e',
+          shape: isShort ? 'arrowDown' : 'arrowUp',
+          text: `${ev.active ? '⏵ ' : ''}${(ev.side || 'short').toUpperCase()} @${ev.price?.toFixed?.(4) ?? ''}`,
+        };
+      }
+      // close
+      const pnlPos = ev.pnl > 0;
+      return {
+        time,
+        position: 'inBar',
+        color: pnlPos ? '#22c55e' : ev.pnl < 0 ? '#ef4444' : '#a3a3a3',
+        shape: 'circle',
+        text: `${pnlPos ? '+' : ''}$${(ev.pnl ?? 0).toFixed(2)} · ${ev.reason || ''}`,
+      };
+    }).sort((a, b) => a.time - b.time);
+    // dedup на тот же time (lightweight-charts требует строго возрастающие)
+    const dedup = [];
+    let lastTime = -Infinity;
+    for (const m of markers) {
+      if (m.time <= lastTime) m.time = lastTime + 1;
+      lastTime = m.time;
+      dedup.push(m);
+    }
+    priceSeries.setMarkers(dedup);
+  } catch (err) {
+    console.debug('[PriceChart] markers fetch failed:', err.message);
+  }
+}
+
 async function fetchAndRenderIdleCandles(coin) {
   if (!coin) return;
   try {
@@ -241,6 +293,7 @@ async function fetchAndRenderIdleCandles(coin) {
       priceChart.timeScale().fitContent();
       chartViewKey = newKey;
     }
+    applyTradeMarkers(coin);
   } catch (err) { console.error('[PriceChart/idle] fetch error:', err); }
 }
 
@@ -271,6 +324,7 @@ async function fetchAndRenderCandles(pos, currentPrice) {
       priceChart.timeScale().fitContent();
       chartViewKey = newKey;
     }
+    applyTradeMarkers(pos.coin);
   } catch (err) { console.error('[PriceChart] fetch error:', err); }
 }
 
@@ -608,12 +662,14 @@ function renderBans(status) {
 async function fetchJson(path) { const r = await fetch(path); if (r.status === 401) window.location.href = '/login'; return r.json(); }
 
 async function tick() {
-  const [historyR, activityR, taxR, signalsR] = await Promise.allSettled([
+  const [historyR, activityR, taxR, signalsR, pnlR] = await Promise.allSettled([
     fetchJson(`/api/history?hours=${currentRangeHours}`),
     fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
     fetchJson('/api/tax-summary'),
     fetchJson('/api/signals?limit=10'),
+    fetchJson('/api/pnl-summary'),
   ]);
+  if (pnlR.status === 'fulfilled') { lastPnlSummary = pnlR.value; renderPnlSummary(); }
   if (historyR.status === 'fulfilled' && historyR.value?.points) {
     equityChart.data.labels = historyR.value.points.map(p => fmtTime(p.ts));
     equityChart.data.datasets[0].data = historyR.value.points.map(p => p.equity);
@@ -636,6 +692,91 @@ function renderActivity(activity) {
       <div><span class="activity-kind ${e.kind}">${e.kind.toUpperCase()}</span><span class="activity-coin">#${e.coin}</span></div>
       <div class="activity-pnl ${e.pnl >= 0 ? 'positive' : 'negative'}">${e.pnl >= 0 ? '+' : ''}${(e.pnl || 0).toFixed(4)}</div>
     </div>`).join('');
+}
+
+function fmtMoney(v, signed = true) {
+  if (!Number.isFinite(v)) return '—';
+  const abs = Math.abs(v);
+  const digits = abs >= 1000 ? 0 : abs >= 100 ? 2 : abs >= 1 ? 2 : 4;
+  const sign = signed ? (v >= 0 ? '+' : '−') : '';
+  return `${sign}$${abs.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+}
+
+function fmtMoneyAbs(v) {
+  if (!Number.isFinite(v)) return '—';
+  const abs = Math.abs(v);
+  const digits = abs >= 1000 ? 0 : abs >= 100 ? 2 : abs >= 1 ? 2 : 4;
+  return `${v < 0 ? '−' : ''}$${abs.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+}
+
+function strategyDisplayName(sid) {
+  if (sid === 'carry') return 'Carry';
+  if (sid === 'hunter' || sid === 'hunter_short') return 'Hunter SHORT';
+  if (sid === 'hunter_long') return 'Hunter LONG';
+  if (sid === 'fade') return 'Fade';
+  return sid || 'Unknown';
+}
+
+function renderPnlSummary() {
+  if (!lastPnlSummary || !lastPnlSummary.periods) return;
+  const p = lastPnlSummary.periods[currentPnlPeriod];
+  if (!p) return;
+
+  const totalEl = document.getElementById('pnl-total');
+  totalEl.textContent = fmtMoney(p.totalPnl);
+  totalEl.classList.toggle('positive', p.totalPnl > 0);
+  totalEl.classList.toggle('negative', p.totalPnl < 0);
+
+  const wr = p.count > 0 ? `${p.winRate.toFixed(0)}% win` : '—';
+  document.getElementById('pnl-stats').textContent = `${p.count} trade${p.count === 1 ? '' : 's'} · ${wr}`;
+
+  const fundingEl = document.getElementById('pnl-funding');
+  fundingEl.textContent = p.funding ? fmtMoney(p.funding) : '—';
+  fundingEl.classList.toggle('positive', p.funding > 0);
+  fundingEl.classList.toggle('negative', p.funding < 0);
+
+  // Unrealized показываем только для period=today (он "сейчас")
+  const unrEl = document.getElementById('pnl-unrealized');
+  const unr = lastPnlSummary.unrealized;
+  if (currentPnlPeriod === 'today' && Number.isFinite(unr) && unr !== 0) {
+    unrEl.textContent = fmtMoney(unr);
+    unrEl.classList.toggle('positive', unr > 0);
+    unrEl.classList.toggle('negative', unr < 0);
+  } else {
+    unrEl.textContent = '—';
+    unrEl.classList.remove('positive', 'negative');
+  }
+
+  document.getElementById('pnl-utilization').textContent =
+    Number.isFinite(p.utilizationPct) ? `${p.utilizationPct.toFixed(0)}%` : '—';
+
+  document.getElementById('pnl-avg').textContent   = p.count > 0 ? fmtMoney(p.avgPnl) : '—';
+  document.getElementById('pnl-best').textContent  = p.count > 0 ? fmtMoney(p.bestPnl) : '—';
+  document.getElementById('pnl-worst').textContent = p.count > 0 ? fmtMoney(p.worstPnl) : '—';
+  document.getElementById('pnl-wl').textContent    = p.count > 0 ? `${p.wins} / ${p.losses}` : '—';
+
+  // Strategy breakdown
+  const stratContainer = document.getElementById('pnl-strategy');
+  const strategies = Object.entries(p.byStrategy || {});
+  if (strategies.length === 0) {
+    stratContainer.innerHTML = '<div class="empty-state">No trades in this period</div>';
+  } else {
+    const maxAbs = Math.max(1e-9, ...strategies.map(([, s]) => Math.abs(s.pnl)));
+    stratContainer.innerHTML = strategies
+      .sort(([, a], [, b]) => Math.abs(b.pnl) - Math.abs(a.pnl))
+      .map(([sid, s]) => {
+        const widthPct = (Math.abs(s.pnl) / maxAbs) * 100;
+        const wr = s.count > 0 ? ((s.wins / s.count) * 100).toFixed(0) : 0;
+        const cls = s.pnl > 0 ? 'positive' : s.pnl < 0 ? 'negative' : '';
+        return `
+          <div class="strategy-row">
+            <div class="strategy-name">${strategyDisplayName(sid)}</div>
+            <div class="strategy-bar"><div class="strategy-bar-fill ${cls}" style="width:${widthPct}%"></div></div>
+            <div class="strategy-pnl ${cls}">${fmtMoney(s.pnl)}</div>
+            <div class="strategy-meta">${s.count}t · ${wr}% win</div>
+          </div>`;
+      }).join('');
+  }
 }
 
 function renderSignals(payload) {
@@ -778,6 +919,14 @@ document.querySelectorAll('.range-btn[data-hours]').forEach(b => b.addEventListe
   b.classList.add('active');
   currentRangeHours = b.dataset.hours;
   tick();
+}));
+
+document.querySelectorAll('#pnl-periods .range-btn').forEach(b => b.addEventListener('click', () => {
+  if (b.dataset.period === currentPnlPeriod) return;
+  document.querySelectorAll('#pnl-periods .range-btn').forEach(r => r.classList.remove('active'));
+  b.classList.add('active');
+  currentPnlPeriod = b.dataset.period;
+  renderPnlSummary();
 }));
 
 document.querySelectorAll('#price-intervals .range-btn').forEach(b => b.addEventListener('click', async () => {
