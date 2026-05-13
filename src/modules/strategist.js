@@ -523,10 +523,17 @@ export function analyze(scoutData, activePosition) {
 
   // 3.5 Smart guards против "тихих" carry-позиций (FARTCOIN 2026-05-13).
   //
+  // КРИТИЧНО: оба guard'а фолсят ТОЛЬКО при unrealizedPct ≥ 0. Если позиция
+  // в минусе — НЕ фиксируем лосс, fall through к: spike protection (-4%) /
+  // negative funding / hold lock + apy_below_threshold. Логика "выйти из
+  // мёртвой позиции, чтобы освободить слот" применима только когда не несём
+  // ущерб от закрытия.
+  const guardUnrealizedPct = unrealizedPct(posSide, activePosition.entry_price, current.price);
+
   // Guard A — APY decay exit: если slowApy упал в N раз от entry_apy, нет смысла
   // дожидаться hold lock — сигнал, на котором заходили, развалился. Игнорим minHold.
   // 0 = выключено.
-  if (CARRY_APY_DECAY_EXIT_RATIO > 0 && activePosition.entry_apy > 0) {
+  if (CARRY_APY_DECAY_EXIT_RATIO > 0 && activePosition.entry_apy > 0 && guardUnrealizedPct >= 0) {
     const entryAbs   = Math.abs(activePosition.entry_apy);
     const currentAbs = Math.abs(current.slowApy);
     const ratio      = currentAbs / entryAbs;
@@ -559,8 +566,8 @@ export function analyze(scoutData, activePosition) {
   // позиция бесполезна — закрываем. peakEquity арм-ится в trailing TP блоке выше
   // (требует unrealized ≥ CARRY_TRAIL_ARM_PCT_EQUITY), здесь сравниваем с
   // независимым порогом CARRY_STALE_MIN_PNL_EQUITY (обычно ниже trail arm).
-  // 0 = выключено.
-  if (CARRY_STALE_TIMEOUT_MIN > 0 && held >= CARRY_STALE_TIMEOUT_MIN) {
+  // 0 = выключено. ТОЛЬКО при unrealizedPct ≥ 0 (см. коммент к Guard A).
+  if (CARRY_STALE_TIMEOUT_MIN > 0 && held >= CARRY_STALE_TIMEOUT_MIN && guardUnrealizedPct >= 0) {
     const equity = getCachedAccountValueSync();
     if (equity && equity > 0) {
       const qty           = activePosition.size_usd / activePosition.entry_price;

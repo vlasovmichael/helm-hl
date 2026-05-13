@@ -330,7 +330,7 @@ test('Hold lock: позиция моложе effectiveMinHold → HOLD (slowApy 
 test('Smart guard: APY decay exit (новый guard) — overrides hold lock когда slowApy упал вдвое', () => {
   resetState();
   // entry_apy=50, slowApy=10 → ratio 0.2 < 0.5 → CLOSE даже на 60-минутной позиции.
-  // Funding-gate: HH:30 (середина часа) — не блокирует.
+  // Funding-gate: HH:30 (середина часа) — не блокирует. Цена не двигалась → unrealized=0% (≥0).
   const restore = freezeTime(2026, 3, 15, 12, 30);
   try {
     const pos = makePosition('BTC', 50, { entry_time: Date.now() - 60 * 60_000 });
@@ -340,6 +340,30 @@ test('Smart guard: APY decay exit (новый guard) — overrides hold lock к�
   } finally {
     restore();
   }
+});
+
+test('Smart guard: APY decay НЕ фолсит когда позиция в минусе (защита от фиксации лосса)', () => {
+  resetState();
+  const restore = freezeTime(2026, 3, 15, 12, 30);
+  try {
+    // SHORT @100. Цена выросла до 102 → unrealizedPct = -2% (минус). APY decay
+    // не должен fix лосс — fall through к spike protection / soft exit.
+    const pos = makePosition('BTC', 50, { entry_price: 100, entry_time: Date.now() - 60 * 60_000 });
+    const r = analyze([makeScoutItem('BTC', 50, { price: 102, slowApy: 10 })], pos);
+    assert.notEqual(r.reason, 'apy_decay');
+  } finally {
+    restore();
+  }
+});
+
+test('Smart guard: stale_position НЕ фолсит когда позиция в минусе', () => {
+  resetState();
+  _seedBalanceCache(100);
+  // SHORT @100, цена 102 → unrealizedPct = -2% (выше -4% spike protection).
+  // Held > stale_timeout (360min default), но guard должен пропустить.
+  const pos = makePosition('BTC', 50, { entry_price: 100, entry_time: Date.now() - 7 * HOUR_MS });
+  const r = analyze([makeScoutItem('BTC', 50, { price: 102, slowApy: 50 })], pos);
+  assert.notEqual(r.reason, 'stale_position');
 });
 
 test('Hold lock: ротация тоже заблокирована во время hold lock', () => {
