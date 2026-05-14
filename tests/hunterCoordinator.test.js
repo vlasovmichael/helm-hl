@@ -26,6 +26,8 @@ const { push: pushPriceHistory, clearAll } =
   await import('../src/core/priceHistory.js');
 const { resetHunterCooldowns } =
   await import('../src/modules/strategistSniper.js');
+const { resetHunterCrossCooldowns } =
+  await import('../src/modules/hunterCrossCooldown.js');
 
 const MIN = 60_000;
 const T0  = 1_700_000_000_000;
@@ -34,6 +36,7 @@ function resetAll() {
   analyze([], undefined);
   clearAll();
   resetHunterCooldowns();
+  resetHunterCrossCooldowns();
 }
 
 function scoutItem(coin, price, smoothedApy = 0) {

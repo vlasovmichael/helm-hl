@@ -14,6 +14,11 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getPriceNMinAgo, getBufferLength } from '../core/priceHistory.js';
+import {
+  setHunterCrossCooldown,
+  isHunterCrossCooldownActive,
+  getHunterCrossCooldownRemainMs,
+} from './hunterCrossCooldown.js';
 
 // ── Конфигурация Iter A (захардкожена; в env переедет при необходимости) ──
 // HUNTER_SPIKE_PCT: env-overrideable. Дефолт снижен с 5.0 → 3.0 (2026-05-11):
@@ -208,6 +213,14 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
     const lastSl = hunterPostSlCooldown.get(item.coin) ?? 0;
     if (now - lastSl < HUNTER_POST_SL_COOLDOWN_MS) continue;
 
+    // Cross-strategy cooldown: Hunter LONG только что закрылся в этой монете —
+    // не лезем туда же.
+    if (isHunterCrossCooldownActive(item.coin, now)) {
+      const remain = Math.ceil(getHunterCrossCooldownRemainMs(item.coin, now) / 60_000);
+      logger.info(`[Hunter] ⛔ #${item.coin} cross-cooldown active (${remain}min remaining)`);
+      continue;
+    }
+
     // Anti-trend filter: если за HUNTER_TREND_LOOKBACK_MIN цена выросла на ≥
     // HUNTER_TREND_MAX_RISE_PCT — это устойчивый pump, не reversion-кандидат.
     // Если истории нет (свежий старт / новая монета) — пропускаем фильтр.
@@ -363,6 +376,7 @@ function checkHunterExit(position, scoutData) {
           `[Hunter] 🎯 TRAIL CLOSE #${position.coin}: peak +${peak.toFixed(2)}% → now +${unrealizedPct.toFixed(2)}% ` +
             `(gave back ${(giveBack / peak * 100).toFixed(0)}% ≥ ${HUNTER_TRAIL_GIVE_BACK_PCT}%)`,
         );
+        setHunterCrossCooldown(position.coin);
         return {
           action: 'CLOSE',
           coin:   position.coin,
@@ -391,6 +405,7 @@ function checkHunterExit(position, scoutData) {
   if (position.sl_price != null && item.price >= position.sl_price) {
     // Регистрируем post-SL cooldown — Hunter не вернётся к этой монете N мин.
     hunterPostSlCooldown.set(position.coin, Date.now());
+    setHunterCrossCooldown(position.coin);
     return {
       action: 'CLOSE',
       coin:   position.coin,
@@ -399,6 +414,7 @@ function checkHunterExit(position, scoutData) {
     };
   }
   if (position.tp_price != null && item.price <= position.tp_price) {
+    setHunterCrossCooldown(position.coin);
     return {
       action: 'CLOSE',
       coin:   position.coin,
@@ -412,6 +428,7 @@ function checkHunterExit(position, scoutData) {
   // Регистрируем cooldown как при SL: монета "не отыгрывает", не лезем обратно.
   if (position.entry_time && Date.now() - position.entry_time >= HUNTER_TIME_STOP_MS) {
     hunterPostSlCooldown.set(position.coin, Date.now());
+    setHunterCrossCooldown(position.coin);
     const heldMin = Math.round((Date.now() - position.entry_time) / 60_000);
     return {
       action: 'CLOSE',

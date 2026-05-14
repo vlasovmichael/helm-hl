@@ -16,6 +16,11 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getPriceNMinAgo } from '../core/priceHistory.js';
+import {
+  setHunterCrossCooldown,
+  isHunterCrossCooldownActive,
+  getHunterCrossCooldownRemainMs,
+} from './hunterCrossCooldown.js';
 
 export const HUNTER_LONG_SPIKE_WINDOW_MIN = 2;          // окно 2 мин (как у HUNTER SHORT)
 export const HUNTER_LONG_COOLDOWN_MS      = 2 * 60_000; // 2 мин re-detect cooldown per coin
@@ -135,6 +140,14 @@ export function analyzeHunterLong(scoutData, activePosition, now = Date.now()) {
 
     const lastSl = postSlCooldown.get(item.coin) ?? 0;
     if (now - lastSl < HUNTER_LONG_POST_SL_COOLDOWN_MS) continue;
+
+    // Cross-strategy cooldown: Hunter SHORT только что закрылся в этой монете —
+    // не лезем в зеркальный long после уже отыгранного движения.
+    if (isHunterCrossCooldownActive(item.coin, now)) {
+      const remain = Math.ceil(getHunterCrossCooldownRemainMs(item.coin, now) / 60_000);
+      logger.info(`[HunterLong] ⛔ #${item.coin} cross-cooldown active (${remain}min remaining)`);
+      continue;
+    }
 
     // Anti-trend: если за HUNTER_LONG_TREND_LOOKBACK_MIN цена уже упала на ≥ MAX_DROP_PCT —
     // это устойчивый downtrend (delist/scam/news), не локальный reversion-кандидат.
@@ -259,6 +272,7 @@ function checkHunterLongExit(position, scoutData) {
           `[HunterLong] 🎯 TRAIL CLOSE #${position.coin}: peak +${peak.toFixed(2)}% → now +${unrealizedPct.toFixed(2)}% ` +
             `(gave back ${(giveBack / peak * 100).toFixed(0)}% ≥ ${HUNTER_LONG_TRAIL_GIVE_BACK_PCT}%)`,
         );
+        setHunterCrossCooldown(position.coin);
         return {
           action: 'CLOSE',
           coin:   position.coin,
@@ -284,6 +298,7 @@ function checkHunterLongExit(position, scoutData) {
 
   if (position.sl_price != null && item.price <= position.sl_price) {
     postSlCooldown.set(position.coin, Date.now());
+    setHunterCrossCooldown(position.coin);
     return {
       action: 'CLOSE',
       coin:   position.coin,
@@ -292,6 +307,7 @@ function checkHunterLongExit(position, scoutData) {
     };
   }
   if (position.tp_price != null && item.price >= position.tp_price) {
+    setHunterCrossCooldown(position.coin);
     return {
       action: 'CLOSE',
       coin:   position.coin,
@@ -302,6 +318,7 @@ function checkHunterLongExit(position, scoutData) {
 
   if (position.entry_time && Date.now() - position.entry_time >= HUNTER_LONG_TIME_STOP_MS) {
     postSlCooldown.set(position.coin, Date.now());
+    setHunterCrossCooldown(position.coin);
     const heldMin = Math.round((Date.now() - position.entry_time) / 60_000);
     return {
       action: 'CLOSE',

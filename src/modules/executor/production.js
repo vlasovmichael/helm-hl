@@ -20,7 +20,7 @@ import {
 import { resolveAsset, parseFillResponse } from './fill-parser.js';
 import { fetchUserFills, classifyClose } from '../userFills.js';
 import {
-  calcSize, calcPnl, checkSlippage, formatHlPrice,
+  calcSize, calcPnl, checkSlippage, formatHlPrice, calcVolSizeMultiplier,
   MARKET_SLIPPAGE, MIN_ORDER_USD, FEE_RATE, ONE_LEG,
   HUNTER_BALANCE_UTILIZATION,
 } from './math.js';
@@ -40,6 +40,7 @@ import { consumeHunterMfeMae, clearHunterTrailState, getHunterPeakPct } from '..
 import {
   consumeHunterLongMfeMae, clearHunterLongTrailState, getHunterLongPeakPct,
 } from '../strategistHunterLong.js';
+import { setHunterCrossCooldown } from '../hunterCrossCooldown.js';
 import {
   notifyProductionOpen, notifyOpenFailed, notifyOpenRejected,
   notifyOpenSkipped, notifySlippageBan,
@@ -74,7 +75,7 @@ const OI_CAP_REGEX = /open\s*interest|oi\s*cap/i;
  * @param {boolean} [silent=false]
  * @returns {Promise<{ ok: boolean, positionId?: number, sizeUsd?: number }>}
  */
-export async function productionOpen(coin, price, apy, silent = false, strategyId = 'carry', side = 'short') {
+export async function productionOpen(coin, price, apy, silent = false, strategyId = 'carry', side = 'short', volIdx = 0) {
   const exchange = getExchange();
   const isLong   = side === 'long';
   const orderLabel = isLong ? 'BUY' : 'SELL';
@@ -134,7 +135,13 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
   }
 
   // ── 3. Расчёт размера ────────────────────────
-  const { sizeUsd, sz, tooSmall } = calcSize(balance, price, szDecimals);
+  // Vol-based sizing: на high-vol монетах режем размер carry-позиции, чтобы один
+  // spike-protection лосс не съедал N win-trades.
+  const volMult = strategyId === 'carry'
+    ? calcVolSizeMultiplier(volIdx, config.trading.carryVolSizePenalty, config.trading.carryVolSizeMinMult)
+    : 1;
+  const effectiveUtilization = 0.95 * volMult;
+  const { sizeUsd, sz, tooSmall } = calcSize(balance, price, szDecimals, effectiveUtilization);
 
   if (tooSmall) {
     logger.warn(
@@ -147,6 +154,12 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
       });
     }
     return { ok: false };
+  }
+
+  if (volMult < 1) {
+    logger.info(
+      `[Sizing] #${coin} volIdx=${volIdx.toFixed(4)} → ×${volMult.toFixed(2)} → size $${sizeUsd.toFixed(2)} (base $${(balance * 0.95).toFixed(2)})`,
+    );
   }
 
   // ── 3.5. Принудительно ставим 1x cross leverage ──
@@ -1041,6 +1054,9 @@ export async function productionClose(signal, position, silent = false) {
           `[Executor] ✅ DB synced: #${coin} (id=${position.id}) → CLOSED | ` +
             `reason: ${classified.reason} | est. PnL: $${estimatedPnl.toFixed(4)}`,
         );
+        if (position.strategy_id === 'hunter' || position.strategy_id === 'hunter_long') {
+          setHunterCrossCooldown(position.coin);
+        }
       } catch (dbErr) {
         logger.error(`[Executor] DB close failed: ${dbErr.message}`);
       }
@@ -1145,6 +1161,10 @@ export async function productionClose(signal, position, silent = false) {
     reason:       signal.reason,
     exitFeatures,
   });
+
+  if (position.strategy_id === 'hunter' || position.strategy_id === 'hunter_long') {
+    setHunterCrossCooldown(position.coin);
+  }
 
   const sign = realizedPnl >= 0 ? "+" : "";
   const fSign = fundingPnl >= 0 ? "+" : "";
@@ -1274,6 +1294,7 @@ export async function productionRotate(signal, position) {
     true, // silent
     signal.strategy_id || 'carry',
     signal.openSide || position.side || 'short',
+    signal.volIdx ?? 0,
   );
 
   if (!openResult.ok) {

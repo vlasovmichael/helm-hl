@@ -96,6 +96,30 @@ export function calcSize(balance, price, szDecimals, utilization = BALANCE_UTILI
 }
 
 /**
+ * Множитель размера позиции по реализованной волатильности.
+ * VolIdx = stddev/mean closes за 15 мин (coefficient of variation из volatility.js).
+ *
+ * Формула: clamp(1 − volIdx × penalty, minMult, 1).
+ *   penalty=50, minMult=0.4:
+ *     volIdx=0.003 (calm)  → ×1.00
+ *     volIdx=0.008 (mid)   → ×0.60
+ *     volIdx=0.015 (hot)   → ×0.40 (floor)
+ *
+ * Применяется к carry на open, чтобы lose-trade на VVV-классе монет не съедал
+ * несколько win-trades. См. memory + история сделок 2026-05-13.
+ *
+ * @param {number} volIdx
+ * @param {number} penalty
+ * @param {number} minMult
+ * @returns {number} multiplier in [minMult, 1]
+ */
+export function calcVolSizeMultiplier(volIdx, penalty, minMult) {
+  if (!Number.isFinite(volIdx) || volIdx <= 0) return 1;
+  const raw = 1 - volIdx * penalty;
+  return Math.max(minMult, Math.min(1, raw));
+}
+
+/**
  * Вычисляет фактическое проскальзывание.
  * Чистая функция — НЕ пишет в state, НЕ логирует.
  *

@@ -10,7 +10,7 @@ import {
 } from '../../core/database.js';
 import { getAvailableBalance } from '../wallet.js';
 import {
-  calcSize, calcPaperClose,
+  calcSize, calcPaperClose, calcVolSizeMultiplier,
   ONE_LEG, MIN_ORDER_USD, HUNTER_BALANCE_UTILIZATION,
 } from './math.js';
 import {
@@ -27,6 +27,7 @@ import { consumeHunterMfeMae, clearHunterTrailState, getHunterPeakPct } from '..
 import {
   consumeHunterLongMfeMae, clearHunterLongTrailState, getHunterLongPeakPct,
 } from '../strategistHunterLong.js';
+import { setHunterCrossCooldown } from '../hunterCrossCooldown.js';
 
 /**
  * Определяет баланс для расчёта размера позиции.
@@ -56,7 +57,7 @@ async function getPaperBalance() {
  * @param {boolean} [silent=false]
  * @returns {Promise<{ ok: boolean, positionId?: number, sizeUsd?: number }>}
  */
-export async function paperOpen(coin, price, apy, silent = false, strategyId = 'carry', side = 'short') {
+export async function paperOpen(coin, price, apy, silent = false, strategyId = 'carry', side = 'short', volIdx = 0) {
   const balance = await getPaperBalance();
 
   if (balance <= 0) {
@@ -64,13 +65,25 @@ export async function paperOpen(coin, price, apy, silent = false, strategyId = '
     return { ok: false };
   }
 
-  const { sizeUsd, tooSmall } = calcSize(balance, price, 0);
+  // Vol-based sizing: на high-vol монетах режем размер carry-позиции.
+  const volMult = strategyId === 'carry'
+    ? calcVolSizeMultiplier(volIdx, config.trading.carryVolSizePenalty, config.trading.carryVolSizeMinMult)
+    : 1;
+  const effectiveUtilization = 0.95 * volMult;
+
+  const { sizeUsd, tooSmall } = calcSize(balance, price, 0, effectiveUtilization);
 
   if (tooSmall) {
     logger.warn(
       `[Executor] [SKIP] PAPER #${coin} — order size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} minimum`,
     );
     return { ok: false };
+  }
+
+  if (volMult < 1) {
+    logger.info(
+      `[Sizing] #${coin} volIdx=${volIdx.toFixed(4)} → ×${volMult.toFixed(2)} → size $${sizeUsd.toFixed(2)} (base $${(balance * 0.95).toFixed(2)})`,
+    );
   }
 
   const fee = sizeUsd * ONE_LEG;
@@ -312,6 +325,12 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
     reason:       signal.reason,
     exitFeatures,
   });
+
+  // Cross-strategy cooldown: на любом close Hunter-позиции бьём общий cooldown.
+  // Покрывает и external/reconcile closes, не только strategist-инициированные.
+  if (position.strategy_id === 'hunter' || position.strategy_id === 'hunter_long') {
+    setHunterCrossCooldown(position.coin);
+  }
 
   // Re-entry cooldown (paper mode тоже)
   setCooldown(position.coin);

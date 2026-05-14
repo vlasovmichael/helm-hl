@@ -146,6 +146,7 @@ async function preflightChecks(coin, smoothedApy = null) {
           `фактический <b>${smoothedApy.toFixed(1)}%</b>. Монета "пампит" — пропускаем тик.`,
       };
     }
+    return { allowed: true, volIdx: vol.volIdx };
   }
 
   return { allowed: true };
@@ -215,11 +216,12 @@ async function handleOpen(signal) {
   }
 
   const side = signal.side || 'short';
+  const volIdx = pre.volIdx ?? 0;
 
   if (config.isProduction) {
-    return productionOpen(signal.coin, signal.price, signal.apy, false, strategyId, side);
+    return productionOpen(signal.coin, signal.price, signal.apy, false, strategyId, side, volIdx);
   }
-  return paperOpen(signal.coin, signal.price, signal.apy, false, strategyId, side);
+  return paperOpen(signal.coin, signal.price, signal.apy, false, strategyId, side, volIdx);
 }
 
 async function handleClose(signal, position) {
@@ -360,6 +362,10 @@ async function handleRotate(signal, position) {
     return { ok: false };
   }
 
+  // volIdx прокидывается в open-нога ротации через signal — иначе придётся
+  // двойной API-call внутри paperRotate/productionRotate.
+  signal.volIdx = pre.volIdx ?? 0;
+
   if (config.isProduction) {
     return productionRotate(signal, position);
   }
@@ -393,6 +399,7 @@ async function paperRotate(signal, position) {
     true, // silent
     signal.strategy_id || 'carry',
     signal.openSide || position.side || 'short',
+    signal.volIdx ?? 0,
   );
 
   if (!openResult.ok) {

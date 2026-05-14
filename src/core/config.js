@@ -105,6 +105,18 @@ function loadConfig() {
   // re-entry через 17ч → второй stop-out. Дефолт 720мин (12ч).
   const carryLossCooldownMin = parseFloat(process.env.CARRY_LOSS_COOLDOWN_MIN || '720');
 
+  // Vol-based position sizing для carry: на high-vol монетах режем размер позиции,
+  // чтобы lose-trade не съедал N win-trades. Формула: size × clamp(1 - volIdx × penalty, minMult, 1).
+  // penalty=50, minMult=0.4: VolIdx=0.003→×1.00, 0.008→×0.60, 0.015→×0.40.
+  const carryVolSizePenalty = parseFloat(process.env.CARRY_VOL_SIZE_PENALTY || '50');
+  const carryVolSizeMinMult = parseFloat(process.env.CARRY_VOL_SIZE_MIN_MULT || '0.4');
+  if (isNaN(carryVolSizePenalty) || carryVolSizePenalty < 0) {
+    throw new Error(`CARRY_VOL_SIZE_PENALTY must be ≥ 0. Got: "${process.env.CARRY_VOL_SIZE_PENALTY}"`);
+  }
+  if (isNaN(carryVolSizeMinMult) || carryVolSizeMinMult <= 0 || carryVolSizeMinMult > 1) {
+    throw new Error(`CARRY_VOL_SIZE_MIN_MULT must be in (0, 1]. Got: "${process.env.CARRY_VOL_SIZE_MIN_MULT}"`);
+  }
+
   if (isNaN(carryTrailArmPct) || carryTrailArmPct <= 0) {
     throw new Error(`CARRY_TRAIL_ARM_PCT must be positive number. Got: "${process.env.CARRY_TRAIL_ARM_PCT}"`);
   }
@@ -290,6 +302,14 @@ function loadConfig() {
   const hunterLongPostSlCooldownMin = parseFloat(process.env.HUNTER_LONG_POST_SL_COOLDOWN_MIN || '60');
   const hunterLongTimeStopMin     = parseFloat(process.env.HUNTER_LONG_TIME_STOP_MIN     || '60');
 
+  // Cross-strategy cooldown: после ЛЮБОГО close (SHORT или LONG) монета на N минут
+  // запрещена для второй Hunter-стратегии. Защита от подбора ножа после успешного
+  // шорта (SAGA 2026-05-13: SHORT TP +$1.13 → LONG ×2 SL).
+  const hunterCrossCooldownMin = parseFloat(process.env.HUNTER_CROSS_COOLDOWN_MIN || '60');
+  if (isNaN(hunterCrossCooldownMin) || hunterCrossCooldownMin <= 0) {
+    throw new Error(`HUNTER_CROSS_COOLDOWN_MIN must be positive. Got: "${process.env.HUNTER_CROSS_COOLDOWN_MIN}"`);
+  }
+
   if (isNaN(hunterLongDumpPct) || hunterLongDumpPct <= 0) {
     throw new Error(`HUNTER_LONG_DUMP_PCT must be positive. Got: "${process.env.HUNTER_LONG_DUMP_PCT}"`);
   }
@@ -429,12 +449,15 @@ function loadConfig() {
       hunterLongTrailShadowLog,
       hunterLongTrailArmPct,
       hunterLongTrailGiveBackPct,
+      hunterCrossCooldownMin,
       carryTrailEnabled,
       carryTrailArmPct,
       carryTrailArmPctEquity,
       carryTrailGiveBackPct,
       carrySpikeProtectionPct,
       carryLossCooldownMin,
+      carryVolSizePenalty,
+      carryVolSizeMinMult,
       carryStaleTimeoutMin,
       carryStaleMinPnlEquity,
       carryApyDecayExitRatio,

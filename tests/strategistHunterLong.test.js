@@ -13,6 +13,7 @@ const { push, clearAll } =
 const {
   analyzeHunterLong, resetHunterLongCooldowns, consumeHunterLongMfeMae,
 } = await import('../src/modules/strategistHunterLong.js');
+const { resetHunterCrossCooldowns } = await import('../src/modules/hunterCrossCooldown.js');
 
 const MIN = 60_000;
 const T0  = 1_700_000_000_000;
@@ -20,6 +21,7 @@ const T0  = 1_700_000_000_000;
 function reset() {
   clearAll();
   resetHunterLongCooldowns();
+  resetHunterCrossCooldowns();
 }
 
 function seedHistory(coin, basePrice, now) {

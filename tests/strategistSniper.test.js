@@ -13,6 +13,7 @@ const {
   analyzeHunter, resetHunterCooldowns,
   HUNTER_SPIKE_PCT, HUNTER_SL_PCT, HUNTER_TP_PCT, HUNTER_COOLDOWN_MS,
 } = await import('../src/modules/strategistSniper.js');
+const { resetHunterCrossCooldowns } = await import('../src/modules/hunterCrossCooldown.js');
 
 const MIN = 60_000;
 const T0  = 1_700_000_000_000;
@@ -20,6 +21,7 @@ const T0  = 1_700_000_000_000;
 function reset() {
   clearAll();
   resetHunterCooldowns();
+  resetHunterCrossCooldowns();
 }
 
 function seedHistory(coin, basePrice, now) {
