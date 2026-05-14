@@ -68,14 +68,14 @@ function freezeDateNow(ts) {
 
 // ── IDLE + spike → Hunter приоритет ─────────────
 
-test('IDLE + spike → Hunter OPEN (перебивает carry даже если тот бы взял)', () => {
+test('IDLE + spike → Hunter OPEN (перебивает carry даже если тот бы взял)', async () => {
   resetAll();
   const now = T0 + 3 * MIN;
   const restore = freezeDateNow(now);
   try {
     seedHistory('MEME', 1.0, now);
     // MEME с +6% спайком и APY 80% (carry тоже хочет)
-    const r = coordinate(
+    const r = await coordinate(
       [scoutItem('MEME', 1.06, 80)],
       undefined,
     );
@@ -90,13 +90,13 @@ test('IDLE + spike → Hunter OPEN (перебивает carry даже если
   }
 });
 
-test('IDLE + no spike + carry кандидат → carry работает (hunter не мешает)', () => {
+test('IDLE + no spike + carry кандидат → carry работает (hunter не мешает)', async () => {
   resetAll();
   const now = T0 + 3 * MIN;
   const restore = freezeDateNow(now);
   try {
     seedHistory('ZRO', 100, now);  // ровный прайс, без спайка
-    const r = coordinate([scoutItem('ZRO', 100, 80)], undefined);
+    const r = await coordinate([scoutItem('ZRO', 100, 80)], undefined);
     assert.equal(r.action, 'OPEN');
     assert.equal(r.strategy_id, 'carry');
   } finally {
@@ -104,14 +104,14 @@ test('IDLE + no spike + carry кандидат → carry работает (hunte
   }
 });
 
-test('IDLE + spike на одной, carry-кандидат на другой → Hunter приоритет', () => {
+test('IDLE + spike на одной, carry-кандидат на другой → Hunter приоритет', async () => {
   resetAll();
   const now = T0 + 3 * MIN;
   const restore = freezeDateNow(now);
   try {
     seedHistory('MEME', 1.0, now);
     seedHistory('ZRO', 100, now);
-    const r = coordinate(
+    const r = await coordinate(
       [
         scoutItem('MEME', 1.06, 5),   // spike но низкий APY
         scoutItem('ZRO', 100, 80),     // нет spike, но APY годный
@@ -126,14 +126,14 @@ test('IDLE + spike на одной, carry-кандидат на другой →
   }
 });
 
-test('IDLE + dump → Hunter HOLD (short-only), carry подбирает если подходит', () => {
+test('IDLE + dump → Hunter HOLD (short-only), carry подбирает если подходит', async () => {
   resetAll();
   const now = T0 + 3 * MIN;
   const restore = freezeDateNow(now);
   try {
     seedHistory('MEME', 1.0, now);
     // -6% dump → Hunter HOLD, но APY=0 → carry тоже HOLD
-    const r = coordinate([scoutItem('MEME', 0.94, 0)], undefined);
+    const r = await coordinate([scoutItem('MEME', 0.94, 0)], undefined);
     assert.equal(r.action, 'HOLD');
   } finally {
     restore();
@@ -157,30 +157,30 @@ function hunterPos(coin = 'MEME', entry = 1.0) {
   };
 }
 
-test('Hunter position + price ≥ SL → CLOSE hunter_sl', () => {
+test('Hunter position + price ≥ SL → CLOSE hunter_sl', async () => {
   resetAll();
   const pos = hunterPos('MEME', 1.0);
-  const r = coordinate([scoutItem('MEME', 1.025, 0)], pos);
+  const r = await coordinate([scoutItem('MEME', 1.025, 0)], pos);
   assert.equal(r.action, 'CLOSE');
   assert.equal(r.reason, 'hunter_sl');
 });
 
-test('Hunter position + price ≤ TP → CLOSE hunter_tp', () => {
+test('Hunter position + price ≤ TP → CLOSE hunter_tp', async () => {
   resetAll();
   const pos = hunterPos('MEME', 1.0);
-  const r = coordinate([scoutItem('MEME', 0.96, 0)], pos);
+  const r = await coordinate([scoutItem('MEME', 0.96, 0)], pos);
   assert.equal(r.action, 'CLOSE');
   assert.equal(r.reason, 'hunter_tp');
 });
 
-test('Hunter position + price между уровнями → HOLD', () => {
+test('Hunter position + price между уровнями → HOLD', async () => {
   resetAll();
   const pos = hunterPos('MEME', 1.0);
-  const r = coordinate([scoutItem('MEME', 1.0, 0)], pos);
+  const r = await coordinate([scoutItem('MEME', 1.0, 0)], pos);
   assert.equal(r.action, 'HOLD');
 });
 
-test('Carry position остаётся → Hunter не эвиктит (Iter A)', () => {
+test('Carry position остаётся → Hunter не эвиктит (Iter A)', async () => {
   resetAll();
   const now = T0 + 3 * MIN;
   const restore = freezeDateNow(now);
@@ -191,7 +191,7 @@ test('Carry position остаётся → Hunter не эвиктит (Iter A)', 
       entry_time: Date.now() - 5 * MIN, mode: 'PAPER', status: 'OPEN', strategy_id: 'carry',
     };
     // Жирный спайк по MEME, но carry-позиция активна
-    const r = coordinate([scoutItem('MEME', 1.10, 5), scoutItem('ZRO', 100, 80)], carryPos);
+    const r = await coordinate([scoutItem('MEME', 1.10, 5), scoutItem('ZRO', 100, 80)], carryPos);
     // coordinator направил в carry-стратегию → её решение (HOLD или CLOSE по слабому APY)
     assert.notEqual(r.action, 'OPEN');
     assert.notEqual(r.strategy_id, 'hunter');

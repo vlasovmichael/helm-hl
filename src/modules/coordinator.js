@@ -4,6 +4,7 @@ import { analyze } from './strategist.js';
 import { analyzeFade } from './strategistFade.js';
 import { analyzeHunter } from './strategistSniper.js';
 import { analyzeHunterLong } from './strategistHunterLong.js';
+import { analyzeTrendFollow } from './strategistTrendFollow.js';
 
 /**
  * Coordinator: единая точка входа для стратегий.
@@ -23,7 +24,7 @@ import { analyzeHunterLong } from './strategistHunterLong.js';
  * @param {Array} [hunterData] — Hunter scope (шире, low-liq monеты тоже). Default: scoutData.
  * @returns {{ action: string, strategy_id?: string, [key: string]: any }}
  */
-export function coordinate(scoutData, activePosition, hunterData = scoutData) {
+export async function coordinate(scoutData, activePosition, hunterData = scoutData) {
   if (activePosition) {
     const sid = activePosition.strategy_id || 'carry';
 
@@ -33,6 +34,10 @@ export function coordinate(scoutData, activePosition, hunterData = scoutData) {
 
     if (sid === 'hunter_long') {
       return analyzeHunterLong(hunterData, activePosition);
+    }
+
+    if (sid === 'trend_follow') {
+      return analyzeTrendFollow(hunterData, activePosition);
     }
 
     if (sid === 'fade') {
@@ -60,6 +65,16 @@ export function coordinate(scoutData, activePosition, hunterData = scoutData) {
     if (hunterLongSignal.action !== 'HOLD') {
       logger.debug(`[Coordinator] hunter_long → ${hunterLongSignal.action} ${hunterLongSignal.coin}`);
       return hunterLongSignal;
+    }
+  }
+
+  // Strategy #4: trend_follow (Chill Boy). Async — 1h candle fetch с кэшем.
+  // Приоритет после Hunter (Hunter ловит быстрые спайки за секунды), до Carry.
+  if (config.trading.chillBoyEnabled) {
+    const tfSignal = await analyzeTrendFollow(hunterData, undefined);
+    if (tfSignal.action !== 'HOLD') {
+      logger.debug(`[Coordinator] trend_follow → ${tfSignal.action} ${tfSignal.coin}`);
+      return tfSignal;
     }
   }
 

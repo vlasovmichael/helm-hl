@@ -72,16 +72,16 @@ function resetAll() {
 //  No position — strategy priority
 // ═══════════════════════════════════════════════
 
-test('Coordinator: no position + carry candidate → OPEN carry', () => {
+test('Coordinator: no position + carry candidate → OPEN carry', async () => {
   resetAll();
   const data = [makeScoutItem('ZRO', 80)];
-  const r = coordinate(data, undefined);
+  const r = await coordinate(data, undefined);
   assert.equal(r.action, 'OPEN');
   assert.equal(r.strategy_id, 'carry');
   assert.equal(r.coin, 'ZRO');
 });
 
-test('Coordinator: no position + no carry + fade candidate → OPEN fade', () => {
+test('Coordinator: no position + no carry + fade candidate → OPEN fade', async () => {
   resetAll();
   // Below carry threshold (40%) but high enough for fade (500%+)
   // Actually, the item needs smoothedApy ≥ 200 AND predicted drop ≥ 40%
@@ -89,13 +89,13 @@ test('Coordinator: no position + no carry + fade candidate → OPEN fade', () =>
   // But carry would also want this (500% > 40%)...
   // Carry will HOLD because of predicted-drop filter (500 → 100 = 80% drop > 30%)
   const data = [makeScoutItem('FART', 500, { rawApy: 500, predictedApy: 100 })];
-  const r = coordinate(data, undefined);
+  const r = await coordinate(data, undefined);
   assert.equal(r.action, 'OPEN');
   assert.equal(r.strategy_id, 'fade');
   assert.equal(r.coin, 'FART');
 });
 
-test('Coordinator: no position + both candidates → carry wins (priority)', () => {
+test('Coordinator: no position + both candidates → carry wins (priority)', async () => {
   resetAll();
   // Two coins: one stable (carry) and one spike (fade)
   const data = [
@@ -108,15 +108,15 @@ test('Coordinator: no position + both candidates → carry wins (priority)', () 
   // Hmm... carry checks only best (scoutData[0]). If FART is blocked by predicted-drop,
   // carry should skip to... no, carry only checks scoutData[0].
   // So carry returns HOLD, then fade returns OPEN FART.
-  const r = coordinate(data, undefined);
+  const r = await coordinate(data, undefined);
   assert.equal(r.action, 'OPEN');
   assert.equal(r.strategy_id, 'fade');
 });
 
-test('Coordinator: no position + nothing interesting → HOLD', () => {
+test('Coordinator: no position + nothing interesting → HOLD', async () => {
   resetAll();
   const data = [makeScoutItem('ZRO', 10)]; // too low for carry and fade
-  const r = coordinate(data, undefined);
+  const r = await coordinate(data, undefined);
   assert.equal(r.action, 'HOLD');
 });
 
@@ -124,7 +124,7 @@ test('Coordinator: no position + nothing interesting → HOLD', () => {
 //  Has position — routes to correct strategy
 // ═══════════════════════════════════════════════
 
-test('Coordinator: carry position → routes to carry strategist', () => {
+test('Coordinator: carry position → routes to carry strategist', async () => {
   resetAll();
   const restore = freezeTime(2026, 3, 15, 14, 30); // safe from funding gate
   try {
@@ -132,7 +132,7 @@ test('Coordinator: carry position → routes to carry strategist', () => {
       entry_time: Date.now() - 50 * HOUR_MS,
     });
     const data = [makeScoutItem('ZRO', 5, { slowApy: 5 })];
-    const r = coordinate(data, pos);
+    const r = await coordinate(data, pos);
     assert.equal(r.action, 'CLOSE');
     assert.equal(r.strategy_id, 'carry');
   } finally {
@@ -140,7 +140,7 @@ test('Coordinator: carry position → routes to carry strategist', () => {
   }
 });
 
-test('Coordinator: fade position → routes to fade strategist', () => {
+test('Coordinator: fade position → routes to fade strategist', async () => {
   resetAll();
   const restore = freezeTime(2026, 3, 15, 14, 30);
   try {
@@ -148,7 +148,7 @@ test('Coordinator: fade position → routes to fade strategist', () => {
       entry_time: Date.now() - 130 * 60_000,
     });
     const data = [makeScoutItem('FART', 400, { rawApy: 400 })];
-    const r = coordinate(data, pos);
+    const r = await coordinate(data, pos);
     assert.equal(r.action, 'CLOSE');
     assert.equal(r.reason, 'fade_time_stop');
   } finally {
@@ -156,12 +156,12 @@ test('Coordinator: fade position → routes to fade strategist', () => {
   }
 });
 
-test('Coordinator: fade position holding → HOLD (no strategy_id on hold)', () => {
+test('Coordinator: fade position holding → HOLD (no strategy_id on hold)', async () => {
   resetAll();
   const pos = makePosition('FART', 500, 'fade', {
     entry_time: Date.now() - 30 * 60_000, // 30min, within time-stop
   });
   const data = [makeScoutItem('FART', 400, { rawApy: 400 })];
-  const r = coordinate(data, pos);
+  const r = await coordinate(data, pos);
   assert.equal(r.action, 'HOLD');
 });

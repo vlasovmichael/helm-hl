@@ -63,13 +63,13 @@ function freezeDateNow(ts) {
   return () => { global.Date = RealDate; };
 }
 
-test('IDLE + dump ≥ 3% → coordinator выдаёт hunter_long OPEN LONG', () => {
+test('IDLE + dump ≥ 3% → coordinator выдаёт hunter_long OPEN LONG', async () => {
   resetAll();
   const now = T0 + 3 * MIN;
   const restore = freezeDateNow(now);
   try {
     seedHistory('MEME', 1.0, now);
-    const r = coordinate([scoutItem('MEME', 0.94, 80)], undefined);
+    const r = await coordinate([scoutItem('MEME', 0.94, 80)], undefined);
     assert.equal(r.action, 'OPEN');
     assert.equal(r.strategy_id, 'hunter_long');
     assert.equal(r.direction, 'LONG');
@@ -80,7 +80,7 @@ test('IDLE + dump ≥ 3% → coordinator выдаёт hunter_long OPEN LONG', ()
   }
 });
 
-test('Активная hunter_long позиция → coordinator делегирует exit-check', () => {
+test('Активная hunter_long позиция → coordinator делегирует exit-check', async () => {
   resetAll();
   const pos = {
     id: 99,
@@ -94,7 +94,7 @@ test('Активная hunter_long позиция → coordinator делегир
     size_usd:    50,
   };
   // Цена выше TP → должен прийти CLOSE hunter_long_tp
-  const r = coordinate([scoutItem('BTC', 49000, 0)], pos);
+  const r = await coordinate([scoutItem('BTC', 49000, 0)], pos);
   assert.equal(r.action, 'CLOSE');
   assert.equal(r.reason, 'hunter_long_tp');
 });
@@ -107,7 +107,7 @@ test('HUNTER_LONG_ENABLED=false → hunter_long не запрашивается 
   const restore = freezeDateNow(now);
   try {
     seedHistory('MEME', 1.0, now);
-    const r = coordinate(
+    const r = await coordinate(
       [scoutItem('MEME', 0.94, 80)],
       { strategy_id: 'carry', coin: 'ETH', entry_apy: 80 },
     );

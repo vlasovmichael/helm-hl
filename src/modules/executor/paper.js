@@ -247,6 +247,67 @@ export async function hunterLongPaperOpen(coin, price, dumpPct, sl, tp, silent =
 }
 
 /**
+ * Открывает виртуальную позицию для Strategy #4 trend_follow (Chill Boy).
+ *
+ * Отличия:
+ *  - Размер = CHILL_BOY_BALANCE_UTILIZATION (default 50%).
+ *  - strategy_id='trend_follow', side зависит от direction.
+ *  - SL/TP — в ATR-единицах от entry (расчёт в strategist'е).
+ *
+ * @param {string} coin
+ * @param {number} price
+ * @param {'LONG'|'SHORT'} direction
+ * @param {number} sl
+ * @param {number} tp
+ * @param {boolean} [silent=false]
+ * @param {Object} [entryFeatures=null]
+ */
+export async function trendFollowPaperOpen(coin, price, direction, sl, tp, silent = false, entryFeatures = null) {
+  const balance = await getPaperBalance();
+  if (balance <= 0) {
+    logger.warn(`[Executor] [ChillBoy] Cannot open — balance is $${balance.toFixed(2)}`);
+    return { ok: false };
+  }
+
+  const utilization = config.trading.chillBoyBalanceUtil;
+  const { sizeUsd, tooSmall } = calcSize(balance, price, 0, utilization);
+  if (tooSmall) {
+    logger.warn(
+      `[Executor] [ChillBoy SKIP] #${coin} — size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min (${(utilization * 100).toFixed(0)}% баланса $${balance.toFixed(2)})`,
+    );
+    return { ok: false };
+  }
+
+  const fee  = sizeUsd * ONE_LEG;
+  const side = direction === 'LONG' ? 'long' : 'short';
+
+  const id = savePosition({
+    coin,
+    size_usd:    sizeUsd,
+    entry_price: price,
+    entry_apy:   0,
+    entry_time:  Date.now(),
+    mode:        "PAPER",
+    strategy_id: 'trend_follow',
+    side,
+    sl_price:    sl,
+    tp_price:    tp,
+    ...(entryFeatures || {}),
+  });
+
+  logger.info(
+    `[Executor] 🎯 ChillBoy OPEN ${direction} #${coin} | $${sizeUsd.toFixed(2)} (of $${balance.toFixed(2)}) @ $${price} ` +
+      `| SL $${sl.toFixed(6)} / TP $${tp.toFixed(6)} | fee $${fee.toFixed(4)} | id: ${id}`,
+  );
+
+  notify('afterOpen', {
+    coin, price, sizeUsd, positionId: Number(id), mode: 'PAPER', strategy: 'trend_follow',
+  });
+
+  return { ok: true, positionId: Number(id), sizeUsd };
+}
+
+/**
  * Закрывает виртуальную позицию.
  *
  * Paper PnL = fundingPnl − fees (без pricePnl, т.к. нет реального fill).
@@ -282,6 +343,11 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
     pricePnl = (position.size_usd * (position.entry_price - closePrice)) / position.entry_price;
   } else if (position.strategy_id === 'hunter_long') {
     pricePnl = (position.size_usd * (closePrice - position.entry_price)) / position.entry_price;
+  } else if (position.strategy_id === 'trend_follow') {
+    const isLong = (position.side || '').toLowerCase() === 'long';
+    pricePnl = isLong
+      ? (position.size_usd * (closePrice - position.entry_price)) / position.entry_price
+      : (position.size_usd * (position.entry_price - closePrice)) / position.entry_price;
   }
   const realizedPnl = baseRealized + pricePnl;
 

@@ -9,7 +9,9 @@ import { state as appState } from '../../app/state.js';
 import { getAccountSummary } from '../exchange.js';
 import { getAccountEquity } from '../wallet.js';
 import { checkVolatility } from '../volatility.js';
-import { paperOpen, paperClose, hunterPaperOpen, hunterLongPaperOpen } from './paper.js';
+import {
+  paperOpen, paperClose, hunterPaperOpen, hunterLongPaperOpen, trendFollowPaperOpen,
+} from './paper.js';
 import {
   productionOpen, productionClose, productionRotate,
   productionHunterOpen, productionHunterLongOpen,
@@ -181,6 +183,30 @@ async function handleOpen(signal) {
     }
     return hunterPaperOpen(
       signal.coin, signal.price, signal.spikePct, signal.sl, signal.tp, false, signal.entryFeatures,
+    );
+  }
+
+  // Strategy #4 (trend_follow / Chill Boy) route. Iter F.1b: PAPER only.
+  // PROD путь — Iter F.3, под gate CHILL_BOY_PROD_ENABLED.
+  if (strategyId === 'trend_follow') {
+    const pre = await preflightChecks(signal.coin, null);
+    if (!pre.allowed) {
+      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
+      return { ok: false };
+    }
+    if (config.isProduction) {
+      if (!config.trading.chillBoyProdEnabled) {
+        logger.warn(
+          `[Executor] ChillBoy PROD-путь выключен (CHILL_BOY_PROD_ENABLED=false). Сигнал #${signal.coin} пропущен.`,
+        );
+        return { ok: false };
+      }
+      // PROD реализация — Iter F.3. Сейчас просто блок.
+      logger.warn(`[Executor] ChillBoy PROD-путь не реализован (Iter F.3). Сигнал #${signal.coin} пропущен.`);
+      return { ok: false };
+    }
+    return trendFollowPaperOpen(
+      signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
     );
   }
 

@@ -77,7 +77,7 @@ export async function tick() {
       state.lastIdleAt = 0;
     }
 
-    const signal = coordinate(scoutData, activePosition, hunterData);
+    const signal = await coordinate(scoutData, activePosition, hunterData);
 
     // Iter D2: если checkHunterExit (внутри coordinate→analyzeHunter) выставил
     // ARM request — выполняем cancel TP-trigger ДО execute(). Это гарантирует,

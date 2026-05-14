@@ -310,6 +310,48 @@ function loadConfig() {
     throw new Error(`HUNTER_CROSS_COOLDOWN_MIN must be positive. Got: "${process.env.HUNTER_CROSS_COOLDOWN_MIN}"`);
   }
 
+  // ── Strategy #4: trend_follow (codename Chill Boy) ─────────
+  // Vol-squeeze breakout trend-follower. План: memory/trend_follow_plan.md.
+  // Iter F.1b: paper only. PROD-gate (CHILL_BOY_PROD_ENABLED) — Iter F.3.
+  const chillBoyEnabled        = (process.env.CHILL_BOY_ENABLED        || 'false').toLowerCase() === 'true';
+  const chillBoyProdEnabled    = (process.env.CHILL_BOY_PROD_ENABLED   || 'false').toLowerCase() === 'true';
+  const chillBoyAtrShort       = parseInt(process.env.CHILL_BOY_ATR_SHORT       || '20', 10);
+  const chillBoyAtrLong        = parseInt(process.env.CHILL_BOY_ATR_LONG        || '50', 10);
+  const chillBoySqueezeRatio   = parseFloat(process.env.CHILL_BOY_SQUEEZE_RATIO || '0.7');
+  const chillBoyBreakoutMult   = parseFloat(process.env.CHILL_BOY_BREAKOUT_MULT || '0.5');
+  const chillBoySlAtrMult      = parseFloat(process.env.CHILL_BOY_SL_ATR_MULT   || '1.5');
+  const chillBoyTpAtrMult      = parseFloat(process.env.CHILL_BOY_TP_ATR_MULT   || '3.0');
+  const chillBoyTimeStopHours  = parseFloat(process.env.CHILL_BOY_TIME_STOP_HOURS || '6');
+  const chillBoyBalanceUtil    = parseFloat(process.env.CHILL_BOY_BALANCE_UTILIZATION || '0.5');
+  const chillBoyPostSlCooldownMin = parseFloat(process.env.CHILL_BOY_POST_SL_COOLDOWN_MIN || '120');
+  if (!Number.isInteger(chillBoyAtrShort) || chillBoyAtrShort < 5 || chillBoyAtrShort >= chillBoyAtrLong) {
+    throw new Error(`CHILL_BOY_ATR_SHORT must be integer in [5, CHILL_BOY_ATR_LONG). Got: "${process.env.CHILL_BOY_ATR_SHORT}"`);
+  }
+  if (!Number.isInteger(chillBoyAtrLong) || chillBoyAtrLong < 10 || chillBoyAtrLong > 200) {
+    throw new Error(`CHILL_BOY_ATR_LONG must be integer in [10, 200]. Got: "${process.env.CHILL_BOY_ATR_LONG}"`);
+  }
+  if (isNaN(chillBoySqueezeRatio) || chillBoySqueezeRatio <= 0 || chillBoySqueezeRatio >= 1) {
+    throw new Error(`CHILL_BOY_SQUEEZE_RATIO must be in (0, 1). Got: "${process.env.CHILL_BOY_SQUEEZE_RATIO}"`);
+  }
+  if (isNaN(chillBoyBreakoutMult) || chillBoyBreakoutMult < 0) {
+    throw new Error(`CHILL_BOY_BREAKOUT_MULT must be ≥ 0. Got: "${process.env.CHILL_BOY_BREAKOUT_MULT}"`);
+  }
+  if (isNaN(chillBoySlAtrMult) || chillBoySlAtrMult <= 0) {
+    throw new Error(`CHILL_BOY_SL_ATR_MULT must be positive. Got: "${process.env.CHILL_BOY_SL_ATR_MULT}"`);
+  }
+  if (isNaN(chillBoyTpAtrMult) || chillBoyTpAtrMult <= 0 || chillBoyTpAtrMult <= chillBoySlAtrMult) {
+    throw new Error(`CHILL_BOY_TP_ATR_MULT must be > CHILL_BOY_SL_ATR_MULT (ниже = плохой R:R). Got: "${process.env.CHILL_BOY_TP_ATR_MULT}"`);
+  }
+  if (isNaN(chillBoyTimeStopHours) || chillBoyTimeStopHours <= 0) {
+    throw new Error(`CHILL_BOY_TIME_STOP_HOURS must be positive. Got: "${process.env.CHILL_BOY_TIME_STOP_HOURS}"`);
+  }
+  if (isNaN(chillBoyBalanceUtil) || chillBoyBalanceUtil <= 0 || chillBoyBalanceUtil > 0.95) {
+    throw new Error(`CHILL_BOY_BALANCE_UTILIZATION must be in (0, 0.95]. Got: "${process.env.CHILL_BOY_BALANCE_UTILIZATION}"`);
+  }
+  if (isNaN(chillBoyPostSlCooldownMin) || chillBoyPostSlCooldownMin <= 0) {
+    throw new Error(`CHILL_BOY_POST_SL_COOLDOWN_MIN must be positive. Got: "${process.env.CHILL_BOY_POST_SL_COOLDOWN_MIN}"`);
+  }
+
   if (isNaN(hunterLongDumpPct) || hunterLongDumpPct <= 0) {
     throw new Error(`HUNTER_LONG_DUMP_PCT must be positive. Got: "${process.env.HUNTER_LONG_DUMP_PCT}"`);
   }
@@ -450,6 +492,17 @@ function loadConfig() {
       hunterLongTrailArmPct,
       hunterLongTrailGiveBackPct,
       hunterCrossCooldownMin,
+      chillBoyEnabled,
+      chillBoyProdEnabled,
+      chillBoyAtrShort,
+      chillBoyAtrLong,
+      chillBoySqueezeRatio,
+      chillBoyBreakoutMult,
+      chillBoySlAtrMult,
+      chillBoyTpAtrMult,
+      chillBoyTimeStopHours,
+      chillBoyBalanceUtil,
+      chillBoyPostSlCooldownMin,
       carryTrailEnabled,
       carryTrailArmPct,
       carryTrailArmPctEquity,
