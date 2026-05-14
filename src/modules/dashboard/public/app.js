@@ -722,6 +722,7 @@ function strategyDisplayName(sid) {
   if (sid === 'carry') return 'Carry';
   if (sid === 'hunter' || sid === 'hunter_short') return 'Hunter SHORT';
   if (sid === 'hunter_long') return 'Hunter LONG';
+  if (sid === 'trend_follow') return 'Chill Boy';
   if (sid === 'fade') return 'Fade';
   if (sid === 'manual') return '🖐 Manual';
   return sid || 'Unknown';
