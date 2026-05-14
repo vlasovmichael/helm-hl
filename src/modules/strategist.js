@@ -103,6 +103,19 @@ function isCoinOnLossCooldown(coin, now = Date.now()) {
   return true;
 }
 
+// Ставит per-coin loss cooldown, если closing-PnL по цене < 0. Funding не учитываем —
+// он мог быть положительным, но мотивация cooldown'а в том, чтобы не возвращаться в
+// монету, которая только что увела позицию в минус по price-move (VVV-паттерн).
+function maybeSetLossCooldown(coin, posSide, entryPrice, currentPrice, reason) {
+  const pct = unrealizedPct(posSide, entryPrice, currentPrice);
+  if (pct >= 0) return;
+  const until = Date.now() + CARRY_LOSS_COOLDOWN_MIN * 60_000;
+  carryLossCooldown.set(coin, until);
+  logger.warn(
+    `[Strategist] ${coin} loss cooldown set (${reason}, price PnL ${pct.toFixed(2)}%) | ${CARRY_LOSS_COOLDOWN_MIN}min`,
+  );
+}
+
 /** Test helper: очистить per-coin loss cooldown. Не используется в проде. */
 export function _resetCarryLossCooldown() {
   carryLossCooldown.clear();
@@ -625,6 +638,7 @@ export function analyze(scoutData, activePosition) {
       negativeFundingStreak = 0; // сброс
       peakUnrealizedPct.delete(currentCoin); // позиция закрывается → пик не нужен
       peakEquityPct.delete(currentCoin);
+      maybeSetLossCooldown(currentCoin, posSide, activePosition.entry_price, current.price, reason);
       return {
         action: 'CLOSE',
         coin:   currentCoin,
@@ -668,6 +682,7 @@ export function analyze(scoutData, activePosition) {
       );
       peakUnrealizedPct.delete(currentCoin);
       peakEquityPct.delete(currentCoin);
+      maybeSetLossCooldown(currentCoin, posSide, activePosition.entry_price, current.price, 'apy_below_threshold');
       return {
         action: 'CLOSE',
         coin:   currentCoin,
@@ -755,6 +770,7 @@ export function analyze(scoutData, activePosition) {
         );
         peakUnrealizedPct.delete(currentCoin);
         peakEquityPct.delete(currentCoin);
+        maybeSetLossCooldown(currentCoin, posSide, activePosition.entry_price, current.price, 'rotate_better_apy');
         return {
           action:       'ROTATE',
           closeCoin:    currentCoin,
