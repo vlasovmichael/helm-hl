@@ -168,17 +168,17 @@ async function handleOpen(signal) {
       await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
       return { ok: false };
     }
-    if (config.isProduction) {
-      // Двойной gate: HUNTER_ENABLED=true пускает paper-сигналы, но реальные ордера
-      // отправляются только с HUNTER_PROD_ENABLED=true. Защита от случайной активации.
-      if (!config.trading.hunterProdEnabled) {
-        logger.warn(
-          `[Executor] Hunter PROD-путь выключен (HUNTER_PROD_ENABLED=false). Сигнал #${signal.coin} пропущен.`,
-        );
-        return { ok: false };
-      }
+    // Двойной gate: HUNTER_ENABLED=true пускает сигнал, но реальные ордера идут
+    // только с HUNTER_PROD_ENABLED=true. Без него — PAPER (даже в isProduction),
+    // иначе стратегия не набирает paper-данные перед PROD-активацией.
+    if (config.isProduction && config.trading.hunterProdEnabled) {
       return productionHunterOpen(
         signal.coin, signal.price, signal.spikePct, signal.sl, signal.tp, false, signal.entryFeatures,
+      );
+    }
+    if (config.isProduction) {
+      logger.info(
+        `[Executor] Hunter PROD-путь выключен (HUNTER_PROD_ENABLED=false) — сигнал #${signal.coin} идёт в PAPER.`,
       );
     }
     return hunterPaperOpen(
@@ -194,15 +194,16 @@ async function handleOpen(signal) {
       await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
       return { ok: false };
     }
-    if (config.isProduction) {
-      if (!config.trading.chillBoyProdEnabled) {
-        logger.warn(
-          `[Executor] ChillBoy PROD-путь выключен (CHILL_BOY_PROD_ENABLED=false). Сигнал #${signal.coin} пропущен.`,
-        );
-        return { ok: false };
-      }
+    // Двойной gate: CHILL_BOY_ENABLED=true пускает сигнал, реальные ордера идут
+    // только с CHILL_BOY_PROD_ENABLED=true. Без него — PAPER (даже в isProduction).
+    if (config.isProduction && config.trading.chillBoyProdEnabled) {
       return productionTrendFollowOpen(
         signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
+      );
+    }
+    if (config.isProduction) {
+      logger.info(
+        `[Executor] ChillBoy PROD-путь выключен (CHILL_BOY_PROD_ENABLED=false) — сигнал #${signal.coin} идёт в PAPER.`,
       );
     }
     return trendFollowPaperOpen(
@@ -217,17 +218,16 @@ async function handleOpen(signal) {
       await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
       return { ok: false };
     }
-    if (config.isProduction) {
-      // Двойной gate: HUNTER_LONG_ENABLED=true пускает paper-сигналы, реальные ордера
-      // отправляются только с HUNTER_LONG_PROD_ENABLED=true.
-      if (!config.trading.hunterLongProdEnabled) {
-        logger.warn(
-          `[Executor] Hunter Long PROD-путь выключен (HUNTER_LONG_PROD_ENABLED=false). Сигнал #${signal.coin} пропущен.`,
-        );
-        return { ok: false };
-      }
+    // Двойной gate: HUNTER_LONG_ENABLED=true пускает сигнал, реальные ордера идут
+    // только с HUNTER_LONG_PROD_ENABLED=true. Без него — PAPER (даже в isProduction).
+    if (config.isProduction && config.trading.hunterLongProdEnabled) {
       return productionHunterLongOpen(
         signal.coin, signal.price, signal.dumpPct, signal.sl, signal.tp, false, signal.entryFeatures,
+      );
+    }
+    if (config.isProduction) {
+      logger.info(
+        `[Executor] Hunter Long PROD-путь выключен (HUNTER_LONG_PROD_ENABLED=false) — сигнал #${signal.coin} идёт в PAPER.`,
       );
     }
     return hunterLongPaperOpen(
