@@ -32,7 +32,6 @@ let idleChartCoin = null;
 let idleChartTimer = null;
 let lastSuccessAt = 0;
 let currentRangeHours = 24;
-let chartLoaded = false;
 let currentPnlPeriod = 'today';
 let lastPnlSummary = null;
 let socket = null;
@@ -310,16 +309,25 @@ async function applyTradeMarkers(coin) {
   }
 }
 
-// ── Price chart loader ───────────────────────────
+// ── Local loaders ────────────────────────────────
 // Спиннер показываем на первичной загрузке (видим по умолчанию из HTML) и при
-// смене таймфрейма. Фоновый refresh (раз в 30с) спиннер не дёргает — только
-// прячет (no-op, если уже спрятан), иначе график мигал бы каждые 30с.
+// смене таймфрейма / диапазона. Фоновый refresh спиннер не дёргает — только
+// прячет (no-op, если уже спрятан), иначе график мигал бы на каждом тике.
 function showPriceChartLoader() {
   const el = document.getElementById('price-chart-loader');
   if (el) el.classList.remove('hidden');
 }
 function hidePriceChartLoader() {
   const el = document.getElementById('price-chart-loader');
+  if (el) el.classList.add('hidden');
+}
+// Performance (equity chart) — оверлей #chart-loader.
+function showChartLoader() {
+  const el = document.getElementById('chart-loader');
+  if (el) el.classList.remove('hidden');
+}
+function hideChartLoader() {
+  const el = document.getElementById('chart-loader');
   if (el) el.classList.add('hidden');
 }
 
@@ -739,7 +747,7 @@ async function tick() {
     equityChart.data.labels = historyR.value.points.map(p => fmtTime(p.ts));
     equityChart.data.datasets[0].data = historyR.value.points.map(p => p.equity);
     equityChart.update();
-    if (!chartLoaded) { document.getElementById('chart-loader').classList.add('hidden'); chartLoaded = true; }
+    hideChartLoader();
   }
   if (activityR.status === 'fulfilled') renderActivity(activityR.value);
   if (taxR.status === 'fulfilled') renderTax(taxR.value);
@@ -902,6 +910,9 @@ function renderPnlSummary() {
           </div>`;
       }).join('');
   }
+
+  // Данные отрендерены — убираем скелетон-оверлей.
+  document.getElementById('pnl-skeleton')?.classList.add('hidden');
 }
 
 function renderSignals(payload) {
@@ -1074,6 +1085,7 @@ document.querySelectorAll('.range-btn[data-hours]').forEach(b => b.addEventListe
   document.querySelectorAll('.range-btn[data-hours]').forEach(r => r.classList.remove('active'));
   b.classList.add('active');
   currentRangeHours = b.dataset.hours;
+  showChartLoader();
   tick();
 }));
 

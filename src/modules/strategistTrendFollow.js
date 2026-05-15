@@ -94,7 +94,9 @@ export async function analyzeTrendFollow(scoutData, activePosition, now = Date.n
         atrShort: ATR_SHORT, atrLong: ATR_LONG,
         squeezeRatio: SQUEEZE_RATIO, breakoutMult: BREAKOUT_MULT,
       });
-      if (!sig.signal) return null;
+      // Возвращаем sig всегда, даже без breakout'а: heartbeat считает squeezed
+      // по inSqueeze. Раньше тут стоял `if (!sig.signal) return null` — results
+      // фильтровались до одних breakout'ов, и squeezed был структурно всегда 0.
       return { item, signal: sig };
     }),
   );
@@ -120,7 +122,9 @@ export async function analyzeTrendFollow(scoutData, activePosition, now = Date.n
 
   // Берём первый breakout (по порядку scoutData) — никакого ранжирования по силе
   // на F.1b. Если будет шквал сигналов одновременно, добавим scoring в F.4.
-  const best = results.find((r) => r != null);
+  // results теперь содержит и не-breakout монеты (для heartbeat) — фильтруем
+  // явно по signal.signal, чтобы не открыть позицию на coil без пробоя.
+  const best = results.find((r) => r?.signal?.signal);
   if (!best) return { action: 'HOLD' };
 
   const { item, signal } = best;
