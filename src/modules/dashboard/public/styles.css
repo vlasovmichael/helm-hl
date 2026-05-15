@@ -1140,6 +1140,9 @@ footer {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+  /* Резерв высоты: число строк-стратегий меняется при переключении периода —
+     без min-height карточка скачет и тянет за собой график ниже. */
+  min-height: 148px;
 }
 #sec-pnl .strategy-row {
   display: grid;

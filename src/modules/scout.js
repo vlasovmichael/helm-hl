@@ -4,6 +4,7 @@ import { logger } from '../core/logger.js';
 import { setUniverse, getTradeableSet } from '../core/universe.js';
 import { getRuntimeBlacklist, getOiCapBans } from './executor/index.js';
 import { push as pushPriceHistory } from '../core/priceHistory.js';
+import { getActivePosition } from '../core/database.js';
 
 const HL_API   = 'https://api.hyperliquid.xyz/info';
 const RTT_LIMIT_MS = 10_000; // отклоняем ответы медленнее 10 с
@@ -296,6 +297,13 @@ export async function scan() {
     );
   }
 
+  // Монета открытой позиции обязана оставаться в scoutData, даже если её funding
+  // ушёл в минус (fast ≤ 0) или просела ликвидность. Иначе Стратег теряет current
+  // в сценарии Б, считает позицию «пропавшей» и закрывает её как delisted (кейс
+  // HYPE 2026-05-15). APY/liquidity-фильтры гейтят ВХОД, а не управление открытой
+  // позицией — её надо видеть, чтобы штатно выйти (negative_funding).
+  const activeCoin = (getActivePosition()?.coin || '').toUpperCase();
+
   const results       = [];  // для carry/fade (узкая liquid-вселенная)
   const hunterResults = [];  // для Hunter (шире — по hunterSet)
   let skippedBlacklist     = 0;
@@ -364,7 +372,8 @@ export async function scan() {
     }
 
     // ── Carry/Fade scope: тот же price + funding, но только для liquidSet ──
-    if (liquidSet.size > 0 && !liquidSet.has(coinUpper)) {
+    const isHeld = coinUpper === activeCoin;
+    if (liquidSet.size > 0 && !liquidSet.has(coinUpper) && !isHeld) {
       skippedIlliquid++;
       continue;
     }
@@ -377,10 +386,11 @@ export async function scan() {
 
     // Под флагом carryLongEnabled пускаем и отрицательный fast (long-сторона).
     // Без флага — старое поведение: только положительный funding (short).
+    // isHeld обходит фильтр: held-монету Стратег обязан видеть всегда.
     if (config.trading.carryLongEnabled) {
-      if (fast === 0) continue;
+      if (fast === 0 && !isHeld) continue;
     } else {
-      if (fast <= 0) continue;
+      if (fast <= 0 && !isHeld) continue;
     }
 
     const side = fast >= 0 ? 'short' : 'long';

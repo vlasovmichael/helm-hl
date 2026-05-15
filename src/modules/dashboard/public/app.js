@@ -310,6 +310,19 @@ async function applyTradeMarkers(coin) {
   }
 }
 
+// ── Price chart loader ───────────────────────────
+// Спиннер показываем на первичной загрузке (видим по умолчанию из HTML) и при
+// смене таймфрейма. Фоновый refresh (раз в 30с) спиннер не дёргает — только
+// прячет (no-op, если уже спрятан), иначе график мигал бы каждые 30с.
+function showPriceChartLoader() {
+  const el = document.getElementById('price-chart-loader');
+  if (el) el.classList.remove('hidden');
+}
+function hidePriceChartLoader() {
+  const el = document.getElementById('price-chart-loader');
+  if (el) el.classList.add('hidden');
+}
+
 async function fetchAndRenderIdleCandles(coin) {
   if (!coin) return;
   try {
@@ -344,6 +357,7 @@ async function fetchAndRenderIdleCandles(coin) {
       chartViewKey = newKey;
     }
     applyTradeMarkers(coin);
+    hidePriceChartLoader();
   } catch (err) { console.error('[PriceChart/idle] fetch error:', err); }
 }
 
@@ -375,6 +389,7 @@ async function fetchAndRenderCandles(pos, currentPrice) {
       chartViewKey = newKey;
     }
     applyTradeMarkers(pos.coin);
+    hidePriceChartLoader();
   } catch (err) { console.error('[PriceChart] fetch error:', err); }
 }
 
@@ -1077,11 +1092,14 @@ document.querySelectorAll('#price-intervals .range-btn').forEach(b => b.addEvent
   currentInterval = b.dataset.iv;
   liveCandle = null;
   chartViewKey = null; // смена ТФ → fitContent под новые данные
+  showPriceChartLoader();
   if (lastPos) {
     const px = Number.isFinite(lastPos.currentPrice) && lastPos.currentPrice > 0 ? lastPos.currentPrice : lastPos.entryPrice;
     await fetchAndRenderCandles(lastPos, px);
   } else if (idleChartCoin) {
     await fetchAndRenderIdleCandles(idleChartCoin);
+  } else {
+    hidePriceChartLoader(); // нечего грузить — не оставляем спиннер висеть
   }
 }));
 

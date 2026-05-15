@@ -835,7 +835,7 @@ function sumFundingInRange(deltas, start, end) {
   return sum;
 }
 
-function computeStats(trades) {
+function computeStats(trades, equityRef = 0) {
   if (trades.length === 0) {
     return {
       totalPnl: 0,
@@ -916,9 +916,11 @@ function computeStats(trades) {
     const dd = peak - cum;
     if (dd > maxDD) maxDD = dd;
   }
-  // % от пика: если пик ≤ 0 — приводим к |totalPnl| как референс, иначе 0.
-  const maxDdRef = peak > 0 ? peak : Math.abs(totalPnl) || 1;
-  const maxDrawdownPct = (maxDD / maxDdRef) * 100;
+  // % просадки считаем от equity счёта — это осмысленный знаменатель.
+  // Старый вариант (пик кумулятивного P&L) взрывался до сотен %, когда пик
+  // был копеечный: $2.41 просадки / $0.88 пик = 273%. equityRef=0 (API
+  // недоступен) → null, и UI просто не показывает процент.
+  const maxDrawdownPct = equityRef > 0 ? (maxDD / equityRef) * 100 : null;
 
   return {
     totalPnl,
@@ -949,6 +951,17 @@ async function handlePnlSummary(_req, res) {
     const bounds = periodBoundaries(now);
     const fundingDeltas = await getFundingHistory();
 
+    // Equity счёта — знаменатель для maxDrawdown %. Падение API не критично:
+    // equityNow=0 → computeStats вернёт maxDrawdownPct=null и UI скроет процент.
+    let equityNow = 0;
+    try {
+      equityNow = config.isProduction
+        ? (await getAccountSummary()).equity
+        : await getAccountEquity();
+    } catch {
+      /* equityNow=0 → процент просадки не показываем */
+    }
+
     // Один проход — наибольший period (all). Дальше фильтруем in-memory.
     const allDb = getHistorySince(0);
     const allArch = getArchivedHistorySince(0);
@@ -975,7 +988,7 @@ async function handlePnlSummary(_req, res) {
       const inRange = allTrades.filter(
         (t) => t.closed_at >= start && t.closed_at < end,
       );
-      const stats = computeStats(inRange);
+      const stats = computeStats(inRange, equityNow);
       const periodMs =
         key === "all"
           ? allTrades.length > 0
