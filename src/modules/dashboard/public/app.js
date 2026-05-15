@@ -93,6 +93,7 @@ function initWebSocket() {
         renderPosition(msg.data.activePosition);
         renderManualPositions(msg.data.manualPositions);
         renderBans(msg.data);
+        renderChillBoy(msg.data.chillBoy);
         handlePriceChartUpdate(msg.data.activePosition, msg.data.manualPositions);
         lastSuccessAt = Date.now();
         setWsState('live');
@@ -1013,6 +1014,39 @@ function renderTax(tax) {
   profitEl.textContent = `${profit >= 0 ? '+' : ''}${profit.toLocaleString()} PLN`;
   profitEl.style.color = profit >= 0 ? 'var(--green)' : 'var(--red)';
   document.getElementById('tax-est').textContent = `${(profit > 0 ? profit * 0.19 : 0).toLocaleString()} PLN`;
+}
+
+// Chill Boy heartbeat — диагностическая карточка детектора. Не влияет на торговлю.
+function renderChillBoy(cb) {
+  const card = document.getElementById('sec-chillboy');
+  if (!card) return;
+  if (!cb || !cb.enabled) { card.style.display = 'none'; return; }
+  card.style.display = '';
+
+  const modeEl = document.getElementById('chillboy-mode');
+  if (modeEl) {
+    modeEl.textContent = cb.prod ? 'PROD' : 'PAPER';
+    modeEl.classList.toggle('prod', !!cb.prod);
+  }
+
+  const hb = cb.heartbeat;
+  const ageEl = document.getElementById('chillboy-age');
+  if (!hb) {
+    if (ageEl) ageEl.textContent = 'warming up…';
+    ['cb-tracked', 'cb-squeezed', 'cb-breakouts', 'cb-slot', 'cb-cooldowns']
+      .forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
+    return;
+  }
+
+  if (ageEl) {
+    const ageSec = Math.floor((Date.now() - hb.ts) / 1000);
+    ageEl.textContent = ageSec < 90 ? `${ageSec}s ago` : `${Math.floor(ageSec / 60)}m ago`;
+  }
+  document.getElementById('cb-tracked').textContent   = hb.tracked;
+  document.getElementById('cb-squeezed').textContent  = hb.squeezed;
+  document.getElementById('cb-breakouts').textContent = hb.breakouts;
+  document.getElementById('cb-slot').textContent      = hb.slot;
+  document.getElementById('cb-cooldowns').textContent = `${hb.reCooldowns} + ${hb.postSlCooldowns}`;
 }
 
 function renderFooter() {

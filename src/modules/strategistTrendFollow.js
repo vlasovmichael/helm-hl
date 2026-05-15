@@ -39,10 +39,20 @@ const cooldownMap    = new Map();   // coin → ts последнего сигн
 const postSlCooldown = new Map();   // coin → ts последнего SL/time_stop
 let lastHeartbeatAt  = 0;
 
+// Снимок последнего heartbeat — только для dashboard-карточки (диагностика
+// детектора). Бот-логику не трогает: на торговые решения никак не влияет.
+let lastHeartbeat = null;
+
 export function resetTrendFollowState() {
   cooldownMap.clear();
   postSlCooldown.clear();
   lastHeartbeatAt = 0;
+  lastHeartbeat = null;
+}
+
+/** Последний снимок состояния детектора Chill Boy (для dashboard). */
+export function getChillBoyHeartbeat() {
+  return lastHeartbeat;
 }
 
 /**
@@ -89,11 +99,19 @@ export async function analyzeTrendFollow(scoutData, activePosition, now = Date.n
     }),
   );
 
-  // Heartbeat (раз в 5мин)
+  // Heartbeat snapshot — обновляем каждый тик (дёшево, results уже посчитаны),
+  // чтобы dashboard-карточка была свежей. В лог пишем раз в 5мин.
+  const tracked  = data.length;
+  const squeezed = results.filter((r) => r?.signal?.inSqueeze).length;
+  const hits     = results.filter((r) => r?.signal?.signal).length;
+  lastHeartbeat = {
+    tracked, squeezed, breakouts: hits,
+    slot: activePosition ? 'BUSY' : 'IDLE',
+    reCooldowns: cooldownMap.size,
+    postSlCooldowns: postSlCooldown.size,
+    ts: now,
+  };
   if (now - lastHeartbeatAt >= TREND_FOLLOW_HEARTBEAT_MS) {
-    const tracked = data.length;
-    const squeezed = results.filter((r) => r?.signal?.inSqueeze).length;
-    const hits     = results.filter((r) => r?.signal?.signal).length;
     logger.info(
       `[ChillBoy] 💓 tracked=${tracked} squeezed=${squeezed} breakouts=${hits} | slot=${activePosition ? 'BUSY' : 'IDLE'} | cooldowns=${cooldownMap.size}+${postSlCooldown.size}`,
     );

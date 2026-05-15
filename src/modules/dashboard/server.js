@@ -29,6 +29,7 @@ import {
   HUNTER_SL_PCT,
   HUNTER_TP_PCT,
 } from "../strategistSniper.js";
+import { getChillBoyHeartbeat } from "../strategistTrendFollow.js";
 
 const HOST = "0.0.0.0";
 const PORT = 3010;
@@ -251,6 +252,15 @@ async function getStatusData() {
         }
       : null,
     manualPositions,
+    // Chill Boy — только отображение состояния детектора. На реальные prod-сделки
+    // не влияет: показываем когда стратегия включена (paper или prod).
+    chillBoy: config.trading.chillBoyEnabled
+      ? {
+          enabled: true,
+          prod: config.isProduction && config.trading.chillBoyProdEnabled,
+          heartbeat: getChillBoyHeartbeat(),
+        }
+      : null,
     ts: Date.now(),
   };
 }
