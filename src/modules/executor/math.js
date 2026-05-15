@@ -9,7 +9,8 @@ export const MAKER_FEE_RATE      = 0.00003;  // 0.003% maker (HL baseline tier, 
 export const SLIPPAGE            = 0.0001;   // 0.01%
 export const ONE_LEG             = FEE_RATE + SLIPPAGE;  // 0.03% за одну сторону
 export const BALANCE_UTILIZATION = 0.95;     // 95% от баланса (carry/fade)
-export const HUNTER_BALANCE_UTILIZATION = 0.50;  // 50% от баланса (Sniper-Hunter — агрессивнее, подушка нужна)
+// Hunter utilization вынесен в config (HUNTER_BALANCE_UTILIZATION /
+// HUNTER_LONG_BALANCE_UTILIZATION) — SHORT и Long тюнятся раздельно.
 export const MIN_ORDER_USD       = 11;       // Hyperliquid min ~$10, с запасом
 export const MARKET_SLIPPAGE     = 0.03;     // 3% потолок IoC
 export const SLIPPAGE_WARN_PCT   = 0.5;      // предупреждение
@@ -83,7 +84,7 @@ export function formatHlPrice(price, szDecimals, maxDecimals = 6) {
  * @param {number} price    — текущая цена
  * @param {number} szDecimals — кол-во десятичных знаков для округления
  * @param {number} [utilization=BALANCE_UTILIZATION] — доля баланса к использованию
- *   (0.95 для carry/fade, 0.50 для hunter).
+ *   (0.95 для carry/fade; hunter — config.trading.hunterBalanceUtil/hunterLongBalanceUtil).
  * @returns {{ sizeUsd: number, sz: number, tooSmall: boolean }}
  */
 export function calcSize(balance, price, szDecimals, utilization = BALANCE_UTILIZATION) {

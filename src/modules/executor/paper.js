@@ -11,7 +11,7 @@ import {
 import { getAvailableBalance } from '../wallet.js';
 import {
   calcSize, calcPaperClose, calcVolSizeMultiplier,
-  ONE_LEG, MIN_ORDER_USD, HUNTER_BALANCE_UTILIZATION,
+  ONE_LEG, MIN_ORDER_USD,
 } from './math.js';
 import {
   setCooldown, REENTRY_COOLDOWN_MS,
@@ -117,7 +117,7 @@ export async function paperOpen(coin, price, apy, silent = false, strategyId = '
  * Открывает виртуальную позицию для Sniper-Hunter (Strategy #3).
  *
  * Отличия от paperOpen:
- *  - Размер = 50% баланса (HUNTER_BALANCE_UTILIZATION), не 95%.
+ *  - Размер = HUNTER_BALANCE_UTILIZATION × баланс (env-настраиваемо), не 95%.
  *  - Записывает sl_price / tp_price в БД (триггеры симулируются в strategistSniper.analyzeHunter).
  *  - strategy_id = 'hunter', entry_apy = 0 (Hunter не получает funding).
  *  - Направление в Iter A — всегда SHORT (short-after-pump).
@@ -140,11 +140,12 @@ export async function hunterPaperOpen(coin, price, spikePct, sl, tp, silent = fa
     return { ok: false };
   }
 
-  const { sizeUsd, tooSmall } = calcSize(balance, price, 0, HUNTER_BALANCE_UTILIZATION);
+  const util = config.trading.hunterBalanceUtil;
+  const { sizeUsd, tooSmall } = calcSize(balance, price, 0, util);
 
   if (tooSmall) {
     logger.warn(
-      `[Executor] [HUNTER SKIP] #${coin} — size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min (50% баланса $${balance.toFixed(2)})`,
+      `[Executor] [HUNTER SKIP] #${coin} — size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min (${(util * 100).toFixed(0)}% баланса $${balance.toFixed(2)})`,
     );
     return { ok: false };
   }
@@ -184,7 +185,7 @@ export async function hunterPaperOpen(coin, price, spikePct, sl, tp, silent = fa
  * Открывает виртуальную LONG-позицию для Hunter Long (Strategy #3, Iter E.1).
  *
  * Зеркало hunterPaperOpen:
- *  - Размер = 50% баланса (тот же HUNTER_BALANCE_UTILIZATION).
+ *  - Размер = HUNTER_LONG_BALANCE_UTILIZATION × баланс (env, по умолч. 50%).
  *  - strategy_id='hunter_long', side='long', entry_apy=0.
  *  - SL/TP инвертированы относительно SHORT: sl < entry < tp.
  *  - Iter E.1: только PAPER. Notification reuse'им notifyPaperOpen с side='long'.
@@ -205,11 +206,12 @@ export async function hunterLongPaperOpen(coin, price, dumpPct, sl, tp, silent =
     return { ok: false };
   }
 
-  const { sizeUsd, tooSmall } = calcSize(balance, price, 0, HUNTER_BALANCE_UTILIZATION);
+  const util = config.trading.hunterLongBalanceUtil;
+  const { sizeUsd, tooSmall } = calcSize(balance, price, 0, util);
 
   if (tooSmall) {
     logger.warn(
-      `[Executor] [HUNTER_LONG SKIP] #${coin} — size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min (50% баланса $${balance.toFixed(2)})`,
+      `[Executor] [HUNTER_LONG SKIP] #${coin} — size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min (${(util * 100).toFixed(0)}% баланса $${balance.toFixed(2)})`,
     );
     return { ok: false };
   }

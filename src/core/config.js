@@ -244,6 +244,19 @@ function loadConfig() {
   // вместо ~12. PAPER-безопасно; для PROD (Iter C) потребуется size-cap и осторожность.
   const hunterMinVolume = parseFloat(process.env.HUNTER_MIN_VOLUME || '1000000');
 
+  // Доля баланса на позицию Hunter. SHORT и Long разделены: данные 2026-05-15
+  // показали у SHORT положительное матожидание (+$0.56/сделку на 12 PROD-trades),
+  // у Long — отрицательное. Поэтому SHORT поднимаем стадийно, Long держим
+  // консервативно. Итоговый нотиональный множитель к балансу = util × hunterLeverage.
+  const hunterBalanceUtil     = parseFloat(process.env.HUNTER_BALANCE_UTILIZATION      || '0.5');
+  const hunterLongBalanceUtil = parseFloat(process.env.HUNTER_LONG_BALANCE_UTILIZATION || '0.5');
+  if (isNaN(hunterBalanceUtil) || hunterBalanceUtil <= 0 || hunterBalanceUtil > 0.95) {
+    throw new Error(`HUNTER_BALANCE_UTILIZATION must be in (0, 0.95]. Got: "${process.env.HUNTER_BALANCE_UTILIZATION}"`);
+  }
+  if (isNaN(hunterLongBalanceUtil) || hunterLongBalanceUtil <= 0 || hunterLongBalanceUtil > 0.95) {
+    throw new Error(`HUNTER_LONG_BALANCE_UTILIZATION must be in (0, 0.95]. Got: "${process.env.HUNTER_LONG_BALANCE_UTILIZATION}"`);
+  }
+
   // Anti-trend filter: не шортим если цена N мин назад была ниже current на ≥M%
   // (значит за N мин уже был устойчивый рост — это тренд, не reversion-кандидат).
   const hunterTrendLookbackMin = parseFloat(process.env.HUNTER_TREND_LOOKBACK_MIN || '15');
@@ -469,6 +482,8 @@ function loadConfig() {
       hunterEnabled,
       hunterProdEnabled,
       hunterLeverage,
+      hunterBalanceUtil,
+      hunterLongBalanceUtil,
       hunterMinVolume,
       hunterTrendLookbackMin,
       hunterTrendMaxRisePct,

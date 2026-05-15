@@ -22,7 +22,6 @@ import { fetchUserFills, classifyClose } from '../userFills.js';
 import {
   calcSize, calcPnl, checkSlippage, formatHlPrice, calcVolSizeMultiplier,
   MARKET_SLIPPAGE, MIN_ORDER_USD, FEE_RATE, ONE_LEG,
-  HUNTER_BALANCE_UTILIZATION,
 } from './math.js';
 import {
   banRuntime, banSlippage, setCooldown,
@@ -439,12 +438,13 @@ export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, si
   // Leverage расширяет нотиональный размер позиции: effectiveBalance = balance × leverage.
   // На $100 при util=0.5, lev=3 → $150 поза, маржа всё ещё $50.
   const leverage = config.trading.hunterLeverage;
+  const util = config.trading.hunterBalanceUtil;
   const effectiveBalance = balance * leverage;
-  const { sizeUsd, sz, tooSmall } = calcSize(effectiveBalance, markPrice, szDecimals, HUNTER_BALANCE_UTILIZATION);
+  const { sizeUsd, sz, tooSmall } = calcSize(effectiveBalance, markPrice, szDecimals, util);
   if (tooSmall) {
     logger.warn(
       `[Executor] [HUNTER SKIP] #${coin} — size $${sizeUsd.toFixed(2)} / sz=${sz} ` +
-        `(50% от $${balance.toFixed(2)} × ${leverage}x lev = $${effectiveBalance.toFixed(2)})`,
+        `(${(util * 100).toFixed(0)}% от $${balance.toFixed(2)} × ${leverage}x lev = $${effectiveBalance.toFixed(2)})`,
     );
     return { ok: false };
   }
@@ -712,12 +712,13 @@ export async function productionHunterLongOpen(coin, markPrice, dumpPct, sl, tp,
   }
 
   const leverage = config.trading.hunterLeverage; // тот же leverage что у Hunter SHORT
+  const util = config.trading.hunterLongBalanceUtil;
   const effectiveBalance = balance * leverage;
-  const { sizeUsd, sz, tooSmall } = calcSize(effectiveBalance, markPrice, szDecimals, HUNTER_BALANCE_UTILIZATION);
+  const { sizeUsd, sz, tooSmall } = calcSize(effectiveBalance, markPrice, szDecimals, util);
   if (tooSmall) {
     logger.warn(
       `[Executor] [HUNTER_LONG SKIP] #${coin} — size $${sizeUsd.toFixed(2)} / sz=${sz} ` +
-        `(50% от $${balance.toFixed(2)} × ${leverage}x lev = $${effectiveBalance.toFixed(2)})`,
+        `(${(util * 100).toFixed(0)}% от $${balance.toFixed(2)} × ${leverage}x lev = $${effectiveBalance.toFixed(2)})`,
     );
     return { ok: false };
   }
