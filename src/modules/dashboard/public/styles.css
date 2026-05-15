@@ -247,6 +247,28 @@ header {
   background: var(--green-soft);
   border-color: var(--green-line);
 }
+.status-pill.live {
+  color: var(--green);
+  background: var(--green-soft);
+  border-color: var(--green-line);
+}
+.status-pill.live::before {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+.status-pill.stale {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+.status-pill.offline {
+  color: var(--red);
+  background: var(--red-soft);
+  border-color: var(--red-line);
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
 
 .meta-info {
   color: var(--text-muted);

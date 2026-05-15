@@ -120,6 +120,7 @@ const PUBLIC_DIR = join(__dirname, "public");
 let server = null;
 let wss = null;
 let broadcastTimer = null;
+let heartbeatTimer = null;
 let unsubscribeLogs = null;
 
 // ─────────────────────────────────────────────────
@@ -1271,6 +1272,8 @@ export function startDashboard() {
     );
   });
   wss.on("connection", async (ws) => {
+    ws.isAlive = true;
+    ws.on("pong", () => { ws.isAlive = true; });
     try {
       const data = await getStatusData();
       ws.send(JSON.stringify({ type: "status", data }));
@@ -1279,6 +1282,20 @@ export function startDashboard() {
       logger.error(`[Dashboard] WS initial send failed: ${err.message}`);
     }
   });
+
+  // Heartbeat: пингуем клиентов раз в 30с, мёртвых (не ответивших pong с прошлого тика) убиваем.
+  // Защита от idle-cut'а в reverse proxy (Cloudflare Tunnel ~100с) и от зависших коннектов.
+  heartbeatTimer = setInterval(() => {
+    if (!wss) return;
+    for (const client of wss.clients) {
+      if (client.isAlive === false) {
+        client.terminate();
+        continue;
+      }
+      client.isAlive = false;
+      try { client.ping(); } catch { /* socket уже мёртв — terminate отработает на след. тике */ }
+    }
+  }, 30_000);
 
   unsubscribeLogs = subscribeLogs((entry) => {
     if (!wss || wss.clients.size === 0) return;
@@ -1308,6 +1325,7 @@ export function startDashboard() {
 
 export function stopDashboard() {
   if (broadcastTimer) clearInterval(broadcastTimer);
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
   if (unsubscribeLogs) {
     unsubscribeLogs();
     unsubscribeLogs = null;

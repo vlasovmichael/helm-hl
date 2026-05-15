@@ -43,10 +43,48 @@ let chartViewKey = null; // coin+interval — для сохранения зум
 
 // ── WebSocket ───────────────────────────────────
 
+let wsState = 'connecting';        // 'live' | 'stale' | 'reconnecting' | 'connecting'
+let wsRetryDelay = 1000;           // ms, exp backoff: 1s → 2s → 4s → 8s → cap 10s
+const WS_RETRY_MAX = 10_000;
+let wsReconnectTimer = null;
+
+function setWsState(next) {
+  if (wsState === next) return;
+  wsState = next;
+  renderWsPill();
+}
+
+function renderWsPill() {
+  const pill = document.getElementById('ws-pill');
+  if (!pill) return;
+  pill.classList.remove('live', 'stale', 'offline');
+  if (wsState === 'live') {
+    pill.classList.add('live');
+    pill.textContent = 'WS live';
+  } else if (wsState === 'stale') {
+    pill.classList.add('stale');
+    const age = Math.floor((Date.now() - lastSuccessAt) / 1000);
+    pill.textContent = `WS stale ${age}s`;
+  } else if (wsState === 'reconnecting') {
+    pill.classList.add('offline');
+    pill.textContent = 'WS reconnecting…';
+  } else {
+    pill.classList.add('offline');
+    pill.textContent = 'WS connecting…';
+  }
+}
+
 function initWebSocket() {
+  if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const wsUrl = `${protocol}//${window.location.host}`;
   socket = new WebSocket(wsUrl);
+
+  socket.onopen = () => {
+    wsRetryDelay = 1000;
+    setWsState('connecting');  // станет 'live' после первого msg
+  };
+
   socket.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
@@ -57,6 +95,7 @@ function initWebSocket() {
         renderBans(msg.data);
         handlePriceChartUpdate(msg.data.activePosition, msg.data.manualPositions);
         lastSuccessAt = Date.now();
+        setWsState('live');
         renderFooter();
       } else if (msg.type === 'logs:init') {
         ingestLogs(msg.entries || [], true);
@@ -65,7 +104,17 @@ function initWebSocket() {
       }
     } catch (err) { console.error('[WS] Error:', err); }
   };
-  socket.onclose = () => setTimeout(initWebSocket, 5000);
+
+  socket.onerror = () => {
+    // onerror всегда сопровождается onclose — закроем явно, чтобы reconnect стартовал быстрее.
+    try { socket.close(); } catch { /* already closed */ }
+  };
+
+  socket.onclose = () => {
+    setWsState('reconnecting');
+    wsReconnectTimer = setTimeout(initWebSocket, wsRetryDelay);
+    wsRetryDelay = Math.min(wsRetryDelay * 2, WS_RETRY_MAX);
+  };
 }
 
 // ── Number Animation (Rabbit Style) ────────────────
@@ -968,9 +1017,16 @@ function renderTax(tax) {
 
 function renderFooter() {
   const footer = document.getElementById('footer-status').querySelector('span');
-  if (!footer) return;
-  const age = Math.floor((Date.now() - lastSuccessAt) / 1000);
-  footer.textContent = age > 15 ? `⚠ Stale (${age}s)` : `Syncing live · WS active`;
+  if (footer) {
+    const age = Math.floor((Date.now() - lastSuccessAt) / 1000);
+    footer.textContent = age > 15 ? `⚠ Stale (${age}s)` : `Syncing live · WS active`;
+  }
+  // Если коннект жив, но данные не идут >10с — флипаем pill в stale.
+  if (wsState === 'live' && Date.now() - lastSuccessAt > 10_000) {
+    setWsState('stale');
+  } else if (wsState === 'stale') {
+    renderWsPill();  // обновим счётчик секунд
+  }
 }
 
 document.querySelectorAll('.theme-btn').forEach(b => b.addEventListener('click', () => { localStorage.setItem(THEME_KEY, b.dataset.theme); applyTheme(b.dataset.theme); }));
