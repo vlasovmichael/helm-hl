@@ -402,6 +402,49 @@ export async function notifyHunterLongOpenFailed({ coin, stage, reason, rolledBa
   );
 }
 
+export async function notifyTrendFollowOpenProd({
+  coin, direction, sizeUsd, balance, leverage, utilization,
+  fillPx, markPrice, sl, tp, slOid, tpOid, slipLabel, fee,
+}) {
+  const levSuffix = leverage > 1 ? ` × <b>${leverage}x</b>` : '';
+  const utilPct   = (utilization * 100).toFixed(0);
+  const arrow     = direction === 'LONG' ? '📈' : '📉';
+  await sendMessage(
+    `🌴${arrow} <b>[CHILLBOY PROD OPEN ${direction}] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `💰 Размер: <b>$${sizeUsd.toFixed(2)}</b> (${utilPct}% от $${balance.toFixed(2)}${levSuffix})\n` +
+      `💵 Mark→Fill: $${markPrice} → <b>$${fillPx}</b> <i>(${slipLabel})</i>\n` +
+      `🛑 SL: $${sl.toFixed(6)} <i>(oid=${slOid})</i>\n` +
+      `🎯 TP: $${tp.toFixed(6)} <i>(oid=${tpOid})</i>\n` +
+      `🏷 Entry fee: $${fee.toFixed(4)}\n` +
+      `<i>Squeeze breakout. Триггеры на бирже, time-stop в стратеге.</i>`,
+    true,
+  );
+}
+
+export async function notifyTrendFollowOpenFailed({
+  coin, direction, stage, reason, rolledBack, fill = null, rollback = null,
+}) {
+  const fillLine = fill
+    ? `📥 Open: <b>${fill.sz}</b> @ $${fill.fillPx} ($${fill.sizeUsd.toFixed(2)})\n`
+    : '';
+  const rbLine = rollback
+    ? `📤 Rollback close @ $${rollback.closePx} | PnL: <b>${rollback.pnl >= 0 ? '+' : ''}$${rollback.pnl.toFixed(4)}</b> (fees $${rollback.fee.toFixed(4)})\n`
+    : '';
+  await sendMessage(
+    `🌴⚠️ <b>[CHILLBOY PROD FAIL ${direction}] #${coin}</b>\n` +
+      `<code>─────────────────────</code>\n` +
+      `Стадия: <b>${stage}</b>\n` +
+      `Причина: <code>${reason}</code>\n` +
+      fillLine +
+      rbLine +
+      (rolledBack
+        ? `<i>Позиция закрыта по market — без SL остаться нельзя.</i>`
+        : `<i>Позиция не открылась — ничего не сделано.</i>`),
+    true,
+  );
+}
+
 export async function notifyHunterLongSL({ coin, entryPrice, slPrice, pnl, fee, holdMinutes }) {
   const sign = pnl >= 0 ? "+" : "";
   await sendMessage(

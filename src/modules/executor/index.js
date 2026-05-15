@@ -14,7 +14,7 @@ import {
 } from './paper.js';
 import {
   productionOpen, productionClose, productionRotate,
-  productionHunterOpen, productionHunterLongOpen,
+  productionHunterOpen, productionHunterLongOpen, productionTrendFollowOpen,
 } from './production.js';
 import { productionArmSniper, finalizeProdSniperPartial } from './sniper.js';
 import { getExchange } from '../exchange.js';
@@ -201,9 +201,9 @@ async function handleOpen(signal) {
         );
         return { ok: false };
       }
-      // PROD реализация — Iter F.3. Сейчас просто блок.
-      logger.warn(`[Executor] ChillBoy PROD-путь не реализован (Iter F.3). Сигнал #${signal.coin} пропущен.`);
-      return { ok: false };
+      return productionTrendFollowOpen(
+        signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
+      );
     }
     return trendFollowPaperOpen(
       signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
