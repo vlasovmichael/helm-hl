@@ -1179,6 +1179,33 @@ footer {
 #sec-pnl .strategy-pnl.negative { color: var(--red); }
 #sec-pnl .strategy-meta { color: var(--text-muted); font-size: 0.72rem; }
 
+#sec-pnl .pnl-detector {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+  padding: 0.45rem 0.75rem;
+  background: var(--bg-elev);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+#sec-pnl .detector-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+#sec-pnl .detector-stats {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
 @media (max-width: 720px) {
   #sec-pnl .pnl-hero { grid-template-columns: 1fr; gap: 0.75rem; }
   #sec-pnl .pnl-hero-side { grid-template-columns: repeat(3, minmax(0, 1fr)); }

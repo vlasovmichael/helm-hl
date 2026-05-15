@@ -1016,12 +1016,12 @@ function renderTax(tax) {
   document.getElementById('tax-est').textContent = `${(profit > 0 ? profit * 0.19 : 0).toLocaleString()} PLN`;
 }
 
-// Chill Boy heartbeat — диагностическая карточка детектора. Не влияет на торговлю.
+// Chill Boy detector heartbeat — строка в P&L Summary. Чисто диагностика, на торговлю не влияет.
 function renderChillBoy(cb) {
-  const card = document.getElementById('sec-chillboy');
-  if (!card) return;
-  if (!cb || !cb.enabled) { card.style.display = 'none'; return; }
-  card.style.display = '';
+  const row = document.getElementById('chillboy-detector');
+  if (!row) return;
+  if (!cb || !cb.enabled) { row.style.display = 'none'; return; }
+  row.style.display = '';
 
   const modeEl = document.getElementById('chillboy-mode');
   if (modeEl) {
@@ -1029,24 +1029,15 @@ function renderChillBoy(cb) {
     modeEl.classList.toggle('prod', !!cb.prod);
   }
 
+  const statsEl = document.getElementById('chillboy-stats');
+  if (!statsEl) return;
   const hb = cb.heartbeat;
-  const ageEl = document.getElementById('chillboy-age');
-  if (!hb) {
-    if (ageEl) ageEl.textContent = 'warming up…';
-    ['cb-tracked', 'cb-squeezed', 'cb-breakouts', 'cb-slot', 'cb-cooldowns']
-      .forEach((id) => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
-    return;
-  }
-
-  if (ageEl) {
-    const ageSec = Math.floor((Date.now() - hb.ts) / 1000);
-    ageEl.textContent = ageSec < 90 ? `${ageSec}s ago` : `${Math.floor(ageSec / 60)}m ago`;
-  }
-  document.getElementById('cb-tracked').textContent   = hb.tracked;
-  document.getElementById('cb-squeezed').textContent  = hb.squeezed;
-  document.getElementById('cb-breakouts').textContent = hb.breakouts;
-  document.getElementById('cb-slot').textContent      = hb.slot;
-  document.getElementById('cb-cooldowns').textContent = `${hb.reCooldowns} + ${hb.postSlCooldowns}`;
+  if (!hb) { statsEl.textContent = 'warming up…'; return; }
+  const ageSec = Math.floor((Date.now() - hb.ts) / 1000);
+  const age = ageSec < 90 ? `${ageSec}s ago` : `${Math.floor(ageSec / 60)}m ago`;
+  statsEl.textContent =
+    `tracked ${hb.tracked} · squeezed ${hb.squeezed} · breakouts ${hb.breakouts} · ` +
+    `slot ${hb.slot} · cooldowns ${hb.reCooldowns}+${hb.postSlCooldowns} · ${age}`;
 }
 
 function renderFooter() {
