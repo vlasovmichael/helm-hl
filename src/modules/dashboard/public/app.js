@@ -3,20 +3,20 @@
 // ─────────────────────────────────────────────────
 
 function formatUptime(minutes) {
-  if (minutes < 60) return `${Math.round(minutes)} мин`;
+  if (minutes < 60) return `${Math.round(minutes)} min`;
   if (minutes < 1440) {
     const h = Math.floor(minutes / 60);
     const m = Math.round(minutes % 60);
-    return m > 0 ? `${h}ч ${m}м` : `${h}ч`;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
   }
   if (minutes < 10080) {
     const d = Math.floor(minutes / 1440);
     const h = Math.round((minutes % 1440) / 60);
-    return h > 0 ? `${d}д ${h}ч` : `${d}д`;
+    return h > 0 ? `${d}d ${h}h` : `${d}d`;
   }
   const w = Math.floor(minutes / 10080);
   const d = Math.round((minutes % 10080) / 1440);
-  return d > 0 ? `${w}н ${d}д` : `${w}н`;
+  return d > 0 ? `${w}w ${d}d` : `${w}w`;
 }
 
 const REFRESH_MS = 10_000;
@@ -26,13 +26,20 @@ let priceSeries = null;
 let entryPriceLine = null;
 let currentPriceLine = null;
 let liveCandle = null; // {time, open, high, low, close}
-let currentInterval = '5m';
-const INTERVAL_SECONDS = { '1m': 60, '5m': 300, '15m': 900, '1h': 3600, '4h': 14400, '1d': 86400 };
+let currentInterval = "5m";
+const INTERVAL_SECONDS = {
+  "1m": 60,
+  "5m": 300,
+  "15m": 900,
+  "1h": 3600,
+  "4h": 14400,
+  "1d": 86400,
+};
 let idleChartCoin = null;
 let idleChartTimer = null;
 let lastSuccessAt = 0;
 let currentRangeHours = 24;
-let currentPnlPeriod = 'today';
+let currentPnlPeriod = "today";
 let lastPnlSummary = null;
 let socket = null;
 const lastAnimatedValues = new Map();
@@ -42,8 +49,8 @@ let chartViewKey = null; // coin+interval — для сохранения зум
 
 // ── WebSocket ───────────────────────────────────
 
-let wsState = 'connecting';        // 'live' | 'stale' | 'reconnecting' | 'connecting'
-let wsRetryDelay = 1000;           // ms, exp backoff: 1s → 2s → 4s → 8s → cap 10s
+let wsState = "connecting"; // 'live' | 'stale' | 'reconnecting' | 'connecting'
+let wsRetryDelay = 1000; // ms, exp backoff: 1s → 2s → 4s → 8s → cap 10s
 const WS_RETRY_MAX = 10_000;
 let wsReconnectTimer = null;
 
@@ -54,64 +61,76 @@ function setWsState(next) {
 }
 
 function renderWsPill() {
-  const pill = document.getElementById('ws-pill');
+  const pill = document.getElementById("ws-pill");
   if (!pill) return;
-  pill.classList.remove('live', 'stale', 'offline');
-  if (wsState === 'live') {
-    pill.classList.add('live');
-    pill.textContent = 'WS live';
-  } else if (wsState === 'stale') {
-    pill.classList.add('stale');
+  pill.classList.remove("live", "stale", "offline");
+  if (wsState === "live") {
+    pill.classList.add("live");
+    pill.textContent = "WS live";
+  } else if (wsState === "stale") {
+    pill.classList.add("stale");
     const age = Math.floor((Date.now() - lastSuccessAt) / 1000);
     pill.textContent = `WS stale ${age}s`;
-  } else if (wsState === 'reconnecting') {
-    pill.classList.add('offline');
-    pill.textContent = 'WS reconnecting…';
+  } else if (wsState === "reconnecting") {
+    pill.classList.add("offline");
+    pill.textContent = "WS reconnecting…";
   } else {
-    pill.classList.add('offline');
-    pill.textContent = 'WS connecting…';
+    pill.classList.add("offline");
+    pill.textContent = "WS connecting…";
   }
 }
 
 function initWebSocket() {
-  if (wsReconnectTimer) { clearTimeout(wsReconnectTimer); wsReconnectTimer = null; }
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  if (wsReconnectTimer) {
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = null;
+  }
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const wsUrl = `${protocol}//${window.location.host}`;
   socket = new WebSocket(wsUrl);
 
   socket.onopen = () => {
     wsRetryDelay = 1000;
-    setWsState('connecting');  // станет 'live' после первого msg
+    setWsState("connecting"); // станет 'live' после первого msg
   };
 
   socket.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
-      if (msg.type === 'status') {
+      if (msg.type === "status") {
         renderHeader(msg.data);
         renderPosition(msg.data.activePosition);
         renderManualPositions(msg.data.manualPositions);
         renderBans(msg.data);
         renderChillBoy(msg.data.chillBoy);
-        handlePriceChartUpdate(msg.data.activePosition, msg.data.manualPositions);
+        handlePriceChartUpdate(
+          msg.data.activePosition,
+          msg.data.manualPositions,
+        );
         lastSuccessAt = Date.now();
-        setWsState('live');
+        setWsState("live");
         renderFooter();
-      } else if (msg.type === 'logs:init') {
+      } else if (msg.type === "logs:init") {
         ingestLogs(msg.entries || [], true);
-      } else if (msg.type === 'log') {
+      } else if (msg.type === "log") {
         ingestLogs([msg.entry], false);
       }
-    } catch (err) { console.error('[WS] Error:', err); }
+    } catch (err) {
+      console.error("[WS] Error:", err);
+    }
   };
 
   socket.onerror = () => {
     // onerror всегда сопровождается onclose — закроем явно, чтобы reconnect стартовал быстрее.
-    try { socket.close(); } catch { /* already closed */ }
+    try {
+      socket.close();
+    } catch {
+      /* already closed */
+    }
   };
 
   socket.onclose = () => {
-    setWsState('reconnecting');
+    setWsState("reconnecting");
     wsReconnectTimer = setTimeout(initWebSocket, wsRetryDelay);
     wsRetryDelay = Math.min(wsRetryDelay * 2, WS_RETRY_MAX);
   };
@@ -127,7 +146,7 @@ function updateAnimatedNumber(elId, newValueStr) {
 
   const oldStr = prev || newValueStr;
   lastAnimatedValues.set(elId, newValueStr);
-  
+
   el.innerHTML = "";
   const maxLength = Math.max(oldStr.length, newValueStr.length);
   const oldPadded = oldStr.padStart(maxLength, " ");
@@ -136,7 +155,7 @@ function updateAnimatedNumber(elId, newValueStr) {
   for (let i = 0; i < maxLength; i++) {
     const charOld = oldPadded[i];
     const charNew = newPadded[i];
-    
+
     if (charOld === charNew) {
       const s = document.createElement("span");
       s.textContent = charNew;
@@ -144,8 +163,8 @@ function updateAnimatedNumber(elId, newValueStr) {
     } else if (/[0-9]/.test(charNew)) {
       const reel = document.createElement("div");
       reel.className = "digit-reel";
-      const digits = (/[0-9]/.test(charOld)) ? [charOld, charNew] : [charNew];
-      digits.forEach(d => {
+      const digits = /[0-9]/.test(charOld) ? [charOld, charNew] : [charNew];
+      digits.forEach((d) => {
         const s = document.createElement("span");
         s.textContent = d;
         reel.appendChild(s);
@@ -172,20 +191,30 @@ function manualToPos(mp) {
   const entry = Number.isFinite(mp.entryPrice) ? mp.entryPrice : 0;
   const live = Number.isFinite(mp.currentPrice) ? mp.currentPrice : null;
   const pnlPrice = Number.isFinite(mp.unrealizedPnl) ? mp.unrealizedPnl : 0;
-  const cleanCoin = String(mp.coin || '').replace(/-PERP$/i, '').replace(/^@/, '');
+  const cleanCoin = String(mp.coin || "")
+    .replace(/-PERP$/i, "")
+    .replace(/^@/, "");
   return {
     coin: cleanCoin,
     sizeUsd,
     entryPrice: entry,
     currentPrice: live,
-    currentPnl: { price: pnlPrice, funding: 0, entryFee: 0, exitFeeMarket: 0, exitFeeMaker: 0, netMarket: pnlPrice, netMaker: pnlPrice },
+    currentPnl: {
+      price: pnlPrice,
+      funding: 0,
+      entryFee: 0,
+      exitFeeMarket: 0,
+      exitFeeMaker: 0,
+      netMarket: pnlPrice,
+      netMaker: pnlPrice,
+    },
     _manual: true,
   };
 }
 
 async function handlePriceChartUpdate(pos, manualPositions) {
-  const card = document.getElementById('price-card');
-  card.style.display = 'block';
+  const card = document.getElementById("price-card");
+  card.style.display = "block";
 
   // Если бот-позиции нет, но есть ручная — показываем её на графике
   if (!pos && Array.isArray(manualPositions) && manualPositions.length > 0) {
@@ -200,21 +229,26 @@ async function handlePriceChartUpdate(pos, manualPositions) {
   }
 
   // Позиция появилась → выключаем idle-режим
-  if (idleChartTimer) { clearInterval(idleChartTimer); idleChartTimer = null; }
+  if (idleChartTimer) {
+    clearInterval(idleChartTimer);
+    idleChartTimer = null;
+  }
   idleChartCoin = null;
 
   lastPos = pos;
-  document.getElementById('price-title').textContent = `Price Performance: #${pos.coin}`;
+  document.getElementById("price-title").textContent =
+    `Price Performance: #${pos.coin}`;
 
   let currentPrice = pos.entryPrice;
   if (Number.isFinite(pos.currentPrice) && pos.currentPrice > 0) {
     currentPrice = pos.currentPrice;
   } else if (pos.currentPnl && pos.sizeUsd > 0 && pos.entryPrice > 0) {
     const qty = pos.sizeUsd / pos.entryPrice;
-    currentPrice = pos.entryPrice + (pos.currentPnl.price / qty);
+    currentPrice = pos.entryPrice + pos.currentPnl.price / qty;
   }
 
-  document.getElementById('price-meta').textContent = `$${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
+  document.getElementById("price-meta").textContent =
+    `$${currentPrice.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
 
   if (currentCoinInPos !== pos.coin) {
     currentCoinInPos = pos.coin;
@@ -227,9 +261,11 @@ async function handlePriceChartUpdate(pos, manualPositions) {
 
 async function getLatestActivityCoin() {
   try {
-    const act = await fetchJson('/api/activity?hours=720&limit=1');
-    return act?.events?.[0]?.coin || 'BTC';
-  } catch { return 'BTC'; }
+    const act = await fetchJson("/api/activity?hours=720&limit=1");
+    return act?.events?.[0]?.coin || "BTC";
+  } catch {
+    return "BTC";
+  }
 }
 
 async function refreshIdleTick() {
@@ -237,7 +273,8 @@ async function refreshIdleTick() {
   if (coin !== idleChartCoin) {
     idleChartCoin = coin;
     chartViewKey = null; // принудительно перецентрировать график на новой монете
-    document.getElementById('price-title').textContent = `Price Performance: #${coin}`;
+    document.getElementById("price-title").textContent =
+      `Price Performance: #${coin}`;
   }
   await fetchAndRenderIdleCandles(idleChartCoin);
 }
@@ -250,7 +287,8 @@ async function renderIdleChart() {
     chartViewKey = null;
   }
 
-  document.getElementById('price-title').textContent = `Price Performance: #${coin}`;
+  document.getElementById("price-title").textContent =
+    `Price Performance: #${coin}`;
 
   await fetchAndRenderIdleCandles(coin);
 
@@ -261,40 +299,51 @@ async function renderIdleChart() {
 
 // Окно истории под markers зависит от выбранного TF графика.
 // Берём с запасом — lightweight-charts отрисует только то, что в видимой области.
-const MARKER_WINDOW_HOURS = { '1m': 4, '5m': 16, '15m': 48, '1h': 168, '4h': 720, '1d': 720 };
+const MARKER_WINDOW_HOURS = {
+  "1m": 4,
+  "5m": 16,
+  "15m": 48,
+  "1h": 168,
+  "4h": 720,
+  "1d": 720,
+};
 
 async function applyTradeMarkers(coin) {
   if (!priceSeries || !coin) return;
   try {
     const hours = MARKER_WINDOW_HOURS[currentInterval] || 168;
-    const payload = await fetchJson(`/api/trade-markers?coin=${encodeURIComponent(coin)}&hours=${hours}`);
+    const payload = await fetchJson(
+      `/api/trade-markers?coin=${encodeURIComponent(coin)}&hours=${hours}`,
+    );
     const events = Array.isArray(payload?.events) ? payload.events : [];
     if (events.length === 0) {
       priceSeries.setMarkers([]);
       return;
     }
-    const markers = events.map(ev => {
-      const time = Math.floor(ev.ts / 1000);
-      if (ev.kind === 'entry') {
-        const isShort = ev.side === 'short';
+    const markers = events
+      .map((ev) => {
+        const time = Math.floor(ev.ts / 1000);
+        if (ev.kind === "entry") {
+          const isShort = ev.side === "short";
+          return {
+            time,
+            position: isShort ? "aboveBar" : "belowBar",
+            color: isShort ? "#ef4444" : "#22c55e",
+            shape: isShort ? "arrowDown" : "arrowUp",
+            text: `${ev.active ? "⏵ " : ""}${(ev.side || "short").toUpperCase()} @${ev.price?.toFixed?.(4) ?? ""}`,
+          };
+        }
+        // close
+        const pnlPos = ev.pnl > 0;
         return {
           time,
-          position: isShort ? 'aboveBar' : 'belowBar',
-          color: isShort ? '#ef4444' : '#22c55e',
-          shape: isShort ? 'arrowDown' : 'arrowUp',
-          text: `${ev.active ? '⏵ ' : ''}${(ev.side || 'short').toUpperCase()} @${ev.price?.toFixed?.(4) ?? ''}`,
+          position: "inBar",
+          color: pnlPos ? "#22c55e" : ev.pnl < 0 ? "#ef4444" : "#a3a3a3",
+          shape: "circle",
+          text: `${pnlPos ? "+" : ""}$${(ev.pnl ?? 0).toFixed(2)} · ${ev.reason || ""}`,
         };
-      }
-      // close
-      const pnlPos = ev.pnl > 0;
-      return {
-        time,
-        position: 'inBar',
-        color: pnlPos ? '#22c55e' : ev.pnl < 0 ? '#ef4444' : '#a3a3a3',
-        shape: 'circle',
-        text: `${pnlPos ? '+' : ''}$${(ev.pnl ?? 0).toFixed(2)} · ${ev.reason || ''}`,
-      };
-    }).sort((a, b) => a.time - b.time);
+      })
+      .sort((a, b) => a.time - b.time);
     // dedup на тот же time (lightweight-charts требует строго возрастающие)
     const dedup = [];
     let lastTime = -Infinity;
@@ -305,7 +354,7 @@ async function applyTradeMarkers(coin) {
     }
     priceSeries.setMarkers(dedup);
   } catch (err) {
-    console.debug('[PriceChart] markers fetch failed:', err.message);
+    console.debug("[PriceChart] markers fetch failed:", err.message);
   }
 }
 
@@ -314,50 +363,65 @@ async function applyTradeMarkers(coin) {
 // смене таймфрейма / диапазона. Фоновый refresh спиннер не дёргает — только
 // прячет (no-op, если уже спрятан), иначе график мигал бы на каждом тике.
 function showPriceChartLoader() {
-  const el = document.getElementById('price-chart-loader');
-  if (el) el.classList.remove('hidden');
+  const el = document.getElementById("price-chart-loader");
+  if (el) el.classList.remove("hidden");
 }
 function hidePriceChartLoader() {
-  const el = document.getElementById('price-chart-loader');
-  if (el) el.classList.add('hidden');
+  const el = document.getElementById("price-chart-loader");
+  if (el) el.classList.add("hidden");
 }
 // Performance (equity chart) — оверлей #chart-loader.
 function showChartLoader() {
-  const el = document.getElementById('chart-loader');
-  if (el) el.classList.remove('hidden');
+  const el = document.getElementById("chart-loader");
+  if (el) el.classList.remove("hidden");
 }
 function hideChartLoader() {
-  const el = document.getElementById('chart-loader');
-  if (el) el.classList.add('hidden');
+  const el = document.getElementById("chart-loader");
+  if (el) el.classList.add("hidden");
 }
 
 async function fetchAndRenderIdleCandles(coin) {
   if (!coin) return;
   try {
-    const candles = await fetchJson(`/api/candles?coin=${coin}&interval=${currentInterval}`);
+    const candles = await fetchJson(
+      `/api/candles?coin=${coin}&interval=${currentInterval}`,
+    );
     if (!Array.isArray(candles) || candles.length === 0) return;
 
     const data = candles
-      .map(c => ({
+      .map((c) => ({
         time: Math.floor(c.t / 1000),
         open: parseFloat(c.o),
         high: parseFloat(c.h),
         low: parseFloat(c.l),
         close: parseFloat(c.c),
       }))
-      .filter(d => Number.isFinite(d.open) && Number.isFinite(d.close))
+      .filter((d) => Number.isFinite(d.open) && Number.isFinite(d.close))
       .sort((a, b) => a.time - b.time);
 
     initPriceChart();
     priceSeries.setData(data);
     const last = data[data.length - 1];
-    liveCandle = { time: last.time, open: last.open, high: last.high, low: last.low, close: last.close };
+    liveCandle = {
+      time: last.time,
+      open: last.open,
+      high: last.high,
+      low: last.low,
+      close: last.close,
+    };
 
     // В idle-режиме убираем линии entry/now
-    if (entryPriceLine) { priceSeries.removePriceLine(entryPriceLine); entryPriceLine = null; }
-    if (currentPriceLine) { priceSeries.removePriceLine(currentPriceLine); currentPriceLine = null; }
+    if (entryPriceLine) {
+      priceSeries.removePriceLine(entryPriceLine);
+      entryPriceLine = null;
+    }
+    if (currentPriceLine) {
+      priceSeries.removePriceLine(currentPriceLine);
+      currentPriceLine = null;
+    }
 
-    document.getElementById('price-meta').textContent = `$${last.close.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
+    document.getElementById("price-meta").textContent =
+      `$${last.close.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`;
 
     const newKey = `idle:${coin}:${currentInterval}`;
     if (chartViewKey !== newKey) {
@@ -366,29 +430,39 @@ async function fetchAndRenderIdleCandles(coin) {
     }
     applyTradeMarkers(coin);
     hidePriceChartLoader();
-  } catch (err) { console.error('[PriceChart/idle] fetch error:', err); }
+  } catch (err) {
+    console.error("[PriceChart/idle] fetch error:", err);
+  }
 }
 
 async function fetchAndRenderCandles(pos, currentPrice) {
   try {
-    const candles = await fetchJson(`/api/candles?coin=${pos.coin}&interval=${currentInterval}`);
+    const candles = await fetchJson(
+      `/api/candles?coin=${pos.coin}&interval=${currentInterval}`,
+    );
     if (!Array.isArray(candles) || candles.length === 0) return;
 
     const data = candles
-      .map(c => ({
+      .map((c) => ({
         time: Math.floor(c.t / 1000),
         open: parseFloat(c.o),
         high: parseFloat(c.h),
         low: parseFloat(c.l),
         close: parseFloat(c.c),
       }))
-      .filter(d => Number.isFinite(d.open) && Number.isFinite(d.close))
+      .filter((d) => Number.isFinite(d.open) && Number.isFinite(d.close))
       .sort((a, b) => a.time - b.time);
 
     initPriceChart();
     priceSeries.setData(data);
     const last = data[data.length - 1];
-    liveCandle = { time: last.time, open: last.open, high: last.high, low: last.low, close: last.close };
+    liveCandle = {
+      time: last.time,
+      open: last.open,
+      high: last.high,
+      low: last.low,
+      close: last.close,
+    };
     setEntryLine(pos.entryPrice);
     setCurrentLine(currentPrice);
     const newKey = `pos:${pos.coin}:${currentInterval}`;
@@ -398,52 +472,60 @@ async function fetchAndRenderCandles(pos, currentPrice) {
     }
     applyTradeMarkers(pos.coin);
     hidePriceChartLoader();
-  } catch (err) { console.error('[PriceChart] fetch error:', err); }
+  } catch (err) {
+    console.error("[PriceChart] fetch error:", err);
+  }
 }
 
 function initPriceChart() {
-  const container = document.getElementById('price-chart');
+  const container = document.getElementById("price-chart");
   if (!container) return;
   if (priceChart) return; // не пересоздаём, иначе теряется зум/пан
 
-  const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  const textColor = css('--text-muted') || (isDark ? '#71717A' : '#52525B');
-  const gridColor = css('--grid-line') || (isDark ? '#1F1F23' : '#E4E4E7');
-  const bgColor = css('--card-bg') || (isDark ? '#131316' : '#FFFFFF');
+  const css = (n) =>
+    getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  const textColor = css("--text-muted") || (isDark ? "#71717A" : "#52525B");
+  const gridColor = css("--grid-line") || (isDark ? "#1F1F23" : "#E4E4E7");
+  const bgColor = css("--card-bg") || (isDark ? "#131316" : "#FFFFFF");
 
   priceChart = LightweightCharts.createChart(container, {
     width: container.clientWidth,
     height: container.clientHeight,
     layout: {
-      background: { type: 'solid', color: bgColor },
+      background: { type: "solid", color: bgColor },
       textColor,
-      fontFamily: 'JetBrains Mono, monospace',
+      fontFamily: "JetBrains Mono, monospace",
     },
     grid: {
       vertLines: { color: gridColor },
       horzLines: { color: gridColor },
     },
     rightPriceScale: { borderColor: gridColor },
-    timeScale: { borderColor: gridColor, timeVisible: true, secondsVisible: false },
+    timeScale: {
+      borderColor: gridColor,
+      timeVisible: true,
+      secondsVisible: false,
+    },
     crosshair: { mode: 0 },
     handleScroll: true,
     handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
   });
 
   priceSeries = priceChart.addCandlestickSeries({
-    upColor: '#22C55E',
-    downColor: '#EF4444',
-    borderUpColor: '#22C55E',
-    borderDownColor: '#EF4444',
-    wickUpColor: '#22C55E',
-    wickDownColor: '#EF4444',
+    upColor: "#22C55E",
+    downColor: "#EF4444",
+    borderUpColor: "#22C55E",
+    borderDownColor: "#EF4444",
+    wickUpColor: "#22C55E",
+    wickDownColor: "#EF4444",
   });
 
   if (!window.__priceChartResizeBound) {
     window.__priceChartResizeBound = true;
-    window.addEventListener('resize', () => {
-      if (priceChart && container) priceChart.resize(container.clientWidth, container.clientHeight);
+    window.addEventListener("resize", () => {
+      if (priceChart && container)
+        priceChart.resize(container.clientWidth, container.clientHeight);
     });
   }
 }
@@ -453,17 +535,20 @@ function setEntryLine(price) {
   if (entryPriceLine) priceSeries.removePriceLine(entryPriceLine);
   entryPriceLine = priceSeries.createPriceLine({
     price,
-    color: '#71717A',
+    color: "#71717A",
     lineWidth: 1,
     lineStyle: 2,
     axisLabelVisible: true,
-    title: 'Entry',
+    title: "Entry",
   });
 }
 
 function setCurrentLine(price) {
   if (!priceSeries || !Number.isFinite(price)) return;
-  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#635BFF';
+  const accent =
+    getComputedStyle(document.documentElement)
+      .getPropertyValue("--accent")
+      .trim() || "#635BFF";
   if (currentPriceLine) priceSeries.removePriceLine(currentPriceLine);
   currentPriceLine = priceSeries.createPriceLine({
     price,
@@ -471,12 +556,13 @@ function setCurrentLine(price) {
     lineWidth: 1,
     lineStyle: 0,
     axisLabelVisible: true,
-    title: 'Now',
+    title: "Now",
   });
 }
 
 function updateCurrentLine(price) {
-  if (!currentPriceLine || !Number.isFinite(price)) return setCurrentLine(price);
+  if (!currentPriceLine || !Number.isFinite(price))
+    return setCurrentLine(price);
   currentPriceLine.applyOptions({ price });
 }
 
@@ -494,7 +580,13 @@ function tickLiveCandle(price, pos) {
 
   if (bucket > liveCandle.time) {
     // новый bucket — стартуем свечу с close предыдущей
-    liveCandle = { time: bucket, open: liveCandle.close, high: price, low: price, close: price };
+    liveCandle = {
+      time: bucket,
+      open: liveCandle.close,
+      high: price,
+      low: price,
+      close: price,
+    };
   } else {
     liveCandle.high = Math.max(liveCandle.high, price);
     liveCandle.low = Math.min(liveCandle.low, price);
@@ -507,14 +599,14 @@ function tickLiveCandle(price, pos) {
 
 function makeGradient(ctx) {
   const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-  const accent = cssVar('--accent') || '#635BFF';
+  const accent = cssVar("--accent") || "#635BFF";
   gradient.addColorStop(0, hexToRgba(accent, 0.18));
   gradient.addColorStop(1, hexToRgba(accent, 0));
   return gradient;
 }
 
 function hexToRgba(hex, alpha) {
-  const h = hex.replace('#', '');
+  const h = hex.replace("#", "");
   const bigint = parseInt(h, 16);
   const r = (bigint >> 16) & 255;
   const g = (bigint >> 8) & 255;
@@ -525,13 +617,13 @@ function hexToRgba(hex, alpha) {
 function applyChartTheme() {
   if (!equityChart) return;
   const ctx = equityChart.ctx;
-  const accent = cssVar('--accent');
-  const textMuted = cssVar('--text-muted');
-  const grid = cssVar('--grid-line');
-  const cardBg = cssVar('--card-bg');
-  const border = cssVar('--border');
-  const textSec = cssVar('--text-secondary');
-  const textPri = cssVar('--text-primary');
+  const accent = cssVar("--accent");
+  const textMuted = cssVar("--text-muted");
+  const grid = cssVar("--grid-line");
+  const cardBg = cssVar("--card-bg");
+  const border = cssVar("--border");
+  const textSec = cssVar("--text-secondary");
+  const textPri = cssVar("--text-primary");
 
   equityChart.data.datasets[0].borderColor = accent;
   equityChart.data.datasets[0].backgroundColor = makeGradient(ctx);
@@ -549,19 +641,19 @@ function applyChartTheme() {
 }
 
 function initEquityChart() {
-  const canvas = document.getElementById('equity-chart');
+  const canvas = document.getElementById("equity-chart");
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext("2d");
 
   equityChart = new Chart(ctx, {
-    type: 'line',
+    type: "line",
     data: {
       labels: [],
       datasets: [
         {
-          label: 'Equity',
+          label: "Equity",
           data: [],
-          borderColor: '#635BFF',
+          borderColor: "#635BFF",
           backgroundColor: makeGradient(ctx),
           borderWidth: 2,
           tension: 0.3,
@@ -569,8 +661,8 @@ function initEquityChart() {
           pointRadius: 0,
           pointHoverRadius: 4,
           pointHitRadius: 10,
-          pointBackgroundColor: '#635BFF',
-          pointBorderColor: '#FFFFFF',
+          pointBackgroundColor: "#635BFF",
+          pointBorderColor: "#FFFFFF",
           pointBorderWidth: 2,
         },
       ],
@@ -581,18 +673,18 @@ function initEquityChart() {
       animation: { duration: 400 },
       interaction: {
         intersect: false,
-        mode: 'index',
+        mode: "index",
       },
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#131316',
-          borderColor: '#27272A',
+          backgroundColor: "#131316",
+          borderColor: "#27272A",
           borderWidth: 1,
-          titleColor: '#A1A1AA',
-          bodyColor: '#FFFFFF',
-          titleFont: { size: 14, family: 'Plus Jakarta Sans' },
-          bodyFont: { size: 14, weight: '600', family: 'JetBrains Mono' },
+          titleColor: "#A1A1AA",
+          bodyColor: "#FFFFFF",
+          titleFont: { size: 14, family: "Plus Jakarta Sans" },
+          bodyFont: { size: 14, weight: "600", family: "JetBrains Mono" },
           padding: 12,
           displayColors: false,
           callbacks: {
@@ -603,8 +695,8 @@ function initEquityChart() {
       scales: {
         x: {
           ticks: {
-            color: '#71717A',
-            font: { family: 'JetBrains Mono', size: 12 },
+            color: "#71717A",
+            font: { family: "JetBrains Mono", size: 12 },
             maxRotation: 0,
             autoSkip: true,
             maxTicksLimit: 8,
@@ -614,12 +706,12 @@ function initEquityChart() {
         },
         y: {
           ticks: {
-            color: '#71717A',
-            font: { family: 'JetBrains Mono', size: 12 },
+            color: "#71717A",
+            font: { family: "JetBrains Mono", size: 12 },
             callback: (v) => `$${v.toFixed(2)}`,
             maxTicksLimit: 6,
           },
-          grid: { color: '#1F1F23' },
+          grid: { color: "#1F1F23" },
           border: { display: false },
         },
       },
@@ -630,53 +722,97 @@ function initEquityChart() {
 
 // ── Theme & Helpers ──────────────────────────────
 
-const THEME_KEY = 'hl-scanner-theme';
-function getStoredTheme() { return localStorage.getItem(THEME_KEY) || 'auto'; }
+const THEME_KEY = "hl-scanner-theme";
+function getStoredTheme() {
+  return localStorage.getItem(THEME_KEY) || "auto";
+}
 function applyTheme(mode) {
   const root = document.documentElement;
-  const resolved = mode === 'auto' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : mode;
-  root.setAttribute('data-theme', resolved);
-  document.querySelectorAll('.theme-btn').forEach(b => b.classList.toggle('active', b.dataset.theme === mode));
-  if (equityChart) { applyChartTheme(); equityChart.update('none'); }
+  const resolved =
+    mode === "auto"
+      ? window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light"
+      : mode;
+  root.setAttribute("data-theme", resolved);
+  document
+    .querySelectorAll(".theme-btn")
+    .forEach((b) => b.classList.toggle("active", b.dataset.theme === mode));
+  if (equityChart) {
+    applyChartTheme();
+    equityChart.update("none");
+  }
 }
 
-function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
-function fmtUsd(n) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0); }
-function fmtPct(n) { return `${(n || 0).toFixed(2)}%`; }
-function escapeHtml(s) { return String(s || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+function cssVar(name) {
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+}
+function fmtUsd(n) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(n || 0);
+}
+function fmtPct(n) {
+  return `${(n || 0).toFixed(2)}%`;
+}
+function escapeHtml(s) {
+  return String(s || "").replace(
+    /[&<>"']/g,
+    (m) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        m
+      ],
+  );
+}
 
 function fmtTime(ts) {
   const d = new Date(ts);
   if (currentRangeHours <= 24) {
-    return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   }
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return (
+    d.toLocaleDateString("en-GB", { day: "2-digit", month: "short" }) +
+    " " +
+    d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })
+  );
 }
 
 // ── Renderers ───────────────────────────────────
 
 function renderHeader(status) {
-  updateAnimatedNumber('equity-value', fmtUsd(status.equity));
+  updateAnimatedNumber("equity-value", fmtUsd(status.equity));
   const profit = status.sessionProfit;
-  const deltaEl = document.getElementById('equity-delta');
+  const deltaEl = document.getElementById("equity-delta");
   if (status.sessionStartEquity > 0) {
     const pct = (profit / status.sessionStartEquity) * 100;
-    deltaEl.textContent = `${profit >= 0 ? '+' : '-'}${fmtUsd(Math.abs(profit))} (${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%) session`;
-    deltaEl.className = `delta ${profit >= 0 ? 'positive' : 'negative'}`;
+    deltaEl.textContent = `${profit >= 0 ? "+" : "-"}${fmtUsd(Math.abs(profit))} (${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%) session`;
+    deltaEl.className = `delta ${profit >= 0 ? "positive" : "negative"}`;
   }
-  document.getElementById('mode-pill').textContent = status.mode;
-  document.getElementById('uptime-val').textContent = `Uptime: ${formatUptime(status.uptimeMin)}`;
-  document.getElementById('available-val').textContent = `Available: ${fmtUsd(status.available)}`;
+  document.getElementById("mode-pill").textContent = status.mode;
+  document.getElementById("uptime-val").textContent =
+    `Uptime: ${formatUptime(status.uptimeMin)}`;
+  document.getElementById("available-val").textContent =
+    `Available: ${fmtUsd(status.available)}`;
 }
 
 function renderPosition(pos) {
-  const container = document.getElementById('position-container');
-  if (!pos) { container.innerHTML = '<div class="empty-state">No active positions — bot is IDLE</div>'; return; }
+  const container = document.getElementById("position-container");
+  if (!pos) {
+    container.innerHTML =
+      '<div class="empty-state">No active positions — bot is IDLE</div>';
+    return;
+  }
   const pnl = pos.currentPnl;
-  let pnlBlock = '';
+  let pnlBlock = "";
   if (pnl) {
-    const cls = v => v >= 0 ? 'positive' : 'negative';
-    const sgn = v => v >= 0 ? '+' : '−';
+    const cls = (v) => (v >= 0 ? "positive" : "negative");
+    const sgn = (v) => (v >= 0 ? "+" : "−");
     pnlBlock = `
       <div class="data-grid" style="margin-top:0.75rem">
         <div class="grid-item"><div class="item-label">Net (Mkt)</div><div class="item-value ${cls(pnl.netMarket)}">${sgn(pnl.netMarket)}$${Math.abs(pnl.netMarket).toFixed(4)}</div></div>
@@ -685,8 +821,8 @@ function renderPosition(pos) {
         <div class="grid-item"><div class="item-label">Funding</div><div class="item-value ${cls(pnl.funding)}">${sgn(pnl.funding)}$${Math.abs(pnl.funding).toFixed(4)}</div></div>
       </div>`;
   }
-  const side = (pos.side || 'SHORT').toUpperCase();
-  const sideCls = side === 'SHORT' ? 'negative' : 'positive';
+  const side = (pos.side || "SHORT").toUpperCase();
+  const sideCls = side === "SHORT" ? "negative" : "positive";
   container.innerHTML = `
     <div class="data-grid">
       <div class="grid-item"><div class="item-label">Coin · Side</div><div class="item-value highlight">#${pos.coin} <span class="${sideCls}" style="font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px; margin-left:4px;">${side}</span></div></div>
@@ -697,17 +833,21 @@ function renderPosition(pos) {
 }
 
 function renderManualPositions(list) {
-  const container = document.getElementById('manual-positions-container');
+  const container = document.getElementById("manual-positions-container");
   if (!container) return;
-  if (!Array.isArray(list) || list.length === 0) { container.innerHTML = ''; return; }
-  const cls = v => v >= 0 ? 'positive' : 'negative';
-  const sgn = v => v >= 0 ? '+' : '−';
-  const blocks = list.map(p => {
-    const sideCls = p.side === 'SHORT' ? 'negative' : 'positive';
-    const liq = p.liquidationPrice != null ? `$${p.liquidationPrice}` : '—';
-    const lev = p.leverage != null ? `${p.leverage}x` : '—';
-    const cur = p.currentPrice != null ? `$${p.currentPrice}` : '—';
-    return `
+  if (!Array.isArray(list) || list.length === 0) {
+    container.innerHTML = "";
+    return;
+  }
+  const cls = (v) => (v >= 0 ? "positive" : "negative");
+  const sgn = (v) => (v >= 0 ? "+" : "−");
+  const blocks = list
+    .map((p) => {
+      const sideCls = p.side === "SHORT" ? "negative" : "positive";
+      const liq = p.liquidationPrice != null ? `$${p.liquidationPrice}` : "—";
+      const lev = p.leverage != null ? `${p.leverage}x` : "—";
+      const cur = p.currentPrice != null ? `$${p.currentPrice}` : "—";
+      return `
       <div style="margin-top:0.75rem; padding:0.75rem; border:1px dashed var(--border); border-radius:8px;">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:0.5rem;">
           <span style="background:rgba(234,179,8,0.12); color:var(--yellow,#eab308); border:1px solid rgba(234,179,8,0.3); padding:2px 8px; border-radius:6px; font-size:11px; font-family:var(--font-mono); font-weight:700;">HANDS-OFF · MANUAL</span>
@@ -722,83 +862,108 @@ function renderManualPositions(list) {
         </div>
         <div style="margin-top:0.5rem; font-size:11px; color:var(--text-muted, #888);">Открыта вручную — бот не управляет. Закрой на бирже, чтобы продолжил работу.</div>
       </div>`;
-  }).join('');
+    })
+    .join("");
   container.innerHTML = blocks;
 }
 
 function renderBans(status) {
-  const container = document.getElementById('bans-container');
-  if (!status.runtimeBans?.length) { container.innerHTML = '<div class="empty-state">No active restrictions</div>'; return; }
-  container.innerHTML = status.runtimeBans.map(c => `<div style="display:inline-block; background:rgba(239,68,68,0.1); color:var(--red); border:1px solid rgba(239,68,68,0.2); padding:4px 10px; border-radius:6px; font-size:11px; font-family:var(--font-mono); font-weight:600; margin:0 8px 8px 0;">#${c}</div>`).join('');
+  const container = document.getElementById("bans-container");
+  if (!status.runtimeBans?.length) {
+    container.innerHTML =
+      '<div class="empty-state">No active restrictions</div>';
+    return;
+  }
+  container.innerHTML = status.runtimeBans
+    .map(
+      (c) =>
+        `<div style="display:inline-block; background:rgba(239,68,68,0.1); color:var(--red); border:1px solid rgba(239,68,68,0.2); padding:4px 10px; border-radius:6px; font-size:11px; font-family:var(--font-mono); font-weight:600; margin:0 8px 8px 0;">#${c}</div>`,
+    )
+    .join("");
 }
 
-async function fetchJson(path) { const r = await fetch(path); if (r.status === 401) window.location.href = '/login'; return r.json(); }
+async function fetchJson(path) {
+  const r = await fetch(path);
+  if (r.status === 401) window.location.href = "/login";
+  return r.json();
+}
 
 async function tick() {
   const [historyR, activityR, taxR, signalsR, pnlR] = await Promise.allSettled([
     fetchJson(`/api/history?hours=${currentRangeHours}`),
     fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
-    fetchJson('/api/tax-summary'),
-    fetchJson('/api/signals?limit=10'),
-    fetchJson('/api/pnl-summary'),
+    fetchJson("/api/tax-summary"),
+    fetchJson("/api/signals?limit=10"),
+    fetchJson("/api/pnl-summary"),
   ]);
-  if (pnlR.status === 'fulfilled') { lastPnlSummary = pnlR.value; renderPnlSummary(); }
-  if (historyR.status === 'fulfilled' && historyR.value?.points) {
-    equityChart.data.labels = historyR.value.points.map(p => fmtTime(p.ts));
-    equityChart.data.datasets[0].data = historyR.value.points.map(p => p.equity);
+  if (pnlR.status === "fulfilled") {
+    lastPnlSummary = pnlR.value;
+    renderPnlSummary();
+  }
+  if (historyR.status === "fulfilled" && historyR.value?.points) {
+    equityChart.data.labels = historyR.value.points.map((p) => fmtTime(p.ts));
+    equityChart.data.datasets[0].data = historyR.value.points.map(
+      (p) => p.equity,
+    );
     equityChart.update();
     hideChartLoader();
   }
-  if (activityR.status === 'fulfilled') renderActivity(activityR.value);
-  if (taxR.status === 'fulfilled') renderTax(taxR.value);
-  if (signalsR.status === 'fulfilled') renderSignals(signalsR.value);
+  if (activityR.status === "fulfilled") renderActivity(activityR.value);
+  if (taxR.status === "fulfilled") renderTax(taxR.value);
+  if (signalsR.status === "fulfilled") renderSignals(signalsR.value);
   lastSuccessAt = Date.now();
   renderFooter();
 }
 
 function renderActivity(activity) {
-  const container = document.getElementById('activity-container');
-  const events = (activity?.events || []).filter(e => e && e.coin);
-  if (!events.length) { container.innerHTML = '<div class="empty-state">No events</div>'; return; }
-  container.innerHTML = events.map(e => {
-    const isManual = e.kind === 'manual_close' || e.strategy_id === 'manual';
-    const kindLabel = e.kind === 'manual_close' ? 'CLOSE' : e.kind.toUpperCase();
-    const kindClass = e.kind === 'manual_close' ? 'close' : e.kind;
-    const manualBadge = isManual
-      ? '<span class="manual-badge" style="background:rgba(234,179,8,0.12); color:var(--yellow,#eab308); border:1px solid rgba(234,179,8,0.3); padding:1px 6px; border-radius:4px; font-size:9px; font-family:var(--font-mono); font-weight:700; margin-left:6px;">MANUAL</span>'
-      : '';
-    const pnlVal = e.pnl || 0;
-    return `
+  const container = document.getElementById("activity-container");
+  const events = (activity?.events || []).filter((e) => e && e.coin);
+  if (!events.length) {
+    container.innerHTML = '<div class="empty-state">No events</div>';
+    return;
+  }
+  container.innerHTML = events
+    .map((e) => {
+      const isManual = e.kind === "manual_close" || e.strategy_id === "manual";
+      const kindLabel =
+        e.kind === "manual_close" ? "CLOSE" : e.kind.toUpperCase();
+      const kindClass = e.kind === "manual_close" ? "close" : e.kind;
+      const manualBadge = isManual
+        ? '<span class="manual-badge" style="background:rgba(234,179,8,0.12); color:var(--yellow,#eab308); border:1px solid rgba(234,179,8,0.3); padding:1px 6px; border-radius:4px; font-size:9px; font-family:var(--font-mono); font-weight:700; margin-left:6px;">MANUAL</span>'
+        : "";
+      const pnlVal = e.pnl || 0;
+      return `
       <div class="activity-item">
         <div><span class="activity-kind ${kindClass}">${kindLabel}</span><span class="activity-coin">#${e.coin}</span>${manualBadge}</div>
-        <div class="activity-pnl ${pnlVal >= 0 ? 'positive' : 'negative'}">${pnlVal >= 0 ? '+' : ''}${pnlVal.toFixed(4)}</div>
+        <div class="activity-pnl ${pnlVal >= 0 ? "positive" : "negative"}">${pnlVal >= 0 ? "+" : ""}${pnlVal.toFixed(4)}</div>
       </div>`;
-  }).join('');
+    })
+    .join("");
 }
 
 function fmtMoney(v, signed = true) {
-  if (!Number.isFinite(v)) return '—';
+  if (!Number.isFinite(v)) return "—";
   const abs = Math.abs(v);
   const digits = abs >= 1000 ? 0 : abs >= 100 ? 2 : abs >= 1 ? 2 : 4;
-  const sign = signed ? (v >= 0 ? '+' : '−') : '';
+  const sign = signed ? (v >= 0 ? "+" : "−") : "";
   return `${sign}$${abs.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 }
 
 function fmtMoneyAbs(v) {
-  if (!Number.isFinite(v)) return '—';
+  if (!Number.isFinite(v)) return "—";
   const abs = Math.abs(v);
   const digits = abs >= 1000 ? 0 : abs >= 100 ? 2 : abs >= 1 ? 2 : 4;
-  return `${v < 0 ? '−' : ''}$${abs.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+  return `${v < 0 ? "−" : ""}$${abs.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 }
 
 function strategyDisplayName(sid) {
-  if (sid === 'carry') return 'Carry';
-  if (sid === 'hunter' || sid === 'hunter_short') return 'Hunter SHORT';
-  if (sid === 'hunter_long') return 'Hunter LONG';
-  if (sid === 'trend_follow') return 'Chill Boy';
-  if (sid === 'fade') return 'Fade';
-  if (sid === 'manual') return '🖐 Manual';
-  return sid || 'Unknown';
+  if (sid === "carry") return "Carry";
+  if (sid === "hunter" || sid === "hunter_short") return "Hunter SHORT";
+  if (sid === "hunter_long") return "Hunter LONG";
+  if (sid === "trend_follow") return "Chill Boy";
+  if (sid === "fade") return "Fade";
+  if (sid === "manual") return "🖐 Manual";
+  return sid || "Unknown";
 }
 
 function renderPnlSummary() {
@@ -807,100 +972,118 @@ function renderPnlSummary() {
   if (!p) return;
 
   // Combined PnL = bot + manual; манУальные приходят отдельно через p.manual.
-  const manualPnl   = p.manual?.pnl   || 0;
+  const manualPnl = p.manual?.pnl || 0;
   const manualCount = p.manual?.count || 0;
   const combinedPnl = (p.totalPnl || 0) + manualPnl;
   const combinedCount = (p.count || 0) + manualCount;
 
-  const totalEl = document.getElementById('pnl-total');
+  const totalEl = document.getElementById("pnl-total");
   totalEl.textContent = fmtMoney(combinedPnl);
-  totalEl.classList.toggle('positive', combinedPnl > 0);
-  totalEl.classList.toggle('negative', combinedPnl < 0);
+  totalEl.classList.toggle("positive", combinedPnl > 0);
+  totalEl.classList.toggle("negative", combinedPnl < 0);
 
-  const wr = p.count > 0 ? `${p.winRate.toFixed(0)}% win` : '—';
-  const manualNote = manualCount > 0
-    ? ` · 🖐 ${manualCount} manual (${fmtMoney(manualPnl)})`
-    : '';
-  document.getElementById('pnl-stats').textContent =
-    `${combinedCount} trade${combinedCount === 1 ? '' : 's'} · ${wr}${manualNote}`;
+  const wr = p.count > 0 ? `${p.winRate.toFixed(0)}% win` : "—";
+  const manualNote =
+    manualCount > 0
+      ? ` · 🖐 ${manualCount} manual (${fmtMoney(manualPnl)})`
+      : "";
+  document.getElementById("pnl-stats").textContent =
+    `${combinedCount} trade${combinedCount === 1 ? "" : "s"} · ${wr}${manualNote}`;
 
-  const fundingEl = document.getElementById('pnl-funding');
-  fundingEl.textContent = p.funding ? fmtMoney(p.funding) : '—';
-  fundingEl.classList.toggle('positive', p.funding > 0);
-  fundingEl.classList.toggle('negative', p.funding < 0);
+  const fundingEl = document.getElementById("pnl-funding");
+  fundingEl.textContent = p.funding ? fmtMoney(p.funding) : "—";
+  fundingEl.classList.toggle("positive", p.funding > 0);
+  fundingEl.classList.toggle("negative", p.funding < 0);
 
   // Unrealized показываем только для period=today (он "сейчас")
-  const unrEl = document.getElementById('pnl-unrealized');
+  const unrEl = document.getElementById("pnl-unrealized");
   const unr = lastPnlSummary.unrealized;
-  if (currentPnlPeriod === 'today' && Number.isFinite(unr) && unr !== 0) {
+  if (currentPnlPeriod === "today" && Number.isFinite(unr) && unr !== 0) {
     unrEl.textContent = fmtMoney(unr);
-    unrEl.classList.toggle('positive', unr > 0);
-    unrEl.classList.toggle('negative', unr < 0);
+    unrEl.classList.toggle("positive", unr > 0);
+    unrEl.classList.toggle("negative", unr < 0);
   } else {
-    unrEl.textContent = '—';
-    unrEl.classList.remove('positive', 'negative');
+    unrEl.textContent = "—";
+    unrEl.classList.remove("positive", "negative");
   }
 
-  document.getElementById('pnl-utilization').textContent =
-    Number.isFinite(p.utilizationPct) ? `${p.utilizationPct.toFixed(0)}%` : '—';
+  document.getElementById("pnl-utilization").textContent = Number.isFinite(
+    p.utilizationPct,
+  )
+    ? `${p.utilizationPct.toFixed(0)}%`
+    : "—";
 
-  document.getElementById('pnl-avg').textContent   = p.count > 0 ? fmtMoney(p.avgPnl) : '—';
-  document.getElementById('pnl-best').textContent  = p.count > 0 ? fmtMoney(p.bestPnl) : '—';
-  document.getElementById('pnl-worst').textContent = p.count > 0 ? fmtMoney(p.worstPnl) : '—';
-  document.getElementById('pnl-wl').textContent    = p.count > 0 ? `${p.wins} / ${p.losses}` : '—';
+  document.getElementById("pnl-avg").textContent =
+    p.count > 0 ? fmtMoney(p.avgPnl) : "—";
+  document.getElementById("pnl-best").textContent =
+    p.count > 0 ? fmtMoney(p.bestPnl) : "—";
+  document.getElementById("pnl-worst").textContent =
+    p.count > 0 ? fmtMoney(p.worstPnl) : "—";
+  document.getElementById("pnl-wl").textContent =
+    p.count > 0 ? `${p.wins} / ${p.losses}` : "—";
 
-  const expEl = document.getElementById('pnl-expectancy');
+  const expEl = document.getElementById("pnl-expectancy");
   if (expEl) {
-    expEl.textContent = p.count > 0 ? fmtMoney(p.expectancy) : '—';
-    expEl.classList.toggle('positive', p.expectancy > 0);
-    expEl.classList.toggle('negative', p.expectancy < 0);
+    expEl.textContent = p.count > 0 ? fmtMoney(p.expectancy) : "—";
+    expEl.classList.toggle("positive", p.expectancy > 0);
+    expEl.classList.toggle("negative", p.expectancy < 0);
   }
-  const payoffEl = document.getElementById('pnl-payoff');
+  const payoffEl = document.getElementById("pnl-payoff");
   if (payoffEl) {
     if (p.count === 0 || p.payoffRatio == null) {
-      payoffEl.textContent = '—';
+      payoffEl.textContent = "—";
     } else {
       payoffEl.textContent = `${p.payoffRatio.toFixed(2)}×`;
     }
   }
-  const ddEl = document.getElementById('pnl-maxdd');
+  const ddEl = document.getElementById("pnl-maxdd");
   if (ddEl) {
     if (p.count === 0) {
-      ddEl.textContent = '—';
+      ddEl.textContent = "—";
     } else {
-      const pctTxt = Number.isFinite(p.maxDrawdownPct) ? ` (${p.maxDrawdownPct.toFixed(0)}%)` : '';
+      const pctTxt = Number.isFinite(p.maxDrawdownPct)
+        ? ` (${p.maxDrawdownPct.toFixed(0)}%)`
+        : "";
       ddEl.textContent = `${fmtMoney(-Math.abs(p.maxDrawdown))}${pctTxt}`;
-      ddEl.classList.toggle('negative', p.maxDrawdown > 0);
+      ddEl.classList.toggle("negative", p.maxDrawdown > 0);
     }
   }
-  const feesEl = document.getElementById('pnl-fees');
+  const feesEl = document.getElementById("pnl-fees");
   if (feesEl) {
     if (p.count === 0) {
-      feesEl.textContent = '—';
+      feesEl.textContent = "—";
     } else {
-      const pctTxt = Number.isFinite(p.feesPctOfGross) && p.grossPnl !== 0
-        ? ` (${p.feesPctOfGross.toFixed(0)}% of gross)`
-        : '';
+      const pctTxt =
+        Number.isFinite(p.feesPctOfGross) && p.grossPnl !== 0
+          ? ` (${p.feesPctOfGross.toFixed(0)}% of gross)`
+          : "";
       feesEl.textContent = `${fmtMoney(p.totalFees)}${pctTxt}`;
     }
   }
 
   // Strategy breakdown — добавляем синтетическую запись 'manual' если есть.
-  const stratContainer = document.getElementById('pnl-strategy');
+  const stratContainer = document.getElementById("pnl-strategy");
   const strategies = Object.entries(p.byStrategy || {});
   if (manualCount > 0) {
-    strategies.push(['manual', { pnl: manualPnl, count: manualCount, wins: p.manual?.wins || 0 }]);
+    strategies.push([
+      "manual",
+      { pnl: manualPnl, count: manualCount, wins: p.manual?.wins || 0 },
+    ]);
   }
   if (strategies.length === 0) {
-    stratContainer.innerHTML = '<div class="empty-state">No trades in this period</div>';
+    stratContainer.innerHTML =
+      '<div class="empty-state">No trades in this period</div>';
   } else {
-    const maxAbs = Math.max(1e-9, ...strategies.map(([, s]) => Math.abs(s.pnl)));
+    const maxAbs = Math.max(
+      1e-9,
+      ...strategies.map(([, s]) => Math.abs(s.pnl)),
+    );
     stratContainer.innerHTML = strategies
       .sort(([, a], [, b]) => Math.abs(b.pnl) - Math.abs(a.pnl))
       .map(([sid, s]) => {
         const widthPct = (Math.abs(s.pnl) / maxAbs) * 100;
         const wr = s.count > 0 ? ((s.wins / s.count) * 100).toFixed(0) : 0;
-        const cls = s.pnl > 0 ? 'positive' : s.pnl < 0 ? 'negative' : '';
+        const cls = s.pnl > 0 ? "positive" : s.pnl < 0 ? "negative" : "";
         return `
           <div class="strategy-row">
             <div class="strategy-name">${strategyDisplayName(sid)}</div>
@@ -908,7 +1091,8 @@ function renderPnlSummary() {
             <div class="strategy-pnl ${cls}">${fmtMoney(s.pnl)}</div>
             <div class="strategy-meta">${s.count}t · ${wr}% win</div>
           </div>`;
-      }).join('');
+      })
+      .join("");
   }
 
   // Резерв высоты под самый «высокий» период: замеряем реальную строку и
@@ -916,125 +1100,147 @@ function renderPnlSummary() {
   // меняет высоту при переключении дней и карточка (с графиком ниже) скачет.
   let maxRows = 1;
   for (const per of Object.values(lastPnlSummary.periods)) {
-    const n = Object.keys(per.byStrategy || {}).length
-      + ((per.manual?.count || 0) > 0 ? 1 : 0);
+    const n =
+      Object.keys(per.byStrategy || {}).length +
+      ((per.manual?.count || 0) > 0 ? 1 : 0);
     if (n > maxRows) maxRows = n;
   }
-  const sampleRow = stratContainer.querySelector('.strategy-row');
+  const sampleRow = stratContainer.querySelector(".strategy-row");
   if (sampleRow) {
     const rowH = sampleRow.getBoundingClientRect().height;
-    const gap = 0.4 * parseFloat(getComputedStyle(document.documentElement).fontSize);
+    const gap =
+      0.4 * parseFloat(getComputedStyle(document.documentElement).fontSize);
     stratContainer.style.minHeight = `${Math.round(maxRows * rowH + (maxRows - 1) * gap)}px`;
   }
 
   // Данные отрендерены — убираем скелетон-оверлей.
-  document.getElementById('pnl-skeleton')?.classList.add('hidden');
+  document.getElementById("pnl-skeleton")?.classList.add("hidden");
 }
 
 function renderSignals(payload) {
-  const tbody = document.getElementById('signals-tbody');
-  const meta  = document.getElementById('signals-meta');
+  const tbody = document.getElementById("signals-tbody");
+  const meta = document.getElementById("signals-meta");
   if (!tbody || !meta) return;
   const signals = payload?.signals || [];
   const th = payload?.thresholds || {};
-  const winSummary = Array.isArray(th.windows) && th.windows.length
-    ? th.windows.map((w) => `${w.label}≥${w.threshold}%`).join(' · ')
-    : `${th.spikePct}%/${th.spikeWindowMin}m`;
+  const winSummary =
+    Array.isArray(th.windows) && th.windows.length
+      ? th.windows.map((w) => `${w.label}≥${w.threshold}%`).join(" · ")
+      : `${th.spikePct}%/${th.spikeWindowMin}m`;
   meta.textContent = payload?.ts
     ? `windows: ${winSummary} · SL ${th.slPct}% · TP ${th.tpPct}% · scope ${payload.universeSize} · updated ${fmtTime(payload.ts)}`
-    : '—';
+    : "—";
   if (!signals.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Waiting for hunter scope…</td></tr>';
+    tbody.innerHTML =
+      '<tr><td colspan="7" class="empty-state">Waiting for hunter scope…</td></tr>';
     return;
   }
 
   const fmtPrice = (p) => {
-    if (p == null) return '—';
+    if (p == null) return "—";
     if (p >= 100) return p.toFixed(2);
-    if (p >= 1)   return p.toFixed(4);
+    if (p >= 1) return p.toFixed(4);
     return p.toPrecision(4);
   };
   const fmtPct = (v, digits = 2) => {
-    if (v == null) return '—';
-    const sign = v >= 0 ? '+' : '';
+    if (v == null) return "—";
+    const sign = v >= 0 ? "+" : "";
     return `${sign}${v.toFixed(digits)}%`;
   };
-  const arrow = (v) => (v == null ? '' : v > 0 ? '▲' : v < 0 ? '▼' : '·');
+  const arrow = (v) => (v == null ? "" : v > 0 ? "▲" : v < 0 ? "▼" : "·");
   // Сила окраски (alpha) шкалируется относительно spike-порога: на пороге alpha=0.18,
   // в 2× порога — 0.36, кэп 0.45.
   const tintRow = (v, kind) => {
-    if (v == null) return '';
+    if (v == null) return "";
     const ratio = Math.min(Math.abs(v) / (th.spikePct ?? 5), 2.5);
     const alpha = Math.min(0.06 + ratio * 0.12, 0.45);
-    const rgb = kind === 'pump' ? '239, 68, 68' : '34, 197, 94';
+    const rgb = kind === "pump" ? "239, 68, 68" : "34, 197, 94";
     return `background: linear-gradient(90deg, rgba(${rgb}, ${alpha.toFixed(2)}), transparent 60%);`;
   };
   const numberClass = (v, threshold) => {
-    if (v == null) return 'num-muted';
-    if (Math.abs(v) >= threshold) return v > 0 ? 'num-pos-strong' : 'num-neg-strong';
-    if (Math.abs(v) >= threshold * 0.6) return v > 0 ? 'num-pos' : 'num-neg';
-    return v > 0 ? 'num-pos-weak' : v < 0 ? 'num-neg-weak' : 'num-muted';
+    if (v == null) return "num-muted";
+    if (Math.abs(v) >= threshold)
+      return v > 0 ? "num-pos-strong" : "num-neg-strong";
+    if (Math.abs(v) >= threshold * 0.6) return v > 0 ? "num-pos" : "num-neg";
+    return v > 0 ? "num-pos-weak" : v < 0 ? "num-neg-weak" : "num-muted";
   };
 
   // Tooltip-сводка по всем окнам — для просмотра «как разные таймфреймы видят монету».
   const windowsTooltip = (windows) => {
-    if (!Array.isArray(windows)) return '';
-    return windows.map((w) => {
-      const v = w.spikePct == null ? '—' : `${w.spikePct >= 0 ? '+' : ''}${w.spikePct.toFixed(2)}%`;
-      const tag = w.tier && w.tier !== 'NEUTRAL' ? ` ${w.tier}` : '';
-      return `${w.label}: ${v}${tag} (≥${w.threshold}%)`;
-    }).join(' | ');
+    if (!Array.isArray(windows)) return "";
+    return windows
+      .map((w) => {
+        const v =
+          w.spikePct == null
+            ? "—"
+            : `${w.spikePct >= 0 ? "+" : ""}${w.spikePct.toFixed(2)}%`;
+        const tag = w.tier && w.tier !== "NEUTRAL" ? ` ${w.tier}` : "";
+        return `${w.label}: ${v}${tag} (≥${w.threshold}%)`;
+      })
+      .join(" | ");
   };
 
-  tbody.innerHTML = signals.map((s) => {
-    const winLabel = s.windowLabel || `${th.spikeWindowMin}m`;
-    const winTitle = windowsTooltip(s.windows);
-    const tierLabel = s.tier && s.tier !== 'NEUTRAL' ? `${s.tier} ` : '';
-    let suggested;
-    if ((s.signal === 'SHORT' || s.signal === 'LONG') && s.blocked) {
-      suggested = `<span class="signals-status blocked" title="${s.blocked}">${tierLabel}${s.signal} ${winLabel} (gated)</span>`;
-    } else if (s.signal === 'SHORT') {
-      suggested = `<span class="signals-status tradable" title="${winTitle}">${tierLabel}▼ SHORT <span class="num-inline-muted">${winLabel}</span></span>`;
-    } else if (s.signal === 'LONG') {
-      suggested = `<span class="signals-status long" title="${winTitle}">${tierLabel}▲ LONG <span class="num-inline-muted">${winLabel}</span></span>`;
-    } else if (s.signal === 'WATCH') {
-      suggested = `<span class="signals-status active" title="${winTitle}">WATCH <span class="num-inline-muted">${winLabel}</span></span>`;
-    } else if (s.signal === 'WARMUP') {
-      const have = Math.min(s.bufferLen ?? 0, s.bufferNeeded ?? 0);
-      const need = s.bufferNeeded ?? 0;
-      suggested = `<span class="signals-status blocked" title="Need ${need} ticks (~${(need * 15 / 60).toFixed(1)}min) of price history">WARMUP ${have}/${need}</span>`;
-    } else {
-      suggested = `<span class="signals-status blocked" title="${winTitle}">—</span>`;
-    }
-    const slTpCell = s.sl != null
-      ? `<span class="num-inline-neg" title="Stop-loss">${fmtPrice(s.sl)}</span> <span class="sep">/</span> <span class="num-inline-pos" title="Take-profit">${fmtPrice(s.tp)}</span>`
-      : '<span class="num-inline-muted">—</span>';
-    const trendThreshold = th.trendMaxRisePct ?? 8;
-    const trendOver = s.trendPct != null && Math.abs(s.trendPct) >= trendThreshold;
-    const trendInlineCls = s.trendPct == null
-      ? 'num-inline-muted'
-      : (s.trendPct > 0 ? 'num-inline-pos' : 'num-inline-neg');
-    const trendCell = s.trendPct != null
-      ? `<span class="${trendInlineCls}${trendOver ? ' num-warn-glow' : ''}">${arrow(s.trendPct)} ${fmtPct(s.trendPct, 1)}</span> <span class="num-inline-muted">/ ${th.trendLookbackMin}m</span>`
-      : '<span class="num-inline-muted">—</span>';
-    // Spike-колонка теперь отражает выбранное окно (signalSpikePct), fallback на 2m.
-    const displaySpike = s.signalSpikePct != null ? s.signalSpikePct : s.spikePct;
-    const displayThreshold = (() => {
-      const w = s.windows?.find((x) => x.label === s.windowLabel);
-      return w?.threshold ?? th.spikePct ?? 5;
-    })();
-    const spikeKind = s.signal === 'SHORT' ? 'pump' : (s.signal === 'LONG' ? 'dump' : null);
-    const rowStyle = spikeKind && !s.blocked ? tintRow(displaySpike, spikeKind) : '';
-    const rowCls = [
-      s.isActive ? 'is-active' : '',
-      s.signal === 'SHORT' ? 'row-short' : '',
-      s.signal === 'LONG' ? 'row-long' : '',
-      s.tier === 'STRONG' ? 'tier-strong' : '',
-    ].filter(Boolean).join(' ');
-    const spikeCellLabel = s.windowLabel
-      ? `<span class="num-inline-muted">${s.windowLabel}</span> ${arrow(displaySpike)} ${fmtPct(displaySpike)}`
-      : `${arrow(displaySpike)} ${fmtPct(displaySpike)}`;
-    return `
+  tbody.innerHTML = signals
+    .map((s) => {
+      const winLabel = s.windowLabel || `${th.spikeWindowMin}m`;
+      const winTitle = windowsTooltip(s.windows);
+      const tierLabel = s.tier && s.tier !== "NEUTRAL" ? `${s.tier} ` : "";
+      let suggested;
+      if ((s.signal === "SHORT" || s.signal === "LONG") && s.blocked) {
+        suggested = `<span class="signals-status blocked" title="${s.blocked}">${tierLabel}${s.signal} ${winLabel} (gated)</span>`;
+      } else if (s.signal === "SHORT") {
+        suggested = `<span class="signals-status tradable" title="${winTitle}">${tierLabel}▼ SHORT <span class="num-inline-muted">${winLabel}</span></span>`;
+      } else if (s.signal === "LONG") {
+        suggested = `<span class="signals-status long" title="${winTitle}">${tierLabel}▲ LONG <span class="num-inline-muted">${winLabel}</span></span>`;
+      } else if (s.signal === "WATCH") {
+        suggested = `<span class="signals-status active" title="${winTitle}">WATCH <span class="num-inline-muted">${winLabel}</span></span>`;
+      } else if (s.signal === "WARMUP") {
+        const have = Math.min(s.bufferLen ?? 0, s.bufferNeeded ?? 0);
+        const need = s.bufferNeeded ?? 0;
+        suggested = `<span class="signals-status blocked" title="Need ${need} ticks (~${((need * 15) / 60).toFixed(1)}min) of price history">WARMUP ${have}/${need}</span>`;
+      } else {
+        suggested = `<span class="signals-status blocked" title="${winTitle}">—</span>`;
+      }
+      const slTpCell =
+        s.sl != null
+          ? `<span class="num-inline-neg" title="Stop-loss">${fmtPrice(s.sl)}</span> <span class="sep">/</span> <span class="num-inline-pos" title="Take-profit">${fmtPrice(s.tp)}</span>`
+          : '<span class="num-inline-muted">—</span>';
+      const trendThreshold = th.trendMaxRisePct ?? 8;
+      const trendOver =
+        s.trendPct != null && Math.abs(s.trendPct) >= trendThreshold;
+      const trendInlineCls =
+        s.trendPct == null
+          ? "num-inline-muted"
+          : s.trendPct > 0
+            ? "num-inline-pos"
+            : "num-inline-neg";
+      const trendCell =
+        s.trendPct != null
+          ? `<span class="${trendInlineCls}${trendOver ? " num-warn-glow" : ""}">${arrow(s.trendPct)} ${fmtPct(s.trendPct, 1)}</span> <span class="num-inline-muted">/ ${th.trendLookbackMin}m</span>`
+          : '<span class="num-inline-muted">—</span>';
+      // Spike-колонка теперь отражает выбранное окно (signalSpikePct), fallback на 2m.
+      const displaySpike =
+        s.signalSpikePct != null ? s.signalSpikePct : s.spikePct;
+      const displayThreshold = (() => {
+        const w = s.windows?.find((x) => x.label === s.windowLabel);
+        return w?.threshold ?? th.spikePct ?? 5;
+      })();
+      const spikeKind =
+        s.signal === "SHORT" ? "pump" : s.signal === "LONG" ? "dump" : null;
+      const rowStyle =
+        spikeKind && !s.blocked ? tintRow(displaySpike, spikeKind) : "";
+      const rowCls = [
+        s.isActive ? "is-active" : "",
+        s.signal === "SHORT" ? "row-short" : "",
+        s.signal === "LONG" ? "row-long" : "",
+        s.tier === "STRONG" ? "tier-strong" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      const spikeCellLabel = s.windowLabel
+        ? `<span class="num-inline-muted">${s.windowLabel}</span> ${arrow(displaySpike)} ${fmtPct(displaySpike)}`
+        : `${arrow(displaySpike)} ${fmtPct(displaySpike)}`;
+      return `
       <tr class="${rowCls}" style="${rowStyle}">
         <td class="num-muted">${s.rank}</td>
         <td class="signals-coin">${s.pair}</td>
@@ -1044,92 +1250,124 @@ function renderSignals(payload) {
         <td>${suggested}</td>
         <td class="signals-sltp">${slTpCell}</td>
       </tr>`;
-  }).join('');
+    })
+    .join("");
 }
 
 function renderTax(tax) {
   if (!tax) return;
-  document.getElementById('tax-costs').textContent = `${(tax.totalCostsPLN || 0).toLocaleString()} PLN`;
-  document.getElementById('tax-revenue').textContent = `${(tax.totalRevenuePLN || 0).toLocaleString()} PLN`;
+  document.getElementById("tax-costs").textContent =
+    `${(tax.totalCostsPLN || 0).toLocaleString()} PLN`;
+  document.getElementById("tax-revenue").textContent =
+    `${(tax.totalRevenuePLN || 0).toLocaleString()} PLN`;
   const profit = tax.netProfitPLN || 0;
-  const profitEl = document.getElementById('tax-profit');
-  profitEl.textContent = `${profit >= 0 ? '+' : ''}${profit.toLocaleString()} PLN`;
-  profitEl.style.color = profit >= 0 ? 'var(--green)' : 'var(--red)';
-  document.getElementById('tax-est').textContent = `${(profit > 0 ? profit * 0.19 : 0).toLocaleString()} PLN`;
+  const profitEl = document.getElementById("tax-profit");
+  profitEl.textContent = `${profit >= 0 ? "+" : ""}${profit.toLocaleString()} PLN`;
+  profitEl.style.color = profit >= 0 ? "var(--green)" : "var(--red)";
+  document.getElementById("tax-est").textContent =
+    `${(profit > 0 ? profit * 0.19 : 0).toLocaleString()} PLN`;
 }
 
 // Chill Boy detector heartbeat — строка в P&L Summary. Чисто диагностика, на торговлю не влияет.
 function renderChillBoy(cb) {
-  const row = document.getElementById('chillboy-detector');
+  const row = document.getElementById("chillboy-detector");
   if (!row) return;
-  if (!cb || !cb.enabled) { row.style.display = 'none'; return; }
-  row.style.display = '';
+  if (!cb || !cb.enabled) {
+    row.style.display = "none";
+    return;
+  }
+  row.style.display = "";
 
-  const modeEl = document.getElementById('chillboy-mode');
+  const modeEl = document.getElementById("chillboy-mode");
   if (modeEl) {
-    modeEl.textContent = cb.prod ? 'PROD' : 'PAPER';
-    modeEl.classList.toggle('prod', !!cb.prod);
+    modeEl.textContent = cb.prod ? "PROD" : "PAPER";
+    modeEl.classList.toggle("prod", !!cb.prod);
   }
 
-  const statsEl = document.getElementById('chillboy-stats');
+  const statsEl = document.getElementById("chillboy-stats");
   if (!statsEl) return;
   const hb = cb.heartbeat;
-  if (!hb) { statsEl.textContent = 'warming up…'; return; }
+  if (!hb) {
+    statsEl.textContent = "warming up…";
+    return;
+  }
   const ageSec = Math.floor((Date.now() - hb.ts) / 1000);
-  const age = ageSec < 90 ? `${ageSec}s ago` : `${Math.floor(ageSec / 60)}m ago`;
+  const age =
+    ageSec < 90 ? `${ageSec}s ago` : `${Math.floor(ageSec / 60)}m ago`;
   statsEl.textContent =
     `tracked ${hb.tracked} · squeezed ${hb.squeezed} · breakouts ${hb.breakouts} · ` +
     `slot ${hb.slot} · cooldowns ${hb.reCooldowns}+${hb.postSlCooldowns} · ${age}`;
 }
 
 function renderFooter() {
-  const footer = document.getElementById('footer-status').querySelector('span');
+  const footer = document.getElementById("footer-status").querySelector("span");
   if (footer) {
     const age = Math.floor((Date.now() - lastSuccessAt) / 1000);
-    footer.textContent = age > 15 ? `⚠ Stale (${age}s)` : `Syncing live · WS active`;
+    footer.textContent =
+      age > 15 ? `⚠ Stale (${age}s)` : `Syncing live · WS active`;
   }
   // Если коннект жив, но данные не идут >10с — флипаем pill в stale.
-  if (wsState === 'live' && Date.now() - lastSuccessAt > 10_000) {
-    setWsState('stale');
-  } else if (wsState === 'stale') {
-    renderWsPill();  // обновим счётчик секунд
+  if (wsState === "live" && Date.now() - lastSuccessAt > 10_000) {
+    setWsState("stale");
+  } else if (wsState === "stale") {
+    renderWsPill(); // обновим счётчик секунд
   }
 }
 
-document.querySelectorAll('.theme-btn').forEach(b => b.addEventListener('click', () => { localStorage.setItem(THEME_KEY, b.dataset.theme); applyTheme(b.dataset.theme); }));
-document.querySelectorAll('.range-btn[data-hours]').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('.range-btn[data-hours]').forEach(r => r.classList.remove('active'));
-  b.classList.add('active');
-  currentRangeHours = b.dataset.hours;
-  showChartLoader();
-  tick();
-}));
+document.querySelectorAll(".theme-btn").forEach((b) =>
+  b.addEventListener("click", () => {
+    localStorage.setItem(THEME_KEY, b.dataset.theme);
+    applyTheme(b.dataset.theme);
+  }),
+);
+document.querySelectorAll(".range-btn[data-hours]").forEach((b) =>
+  b.addEventListener("click", () => {
+    document
+      .querySelectorAll(".range-btn[data-hours]")
+      .forEach((r) => r.classList.remove("active"));
+    b.classList.add("active");
+    currentRangeHours = b.dataset.hours;
+    showChartLoader();
+    tick();
+  }),
+);
 
-document.querySelectorAll('#pnl-periods .range-btn').forEach(b => b.addEventListener('click', () => {
-  if (b.dataset.period === currentPnlPeriod) return;
-  document.querySelectorAll('#pnl-periods .range-btn').forEach(r => r.classList.remove('active'));
-  b.classList.add('active');
-  currentPnlPeriod = b.dataset.period;
-  renderPnlSummary();
-}));
+document.querySelectorAll("#pnl-periods .range-btn").forEach((b) =>
+  b.addEventListener("click", () => {
+    if (b.dataset.period === currentPnlPeriod) return;
+    document
+      .querySelectorAll("#pnl-periods .range-btn")
+      .forEach((r) => r.classList.remove("active"));
+    b.classList.add("active");
+    currentPnlPeriod = b.dataset.period;
+    renderPnlSummary();
+  }),
+);
 
-document.querySelectorAll('#price-intervals .range-btn').forEach(b => b.addEventListener('click', async () => {
-  if (b.dataset.iv === currentInterval) return;
-  document.querySelectorAll('#price-intervals .range-btn').forEach(r => r.classList.remove('active'));
-  b.classList.add('active');
-  currentInterval = b.dataset.iv;
-  liveCandle = null;
-  chartViewKey = null; // смена ТФ → fitContent под новые данные
-  showPriceChartLoader();
-  if (lastPos) {
-    const px = Number.isFinite(lastPos.currentPrice) && lastPos.currentPrice > 0 ? lastPos.currentPrice : lastPos.entryPrice;
-    await fetchAndRenderCandles(lastPos, px);
-  } else if (idleChartCoin) {
-    await fetchAndRenderIdleCandles(idleChartCoin);
-  } else {
-    hidePriceChartLoader(); // нечего грузить — не оставляем спиннер висеть
-  }
-}));
+document.querySelectorAll("#price-intervals .range-btn").forEach((b) =>
+  b.addEventListener("click", async () => {
+    if (b.dataset.iv === currentInterval) return;
+    document
+      .querySelectorAll("#price-intervals .range-btn")
+      .forEach((r) => r.classList.remove("active"));
+    b.classList.add("active");
+    currentInterval = b.dataset.iv;
+    liveCandle = null;
+    chartViewKey = null; // смена ТФ → fitContent под новые данные
+    showPriceChartLoader();
+    if (lastPos) {
+      const px =
+        Number.isFinite(lastPos.currentPrice) && lastPos.currentPrice > 0
+          ? lastPos.currentPrice
+          : lastPos.entryPrice;
+      await fetchAndRenderCandles(lastPos, px);
+    } else if (idleChartCoin) {
+      await fetchAndRenderIdleCandles(idleChartCoin);
+    } else {
+      hidePriceChartLoader(); // нечего грузить — не оставляем спиннер висеть
+    }
+  }),
+);
 
 // ── Live Logs ────────────────────────────────────
 
@@ -1137,8 +1375,8 @@ const LOG_BUFFER_MAX = 1000;
 const logsState = {
   buffer: [],
   lastId: 0,
-  level: 'all',
-  query: '',
+  level: "all",
+  query: "",
   paused: false,
   renderScheduled: false,
 };
@@ -1146,7 +1384,7 @@ const logsState = {
 function ingestLogs(entries, replace) {
   if (replace) logsState.buffer = [];
   for (const e of entries) {
-    if (!e || typeof e.id !== 'number') continue;
+    if (!e || typeof e.id !== "number") continue;
     if (e.id <= logsState.lastId && !replace) continue;
     logsState.buffer.push(e);
     if (e.id > logsState.lastId) logsState.lastId = e.id;
@@ -1167,16 +1405,17 @@ function scheduleLogRender() {
 }
 
 function logMatches(e) {
-  if (logsState.level !== 'all' && e.level !== logsState.level) return false;
-  if (logsState.query && !e.message.toLowerCase().includes(logsState.query)) return false;
+  if (logsState.level !== "all" && e.level !== logsState.level) return false;
+  if (logsState.query && !e.message.toLowerCase().includes(logsState.query))
+    return false;
   return true;
 }
 
 function fmtLogTime(ts) {
   const d = new Date(ts);
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  const ss = String(d.getSeconds()).padStart(2, "0");
   return `${hh}:${mm}:${ss}`;
 }
 
@@ -1185,35 +1424,41 @@ function highlightMatch(text, query) {
   if (!query) return safe;
   const q = escapeHtml(query);
   // case-insensitive replace on the escaped string
-  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'ig');
-  return safe.replace(re, m => `<mark>${m}</mark>`);
+  const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "ig");
+  return safe.replace(re, (m) => `<mark>${m}</mark>`);
 }
 
 function renderLogs() {
-  const list = document.getElementById('logs-list');
-  const empty = document.getElementById('logs-empty');
-  const countEl = document.getElementById('logs-count');
+  const list = document.getElementById("logs-list");
+  const empty = document.getElementById("logs-empty");
+  const countEl = document.getElementById("logs-count");
   if (!list || !empty || !countEl) return;
 
   const filtered = logsState.buffer.filter(logMatches);
   countEl.textContent = `${filtered.length} / ${logsState.buffer.length} lines`;
 
   if (filtered.length === 0) {
-    list.innerHTML = '';
-    empty.style.display = 'block';
+    list.innerHTML = "";
+    empty.style.display = "block";
     return;
   }
-  empty.style.display = 'none';
+  empty.style.display = "none";
 
-  const viewport = document.getElementById('logs-viewport');
-  const wasAtBottom = viewport ? (viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 30) : true;
+  const viewport = document.getElementById("logs-viewport");
+  const wasAtBottom = viewport
+    ? viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 30
+    : true;
 
-  list.innerHTML = filtered.map(e => `
+  list.innerHTML = filtered
+    .map(
+      (e) => `
     <div class="log-row log-${e.level}">
       <span class="log-time">${fmtLogTime(e.ts)}</span>
       <span class="log-level">${e.level.toUpperCase()}</span>
       <span class="log-msg">${highlightMatch(e.message, logsState.query)}</span>
-    </div>`).join('');
+    </div>`,
+    )
+    .join("");
 
   if (!logsState.paused && wasAtBottom && viewport) {
     viewport.scrollTop = viewport.scrollHeight;
@@ -1221,46 +1466,52 @@ function renderLogs() {
 }
 
 function bindLogsUi() {
-  const search = document.getElementById('logs-search');
-  const pauseBtn = document.getElementById('logs-pause');
-  const filters = document.getElementById('logs-filters');
-  const viewport = document.getElementById('logs-viewport');
+  const search = document.getElementById("logs-search");
+  const pauseBtn = document.getElementById("logs-pause");
+  const filters = document.getElementById("logs-filters");
+  const viewport = document.getElementById("logs-viewport");
 
   if (search) {
-    search.addEventListener('input', () => {
+    search.addEventListener("input", () => {
       logsState.query = search.value.trim().toLowerCase();
       renderLogs();
     });
   }
   if (pauseBtn) {
-    pauseBtn.addEventListener('click', () => {
+    pauseBtn.addEventListener("click", () => {
       logsState.paused = !logsState.paused;
-      pauseBtn.textContent = logsState.paused ? '▶' : '⏸';
-      pauseBtn.classList.toggle('active', logsState.paused);
-      document.getElementById('logs-status').textContent = logsState.paused ? 'paused' : 'live';
-      if (!logsState.paused && viewport) viewport.scrollTop = viewport.scrollHeight;
+      pauseBtn.textContent = logsState.paused ? "▶" : "⏸";
+      pauseBtn.classList.toggle("active", logsState.paused);
+      document.getElementById("logs-status").textContent = logsState.paused
+        ? "paused"
+        : "live";
+      if (!logsState.paused && viewport)
+        viewport.scrollTop = viewport.scrollHeight;
     });
   }
   if (filters) {
-    filters.addEventListener('click', (ev) => {
-      const btn = ev.target.closest('.logs-filter-btn');
+    filters.addEventListener("click", (ev) => {
+      const btn = ev.target.closest(".logs-filter-btn");
       if (!btn) return;
-      filters.querySelectorAll('.logs-filter-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+      filters
+        .querySelectorAll(".logs-filter-btn")
+        .forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
       logsState.level = btn.dataset.level;
       renderLogs();
     });
   }
   // Detect manual scroll up → auto-pause autoscroll until user clicks resume or scrolls back to bottom
   if (viewport) {
-    viewport.addEventListener('scroll', () => {
-      const atBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 30;
+    viewport.addEventListener("scroll", () => {
+      const atBottom =
+        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 30;
       if (atBottom && logsState.paused) {
         // user scrolled back to bottom — resume
         logsState.paused = false;
-        pauseBtn.textContent = '⏸';
-        pauseBtn.classList.remove('active');
-        document.getElementById('logs-status').textContent = 'live';
+        pauseBtn.textContent = "⏸";
+        pauseBtn.classList.remove("active");
+        document.getElementById("logs-status").textContent = "live";
       }
     });
   }
@@ -1268,9 +1519,11 @@ function bindLogsUi() {
 
 async function fetchInitialLogs() {
   try {
-    const r = await fetchJson('/api/logs?limit=500');
+    const r = await fetchJson("/api/logs?limit=500");
     if (r && Array.isArray(r.entries)) ingestLogs(r.entries, true);
-  } catch (err) { console.error('[Logs] initial fetch failed', err); }
+  } catch (err) {
+    console.error("[Logs] initial fetch failed", err);
+  }
 }
 
 bindLogsUi();
