@@ -13,6 +13,7 @@ import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getExchange } from '../modules/exchange.js';
 import { sendMessage } from '../modules/reporter.js';
+import { saveEquitySnapshot } from '../core/database.js';
 
 const DIAG_INTERVAL_MS = 5 * 60_000; // каждые 5 мин
 let lastDiagAt = 0;
@@ -75,6 +76,13 @@ export async function runBalanceDiag() {
         (otherSpot.length ? ` other=[${otherSpot.join(',')}]` : '') +
         ` | ${indicators.join(' ')}`,
     );
+
+    // Снапшот equity для Performance-графика. Guard > 0: HL-индексер изредка
+    // отдаёт $0 на живом аккаунте (см. balanceCache) — нулевую точку не пишем,
+    // иначе на графике ложный провал.
+    if (perpAcct > 0) {
+      saveEquitySnapshot(perpAcct);
+    }
 
     // Алерт когда perp=$0 а в споте есть деньги — нужен РУЧНОЙ свап
     // на HL UI. Авто-фикс не делаем: HL не разрешает usdClassTransfer

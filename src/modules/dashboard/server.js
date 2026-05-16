@@ -14,6 +14,7 @@ import {
   getActivePosition,
   getHistorySince,
   getArchivedHistorySince,
+  getEquitySnapshotsSince,
 } from "../../core/database.js";
 import { getAccountSummary, getPositions, getLivePrice } from "../exchange.js";
 import { fetchUserFills, reconstructManualTrades } from "../userFills.js";
@@ -329,37 +330,12 @@ async function handleHistory(req, res) {
   try {
     const hours = req.query.hours ? parseInt(req.query.hours, 10) : 24;
     const since = Date.now() - hours * 3_600_000;
-    const dbRows = getHistorySince(since);
-    const archRows = getArchivedHistorySince(since);
-    const botTrades = [...dbRows, ...archRows].map((t) => ({
-      ts: t.closed_at,
-      coin: t.coin,
-      pnl: t.realized_pnl,
-      reason: t.reason,
-      source: "bot",
-    }));
+    const now = Date.now();
 
-    // Manual trades (закрытые в окне) тоже двигают equity — включаем их в график.
-    let manualTradePoints = [];
-    try {
-      const manualTrades = await getManualTrades();
-      manualTradePoints = manualTrades
-        .filter((m) => m.status === "closed" && m.closeTime >= since)
-        .map((m) => ({
-          ts: m.closeTime,
-          coin: m.coin,
-          pnl: m.pnl,
-          reason: "manual_close",
-          source: "manual",
-        }));
-    } catch {
-      /* manual best-effort */
-    }
-
-    const allTrades = [...botTrades, ...manualTradePoints].sort(
-      (a, b) => a.ts - b.ts,
-    );
-
+    // Performance-кривая = ИЗМЕРЕННЫЙ equity (снапшоты пишутся в balanceDiag
+    // раз в 5 мин), а не реконструкция из суммы PnL сделок. Старая модель
+    // (currentEquity − Σpnl) ломалась на депозитах/выводах: cash-in не сделка,
+    // в Σpnl не попадал — и весь baseline молча сдвигался, ступенька исчезала.
     let currentEquity = 0;
     try {
       if (config.isProduction) {
@@ -372,42 +348,20 @@ async function handleHistory(req, res) {
       currentEquity = state.sessionStartEquity || 0;
     }
 
-    const totalPnlInWindow = allTrades.reduce((sum, t) => sum + t.pnl, 0);
-    let runningEquity = currentEquity - totalPnlInWindow;
-    const baseline = runningEquity;
+    const points = getEquitySnapshotsSince(since).map((s) => ({
+      ts: s.ts,
+      equity: s.equity,
+    }));
 
-    const tradePoints = allTrades.map((t) => {
-      runningEquity += t.pnl;
-      return {
-        ts: t.ts,
-        coin: t.coin,
-        pnl: t.pnl,
-        equity: runningEquity,
-        reason: t.reason,
-        source: t.source,
-      };
-    });
-
-    const now = Date.now();
-    const points = [
-      {
-        ts: since,
-        coin: null,
-        pnl: 0,
-        equity: baseline,
-        reason: "window_start",
-      },
-      ...tradePoints,
-      { ts: now, coin: null, pnl: 0, equity: currentEquity, reason: "now" },
-    ];
+    // Живой кончик: фактический equity «сейчас», если последний снапшот
+    // старше 30с (снапшоты идут раз в 5 мин, без этого график отстаёт).
+    if (points.length === 0 || now - points[points.length - 1].ts > 30_000) {
+      points.push({ ts: now, equity: currentEquity });
+    }
 
     res.json({
-      baseline,
       currentEquity,
       windowHours: hours,
-      tradeCount: tradePoints.length,
-      botCount: botTrades.length,
-      manualCount: manualTradePoints.length,
       count: points.length,
       points,
     });

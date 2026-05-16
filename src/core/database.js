@@ -39,6 +39,11 @@ export function initDB() {
       closed_at     INTEGER NOT NULL,
       reason        TEXT    NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS equity_snapshots (
+      ts     INTEGER PRIMARY KEY,
+      equity REAL    NOT NULL
+    );
   `);
 
   // Migration: strategy_id column for multi-strategy support
@@ -344,6 +349,36 @@ export function getActivePaperPosition() {
   return getDb()
     .prepare("SELECT * FROM positions WHERE status = ? AND mode = 'PAPER' ORDER BY id DESC LIMIT 1")
     .get('OPEN');
+}
+
+const EQUITY_SNAPSHOT_RETENTION_MS = 35 * 24 * 3_600_000; // 35 дней
+
+/**
+ * Записывает измеренный equity-снапшот. Дашборд строит Performance-график
+ * по этим точкам напрямую — депозиты/выводы видны как ступеньки, потому что
+ * рисуется ФАКТИЧЕСКИЙ equity, а не реконструкция из суммы PnL сделок.
+ * @param {number} equity
+ * @param {number} [ts] — Unix ms (default: now)
+ */
+export function saveEquitySnapshot(equity, ts = Date.now()) {
+  if (!Number.isFinite(equity)) return;
+  getDb()
+    .prepare('INSERT OR REPLACE INTO equity_snapshots (ts, equity) VALUES (?, ?)')
+    .run(ts, equity);
+  getDb()
+    .prepare('DELETE FROM equity_snapshots WHERE ts < ?')
+    .run(ts - EQUITY_SNAPSHOT_RETENTION_MS);
+}
+
+/**
+ * Снапшоты equity, начиная с указанного timestamp, по возрастанию ts.
+ * @param {number} sinceMs
+ * @returns {Array<{ ts: number, equity: number }>}
+ */
+export function getEquitySnapshotsSince(sinceMs) {
+  return getDb()
+    .prepare('SELECT ts, equity FROM equity_snapshots WHERE ts >= ? ORDER BY ts ASC')
+    .all(sinceMs);
 }
 
 /**
