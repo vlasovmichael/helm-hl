@@ -13,6 +13,7 @@ import { integrityCheck, orphanCheck } from './integrity.js';
 import { hunterReconcile } from './hunterReconcile.js';
 import { hunterLongReconcile } from './hunterLongReconcile.js';
 import { processHunterTrailArm } from './hunterTrailArm.js';
+import { tickTrendFollowPaper } from './trendFollowPaperTick.js';
 import { runBalanceDiag } from './balanceDiag.js';
 import { flushBotStatePeriodic } from './lifecycle.js';
 import { state } from './state.js';
@@ -88,6 +89,9 @@ export async function tick() {
     if (signal.action !== 'HOLD') {
       await execute(signal, activePosition);
     }
+
+    // ChillBoy (trend_follow) бумажный слот — независим от реального.
+    await tickTrendFollowPaper(hunterData);
 
     await runSmartAlerts(scoutData, signal, activePosition);
 

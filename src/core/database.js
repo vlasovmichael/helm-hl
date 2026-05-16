@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { logger } from './logger.js';
+import { config } from './config.js';
 
 mkdirSync('data', { recursive: true });
 
@@ -316,11 +317,32 @@ export function closePosition(id, data) {
 }
 
 /**
- * Возвращает активную (OPEN) позицию или undefined.
+ * Возвращает активную (OPEN) позицию ОСНОВНОГО слота или undefined.
+ *
+ * Основной слот = позиция в режиме самого бота:
+ *   • PROD-бот  → mode='PRODUCTION'
+ *   • PAPER-бот → mode='PAPER'
+ *
+ * В PROD-боте shadow-позиции (mode='PAPER', напр. ChillBoy до PROD-активации)
+ * сюда НЕ попадают — иначе integrityCheck принимает бумажную позу за реальную,
+ * не находит её на бирже и шлёт ложное "ВНЕШНЕЕ ЗАКРЫТИЕ". Для shadow-слота
+ * есть getActivePaperPosition().
  */
 export function getActivePosition() {
+  const mode = config.isProduction ? 'PRODUCTION' : 'PAPER';
   return getDb()
-    .prepare('SELECT * FROM positions WHERE status = ? ORDER BY id DESC LIMIT 1')
+    .prepare('SELECT * FROM positions WHERE status = ? AND mode = ? ORDER BY id DESC LIMIT 1')
+    .get('OPEN', mode);
+}
+
+/**
+ * Возвращает активную (OPEN) shadow-позицию (mode='PAPER') или undefined.
+ * Отдельный slot для paper-стратегий в PROD-боте — не конкурирует с реальным
+ * и не виден integrity/reconcile.
+ */
+export function getActivePaperPosition() {
+  return getDb()
+    .prepare("SELECT * FROM positions WHERE status = ? AND mode = 'PAPER' ORDER BY id DESC LIMIT 1")
     .get('OPEN');
 }
 

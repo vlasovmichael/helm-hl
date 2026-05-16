@@ -258,6 +258,13 @@ async function handleClose(signal, position) {
     return { ok: false };
   }
 
+  // Shadow-paper позиция в PROD-боте (напр. ChillBoy до PROD-активации) закрывается
+  // строго виртуально и НЕ касается Sniper-слота: armSniper/clearSniper ниже —
+  // это слот РЕАЛЬНОЙ позиции, бумажный exit не должен его трогать.
+  if (config.isProduction && position.mode === 'PAPER') {
+    return paperClose(signal, position);
+  }
+
   // ── Sniper routing (soft-причины → maker-only exit) ─────────
   const isSoft = SNIPER_SOFT_REASONS.has(signal.reason);
   const sniperActive = hasSniper();
@@ -285,7 +292,7 @@ async function handleClose(signal, position) {
       clearSniper();
     }
 
-    if (config.isProduction) {
+    if (position.mode === 'PRODUCTION') {
       return productionArmSniper(signal, position);
     }
 
@@ -360,7 +367,10 @@ async function handleClose(signal, position) {
     }
   }
 
-  if (config.isProduction) {
+  // Маршрут по mode позиции, а не по config.isProduction: бумажная позиция
+  // (shadow-стратегия в проде) должна закрываться виртуально, иначе productionClose
+  // отправит реальный market-ордер на монету, которой бот не владеет.
+  if (position.mode === 'PRODUCTION') {
     return productionClose(signal, position);
   }
   return paperClose(signal, position);
