@@ -18,6 +18,7 @@ import {
   setLeverage,
 } from '../exchange.js';
 import { resolveAsset, parseFillResponse } from './fill-parser.js';
+import { resolveEntrySize } from './sizing.js';
 import { fetchUserFills, classifyClose } from '../userFills.js';
 import {
   calcSize, calcPnl, checkSlippage, formatHlPrice, calcVolSizeMultiplier,
@@ -440,7 +441,10 @@ export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, si
   const leverage = config.trading.hunterLeverage;
   const util = config.trading.hunterBalanceUtil;
   const effectiveBalance = balance * leverage;
-  const { sizeUsd, sz, tooSmall } = calcSize(effectiveBalance, markPrice, szDecimals, util);
+  const { sizeUsd, sz, tooSmall } = resolveEntrySize({
+    coin, tag: 'Hunter', equity: balance, capBase: effectiveBalance,
+    capUtil: util, price: markPrice, sl, szDecimals,
+  });
   if (tooSmall) {
     logger.warn(
       `[Executor] [HUNTER SKIP] #${coin} — size $${sizeUsd.toFixed(2)} / sz=${sz} ` +
@@ -714,7 +718,10 @@ export async function productionHunterLongOpen(coin, markPrice, dumpPct, sl, tp,
   const leverage = config.trading.hunterLeverage; // тот же leverage что у Hunter SHORT
   const util = config.trading.hunterLongBalanceUtil;
   const effectiveBalance = balance * leverage;
-  const { sizeUsd, sz, tooSmall } = calcSize(effectiveBalance, markPrice, szDecimals, util);
+  const { sizeUsd, sz, tooSmall } = resolveEntrySize({
+    coin, tag: 'HunterLong', equity: balance, capBase: effectiveBalance,
+    capUtil: util, price: markPrice, sl, szDecimals,
+  });
   if (tooSmall) {
     logger.warn(
       `[Executor] [HUNTER_LONG SKIP] #${coin} — size $${sizeUsd.toFixed(2)} / sz=${sz} ` +
@@ -945,7 +952,10 @@ export async function productionTrendFollowOpen(
   const leverage = config.trading.hunterLeverage;
   const utilization = config.trading.chillBoyBalanceUtil;
   const effectiveBalance = balance * leverage;
-  const { sizeUsd, sz, tooSmall } = calcSize(effectiveBalance, markPrice, szDecimals, utilization);
+  const { sizeUsd, sz, tooSmall } = resolveEntrySize({
+    coin, tag: 'ChillBoy', equity: balance, capBase: effectiveBalance,
+    capUtil: utilization, price: markPrice, sl, szDecimals,
+  });
   if (tooSmall) {
     logger.warn(
       `[Executor] [CHILLBOY SKIP] #${coin} — size $${sizeUsd.toFixed(2)} / sz=${sz} ` +

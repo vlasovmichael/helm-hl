@@ -97,6 +97,37 @@ export function calcSize(balance, price, szDecimals, utilization = BALANCE_UTILI
 }
 
 /**
+ * Risk-based размер позиции: считается от расстояния до стопа, чтобы лосс по SL
+ * стоил фиксированную долю эквити независимо от монеты (узкий стоп → больше
+ * позиция, широкий → меньше).
+ *
+ *   riskUsd     = equity × riskPct
+ *   stopDistPct = |price − sl| / price
+ *   sizeUsd     = clamp(riskUsd / stopDistPct, MIN_ORDER_USD, capUsd)
+ *
+ * @param {number} equity     — реальный баланс (база для risk $, БЕЗ leverage)
+ * @param {number} price      — цена входа
+ * @param {number} sl         — stop-loss price
+ * @param {number} szDecimals — округление sz
+ * @param {number} riskPct    — доля эквити под риском (0.01 = 1%)
+ * @param {number} capUsd     — потолок размера в USD
+ * @returns {{ sizeUsd: number, sz: number, tooSmall: boolean, stopDistPct: number }}
+ */
+export function calcRiskSize(equity, price, sl, szDecimals, riskPct, capUsd) {
+  const stopDistPct = Math.abs(price - sl) / price;
+  if (!Number.isFinite(stopDistPct) || stopDistPct <= 0) {
+    return { sizeUsd: 0, sz: 0, tooSmall: true, stopDistPct: 0 };
+  }
+  let sizeUsd = (equity * riskPct) / stopDistPct;
+  if (sizeUsd > capUsd) sizeUsd = capUsd;
+  if (sizeUsd < MIN_ORDER_USD) {
+    return { sizeUsd, sz: 0, tooSmall: true, stopDistPct };
+  }
+  const sz = roundDown(sizeUsd / price, szDecimals);
+  return { sizeUsd, sz, tooSmall: sz <= 0, stopDistPct };
+}
+
+/**
  * Множитель размера позиции по реализованной волатильности.
  * VolIdx = stddev/mean closes за 15 мин (coefficient of variation из volatility.js).
  *

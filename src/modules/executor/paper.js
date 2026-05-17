@@ -29,6 +29,7 @@ import {
 } from '../strategistHunterLong.js';
 import { setHunterCrossCooldown } from '../hunterCrossCooldown.js';
 import { resolveAsset } from './fill-parser.js';
+import { resolveEntrySize } from './sizing.js';
 
 /**
  * Определяет баланс для расчёта размера позиции.
@@ -162,7 +163,10 @@ export async function hunterPaperOpen(coin, price, spikePct, sl, tp, silent = fa
   const util = config.trading.hunterBalanceUtil;
   const szDecimals = resolvePaperSzDecimals(coin);
   if (szDecimals == null) return { ok: false };
-  const { sizeUsd, sz, tooSmall } = calcSize(balance, price, szDecimals, util);
+  const { sizeUsd, sz, tooSmall } = resolveEntrySize({
+    coin, tag: 'Hunter', equity: balance, capBase: balance,
+    capUtil: util, price, sl, szDecimals,
+  });
 
   if (tooSmall) {
     const why = sizeUsd < MIN_ORDER_USD
@@ -233,7 +237,10 @@ export async function hunterLongPaperOpen(coin, price, dumpPct, sl, tp, silent =
   const util = config.trading.hunterLongBalanceUtil;
   const szDecimals = resolvePaperSzDecimals(coin);
   if (szDecimals == null) return { ok: false };
-  const { sizeUsd, sz, tooSmall } = calcSize(balance, price, szDecimals, util);
+  const { sizeUsd, sz, tooSmall } = resolveEntrySize({
+    coin, tag: 'HunterLong', equity: balance, capBase: balance,
+    capUtil: util, price, sl, szDecimals,
+  });
 
   if (tooSmall) {
     const why = sizeUsd < MIN_ORDER_USD
@@ -303,7 +310,10 @@ export async function trendFollowPaperOpen(coin, price, direction, sl, tp, silen
   const utilization = config.trading.chillBoyBalanceUtil;
   const szDecimals = resolvePaperSzDecimals(coin);
   if (szDecimals == null) return { ok: false };
-  const { sizeUsd, sz, tooSmall } = calcSize(balance, price, szDecimals, utilization);
+  const { sizeUsd, sz, tooSmall } = resolveEntrySize({
+    coin, tag: 'ChillBoy', equity: balance, capBase: balance,
+    capUtil: utilization, price, sl, szDecimals,
+  });
   if (tooSmall) {
     const why = sizeUsd < MIN_ORDER_USD
       ? `size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min`

@@ -337,6 +337,11 @@ function loadConfig() {
   const chillBoyTimeStopHours  = parseFloat(process.env.CHILL_BOY_TIME_STOP_HOURS || '6');
   const chillBoyBalanceUtil    = parseFloat(process.env.CHILL_BOY_BALANCE_UTILIZATION || '0.5');
   const chillBoyPostSlCooldownMin = parseFloat(process.env.CHILL_BOY_POST_SL_COOLDOWN_MIN || '120');
+
+  // ── Risk-based position sizing (cross-strategy: Hunter / Hunter Long / ChillBoy) ──
+  const riskBasedSizing  = (process.env.RISK_BASED_SIZING  || 'false').toLowerCase() === 'true';
+  const riskSizingShadow = (process.env.RISK_SIZING_SHADOW || 'true').toLowerCase() === 'true';
+  const riskPctPerTrade  = parseFloat(process.env.RISK_PCT_PER_TRADE || '0.01');
   if (!Number.isInteger(chillBoyAtrShort) || chillBoyAtrShort < 5 || chillBoyAtrShort >= chillBoyAtrLong) {
     throw new Error(`CHILL_BOY_ATR_SHORT must be integer in [5, CHILL_BOY_ATR_LONG). Got: "${process.env.CHILL_BOY_ATR_SHORT}"`);
   }
@@ -363,6 +368,9 @@ function loadConfig() {
   }
   if (isNaN(chillBoyPostSlCooldownMin) || chillBoyPostSlCooldownMin <= 0) {
     throw new Error(`CHILL_BOY_POST_SL_COOLDOWN_MIN must be positive. Got: "${process.env.CHILL_BOY_POST_SL_COOLDOWN_MIN}"`);
+  }
+  if (isNaN(riskPctPerTrade) || riskPctPerTrade <= 0 || riskPctPerTrade > 0.1) {
+    throw new Error(`RISK_PCT_PER_TRADE must be in (0, 0.1]. Got: "${process.env.RISK_PCT_PER_TRADE}"`);
   }
 
   if (isNaN(hunterLongDumpPct) || hunterLongDumpPct <= 0) {
@@ -518,6 +526,9 @@ function loadConfig() {
       chillBoyTimeStopHours,
       chillBoyBalanceUtil,
       chillBoyPostSlCooldownMin,
+      riskBasedSizing,
+      riskSizingShadow,
+      riskPctPerTrade,
       carryTrailEnabled,
       carryTrailArmPct,
       carryTrailArmPctEquity,
