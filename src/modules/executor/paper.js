@@ -28,6 +28,7 @@ import {
   consumeHunterLongMfeMae, clearHunterLongTrailState, getHunterLongPeakPct,
 } from '../strategistHunterLong.js';
 import { setHunterCrossCooldown } from '../hunterCrossCooldown.js';
+import { resolveAsset } from './fill-parser.js';
 
 /**
  * Определяет баланс для расчёта размера позиции.
@@ -45,6 +46,21 @@ async function getPaperBalance() {
   } catch (err) {
     logger.error(`[Executor] PAPER getPaperBalance failed: ${err.message}`);
     return 0;
+  }
+}
+
+/**
+ * szDecimals монеты из общего universe-кеша. Нужен calcSize'у, чтобы
+ * округление sz в PAPER совпадало с PROD (zero hardcoded → монеты дороже
+ * размера позиции молча округлялись в sz=0 и скипались). null → монета
+ * не в universe, открывать нельзя.
+ */
+function resolvePaperSzDecimals(coin) {
+  try {
+    return resolveAsset(coin).szDecimals;
+  } catch (err) {
+    logger.warn(`[Executor] PAPER #${coin} — resolveAsset failed: ${err.message}`);
+    return null;
   }
 }
 
@@ -71,12 +87,15 @@ export async function paperOpen(coin, price, apy, silent = false, strategyId = '
     : 1;
   const effectiveUtilization = 0.95 * volMult;
 
-  const { sizeUsd, tooSmall } = calcSize(balance, price, 0, effectiveUtilization);
+  const szDecimals = resolvePaperSzDecimals(coin);
+  if (szDecimals == null) return { ok: false };
+  const { sizeUsd, sz, tooSmall } = calcSize(balance, price, szDecimals, effectiveUtilization);
 
   if (tooSmall) {
-    logger.warn(
-      `[Executor] [SKIP] PAPER #${coin} — order size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} minimum`,
-    );
+    const why = sizeUsd < MIN_ORDER_USD
+      ? `order size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} minimum`
+      : `sz=${sz} rounds to 0 (szDecimals=${szDecimals}, price $${price})`;
+    logger.warn(`[Executor] [SKIP] PAPER #${coin} — ${why}`);
     return { ok: false };
   }
 
@@ -141,11 +160,16 @@ export async function hunterPaperOpen(coin, price, spikePct, sl, tp, silent = fa
   }
 
   const util = config.trading.hunterBalanceUtil;
-  const { sizeUsd, tooSmall } = calcSize(balance, price, 0, util);
+  const szDecimals = resolvePaperSzDecimals(coin);
+  if (szDecimals == null) return { ok: false };
+  const { sizeUsd, sz, tooSmall } = calcSize(balance, price, szDecimals, util);
 
   if (tooSmall) {
+    const why = sizeUsd < MIN_ORDER_USD
+      ? `size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min`
+      : `sz=${sz} rounds to 0 (szDecimals=${szDecimals}, price $${price})`;
     logger.warn(
-      `[Executor] [HUNTER SKIP] #${coin} — size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min (${(util * 100).toFixed(0)}% баланса $${balance.toFixed(2)})`,
+      `[Executor] [HUNTER SKIP] #${coin} — ${why} (${(util * 100).toFixed(0)}% баланса $${balance.toFixed(2)})`,
     );
     return { ok: false };
   }
@@ -207,11 +231,16 @@ export async function hunterLongPaperOpen(coin, price, dumpPct, sl, tp, silent =
   }
 
   const util = config.trading.hunterLongBalanceUtil;
-  const { sizeUsd, tooSmall } = calcSize(balance, price, 0, util);
+  const szDecimals = resolvePaperSzDecimals(coin);
+  if (szDecimals == null) return { ok: false };
+  const { sizeUsd, sz, tooSmall } = calcSize(balance, price, szDecimals, util);
 
   if (tooSmall) {
+    const why = sizeUsd < MIN_ORDER_USD
+      ? `size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min`
+      : `sz=${sz} rounds to 0 (szDecimals=${szDecimals}, price $${price})`;
     logger.warn(
-      `[Executor] [HUNTER_LONG SKIP] #${coin} — size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min (${(util * 100).toFixed(0)}% баланса $${balance.toFixed(2)})`,
+      `[Executor] [HUNTER_LONG SKIP] #${coin} — ${why} (${(util * 100).toFixed(0)}% баланса $${balance.toFixed(2)})`,
     );
     return { ok: false };
   }
@@ -272,10 +301,15 @@ export async function trendFollowPaperOpen(coin, price, direction, sl, tp, silen
   }
 
   const utilization = config.trading.chillBoyBalanceUtil;
-  const { sizeUsd, tooSmall } = calcSize(balance, price, 0, utilization);
+  const szDecimals = resolvePaperSzDecimals(coin);
+  if (szDecimals == null) return { ok: false };
+  const { sizeUsd, sz, tooSmall } = calcSize(balance, price, szDecimals, utilization);
   if (tooSmall) {
+    const why = sizeUsd < MIN_ORDER_USD
+      ? `size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min`
+      : `sz=${sz} rounds to 0 (szDecimals=${szDecimals}, price $${price})`;
     logger.warn(
-      `[Executor] [ChillBoy SKIP] #${coin} — size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min (${(utilization * 100).toFixed(0)}% баланса $${balance.toFixed(2)})`,
+      `[Executor] [ChillBoy SKIP] #${coin} — ${why} (${(utilization * 100).toFixed(0)}% баланса $${balance.toFixed(2)})`,
     );
     return { ok: false };
   }
