@@ -50,6 +50,21 @@ export function resetTrendFollowState() {
   lastHeartbeat = null;
 }
 
+/**
+ * Облегчённый heartbeat для тиков, где slot занят и universe не сканируется.
+ * Держит dashboard-карточку живой — иначе после рестарта она висит «warming up»,
+ * пока ChillBoy в сделке (analyzeTrendFollow уходит в ранний return до снапшота).
+ */
+function markBusyHeartbeat(tracked, now) {
+  lastHeartbeat = {
+    tracked, squeezed: 0, breakouts: 0,
+    slot: 'BUSY',
+    reCooldowns: cooldownMap.size,
+    postSlCooldowns: postSlCooldown.size,
+    ts: now,
+  };
+}
+
 /** Последний снимок состояния детектора Chill Boy (для dashboard). */
 export function getChillBoyHeartbeat() {
   return lastHeartbeat;
@@ -70,11 +85,15 @@ export function getChillBoyHeartbeat() {
 export async function analyzeTrendFollow(scoutData, activePosition, now = Date.now(), candleFetcher = getHourlyCandles) {
   // Exit для своей позиции
   if (activePosition?.strategy_id === 'trend_follow') {
+    markBusyHeartbeat(scoutData?.length ?? 0, now);
     return checkTrendFollowExit(activePosition, scoutData, now);
   }
 
   // Если slot занят чужой стратегией — Iter F.1b без эвикшена, HOLD.
-  if (activePosition) return { action: 'HOLD' };
+  if (activePosition) {
+    markBusyHeartbeat(scoutData?.length ?? 0, now);
+    return { action: 'HOLD' };
+  }
 
   // Сканируем universe — ищем squeeze+breakout. Параллельные fetch.
   const data = scoutData ?? [];

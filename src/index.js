@@ -83,6 +83,12 @@ async function main() {
   );
   logger.info('[System] Tax collector cron scheduled: 03:00 Europe/Warsaw daily');
 
+  // Разовый прогон при старте: после деплоя налоговые данные подтягиваются
+  // сразу, не дожидаясь 03:00. Non-blocking + fail-soft.
+  taxDailyJob().catch((err) => {
+    logger.error(`[Tax] Startup run crashed: ${err.message}`);
+  });
+
   // ── Tax Outbox pusher — каждые 15 минут ──
   // Драйнит tax_outbox в tax-manager. Fail-soft: если env не задан — skip.
   cron.schedule('*/15 * * * *', () => {
