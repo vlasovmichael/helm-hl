@@ -15,6 +15,7 @@ import {
   getHistorySince,
   getArchivedHistorySince,
   getEquitySnapshotsSince,
+  realTradesForDisplay,
 } from "../../core/database.js";
 import { getAccountSummary, getPositions, getLivePrice } from "../exchange.js";
 import { fetchUserFills, reconstructManualTrades } from "../userFills.js";
@@ -378,7 +379,7 @@ async function handleActivity(req, res) {
     const since = Date.now() - hours * 3_600_000;
     const events = [];
 
-    for (const t of getHistorySince(since)) {
+    for (const t of realTradesForDisplay(getHistorySince(since))) {
       if (!t.coin) continue;
       events.push({
         kind: "close",
@@ -389,7 +390,7 @@ async function handleActivity(req, res) {
         strategy_id: t.strategy_id || "carry",
       });
     }
-    for (const t of getArchivedHistorySince(since)) {
+    for (const t of realTradesForDisplay(getArchivedHistorySince(since))) {
       if (!t.coin) continue;
       events.push({
         kind: "close",
@@ -919,7 +920,7 @@ async function handlePnlSummary(_req, res) {
     // Один проход — наибольший period (all). Дальше фильтруем in-memory.
     const allDb = getHistorySince(0);
     const allArch = getArchivedHistorySince(0);
-    const allTrades = [...allDb, ...allArch];
+    const allTrades = realTradesForDisplay([...allDb, ...allArch]);
 
     // Manual trades (reconstructed from userFills, deduped against bot trades).
     const manualTrades = await getManualTrades();
@@ -1013,8 +1014,10 @@ async function handleTradeMarkers(req, res) {
       : 168;
     const since = Date.now() - hours * 3600_000;
 
-    const dbRows = getHistorySince(since).filter((t) => t.coin === coin);
-    const archRows = getArchivedHistorySince(since).filter(
+    const dbRows = realTradesForDisplay(getHistorySince(since)).filter(
+      (t) => t.coin === coin,
+    );
+    const archRows = realTradesForDisplay(getArchivedHistorySince(since)).filter(
       (t) => t.coin === coin,
     );
     const closes = [...dbRows, ...archRows];

@@ -426,6 +426,20 @@ export function getArchivedHistorySince(sinceMs) {
 }
 
 /**
+ * Фильтрует сделки до реальных (mode='PRODUCTION'), когда бот работает в проде.
+ * В PAPER-боте возвращает список без изменений. Используется во всех P&L-сводках
+ * и лентах активности, чтобы shadow/paper-эксперименты (напр. выключенный Chill Boy)
+ * не подмешивались в реальную статистику счёта.
+ *
+ * @param {Array<Object>} trades
+ * @returns {Array<Object>}
+ */
+export function realTradesForDisplay(trades) {
+  if (!config.isProduction) return trades;
+  return trades.filter((t) => t.mode === 'PRODUCTION');
+}
+
+/**
  * Архивирует всю историю в data/history_archive.json и очищает таблицу history.
  *
  * Файл архива — JSON-массив. При повторных вызовах записи дописываются

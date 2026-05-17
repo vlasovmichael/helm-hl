@@ -4,7 +4,7 @@
 
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
-import { getActivePosition, getHistory, getHistorySince, getArchivedHistorySince, archiveAndClearHistory } from '../core/database.js';
+import { getActivePosition, getHistory, getHistorySince, getArchivedHistorySince, archiveAndClearHistory, realTradesForDisplay } from '../core/database.js';
 import { getAccountSummary, getMarkPrice } from '../modules/exchange.js';
 import { getAccountEquity } from '../modules/wallet.js';
 import {
@@ -130,7 +130,7 @@ async function checkDailyRecap() {
   if (state.dailyRecapSentDate === today) return;
 
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const todayHistory = getHistorySince(dayStart);
+  const todayHistory = realTradesForDisplay(getHistorySince(dayStart));
 
   let equity = 0;
   try {
@@ -193,7 +193,7 @@ async function sendPeriodRecap(label, sinceMs, equity) {
   try {
     const dbTrades      = getHistorySince(sinceMs);
     const archiveTrades = getArchivedHistorySince(sinceMs);
-    const allTrades     = [...archiveTrades, ...dbTrades];
+    const allTrades     = realTradesForDisplay([...archiveTrades, ...dbTrades]);
 
     await sendPeriodSummary({ label, trades: allTrades, equity });
   } catch (err) {
