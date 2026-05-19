@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { mkdirSync, readFileSync, writeFileSync, renameSync } from 'fs';
 import { logger } from './logger.js';
 import { config } from './config.js';
 
@@ -478,7 +478,13 @@ export function archiveAndClearHistory() {
   );
 
   const merged = [...existing, ...newRows];
-  writeFileSync(ARCHIVE_PATH, JSON.stringify(merged, null, 2), 'utf-8');
+  // Атомарная запись через tmp + rename — как saveBotState/balanceCache.
+  // Прямой writeFileSync открывал бы существующий файл на запись и падал с
+  // EACCES, если владелец файла (opc) ≠ UID процесса в контейнере (node).
+  // rename требует прав только на директорию data/ (она 777).
+  const tmpPath = `${ARCHIVE_PATH}.${process.pid}.tmp`;
+  writeFileSync(tmpPath, JSON.stringify(merged, null, 2), 'utf-8');
+  renameSync(tmpPath, ARCHIVE_PATH);
 
   // Очищаем таблицу history
   getDb().prepare('DELETE FROM history').run();
