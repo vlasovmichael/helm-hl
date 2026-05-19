@@ -514,6 +514,11 @@ export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, si
   const slip    = checkSlippage(markPrice, fillPx, 'SELL');
   const fee     = fillUsd * ONE_LEG;
 
+  // SL/TP стратег задал от сигнальной цены; пересчитываем от реального филла —
+  // иначе при проскальзывании стоп встаёт вплотную к entry (инцидент TST 2026-05-19).
+  sl = fillPx * (sl / markPrice);
+  tp = fillPx * (tp / markPrice);
+
   // ── 5. Save position (без oids — обновим после триггеров) ──
   let entryEquity = null;
   try {
@@ -785,6 +790,11 @@ export async function productionHunterLongOpen(coin, markPrice, dumpPct, sl, tp,
   const slip    = checkSlippage(markPrice, fillPx, 'BUY');
   const fee     = fillUsd * ONE_LEG;
 
+  // SL/TP стратег задал от сигнальной цены; пересчитываем от реального филла —
+  // иначе при проскальзывании стоп встаёт вплотную к entry (инцидент TST 2026-05-19).
+  sl = fillPx * (sl / markPrice);
+  tp = fillPx * (tp / markPrice);
+
   let entryEquity = null;
   try {
     const summary = await getAccountSummary();
@@ -1018,6 +1028,11 @@ export async function productionTrendFollowOpen(
   const fillUsd = fillSz * fillPx;
   const slip    = checkSlippage(markPrice, fillPx, isLong ? 'BUY' : 'SELL');
   const fee     = fillUsd * ONE_LEG;
+
+  // SL/TP стратег задал от сигнальной цены; пересчитываем от реального филла —
+  // иначе при проскальзывании стоп встаёт вплотную к entry (инцидент TST 2026-05-19).
+  sl = fillPx * (sl / markPrice);
+  tp = fillPx * (tp / markPrice);
 
   let entryEquity = null;
   try {

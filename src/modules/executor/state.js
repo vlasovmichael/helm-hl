@@ -11,10 +11,13 @@ export const RUNTIME_BAN_TTL_MS    = 30 * 60_000;  // 30 мин
 export const SLIPPAGE_BAN_TTL_MS   = 10 * 60_000;  // 10 мин
 export const REENTRY_COOLDOWN_MS   = 15 * 60_000;  // 15 мин
 export const REJECTED_ALERT_TTL_MS = 30 * 60_000;  // 30 мин
-// OI cap bans используют exponential backoff: 30м → 1ч → 2ч → 4ч (cap).
+// OI cap bans используют exponential backoff: 6ч → 12ч → 24ч (cap).
+// OI на потолке биржи — структурный признак неликвида, не транзиентный шум:
+// 30-мин бан был слишком коротким (инцидент TST 2026-05-19 — бан истёк, монета
+// зашла снова через 3ч и мгновенно вылетела по SL на 2% проскальзывании).
 // Счётчик сбрасывается если за OI_CAP_REPEAT_RESET_MS не было новых rejection.
-export const OI_CAP_BAN_BASE_MS      = 30 * 60_000;        // tier 1
-export const OI_CAP_BAN_MAX_MS       = 4  * 3_600_000;     // tier ≥4 (cap)
+export const OI_CAP_BAN_BASE_MS      = 6  * 3_600_000;     // tier 1
+export const OI_CAP_BAN_MAX_MS       = 24 * 3_600_000;     // tier ≥3 (cap)
 export const OI_CAP_REPEAT_RESET_MS  = 24 * 3_600_000;     // 24ч тишины → reset
 
 // ── Risk-параметры (из .env через config.risk) ──
