@@ -43,9 +43,17 @@ const HUNTER_LONG_TRAIL_SHADOW_LOG   = config.trading.hunterLongTrailShadowLog;
 const HUNTER_LONG_TRAIL_ARM_PCT      = config.trading.hunterLongTrailArmPct;
 const HUNTER_LONG_TRAIL_GIVE_BACK_PCT = config.trading.hunterLongTrailGiveBackPct;
 
+// 2026-05-20 toxic-coin filters.
+const HUNTER_LONG_MIN_OI_USD     = config.trading.hunterLongMinOiUsd;
+const HUNTER_LONG_MIN_VOL_24H    = config.trading.hunterLongMinVol24hUsd;
+const HUNTER_LONG_SL_STREAK_BAN     = config.trading.hunterLongSlStreakBan;
+const HUNTER_LONG_SL_STREAK_WINDOW_MS = config.trading.hunterLongSlStreakWindowH * 3_600_000;
+const HUNTER_LONG_SL_STREAK_BAN_MS  = config.trading.hunterLongSlStreakBanH    * 3_600_000;
+
 // Per-coin cooldown state (изолировано от Hunter SHORT — у него свои Maps).
 const cooldownMap     = new Map();   // coin → last-signal timestamp (re-detect)
-const postSlCooldown  = new Map();   // coin → SL timestamp (длинный cooldown после SL)
+const postSlCooldown  = new Map();   // coin → ban-until timestamp (мс). Coin запрещена до этого ts.
+const slStreak        = new Map();   // coin → { count, lastSlAt } — для consecutive-SL бана
 const mfeMaeMap       = new Map();   // positionId → { mfeUsd, maeUsd, mfePct, maePct }
 const peakUnrealizedPct = new Map(); // positionId → peak unrealized% (LONG: (current-entry)/entry*100)
 const armedShadowMap  = new Map();   // positionId → true, если SHADOW лог уже сработал (one-shot)
@@ -55,10 +63,48 @@ let lastHeartbeatAt   = 0;
 export function resetHunterLongCooldowns() {
   cooldownMap.clear();
   postSlCooldown.clear();
+  slStreak.clear();
   mfeMaeMap.clear();
   peakUnrealizedPct.clear();
   armedShadowMap.clear();
   lastHeartbeatAt = 0;
+}
+
+/**
+ * Ставит post-SL cooldown с учётом streak'а. Вызывается из:
+ *   - checkHunterLongExit() при SL (этот же модуль)
+ *   - production.js при external_close детекте (Fix C)
+ *
+ * Behavior:
+ *   - streak увеличивается на 1 (или сбрасывается в 1 если прошлый SL > WINDOW назад)
+ *   - если streak ≥ HUNTER_LONG_SL_STREAK_BAN → длинный бан (BAN_HOURS)
+ *   - иначе стандартный postSlCooldown (HUNTER_LONG_POST_SL_COOLDOWN_MIN)
+ */
+export function recordHunterLongLossEvent(coin, now = Date.now()) {
+  const prev = slStreak.get(coin);
+  let count;
+  if (prev && now - prev.lastSlAt <= HUNTER_LONG_SL_STREAK_WINDOW_MS) {
+    count = prev.count + 1;
+  } else {
+    count = 1;
+  }
+  slStreak.set(coin, { count, lastSlAt: now });
+
+  const banMs = count >= HUNTER_LONG_SL_STREAK_BAN
+    ? HUNTER_LONG_SL_STREAK_BAN_MS
+    : HUNTER_LONG_POST_SL_COOLDOWN_MS;
+  postSlCooldown.set(coin, now + banMs);
+
+  if (count >= HUNTER_LONG_SL_STREAK_BAN) {
+    logger.warn(
+      `[HunterLong] 🚫 #${coin} consecutive SL streak=${count} → banned for ${(banMs / 3_600_000).toFixed(1)}h`,
+    );
+  }
+}
+
+/** Очистка streak'а — вызывается на TP / trail_tp / положительный time_stop. */
+export function clearHunterLongSlStreak(coin) {
+  slStreak.delete(coin);
 }
 
 /** Текущий peak unrealized% (для exitFeatures при close). */
@@ -138,8 +184,25 @@ export function analyzeHunterLong(scoutData, activePosition, now = Date.now()) {
     const lastFired = cooldownMap.get(item.coin) ?? 0;
     if (now - lastFired < HUNTER_LONG_COOLDOWN_MS) continue;
 
-    const lastSl = postSlCooldown.get(item.coin) ?? 0;
-    if (now - lastSl < HUNTER_LONG_POST_SL_COOLDOWN_MS) continue;
+    const unbanAt = postSlCooldown.get(item.coin) ?? 0;
+    if (now < unbanAt) continue;
+
+    // Fix A (2026-05-20): toxic-coin filter. Null/undefined → пропуск проверки
+    // (degradation: scout мог не получить данные). Число ниже порога → блок + лог.
+    const oiUsd = Number.isFinite(item.oiUsd) ? item.oiUsd : null;
+    const volUsd = Number.isFinite(item.volume24hUsd) ? item.volume24hUsd : null;
+    if (oiUsd !== null && oiUsd < HUNTER_LONG_MIN_OI_USD) {
+      logger.info(
+        `[HunterLong] ⛔ #${item.coin} dump ${pct.toFixed(2)}% пропущен: OI $${(oiUsd / 1_000).toFixed(0)}k < min $${(HUNTER_LONG_MIN_OI_USD / 1_000).toFixed(0)}k (delist-risk)`,
+      );
+      continue;
+    }
+    if (volUsd !== null && volUsd < HUNTER_LONG_MIN_VOL_24H) {
+      logger.info(
+        `[HunterLong] ⛔ #${item.coin} dump ${pct.toFixed(2)}% пропущен: vol24h $${(volUsd / 1_000_000).toFixed(2)}M < min $${(HUNTER_LONG_MIN_VOL_24H / 1_000_000).toFixed(1)}M`,
+      );
+      continue;
+    }
 
     // Cross-strategy cooldown: Hunter SHORT только что закрылся в этой монете —
     // не лезем в зеркальный long после уже отыгранного движения.
@@ -273,6 +336,7 @@ function checkHunterLongExit(position, scoutData) {
             `(gave back ${(giveBack / peak * 100).toFixed(0)}% ≥ ${HUNTER_LONG_TRAIL_GIVE_BACK_PCT}%)`,
         );
         setHunterCrossCooldown(position.coin);
+        clearHunterLongSlStreak(position.coin);
         return {
           action: 'CLOSE',
           coin:   position.coin,
@@ -297,7 +361,7 @@ function checkHunterLongExit(position, scoutData) {
   }
 
   if (position.sl_price != null && item.price <= position.sl_price) {
-    postSlCooldown.set(position.coin, Date.now());
+    recordHunterLongLossEvent(position.coin, Date.now());
     setHunterCrossCooldown(position.coin);
     return {
       action: 'CLOSE',
@@ -308,6 +372,7 @@ function checkHunterLongExit(position, scoutData) {
   }
   if (position.tp_price != null && item.price >= position.tp_price) {
     setHunterCrossCooldown(position.coin);
+    clearHunterLongSlStreak(position.coin);
     return {
       action: 'CLOSE',
       coin:   position.coin,
@@ -317,7 +382,14 @@ function checkHunterLongExit(position, scoutData) {
   }
 
   if (position.entry_time && Date.now() - position.entry_time >= HUNTER_LONG_TIME_STOP_MS) {
-    postSlCooldown.set(position.coin, Date.now());
+    // Time-stop с прибылью = сигнал отработал (медленно, но в плюс) → не наказываем.
+    // Time-stop в убыток = ставим обычный cooldown через recordHunterLongLossEvent.
+    const exitPnlPct = ((item.price - position.entry_price) / position.entry_price) * 100;
+    if (exitPnlPct > 0) {
+      clearHunterLongSlStreak(position.coin);
+    } else {
+      recordHunterLongLossEvent(position.coin, Date.now());
+    }
     setHunterCrossCooldown(position.coin);
     const heldMin = Math.round((Date.now() - position.entry_time) / 60_000);
     return {

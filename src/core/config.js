@@ -312,8 +312,21 @@ function loadConfig() {
   const hunterLongTpPct           = parseFloat(process.env.HUNTER_LONG_TP_PCT           || '3.0');
   const hunterLongTrendLookbackMin = parseFloat(process.env.HUNTER_LONG_TREND_LOOKBACK_MIN || '15');
   const hunterLongTrendMaxDropPct = parseFloat(process.env.HUNTER_LONG_TREND_MAX_DROP_PCT || '6');
-  const hunterLongPostSlCooldownMin = parseFloat(process.env.HUNTER_LONG_POST_SL_COOLDOWN_MIN || '60');
+  const hunterLongPostSlCooldownMin = parseFloat(process.env.HUNTER_LONG_POST_SL_COOLDOWN_MIN || '180');
   const hunterLongTimeStopMin     = parseFloat(process.env.HUNTER_LONG_TIME_STOP_MIN     || '60');
+
+  // ── Hunter Long entry filters (2026-05-20: после анализа Hunter LONG −$1.93/12tr) ──
+  // Min-OI / min-volume гард: отсекаем low-liquidity монеты, склонные к halt/delist.
+  // TST −$1.80 (external_close) — кейс-мотивация. Null → пропуск (deg. graceful при
+  // API-сбоях scout'а), число ниже порога → continue + лог.
+  const hunterLongMinOiUsd      = parseFloat(process.env.HUNTER_LONG_MIN_OI_USD       || '500000');
+  const hunterLongMinVol24hUsd  = parseFloat(process.env.HUNTER_LONG_MIN_VOL_24H_USD  || '5000000');
+  // Consecutive-SL ban: после N подряд SL'ов на одной монете (в окне WINDOW_HOURS)
+  // ставим длинный бан BAN_HOURS. Защита от serial-loser паттерна (SAGA ×2 SL 2026-05-14).
+  // Стандартный postSlCooldown остаётся базовой защитой (минуты), это — добавка поверх.
+  const hunterLongSlStreakBan      = parseInt(process.env.HUNTER_LONG_SL_STREAK_BAN       || '2', 10);
+  const hunterLongSlStreakWindowH  = parseFloat(process.env.HUNTER_LONG_SL_STREAK_WINDOW_HOURS || '6');
+  const hunterLongSlStreakBanH     = parseFloat(process.env.HUNTER_LONG_SL_STREAK_BAN_HOURS    || '24');
 
   // Cross-strategy cooldown: после ЛЮБОГО close (SHORT или LONG) монета на N минут
   // запрещена для второй Hunter-стратегии. Защита от подбора ножа после успешного
@@ -393,6 +406,21 @@ function loadConfig() {
   }
   if (isNaN(hunterLongTimeStopMin) || hunterLongTimeStopMin <= 0) {
     throw new Error(`HUNTER_LONG_TIME_STOP_MIN must be positive. Got: "${process.env.HUNTER_LONG_TIME_STOP_MIN}"`);
+  }
+  if (isNaN(hunterLongMinOiUsd) || hunterLongMinOiUsd < 0) {
+    throw new Error(`HUNTER_LONG_MIN_OI_USD must be ≥ 0. Got: "${process.env.HUNTER_LONG_MIN_OI_USD}"`);
+  }
+  if (isNaN(hunterLongMinVol24hUsd) || hunterLongMinVol24hUsd < 0) {
+    throw new Error(`HUNTER_LONG_MIN_VOL_24H_USD must be ≥ 0. Got: "${process.env.HUNTER_LONG_MIN_VOL_24H_USD}"`);
+  }
+  if (!Number.isInteger(hunterLongSlStreakBan) || hunterLongSlStreakBan < 1) {
+    throw new Error(`HUNTER_LONG_SL_STREAK_BAN must be integer ≥ 1. Got: "${process.env.HUNTER_LONG_SL_STREAK_BAN}"`);
+  }
+  if (isNaN(hunterLongSlStreakWindowH) || hunterLongSlStreakWindowH <= 0) {
+    throw new Error(`HUNTER_LONG_SL_STREAK_WINDOW_HOURS must be positive. Got: "${process.env.HUNTER_LONG_SL_STREAK_WINDOW_HOURS}"`);
+  }
+  if (isNaN(hunterLongSlStreakBanH) || hunterLongSlStreakBanH <= 0) {
+    throw new Error(`HUNTER_LONG_SL_STREAK_BAN_HOURS must be positive. Got: "${process.env.HUNTER_LONG_SL_STREAK_BAN_HOURS}"`);
   }
 
   // Iter E.2: trailing TP для Hunter Long (PAPER). Зеркало HUNTER_TRAIL_*.
@@ -510,6 +538,11 @@ function loadConfig() {
       hunterLongTrendMaxDropPct,
       hunterLongPostSlCooldownMin,
       hunterLongTimeStopMin,
+      hunterLongMinOiUsd,
+      hunterLongMinVol24hUsd,
+      hunterLongSlStreakBan,
+      hunterLongSlStreakWindowH,
+      hunterLongSlStreakBanH,
       hunterLongTrailEnabled,
       hunterLongTrailShadowLog,
       hunterLongTrailArmPct,

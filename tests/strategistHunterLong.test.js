@@ -12,6 +12,7 @@ const { push, clearAll } =
   await import('../src/core/priceHistory.js');
 const {
   analyzeHunterLong, resetHunterLongCooldowns, consumeHunterLongMfeMae,
+  recordHunterLongLossEvent, clearHunterLongSlStreak,
 } = await import('../src/modules/strategistHunterLong.js');
 const { resetHunterCrossCooldowns } = await import('../src/modules/hunterCrossCooldown.js');
 
@@ -208,4 +209,107 @@ test('Slot занят другой стратегией → HOLD, hunter_long н
     now,
   );
   assert.equal(r.action, 'HOLD');
+});
+
+// ── 2026-05-20: toxic-coin filters (Fix A + B + C) ──────────────────────
+
+test('Fix A: OI ниже порога → dump пропущен (entry заблокирован)', () => {
+  reset();
+  const now = T0;
+  seedHistory('TST', 100, now);
+  const r = analyzeHunterLong(
+    [{ coin: 'TST', price: 95, oiUsd: 100_000, volume24hUsd: 50_000_000 }], // OI=100k < 500k default
+    null,
+    now,
+  );
+  assert.equal(r.action, 'HOLD', 'низкий OI должен блокировать вход');
+});
+
+test('Fix A: vol24h ниже порога → dump пропущен', () => {
+  reset();
+  const now = T0;
+  seedHistory('TST', 100, now);
+  const r = analyzeHunterLong(
+    [{ coin: 'TST', price: 95, oiUsd: 10_000_000, volume24hUsd: 1_000_000 }], // vol=1M < 5M default
+    null,
+    now,
+  );
+  assert.equal(r.action, 'HOLD', 'низкий vol24h должен блокировать вход');
+});
+
+test('Fix A: null OI/vol → пропуск проверки (graceful degradation), вход возможен', () => {
+  reset();
+  const now = T0;
+  seedHistory('BTC', 50000, now);
+  const r = analyzeHunterLong(
+    [{ coin: 'BTC', price: 47000 }], // нет oiUsd/volume24hUsd
+    null,
+    now,
+  );
+  assert.equal(r.action, 'OPEN', 'отсутствие данных не должно блокировать (API-glitch safety)');
+});
+
+test('Fix A: OI и vol выше порога → нормальный OPEN', () => {
+  reset();
+  const now = T0;
+  seedHistory('BTC', 50000, now);
+  const r = analyzeHunterLong(
+    [{ coin: 'BTC', price: 47000, oiUsd: 10_000_000, volume24hUsd: 100_000_000 }],
+    null,
+    now,
+  );
+  assert.equal(r.action, 'OPEN');
+});
+
+test('Fix B: 1 SL → стандартный cooldown, 2-й SL подряд в окне → длинный бан 24h', () => {
+  reset();
+  const now = T0;
+  // Первый SL
+  recordHunterLongLossEvent('SAGA', now);
+  // Через 30 мин — пробуем войти. Стандартный postSlCooldown=180мин → блок.
+  seedHistory('SAGA', 0.03, now + 30 * MIN);
+  let r = analyzeHunterLong(
+    [{ coin: 'SAGA', price: 0.028, oiUsd: 10_000_000, volume24hUsd: 50_000_000 }],
+    null,
+    now + 30 * MIN,
+  );
+  assert.equal(r.action, 'HOLD', 'через 30мин cooldown ещё активен');
+
+  // Через 4ч — обычный cooldown истёк (180мин = 3h), второй SL ловим
+  recordHunterLongLossEvent('SAGA', now + 4 * 60 * MIN);
+  // Через 6ч после первого SL (2ч после второго) — пробуем войти. Streak=2 → бан 24h.
+  seedHistory('SAGA', 0.03, now + 6 * 60 * MIN);
+  r = analyzeHunterLong(
+    [{ coin: 'SAGA', price: 0.028, oiUsd: 10_000_000, volume24hUsd: 50_000_000 }],
+    null,
+    now + 6 * 60 * MIN,
+  );
+  assert.equal(r.action, 'HOLD', 'после streak=2 должен быть длинный бан');
+
+  // Через 29ч от первого SL = 25ч после второго SL → бан 24h истёк, можно входить
+  seedHistory('SAGA', 0.03, now + 29 * 60 * MIN);
+  r = analyzeHunterLong(
+    [{ coin: 'SAGA', price: 0.028, oiUsd: 10_000_000, volume24hUsd: 50_000_000 }],
+    null,
+    now + 29 * 60 * MIN,
+  );
+  assert.equal(r.action, 'OPEN', 'через 25ч после 2-го SL бан истёк, можно входить');
+});
+
+test('Fix B: clearHunterLongSlStreak сбрасывает счётчик (после TP)', () => {
+  reset();
+  const now = T0;
+  recordHunterLongLossEvent('VVV', now);
+  clearHunterLongSlStreak('VVV');                       // имитация TP — сброс
+  recordHunterLongLossEvent('VVV', now + 4 * 60 * MIN); // следующий SL = streak 1, не 2
+
+  // Через 4h+3h+1min от первого = 7h01m — после второго SL (через 4h) + 3h cooldown
+  const tNow = now + (4 * 60 + 181) * MIN;
+  seedHistory('VVV', 13.5, tNow);
+  const r = analyzeHunterLong(
+    [{ coin: 'VVV', price: 13.0, oiUsd: 10_000_000, volume24hUsd: 50_000_000 }],
+    null,
+    tNow,
+  );
+  assert.equal(r.action, 'OPEN', 'streak сброшен между SL → второй SL = streak 1, бан стандартный');
 });

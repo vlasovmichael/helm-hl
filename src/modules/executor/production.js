@@ -41,6 +41,7 @@ import {
   consumeHunterLongMfeMae, clearHunterLongTrailState, getHunterLongPeakPct,
 } from '../strategistHunterLong.js';
 import { setHunterCrossCooldown } from '../hunterCrossCooldown.js';
+import { recordHunterLongLossEvent } from '../strategistHunterLong.js';
 import {
   notifyProductionOpen, notifyOpenFailed, notifyOpenRejected,
   notifyOpenSkipped, notifySlippageBan,
@@ -1311,6 +1312,16 @@ export async function productionClose(signal, position, silent = false) {
         );
         if (position.strategy_id === 'hunter' || position.strategy_id === 'hunter_long') {
           setHunterCrossCooldown(position.coin);
+        }
+        // Fix C (2026-05-20): external close на hunter_long почти всегда = убыток
+        // (delist/halt/liquidation/user manual close). Ставим post-SL cooldown +
+        // инкрементим SL-streak, чтобы не войти повторно в ту же токсичную монету.
+        // Исключение: если classifier явно вернул tp_trigger → не пенализуем.
+        if (
+          position.strategy_id === 'hunter_long' &&
+          !['tp_trigger', 'hunter_long_tp', 'hunter_long_trail_tp'].includes(classified.reason)
+        ) {
+          recordHunterLongLossEvent(position.coin);
         }
       } catch (dbErr) {
         logger.error(`[Executor] DB close failed: ${dbErr.message}`);
