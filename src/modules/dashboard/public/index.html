@@ -285,6 +285,58 @@
         </div>
       </section>
 
+      <!-- 06.5 / Insights -->
+      <section class="card" id="sec-insights">
+        <div class="card-header">
+          <div class="card-title" data-num="06+" title="Lifetime per-coin breakdown + 90-day daily P&amp;L heatmap. Independent of P&amp;L period selector — always shows all-time / 90d.">Insights</div>
+          <div class="time-ranges" id="insights-tabs">
+            <button class="range-btn active" data-tab="per-coin">Per-coin</button>
+            <button class="range-btn" data-tab="heatmap">Heatmap</button>
+          </div>
+        </div>
+        <div id="insights-container" style="position: relative">
+          <div class="card-skeleton" id="insights-skeleton">
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+          </div>
+          <div class="insights-pane" id="insights-pane-per-coin">
+            <div class="per-coin-meta" id="per-coin-meta">— coins · all-time</div>
+            <div class="per-coin-table-wrap">
+              <table class="per-coin-table">
+                <thead>
+                  <tr>
+                    <th data-sort="coin">Coin</th>
+                    <th data-sort="trades" class="num">Trades</th>
+                    <th data-sort="pnl" class="num sort-active sort-desc">P&amp;L</th>
+                    <th data-sort="winRate" class="num">Win%</th>
+                    <th data-sort="avg" class="num">Avg</th>
+                    <th data-sort="lastClosedAt" class="num">Last</th>
+                  </tr>
+                </thead>
+                <tbody id="per-coin-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="insights-pane" id="insights-pane-heatmap" style="display: none">
+            <div class="heatmap-meta" id="heatmap-meta">— days · 90d window</div>
+            <div class="heatmap-grid" id="heatmap-grid"></div>
+            <div class="heatmap-legend">
+              <span>Loss</span>
+              <span class="heatmap-cell loss-strong"></span>
+              <span class="heatmap-cell loss-normal"></span>
+              <span class="heatmap-cell loss-weak"></span>
+              <span class="heatmap-cell empty"></span>
+              <span class="heatmap-cell win-weak"></span>
+              <span class="heatmap-cell win-normal"></span>
+              <span class="heatmap-cell win-strong"></span>
+              <span>Win</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- 07 / Performance (Equity Chart) -->
       <section class="card">
         <div class="card-header">

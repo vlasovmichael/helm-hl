@@ -42,6 +42,9 @@ let lastSuccessAt = 0;
 let currentRangeHours = 24;
 let currentPnlPeriod = "today";
 let lastPnlSummary = null;
+let lastInsights = null;
+let currentInsightsTab = "per-coin";
+let perCoinSort = { key: "pnl", dir: "desc" };
 let socket = null;
 const lastAnimatedValues = new Map();
 let currentCoinInPos = null;
@@ -1060,17 +1063,22 @@ async function fetchJson(path) {
 }
 
 async function tick() {
-  const [historyR, activityR, taxR, pnlR, moversR] = await Promise.allSettled([
+  const [historyR, activityR, taxR, pnlR, moversR, insightsR] = await Promise.allSettled([
     fetchJson(`/api/history?hours=${currentRangeHours}`),
     fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
     fetchJson("/api/tax-summary"),
     fetchJson("/api/pnl-summary"),
     fetchJson("/api/signals?limit=200"),
+    fetchJson("/api/insights"),
   ]);
   if (moversR.status === "fulfilled") renderHotMovers(moversR.value);
   if (pnlR.status === "fulfilled") {
     lastPnlSummary = pnlR.value;
     renderPnlSummary();
+  }
+  if (insightsR.status === "fulfilled") {
+    lastInsights = insightsR.value;
+    renderInsights();
   }
   if (historyR.status === "fulfilled" && historyR.value?.points) {
     const pts = historyR.value.points;
@@ -1447,6 +1455,136 @@ function renderPnlSummary() {
   document.getElementById("pnl-skeleton")?.classList.add("hidden");
 }
 
+// ─────────────────────────────────────────────────
+//  Insights: per-coin lifetime + 90d heatmap
+// ─────────────────────────────────────────────────
+function renderInsights() {
+  if (!lastInsights) return;
+  if (currentInsightsTab === "per-coin") renderPerCoin();
+  else renderHeatmap();
+  document.getElementById("insights-skeleton")?.classList.add("hidden");
+}
+
+function renderPerCoin() {
+  const rows = [...(lastInsights.perCoin || [])];
+  const { key, dir } = perCoinSort;
+  const mul = dir === "asc" ? 1 : -1;
+  rows.sort((a, b) => {
+    const va = a[key];
+    const vb = b[key];
+    if (typeof va === "string") return mul * va.localeCompare(vb);
+    return mul * ((va || 0) - (vb || 0));
+  });
+
+  // Sort indicator on headers.
+  document.querySelectorAll(".per-coin-table th[data-sort]").forEach((th) => {
+    th.classList.remove("sort-active", "sort-asc", "sort-desc");
+    if (th.dataset.sort === key) {
+      th.classList.add("sort-active");
+      th.classList.add(dir === "asc" ? "sort-asc" : "sort-desc");
+    }
+  });
+
+  const meta = document.getElementById("per-coin-meta");
+  const totalPnl = rows.reduce((s, r) => s + r.pnl, 0);
+  const totalTrades = rows.reduce((s, r) => s + r.trades, 0);
+  if (meta) {
+    meta.textContent = `${rows.length} coins · ${totalTrades} trades · ${fmtMoney(totalPnl)} all-time`;
+  }
+
+  const tbody = document.getElementById("per-coin-tbody");
+  if (!tbody) return;
+  if (rows.length === 0) {
+    tbody.innerHTML =
+      '<tr><td colspan="6" class="empty-state">No trades yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows
+    .map((r) => {
+      const pnlCls = r.pnl > 0 ? "num-pos" : r.pnl < 0 ? "num-neg" : "";
+      const avgCls = r.avg > 0 ? "num-pos" : r.avg < 0 ? "num-neg" : "";
+      const wrCls =
+        r.winRate >= 60 ? "num-pos" : r.winRate < 40 ? "num-neg" : "";
+      return `
+        <tr>
+          <td class="coin-cell">#${escapeHtml(r.coin)}</td>
+          <td class="num">${r.trades}</td>
+          <td class="num ${pnlCls}">${fmtMoney(r.pnl)}</td>
+          <td class="num ${wrCls}">${r.winRate.toFixed(0)}%</td>
+          <td class="num ${avgCls}">${fmtMoney(r.avg)}</td>
+          <td class="num num-muted">${fmtTime(r.lastClosedAt)}</td>
+        </tr>`;
+    })
+    .join("");
+}
+
+function renderHeatmap() {
+  const days = lastInsights.daily || [];
+  const grid = document.getElementById("heatmap-grid");
+  const meta = document.getElementById("heatmap-meta");
+  if (!grid) return;
+
+  const tradedDays = days.filter((d) => d.trades > 0);
+  const totalPnl = days.reduce((s, d) => s + d.pnl, 0);
+  if (meta) {
+    meta.textContent = `${tradedDays.length}/${days.length} active days · ${fmtMoney(totalPnl)} (90d)`;
+  }
+
+  // Тиры по абсолюту daily P&L: 3 ступени win + 3 loss + empty.
+  const absVals = days.map((d) => Math.abs(d.pnl)).filter((v) => v > 0);
+  absVals.sort((a, b) => a - b);
+  const q = (p) =>
+    absVals.length === 0 ? 0 : absVals[Math.floor((absVals.length - 1) * p)];
+  const t1 = q(0.33);
+  const t2 = q(0.66);
+
+  const cellClass = (d) => {
+    if (d.trades === 0) return "empty";
+    const a = Math.abs(d.pnl);
+    const tier = a >= t2 ? "strong" : a >= t1 ? "normal" : "weak";
+    return d.pnl >= 0 ? `win-${tier}` : `loss-${tier}`;
+  };
+
+  // Сетка: колонки = недели, строки = дни недели (Mon..Sun).
+  // Первая колонка может быть неполной (если 90д начинается с середины недели).
+  const cellsByCol = [];
+  let col = [];
+  for (const d of days) {
+    const date = new Date(d.date + "T00:00:00");
+    const dow = (date.getDay() + 6) % 7; // 0 = Mon ... 6 = Sun
+    if (col.length === 0 && dow > 0) {
+      for (let i = 0; i < dow; i++) col.push(null);
+    }
+    col.push(d);
+    if (dow === 6) {
+      cellsByCol.push(col);
+      col = [];
+    }
+  }
+  if (col.length) cellsByCol.push(col);
+
+  const html = cellsByCol
+    .map((week) => {
+      const cells = [];
+      for (let i = 0; i < 7; i++) {
+        const d = week[i];
+        if (!d) {
+          cells.push('<div class="heatmap-cell placeholder"></div>');
+          continue;
+        }
+        const cls = cellClass(d);
+        const todayCls = d.isToday ? " is-today" : "";
+        const tip = `${d.date} · ${fmtMoney(d.pnl)} · ${d.trades} trade${d.trades === 1 ? "" : "s"}`;
+        cells.push(
+          `<div class="heatmap-cell ${cls}${todayCls}" title="${tip}"></div>`,
+        );
+      }
+      return `<div class="heatmap-col">${cells.join("")}</div>`;
+    })
+    .join("");
+  grid.innerHTML = html;
+}
+
 function renderTax(tax) {
   if (!tax) return;
   document.getElementById("tax-costs").textContent =
@@ -1534,6 +1672,36 @@ document.querySelectorAll("#pnl-periods .range-btn").forEach((b) =>
     b.classList.add("active");
     currentPnlPeriod = b.dataset.period;
     renderPnlSummary();
+  }),
+);
+
+document.querySelectorAll("#insights-tabs .range-btn").forEach((b) =>
+  b.addEventListener("click", () => {
+    if (b.dataset.tab === currentInsightsTab) return;
+    document
+      .querySelectorAll("#insights-tabs .range-btn")
+      .forEach((r) => r.classList.remove("active"));
+    b.classList.add("active");
+    currentInsightsTab = b.dataset.tab;
+    document.getElementById("insights-pane-per-coin").style.display =
+      currentInsightsTab === "per-coin" ? "" : "none";
+    document.getElementById("insights-pane-heatmap").style.display =
+      currentInsightsTab === "heatmap" ? "" : "none";
+    renderInsights();
+  }),
+);
+
+document.querySelectorAll(".per-coin-table th[data-sort]").forEach((th) =>
+  th.addEventListener("click", () => {
+    const key = th.dataset.sort;
+    if (perCoinSort.key === key) {
+      perCoinSort.dir = perCoinSort.dir === "desc" ? "asc" : "desc";
+    } else {
+      perCoinSort.key = key;
+      // По дефолту для числовых — desc, для coin — asc.
+      perCoinSort.dir = key === "coin" ? "asc" : "desc";
+    }
+    renderInsights();
   }),
 );
 

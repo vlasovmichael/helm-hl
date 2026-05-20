@@ -1047,6 +1047,104 @@ async function handlePnlSummary(_req, res) {
 }
 
 // ─────────────────────────────────────────────────
+//  Insights — per-coin lifetime + daily P&L heatmap (90d)
+// ─────────────────────────────────────────────────
+async function handleInsights(_req, res) {
+  try {
+    const now = Date.now();
+
+    // Combined dataset (bot DB + archive + reconstructed manual).
+    const allDb = getHistorySince(0);
+    const allArch = getArchivedHistorySince(0);
+    const botTrades = realTradesForDisplay([...allDb, ...allArch]);
+    const manualTrades = await getManualTrades();
+    const manualClosed = manualTrades.filter((m) => m.status === "closed");
+    const manualAsTrades = manualClosed.map((m) => ({
+      coin: m.coin,
+      realized_pnl: m.pnl || 0,
+      fee_paid: m.fee || 0,
+      strategy_id: "manual",
+      entry_time: m.entryTime,
+      closed_at: m.closeTime,
+    }));
+    const combined = [...botTrades, ...manualAsTrades];
+
+    // ── Per-coin aggregation (lifetime, all periods) ──
+    const byCoin = new Map();
+    for (const t of combined) {
+      const c = (t.coin || "?").toUpperCase();
+      if (!byCoin.has(c)) {
+        byCoin.set(c, {
+          coin: c,
+          trades: 0,
+          pnl: 0,
+          wins: 0,
+          losses: 0,
+          fees: 0,
+          lastClosedAt: 0,
+        });
+      }
+      const row = byCoin.get(c);
+      row.trades += 1;
+      const pnl = t.realized_pnl || 0;
+      row.pnl += pnl;
+      row.fees += t.fee_paid || 0;
+      if (pnl > 0) row.wins += 1;
+      else if (pnl < 0) row.losses += 1;
+      if ((t.closed_at || 0) > row.lastClosedAt) row.lastClosedAt = t.closed_at;
+    }
+    const perCoin = [...byCoin.values()]
+      .map((r) => ({
+        ...r,
+        avg: r.trades > 0 ? r.pnl / r.trades : 0,
+        winRate: r.trades > 0 ? (r.wins / r.trades) * 100 : 0,
+      }))
+      .sort((a, b) => b.pnl - a.pnl);
+
+    // ── Daily P&L for last 90 days (heatmap) ──
+    const DAY_MS = 86_400_000;
+    const HEATMAP_DAYS = 90;
+    // День в локальной зоне сервера: YYYY-MM-DD.
+    const localDayKey = (ts) => {
+      const d = new Date(ts);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${dd}`;
+    };
+    const cutoff = now - HEATMAP_DAYS * DAY_MS;
+    const dailyMap = new Map();
+    for (const t of combined) {
+      if (!t.closed_at || t.closed_at < cutoff) continue;
+      const key = localDayKey(t.closed_at);
+      if (!dailyMap.has(key)) dailyMap.set(key, { date: key, pnl: 0, trades: 0 });
+      const row = dailyMap.get(key);
+      row.pnl += t.realized_pnl || 0;
+      row.trades += 1;
+    }
+    // Заполняем все дни в окне (включая пустые) для непрерывной сетки.
+    const daily = [];
+    const todayKey = localDayKey(now);
+    for (let i = HEATMAP_DAYS - 1; i >= 0; i--) {
+      const ts = now - i * DAY_MS;
+      const key = localDayKey(ts);
+      const row = dailyMap.get(key) || { date: key, pnl: 0, trades: 0 };
+      daily.push({
+        date: row.date,
+        pnl: row.pnl,
+        trades: row.trades,
+        isToday: row.date === todayKey,
+      });
+    }
+
+    res.json({ now, perCoin, daily });
+  } catch (err) {
+    logger.warn(`[Dashboard] /api/insights error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// ─────────────────────────────────────────────────
 //  Trade markers — entry/close events для price chart annotations
 // ─────────────────────────────────────────────────
 async function handleTradeMarkers(req, res) {
@@ -1233,6 +1331,7 @@ export function startDashboard() {
   app.get("/api/trade/:id", handleTradeDetail);
   app.get("/api/tax-summary", handleTaxSummary);
   app.get("/api/pnl-summary", handlePnlSummary);
+  app.get("/api/insights", handleInsights);
   app.get("/api/trade-markers", handleTradeMarkers);
 
   const ALLOWED_INTERVALS = {
