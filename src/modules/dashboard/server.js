@@ -30,7 +30,15 @@ import {
   HUNTER_SPIKE_WINDOW_MIN,
   HUNTER_SL_PCT,
   HUNTER_TP_PCT,
+  getHunterShortCooldownSnapshot,
+  getHunterShortSpikesSnapshot,
 } from "../strategistSniper.js";
+import {
+  getHunterLongCooldownSnapshot,
+  getHunterLongDumpsSnapshot,
+} from "../strategistHunterLong.js";
+import { getHunterCrossCooldownSnapshot } from "../hunterCrossCooldown.js";
+import { getOiCapBans, getOiCapBanRemainMs } from "../executor/state.js";
 import { getChillBoyHeartbeat } from "../strategistTrendFollow.js";
 import { getNearMisses } from "../nearMisses.js";
 
@@ -662,6 +670,42 @@ function handleNearMisses(req, res) {
   }
 }
 
+function handleHunterWatchlist(req, res) {
+  try {
+    const now = Date.now();
+
+    const shortCools = getHunterShortCooldownSnapshot(now).map((c) => ({ ...c, strategy: "hunter" }));
+    const longCools  = getHunterLongCooldownSnapshot(now).map((c)  => ({ ...c, strategy: "hunter_long" }));
+    const crossCools = getHunterCrossCooldownSnapshot(now).map((c) => ({ ...c, type: "cross", strategy: "both" }));
+
+    const oiBans = [];
+    for (const coin of getOiCapBans()) {
+      oiBans.push({ coin, type: "oi_cap", strategy: "both", remainMs: getOiCapBanRemainMs(coin) });
+    }
+
+    const cooldowns = [...shortCools, ...longCools, ...crossCools, ...oiBans]
+      .sort((a, b) => b.remainMs - a.remainMs);
+
+    const shortSpikes = getHunterShortSpikesSnapshot();
+    const longDumps   = getHunterLongDumpsSnapshot();
+
+    const nearMisses = getNearMisses({ since: 0, limit: 30 });
+
+    res.json({
+      ts: now,
+      cooldowns,
+      topSpikes: {
+        short: shortSpikes.items || [],
+        long: longDumps.items || [],
+        spikeThresholdPct: HUNTER_SPIKE_PCT,
+      },
+      nearMisses,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
 function handleTradeDetail(req, res) {
   try {
     const id = parseInt(req.params.id, 10);
@@ -1215,6 +1259,7 @@ export function startDashboard() {
   app.get("/api/logs", handleLogs);
   app.get("/api/signals", handleSignals);
   app.get("/api/near-misses", handleNearMisses);
+  app.get("/api/hunter-watchlist", handleHunterWatchlist);
   app.get("/api/trade/:id", handleTradeDetail);
   app.get("/api/tax-summary", handleTaxSummary);
   app.get("/api/pnl-summary", handlePnlSummary);

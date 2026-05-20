@@ -905,43 +905,121 @@ const REASON_LABEL = {
   slot_busy: "slot busy",
 };
 
-function renderNearMisses(data) {
-  const container = document.getElementById("near-misses-container");
-  if (!container) return;
-  const events = data?.events || [];
-  if (!events.length) {
-    container.innerHTML =
-      '<div class="empty-state">No recent near-misses</div>';
-    return;
+function fmtRemain(ms) {
+  if (ms < 60_000) return `${Math.max(1, Math.floor(ms / 1000))}s`;
+  if (ms < 3600_000) return `${Math.floor(ms / 60_000)}m`;
+  return `${(ms / 3600_000).toFixed(1)}h`;
+}
+
+const COOLDOWN_TAG = {
+  re_detect:      { label: "RE-DETECT", cls: "" },
+  post_sl:        { label: "POST-SL",   cls: "" },
+  sl_streak:      { label: "SL×STREAK", cls: "wl-tag-streak" },
+  cross:          { label: "CROSS-CD",  cls: "wl-tag-cross" },
+  oi_cap:         { label: "OI CAP",    cls: "wl-tag-oi" },
+};
+
+const STRATEGY_SIDE_TAG = {
+  hunter:      { label: "▼ SHORT", cls: "wl-side-short" },
+  hunter_long: { label: "▲ LONG",  cls: "wl-side-long" },
+  both:        { label: "BOTH",    cls: "" },
+};
+
+function renderHunterWatchlist(data) {
+  if (!data) return;
+
+  // 1. Cooldowns
+  const coolBox = document.getElementById("wl-cooldowns");
+  if (coolBox) {
+    const list = (data.cooldowns || []).slice(0, 6);
+    if (!list.length) {
+      coolBox.innerHTML = '<div class="empty-state">No active cooldowns</div>';
+    } else {
+      coolBox.innerHTML = list
+        .map((c) => {
+          const tag = COOLDOWN_TAG[c.type] || { label: c.type, cls: "" };
+          const side = STRATEGY_SIDE_TAG[c.strategy] || { label: "", cls: "" };
+          return `<div class="wl-row wl-cooldown-row">
+            <span class="wl-coin">#${escapeHtml(c.coin)}</span>
+            <span class="wl-side-tag ${side.cls}">${side.label}</span>
+            <span class="wl-detail"><span class="wl-tag ${tag.cls}">${tag.label}</span></span>
+            <span class="wl-remain">${fmtRemain(c.remainMs)}</span>
+          </div>`;
+        })
+        .join("");
+    }
   }
-  // Dedupe per coin+reason — последний по времени.
-  const seen = new Set();
-  const filtered = [];
-  for (const e of events) {
-    const key = `${e.coin}|${e.reason}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    filtered.push(e);
-    if (filtered.length >= 8) break;
+
+  // 2. Top Spikes
+  const spikeBox = document.getElementById("wl-spikes");
+  if (spikeBox) {
+    const shortItems = (data.topSpikes?.short || []).slice(0, 3);
+    const longItems  = (data.topSpikes?.long  || []).slice(0, 3);
+    const rows = [];
+    for (const s of shortItems) {
+      const pct = s.pct.toFixed(2);
+      const pctCls = s.pct >= 0 ? "wl-pct-up" : "wl-pct-down";
+      rows.push(`<div class="wl-row wl-spike-row">
+        <span class="wl-coin">#${escapeHtml(s.coin)}</span>
+        <span class="wl-side-tag wl-side-short">▼ SHORT</span>
+        <span class="${pctCls}">${s.pct >= 0 ? "+" : ""}${pct}%</span>
+        <span class="wl-detail">pump 2m</span>
+      </div>`);
+    }
+    for (const s of longItems) {
+      const pct = s.pct.toFixed(2);
+      const pctCls = s.pct <= 0 ? "wl-pct-down" : "wl-pct-up";
+      rows.push(`<div class="wl-row wl-spike-row">
+        <span class="wl-coin">#${escapeHtml(s.coin)}</span>
+        <span class="wl-side-tag wl-side-long">▲ LONG</span>
+        <span class="${pctCls}">${s.pct >= 0 ? "+" : ""}${pct}%</span>
+        <span class="wl-detail">dump 2m</span>
+      </div>`);
+    }
+    if (!rows.length) {
+      spikeBox.innerHTML = '<div class="empty-state">Waiting for price history…</div>';
+    } else {
+      spikeBox.innerHTML = rows.join("");
+    }
   }
-  container.innerHTML = filtered
-    .map((e) => {
-      const sideClass =
-        e.side === "LONG" ? "near-miss-side-long" : "near-miss-side-short";
-      const sideArrow = e.side === "LONG" ? "▲" : "▼";
-      const spike =
-        e.spikePct == null
-          ? ""
-          : `${e.spikePct >= 0 ? "+" : ""}${e.spikePct.toFixed(1)}%`;
-      const reasonLabel = REASON_LABEL[e.reason] || e.reason;
-      return `<div class="near-miss-row" title="${escapeAttr(e.detail || "")}">
-        <span class="near-miss-coin">#${e.coin}</span>
-        <span class="${sideClass}">${sideArrow} ${spike}</span>
-        <span class="near-miss-detail"><span class="near-miss-reason">${reasonLabel}</span> ${escapeHtml(e.detail || "")}</span>
-        <span class="near-miss-age">${fmtAge(e.ts)}</span>
-      </div>`;
-    })
-    .join("");
+
+  // 3. Near Misses (≥ threshold, отсечённые фильтром)
+  const nmBox = document.getElementById("wl-near-misses");
+  if (nmBox) {
+    const events = data.nearMisses || [];
+    if (!events.length) {
+      nmBox.innerHTML =
+        '<div class="empty-state">None — спайки ≥порога редки в тихий рынок</div>';
+    } else {
+      // Dedupe per coin+reason.
+      const seen = new Set();
+      const filtered = [];
+      for (const e of events) {
+        const key = `${e.coin}|${e.reason}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        filtered.push(e);
+        if (filtered.length >= 5) break;
+      }
+      nmBox.innerHTML = filtered
+        .map((e) => {
+          const sideClass = e.side === "LONG" ? "wl-side-long" : "wl-side-short";
+          const sideArrow = e.side === "LONG" ? "▲" : "▼";
+          const spike =
+            e.spikePct == null
+              ? ""
+              : `${e.spikePct >= 0 ? "+" : ""}${e.spikePct.toFixed(1)}%`;
+          const reasonLabel = REASON_LABEL[e.reason] || e.reason;
+          return `<div class="wl-row wl-cooldown-row" title="${escapeAttr(e.detail || "")}">
+            <span class="wl-coin">#${escapeHtml(e.coin)}</span>
+            <span class="wl-side-tag ${sideClass}">${sideArrow} ${spike}</span>
+            <span class="wl-detail"><span class="wl-tag">${reasonLabel}</span> ${escapeHtml(e.detail || "")}</span>
+            <span class="wl-remain">${fmtAge(e.ts)}</span>
+          </div>`;
+        })
+        .join("");
+    }
+  }
 }
 
 function escapeAttr(s) {
@@ -956,15 +1034,15 @@ async function fetchJson(path) {
 }
 
 async function tick() {
-  const [historyR, activityR, taxR, signalsR, pnlR, nearR] = await Promise.allSettled([
+  const [historyR, activityR, taxR, signalsR, pnlR, watchR] = await Promise.allSettled([
     fetchJson(`/api/history?hours=${currentRangeHours}`),
     fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
     fetchJson("/api/tax-summary"),
     fetchJson("/api/signals?limit=10"),
     fetchJson("/api/pnl-summary"),
-    fetchJson("/api/near-misses?limit=30"),
+    fetchJson("/api/hunter-watchlist"),
   ]);
-  if (nearR.status === "fulfilled") renderNearMisses(nearR.value);
+  if (watchR.status === "fulfilled") renderHunterWatchlist(watchR.value);
   if (pnlR.status === "fulfilled") {
     lastPnlSummary = pnlR.value;
     renderPnlSummary();

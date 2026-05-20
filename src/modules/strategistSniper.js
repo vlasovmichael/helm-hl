@@ -44,6 +44,14 @@ const hunterCooldownMap   = new Map();  // coin → last-signal timestamp (re-de
 const hunterPostSlCooldown = new Map(); // coin → SL timestamp (длинный cooldown после SL)
 let lastHeartbeatAt = 0;
 
+// Снимок последних подсчитанных спайков (для дашборд-карточки Hunter Watchlist).
+// Обновляется каждый тик внутри analyzeHunter, [{coin, pct}], отсортирован по pct desc.
+let lastShortSpikesSnapshot = { ts: 0, items: [] };
+const SPIKE_SNAPSHOT_LIMIT = 8;
+export function getHunterShortSpikesSnapshot() {
+  return lastShortSpikesSnapshot;
+}
+
 // MFE/MAE per open hunter position. Обновляется на каждом тике в checkHunterExit,
 // читается paperClose/hunterReconcile при закрытии. Очищается через
 // clearHunterMfeMae(positionId) после INSERT в history.
@@ -109,6 +117,23 @@ export function getHunterPeakPct(positionId) {
 }
 
 const HUNTER_TREND_1H_MIN = 60;  // окно для entry_trend_1h_pct (логирование, не фильтр)
+
+/**
+ * Снимок активных cooldown'ов Hunter SHORT для дашборда.
+ * Возвращает [{coin, type, remainMs}], type ∈ 're_detect' | 'post_sl'.
+ */
+export function getHunterShortCooldownSnapshot(now = Date.now()) {
+  const out = [];
+  for (const [coin, lastFired] of hunterCooldownMap) {
+    const remain = HUNTER_COOLDOWN_MS - (now - lastFired);
+    if (remain > 0) out.push({ coin, type: 're_detect', remainMs: remain });
+  }
+  for (const [coin, lastSl] of hunterPostSlCooldown) {
+    const remain = HUNTER_POST_SL_COOLDOWN_MS - (now - lastSl);
+    if (remain > 0) out.push({ coin, type: 'post_sl', remainMs: remain });
+  }
+  return out;
+}
 
 /** Тестовый helper — сброс cooldown'ов + heartbeat timer. */
 export function resetHunterCooldowns() {
@@ -195,12 +220,14 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
   // (видимость "насколько близки к сигналу" при занятом слоте).
   let best = null;  // { coin, price, past, pct, item, trend15mPct }
   let bestUnqualified = null;  // лучший по pct даже если ниже порога / в cooldown — для heartbeat
+  const allSpikes = [];  // для snapshot
   const data = scoutData ?? [];
   for (const item of data) {
     const past = getPriceNMinAgo(item.coin, HUNTER_SPIKE_WINDOW_MIN, now);
     if (past === null) continue;  // недостаточно истории
 
     const pct = ((item.price - past) / past) * 100;
+    allSpikes.push({ coin: item.coin, pct });
     if (!bestUnqualified || pct > bestUnqualified.pct) {
       bestUnqualified = { coin: item.coin, pct };
     }
@@ -252,6 +279,10 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
       best = { coin: item.coin, price: item.price, past, pct, item, trend15mPct };
     }
   }
+
+  // ── Snapshot top-N pump spikes для дашборда (всегда обновляем) ──
+  allSpikes.sort((a, b) => b.pct - a.pct);
+  lastShortSpikesSnapshot = { ts: now, items: allSpikes.slice(0, SPIKE_SNAPSHOT_LIMIT) };
 
   // ── Heartbeat: раз в 5 мин показываем что Hunter жив + ближайший к порогу ──
   if (now - lastHeartbeatAt >= HUNTER_HEARTBEAT_MS) {

@@ -28,7 +28,7 @@ export const HUNTER_LONG_COOLDOWN_MS      = 2 * 60_000; // 2 мин re-detect co
 export const HUNTER_LONG_HEARTBEAT_MS     = 5 * 60_000; // heartbeat в лог раз в 5 мин
 
 // Параметры из config (env-overrideable).
-const HUNTER_LONG_DUMP_PCT          = config.trading.hunterLongDumpPct;
+export const HUNTER_LONG_DUMP_PCT   = config.trading.hunterLongDumpPct;
 const HUNTER_LONG_SL_PCT            = config.trading.hunterLongSlPct;
 const HUNTER_LONG_TP_PCT            = config.trading.hunterLongTpPct;
 const HUNTER_LONG_TREND_LOOKBACK_MIN = config.trading.hunterLongTrendLookbackMin;
@@ -59,6 +59,35 @@ const mfeMaeMap       = new Map();   // positionId → { mfeUsd, maeUsd, mfePct,
 const peakUnrealizedPct = new Map(); // positionId → peak unrealized% (LONG: (current-entry)/entry*100)
 const armedShadowMap  = new Map();   // positionId → true, если SHADOW лог уже сработал (one-shot)
 let lastHeartbeatAt   = 0;
+
+// Снимок последних подсчитанных dump-спайков для дашборд-карточки Hunter Watchlist.
+// Обновляется каждый тик внутри analyzeHunterLong, [{coin, pct}], отсортирован по pct asc (самые сильные dump'ы первые).
+let lastLongDumpsSnapshot = { ts: 0, items: [] };
+const LONG_SNAPSHOT_LIMIT = 8;
+export function getHunterLongDumpsSnapshot() {
+  return lastLongDumpsSnapshot;
+}
+
+/**
+ * Снимок активных cooldown'ов Hunter LONG для дашборда.
+ * Возвращает [{coin, type, remainMs}], type ∈ 're_detect' | 'post_sl' | 'sl_streak'.
+ */
+export function getHunterLongCooldownSnapshot(now = Date.now()) {
+  const out = [];
+  for (const [coin, lastFired] of cooldownMap) {
+    const remain = HUNTER_LONG_COOLDOWN_MS - (now - lastFired);
+    if (remain > 0) out.push({ coin, type: 're_detect', remainMs: remain });
+  }
+  for (const [coin, unbanAt] of postSlCooldown) {
+    const remain = unbanAt - now;
+    if (remain > 0) {
+      const streak = slStreak.get(coin);
+      const isStreakBan = streak && streak.count >= HUNTER_LONG_SL_STREAK_BAN;
+      out.push({ coin, type: isStreakBan ? 'sl_streak' : 'post_sl', remainMs: remain });
+    }
+  }
+  return out;
+}
 
 /** Тестовый helper — сброс state. */
 export function resetHunterLongCooldowns() {
@@ -168,6 +197,7 @@ export function analyzeHunterLong(scoutData, activePosition, now = Date.now()) {
   // Детекция: ищем самый сильный dump среди scoutData (pct < -threshold).
   let best = null;            // { coin, price, past, pct (отрицательный), item, trendPct }
   let bestUnqualified = null; // для heartbeat — самый "сильный" dump даже если в cooldown / выше порога
+  const allDumps = [];        // для snapshot дашборда
   const data = scoutData ?? [];
 
   for (const item of data) {
@@ -175,6 +205,7 @@ export function analyzeHunterLong(scoutData, activePosition, now = Date.now()) {
     if (past === null) continue;
 
     const pct = ((item.price - past) / past) * 100;
+    allDumps.push({ coin: item.coin, pct });
     // Для long-after-dump интересны отрицательные изменения. Чем меньше (ближе к -∞), тем сильнее dump.
     if (!bestUnqualified || pct < bestUnqualified.pct) {
       bestUnqualified = { coin: item.coin, pct };
@@ -244,6 +275,10 @@ export function analyzeHunterLong(scoutData, activePosition, now = Date.now()) {
       best = { coin: item.coin, price: item.price, past, pct, item, trendPct };
     }
   }
+
+  // Snapshot самых сильных dump'ов для дашборда (asc, наиболее отрицательные первые).
+  allDumps.sort((a, b) => a.pct - b.pct);
+  lastLongDumpsSnapshot = { ts: now, items: allDumps.slice(0, LONG_SNAPSHOT_LIMIT) };
 
   // Heartbeat.
   if (now - lastHeartbeatAt >= HUNTER_LONG_HEARTBEAT_MS) {

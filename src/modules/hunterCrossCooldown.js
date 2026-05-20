@@ -34,3 +34,14 @@ export function getHunterCrossCooldownRemainMs(coin, now = Date.now()) {
 export function resetHunterCrossCooldowns() {
   crossMap.clear();
 }
+
+/** Снимок активных cross-cooldown'ов для дашборда. [{coin, remainMs}]. */
+export function getHunterCrossCooldownSnapshot(now = Date.now()) {
+  const ttl = cooldownMs();
+  const out = [];
+  for (const [coin, ts] of crossMap) {
+    const remain = ttl - (now - ts);
+    if (remain > 0) out.push({ coin, remainMs: remain });
+  }
+  return out;
+}

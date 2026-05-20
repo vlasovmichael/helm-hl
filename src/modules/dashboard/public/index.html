@@ -319,12 +319,28 @@
       <div class="card-wrapper" id="sec-activity">
         <section class="card cart-cooldowns">
           <div class="card-header">
-            <div class="card-title" data-num="07">Near Misses</div>
-            <div class="card-subtitle" title="Сигналы, которые Hunter увидел, но не взял (vol/OI/trend/cooldown/slot)">видел, но не взял</div>
+            <div class="card-title" data-num="07" title="Что Hunter видит прямо сейчас: cooldown'ы, лучшие спайки и near-misses ≥порога">Hunter Watchlist</div>
           </div>
           <div id="bans-strip"></div>
-          <div id="near-misses-container">
-            <div class="empty-state">No recent near-misses</div>
+          <div id="hunter-watchlist-container">
+            <div class="watchlist-section" id="wl-cooldowns-section">
+              <div class="watchlist-section-title">In Cooldown</div>
+              <div id="wl-cooldowns" class="watchlist-rows">
+                <div class="empty-state">No active cooldowns</div>
+              </div>
+            </div>
+            <div class="watchlist-section" id="wl-spikes-section">
+              <div class="watchlist-section-title">Top Spikes Now</div>
+              <div id="wl-spikes" class="watchlist-rows">
+                <div class="empty-state">Loading…</div>
+              </div>
+            </div>
+            <div class="watchlist-section" id="wl-near-misses-section">
+              <div class="watchlist-section-title">Near Misses (≥ threshold, filtered)</div>
+              <div id="wl-near-misses" class="watchlist-rows">
+                <div class="empty-state">None — спайки ≥порога редки в тихий рынок</div>
+              </div>
+            </div>
           </div>
         </section>
 
