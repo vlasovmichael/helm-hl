@@ -477,6 +477,11 @@ function checkHunterExit(position, scoutData) {
     hunterPostSlCooldown.set(position.coin, Date.now());
     setHunterCrossCooldown(position.coin);
     const heldMin = Math.round((Date.now() - position.entry_time) / 60_000);
+    // Observability: peak% vs current% при time-stop. Помогает решить, нужен ли
+    // в будущем "ARM trail при time-stop если peak >0" или достаточно текущей логики.
+    logger.info(
+      `[Hunter] ⏱ TIME-STOP #${position.coin} (id=${position.id}): held ${heldMin}min | peak +${peak.toFixed(2)}% | now ${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(2)}%`,
+    );
     return {
       action: 'CLOSE',
       coin:   position.coin,

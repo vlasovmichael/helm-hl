@@ -445,6 +445,10 @@ function checkHunterLongExit(position, scoutData) {
     }
     setHunterCrossCooldown(position.coin);
     const heldMin = Math.round((Date.now() - position.entry_time) / 60_000);
+    // Observability: peak% vs current% при time-stop (см. аналог в strategistSniper.js).
+    logger.info(
+      `[HunterLong] ⏱ TIME-STOP #${position.coin} (id=${position.id}): held ${heldMin}min | peak +${peak.toFixed(2)}% | now ${exitPnlPct >= 0 ? '+' : ''}${exitPnlPct.toFixed(2)}%`,
+    );
     return {
       action: 'CLOSE',
       coin:   position.coin,
