@@ -531,6 +531,9 @@ function initPriceChart() {
       borderColor: gridColor,
       timeVisible: true,
       secondsVisible: false,
+      barSpacing: 10,
+      minBarSpacing: 4,
+      rightOffset: 4,
     },
     crosshair: { mode: 0 },
     handleScroll: true,
@@ -547,7 +550,7 @@ function initPriceChart() {
   });
   priceSeries
     .priceScale()
-    .applyOptions({ scaleMargins: { top: 0.05, bottom: 0.25 } });
+    .applyOptions({ scaleMargins: { top: 0.12, bottom: 0.28 } });
 
   volumeSeries = priceChart.addHistogramSeries({
     priceFormat: { type: "volume" },

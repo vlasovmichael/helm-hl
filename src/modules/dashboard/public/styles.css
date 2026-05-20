@@ -973,7 +973,7 @@ footer {
   .data-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
 
   .chart-container { height: 220px; }
-  #price-chart { height: 220px !important; }
+  #price-chart { height: 440px !important; }
 
   .time-ranges { width: 100%; }
   .time-ranges .range-btn { flex: 1; padding: 7px 8px; }
