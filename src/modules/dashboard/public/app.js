@@ -1037,13 +1037,14 @@ function tmHeader({ coin, side, kindLabel, strat, isManual, when }) {
   const sideChip = side
     ? `<span class="tm-side-chip ${sideClass}">${side === "LONG" ? "▲" : "▼"} ${side}</span>`
     : "";
-  const manualBit = isManual ? " · 🖐 MANUAL" : "";
+  // strategyDisplayName('manual') уже отдаёт '🖐 Manual' — не дублируем эмодзи.
+  const stratText = isManual && !/manual/i.test(strat) ? `${strat} · 🖐 Manual` : strat;
   return `
     <div class="tm-header">
       <div class="tm-coin-badge">${coin.slice(0, 4)}</div>
       <div class="tm-header-text">
         <div class="tm-title">${kindLabel} #${coin} ${sideChip}</div>
-        <div class="tm-sub">${strat}${manualBit} · ${when}</div>
+        <div class="tm-sub">${stratText} · ${when}</div>
       </div>
     </div>
   `;
