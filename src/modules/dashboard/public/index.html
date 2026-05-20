@@ -207,10 +207,41 @@
         </div>
       </section>
 
-      <!-- 04.5 / P&L Summary -->
+      <!-- 05 / Hot Movers (manual-trading helper) -->
+      <section class="card" id="hot-movers-card">
+        <div class="card-header">
+          <div class="card-title" data-num="05" title="Топ монет по абсолютному движению цены за разные окна — для ручной торговли. Показывает всё что двигается, не только пробои порога Hunter.">Hot Movers</div>
+          <div class="signals-meta" id="hot-movers-meta">—</div>
+        </div>
+        <div class="signals-table-wrap">
+          <table class="signals-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Pair</th>
+                <th>Price</th>
+                <th title="Изменение за 2 минуты">2m</th>
+                <th title="Изменение за 5 минут">5m</th>
+                <th title="Изменение за 15 минут">15m</th>
+                <th title="Изменение за 1 час">1h</th>
+                <th title="Длинное окно (anti-trend lookback)">Trend</th>
+              </tr>
+            </thead>
+            <tbody id="hot-movers-tbody">
+              <tr>
+                <td colspan="8" class="empty-state">
+                  Waiting for hunter scope…
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 06 / P&L Summary -->
       <section class="card" id="sec-pnl">
         <div class="card-header">
-          <div class="card-title" data-num="05">P&amp;L Summary</div>
+          <div class="card-title" data-num="06">P&amp;L Summary</div>
           <div class="time-ranges" id="pnl-periods">
             <button class="range-btn active" data-period="today">Today</button>
             <button class="range-btn" data-period="yesterday">Yesterday</button>
@@ -297,10 +328,10 @@
         </div>
       </section>
 
-      <!-- 06 / Performance (Equity Chart) -->
+      <!-- 07 / Performance (Equity Chart) -->
       <section class="card">
         <div class="card-header">
-          <div class="card-title" data-num="06">Performance</div>
+          <div class="card-title" data-num="07">Performance</div>
           <div class="time-ranges">
             <button class="range-btn" data-hours="1">1h</button>
             <button class="range-btn active" data-hours="24">24h</button>
@@ -316,48 +347,21 @@
         </div>
       </section>
 
-      <div class="card-wrapper" id="sec-activity">
-        <section class="card cart-cooldowns">
-          <div class="card-header">
-            <div class="card-title" data-num="07" title="Что Hunter видит прямо сейчас: cooldown'ы, лучшие спайки и near-misses ≥порога">Hunter Watchlist</div>
+      <!-- 08 / Recent Activity -->
+      <section class="card" id="sec-activity">
+        <div class="card-header">
+          <div class="card-title" data-num="08">Recent Activity</div>
+        </div>
+        <div id="bans-strip"></div>
+        <div id="activity-container">
+          <div class="activity-skeleton">
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
           </div>
-          <div id="bans-strip"></div>
-          <div id="hunter-watchlist-container">
-            <div class="watchlist-section" id="wl-cooldowns-section">
-              <div class="watchlist-section-title">In Cooldown</div>
-              <div id="wl-cooldowns" class="watchlist-rows">
-                <div class="empty-state">No active cooldowns</div>
-              </div>
-            </div>
-            <div class="watchlist-section" id="wl-spikes-section">
-              <div class="watchlist-section-title">Top Spikes Now</div>
-              <div id="wl-spikes" class="watchlist-rows">
-                <div class="empty-state">Loading…</div>
-              </div>
-            </div>
-            <div class="watchlist-section" id="wl-near-misses-section">
-              <div class="watchlist-section-title">Near Misses (≥ threshold, filtered)</div>
-              <div id="wl-near-misses" class="watchlist-rows">
-                <div class="empty-state">None — спайки ≥порога редки в тихий рынок</div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="card" style="margin-bottom: 0">
-          <div class="card-header">
-            <div class="card-title" data-num="08">Recent Activity</div>
-          </div>
-          <div id="activity-container">
-            <div class="activity-skeleton">
-              <div class="skeleton-row"></div>
-              <div class="skeleton-row"></div>
-              <div class="skeleton-row"></div>
-              <div class="skeleton-row"></div>
-            </div>
-          </div>
-        </section>
-      </div>
+        </div>
+      </section>
 
       <section class="card">
         <div class="card-header">

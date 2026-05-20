@@ -887,144 +887,84 @@ function renderBans(status) {
       .join("");
 }
 
-function fmtAge(ts) {
-  const dt = Date.now() - ts;
-  if (dt < 60_000) return `${Math.max(1, Math.floor(dt / 1000))}s ago`;
-  if (dt < 3600_000) return `${Math.floor(dt / 60_000)}m ago`;
-  if (dt < 86_400_000) return `${Math.floor(dt / 3600_000)}h ago`;
-  return `${Math.floor(dt / 86_400_000)}d ago`;
-}
+function renderHotMovers(payload) {
+  const tbody = document.getElementById("hot-movers-tbody");
+  const meta = document.getElementById("hot-movers-meta");
+  if (!tbody || !meta) return;
+  const signals = Array.isArray(payload?.signals) ? payload.signals : [];
+  const th = payload?.thresholds || {};
 
-const REASON_LABEL = {
-  vol: "low vol",
-  oi: "low OI",
-  trend: "trend gate",
-  cooldown: "cooldown",
-  post_sl: "post-SL",
-  cross_cooldown: "cross-CD",
-  slot_busy: "slot busy",
-};
-
-function fmtRemain(ms) {
-  if (ms < 60_000) return `${Math.max(1, Math.floor(ms / 1000))}s`;
-  if (ms < 3600_000) return `${Math.floor(ms / 60_000)}m`;
-  return `${(ms / 3600_000).toFixed(1)}h`;
-}
-
-const COOLDOWN_TAG = {
-  re_detect:      { label: "RE-DETECT", cls: "" },
-  post_sl:        { label: "POST-SL",   cls: "" },
-  sl_streak:      { label: "SL×STREAK", cls: "wl-tag-streak" },
-  cross:          { label: "CROSS-CD",  cls: "wl-tag-cross" },
-  oi_cap:         { label: "OI CAP",    cls: "wl-tag-oi" },
-};
-
-const STRATEGY_SIDE_TAG = {
-  hunter:      { label: "▼ SHORT", cls: "wl-side-short" },
-  hunter_long: { label: "▲ LONG",  cls: "wl-side-long" },
-  both:        { label: "BOTH",    cls: "" },
-};
-
-function renderHunterWatchlist(data) {
-  if (!data) return;
-
-  // 1. Cooldowns
-  const coolBox = document.getElementById("wl-cooldowns");
-  if (coolBox) {
-    const list = (data.cooldowns || []).slice(0, 6);
-    if (!list.length) {
-      coolBox.innerHTML = '<div class="empty-state">No active cooldowns</div>';
-    } else {
-      coolBox.innerHTML = list
-        .map((c) => {
-          const tag = COOLDOWN_TAG[c.type] || { label: c.type, cls: "" };
-          const side = STRATEGY_SIDE_TAG[c.strategy] || { label: "", cls: "" };
-          return `<div class="wl-row wl-cooldown-row">
-            <span class="wl-coin">#${escapeHtml(c.coin)}</span>
-            <span class="wl-side-tag ${side.cls}">${side.label}</span>
-            <span class="wl-detail"><span class="wl-tag ${tag.cls}">${tag.label}</span></span>
-            <span class="wl-remain">${fmtRemain(c.remainMs)}</span>
-          </div>`;
-        })
-        .join("");
-    }
-  }
-
-  // 2. Top Spikes
-  const spikeBox = document.getElementById("wl-spikes");
-  if (spikeBox) {
-    const shortItems = (data.topSpikes?.short || []).slice(0, 3);
-    const longItems  = (data.topSpikes?.long  || []).slice(0, 3);
-    const rows = [];
-    for (const s of shortItems) {
-      const pct = s.pct.toFixed(2);
-      const pctCls = s.pct >= 0 ? "wl-pct-up" : "wl-pct-down";
-      rows.push(`<div class="wl-row wl-spike-row">
-        <span class="wl-coin">#${escapeHtml(s.coin)}</span>
-        <span class="wl-side-tag wl-side-short">▼ SHORT</span>
-        <span class="${pctCls}">${s.pct >= 0 ? "+" : ""}${pct}%</span>
-        <span class="wl-detail">pump 2m</span>
-      </div>`);
-    }
-    for (const s of longItems) {
-      const pct = s.pct.toFixed(2);
-      const pctCls = s.pct <= 0 ? "wl-pct-down" : "wl-pct-up";
-      rows.push(`<div class="wl-row wl-spike-row">
-        <span class="wl-coin">#${escapeHtml(s.coin)}</span>
-        <span class="wl-side-tag wl-side-long">▲ LONG</span>
-        <span class="${pctCls}">${s.pct >= 0 ? "+" : ""}${pct}%</span>
-        <span class="wl-detail">dump 2m</span>
-      </div>`);
-    }
-    if (!rows.length) {
-      spikeBox.innerHTML = '<div class="empty-state">Waiting for price history…</div>';
-    } else {
-      spikeBox.innerHTML = rows.join("");
-    }
-  }
-
-  // 3. Near Misses (≥ threshold, отсечённые фильтром)
-  const nmBox = document.getElementById("wl-near-misses");
-  if (nmBox) {
-    const events = data.nearMisses || [];
-    if (!events.length) {
-      nmBox.innerHTML =
-        '<div class="empty-state">None — спайки ≥порога редки в тихий рынок</div>';
-    } else {
-      // Dedupe per coin+reason.
-      const seen = new Set();
-      const filtered = [];
-      for (const e of events) {
-        const key = `${e.coin}|${e.reason}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        filtered.push(e);
-        if (filtered.length >= 5) break;
+  // Sort by max |spikePct| across all windows, desc. Items with no history go last.
+  const enriched = signals
+    .map((s) => {
+      const windows = Array.isArray(s.windows) ? s.windows : [];
+      let maxAbs = -Infinity;
+      for (const w of windows) {
+        if (w.spikePct != null && Math.abs(w.spikePct) > maxAbs) {
+          maxAbs = Math.abs(w.spikePct);
+        }
       }
-      nmBox.innerHTML = filtered
-        .map((e) => {
-          const sideClass = e.side === "LONG" ? "wl-side-long" : "wl-side-short";
-          const sideArrow = e.side === "LONG" ? "▲" : "▼";
-          const spike =
-            e.spikePct == null
-              ? ""
-              : `${e.spikePct >= 0 ? "+" : ""}${e.spikePct.toFixed(1)}%`;
-          const reasonLabel = REASON_LABEL[e.reason] || e.reason;
-          return `<div class="wl-row wl-cooldown-row" title="${escapeAttr(e.detail || "")}">
-            <span class="wl-coin">#${escapeHtml(e.coin)}</span>
-            <span class="wl-side-tag ${sideClass}">${sideArrow} ${spike}</span>
-            <span class="wl-detail"><span class="wl-tag">${reasonLabel}</span> ${escapeHtml(e.detail || "")}</span>
-            <span class="wl-remain">${fmtAge(e.ts)}</span>
-          </div>`;
-        })
-        .join("");
-    }
-  }
-}
+      return { s, windows, maxAbs };
+    })
+    .filter((x) => x.maxAbs > -Infinity)
+    .sort((a, b) => b.maxAbs - a.maxAbs)
+    .slice(0, 20);
 
-function escapeAttr(s) {
-  // escapeHtml уже экранирует кавычки (см. выше).
-  return escapeHtml(s);
+  meta.textContent = payload?.ts
+    ? `scope ${payload.universeSize} · top ${enriched.length} by max |move| · updated ${fmtTime(payload.ts)}`
+    : "—";
+
+  if (!enriched.length) {
+    tbody.innerHTML =
+      '<tr><td colspan="8" class="empty-state">Waiting for price history…</td></tr>';
+    return;
+  }
+
+  const fmtPrice = (p) => {
+    if (p == null) return "—";
+    if (p >= 100) return p.toFixed(2);
+    if (p >= 1) return p.toFixed(4);
+    return p.toPrecision(4);
+  };
+  const fmtPct = (v) => {
+    if (v == null) return "—";
+    const sign = v >= 0 ? "+" : "";
+    return `${sign}${v.toFixed(2)}%`;
+  };
+  const pctCell = (v) => {
+    if (v == null) return '<span class="num-inline-muted">—</span>';
+    const arrow = v > 0 ? "▲" : v < 0 ? "▼" : "·";
+    const cls = v > 0 ? "num-inline-pos" : v < 0 ? "num-inline-neg" : "num-inline-muted";
+    return `<span class="${cls}">${arrow} ${fmtPct(v)}</span>`;
+  };
+  const findWin = (windows, mins) => windows.find((w) => w.mins === mins);
+  const winByLabel = (windows, label) => windows.find((w) => w.label === label);
+
+  tbody.innerHTML = enriched
+    .map((x, idx) => {
+      const s = x.s;
+      const w2 = findWin(x.windows, 2) || winByLabel(x.windows, "2m");
+      const w5 = findWin(x.windows, 5) || winByLabel(x.windows, "5m");
+      const w15 = findWin(x.windows, 15) || winByLabel(x.windows, "15m");
+      const w60 = findWin(x.windows, 60) || winByLabel(x.windows, "1h");
+      const trendLbl = th.trendLookbackMin ? `${th.trendLookbackMin}m` : "";
+      const trendCell =
+        s.trendPct != null
+          ? `${pctCell(s.trendPct)} <span class="num-inline-muted">/ ${trendLbl}</span>`
+          : '<span class="num-inline-muted">—</span>';
+      const rowCls = s.isActive ? "is-active" : "";
+      return `<tr class="${rowCls}">
+        <td>${idx + 1}</td>
+        <td><span class="signals-price">#${escapeHtml(s.coin)}</span></td>
+        <td><span class="signals-price">${fmtPrice(s.price)}</span></td>
+        <td>${pctCell(w2?.spikePct ?? null)}</td>
+        <td>${pctCell(w5?.spikePct ?? null)}</td>
+        <td>${pctCell(w15?.spikePct ?? null)}</td>
+        <td>${pctCell(w60?.spikePct ?? null)}</td>
+        <td>${trendCell}</td>
+      </tr>`;
+    })
+    .join("");
 }
 
 async function fetchJson(path) {
@@ -1034,15 +974,15 @@ async function fetchJson(path) {
 }
 
 async function tick() {
-  const [historyR, activityR, taxR, signalsR, pnlR, watchR] = await Promise.allSettled([
+  const [historyR, activityR, taxR, signalsR, pnlR, moversR] = await Promise.allSettled([
     fetchJson(`/api/history?hours=${currentRangeHours}`),
     fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
     fetchJson("/api/tax-summary"),
     fetchJson("/api/signals?limit=10"),
     fetchJson("/api/pnl-summary"),
-    fetchJson("/api/hunter-watchlist"),
+    fetchJson("/api/signals?limit=200"),
   ]);
-  if (watchR.status === "fulfilled") renderHunterWatchlist(watchR.value);
+  if (moversR.status === "fulfilled") renderHotMovers(moversR.value);
   if (pnlR.status === "fulfilled") {
     lastPnlSummary = pnlR.value;
     renderPnlSummary();

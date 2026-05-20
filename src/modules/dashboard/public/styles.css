@@ -335,7 +335,6 @@ header {
   letter-spacing: -0.01em;
 }
 
-.cart-cooldowns { margin-bottom: 0; }
 
 /* ──────────────────────── Time-range segmented controls */
 .time-ranges {
@@ -584,14 +583,6 @@ footer {
   transition: all 0.12s var(--ease);
 }
 .logout-link:hover { color: var(--accent); background: var(--canvas-subtle); }
-
-/* ──────────────────────── Card-wrapper grid (bans + activity) */
-.card-wrapper {
-  display: grid;
-  grid-template-columns: 1fr 1.6fr;
-  gap: 16px;
-  margin-bottom: 16px;
-}
 
 /* ──────────────────────── Live Logs */
 #logs-card .card-header { flex-wrap: wrap; gap: 8px; }
@@ -938,9 +929,6 @@ footer {
 
   .data-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
 
-  .card-wrapper { display: block; }
-  .cart-cooldowns { margin-bottom: 12px; }
-
   .chart-container { height: 220px; }
   #price-chart { height: 220px !important; }
 
@@ -1273,72 +1261,6 @@ footer {
   margin-bottom: 6px;
   padding-bottom: 6px;
   border-bottom: 1px dashed rgba(255,255,255,0.06);
-}
-
-/* ── Hunter Watchlist (card 07) ───────────────────────────── */
-.watchlist-section + .watchlist-section {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px dashed rgba(255,255,255,0.06);
-}
-.watchlist-section-title {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--text-muted, #888);
-  margin-bottom: 4px;
-  font-weight: 600;
-}
-.watchlist-rows .empty-state {
-  font-size: 11px;
-  padding: 4px 8px;
-  color: var(--text-muted, #888);
-}
-.wl-row {
-  display: grid;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 8px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-family: var(--font-mono);
-}
-.wl-row + .wl-row { margin-top: 2px; }
-.wl-row:hover { background: rgba(255,255,255,0.03); }
-.wl-row .wl-coin { font-weight: 700; }
-.wl-cooldown-row { grid-template-columns: 56px 80px 1fr auto; }
-.wl-spike-row    { grid-template-columns: 56px 70px 80px 1fr; }
-.wl-pct-up    { color: var(--green, #22c55e); }
-.wl-pct-down  { color: var(--red, #ef4444); }
-.wl-pct-neutral { color: var(--text-muted, #888); }
-.wl-tag {
-  display: inline-block;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 9px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  background: rgba(234,179,8,0.10);
-  color: var(--yellow, #eab308);
-  border: 1px solid rgba(234,179,8,0.25);
-}
-.wl-tag.wl-tag-cross { background: rgba(168,85,247,0.10); color: #a855f7; border-color: rgba(168,85,247,0.25); }
-.wl-tag.wl-tag-oi    { background: rgba(239,68,68,0.10); color: var(--red,#ef4444); border-color: rgba(239,68,68,0.25); }
-.wl-tag.wl-tag-streak{ background: rgba(239,68,68,0.18); color: var(--red,#ef4444); border-color: rgba(239,68,68,0.40); }
-.wl-side-tag {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-}
-.wl-side-short { color: var(--red, #ef4444); }
-.wl-side-long  { color: var(--green, #22c55e); }
-.wl-remain { color: var(--text-muted, #888); font-size: 10px; }
-.wl-detail {
-  color: var(--text-muted, #888);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ── Activity rows clickable ──────────────────────────────── */
