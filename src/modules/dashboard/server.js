@@ -976,22 +976,37 @@ async function handlePnlSummary(_req, res) {
       const inRange = allTrades.filter(
         (t) => t.closed_at >= start && t.closed_at < end,
       );
-      const stats = computeStats(inRange, equityNow);
-      const periodMs =
-        key === "all"
-          ? allTrades.length > 0
-            ? now - Math.min(...allTrades.map((t) => t.closed_at))
-            : 1
-          : end - start;
-      const utilizationPct =
-        periodMs > 0 ? Math.min(100, (stats.totalHoldMs / periodMs) * 100) : 0;
-      const funding = sumFundingInRange(fundingDeltas, start, end);
 
       // Manual split: trades закрытые в этом окне.
       const manualInRange = manualTrades.filter(
         (m) =>
           m.status === "closed" && m.closeTime >= start && m.closeTime < end,
       );
+
+      // Normalize manual trades to the shape computeStats() expects so они
+      // попадают во все метрики (avg, expectancy, best/worst, wins/losses,
+      // payoff, maxDD, fees) единым набором с bot trades.
+      const manualAsBotShape = manualInRange.map((m) => ({
+        realized_pnl: m.pnl || 0,
+        fee_paid: m.fee || 0,
+        strategy_id: "manual",
+        entry_time: m.entryTime,
+        closed_at: m.closeTime,
+      }));
+      const combined = [...inRange, ...manualAsBotShape];
+      const stats = computeStats(combined, equityNow);
+      const botStats = computeStats(inRange, equityNow);
+
+      const periodMs =
+        key === "all"
+          ? combined.length > 0
+            ? now - Math.min(...combined.map((t) => t.closed_at))
+            : 1
+          : end - start;
+      const utilizationPct =
+        periodMs > 0 ? Math.min(100, (stats.totalHoldMs / periodMs) * 100) : 0;
+      const funding = sumFundingInRange(fundingDeltas, start, end);
+
       const manualPnl = manualInRange.reduce((s, m) => s + (m.pnl || 0), 0);
       const manualCount = manualInRange.length;
       const manualWins = manualInRange.filter((m) => (m.pnl || 0) > 0).length;
@@ -1003,11 +1018,11 @@ async function handlePnlSummary(_req, res) {
         // Price-only PnL = realized_pnl − funding_collected. Если funding_collected NULL
         // (старые записи) — fallback: показываем total как есть, отдельно period funding.
         pricePnl: stats.totalPnl,
-        // Bot vs manual split (2026-05-13): bot = stats (DB), manual = reconstructed.
+        // Bot vs manual split (2026-05-13): bot = bot-only stats, manual = reconstructed.
         bot: {
-          pnl: stats.totalPnl,
-          count: stats.count,
-          wins: stats.wins,
+          pnl: botStats.totalPnl,
+          count: botStats.count,
+          wins: botStats.wins,
         },
         manual: {
           pnl: manualPnl,

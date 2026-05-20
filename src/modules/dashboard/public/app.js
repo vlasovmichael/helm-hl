@@ -1310,16 +1310,14 @@ function renderPnlSummary() {
   const p = lastPnlSummary.periods[currentPnlPeriod];
   if (!p) return;
 
-  // Combined PnL = bot + manual; манУальные приходят отдельно через p.manual.
+  // p.* теперь = combined stats (bot + manual). p.manual/p.bot — только для split-вывода.
   const manualPnl = p.manual?.pnl || 0;
   const manualCount = p.manual?.count || 0;
-  const combinedPnl = (p.totalPnl || 0) + manualPnl;
-  const combinedCount = (p.count || 0) + manualCount;
 
   const totalEl = document.getElementById("pnl-total");
-  totalEl.textContent = fmtMoney(combinedPnl);
-  totalEl.classList.toggle("positive", combinedPnl > 0);
-  totalEl.classList.toggle("negative", combinedPnl < 0);
+  totalEl.textContent = fmtMoney(p.totalPnl || 0);
+  totalEl.classList.toggle("positive", (p.totalPnl || 0) > 0);
+  totalEl.classList.toggle("negative", (p.totalPnl || 0) < 0);
 
   const wr = p.count > 0 ? `${p.winRate.toFixed(0)}% win` : "—";
   const manualNote =
@@ -1327,7 +1325,7 @@ function renderPnlSummary() {
       ? ` · 🖐 ${manualCount} manual (${fmtMoney(manualPnl)})`
       : "";
   document.getElementById("pnl-stats").textContent =
-    `${combinedCount} trade${combinedCount === 1 ? "" : "s"} · ${wr}${manualNote}`;
+    `${p.count} trade${p.count === 1 ? "" : "s"} · ${wr}${manualNote}`;
 
   const fundingEl = document.getElementById("pnl-funding");
   fundingEl.textContent = p.funding ? fmtMoney(p.funding) : "—";
@@ -1402,13 +1400,8 @@ function renderPnlSummary() {
 
   // Strategy breakdown — добавляем синтетическую запись 'manual' если есть.
   const stratContainer = document.getElementById("pnl-strategy");
+  // byStrategy теперь уже включает 'manual' (server-side combined stats).
   const strategies = Object.entries(p.byStrategy || {});
-  if (manualCount > 0) {
-    strategies.push([
-      "manual",
-      { pnl: manualPnl, count: manualCount, wins: p.manual?.wins || 0 },
-    ]);
-  }
   if (strategies.length === 0) {
     stratContainer.innerHTML =
       '<div class="empty-state">No trades in this period</div>';
@@ -1439,9 +1432,7 @@ function renderPnlSummary() {
   // меняет высоту при переключении дней и карточка (с графиком ниже) скачет.
   let maxRows = 1;
   for (const per of Object.values(lastPnlSummary.periods)) {
-    const n =
-      Object.keys(per.byStrategy || {}).length +
-      ((per.manual?.count || 0) > 0 ? 1 : 0);
+    const n = Object.keys(per.byStrategy || {}).length;
     if (n > maxRows) maxRows = n;
   }
   const sampleRow = stratContainer.querySelector(".strategy-row");
