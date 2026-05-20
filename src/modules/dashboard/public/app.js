@@ -1032,28 +1032,53 @@ function closeTradeModal() {
   document.body.style.overflow = "";
 }
 
+function tmHeader({ coin, side, kindLabel, strat, isManual, when }) {
+  const sideClass = side === "LONG" ? "long" : side === "SHORT" ? "short" : "";
+  const sideChip = side
+    ? `<span class="tm-side-chip ${sideClass}">${side === "LONG" ? "▲" : "▼"} ${side}</span>`
+    : "";
+  const manualBit = isManual ? " · 🖐 MANUAL" : "";
+  return `
+    <div class="tm-header">
+      <div class="tm-coin-badge">${coin.slice(0, 4)}</div>
+      <div class="tm-header-text">
+        <div class="tm-title">${kindLabel} #${coin} ${sideChip}</div>
+        <div class="tm-sub">${strat}${manualBit} · ${when}</div>
+      </div>
+    </div>
+  `;
+}
+
+function tmPnlHero(pnl) {
+  const cls = pnl >= 0 ? "positive" : "negative";
+  const sign = pnl >= 0 ? "+" : "−";
+  return `
+    <div class="tm-pnl-hero">
+      <div class="tm-pnl-hero-label">Realized PnL</div>
+      <div class="tm-pnl-hero-value ${cls}">${sign}$${Math.abs(pnl).toFixed(4)}</div>
+    </div>
+  `;
+}
+
 function tradeModalHtmlFromActivity(e) {
-  const side = e.kind === "open" ? "OPEN" : "CLOSE";
+  const kindLabel = e.kind === "open" ? "OPEN" : "CLOSE";
   const isManual = e.kind === "manual_close" || e.strategy_id === "manual";
   const strat = strategyDisplayName(e.strategy_id);
   const pnl = e.pnl || 0;
-  const pnlColor = pnl >= 0 ? "var(--green,#22c55e)" : "var(--red,#ef4444)";
   const when = new Date(e.ts).toLocaleString();
-  const subBits = [strat];
-  if (isManual) subBits.push("MANUAL");
-  subBits.push(when);
+  const side = e.side ? e.side.toUpperCase() : null;
+
+  const cells = [];
+  if (e.entryPrice != null) cells.push(`<div class="tm-cell"><div class="tm-cell-label">Entry</div><div class="tm-cell-value">$${fmtPx(e.entryPrice)}</div></div>`);
+  if (e.closePrice != null) cells.push(`<div class="tm-cell"><div class="tm-cell-label">Close</div><div class="tm-cell-value">$${fmtPx(e.closePrice)}</div></div>`);
+  if (e.sizeUsd != null) cells.push(`<div class="tm-cell"><div class="tm-cell-label">Size</div><div class="tm-cell-value">$${e.sizeUsd.toFixed(2)}</div></div>`);
+  if (e.reason) cells.push(`<div class="tm-cell"><div class="tm-cell-label">Reason</div><div class="tm-cell-value">${e.reason}</div></div>`);
+
   return `
-    <div class="tm-title">${side} #${e.coin}</div>
-    <div class="tm-sub">${subBits.join(" · ")}</div>
-    <div class="tm-grid">
-      ${e.entryPrice != null ? `<div class="tm-cell"><div class="tm-cell-label">Entry</div><div class="tm-cell-value">$${fmtPx(e.entryPrice)}</div></div>` : ""}
-      ${e.closePrice != null ? `<div class="tm-cell"><div class="tm-cell-label">Close</div><div class="tm-cell-value">$${fmtPx(e.closePrice)}</div></div>` : ""}
-      ${e.side ? `<div class="tm-cell"><div class="tm-cell-label">Side</div><div class="tm-cell-value">${e.side}</div></div>` : ""}
-      ${e.sizeUsd != null ? `<div class="tm-cell"><div class="tm-cell-label">Size</div><div class="tm-cell-value">$${e.sizeUsd.toFixed(2)}</div></div>` : ""}
-      ${e.reason ? `<div class="tm-cell"><div class="tm-cell-label">Reason</div><div class="tm-cell-value">${e.reason}</div></div>` : ""}
-      <div class="tm-cell"><div class="tm-cell-label">PnL</div><div class="tm-cell-value" style="color:${pnlColor}">${pnl >= 0 ? "+" : ""}$${pnl.toFixed(4)}</div></div>
-    </div>
-    ${e.id ? `<div class="tm-section" id="tm-detail-slot"><div class="tm-sub">Загружаю детали…</div></div>` : ""}
+    ${tmHeader({ coin: e.coin, side, kindLabel, strat, isManual, when })}
+    ${e.kind !== "open" ? tmPnlHero(pnl) : ""}
+    ${cells.length ? `<div class="tm-grid">${cells.join("")}</div>` : ""}
+    ${e.id ? `<div class="tm-section" id="tm-detail-slot"><div class="tm-section-title">Детали</div><div class="tm-sub">Загружаю…</div></div>` : ""}
   `;
 }
 
@@ -1064,34 +1089,44 @@ function tradeDetailHtml(t) {
   const entryPx = t.entry_price;
   const closePx = t.close_price;
   const pnl = t.realized_pnl || 0;
-  const pnlColor = pnl >= 0 ? "var(--green,#22c55e)" : "var(--red,#ef4444)";
   const fee = t.fee_paid || 0;
   const grossPnl = pnl + fee;
   const holdMs = t.closed_at && t.entry_time ? t.closed_at - t.entry_time : null;
-  const holdStr = holdMs == null ? "—" : holdMs < 3600_000 ? `${Math.round(holdMs / 60_000)}m` : `${(holdMs / 3600_000).toFixed(1)}h`;
+  const holdStr =
+    holdMs == null
+      ? "—"
+      : holdMs < 60_000
+      ? `${Math.round(holdMs / 1000)}s`
+      : holdMs < 3600_000
+      ? `${Math.round(holdMs / 60_000)}m`
+      : `${(holdMs / 3600_000).toFixed(1)}h`;
   const sl = t.sl_price;
   const tp = t.tp_price;
   const opened = t.entry_time ? new Date(t.entry_time).toLocaleString() : "—";
   const closed = t.closed_at ? new Date(t.closed_at).toLocaleString() : "—";
+  const isManual = t.strategy_id === "manual";
+
+  const cells = [
+    `<div class="tm-cell"><div class="tm-cell-label">Entry</div><div class="tm-cell-value">$${fmtPx(entryPx)}</div></div>`,
+    `<div class="tm-cell"><div class="tm-cell-label">Close</div><div class="tm-cell-value">$${fmtPx(closePx)}</div></div>`,
+    `<div class="tm-cell"><div class="tm-cell-label">Size</div><div class="tm-cell-value">$${(t.size_usd || 0).toFixed(2)}</div></div>`,
+    `<div class="tm-cell"><div class="tm-cell-label">Hold</div><div class="tm-cell-value">${holdStr}</div></div>`,
+  ];
+  if (sl != null) cells.push(`<div class="tm-cell"><div class="tm-cell-label">Stop Loss</div><div class="tm-cell-value">$${fmtPx(sl)}</div></div>`);
+  if (tp != null) cells.push(`<div class="tm-cell"><div class="tm-cell-label">Take Profit</div><div class="tm-cell-value">$${fmtPx(tp)}</div></div>`);
+  cells.push(`<div class="tm-cell"><div class="tm-cell-label">Gross PnL</div><div class="tm-cell-value ${grossPnl >= 0 ? "positive" : "negative"}">${grossPnl >= 0 ? "+" : "−"}$${Math.abs(grossPnl).toFixed(4)}</div></div>`);
+  cells.push(`<div class="tm-cell"><div class="tm-cell-label">Fees</div><div class="tm-cell-value muted">−$${Math.abs(fee).toFixed(4)}</div></div>`);
+  if (t.reason) cells.push(`<div class="tm-cell full"><div class="tm-cell-label">Close reason</div><div class="tm-cell-value">${t.reason}</div></div>`);
+
   return `
-    <div class="tm-title">#${t.coin} · ${direction}</div>
-    <div class="tm-sub">${strat} · id ${t.id}</div>
-    <div class="tm-grid">
-      <div class="tm-cell"><div class="tm-cell-label">Entry</div><div class="tm-cell-value">$${fmtPx(entryPx)}</div></div>
-      <div class="tm-cell"><div class="tm-cell-label">Close</div><div class="tm-cell-value">$${fmtPx(closePx)}</div></div>
-      <div class="tm-cell"><div class="tm-cell-label">Size</div><div class="tm-cell-value">$${(t.size_usd || 0).toFixed(2)}</div></div>
-      <div class="tm-cell"><div class="tm-cell-label">Hold</div><div class="tm-cell-value">${holdStr}</div></div>
-      ${sl != null ? `<div class="tm-cell"><div class="tm-cell-label">SL</div><div class="tm-cell-value">$${fmtPx(sl)}</div></div>` : ""}
-      ${tp != null ? `<div class="tm-cell"><div class="tm-cell-label">TP</div><div class="tm-cell-value">$${fmtPx(tp)}</div></div>` : ""}
-      <div class="tm-cell"><div class="tm-cell-label">Gross</div><div class="tm-cell-value">${grossPnl >= 0 ? "+" : ""}$${grossPnl.toFixed(4)}</div></div>
-      <div class="tm-cell"><div class="tm-cell-label">Fees</div><div class="tm-cell-value">−$${Math.abs(fee).toFixed(4)}</div></div>
-      <div class="tm-cell"><div class="tm-cell-label">Net PnL</div><div class="tm-cell-value" style="color:${pnlColor}">${pnl >= 0 ? "+" : ""}$${pnl.toFixed(4)}</div></div>
-      <div class="tm-cell"><div class="tm-cell-label">Reason</div><div class="tm-cell-value">${t.reason || "—"}</div></div>
-    </div>
+    ${tmHeader({ coin: t.coin, side: direction, kindLabel: "TRADE", strat, isManual, when: `id ${t.id}` })}
+    ${tmPnlHero(pnl)}
+    <div class="tm-grid">${cells.join("")}</div>
     <div class="tm-section">
+      <div class="tm-section-title">Timeline</div>
       <div class="tm-grid">
-        <div class="tm-cell"><div class="tm-cell-label">Opened</div><div class="tm-cell-value" style="font-size:11px">${opened}</div></div>
-        <div class="tm-cell"><div class="tm-cell-label">Closed</div><div class="tm-cell-value" style="font-size:11px">${closed}</div></div>
+        <div class="tm-cell"><div class="tm-cell-label">Opened</div><div class="tm-cell-value muted">${opened}</div></div>
+        <div class="tm-cell"><div class="tm-cell-label">Closed</div><div class="tm-cell-value muted">${closed}</div></div>
       </div>
     </div>
   `;
