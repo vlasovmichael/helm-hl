@@ -537,6 +537,22 @@ function initPriceChart() {
       barSpacing: 10,
       minBarSpacing: 4,
       rightOffset: 4,
+      tickMarkFormatter: (time) => {
+        const d = new Date(time * 1000);
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mm = String(d.getMinutes()).padStart(2, "0");
+        return `${hh}:${mm}`;
+      },
+    },
+    localization: {
+      timeFormatter: (time) => {
+        const d = new Date(time * 1000);
+        const dd = String(d.getDate()).padStart(2, "0");
+        const mo = String(d.getMonth() + 1).padStart(2, "0");
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mi = String(d.getMinutes()).padStart(2, "0");
+        return `${dd}.${mo} ${hh}:${mi}`;
+      },
     },
     crosshair: { mode: 0 },
     handleScroll: true,
@@ -720,12 +736,26 @@ function initEquityChart() {
       borderColor: grid,
       timeVisible: true,
       secondsVisible: false,
+      tickMarkFormatter: (time) => {
+        const d = new Date(time * 1000);
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mm = String(d.getMinutes()).padStart(2, "0");
+        return `${hh}:${mm}`;
+      },
     },
     crosshair: { mode: 0 },
     handleScroll: true,
     handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
     localization: {
       priceFormatter: (v) => `$${Number(v).toFixed(2)}`,
+      timeFormatter: (time) => {
+        const d = new Date(time * 1000);
+        const dd = String(d.getDate()).padStart(2, "0");
+        const mo = String(d.getMonth() + 1).padStart(2, "0");
+        const hh = String(d.getHours()).padStart(2, "0");
+        const mi = String(d.getMinutes()).padStart(2, "0");
+        return `${dd}.${mo} ${hh}:${mi}`;
+      },
     },
   });
 
