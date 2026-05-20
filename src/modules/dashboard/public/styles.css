@@ -47,6 +47,14 @@ html[data-theme='light'] {
   --red:              #cf222e;
   --red-soft:         #ffebe9;
   --red-line:         #ff8182;
+
+  /* Tier backgrounds (Hot Movers): STRONG → NORMAL → WEAK */
+  --tier-pos-strong:  rgba(46, 160, 67, 0.38);
+  --tier-pos-normal:  rgba(46, 160, 67, 0.18);
+  --tier-pos-weak:    rgba(46, 160, 67, 0.07);
+  --tier-neg-strong:  rgba(207, 34, 46, 0.32);
+  --tier-neg-normal:  rgba(207, 34, 46, 0.15);
+  --tier-neg-weak:    rgba(207, 34, 46, 0.06);
   --warn:             #9a6700;
   --warn-soft:        #fff8c5;
   --info:             #0969da;
@@ -88,6 +96,14 @@ html[data-theme='dark'] {
   --red:              #f85149;
   --red-soft:         rgba(248, 81, 73, 0.15);
   --red-line:         rgba(248, 81, 73, 0.4);
+
+  /* Tier backgrounds (Hot Movers): STRONG → NORMAL → WEAK */
+  --tier-pos-strong:  rgba(46, 160, 67, 0.42);
+  --tier-pos-normal:  rgba(46, 160, 67, 0.20);
+  --tier-pos-weak:    rgba(46, 160, 67, 0.08);
+  --tier-neg-strong:  rgba(248, 81, 73, 0.38);
+  --tier-neg-normal:  rgba(248, 81, 73, 0.18);
+  --tier-neg-weak:    rgba(248, 81, 73, 0.07);
   --warn:             #d29922;
   --warn-soft:        rgba(187, 128, 9, 0.15);
   --info:             #4493f8;
@@ -838,14 +854,18 @@ footer {
 
 .signals-table td.num-pos-strong, .signals-table td.num-pos-strong * { color: var(--green); font-weight: 700; }
 .signals-table td.num-pos,        .signals-table td.num-pos *        { color: var(--green); font-weight: 600; }
-.signals-table td.num-pos-weak,   .signals-table td.num-pos-weak *   { color: var(--green); font-weight: 500; opacity: 0.75; }
+.signals-table td.num-pos-weak,   .signals-table td.num-pos-weak *   { color: var(--green); font-weight: 500; }
 .signals-table td.num-neg-strong, .signals-table td.num-neg-strong * { color: var(--red); font-weight: 700; }
 .signals-table td.num-neg,        .signals-table td.num-neg *        { color: var(--red); font-weight: 600; }
-.signals-table td.num-neg-weak,   .signals-table td.num-neg-weak *   { color: var(--red); font-weight: 500; opacity: 0.75; }
+.signals-table td.num-neg-weak,   .signals-table td.num-neg-weak *   { color: var(--red); font-weight: 500; }
 .signals-table td.num-muted,      .signals-table td.num-muted *      { color: var(--text-muted); }
 
-.signals-table td.num-pos-strong, .signals-table td.num-pos { background: var(--green-soft); border-radius: 4px; }
-.signals-table td.num-neg-strong, .signals-table td.num-neg { background: var(--red-soft); border-radius: 4px; }
+.signals-table td.num-pos-strong { background: var(--tier-pos-strong); border-radius: 4px; }
+.signals-table td.num-pos        { background: var(--tier-pos-normal); border-radius: 4px; }
+.signals-table td.num-pos-weak   { background: var(--tier-pos-weak);   border-radius: 4px; }
+.signals-table td.num-neg-strong { background: var(--tier-neg-strong); border-radius: 4px; }
+.signals-table td.num-neg        { background: var(--tier-neg-normal); border-radius: 4px; }
+.signals-table td.num-neg-weak   { background: var(--tier-neg-weak);   border-radius: 4px; }
 
 .num-warn-glow { font-weight: 700; }
 .signals-table .num-inline-pos { color: var(--green); font-weight: 600; }
@@ -1077,14 +1097,18 @@ footer {
   .signals-table td:nth-child(5) { grid-area: trend; }
 
   /* Restore the small coloured-background pill on Spike/Trend cells (mobile) */
-  .signals-table td.num-pos-strong, .signals-table td.num-pos {
-    background: var(--green-soft) !important;
-    border-radius: 4px !important;
-    padding: 2px 6px !important;
-    width: fit-content;
-  }
-  .signals-table td.num-neg-strong, .signals-table td.num-neg {
-    background: var(--red-soft) !important;
+  .signals-table td.num-pos-strong { background: var(--tier-pos-strong) !important; }
+  .signals-table td.num-pos        { background: var(--tier-pos-normal) !important; }
+  .signals-table td.num-pos-weak   { background: var(--tier-pos-weak)   !important; }
+  .signals-table td.num-neg-strong { background: var(--tier-neg-strong) !important; }
+  .signals-table td.num-neg        { background: var(--tier-neg-normal) !important; }
+  .signals-table td.num-neg-weak   { background: var(--tier-neg-weak)   !important; }
+  .signals-table td.num-pos-strong,
+  .signals-table td.num-pos,
+  .signals-table td.num-pos-weak,
+  .signals-table td.num-neg-strong,
+  .signals-table td.num-neg,
+  .signals-table td.num-neg-weak {
     border-radius: 4px !important;
     padding: 2px 6px !important;
     width: fit-content;
