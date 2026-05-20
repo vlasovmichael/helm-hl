@@ -319,10 +319,12 @@
       <div class="card-wrapper" id="sec-activity">
         <section class="card cart-cooldowns">
           <div class="card-header">
-            <div class="card-title" data-num="07">Bans / Cooldowns</div>
+            <div class="card-title" data-num="07">Near Misses</div>
+            <div class="card-subtitle" title="Сигналы, которые Hunter увидел, но не взял (vol/OI/trend/cooldown/slot)">видел, но не взял</div>
           </div>
-          <div id="bans-container">
-            <div class="empty-state">No active restrictions</div>
+          <div id="bans-strip"></div>
+          <div id="near-misses-container">
+            <div class="empty-state">No recent near-misses</div>
           </div>
         </section>
 
@@ -534,6 +536,13 @@
         });
       })();
     </script>
+    <div id="trade-modal" class="trade-modal" hidden>
+      <div class="trade-modal__backdrop" data-close="1"></div>
+      <div class="trade-modal__panel" role="dialog" aria-modal="true">
+        <button class="trade-modal__close" data-close="1" aria-label="Close">×</button>
+        <div id="trade-modal-body"></div>
+      </div>
+    </div>
     <script src="app.js"></script>
   </body>
 </html>

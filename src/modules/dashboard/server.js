@@ -32,6 +32,7 @@ import {
   HUNTER_TP_PCT,
 } from "../strategistSniper.js";
 import { getChillBoyHeartbeat } from "../strategistTrendFollow.js";
+import { getNearMisses } from "../nearMisses.js";
 
 const HOST = "0.0.0.0";
 const PORT = 3010;
@@ -382,6 +383,7 @@ async function handleActivity(req, res) {
     for (const t of realTradesForDisplay(getHistorySince(since))) {
       if (!t.coin) continue;
       events.push({
+        id: t.id,
         kind: "close",
         ts: t.closed_at,
         coin: t.coin,
@@ -393,6 +395,7 @@ async function handleActivity(req, res) {
     for (const t of realTradesForDisplay(getArchivedHistorySince(since))) {
       if (!t.coin) continue;
       events.push({
+        id: t.id,
         kind: "close",
         ts: t.closed_at,
         coin: t.coin,
@@ -405,6 +408,7 @@ async function handleActivity(req, res) {
     const open = getActivePosition();
     if (open && open.coin && open.entry_time >= since) {
       events.push({
+        id: open.id,
         kind: "open",
         ts: open.entry_time,
         coin: open.coin,
@@ -640,6 +644,35 @@ function handleSignals(req, res) {
       count: top.length,
       signals: top,
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+function handleNearMisses(req, res) {
+  try {
+    const limit = req.query.limit
+      ? Math.max(1, Math.min(200, parseInt(req.query.limit, 10)))
+      : 30;
+    const since = req.query.since ? parseInt(req.query.since, 10) : 0;
+    const events = getNearMisses({ since, limit });
+    res.json({ count: events.length, events });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+function handleTradeDetail(req, res) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id) || id <= 0) {
+      return res.status(400).json({ error: "invalid id" });
+    }
+    // Ищем сначала в активной истории, потом в архиве.
+    const all = [...getHistorySince(0), ...getArchivedHistorySince(0)];
+    const trade = all.find((t) => t.id === id);
+    if (!trade) return res.status(404).json({ error: "trade not found" });
+    res.json({ trade });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1181,6 +1214,8 @@ export function startDashboard() {
   app.get("/api/activity", handleActivity);
   app.get("/api/logs", handleLogs);
   app.get("/api/signals", handleSignals);
+  app.get("/api/near-misses", handleNearMisses);
+  app.get("/api/trade/:id", handleTradeDetail);
   app.get("/api/tax-summary", handleTaxSummary);
   app.get("/api/pnl-summary", handlePnlSummary);
   app.get("/api/trade-markers", handleTradeMarkers);

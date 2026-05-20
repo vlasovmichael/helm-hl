@@ -21,6 +21,7 @@ import {
   isHunterCrossCooldownActive,
   getHunterCrossCooldownRemainMs,
 } from './hunterCrossCooldown.js';
+import { recordNearMiss } from './nearMisses.js';
 
 export const HUNTER_LONG_SPIKE_WINDOW_MIN = 2;          // окно 2 мин (как у HUNTER SHORT)
 export const HUNTER_LONG_COOLDOWN_MS      = 2 * 60_000; // 2 мин re-detect cooldown per coin
@@ -182,10 +183,18 @@ export function analyzeHunterLong(scoutData, activePosition, now = Date.now()) {
     if (pct > -HUNTER_LONG_DUMP_PCT) continue;  // дамп слабый или это pump → пропускаем
 
     const lastFired = cooldownMap.get(item.coin) ?? 0;
-    if (now - lastFired < HUNTER_LONG_COOLDOWN_MS) continue;
+    if (now - lastFired < HUNTER_LONG_COOLDOWN_MS) {
+      const remain = Math.ceil((HUNTER_LONG_COOLDOWN_MS - (now - lastFired)) / 1000);
+      recordNearMiss({ ts: now, strategy: 'hunter_long', coin: item.coin, side: 'LONG', spikePct: pct, reason: 'cooldown', detail: `re-detect cooldown ${remain}s` });
+      continue;
+    }
 
     const unbanAt = postSlCooldown.get(item.coin) ?? 0;
-    if (now < unbanAt) continue;
+    if (now < unbanAt) {
+      const remain = Math.ceil((unbanAt - now) / 60_000);
+      recordNearMiss({ ts: now, strategy: 'hunter_long', coin: item.coin, side: 'LONG', spikePct: pct, reason: 'post_sl', detail: `post-SL cooldown ${remain}min` });
+      continue;
+    }
 
     // Fix A (2026-05-20): toxic-coin filter. Null/undefined → пропуск проверки
     // (degradation: scout мог не получить данные). Число ниже порога → блок + лог.
@@ -195,12 +204,14 @@ export function analyzeHunterLong(scoutData, activePosition, now = Date.now()) {
       logger.info(
         `[HunterLong] ⛔ #${item.coin} dump ${pct.toFixed(2)}% пропущен: OI $${(oiUsd / 1_000).toFixed(0)}k < min $${(HUNTER_LONG_MIN_OI_USD / 1_000).toFixed(0)}k (delist-risk)`,
       );
+      recordNearMiss({ ts: now, strategy: 'hunter_long', coin: item.coin, side: 'LONG', spikePct: pct, reason: 'oi', detail: `OI $${(oiUsd / 1_000).toFixed(0)}k < $${(HUNTER_LONG_MIN_OI_USD / 1_000).toFixed(0)}k min` });
       continue;
     }
     if (volUsd !== null && volUsd < HUNTER_LONG_MIN_VOL_24H) {
       logger.info(
         `[HunterLong] ⛔ #${item.coin} dump ${pct.toFixed(2)}% пропущен: vol24h $${(volUsd / 1_000_000).toFixed(2)}M < min $${(HUNTER_LONG_MIN_VOL_24H / 1_000_000).toFixed(1)}M`,
       );
+      recordNearMiss({ ts: now, strategy: 'hunter_long', coin: item.coin, side: 'LONG', spikePct: pct, reason: 'vol', detail: `vol24h $${(volUsd / 1_000_000).toFixed(2)}M < $${(HUNTER_LONG_MIN_VOL_24H / 1_000_000).toFixed(1)}M min` });
       continue;
     }
 
@@ -209,6 +220,7 @@ export function analyzeHunterLong(scoutData, activePosition, now = Date.now()) {
     if (isHunterCrossCooldownActive(item.coin, now)) {
       const remain = Math.ceil(getHunterCrossCooldownRemainMs(item.coin, now) / 60_000);
       logger.info(`[HunterLong] ⛔ #${item.coin} cross-cooldown active (${remain}min remaining)`);
+      recordNearMiss({ ts: now, strategy: 'hunter_long', coin: item.coin, side: 'LONG', spikePct: pct, reason: 'cross_cooldown', detail: `cross-cooldown ${remain}min` });
       continue;
     }
 
@@ -223,6 +235,7 @@ export function analyzeHunterLong(scoutData, activePosition, now = Date.now()) {
           `[HunterLong] ⛔ #${item.coin} dump ${pct.toFixed(2)}%/2мин ` +
             `пропущен: тренд ${trendPct.toFixed(2)}% за ${HUNTER_LONG_TREND_LOOKBACK_MIN}мин ≤ -${HUNTER_LONG_TREND_MAX_DROP_PCT}%`,
         );
+        recordNearMiss({ ts: now, strategy: 'hunter_long', coin: item.coin, side: 'LONG', spikePct: pct, reason: 'trend', detail: `trend ${trendPct.toFixed(1)}%/${HUNTER_LONG_TREND_LOOKBACK_MIN}min ≤ -${HUNTER_LONG_TREND_MAX_DROP_PCT}%` });
         continue;
       }
     }
@@ -239,7 +252,12 @@ export function analyzeHunterLong(scoutData, activePosition, now = Date.now()) {
   }
 
   // Slot занят чужой стратегией → ждём.
-  if (activePosition) return { action: 'HOLD' };
+  if (activePosition) {
+    if (best) {
+      recordNearMiss({ ts: now, strategy: 'hunter_long', coin: best.coin, side: 'LONG', spikePct: best.pct, reason: 'slot_busy', detail: `slot occupied by #${activePosition.coin} (${activePosition.strategy_id || 'carry'})` });
+    }
+    return { action: 'HOLD' };
+  }
   if (!best) return { action: 'HOLD' };
 
   cooldownMap.set(best.coin, now);

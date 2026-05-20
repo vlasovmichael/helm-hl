@@ -19,6 +19,7 @@ import {
   isHunterCrossCooldownActive,
   getHunterCrossCooldownRemainMs,
 } from './hunterCrossCooldown.js';
+import { recordNearMiss } from './nearMisses.js';
 
 // ── Конфигурация Iter A (захардкожена; в env переедет при необходимости) ──
 // HUNTER_SPIKE_PCT: env-overrideable. Дефолт снижен с 5.0 → 3.0 (2026-05-11):
@@ -207,17 +208,26 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
     if (pct < HUNTER_SPIKE_PCT) continue;  // pump слабый или dump (short-only → игнор)
 
     const lastFired = hunterCooldownMap.get(item.coin) ?? 0;
-    if (now - lastFired < HUNTER_COOLDOWN_MS) continue;  // per-coin cooldown
+    if (now - lastFired < HUNTER_COOLDOWN_MS) {
+      const remain = Math.ceil((HUNTER_COOLDOWN_MS - (now - lastFired)) / 1000);
+      recordNearMiss({ ts: now, strategy: 'hunter', coin: item.coin, side: 'SHORT', spikePct: pct, reason: 'cooldown', detail: `re-detect cooldown ${remain}s` });
+      continue;
+    }
 
     // Post-SL cooldown: после SL не возвращаемся к этой монете N минут (default 30).
     const lastSl = hunterPostSlCooldown.get(item.coin) ?? 0;
-    if (now - lastSl < HUNTER_POST_SL_COOLDOWN_MS) continue;
+    if (now - lastSl < HUNTER_POST_SL_COOLDOWN_MS) {
+      const remain = Math.ceil((HUNTER_POST_SL_COOLDOWN_MS - (now - lastSl)) / 60_000);
+      recordNearMiss({ ts: now, strategy: 'hunter', coin: item.coin, side: 'SHORT', spikePct: pct, reason: 'post_sl', detail: `post-SL cooldown ${remain}min` });
+      continue;
+    }
 
     // Cross-strategy cooldown: Hunter LONG только что закрылся в этой монете —
     // не лезем туда же.
     if (isHunterCrossCooldownActive(item.coin, now)) {
       const remain = Math.ceil(getHunterCrossCooldownRemainMs(item.coin, now) / 60_000);
       logger.info(`[Hunter] ⛔ #${item.coin} cross-cooldown active (${remain}min remaining)`);
+      recordNearMiss({ ts: now, strategy: 'hunter', coin: item.coin, side: 'SHORT', spikePct: pct, reason: 'cross_cooldown', detail: `cross-cooldown ${remain}min` });
       continue;
     }
 
@@ -233,6 +243,7 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
           `[Hunter] ⛔ #${item.coin} спайк +${pct.toFixed(2)}%/2мин ` +
             `пропущен: тренд +${trend15mPct.toFixed(2)}% за ${HUNTER_TREND_LOOKBACK_MIN}мин ≥ ${HUNTER_TREND_MAX_RISE_PCT}%`,
         );
+        recordNearMiss({ ts: now, strategy: 'hunter', coin: item.coin, side: 'SHORT', spikePct: pct, reason: 'trend', detail: `trend +${trend15mPct.toFixed(1)}%/${HUNTER_TREND_LOOKBACK_MIN}min ≥ ${HUNTER_TREND_MAX_RISE_PCT}%` });
         continue;
       }
     }
@@ -249,7 +260,12 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
   }
 
   // ── Вход невозможен если slot занят другой стратегией (Iter A без эвикшена) ──
-  if (activePosition) return { action: 'HOLD' };
+  if (activePosition) {
+    if (best) {
+      recordNearMiss({ ts: now, strategy: 'hunter', coin: best.coin, side: 'SHORT', spikePct: best.pct, reason: 'slot_busy', detail: `slot occupied by #${activePosition.coin} (${activePosition.strategy_id || 'carry'})` });
+    }
+    return { action: 'HOLD' };
+  }
 
   if (!best) return { action: 'HOLD' };
 

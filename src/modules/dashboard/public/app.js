@@ -868,18 +868,85 @@ function renderManualPositions(list) {
 }
 
 function renderBans(status) {
-  const container = document.getElementById("bans-container");
+  // Compact strip над Near Misses: показываем только если есть активные баны.
+  const strip = document.getElementById("bans-strip");
+  if (!strip) return;
   if (!status.runtimeBans?.length) {
-    container.innerHTML =
-      '<div class="empty-state">No active restrictions</div>';
+    strip.innerHTML = "";
+    strip.classList.remove("bans-strip");
     return;
   }
-  container.innerHTML = status.runtimeBans
-    .map(
-      (c) =>
-        `<div style="display:inline-block; background:rgba(239,68,68,0.1); color:var(--red); border:1px solid rgba(239,68,68,0.2); padding:4px 10px; border-radius:6px; font-size:11px; font-family:var(--font-mono); font-weight:600; margin:0 8px 8px 0;">#${c}</div>`,
-    )
+  strip.classList.add("bans-strip");
+  strip.innerHTML =
+    '<div style="font-size:10px; color:var(--text-muted,#888); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">Runtime bans</div>' +
+    status.runtimeBans
+      .map(
+        (c) =>
+          `<div style="display:inline-block; background:rgba(239,68,68,0.1); color:var(--red); border:1px solid rgba(239,68,68,0.2); padding:3px 8px; border-radius:5px; font-size:10px; font-family:var(--font-mono); font-weight:600; margin:0 6px 4px 0;">#${c}</div>`,
+      )
+      .join("");
+}
+
+function fmtAge(ts) {
+  const dt = Date.now() - ts;
+  if (dt < 60_000) return `${Math.max(1, Math.floor(dt / 1000))}s ago`;
+  if (dt < 3600_000) return `${Math.floor(dt / 60_000)}m ago`;
+  if (dt < 86_400_000) return `${Math.floor(dt / 3600_000)}h ago`;
+  return `${Math.floor(dt / 86_400_000)}d ago`;
+}
+
+const REASON_LABEL = {
+  vol: "low vol",
+  oi: "low OI",
+  trend: "trend gate",
+  cooldown: "cooldown",
+  post_sl: "post-SL",
+  cross_cooldown: "cross-CD",
+  slot_busy: "slot busy",
+};
+
+function renderNearMisses(data) {
+  const container = document.getElementById("near-misses-container");
+  if (!container) return;
+  const events = data?.events || [];
+  if (!events.length) {
+    container.innerHTML =
+      '<div class="empty-state">No recent near-misses</div>';
+    return;
+  }
+  // Dedupe per coin+reason — последний по времени.
+  const seen = new Set();
+  const filtered = [];
+  for (const e of events) {
+    const key = `${e.coin}|${e.reason}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    filtered.push(e);
+    if (filtered.length >= 8) break;
+  }
+  container.innerHTML = filtered
+    .map((e) => {
+      const sideClass =
+        e.side === "LONG" ? "near-miss-side-long" : "near-miss-side-short";
+      const sideArrow = e.side === "LONG" ? "▲" : "▼";
+      const spike =
+        e.spikePct == null
+          ? ""
+          : `${e.spikePct >= 0 ? "+" : ""}${e.spikePct.toFixed(1)}%`;
+      const reasonLabel = REASON_LABEL[e.reason] || e.reason;
+      return `<div class="near-miss-row" title="${escapeAttr(e.detail || "")}">
+        <span class="near-miss-coin">#${e.coin}</span>
+        <span class="${sideClass}">${sideArrow} ${spike}</span>
+        <span class="near-miss-detail"><span class="near-miss-reason">${reasonLabel}</span> ${escapeHtml(e.detail || "")}</span>
+        <span class="near-miss-age">${fmtAge(e.ts)}</span>
+      </div>`;
+    })
     .join("");
+}
+
+function escapeAttr(s) {
+  // escapeHtml уже экранирует кавычки (см. выше).
+  return escapeHtml(s);
 }
 
 async function fetchJson(path) {
@@ -889,13 +956,15 @@ async function fetchJson(path) {
 }
 
 async function tick() {
-  const [historyR, activityR, taxR, signalsR, pnlR] = await Promise.allSettled([
+  const [historyR, activityR, taxR, signalsR, pnlR, nearR] = await Promise.allSettled([
     fetchJson(`/api/history?hours=${currentRangeHours}`),
     fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
     fetchJson("/api/tax-summary"),
     fetchJson("/api/signals?limit=10"),
     fetchJson("/api/pnl-summary"),
+    fetchJson("/api/near-misses?limit=30"),
   ]);
+  if (nearR.status === "fulfilled") renderNearMisses(nearR.value);
   if (pnlR.status === "fulfilled") {
     lastPnlSummary = pnlR.value;
     renderPnlSummary();
@@ -915,15 +984,18 @@ async function tick() {
   renderFooter();
 }
 
+let lastActivityEvents = [];
+
 function renderActivity(activity) {
   const container = document.getElementById("activity-container");
   const events = (activity?.events || []).filter((e) => e && e.coin);
+  lastActivityEvents = events;
   if (!events.length) {
     container.innerHTML = '<div class="empty-state">No events</div>';
     return;
   }
   container.innerHTML = events
-    .map((e) => {
+    .map((e, idx) => {
       const isManual = e.kind === "manual_close" || e.strategy_id === "manual";
       const kindLabel =
         e.kind === "manual_close" ? "CLOSE" : e.kind.toUpperCase();
@@ -932,14 +1004,135 @@ function renderActivity(activity) {
         ? '<span class="manual-badge" style="background:rgba(234,179,8,0.12); color:var(--yellow,#eab308); border:1px solid rgba(234,179,8,0.3); padding:1px 6px; border-radius:4px; font-size:9px; font-family:var(--font-mono); font-weight:700; margin-left:6px;">MANUAL</span>'
         : "";
       const pnlVal = e.pnl || 0;
+      const canOpen = e.kind === "close" || e.kind === "manual_close" || e.kind === "open";
+      const clickable = canOpen ? "clickable" : "";
+      const idxAttr = canOpen ? `data-activity-idx="${idx}"` : "";
       return `
-      <div class="activity-item">
+      <div class="activity-item ${clickable}" ${idxAttr}>
         <div><span class="activity-kind ${kindClass}">${kindLabel}</span><span class="activity-coin">#${e.coin}</span>${manualBadge}</div>
         <div class="activity-pnl ${pnlVal >= 0 ? "positive" : "negative"}">${pnlVal >= 0 ? "+" : ""}${pnlVal.toFixed(4)}</div>
       </div>`;
     })
     .join("");
 }
+
+// ── Trade detail modal ─────────────────────────────────────────────────
+function openTradeModal(html) {
+  const modal = document.getElementById("trade-modal");
+  const body = document.getElementById("trade-modal-body");
+  if (!modal || !body) return;
+  body.innerHTML = html;
+  modal.hidden = false;
+  document.body.style.overflow = "hidden";
+}
+function closeTradeModal() {
+  const modal = document.getElementById("trade-modal");
+  if (!modal) return;
+  modal.hidden = true;
+  document.body.style.overflow = "";
+}
+
+function tradeModalHtmlFromActivity(e) {
+  const side = e.kind === "open" ? "OPEN" : "CLOSE";
+  const isManual = e.kind === "manual_close" || e.strategy_id === "manual";
+  const strat = strategyDisplayName(e.strategy_id);
+  const pnl = e.pnl || 0;
+  const pnlColor = pnl >= 0 ? "var(--green,#22c55e)" : "var(--red,#ef4444)";
+  const when = new Date(e.ts).toLocaleString();
+  const subBits = [strat];
+  if (isManual) subBits.push("MANUAL");
+  subBits.push(when);
+  return `
+    <div class="tm-title">${side} #${e.coin}</div>
+    <div class="tm-sub">${subBits.join(" · ")}</div>
+    <div class="tm-grid">
+      ${e.entryPrice != null ? `<div class="tm-cell"><div class="tm-cell-label">Entry</div><div class="tm-cell-value">$${fmtPx(e.entryPrice)}</div></div>` : ""}
+      ${e.closePrice != null ? `<div class="tm-cell"><div class="tm-cell-label">Close</div><div class="tm-cell-value">$${fmtPx(e.closePrice)}</div></div>` : ""}
+      ${e.side ? `<div class="tm-cell"><div class="tm-cell-label">Side</div><div class="tm-cell-value">${e.side}</div></div>` : ""}
+      ${e.sizeUsd != null ? `<div class="tm-cell"><div class="tm-cell-label">Size</div><div class="tm-cell-value">$${e.sizeUsd.toFixed(2)}</div></div>` : ""}
+      ${e.reason ? `<div class="tm-cell"><div class="tm-cell-label">Reason</div><div class="tm-cell-value">${e.reason}</div></div>` : ""}
+      <div class="tm-cell"><div class="tm-cell-label">PnL</div><div class="tm-cell-value" style="color:${pnlColor}">${pnl >= 0 ? "+" : ""}$${pnl.toFixed(4)}</div></div>
+    </div>
+    ${e.id ? `<div class="tm-section" id="tm-detail-slot"><div class="tm-sub">Загружаю детали…</div></div>` : ""}
+  `;
+}
+
+function tradeDetailHtml(t) {
+  if (!t) return '<div class="tm-sub">Детали недоступны</div>';
+  const strat = strategyDisplayName(t.strategy_id);
+  const direction = (t.side || t.direction || "long").toUpperCase();
+  const entryPx = t.entry_price;
+  const closePx = t.close_price;
+  const pnl = t.realized_pnl || 0;
+  const pnlColor = pnl >= 0 ? "var(--green,#22c55e)" : "var(--red,#ef4444)";
+  const fee = t.fee_paid || 0;
+  const grossPnl = pnl + fee;
+  const holdMs = t.closed_at && t.entry_time ? t.closed_at - t.entry_time : null;
+  const holdStr = holdMs == null ? "—" : holdMs < 3600_000 ? `${Math.round(holdMs / 60_000)}m` : `${(holdMs / 3600_000).toFixed(1)}h`;
+  const sl = t.sl_price;
+  const tp = t.tp_price;
+  const opened = t.entry_time ? new Date(t.entry_time).toLocaleString() : "—";
+  const closed = t.closed_at ? new Date(t.closed_at).toLocaleString() : "—";
+  return `
+    <div class="tm-title">#${t.coin} · ${direction}</div>
+    <div class="tm-sub">${strat} · id ${t.id}</div>
+    <div class="tm-grid">
+      <div class="tm-cell"><div class="tm-cell-label">Entry</div><div class="tm-cell-value">$${fmtPx(entryPx)}</div></div>
+      <div class="tm-cell"><div class="tm-cell-label">Close</div><div class="tm-cell-value">$${fmtPx(closePx)}</div></div>
+      <div class="tm-cell"><div class="tm-cell-label">Size</div><div class="tm-cell-value">$${(t.size_usd || 0).toFixed(2)}</div></div>
+      <div class="tm-cell"><div class="tm-cell-label">Hold</div><div class="tm-cell-value">${holdStr}</div></div>
+      ${sl != null ? `<div class="tm-cell"><div class="tm-cell-label">SL</div><div class="tm-cell-value">$${fmtPx(sl)}</div></div>` : ""}
+      ${tp != null ? `<div class="tm-cell"><div class="tm-cell-label">TP</div><div class="tm-cell-value">$${fmtPx(tp)}</div></div>` : ""}
+      <div class="tm-cell"><div class="tm-cell-label">Gross</div><div class="tm-cell-value">${grossPnl >= 0 ? "+" : ""}$${grossPnl.toFixed(4)}</div></div>
+      <div class="tm-cell"><div class="tm-cell-label">Fees</div><div class="tm-cell-value">−$${Math.abs(fee).toFixed(4)}</div></div>
+      <div class="tm-cell"><div class="tm-cell-label">Net PnL</div><div class="tm-cell-value" style="color:${pnlColor}">${pnl >= 0 ? "+" : ""}$${pnl.toFixed(4)}</div></div>
+      <div class="tm-cell"><div class="tm-cell-label">Reason</div><div class="tm-cell-value">${t.reason || "—"}</div></div>
+    </div>
+    <div class="tm-section">
+      <div class="tm-grid">
+        <div class="tm-cell"><div class="tm-cell-label">Opened</div><div class="tm-cell-value" style="font-size:11px">${opened}</div></div>
+        <div class="tm-cell"><div class="tm-cell-label">Closed</div><div class="tm-cell-value" style="font-size:11px">${closed}</div></div>
+      </div>
+    </div>
+  `;
+}
+
+function fmtPx(v) {
+  if (v == null || !Number.isFinite(v)) return "—";
+  const abs = Math.abs(v);
+  const digits = abs >= 1000 ? 2 : abs >= 1 ? 4 : abs >= 0.01 ? 5 : 7;
+  return v.toFixed(digits);
+}
+
+async function onActivityClick(e) {
+  const row = e.target.closest("[data-activity-idx]");
+  if (!row) return;
+  const idx = parseInt(row.getAttribute("data-activity-idx"), 10);
+  const evt = lastActivityEvents[idx];
+  if (!evt) return;
+  openTradeModal(tradeModalHtmlFromActivity(evt));
+  if (evt.id) {
+    try {
+      const r = await fetchJson(`/api/trade/${evt.id}`);
+      const slot = document.getElementById("tm-detail-slot");
+      if (slot && r?.trade) slot.outerHTML = `<div class="tm-section">${tradeDetailHtml(r.trade)}</div>`;
+    } catch (err) {
+      const slot = document.getElementById("tm-detail-slot");
+      if (slot) slot.innerHTML = '<div class="tm-sub">Не удалось загрузить детали</div>';
+    }
+  }
+}
+
+document.addEventListener("click", (e) => {
+  if (e.target.closest("#trade-modal [data-close]")) {
+    closeTradeModal();
+    return;
+  }
+  if (e.target.closest("#activity-container")) onActivityClick(e);
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeTradeModal();
+});
 
 function fmtMoney(v, signed = true) {
   if (!Number.isFinite(v)) return "—";
