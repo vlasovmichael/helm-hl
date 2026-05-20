@@ -18,7 +18,6 @@
     />
     <title>HL Scanner</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
     <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -290,6 +289,10 @@
       <section class="card">
         <div class="card-header">
           <div class="card-title" data-num="07">Performance</div>
+          <div class="equity-pill" id="equity-pill" hidden>
+            <span class="equity-pill-value" id="equity-pill-value">$0.00</span>
+            <span class="equity-pill-delta" id="equity-pill-delta">+0.00%</span>
+          </div>
           <div class="time-ranges">
             <button class="range-btn" data-hours="1">1h</button>
             <button class="range-btn active" data-hours="24">24h</button>
@@ -298,7 +301,7 @@
           </div>
         </div>
         <div class="chart-container" id="chart-container">
-          <canvas id="equity-chart"></canvas>
+          <div id="equity-chart"></div>
           <div class="local-loader" id="chart-loader">
             <div class="loader-spinner"></div>
           </div>

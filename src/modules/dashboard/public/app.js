@@ -595,15 +595,10 @@ function tickLiveCandle(price, pos) {
   priceSeries.update(liveCandle);
 }
 
-// ── Performance Chart (EQUITY) — RESTORING ORIGINAL STYLE ──
+// ── Performance Chart (EQUITY) — Lightweight Charts area-series ──
 
-function makeGradient(ctx) {
-  const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-  const accent = cssVar("--accent") || "#635BFF";
-  gradient.addColorStop(0, hexToRgba(accent, 0.18));
-  gradient.addColorStop(1, hexToRgba(accent, 0));
-  return gradient;
-}
+let equitySeries = null;
+let equityData = []; // [{time, value}]
 
 function hexToRgba(hex, alpha) {
   const h = hex.replace("#", "");
@@ -616,108 +611,111 @@ function hexToRgba(hex, alpha) {
 
 function applyChartTheme() {
   if (!equityChart) return;
-  const ctx = equityChart.ctx;
-  const accent = cssVar("--accent");
-  const textMuted = cssVar("--text-muted");
-  const grid = cssVar("--grid-line");
-  const cardBg = cssVar("--card-bg");
-  const border = cssVar("--border");
-  const textSec = cssVar("--text-secondary");
-  const textPri = cssVar("--text-primary");
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  const accent = cssVar("--accent") || "#635BFF";
+  const textMuted = cssVar("--text-muted") || (isDark ? "#71717A" : "#52525B");
+  const grid = cssVar("--grid-line") || (isDark ? "#1F1F23" : "#E4E4E7");
+  const bgColor = cssVar("--card-bg") || (isDark ? "#131316" : "#FFFFFF");
 
-  equityChart.data.datasets[0].borderColor = accent;
-  equityChart.data.datasets[0].backgroundColor = makeGradient(ctx);
-  equityChart.data.datasets[0].pointBackgroundColor = accent;
-  equityChart.data.datasets[0].pointBorderColor = cardBg;
+  equityChart.applyOptions({
+    layout: {
+      background: { type: "solid", color: bgColor },
+      textColor: textMuted,
+      fontFamily: "JetBrains Mono, monospace",
+    },
+    grid: {
+      vertLines: { color: "transparent" },
+      horzLines: { color: grid },
+    },
+    rightPriceScale: { borderColor: grid },
+    timeScale: { borderColor: grid },
+  });
 
-  equityChart.options.plugins.tooltip.backgroundColor = cardBg;
-  equityChart.options.plugins.tooltip.borderColor = border;
-  equityChart.options.plugins.tooltip.titleColor = textSec;
-  equityChart.options.plugins.tooltip.bodyColor = textPri;
-
-  equityChart.options.scales.x.ticks.color = textMuted;
-  equityChart.options.scales.y.ticks.color = textMuted;
-  equityChart.options.scales.y.grid.color = grid;
+  if (equitySeries) {
+    equitySeries.applyOptions({
+      lineColor: accent,
+      topColor: hexToRgba(accent, 0.28),
+      bottomColor: hexToRgba(accent, 0),
+    });
+  }
 }
 
 function initEquityChart() {
-  const canvas = document.getElementById("equity-chart");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
+  const container = document.getElementById("equity-chart");
+  if (!container) return;
+  if (equityChart) return;
 
-  equityChart = new Chart(ctx, {
-    type: "line",
-    data: {
-      labels: [],
-      datasets: [
-        {
-          label: "Equity",
-          data: [],
-          borderColor: "#635BFF",
-          backgroundColor: makeGradient(ctx),
-          borderWidth: 2,
-          tension: 0.3,
-          fill: true,
-          pointRadius: 0,
-          pointHoverRadius: 4,
-          pointHitRadius: 10,
-          pointBackgroundColor: "#635BFF",
-          pointBorderColor: "#FFFFFF",
-          pointBorderWidth: 2,
-        },
-      ],
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  const accent = cssVar("--accent") || "#635BFF";
+  const textMuted = cssVar("--text-muted") || (isDark ? "#71717A" : "#52525B");
+  const grid = cssVar("--grid-line") || (isDark ? "#1F1F23" : "#E4E4E7");
+  const bgColor = cssVar("--card-bg") || (isDark ? "#131316" : "#FFFFFF");
+
+  equityChart = LightweightCharts.createChart(container, {
+    width: container.clientWidth,
+    height: container.clientHeight,
+    layout: {
+      background: { type: "solid", color: bgColor },
+      textColor: textMuted,
+      fontFamily: "JetBrains Mono, monospace",
     },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: { duration: 400 },
-      interaction: {
-        intersect: false,
-        mode: "index",
-      },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          backgroundColor: "#131316",
-          borderColor: "#27272A",
-          borderWidth: 1,
-          titleColor: "#A1A1AA",
-          bodyColor: "#FFFFFF",
-          titleFont: { size: 14, family: "Plus Jakarta Sans" },
-          bodyFont: { size: 14, weight: "600", family: "JetBrains Mono" },
-          padding: 12,
-          displayColors: false,
-          callbacks: {
-            label: (ctx) => `Equity: $${ctx.parsed.y.toFixed(2)}`,
-          },
-        },
-      },
-      scales: {
-        x: {
-          ticks: {
-            color: "#71717A",
-            font: { family: "JetBrains Mono", size: 12 },
-            maxRotation: 0,
-            autoSkip: true,
-            maxTicksLimit: 8,
-          },
-          grid: { display: false },
-          border: { display: false },
-        },
-        y: {
-          ticks: {
-            color: "#71717A",
-            font: { family: "JetBrains Mono", size: 12 },
-            callback: (v) => `$${v.toFixed(2)}`,
-            maxTicksLimit: 6,
-          },
-          grid: { color: "#1F1F23" },
-          border: { display: false },
-        },
-      },
+    grid: {
+      vertLines: { color: "transparent" },
+      horzLines: { color: grid },
+    },
+    rightPriceScale: {
+      borderColor: grid,
+      scaleMargins: { top: 0.15, bottom: 0.05 },
+    },
+    timeScale: {
+      borderColor: grid,
+      timeVisible: true,
+      secondsVisible: false,
+    },
+    crosshair: { mode: 0 },
+    handleScroll: true,
+    handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
+    localization: {
+      priceFormatter: (v) => `$${Number(v).toFixed(2)}`,
     },
   });
-  applyChartTheme();
+
+  equitySeries = equityChart.addAreaSeries({
+    lineColor: accent,
+    topColor: hexToRgba(accent, 0.28),
+    bottomColor: hexToRgba(accent, 0),
+    lineWidth: 2,
+    priceLineVisible: false,
+    lastValueVisible: false,
+    priceFormat: { type: "price", precision: 2, minMove: 0.01 },
+  });
+
+  if (!window.__equityChartResizeBound) {
+    window.__equityChartResizeBound = true;
+    window.addEventListener("resize", () => {
+      if (equityChart && container)
+        equityChart.resize(container.clientWidth, container.clientHeight);
+    });
+  }
+}
+
+function renderEquityPill() {
+  const pill = document.getElementById("equity-pill");
+  if (!pill || !equityData.length) return;
+  const first = equityData[0].value;
+  const last = equityData[equityData.length - 1].value;
+  const delta = last - first;
+  const pct = first > 0 ? (delta / first) * 100 : 0;
+  const valEl = document.getElementById("equity-pill-value");
+  const dEl = document.getElementById("equity-pill-delta");
+  if (valEl) valEl.textContent = fmtUsd(last);
+  if (dEl) {
+    const sign = delta >= 0 ? "+" : "-";
+    dEl.textContent = `${sign}${fmtUsd(Math.abs(delta))} (${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%)`;
+  }
+  pill.classList.toggle("positive", delta >= 0);
+  pill.classList.toggle("negative", delta < 0);
+  pill.hidden = false;
 }
 
 // ── Theme & Helpers ──────────────────────────────
@@ -740,7 +738,6 @@ function applyTheme(mode) {
     .forEach((b) => b.classList.toggle("active", b.dataset.theme === mode));
   if (equityChart) {
     applyChartTheme();
-    equityChart.update("none");
   }
 }
 
@@ -1030,11 +1027,19 @@ async function tick() {
     renderPnlSummary();
   }
   if (historyR.status === "fulfilled" && historyR.value?.points) {
-    equityChart.data.labels = historyR.value.points.map((p) => fmtTime(p.ts));
-    equityChart.data.datasets[0].data = historyR.value.points.map(
-      (p) => p.equity,
-    );
-    equityChart.update();
+    const pts = historyR.value.points;
+    const seen = new Set();
+    const data = [];
+    for (const p of pts) {
+      const t = Math.floor(p.ts / 1000);
+      if (seen.has(t)) continue;
+      seen.add(t);
+      data.push({ time: t, value: Number(p.equity) });
+    }
+    data.sort((a, b) => a.time - b.time);
+    equityData = data;
+    if (equitySeries) equitySeries.setData(data);
+    renderEquityPill();
     hideChartLoader();
   }
   if (activityR.status === "fulfilled") renderActivity(activityR.value);

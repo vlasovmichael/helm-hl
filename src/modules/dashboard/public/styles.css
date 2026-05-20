@@ -372,9 +372,48 @@ header {
   border-radius: var(--radius);
   overflow: hidden;
 }
-#price-chart {
+#price-chart,
+#equity-chart {
+  width: 100%;
+  height: 100%;
   border-radius: var(--radius);
   overflow: hidden;
+}
+
+.equity-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 12px;
+  line-height: 1;
+  background: var(--surface-2, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--border, rgba(127, 127, 127, 0.18));
+  margin-left: auto;
+  margin-right: 8px;
+}
+.equity-pill .equity-pill-value {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.equity-pill .equity-pill-delta {
+  font-weight: 600;
+}
+.equity-pill.positive {
+  background: rgba(34, 197, 94, 0.10);
+  border-color: rgba(34, 197, 94, 0.35);
+}
+.equity-pill.positive .equity-pill-delta {
+  color: #22c55e;
+}
+.equity-pill.negative {
+  background: rgba(239, 68, 68, 0.10);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+.equity-pill.negative .equity-pill-delta {
+  color: #ef4444;
 }
 
 /* ──────────────────────── Data grid (Tax) */
