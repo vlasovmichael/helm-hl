@@ -176,11 +176,15 @@ export function reconstructManualTrades(fills, botTrades) {
     });
   }
 
-  const GRACE_MS = 60_000;  // ±60с: чуть-чуть подушки для лагов indexer
+  const GRACE_MS = 60_000;  // +60с на close: indexer может лагать на финальном fill бота
 
   function inBotWindow(coin, ts) {
     const ranges = botByCoin.get(coin.toUpperCase()) || [];
-    return ranges.some((r) => ts >= r.entry - GRACE_MS && ts <= r.close + GRACE_MS);
+    // Leading edge — без grace: entry_time бота = момент отправки ордера,
+    // fills физически не могут быть РАНЬШЕ. Иначе ручной close, случайно
+    // оказавшийся за несколько секунд ДО входа бота, попадал в окно и
+    // отбрасывался как «ботовый» → manual трейд терялся в /api/activity.
+    return ranges.some((r) => ts >= r.entry && ts <= r.close + GRACE_MS);
   }
 
   // Группируем fills по coin, прогоняем их по времени, отслеживаем running size.
