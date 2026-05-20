@@ -819,6 +819,10 @@ footer {
 .signals-table tr.row-short td:first-child { box-shadow: inset 2px 0 0 var(--red); }
 .signals-table tr.row-long  td:first-child { box-shadow: inset 2px 0 0 var(--green); }
 .signals-table tr.is-active td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
+.signals-table tr.row-fade-short { background: linear-gradient(90deg, rgba(239,68,68,0.10), transparent 75%); }
+.signals-table tr.row-fade-long  { background: linear-gradient(90deg, rgba(34,197,94,0.10), transparent 75%); }
+.signals-table tr.row-fade-short.is-active,
+.signals-table tr.row-fade-long.is-active { background: var(--accent-soft); }
 
 .signals-meta::before {
   content: '';

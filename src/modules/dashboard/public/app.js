@@ -931,14 +931,47 @@ function renderHotMovers(payload) {
     const sign = v >= 0 ? "+" : "";
     return `${sign}${v.toFixed(2)}%`;
   };
-  const pctCell = (v) => {
-    if (v == null) return '<span class="num-inline-muted">—</span>';
+  // Tier+sign → CSS-класс ячейки. Использует существующие num-pos/neg-* классы
+  // (зелёный/красный тинт + жирность по силе). Hunter-порог визуально виден в
+  // самой Hot Movers таблице — отдельная карточка не нужна.
+  const tierCellCls = (w) => {
+    if (!w || w.spikePct == null) return "num-muted";
+    const tier = w.tier;
+    if (!tier || tier === "NEUTRAL") return "";
+    const pos = w.spikePct > 0;
+    if (tier === "STRONG") return pos ? "num-pos-strong" : "num-neg-strong";
+    if (tier === "NORMAL") return pos ? "num-pos" : "num-neg";
+    if (tier === "WEAK") return pos ? "num-pos-weak" : "num-neg-weak";
+    return "";
+  };
+  const pctCellTiered = (w) => {
+    if (!w || w.spikePct == null) return ['<span class="num-inline-muted">—</span>', ""];
+    const v = w.spikePct;
     const arrow = v > 0 ? "▲" : v < 0 ? "▼" : "·";
-    const cls = v > 0 ? "num-inline-pos" : v < 0 ? "num-inline-neg" : "num-inline-muted";
-    return `<span class="${cls}">${arrow} ${fmtPct(v)}</span>`;
+    const cls = tierCellCls(w);
+    const inner = cls
+      ? `${arrow} ${fmtPct(v)}`
+      : `<span class="${v > 0 ? "num-inline-pos" : "num-inline-neg"}">${arrow} ${fmtPct(v)}</span>`;
+    return [inner, cls];
   };
   const findWin = (windows, mins) => windows.find((w) => w.mins === mins);
   const winByLabel = (windows, label) => windows.find((w) => w.label === label);
+
+  // Direction для подсветки всей строки: берём окно с лучшим тиром (STRONG>NORMAL>WEAK),
+  // tiebreak — наибольший |spike|. pump → SHORT-fade (красный), dump → LONG-fade (зелёный).
+  const TIER_RANK = { STRONG: 3, NORMAL: 2, WEAK: 1 };
+  const bestDirection = (windows) => {
+    let best = null;
+    for (const w of windows) {
+      if (!w.tier || w.tier === "NEUTRAL" || w.spikePct == null) continue;
+      const rank = TIER_RANK[w.tier] || 0;
+      const abs = Math.abs(w.spikePct);
+      if (!best || rank > best.rank || (rank === best.rank && abs > best.abs)) {
+        best = { rank, abs, sign: w.spikePct > 0 ? "pump" : "dump" };
+      }
+    }
+    return best?.sign ?? null;
+  };
 
   tbody.innerHTML = enriched
     .map((x, idx) => {
@@ -948,20 +981,30 @@ function renderHotMovers(payload) {
       const w15 = findWin(x.windows, 15) || winByLabel(x.windows, "15m");
       const w60 = findWin(x.windows, 60) || winByLabel(x.windows, "1h");
       const trendLbl = th.trendLookbackMin ? `${th.trendLookbackMin}m` : "";
-      const trendCell =
-        s.trendPct != null
-          ? `${pctCell(s.trendPct)} <span class="num-inline-muted">/ ${trendLbl}</span>`
-          : '<span class="num-inline-muted">—</span>';
-      const rowCls = s.isActive ? "is-active" : "";
+      const trendPct = s.trendPct;
+      const trendInner =
+        trendPct == null
+          ? '<span class="num-inline-muted">—</span>'
+          : `<span class="${trendPct > 0 ? "num-inline-pos" : "num-inline-neg"}">${trendPct > 0 ? "▲" : "▼"} ${fmtPct(trendPct)}</span> <span class="num-inline-muted">/ ${trendLbl}</span>`;
+
+      const dir = bestDirection(x.windows);
+      const rowCls = [
+        s.isActive ? "is-active" : "",
+        dir === "pump" ? "row-short row-fade-short" : "",
+        dir === "dump" ? "row-long row-fade-long" : "",
+      ].filter(Boolean).join(" ");
+
+      const cells = [w2, w5, w15, w60].map((w) => {
+        const [inner, cls] = pctCellTiered(w);
+        return `<td${cls ? ` class="${cls}"` : ""}>${inner}</td>`;
+      }).join("");
+
       return `<tr class="${rowCls}">
         <td>${idx + 1}</td>
         <td><span class="signals-price">#${escapeHtml(s.coin)}</span></td>
         <td><span class="signals-price">${fmtPrice(s.price)}</span></td>
-        <td>${pctCell(w2?.spikePct ?? null)}</td>
-        <td>${pctCell(w5?.spikePct ?? null)}</td>
-        <td>${pctCell(w15?.spikePct ?? null)}</td>
-        <td>${pctCell(w60?.spikePct ?? null)}</td>
-        <td>${trendCell}</td>
+        ${cells}
+        <td>${trendInner}</td>
       </tr>`;
     })
     .join("");
@@ -974,11 +1017,10 @@ async function fetchJson(path) {
 }
 
 async function tick() {
-  const [historyR, activityR, taxR, signalsR, pnlR, moversR] = await Promise.allSettled([
+  const [historyR, activityR, taxR, pnlR, moversR] = await Promise.allSettled([
     fetchJson(`/api/history?hours=${currentRangeHours}`),
     fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
     fetchJson("/api/tax-summary"),
-    fetchJson("/api/signals?limit=10"),
     fetchJson("/api/pnl-summary"),
     fetchJson("/api/signals?limit=200"),
   ]);
@@ -997,7 +1039,6 @@ async function tick() {
   }
   if (activityR.status === "fulfilled") renderActivity(activityR.value);
   if (taxR.status === "fulfilled") renderTax(taxR.value);
-  if (signalsR.status === "fulfilled") renderSignals(signalsR.value);
   lastSuccessAt = Date.now();
   renderFooter();
 }
@@ -1362,143 +1403,6 @@ function renderPnlSummary() {
 
   // Данные отрендерены — убираем скелетон-оверлей.
   document.getElementById("pnl-skeleton")?.classList.add("hidden");
-}
-
-function renderSignals(payload) {
-  const tbody = document.getElementById("signals-tbody");
-  const meta = document.getElementById("signals-meta");
-  if (!tbody || !meta) return;
-  const signals = payload?.signals || [];
-  const th = payload?.thresholds || {};
-  const winSummary =
-    Array.isArray(th.windows) && th.windows.length
-      ? th.windows.map((w) => `${w.label}≥${w.threshold}%`).join(" · ")
-      : `${th.spikePct}%/${th.spikeWindowMin}m`;
-  meta.textContent = payload?.ts
-    ? `windows: ${winSummary} · SL ${th.slPct}% · TP ${th.tpPct}% · scope ${payload.universeSize} · updated ${fmtTime(payload.ts)}`
-    : "—";
-  if (!signals.length) {
-    tbody.innerHTML =
-      '<tr><td colspan="7" class="empty-state">Waiting for hunter scope…</td></tr>';
-    return;
-  }
-
-  const fmtPrice = (p) => {
-    if (p == null) return "—";
-    if (p >= 100) return p.toFixed(2);
-    if (p >= 1) return p.toFixed(4);
-    return p.toPrecision(4);
-  };
-  const fmtPct = (v, digits = 2) => {
-    if (v == null) return "—";
-    const sign = v >= 0 ? "+" : "";
-    return `${sign}${v.toFixed(digits)}%`;
-  };
-  const arrow = (v) => (v == null ? "" : v > 0 ? "▲" : v < 0 ? "▼" : "·");
-  // Сила окраски (alpha) шкалируется относительно spike-порога: на пороге alpha=0.18,
-  // в 2× порога — 0.36, кэп 0.45.
-  const tintRow = (v, kind) => {
-    if (v == null) return "";
-    const ratio = Math.min(Math.abs(v) / (th.spikePct ?? 5), 2.5);
-    const alpha = Math.min(0.06 + ratio * 0.12, 0.45);
-    const rgb = kind === "pump" ? "239, 68, 68" : "34, 197, 94";
-    return `background: linear-gradient(90deg, rgba(${rgb}, ${alpha.toFixed(2)}), transparent 60%);`;
-  };
-  const numberClass = (v, threshold) => {
-    if (v == null) return "num-muted";
-    if (Math.abs(v) >= threshold)
-      return v > 0 ? "num-pos-strong" : "num-neg-strong";
-    if (Math.abs(v) >= threshold * 0.6) return v > 0 ? "num-pos" : "num-neg";
-    return v > 0 ? "num-pos-weak" : v < 0 ? "num-neg-weak" : "num-muted";
-  };
-
-  // Tooltip-сводка по всем окнам — для просмотра «как разные таймфреймы видят монету».
-  const windowsTooltip = (windows) => {
-    if (!Array.isArray(windows)) return "";
-    return windows
-      .map((w) => {
-        const v =
-          w.spikePct == null
-            ? "—"
-            : `${w.spikePct >= 0 ? "+" : ""}${w.spikePct.toFixed(2)}%`;
-        const tag = w.tier && w.tier !== "NEUTRAL" ? ` ${w.tier}` : "";
-        return `${w.label}: ${v}${tag} (≥${w.threshold}%)`;
-      })
-      .join(" | ");
-  };
-
-  tbody.innerHTML = signals
-    .map((s) => {
-      const winLabel = s.windowLabel || `${th.spikeWindowMin}m`;
-      const winTitle = windowsTooltip(s.windows);
-      const tierLabel = s.tier && s.tier !== "NEUTRAL" ? `${s.tier} ` : "";
-      let suggested;
-      if ((s.signal === "SHORT" || s.signal === "LONG") && s.blocked) {
-        suggested = `<span class="signals-status blocked" title="${s.blocked}">${tierLabel}${s.signal} ${winLabel} (gated)</span>`;
-      } else if (s.signal === "SHORT") {
-        suggested = `<span class="signals-status tradable" title="${winTitle}">${tierLabel}▼ SHORT <span class="num-inline-muted">${winLabel}</span></span>`;
-      } else if (s.signal === "LONG") {
-        suggested = `<span class="signals-status long" title="${winTitle}">${tierLabel}▲ LONG <span class="num-inline-muted">${winLabel}</span></span>`;
-      } else if (s.signal === "WATCH") {
-        suggested = `<span class="signals-status active" title="${winTitle}">WATCH <span class="num-inline-muted">${winLabel}</span></span>`;
-      } else if (s.signal === "WARMUP") {
-        const have = Math.min(s.bufferLen ?? 0, s.bufferNeeded ?? 0);
-        const need = s.bufferNeeded ?? 0;
-        suggested = `<span class="signals-status blocked" title="Need ${need} ticks (~${((need * 15) / 60).toFixed(1)}min) of price history">WARMUP ${have}/${need}</span>`;
-      } else {
-        suggested = `<span class="signals-status blocked" title="${winTitle}">—</span>`;
-      }
-      const slTpCell =
-        s.sl != null
-          ? `<span class="num-inline-neg" title="Stop-loss">${fmtPrice(s.sl)}</span> <span class="sep">/</span> <span class="num-inline-pos" title="Take-profit">${fmtPrice(s.tp)}</span>`
-          : '<span class="num-inline-muted">—</span>';
-      const trendThreshold = th.trendMaxRisePct ?? 8;
-      const trendOver =
-        s.trendPct != null && Math.abs(s.trendPct) >= trendThreshold;
-      const trendInlineCls =
-        s.trendPct == null
-          ? "num-inline-muted"
-          : s.trendPct > 0
-            ? "num-inline-pos"
-            : "num-inline-neg";
-      const trendCell =
-        s.trendPct != null
-          ? `<span class="${trendInlineCls}${trendOver ? " num-warn-glow" : ""}">${arrow(s.trendPct)} ${fmtPct(s.trendPct, 1)}</span> <span class="num-inline-muted">/ ${th.trendLookbackMin}m</span>`
-          : '<span class="num-inline-muted">—</span>';
-      // Spike-колонка теперь отражает выбранное окно (signalSpikePct), fallback на 2m.
-      const displaySpike =
-        s.signalSpikePct != null ? s.signalSpikePct : s.spikePct;
-      const displayThreshold = (() => {
-        const w = s.windows?.find((x) => x.label === s.windowLabel);
-        return w?.threshold ?? th.spikePct ?? 5;
-      })();
-      const spikeKind =
-        s.signal === "SHORT" ? "pump" : s.signal === "LONG" ? "dump" : null;
-      const rowStyle =
-        spikeKind && !s.blocked ? tintRow(displaySpike, spikeKind) : "";
-      const rowCls = [
-        s.isActive ? "is-active" : "",
-        s.signal === "SHORT" ? "row-short" : "",
-        s.signal === "LONG" ? "row-long" : "",
-        s.tier === "STRONG" ? "tier-strong" : "",
-      ]
-        .filter(Boolean)
-        .join(" ");
-      const spikeCellLabel = s.windowLabel
-        ? `<span class="num-inline-muted">${s.windowLabel}</span> ${arrow(displaySpike)} ${fmtPct(displaySpike)}`
-        : `${arrow(displaySpike)} ${fmtPct(displaySpike)}`;
-      return `
-      <tr class="${rowCls}" style="${rowStyle}">
-        <td class="num-muted">${s.rank}</td>
-        <td class="signals-coin">${s.pair}</td>
-        <td class="signals-price">${fmtPrice(s.price)}</td>
-        <td class="${numberClass(displaySpike, displayThreshold)}" title="${winTitle}">${spikeCellLabel}</td>
-        <td>${trendCell}</td>
-        <td>${suggested}</td>
-        <td class="signals-sltp">${slTpCell}</td>
-      </tr>`;
-    })
-    .join("");
 }
 
 function renderTax(tax) {
