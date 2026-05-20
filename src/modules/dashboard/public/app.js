@@ -23,6 +23,7 @@ const REFRESH_MS = 10_000;
 let equityChart = null;
 let priceChart = null;
 let priceSeries = null;
+let volumeSeries = null;
 let entryPriceLine = null;
 let currentPriceLine = null;
 let liveCandle = null; // {time, open, high, low, close}
@@ -297,6 +298,28 @@ async function renderIdleChart() {
   }
 }
 
+function buildVolumeData(candles) {
+  const seen = new Set();
+  const out = [];
+  for (const c of candles) {
+    const time = Math.floor(c.t / 1000);
+    if (seen.has(time)) continue;
+    seen.add(time);
+    const v = parseFloat(c.v);
+    if (!Number.isFinite(v)) continue;
+    const open = parseFloat(c.o);
+    const close = parseFloat(c.c);
+    const bullish = close >= open;
+    out.push({
+      time,
+      value: v,
+      color: bullish ? "rgba(34,197,94,0.55)" : "rgba(239,68,68,0.55)",
+    });
+  }
+  out.sort((a, b) => a.time - b.time);
+  return out;
+}
+
 // Окно истории под markers зависит от выбранного TF графика.
 // Берём с запасом — lightweight-charts отрисует только то, что в видимой области.
 const MARKER_WINDOW_HOURS = {
@@ -401,6 +424,7 @@ async function fetchAndRenderIdleCandles(coin) {
 
     initPriceChart();
     priceSeries.setData(data);
+    if (volumeSeries) volumeSeries.setData(buildVolumeData(candles));
     const last = data[data.length - 1];
     liveCandle = {
       time: last.time,
@@ -455,6 +479,7 @@ async function fetchAndRenderCandles(pos, currentPrice) {
 
     initPriceChart();
     priceSeries.setData(data);
+    if (volumeSeries) volumeSeries.setData(buildVolumeData(candles));
     const last = data[data.length - 1];
     liveCandle = {
       time: last.time,
@@ -520,6 +545,24 @@ function initPriceChart() {
     wickUpColor: "#22C55E",
     wickDownColor: "#EF4444",
   });
+  priceSeries
+    .priceScale()
+    .applyOptions({ scaleMargins: { top: 0.05, bottom: 0.25 } });
+
+  volumeSeries = priceChart.addHistogramSeries({
+    priceFormat: { type: "volume" },
+    priceScaleId: "vol",
+    color: "#22C55E",
+    priceLineVisible: false,
+    lastValueVisible: false,
+  });
+  priceChart
+    .priceScale("vol")
+    .applyOptions({
+      scaleMargins: { top: 0.82, bottom: 0 },
+      borderVisible: false,
+      visible: false,
+    });
 
   if (!window.__priceChartResizeBound) {
     window.__priceChartResizeBound = true;
