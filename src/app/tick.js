@@ -50,7 +50,16 @@ export async function tick() {
     // ── Manual Position Check: hands-off режим если оператор торгует вручную ──
     const manualState = await orphanCheck();
     if (manualState === 'paused') {
-      logger.debug('[Tick] HANDS-OFF: manual position active, skipping tick');
+      logger.debug('[Tick] HANDS-OFF: manual position active, scan-only refresh');
+      // Дашборд (Hot Movers / Hunter signals) должен продолжать обновляться,
+      // даже когда бот в HANDS-OFF. Делаем чистый scan без coordinate/execute.
+      try {
+        const { hunterData: handsOffHunter } = await scan();
+        state.latestHunter   = handsOffHunter;
+        state.latestHunterAt = Date.now();
+      } catch (err) {
+        logger.debug(`[Tick] HANDS-OFF scan failed: ${err.message}`);
+      }
       return;
     }
 
