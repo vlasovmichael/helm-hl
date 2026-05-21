@@ -202,6 +202,7 @@ function manualToPos(mp) {
     .replace(/^@/, "");
   return {
     coin: cleanCoin,
+    side: (mp.side || "SHORT").toUpperCase(),
     sizeUsd,
     entryPrice: entry,
     currentPrice: live,
@@ -266,8 +267,11 @@ async function handlePriceChartUpdate(pos, manualPositions) {
   if (Number.isFinite(pos.currentPrice) && pos.currentPrice > 0) {
     currentPrice = pos.currentPrice;
   } else if (pos.currentPnl && pos.sizeUsd > 0 && pos.entryPrice > 0) {
+    // Фолбэк когда livePrice не пришёл: вывести из unrealized pnl.
+    // SHORT: pnl>0 ⇒ цена упала; LONG: pnl>0 ⇒ цена выросла.
     const qty = pos.sizeUsd / pos.entryPrice;
-    currentPrice = pos.entryPrice + pos.currentPnl.price / qty;
+    const sideSign = (pos.side || "SHORT").toUpperCase() === "SHORT" ? -1 : 1;
+    currentPrice = pos.entryPrice + sideSign * (pos.currentPnl.price / qty);
   }
 
   document.getElementById("price-meta").textContent =
