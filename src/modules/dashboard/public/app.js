@@ -38,6 +38,8 @@ const INTERVAL_SECONDS = {
 };
 let idleChartCoin = null;
 let idleChartTimer = null;
+let posChartTimer = null;
+let lastPosCandlesAt = 0;
 let lastSuccessAt = 0;
 let currentRangeHours = 24;
 let currentPnlPeriod = "today";
@@ -228,6 +230,10 @@ async function handlePriceChartUpdate(pos, manualPositions) {
   if (!pos) {
     lastPos = null;
     currentCoinInPos = null;
+    if (posChartTimer) {
+      clearInterval(posChartTimer);
+      posChartTimer = null;
+    }
     await renderIdleChart();
     return;
   }
@@ -238,6 +244,19 @@ async function handlePriceChartUpdate(pos, manualPositions) {
     idleChartTimer = null;
   }
   idleChartCoin = null;
+
+  // Периодический re-fetch реальных свечей с биржи, пока позиция открыта —
+  // иначе график живёт на синтетике от livePrice и со временем "замерзает".
+  if (!posChartTimer) {
+    posChartTimer = setInterval(() => {
+      if (lastPos && Date.now() - lastPosCandlesAt > 25_000) {
+        const price = Number.isFinite(lastPos.currentPrice)
+          ? lastPos.currentPrice
+          : lastPos.entryPrice;
+        fetchAndRenderCandles(lastPos, price);
+      }
+    }, 30_000);
+  }
 
   lastPos = pos;
   document.getElementById("price-title").textContent =
@@ -468,6 +487,7 @@ async function fetchAndRenderCandles(pos, currentPrice) {
       `/api/candles?coin=${pos.coin}&interval=${currentInterval}`,
     );
     if (!Array.isArray(candles) || candles.length === 0) return;
+    lastPosCandlesAt = Date.now();
 
     const data = candles
       .map((c) => ({
