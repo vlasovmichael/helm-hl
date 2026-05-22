@@ -1272,6 +1272,30 @@ footer {
   letter-spacing: 0.02em;
   color: var(--text);
 }
+#sec-pnl .pnl-manual-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.6rem;
+  padding: 0.4rem 0.75rem;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+#sec-pnl .pnl-manual-row .manual-label {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  min-width: 90px;
+}
+#sec-pnl .pnl-manual-row .manual-wl { color: var(--text-muted); }
+#sec-pnl .pnl-manual-row .manual-pnl { font-weight: 600; }
+#sec-pnl .pnl-manual-row .manual-pnl.positive { color: var(--green); }
+#sec-pnl .pnl-manual-row .manual-pnl.negative { color: var(--red); }
+#sec-pnl .pnl-manual-row .manual-avg { color: var(--text-muted); margin-left: auto; }
+
 #sec-pnl .detector-stats {
   font-family: var(--font-mono);
   font-size: 0.74rem;

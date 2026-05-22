@@ -1422,6 +1422,28 @@ function renderPnlSummary() {
   document.getElementById("pnl-wl").textContent =
     p.count > 0 ? `${p.wins} / ${p.losses}` : "—";
 
+  // Manual breakdown row: отдельная видимость W/L+P&L по ручным сделкам.
+  // Combined p.wins/losses их прячет, а ручные сделки бывают важны для разбора.
+  const manualRow = document.getElementById("pnl-manual-row");
+  if (manualRow) {
+    if (manualCount > 0) {
+      manualRow.style.display = "";
+      const manualWins = p.manual?.wins || 0;
+      const manualLosses = manualCount - manualWins;
+      const manualAvg = manualCount > 0 ? manualPnl / manualCount : 0;
+      document.getElementById("pnl-manual-wl").textContent =
+        `${manualWins}W / ${manualLosses}L`;
+      const pnlEl = document.getElementById("pnl-manual-pnl");
+      pnlEl.textContent = fmtMoney(manualPnl);
+      pnlEl.classList.toggle("positive", manualPnl > 0);
+      pnlEl.classList.toggle("negative", manualPnl < 0);
+      document.getElementById("pnl-manual-avg").textContent =
+        `avg ${fmtMoney(manualAvg)}`;
+    } else {
+      manualRow.style.display = "none";
+    }
+  }
+
   const expEl = document.getElementById("pnl-expectancy");
   if (expEl) {
     expEl.textContent = p.count > 0 ? fmtMoney(p.expectancy) : "—";
