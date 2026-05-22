@@ -287,6 +287,49 @@
         </div>
       </section>
 
+      <!-- 06.4 / Chill Boy — Shadow Trading (PAPER only) -->
+      <!-- Полный обзор детектора Chill Boy: активная paper-позиция, watchlist
+           squeezed-монет, cooldowns, история. Гасится когда CHILL_BOY_PROD_ENABLED=true. -->
+      <section class="card" id="sec-chillboy" style="display:none">
+        <div class="card-header">
+          <div class="card-title" data-num="06.4" title="Chill Boy: trend-follow squeeze breakout detector. Shadow paper trading — детектор работает в PROD-боте, но не торгует реальный slot. Все данные для решения о промоушене стратегии.">Chill Boy — Shadow Trading</div>
+          <div class="time-ranges">
+            <span id="chillboy-card-mode" class="status-pill">PAPER</span>
+            <span id="chillboy-card-equity" class="status-pill" style="display:none"></span>
+          </div>
+        </div>
+        <div class="cb-grid">
+          <!-- Активная paper позиция (если есть) -->
+          <div class="cb-section" id="cb-active-section" style="display:none">
+            <div class="cb-section-title">Active paper position</div>
+            <div id="cb-active-body"></div>
+          </div>
+          <!-- Watchlist squeeze candidates -->
+          <div class="cb-section">
+            <div class="cb-section-title">Watchlist — closest to breakout</div>
+            <div id="cb-watchlist-body" class="cb-watchlist"><div class="empty-state">no squeezed coins</div></div>
+          </div>
+          <!-- Cooldowns -->
+          <div class="cb-section">
+            <div class="cb-section-title">Cooldowns</div>
+            <div id="cb-cooldowns-body" class="cb-cooldowns"><div class="empty-state">none</div></div>
+          </div>
+          <!-- Paper trades history (с MFE/MAE) -->
+          <div class="cb-section cb-section-full">
+            <div class="cb-section-title">
+              Paper trades history
+              <span id="cb-stats-inline" style="opacity:.75; font-weight:normal; margin-left:8px"></span>
+            </div>
+            <div id="cb-history-body"><div class="empty-state">no closed trades yet</div></div>
+          </div>
+          <!-- Detector heartbeat (raw) -->
+          <div class="cb-section cb-section-full">
+            <div class="cb-section-title" style="opacity:.7">Detector status</div>
+            <div id="cb-heartbeat" style="font-size:11px; opacity:.85">—</div>
+          </div>
+        </div>
+      </section>
+
       <!-- 06.5 / Insights -->
       <section class="card" id="sec-insights">
         <div class="card-header">

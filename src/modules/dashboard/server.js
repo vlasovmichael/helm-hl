@@ -12,6 +12,7 @@ import { config } from "../../core/config.js";
 import { logger, getLogBuffer, subscribeLogs } from "../../core/logger.js";
 import {
   getActivePosition,
+  getActivePaperPosition,
   getHistorySince,
   getArchivedHistorySince,
   getEquitySnapshotsSince,
@@ -33,7 +34,7 @@ import {
   HUNTER_SL_PCT,
   HUNTER_TP_PCT,
 } from "../strategistSniper.js";
-import { getChillBoyHeartbeat } from "../strategistTrendFollow.js";
+import { getChillBoyHeartbeat, getTrendFollowMfeMae } from "../strategistTrendFollow.js";
 import { getVirtualEquitySnapshot } from "../chillBoyVirtualEquity.js";
 import { getNearMisses } from "../nearMisses.js";
 
@@ -133,6 +134,56 @@ let unsubscribeLogs = null;
 // ─────────────────────────────────────────────────
 //  Status Logic (Shared)
 // ─────────────────────────────────────────────────
+
+// Активная shadow paper-позиция Chill Boy (PROD-бот, прод-флаг выкл). Возвращает
+// готовый payload c live price, PnL, MFE/MAE и distance до SL/TP. На торговую
+// логику не влияет: чисто отображение для решения о промоушене стратегии.
+async function buildChillBoyPaperPosition() {
+  if (!config.isProduction) return null;            // в PAPER-боте shadow-слота нет
+  if (config.trading.chillBoyProdEnabled) return null; // PROD-режим карточку гасит
+  const pos = getActivePaperPosition();
+  if (!pos || pos.strategy_id !== 'trend_follow') return null;
+
+  let livePrice = null;
+  try { livePrice = await getLivePrice(pos.coin); } catch { /* ignore */ }
+
+  const entry  = pos.entry_price;
+  const isLong = (pos.side || '').toLowerCase() === 'long';
+  let unrealPct = null;
+  let unrealUsd = null;
+  if (livePrice && entry) {
+    unrealPct = isLong ? ((livePrice - entry) / entry) * 100 : ((entry - livePrice) / entry) * 100;
+    unrealUsd = pos.size_usd * (unrealPct / 100);
+  }
+
+  // Distance to SL/TP в % от текущей цены (полезно для «насколько близко»).
+  const distPct = (target) => (livePrice && target ? Math.abs(target - livePrice) / livePrice * 100 : null);
+
+  const mm = getTrendFollowMfeMae(pos.id);
+
+  return {
+    id:           pos.id,
+    coin:         pos.coin,
+    side:         (pos.side || '').toUpperCase(),
+    sizeUsd:      pos.size_usd,
+    entryPrice:   entry,
+    currentPrice: livePrice,
+    entryTime:    pos.entry_time,
+    heldMin:      Math.round((Date.now() - pos.entry_time) / 60_000),
+    slPrice:      pos.sl_price,
+    tpPrice:      pos.tp_price,
+    slDistPct:    distPct(pos.sl_price),
+    tpDistPct:    distPct(pos.tp_price),
+    unrealPct,
+    unrealUsd,
+    mfeUsd: mm?.mfeUsd ?? null,
+    maeUsd: mm?.maeUsd ?? null,
+    mfePct: mm?.mfePct ?? null,
+    maePct: mm?.maePct ?? null,
+    entry_atr_short:    pos.entry_atr_short ?? null,
+    entry_squeeze_ratio: pos.entry_squeeze_ratio ?? null,
+  };
+}
 
 async function getStatusData() {
   const position = getActivePosition();
@@ -271,6 +322,7 @@ async function getStatusData() {
             : null,
           paperStats: getStrategyStats('trend_follow', 'PAPER'),
           paperTrades: getRecentStrategyTrades('trend_follow', 'PAPER', 10),
+          paperPosition: await buildChillBoyPaperPosition(),
         }
       : null,
     ts: Date.now(),

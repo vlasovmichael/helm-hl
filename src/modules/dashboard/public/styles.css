@@ -1286,6 +1286,62 @@ footer {
   #sec-pnl .strategy-meta { display: none; }
 }
 
+/* ── Chill Boy Shadow Trading card ─────────────────────────── */
+#sec-chillboy .cb-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+#sec-chillboy .cb-section {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+}
+#sec-chillboy .cb-section-full { grid-column: 1 / -1; }
+#sec-chillboy .cb-section-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 0.45rem;
+}
+#sec-chillboy .cb-kv {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: 0.6rem;
+  row-gap: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+#sec-chillboy .cb-kv .k { color: var(--text-muted); }
+#sec-chillboy .cb-kv .v { color: var(--text); }
+#sec-chillboy .cb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+}
+#sec-chillboy .cb-table th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  padding: 0.25rem 0.4rem;
+}
+#sec-chillboy .cb-table td {
+  padding: 0.2rem 0.4rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+}
+#sec-chillboy .cb-table tr:last-child td { border-bottom: none; }
+#sec-chillboy .cb-pos-pnl.positive { color: var(--green); }
+#sec-chillboy .cb-pos-pnl.negative { color: var(--red); }
+
+@media (max-width: 720px) {
+  #sec-chillboy .cb-grid { grid-template-columns: 1fr; }
+}
+
 /* ── Near Misses ──────────────────────────────────────────── */
 .near-miss-row {
   display: grid;

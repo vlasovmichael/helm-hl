@@ -440,7 +440,9 @@ export function getStrategyStats(strategyId, mode) {
 export function getRecentStrategyTrades(strategyId, mode, limit = 10) {
   return getDb()
     .prepare(`
-      SELECT coin, closed_at, realized_pnl, fee_paid, reason, entry_price, close_price, side
+      SELECT coin, entry_time, closed_at, realized_pnl, fee_paid, reason,
+             entry_price, close_price, side, size_usd,
+             mfe_usd, mae_usd, mfe_pct, mae_pct, hold_seconds
       FROM history
       WHERE strategy_id = ? AND mode = ?
       ORDER BY closed_at DESC

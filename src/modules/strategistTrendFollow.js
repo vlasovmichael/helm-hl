@@ -43,11 +43,54 @@ let lastHeartbeatAt  = 0;
 // детектора). Бот-логику не трогает: на торговые решения никак не влияет.
 let lastHeartbeat = null;
 
+// MFE/MAE per open trend_follow position. Обновляется в checkTrendFollowExit,
+// читается paperClose при закрытии (по аналогии с Hunter). Только paper —
+// долгосрочно поможет оценить «закрытия в плюсе/минусе раньше времени».
+const trendFollowMfeMaeMap = new Map();
+
 export function resetTrendFollowState() {
   cooldownMap.clear();
   postSlCooldown.clear();
+  trendFollowMfeMaeMap.clear();
   lastHeartbeatAt = 0;
   lastHeartbeat = null;
+}
+
+/** Текущие MFE/MAE для открытой trend_follow позиции (dashboard, peek). */
+export function getTrendFollowMfeMae(positionId) {
+  if (positionId == null) return null;
+  return trendFollowMfeMaeMap.get(positionId) ?? null;
+}
+
+/** Забрать MFE/MAE и удалить запись (вызывается из paper close-handler'а). */
+export function consumeTrendFollowMfeMae(positionId) {
+  if (positionId == null) return null;
+  const v = trendFollowMfeMaeMap.get(positionId);
+  if (!v) return null;
+  trendFollowMfeMaeMap.delete(positionId);
+  return v;
+}
+
+function updateTrendFollowMfeMae(position, currentPrice) {
+  if (!position?.id || !position.entry_price || !position.size_usd) return;
+  const entry = position.entry_price;
+  const isLong = (position.side || '').toLowerCase() === 'long';
+  // LONG profit при росте, SHORT — при падении.
+  const pnlPct = isLong
+    ? ((currentPrice - entry) / entry) * 100
+    : ((entry - currentPrice) / entry) * 100;
+  const pnlUsd = isLong
+    ? (position.size_usd * (currentPrice - entry)) / entry
+    : (position.size_usd * (entry - currentPrice)) / entry;
+
+  let v = trendFollowMfeMaeMap.get(position.id);
+  if (!v) {
+    v = { mfeUsd: pnlUsd, maeUsd: pnlUsd, mfePct: pnlPct, maePct: pnlPct };
+    trendFollowMfeMaeMap.set(position.id, v);
+    return;
+  }
+  if (pnlUsd > v.mfeUsd) { v.mfeUsd = pnlUsd; v.mfePct = pnlPct; }
+  if (pnlUsd < v.maeUsd) { v.maeUsd = pnlUsd; v.maePct = pnlPct; }
 }
 
 /**
@@ -61,8 +104,50 @@ function markBusyHeartbeat(tracked, now) {
     slot: 'BUSY',
     reCooldowns: cooldownMap.size,
     postSlCooldowns: postSlCooldown.size,
+    watchlist: [],
+    cooldownList: buildCooldownList(now),
     ts: now,
   };
+}
+
+function buildCooldownList(now) {
+  const out = [];
+  for (const [coin, ts] of cooldownMap.entries()) {
+    const remainMs = TREND_FOLLOW_REENTRY_COOLDOWN_MS - (now - ts);
+    if (remainMs > 0) out.push({ coin, kind: 're', remainMs });
+  }
+  for (const [coin, ts] of postSlCooldown.entries()) {
+    const remainMs = POST_SL_MS - (now - ts);
+    if (remainMs > 0) out.push({ coin, kind: 'post_sl', remainMs });
+  }
+  out.sort((a, b) => b.remainMs - a.remainMs);
+  return out.slice(0, 10);
+}
+
+// Topn squeeze-candidates: считаем «близость к breakout» как dist в %, минимум
+// из (range.high - price) и (price - range.low) от текущей цены. Берём только
+// inSqueeze монеты (где детектор уже видит coil). Для UI принятия решений.
+function buildWatchlist(results, limit = 5) {
+  const items = [];
+  for (const r of results) {
+    if (!r?.signal?.inSqueeze || !r.signal.range) continue;
+    const { item, signal } = r;
+    const { high, low } = signal.range;
+    const distUp   = ((high - item.price) / item.price) * 100;
+    const distDown = ((item.price - low) / item.price) * 100;
+    items.push({
+      coin: item.coin,
+      price: item.price,
+      ratio: signal.atrShort && signal.atrLong ? signal.atrShort / signal.atrLong : null,
+      rangeHigh: high,
+      rangeLow:  low,
+      distUpPct:   distUp,
+      distDownPct: distDown,
+      nearest: Math.min(Math.abs(distUp), Math.abs(distDown)),
+    });
+  }
+  items.sort((a, b) => a.nearest - b.nearest);
+  return items.slice(0, limit);
 }
 
 /** Последний снимок состояния детектора Chill Boy (для dashboard). */
@@ -130,6 +215,8 @@ export async function analyzeTrendFollow(scoutData, activePosition, now = Date.n
     slot: activePosition ? 'BUSY' : 'IDLE',
     reCooldowns: cooldownMap.size,
     postSlCooldowns: postSlCooldown.size,
+    watchlist:    buildWatchlist(results, 5),
+    cooldownList: buildCooldownList(now),
     ts: now,
   };
   if (now - lastHeartbeatAt >= TREND_FOLLOW_HEARTBEAT_MS) {
@@ -193,6 +280,8 @@ function checkTrendFollowExit(position, scoutData, now) {
 
   const isLong = (position.side || '').toLowerCase() === 'long';
   const price  = item.price;
+
+  updateTrendFollowMfeMae(position, price);
 
   // SL: long → price ≤ sl, short → price ≥ sl
   if (position.sl_price != null) {

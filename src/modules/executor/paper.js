@@ -27,6 +27,7 @@ import { consumeHunterMfeMae, clearHunterTrailState, getHunterPeakPct } from '..
 import {
   consumeHunterLongMfeMae, clearHunterLongTrailState, getHunterLongPeakPct,
 } from '../strategistHunterLong.js';
+import { consumeTrendFollowMfeMae } from '../strategistTrendFollow.js';
 import { setHunterCrossCooldown } from '../hunterCrossCooldown.js';
 import { resolveAsset } from './fill-parser.js';
 import { resolveEntrySize } from './sizing.js';
@@ -433,6 +434,15 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
       exitFeatures.trail_give_back_pct = signal.giveBackPct ?? null;
     }
     clearHunterLongTrailState(position.id);
+  } else if (position.strategy_id === 'trend_follow') {
+    const mm = consumeTrendFollowMfeMae(position.id);
+    exitFeatures = {
+      mfe_usd:      mm?.mfeUsd ?? null,
+      mae_usd:      mm?.maeUsd ?? null,
+      mfe_pct:      mm?.mfePct ?? null,
+      mae_pct:      mm?.maePct ?? null,
+      hold_seconds: Math.round(holdMs / 1000),
+    };
   }
 
   dbClosePosition(position.id, {
