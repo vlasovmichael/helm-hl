@@ -1395,6 +1395,25 @@ export function startDashboard() {
   app.get("/api/insights", handleInsights);
   app.get("/api/trade-markers", handleTradeMarkers);
 
+  // Debug: посмотреть что реально выдаёт getManualTrades() — для расследования
+  // багов в reconstructManualTrades. JSON со списком всех восстановленных
+  // ручных трейдов + raw PURR fills из последнего fetchUserFills.
+  app.get("/api/_debug/manual", async (_req, res) => {
+    try {
+      const manualTrades = await getManualTrades();
+      const fills = await fetchUserFills(0);
+      const purrFills = fills.filter((f) => f.coin === "PURR");
+      res.json({
+        now: Date.now(),
+        manualCount: manualTrades.length,
+        manualTrades,
+        purrFills,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   const ALLOWED_INTERVALS = {
     "1m": 4 * 3600_000,
     "5m": 16 * 3600_000,
