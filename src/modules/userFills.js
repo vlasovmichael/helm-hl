@@ -163,7 +163,7 @@ export function classifyClose(position, fills) {
  *                   entryPrice, closePrice|null, sizeUsd, pnl, status: 'open'|'closed',
  *                   sl|null, tp|null }>}
  */
-export function reconstructManualTrades(fills, botTrades) {
+export function reconstructManualTrades(fills, botTrades, botOidSet = null) {
   if (!Array.isArray(fills) || fills.length === 0) return [];
   const botByCoin = new Map();
   for (const bt of botTrades || []) {
@@ -176,22 +176,33 @@ export function reconstructManualTrades(fills, botTrades) {
     });
   }
 
-  const GRACE_MS = 60_000;  // +60с на close: indexer может лагать на финальном fill бота
+  // OID-based фильтр (2026-05-22): новые bot fills имеют oid в bot_oid_log →
+  // фильтруются точно. Без legacy time-based window'а: bot.entry_time лагает
+  // относительно фактического fill.time (PURR incident — 518ms skew).
+  const useOidFilter = botOidSet instanceof Set && botOidSet.size > 0;
+
+  const GRACE_MS = 60_000;
+  // Fallback для старых записей (до OID-логирования): time-based с extended
+  // leading grace, чтобы compensate skew. Применяется ТОЛЬКО когда нет oid в
+  // bot_oid_log (старые fills/trades до фикса).
+  const LEADING_GRACE_MS = 10_000;
 
   function inBotWindow(coin, ts) {
     const ranges = botByCoin.get(coin.toUpperCase()) || [];
-    // Leading edge — без grace: entry_time бота = момент отправки ордера,
-    // fills физически не могут быть РАНЬШЕ. Иначе ручной close, случайно
-    // оказавшийся за несколько секунд ДО входа бота, попадал в окно и
-    // отбрасывался как «ботовый» → manual трейд терялся в /api/activity.
-    return ranges.some((r) => ts >= r.entry && ts <= r.close + GRACE_MS);
+    return ranges.some((r) => ts >= (r.entry - LEADING_GRACE_MS) && ts <= r.close + GRACE_MS);
+  }
+
+  function isBotFill(f) {
+    if (useOidFilter && f.oid != null && botOidSet.has(Number(f.oid))) return true;
+    // Fallback: для старых fills (oid не записан в log) — time-based.
+    return inBotWindow(f.coin, f.time);
   }
 
   // Группируем fills по coin, прогоняем их по времени, отслеживаем running size.
   const byCoin = new Map();
   for (const f of fills) {
     if (!f.coin) continue;
-    if (inBotWindow(f.coin, f.time)) continue;  // bot's fill — пропускаем
+    if (isBotFill(f)) continue;  // bot's fill — пропускаем (oid match или time-based fallback)
     if (!byCoin.has(f.coin)) byCoin.set(f.coin, []);
     byCoin.get(f.coin).push(f);
   }

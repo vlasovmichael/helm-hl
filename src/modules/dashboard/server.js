@@ -19,6 +19,7 @@ import {
   realTradesForDisplay,
   getStrategyStats,
   getRecentStrategyTrades,
+  getBotOidsSince,
 } from "../../core/database.js";
 import { getAccountSummary, getPositions, getLivePrice } from "../exchange.js";
 import { fetchUserFills, reconstructManualTrades } from "../userFills.js";
@@ -867,7 +868,8 @@ async function getManualTrades() {
         closed_at: null,
         status: "OPEN",
       });
-    const trades = reconstructManualTrades(fills, botTrades);
+    const botOidSet = getBotOidsSince(0);
+    const trades = reconstructManualTrades(fills, botTrades, botOidSet);
     manualCache = { ts: Date.now(), trades };
     return trades;
   } catch (err) {

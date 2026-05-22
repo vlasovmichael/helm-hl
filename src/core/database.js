@@ -181,8 +181,60 @@ export function initDB() {
       ON tax_outbox (created_at) WHERE pushed_at IS NULL;
   `);
 
+  // Bot order id log — для точной фильтрации bot vs manual fills в dashboard'е.
+  // Раньше использовали time-based bot window, но bot.entry_time ≠ фактический
+  // fill.time (skew 100-1000ms), из-за чего pre-entry fills бота проскакивали
+  // в manual reconstruction (PURR incident 2026-05-22). Теперь сохраняем каждый
+  // фактический oid, который бот разместил/получил из ответа placeOrder.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS bot_oid_log (
+      oid       INTEGER PRIMARY KEY,
+      coin      TEXT NOT NULL,
+      ts        INTEGER NOT NULL,
+      kind      TEXT NOT NULL,
+      position_id INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS bot_oid_log_ts_idx ON bot_oid_log (ts);
+    CREATE INDEX IF NOT EXISTS bot_oid_log_coin_ts_idx ON bot_oid_log (coin, ts);
+  `);
+
   logger.info(`[DB] Initialized at ${DB_PATH}`);
   return db;
+}
+
+/**
+ * Записать oid бот-ордера для последующей фильтрации в manual reconstruction.
+ * @param {number} oid — order id из ответа exchange.placeOrder/fill
+ * @param {string} coin
+ * @param {string} kind — 'open' | 'close' | 'sl_trigger' | 'tp_trigger'
+ * @param {number} [positionId] — связь с позицией (опционально)
+ */
+export function recordBotOid(oid, coin, kind, positionId = null) {
+  if (oid == null || !Number.isFinite(Number(oid))) return;
+  if (!coin) return;
+  try {
+    getDb()
+      .prepare('INSERT OR IGNORE INTO bot_oid_log (oid, coin, ts, kind, position_id) VALUES (?, ?, ?, ?, ?)')
+      .run(Number(oid), String(coin).toUpperCase(), Date.now(), kind || 'unknown', positionId);
+  } catch (err) {
+    logger.warn(`[DB] recordBotOid(${oid}, ${coin}, ${kind}) failed: ${err.message}`);
+  }
+}
+
+/**
+ * Все oid'ы бота с указанного timestamp. Set для быстрого lookup в reconstruct.
+ * @param {number} sinceMs
+ * @returns {Set<number>}
+ */
+export function getBotOidsSince(sinceMs = 0) {
+  try {
+    const rows = getDb()
+      .prepare('SELECT oid FROM bot_oid_log WHERE ts >= ?')
+      .all(sinceMs);
+    return new Set(rows.map((r) => Number(r.oid)));
+  } catch {
+    return new Set();
+  }
 }
 
 export function getRawDb() {

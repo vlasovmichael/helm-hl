@@ -9,6 +9,7 @@ import {
   savePosition,
   closePosition as dbClosePosition,
   updateHunterTriggerOids,
+  recordBotOid,
 } from '../../core/database.js';
 import {
   getExchange,
@@ -324,6 +325,7 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
       `filled: ${fill.totalSz} @ $${fill.avgPx} ($${fillUsd.toFixed(2)}) | ` +
       `slippage: ${slip.label} | APY: ${apy.toFixed(2)}% | id: ${id}`,
   );
+  recordBotOid(fill.oid, coin, 'open', id);
 
   // ── 8. Reconciliation (fire-and-forget) ──────
   reconcile(coin, "OPEN", { expectPosition: true, expectedSzUsd: fillUsd });
@@ -547,6 +549,7 @@ export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, si
   logger.info(
     `[Executor] ✅ PROD HUNTER OPEN SHORT #${coin} | oid: ${fill.oid} | filled: ${fillSz} @ $${fillPx} ($${fillUsd.toFixed(2)}) | slip: ${slip.label} | id: ${id}`,
   );
+  recordBotOid(fill.oid, coin, 'open', id);
 
   const fillInfo = { sizeUsd: fillUsd, fillPx, sz: fillSz };
 
@@ -576,6 +579,8 @@ export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, si
 
   // ── 8. Сохранить oids ──
   updateHunterTriggerOids(id, { hunter_sl_oid: slOid, hunter_tp_oid: tpOid });
+  recordBotOid(slOid, coin, 'sl_trigger', id);
+  recordBotOid(tpOid, coin, 'tp_trigger', id);
 
   // ── 9. Notify ──
   if (!silent) {
@@ -822,6 +827,7 @@ export async function productionHunterLongOpen(coin, markPrice, dumpPct, sl, tp,
   logger.info(
     `[Executor] ✅ PROD HUNTER_LONG OPEN LONG #${coin} | oid: ${fill.oid} | filled: ${fillSz} @ $${fillPx} ($${fillUsd.toFixed(2)}) | slip: ${slip.label} | id: ${id}`,
   );
+  recordBotOid(fill.oid, coin, 'open', id);
 
   const fillInfo = { sizeUsd: fillUsd, fillPx, sz: fillSz };
 
@@ -1061,6 +1067,7 @@ export async function productionTrendFollowOpen(
   logger.info(
     `[Executor] ✅ PROD CHILLBOY OPEN ${sideLbl} #${coin} | oid: ${fill.oid} | filled: ${fillSz} @ $${fillPx} ($${fillUsd.toFixed(2)}) | slip: ${slip.label} | id: ${id}`,
   );
+  recordBotOid(fill.oid, coin, 'open', id);
 
   const fillInfo = { sizeUsd: fillUsd, fillPx, sz: fillSz };
 
@@ -1431,6 +1438,8 @@ export async function productionClose(signal, position, silent = false) {
   if (position.strategy_id === 'hunter' || position.strategy_id === 'hunter_long') {
     setHunterCrossCooldown(position.coin);
   }
+
+  recordBotOid(fill.oid, coin, 'close', position.id);
 
   const sign = realizedPnl >= 0 ? "+" : "";
   const fSign = fundingPnl >= 0 ? "+" : "";
