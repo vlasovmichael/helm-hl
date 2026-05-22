@@ -22,6 +22,13 @@ import {
   getHunterCrossCooldownRemainMs,
 } from './hunterCrossCooldown.js';
 import { recordNearMiss } from './nearMisses.js';
+import {
+  loadHunterCooldowns,
+  setLongPostSl,
+  setLongSlStreak,
+  clearLongSlStreak as persistClearLongSlStreak,
+  _resetForTest as resetCooldownStore,
+} from './hunterCooldownStore.js';
 
 export const HUNTER_LONG_SPIKE_WINDOW_MIN = 2;          // окно 2 мин (как у HUNTER SHORT)
 export const HUNTER_LONG_COOLDOWN_MS      = 2 * 60_000; // 2 мин re-detect cooldown per coin
@@ -55,6 +62,24 @@ const HUNTER_LONG_SL_STREAK_BAN_MS  = config.trading.hunterLongSlStreakBanH    *
 const cooldownMap     = new Map();   // coin → last-signal timestamp (re-detect)
 const postSlCooldown  = new Map();   // coin → ban-until timestamp (мс). Coin запрещена до этого ts.
 const slStreak        = new Map();   // coin → { count, lastSlAt } — для consecutive-SL бана
+
+// Восстановление postSlCooldown + slStreak из data/hunter_cooldowns.json после рестарта.
+// Bug fix 2026-05-22: до этого Map'ы жили только in-memory, рестарт сбрасывал 24h-баны.
+// cooldownMap (2-min re-detect) НЕ персистим — за 2 мин рестарт + новый сигнал в той же монете
+// крайне маловероятен, а файловое IO на каждом сигнале не оправдано.
+let restoredFromDisk = false;
+function restoreFromDiskOnce() {
+  if (restoredFromDisk) return;
+  restoredFromDisk = true;
+  const snap = loadHunterCooldowns();
+  for (const [coin, unbanAt] of Object.entries(snap.long.postSlCooldown)) {
+    postSlCooldown.set(coin, unbanAt);
+  }
+  for (const [coin, entry] of Object.entries(snap.long.slStreak)) {
+    slStreak.set(coin, entry);
+  }
+}
+restoreFromDiskOnce();
 const mfeMaeMap       = new Map();   // positionId → { mfeUsd, maeUsd, mfePct, maePct }
 const peakUnrealizedPct = new Map(); // positionId → peak unrealized% (LONG: (current-entry)/entry*100)
 const armedShadowMap  = new Map();   // positionId → true, если SHADOW лог уже сработал (one-shot)
@@ -98,6 +123,8 @@ export function resetHunterLongCooldowns() {
   peakUnrealizedPct.clear();
   armedShadowMap.clear();
   lastHeartbeatAt = 0;
+  resetCooldownStore();
+  restoredFromDisk = false;
 }
 
 /**
@@ -118,12 +145,16 @@ export function recordHunterLongLossEvent(coin, now = Date.now()) {
   } else {
     count = 1;
   }
-  slStreak.set(coin, { count, lastSlAt: now });
+  const streakEntry = { count, lastSlAt: now };
+  slStreak.set(coin, streakEntry);
+  setLongSlStreak(coin, streakEntry);
 
   const banMs = count >= HUNTER_LONG_SL_STREAK_BAN
     ? HUNTER_LONG_SL_STREAK_BAN_MS
     : HUNTER_LONG_POST_SL_COOLDOWN_MS;
-  postSlCooldown.set(coin, now + banMs);
+  const unbanAt = now + banMs;
+  postSlCooldown.set(coin, unbanAt);
+  setLongPostSl(coin, unbanAt);
 
   if (count >= HUNTER_LONG_SL_STREAK_BAN) {
     logger.warn(
@@ -135,6 +166,7 @@ export function recordHunterLongLossEvent(coin, now = Date.now()) {
 /** Очистка streak'а — вызывается на TP / trail_tp / положительный time_stop. */
 export function clearHunterLongSlStreak(coin) {
   slStreak.delete(coin);
+  persistClearLongSlStreak(coin);
 }
 
 /** Текущий peak unrealized% (для exitFeatures при close). */

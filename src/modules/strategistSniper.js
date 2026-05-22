@@ -20,6 +20,11 @@ import {
   getHunterCrossCooldownRemainMs,
 } from './hunterCrossCooldown.js';
 import { recordNearMiss } from './nearMisses.js';
+import {
+  loadHunterCooldowns,
+  setShortPostSl,
+  _resetForTest as resetCooldownStore,
+} from './hunterCooldownStore.js';
 
 // ── Конфигурация Iter A (захардкожена; в env переедет при необходимости) ──
 // HUNTER_SPIKE_PCT: env-overrideable. Дефолт снижен с 5.0 → 3.0 (2026-05-11):
@@ -43,6 +48,19 @@ const HUNTER_TIME_STOP_MS        = config.trading.hunterTimeStopMin * 60_000;
 const hunterCooldownMap   = new Map();  // coin → last-signal timestamp (re-detect debounce)
 const hunterPostSlCooldown = new Map(); // coin → SL timestamp (длинный cooldown после SL)
 let lastHeartbeatAt = 0;
+
+// Восстановление hunterPostSlCooldown из data/hunter_cooldowns.json после рестарта.
+// Bug fix 2026-05-22 (см. hunterCooldownStore.js). hunterCooldownMap (2-min) не персистим.
+let restoredFromDisk = false;
+function restoreFromDiskOnce() {
+  if (restoredFromDisk) return;
+  restoredFromDisk = true;
+  const snap = loadHunterCooldowns();
+  for (const [coin, lastSlAt] of Object.entries(snap.short.postSlCooldown)) {
+    hunterPostSlCooldown.set(coin, lastSlAt);
+  }
+}
+restoreFromDiskOnce();
 
 // Снимок последних подсчитанных спайков (для дашборд-карточки Hunter Watchlist).
 // Обновляется каждый тик внутри analyzeHunter, [{coin, pct}], отсортирован по pct desc.
@@ -144,6 +162,8 @@ export function resetHunterCooldowns() {
   hunterArmedMap.clear();
   hunterArmRequestMap.clear();
   lastHeartbeatAt = 0;
+  resetCooldownStore();
+  restoredFromDisk = false;
 }
 
 /**
@@ -189,6 +209,7 @@ function updateMfeMae(position, currentPrice) {
  */
 export function recordHunterSlExternal(coin, now = Date.now()) {
   hunterPostSlCooldown.set(coin, now);
+  setShortPostSl(coin, now);
 }
 
 /**
@@ -451,7 +472,9 @@ function checkHunterExit(position, scoutData) {
 
   if (position.sl_price != null && item.price >= position.sl_price) {
     // Регистрируем post-SL cooldown — Hunter не вернётся к этой монете N мин.
-    hunterPostSlCooldown.set(position.coin, Date.now());
+    const slTs = Date.now();
+    hunterPostSlCooldown.set(position.coin, slTs);
+    setShortPostSl(position.coin, slTs);
     setHunterCrossCooldown(position.coin);
     return {
       action: 'CLOSE',
@@ -474,7 +497,9 @@ function checkHunterExit(position, scoutData) {
   // болтается между SL/TP уже HUNTER_TIME_STOP_MIN — сценарий не сработал, выходим.
   // Регистрируем cooldown как при SL: монета "не отыгрывает", не лезем обратно.
   if (position.entry_time && Date.now() - position.entry_time >= HUNTER_TIME_STOP_MS) {
-    hunterPostSlCooldown.set(position.coin, Date.now());
+    const tsNow = Date.now();
+    hunterPostSlCooldown.set(position.coin, tsNow);
+    setShortPostSl(position.coin, tsNow);
     setHunterCrossCooldown(position.coin);
     const heldMin = Math.round((Date.now() - position.entry_time) / 60_000);
     // Observability: peak% vs current% при time-stop. Помогает решить, нужен ли
