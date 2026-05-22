@@ -1483,10 +1483,10 @@ function renderPnlSummary() {
     }
   }
 
-  // Strategy breakdown — добавляем синтетическую запись 'manual' если есть.
+  // Strategy breakdown — manual идёт отдельной строкой выше (pnl-manual-row),
+  // поэтому фильтруем его из byStrategy, чтобы не дублировать.
   const stratContainer = document.getElementById("pnl-strategy");
-  // byStrategy теперь уже включает 'manual' (server-side combined stats).
-  const strategies = Object.entries(p.byStrategy || {});
+  const strategies = Object.entries(p.byStrategy || {}).filter(([sid]) => sid !== "manual");
   if (strategies.length === 0) {
     stratContainer.innerHTML =
       '<div class="empty-state">No trades in this period</div>';
