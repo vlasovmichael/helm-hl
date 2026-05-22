@@ -30,6 +30,7 @@ import {
 import { setHunterCrossCooldown } from '../hunterCrossCooldown.js';
 import { resolveAsset } from './fill-parser.js';
 import { resolveEntrySize } from './sizing.js';
+import { getVirtualEquity, applyVirtualPnl } from '../chillBoyVirtualEquity.js';
 
 /**
  * Определяет баланс для расчёта размера позиции.
@@ -301,13 +302,17 @@ export async function hunterLongPaperOpen(coin, price, dumpPct, sl, tp, silent =
  * @param {Object} [entryFeatures=null]
  */
 export async function trendFollowPaperOpen(coin, price, direction, sl, tp, silent = false, entryFeatures = null) {
-  const balance = await getPaperBalance();
+  const virtualMode = config.trading.chillBoyPaperVirtualBalance > 0;
+  const balance = virtualMode ? getVirtualEquity() : await getPaperBalance();
   if (balance <= 0) {
     logger.warn(`[Executor] [ChillBoy] Cannot open — balance is $${balance.toFixed(2)}`);
     return { ok: false };
   }
+  const balanceTag = virtualMode ? `virtual $${balance.toFixed(2)}` : `real $${balance.toFixed(2)}`;
 
-  const utilization = config.trading.chillBoyBalanceUtil;
+  const utilization = virtualMode
+    ? config.trading.chillBoyPaperVirtualUtil
+    : config.trading.chillBoyBalanceUtil;
   const szDecimals = resolvePaperSzDecimals(coin);
   if (szDecimals == null) return { ok: false };
   const { sizeUsd, sz, tooSmall } = resolveEntrySize({
@@ -319,7 +324,7 @@ export async function trendFollowPaperOpen(coin, price, direction, sl, tp, silen
       ? `size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min`
       : `sz=${sz} rounds to 0 (szDecimals=${szDecimals}, price $${price})`;
     logger.warn(
-      `[Executor] [ChillBoy SKIP] #${coin} — ${why} (${(utilization * 100).toFixed(0)}% баланса $${balance.toFixed(2)})`,
+      `[Executor] [ChillBoy SKIP] #${coin} — ${why} (${(utilization * 100).toFixed(0)}% ${balanceTag})`,
     );
     return { ok: false };
   }
@@ -342,7 +347,7 @@ export async function trendFollowPaperOpen(coin, price, direction, sl, tp, silen
   });
 
   logger.info(
-    `[Executor] 🎯 ChillBoy OPEN ${direction} #${coin} | $${sizeUsd.toFixed(2)} (of $${balance.toFixed(2)}) @ $${price} ` +
+    `[Executor] 🎯 ChillBoy OPEN ${direction} #${coin} | $${sizeUsd.toFixed(2)} (of ${balanceTag}) @ $${price} ` +
       `| SL $${sl.toFixed(6)} / TP $${tp.toFixed(6)} | fee $${fee.toFixed(4)} | id: ${id}`,
   );
 
@@ -437,6 +442,15 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
     reason:       signal.reason,
     exitFeatures,
   });
+
+  // Compound sandbox: ChillBoy paper virtual equity tracks net P&L over time.
+  if (
+    position.strategy_id === 'trend_follow' &&
+    position.mode === 'PAPER' &&
+    config.trading.chillBoyPaperVirtualBalance > 0
+  ) {
+    applyVirtualPnl(realizedPnl - totalFee, { coin: position.coin, reason: signal.reason });
+  }
 
   // Cross-strategy cooldown: на любом close Hunter-позиции бьём общий cooldown.
   // Покрывает и external/reconcile closes, не только strategist-инициированные.

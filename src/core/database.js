@@ -405,6 +405,51 @@ export function getHistorySince(sinceMs) {
 }
 
 /**
+ * Stats для конкретной стратегии/режима — для dashboard карточки.
+ * Возвращает n, sumNet, avgNet, worstNet, bestNet, winRate, lastClosedAt.
+ */
+export function getStrategyStats(strategyId, mode) {
+  const row = getDb()
+    .prepare(`
+      SELECT
+        COUNT(*)                                   AS n,
+        COALESCE(SUM(realized_pnl - fee_paid), 0)  AS sum_net,
+        COALESCE(AVG(realized_pnl - fee_paid), 0)  AS avg_net,
+        COALESCE(MIN(realized_pnl - fee_paid), 0)  AS worst_net,
+        COALESCE(MAX(realized_pnl - fee_paid), 0)  AS best_net,
+        SUM(CASE WHEN (realized_pnl - fee_paid) > 0 THEN 1 ELSE 0 END) AS wins,
+        MAX(closed_at)                             AS last_closed_at
+      FROM history
+      WHERE strategy_id = ? AND mode = ?
+    `)
+    .get(strategyId, mode);
+  return {
+    n:            row.n,
+    sumNet:       row.sum_net,
+    avgNet:       row.avg_net,
+    worstNet:     row.worst_net,
+    bestNet:      row.best_net,
+    winRate:      row.n > 0 ? row.wins / row.n : 0,
+    lastClosedAt: row.last_closed_at,
+  };
+}
+
+/**
+ * Последние N сделок стратегии/режима для карточки на dashboard.
+ */
+export function getRecentStrategyTrades(strategyId, mode, limit = 10) {
+  return getDb()
+    .prepare(`
+      SELECT coin, closed_at, realized_pnl, fee_paid, reason, entry_price, close_price, side
+      FROM history
+      WHERE strategy_id = ? AND mode = ?
+      ORDER BY closed_at DESC
+      LIMIT ?
+    `)
+    .all(strategyId, mode, limit);
+}
+
+/**
  * Возвращает заархивированные сделки, закрытые после указанного timestamp.
  * Читает данные из data/history_archive.json.
  *

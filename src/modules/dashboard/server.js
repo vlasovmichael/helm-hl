@@ -16,6 +16,8 @@ import {
   getArchivedHistorySince,
   getEquitySnapshotsSince,
   realTradesForDisplay,
+  getStrategyStats,
+  getRecentStrategyTrades,
 } from "../../core/database.js";
 import { getAccountSummary, getPositions, getLivePrice } from "../exchange.js";
 import { fetchUserFills, reconstructManualTrades } from "../userFills.js";
@@ -32,6 +34,7 @@ import {
   HUNTER_TP_PCT,
 } from "../strategistSniper.js";
 import { getChillBoyHeartbeat } from "../strategistTrendFollow.js";
+import { getVirtualEquitySnapshot } from "../chillBoyVirtualEquity.js";
 import { getNearMisses } from "../nearMisses.js";
 
 const HOST = "0.0.0.0";
@@ -262,6 +265,12 @@ async function getStatusData() {
           enabled: true,
           prod: config.isProduction && config.trading.chillBoyProdEnabled,
           heartbeat: getChillBoyHeartbeat(),
+          virtualBalance: config.trading.chillBoyPaperVirtualBalance,
+          virtualEquity:  config.trading.chillBoyPaperVirtualBalance > 0
+            ? getVirtualEquitySnapshot()
+            : null,
+          paperStats: getStrategyStats('trend_follow', 'PAPER'),
+          paperTrades: getRecentStrategyTrades('trend_follow', 'PAPER', 10),
         }
       : null,
     ts: Date.now(),

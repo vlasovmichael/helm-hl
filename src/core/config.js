@@ -350,6 +350,12 @@ function loadConfig() {
   const chillBoyTimeStopHours  = parseFloat(process.env.CHILL_BOY_TIME_STOP_HOURS || '6');
   const chillBoyBalanceUtil    = parseFloat(process.env.CHILL_BOY_BALANCE_UTILIZATION || '0.5');
   const chillBoyPostSlCooldownMin = parseFloat(process.env.CHILL_BOY_POST_SL_COOLDOWN_MIN || '120');
+  // Виртуальный paper-баланс ChillBoy: позволяет shadow-сделкам открываться,
+  // даже когда реальный free-balance занят carry. 0 = старое поведение (real balance).
+  const chillBoyPaperVirtualBalance = parseFloat(process.env.CHILL_BOY_PAPER_VIRTUAL_BALANCE || '0');
+  // Util только для virtual paper-режима (compound sandbox). Реальный paper
+  // продолжает использовать CHILL_BOY_BALANCE_UTILIZATION.
+  const chillBoyPaperVirtualUtil = parseFloat(process.env.CHILL_BOY_PAPER_VIRTUAL_UTILIZATION || '0.9');
 
   // ── Risk-based position sizing (cross-strategy: Hunter / Hunter Long / ChillBoy) ──
   const riskBasedSizing  = (process.env.RISK_BASED_SIZING  || 'false').toLowerCase() === 'true';
@@ -381,6 +387,12 @@ function loadConfig() {
   }
   if (isNaN(chillBoyPostSlCooldownMin) || chillBoyPostSlCooldownMin <= 0) {
     throw new Error(`CHILL_BOY_POST_SL_COOLDOWN_MIN must be positive. Got: "${process.env.CHILL_BOY_POST_SL_COOLDOWN_MIN}"`);
+  }
+  if (isNaN(chillBoyPaperVirtualBalance) || chillBoyPaperVirtualBalance < 0) {
+    throw new Error(`CHILL_BOY_PAPER_VIRTUAL_BALANCE must be ≥ 0. Got: "${process.env.CHILL_BOY_PAPER_VIRTUAL_BALANCE}"`);
+  }
+  if (isNaN(chillBoyPaperVirtualUtil) || chillBoyPaperVirtualUtil <= 0 || chillBoyPaperVirtualUtil > 0.95) {
+    throw new Error(`CHILL_BOY_PAPER_VIRTUAL_UTILIZATION must be in (0, 0.95]. Got: "${process.env.CHILL_BOY_PAPER_VIRTUAL_UTILIZATION}"`);
   }
   if (isNaN(riskPctPerTrade) || riskPctPerTrade <= 0 || riskPctPerTrade > 0.1) {
     throw new Error(`RISK_PCT_PER_TRADE must be in (0, 0.1]. Got: "${process.env.RISK_PCT_PER_TRADE}"`);
@@ -559,6 +571,8 @@ function loadConfig() {
       chillBoyTimeStopHours,
       chillBoyBalanceUtil,
       chillBoyPostSlCooldownMin,
+      chillBoyPaperVirtualBalance,
+      chillBoyPaperVirtualUtil,
       riskBasedSizing,
       riskSizingShadow,
       riskPctPerTrade,

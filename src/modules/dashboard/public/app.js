@@ -1682,6 +1682,58 @@ function renderChillBoy(cb) {
   statsEl.textContent =
     `tracked ${hb.tracked} · squeezed ${hb.squeezed} · breakouts ${hb.breakouts} · ` +
     `slot ${hb.slot} · cooldowns ${hb.reCooldowns}+${hb.postSlCooldowns} · ${age}`;
+
+  const vEl = document.getElementById("chillboy-vbalance");
+  if (vEl) {
+    if (cb.virtualEquity) {
+      vEl.style.display = "";
+      const ve = cb.virtualEquity;
+      const sign = ve.pnlTotal >= 0 ? "+" : "-";
+      const color = ve.pnlTotal >= 0 ? "var(--accent-positive, #4caf50)" : "var(--accent-negative, #f44336)";
+      vEl.innerHTML =
+        `sandbox: <b>$${ve.equity.toFixed(2)}</b> ` +
+        `<span style="color:${color}">(${sign}$${Math.abs(ve.pnlTotal).toFixed(2)} · ` +
+        `${sign}${Math.abs(ve.pnlPct * 100).toFixed(1)}%)</span> ` +
+        `· seed $${ve.startEquity.toFixed(0)} · n=${ve.tradesApplied}`;
+    } else if (cb.virtualBalance > 0) {
+      vEl.style.display = "";
+      vEl.textContent = `virtual $${cb.virtualBalance.toFixed(0)}`;
+    } else {
+      vEl.style.display = "none";
+    }
+  }
+
+  const psEl = document.getElementById("chillboy-paper-stats");
+  if (psEl && cb.paperStats) {
+    const s = cb.paperStats;
+    if (s.n > 0) {
+      psEl.style.display = "";
+      const fmt = (v) => (v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`);
+      psEl.innerHTML =
+        `<b>Paper:</b> n=${s.n} · net ${fmt(s.sumNet)} · avg ${fmt(s.avgNet)} · ` +
+        `worst ${fmt(s.worstNet)} · best ${fmt(s.bestNet)} · ` +
+        `win-rate ${(s.winRate * 100).toFixed(0)}%`;
+    } else {
+      psEl.style.display = "none";
+    }
+  }
+
+  const ptEl = document.getElementById("chillboy-paper-trades");
+  if (ptEl && Array.isArray(cb.paperTrades) && cb.paperTrades.length > 0) {
+    ptEl.style.display = "";
+    ptEl.innerHTML = cb.paperTrades
+      .map((t) => {
+        const net = (t.realized_pnl || 0) - (t.fee_paid || 0);
+        const sign = net >= 0 ? "+" : "-";
+        const dt = new Date(t.closed_at);
+        const ts = `${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")} ${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
+        const color = net >= 0 ? "var(--accent-positive, #4caf50)" : "var(--accent-negative, #f44336)";
+        return `<div>${ts} · ${t.side.toUpperCase()} ${t.coin} · <span style="color:${color}">${sign}$${Math.abs(net).toFixed(2)}</span> · ${t.reason}</div>`;
+      })
+      .join("");
+  } else if (ptEl) {
+    ptEl.style.display = "none";
+  }
 }
 
 function renderFooter() {
