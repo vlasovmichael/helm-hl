@@ -275,8 +275,28 @@ export async function analyzeTrendFollow(scoutData, activePosition, now = Date.n
  * Берёт current price из scoutData; если монеты нет — HOLD (next tick подскажет).
  */
 function checkTrendFollowExit(position, scoutData, now) {
+  // Time-stop проверяем ПЕРВЫМ — он time-based, не нуждается в свежей цене.
+  // Раньше стоял в самом низу под early-return `if (!item) return HOLD`, из-за
+  // чего позиция могла висеть бесконечно, если её coin выпадал из scoutData
+  // (инцидент BTC id=90, 2026-05-22: 10h+ при TIME_STOP=6h).
+  if (position.entry_time && now - position.entry_time >= TIME_STOP_MS) {
+    postSlCooldown.set(position.coin, now);
+    const heldMin = Math.round((now - position.entry_time) / 60_000);
+    const item    = (scoutData ?? []).find((x) => x.coin === position.coin);
+    return {
+      action: 'CLOSE',
+      coin:   position.coin,
+      price:  item?.price ?? position.entry_price,
+      reason: 'trend_follow_time_stop',
+      heldMin,
+    };
+  }
+
   const item = (scoutData ?? []).find((x) => x.coin === position.coin);
-  if (!item) return { action: 'HOLD' };
+  if (!item) {
+    logger.warn(`[ChillBoy] exit-check: #${position.coin} нет в scoutData — SL/TP пропущены, ждём time-stop`);
+    return { action: 'HOLD' };
+  }
 
   const isLong = (position.side || '').toLowerCase() === 'long';
   const price  = item.price;
@@ -308,17 +328,6 @@ function checkTrendFollowExit(position, scoutData, now) {
       };
     }
   }
-  // Time-stop
-  if (position.entry_time && now - position.entry_time >= TIME_STOP_MS) {
-    postSlCooldown.set(position.coin, now);
-    const heldMin = Math.round((now - position.entry_time) / 60_000);
-    return {
-      action: 'CLOSE',
-      coin:   position.coin,
-      price,
-      reason: 'trend_follow_time_stop',
-      heldMin,
-    };
-  }
+  // Time-stop проверяется в начале функции (до early-return по отсутствию item).
   return { action: 'HOLD' };
 }

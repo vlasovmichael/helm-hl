@@ -4,7 +4,7 @@ import { logger } from '../core/logger.js';
 import { setUniverse, getTradeableSet } from '../core/universe.js';
 import { getRuntimeBlacklist, getOiCapBans } from './executor/index.js';
 import { push as pushPriceHistory } from '../core/priceHistory.js';
-import { getActivePosition } from '../core/database.js';
+import { getActivePosition, getActivePaperPosition } from '../core/database.js';
 
 const HL_API   = 'https://api.hyperliquid.xyz/info';
 const RTT_LIMIT_MS = 10_000; // отклоняем ответы медленнее 10 с
@@ -303,6 +303,12 @@ export async function scan() {
   // HYPE 2026-05-15). APY/liquidity-фильтры гейтят ВХОД, а не управление открытой
   // позицией — её надо видеть, чтобы штатно выйти (negative_funding).
   const activeCoin = (getActivePosition()?.coin || '').toUpperCase();
+  // Paper shadow-слот (ChillBoy virtual) тоже нуждается в свежей цене для
+  // SL/TP в exit-check. Без этого, если coin выпадает из hunterSet/liquidSet,
+  // checkTrendFollowExit получает item=undefined и пропускает SL/TP
+  // (инцидент BTC id=90, 2026-05-22). Time-stop теперь покрыт отдельно, но
+  // SL/TP должны работать штатно — пинним paper-coin тоже.
+  const activePaperCoin = (getActivePaperPosition()?.coin || '').toUpperCase();
 
   const results       = [];  // для carry/fade (узкая liquid-вселенная)
   const hunterResults = [];  // для Hunter (шире — по hunterSet)
@@ -351,7 +357,10 @@ export async function scan() {
     if (isNaN(price)) continue;
 
     // ── Hunter scope: shirоkий volume-floor, отдельная вселенная ──
-    const inHunterSet = hunterSet.size === 0 || hunterSet.has(coinUpper);
+    // Paper-shadow позицию (ChillBoy virtual) пинним даже если её coin выпал
+    // из hunterSet — иначе exit-check не получит цену для SL/TP.
+    const isHeldPaper = coinUpper === activePaperCoin;
+    const inHunterSet = hunterSet.size === 0 || hunterSet.has(coinUpper) || isHeldPaper;
     if (inHunterSet) {
       // Доп. фичи рынка для extended-логирования (см. database.js миграция).
       // Все nullable: при missing в API будут null'ы в БД, не блокируем сигнал.
