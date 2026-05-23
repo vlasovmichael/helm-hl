@@ -887,15 +887,11 @@ function fmtTime(ts) {
 // ── Renderers ───────────────────────────────────
 
 function renderHeader(status) {
-  // Total Equity = wallet total (perp accountValue + свободный spot USDC),
-  // как его видит HL UI. Раньше показывали только perp equity, но при
-  // открытой убыточной позиции расхождение с биржей путает. Fallback на
-  // perp equity, если spot fetch не отработал (HL CloudFront 504 и т.п.).
-  const displayEquity =
-    status.walletTotal != null && status.walletTotal > 0
-      ? status.walletTotal
-      : status.equity;
-  updateAnimatedNumber("equity-value", fmtUsd(displayEquity));
+  // HL 2026-05-23 unified mode: equity = spot.total + perp.uPnL,
+  // available = spot.total - spot.hold. Раньше показывали отдельный
+  // wallet-total / perp/spot breakdown — после миграции это один и
+  // тот же пул, разбивка потеряла смысл.
+  updateAnimatedNumber("equity-value", fmtUsd(status.equity));
 
   const profit = status.sessionProfit;
   const deltaEl = document.getElementById("equity-delta");
@@ -910,18 +906,8 @@ function renderHeader(status) {
   document.getElementById("available-val").textContent =
     `Available: ${fmtUsd(status.available)}`;
 
-  // Под Available — breakdown perp/spot, чтобы было видно где деньги при
-  // открытой позиции. Скрыт когда расхождения нет (всё в perp или wallet
-  // не доступен).
   const wtEl = document.getElementById("wallet-total-val");
-  if (wtEl) {
-    if (status.walletTotal != null && status.spotFree != null && status.spotFree > 1) {
-      wtEl.style.display = "";
-      wtEl.textContent = `perp ${fmtUsd(status.equity)} · spot ${fmtUsd(status.spotFree)}`;
-    } else {
-      wtEl.style.display = "none";
-    }
-  }
+  if (wtEl) wtEl.style.display = "none";
 }
 
 function renderPosition(pos) {

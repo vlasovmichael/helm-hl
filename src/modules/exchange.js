@@ -76,24 +76,24 @@ export async function initExchange() {
 
 /**
  * Проверяет, что подключение работает: запрашиваем баланс.
+ * HL unified mode (2026-05-23): primary source = spotClearinghouseState.
  */
 async function verifyConnection() {
-  const state = await retryWithBackoff(
-    () => sdk.info.perpetuals.getClearinghouseState(config.wallet.address),
+  const spotUsdc = await retryWithBackoff(
+    () => fetchSpotUsdcBalance(),
     { label: "verify-connection", maxRetries: 3 },
   );
 
-  const accountValue = parseFloat(state?.marginSummary?.accountValue ?? "0");
-  const withdrawable = parseFloat(state?.withdrawable ?? "0");
+  const free = Math.max(0, spotUsdc.total - spotUsdc.hold);
 
   logger.info(
     `[Exchange] ✅ Connection verified — ` +
-      `Account: $${accountValue.toFixed(2)} | Withdrawable: $${withdrawable.toFixed(2)}`,
+      `Wallet: $${spotUsdc.total.toFixed(2)} | Free: $${free.toFixed(2)}`,
   );
 
-  if (accountValue <= 0) {
+  if (spotUsdc.total <= 0) {
     logger.warn(
-      "[Exchange] ⚠️  Account value is $0 — is this the right wallet?",
+      "[Exchange] ⚠️  Spot USDC = $0 — is this the right wallet?",
     );
   }
 
@@ -258,16 +258,12 @@ export async function getPositions() {
 }
 
 /**
- * Запрашивает spot-баланс USDC. Используется ТОЛЬКО для диагностики
- * (BalanceDiag, manualSwapAlert). Авто-трансфер не делаем — HL не
- * разрешает usdClassTransfer от agent wallet (ошибка "Must deposit
- * before performing actions. User: <agent-address>"). Чтобы починить
- * нужен main key, который мы боту не даём.
+ * Запрашивает USDC из spotClearinghouseState. Возвращает {total, hold}.
+ * Используется как primary source баланса в unified mode (см.
+ * memory/hl_unified_migration_2026_05_23.md). SDK маркирует spot-токены
+ * суффиксом "-SPOT" чтобы отличать от перп-тикеров — принимаем оба.
  *
- * SDK маркирует spot-токены суффиксом "-SPOT" чтобы отличать от
- * перп-тикеров — принимаем оба варианта.
- *
- * @returns {Promise<number>} — USDC баланс в spot wallet (0 если нет)
+ * @returns {Promise<{ total: number, hold: number }>}
  */
 export async function fetchSpotUsdcBalance() {
   try {
@@ -278,34 +274,52 @@ export async function fetchSpotUsdcBalance() {
       const c = (b.coin ?? "").toUpperCase();
       return c === "USDC" || c === "USDC-SPOT";
     });
-    if (!usdc) return 0;
+    if (!usdc) return { total: 0, hold: 0 };
     const total = parseFloat(usdc.total ?? "0");
-    return Number.isFinite(total) ? total : 0;
+    const hold  = parseFloat(usdc.hold ?? "0");
+    return {
+      total: Number.isFinite(total) ? total : 0,
+      hold:  Number.isFinite(hold)  ? hold  : 0,
+    };
   } catch (err) {
     logger.warn(`[Exchange] fetchSpotUsdcBalance failed: ${err.message}`);
-    return 0;
+    return { total: 0, hold: 0 };
   }
 }
 
 /**
- * Fetcher для balanceCache: дёргает SDK и нормализует ответ в
- * {accountValue, withdrawable, unrealizedPnl}. Retry — только на сеть.
+ * Fetcher для balanceCache. HL 2026-05-23: unified-by-default → primary
+ * source баланса = spotClearinghouseState. clearinghouseState (perp)
+ * остаётся только для unrealized PnL по открытым позициям. Контракт
+ * кэша {accountValue, withdrawable, unrealizedPnl} прежний, поменялись
+ * только источники:
+ *   accountValue  = spot.USDC.total + perp.unrealizedPnl
+ *   withdrawable  = spot.USDC.total - spot.USDC.hold
+ *   unrealizedPnl = perp.marginSummary.totalUnrealizedPnl
  */
 async function fetchBalanceFromSdk() {
   return retryWithBackoff(
-    () =>
-      sdk.info.perpetuals
-        .getClearinghouseState(config.wallet.address)
-        .then((state) => {
-          const ms = state?.marginSummary ?? {};
-          return {
-            accountValue:  parseFloat(ms.accountValue ?? "0"),
-            withdrawable:  parseFloat(state?.withdrawable ?? "0"),
-            unrealizedPnl: parseFloat(
-              ms.totalUnrealizedPnl ?? ms.unrealizedPnl ?? "0",
-            ),
-          };
-        }),
+    async () => {
+      const [perpState, spotUsdc] = await Promise.all([
+        sdk.info.perpetuals.getClearinghouseState(config.wallet.address),
+        fetchSpotUsdcBalance(),
+      ]);
+
+      const ms = perpState?.marginSummary ?? {};
+      const perpUnrealized = parseFloat(
+        ms.totalUnrealizedPnl ?? ms.unrealizedPnl ?? "0",
+      );
+      const upnl = Number.isFinite(perpUnrealized) ? perpUnrealized : 0;
+
+      const accountValue = spotUsdc.total + upnl;
+      const withdrawable = Math.max(0, spotUsdc.total - spotUsdc.hold);
+
+      return {
+        accountValue,
+        withdrawable,
+        unrealizedPnl: upnl,
+      };
+    },
     { label: "exchange-get-balance", maxRetries: 3 },
   );
 }

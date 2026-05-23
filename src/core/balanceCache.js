@@ -2,8 +2,15 @@
 //  Balance Cache — защита от API-глитчей Hyperliquid
 // ─────────────────────────────────────────────────
 //
-// Hyperliquid индексатор иногда "залипает" и возвращает accountValue=0,
-// withdrawable=0 — при этом на счёте реально есть деньги. Если верить ответу:
+// HL 2026-05-23: после миграции на unified-by-default primary source —
+// spotClearinghouseState. Контракт кэша не менялся, но смысл полей сейчас:
+//   accountValue  = spot.USDC.total + perp.unrealizedPnl
+//   withdrawable  = spot.USDC.total - spot.USDC.hold
+//   unrealizedPnl = perp.marginSummary.totalUnrealizedPnl
+// См. memory/hl_unified_migration_2026_05_23.md.
+//
+// Hyperliquid индексатор иногда "залипает" и возвращает 0 на одном или
+// обоих endpoint'ах — при этом на счёте реально есть деньги. Если верить:
 //   - drawdown-гард орёт -100% и блокирует все OPEN,
 //   - Auto-Cleanup затирает baseline,
 //   - в PROD бот может счесть позицию закрытой и наоткрывать лишних.
@@ -135,9 +142,9 @@ export async function getCachedBalance(fetcher) {
     return { ...normalized, stale: false };
   }
 
-  // API вернул $0. Возможные причины: indexer-glitch, funds в spot wallet
-  // (Unified Mode — диагностика в BalanceDiag). Авто-фикс не делаем:
-  // usdClassTransfer запрещён для agent wallet на стороне HL.
+  // API вернул $0. Возможные причины: indexer-glitch на spot endpoint,
+  // мигрирующий аккаунт. Авто-фикс не делаем — это редкий transient,
+  // живём на cache до восстановления.
   if (zeroStreakStart === 0) zeroStreakStart = Date.now();
 
   const hasFreshCache = lastGood && Date.now() - lastGood.ts < STALE_MAX_AGE_MS;

@@ -32,28 +32,47 @@ const axiosModule = await import('axios');
 const wallet = await import('../src/modules/wallet.js');
 const balanceCache = await import('../src/core/balanceCache.js');
 
-let mockResponse = null;
+// HL 2026-05-23: unified mode → fetcher делает 2 запроса (perp + spot).
+// Мок различает по полю `type` в body. Контракт wallet.js теперь:
+//   accountValue  = spot.USDC.total + perp.uPnl
+//   withdrawable  = spot.USDC.total - spot.USDC.hold
+let mockSpotTotal = 0;
+let mockSpotHold  = 0;
+let mockPerpUpnl  = 0;
 let mockError = null;
 
 const originalPost = axiosModule.default.post;
-axiosModule.default.post = async () => {
+axiosModule.default.post = async (_url, body = {}) => {
   if (mockError) throw mockError;
-  return { data: mockResponse };
+  if (body.type === 'spotClearinghouseState') {
+    return {
+      data: {
+        balances: [
+          { coin: 'USDC', total: String(mockSpotTotal), hold: String(mockSpotHold) },
+        ],
+      },
+    };
+  }
+  // clearinghouseState (perp)
+  return {
+    data: {
+      marginSummary: { totalUnrealizedPnl: String(mockPerpUpnl) },
+      assetPositions: [],
+    },
+  };
 };
 
+// Параметры теста сформулированы в новой модели: задаём то, что хотим
+// видеть на выходе кэша (equity / available), а мок раскладывает их в
+// spot.total / spot.hold так, чтобы получились эти числа.
 function setApi({ accountValue, withdrawable, unrealizedPnl = 0 }) {
   mockError = null;
-  mockResponse = {
-    marginSummary: {
-      accountValue:       String(accountValue),
-      totalUnrealizedPnl: String(unrealizedPnl),
-    },
-    withdrawable: String(withdrawable),
-  };
+  mockPerpUpnl  = unrealizedPnl;
+  mockSpotTotal = accountValue - unrealizedPnl;     // spot.total = equity - uPnL
+  mockSpotHold  = Math.max(0, mockSpotTotal - withdrawable);
 }
 
 function setApiError(err) {
-  mockResponse = null;
   mockError = err;
 }
 

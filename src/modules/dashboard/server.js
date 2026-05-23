@@ -5,7 +5,6 @@
 
 import express from "express";
 import crypto from "node:crypto";
-import axios from "axios";
 import { WebSocketServer } from "ws";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -187,39 +186,11 @@ async function buildChillBoyPaperPosition() {
   };
 }
 
-// Spot USDC снапшот для дашборда. Дашборд показывает perp accountValue как
-// Total Equity, но HL UI считает wallet total = spot.USDC.total (unified
-// account: perp margin физически живёт в spot.hold). Без этой строки шапка
-// расходится с биржей на величину «свободно вне маржи» — путает, особенно
-// когда позиция в большом минусе и unrealized съел весь cushion.
-//
-// Кэшируем 30с: spotClearinghouseState ≠ critical path, лишний raw POST
-// в HL info-API на каждый WS broadcast (2s) не нужен. При HL downtime
-// (504 от CloudFront) возвращаем последний снапшот с пометкой stale.
-const SPOT_CACHE_TTL_MS = 30_000;
-let spotCache = { ts: 0, total: 0, hold: 0 };
-
-async function getSpotUsdcSnapshot() {
-  const now = Date.now();
-  if (now - spotCache.ts < SPOT_CACHE_TTL_MS) return spotCache;
-  try {
-    const { data } = await axios.post(
-      "https://api.hyperliquid.xyz/info",
-      { type: "spotClearinghouseState", user: config.wallet.address },
-      { timeout: 5_000 },
-    );
-    const usdc = (data?.balances || []).find((b) => b.coin === "USDC");
-    if (!usdc) return spotCache;
-    const total = parseFloat(usdc.total ?? "0");
-    const hold  = parseFloat(usdc.hold ?? "0");
-    if (Number.isFinite(total) && Number.isFinite(hold)) {
-      spotCache = { ts: now, total, hold };
-    }
-  } catch {
-    // stale-OK: HL CloudFront иногда отдаёт 504, не паникуем
-  }
-  return spotCache;
-}
+// HL 2026-05-23: unified-by-default. Раньше дашборд отдельно дёргал
+// spotClearinghouseState чтобы показать "Wallet Total", потому что perp
+// accountValue не включал spot. Теперь getAccountSummary() / wallet.js
+// уже считают всё через spot (см. memory/hl_unified_migration_2026_05_23.md),
+// отдельный snapshot не нужен.
 
 async function getStatusData() {
   const position = getActivePosition();
@@ -321,24 +292,10 @@ async function getStatusData() {
     }
   }
 
-  // Wallet Total = spot.USDC.total (см. getSpotUsdcSnapshot). Нужен только для
-  // PROD: в PAPER perp/spot не пересекаются, шапке его подмешивать незачем.
-  let walletTotal = null;
-  let spotFree = null;
-  if (config.isProduction) {
-    const spot = await getSpotUsdcSnapshot();
-    if (spot.total > 0) {
-      walletTotal = spot.total;
-      spotFree = Math.max(0, spot.total - spot.hold);
-    }
-  }
-
   return {
     mode: config.mode,
     equity,
     available,
-    walletTotal,
-    spotFree,
     sessionStartEquity: state.sessionStartEquity,
     sessionProfit:
       state.sessionStartEquity > 0 ? equity - state.sessionStartEquity : 0,
