@@ -887,7 +887,16 @@ function fmtTime(ts) {
 // ── Renderers ───────────────────────────────────
 
 function renderHeader(status) {
-  updateAnimatedNumber("equity-value", fmtUsd(status.equity));
+  // Total Equity = wallet total (perp accountValue + свободный spot USDC),
+  // как его видит HL UI. Раньше показывали только perp equity, но при
+  // открытой убыточной позиции расхождение с биржей путает. Fallback на
+  // perp equity, если spot fetch не отработал (HL CloudFront 504 и т.п.).
+  const displayEquity =
+    status.walletTotal != null && status.walletTotal > 0
+      ? status.walletTotal
+      : status.equity;
+  updateAnimatedNumber("equity-value", fmtUsd(displayEquity));
+
   const profit = status.sessionProfit;
   const deltaEl = document.getElementById("equity-delta");
   if (status.sessionStartEquity > 0) {
@@ -901,15 +910,14 @@ function renderHeader(status) {
   document.getElementById("available-val").textContent =
     `Available: ${fmtUsd(status.available)}`;
 
-  // Wallet Total — total как его видит HL UI (perp accountValue + свободный
-  // spot USDC). Дашборд намеренно показывает только perp equity, но без этой
-  // строки расхождение с биржей (особенно при глубоком unrealized loss) сбивает
-  // с толку. Показываем только в PROD, когда есть free spot > $1.
+  // Под Available — breakdown perp/spot, чтобы было видно где деньги при
+  // открытой позиции. Скрыт когда расхождения нет (всё в perp или wallet
+  // не доступен).
   const wtEl = document.getElementById("wallet-total-val");
   if (wtEl) {
     if (status.walletTotal != null && status.spotFree != null && status.spotFree > 1) {
       wtEl.style.display = "";
-      wtEl.textContent = `Wallet: ${fmtUsd(status.walletTotal)} (+${fmtUsd(status.spotFree)} free spot)`;
+      wtEl.textContent = `perp ${fmtUsd(status.equity)} · spot ${fmtUsd(status.spotFree)}`;
     } else {
       wtEl.style.display = "none";
     }

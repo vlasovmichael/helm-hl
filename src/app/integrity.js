@@ -187,10 +187,8 @@ export async function integrityCheck() {
 // это ты торгуешь вручную (LONG или SHORT). Бот в этом случае:
 //   • НЕ усыновляет позицию (ты сам управляешь exit'ом)
 //   • НЕ открывает свою параллельно (паузится)
-//   • Шлёт throttled-уведомление о входе в hands-off режим
+//   • Шлёт уведомление ОДИН РАЗ при входе в hands-off режим
 // Когда ручная позиция исчезает с биржи → бот автоматом возвращается к торговле.
-
-const MANUAL_WARNING_THROTTLE_MS = 30 * 60_000;  // 30 мин
 
 let lastOrphanCheck = 0;
 const ORPHAN_CHECK_INTERVAL_MS = 60_000;  // 60с — реже чем тик чтобы не спамить API
@@ -251,10 +249,14 @@ export async function orphanCheck() {
   const currentCoins = new Set(manualPositions.map((p) => p.coin));
   state.manualPositionCoins = currentCoins;
 
-  // Throttled-уведомление по каждой монете отдельно
+  // Уведомление шлём ОДИН РАЗ на коин — пока оператор не закроет позицию.
+  // throttle Map используется как "notified set": если запись уже есть,
+  // молчим. При закрытии всех ручных позиций map очищается (см. ветку выше),
+  // следующая открытая поза снова получит уведомление.
+  // Прошлая версия слала каждые 30 мин — раздражало без причины, оператор и так
+  // видит позицию на бирже / дашборде.
   for (const exPos of manualPositions) {
-    const last = state.manualWarningThrottle.get(exPos.coin);
-    if (!last || now - last >= MANUAL_WARNING_THROTTLE_MS) {
+    if (!state.manualWarningThrottle.has(exPos.coin)) {
       state.manualWarningThrottle.set(exPos.coin, now);
       const side = exPos.szi < 0 ? 'SHORT' : 'LONG';
       const sizeUsd = Math.abs(exPos.szi) * exPos.entryPx;
