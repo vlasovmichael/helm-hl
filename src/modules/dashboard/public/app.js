@@ -900,6 +900,20 @@ function renderHeader(status) {
     `Uptime: ${formatUptime(status.uptimeMin)}`;
   document.getElementById("available-val").textContent =
     `Available: ${fmtUsd(status.available)}`;
+
+  // Wallet Total — total как его видит HL UI (perp accountValue + свободный
+  // spot USDC). Дашборд намеренно показывает только perp equity, но без этой
+  // строки расхождение с биржей (особенно при глубоком unrealized loss) сбивает
+  // с толку. Показываем только в PROD, когда есть free spot > $1.
+  const wtEl = document.getElementById("wallet-total-val");
+  if (wtEl) {
+    if (status.walletTotal != null && status.spotFree != null && status.spotFree > 1) {
+      wtEl.style.display = "";
+      wtEl.textContent = `Wallet: ${fmtUsd(status.walletTotal)} (+${fmtUsd(status.spotFree)} free spot)`;
+    } else {
+      wtEl.style.display = "none";
+    }
+  }
 }
 
 function renderPosition(pos) {
