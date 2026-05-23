@@ -96,8 +96,6 @@ async function verifyConnection() {
       "[Exchange] ⚠️  Spot USDC = $0 — is this the right wallet?",
     );
   }
-
-  return { accountValue, withdrawable };
 }
 
 /**
