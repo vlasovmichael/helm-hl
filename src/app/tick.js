@@ -57,8 +57,12 @@ export async function tick() {
         const { hunterData: handsOffHunter } = await scan();
         state.latestHunter   = handsOffHunter;
         state.latestHunterAt = Date.now();
+        // ChillBoy paper shadow-слот независим от реального слота — должен тикать
+        // даже в HANDS-OFF, иначе зависшая ручная PROD-поза подвешивает paper
+        // позицию навсегда (инцидент BTC id=90 + PURR HANDS-OFF, 2026-05-22/23).
+        await tickTrendFollowPaper(handsOffHunter);
       } catch (err) {
-        logger.debug(`[Tick] HANDS-OFF scan failed: ${err.message}`);
+        logger.debug(`[Tick] HANDS-OFF scan/chillboy failed: ${err.message}`);
       }
       return;
     }
