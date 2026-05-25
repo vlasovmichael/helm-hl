@@ -2790,7 +2790,7 @@ setInterval(renderFooter, 1000);
 
   const CHARS = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモ0123456789ABCDEF$%/+-=*<>";
   const CHAR_SIZE = 14;
-  const TRAIL = 18; // длина хвоста капли в символах
+  const TRAIL = 5; // короткий хвост — без длинного «шлейфа» прежнего варианта
   let cols = 0;
   let drops  = []; // y-позиция головы (float, в символах)
   let speeds = []; // персональная скорость колонки (символов/кадр)
@@ -2859,10 +2859,11 @@ setInterval(renderFooter, 1000);
           const y = (headRow - (TRAIL - 1 - t)) * CHAR_SIZE;
           if (y < -CHAR_SIZE || y > canvas.height) continue;
           if (t === TRAIL - 1) {
-            ctx.fillStyle = rgba(colors.head, 0.85);
+            ctx.fillStyle = rgba(colors.head, 0.9);
           } else {
-            // Альфа линейно убывает к хвосту: 0.55..0.05
-            const a = 0.55 * (t / (TRAIL - 1)) + 0.05;
+            // Резкий fall-off: всего 2-3 символа за головой видно, дальше почти нет.
+            const norm = t / (TRAIL - 1); // 0 для самого старого, 1 для перед головой
+            const a = Math.pow(norm, 2) * 0.4; // квадратичный спад
             ctx.fillStyle = rgba(colors.text, a);
           }
           ctx.fillText(trails[i][t], i * CHAR_SIZE, y);
