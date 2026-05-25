@@ -20,10 +20,10 @@
 
 /* ── GitHub Primer: light theme (calm white) ─────────────────────── */
 html[data-theme="light"] {
-  /* --bg чуть отличается от --card-bg, чтобы карточки имели визуальный
-     контраст с body фоном (раньше оба были #ffffff и границы держались
-     только на --border — без matrix-rain в зазорах карточки сливались). */
-  --bg: #f1f3f6;
+  /* Stripe/Notion-паттерн: тёплый серый body + белые карточки.
+     Раньше оба были #ffffff → карточки сливались с body, держались
+     только на тонком --border. */
+  --bg: #e7ebf0;
   --canvas-subtle: #f6f8fa;
   --canvas-inset: #eaeef2;
   --card-bg: #ffffff;
@@ -72,13 +72,13 @@ html[data-theme="light"] {
 
 /* ── GitHub Primer: dark theme ───────────────────────────────────── */
 html[data-theme="dark"] {
-  /* --bg темнее --card-bg (раньше оба были #0d1117 → карточки сливались
-     без matrix-rain в фоне). Чуть глубже body даёт карточкам визуальный
-     подъём, как мягкое elevation, без агрессии. */
-  --bg: #06080c;
+  /* Тёмный body, карточки явно «поднимаются» над ним. Раньше оба были
+     #0d1117 → карточки сливались. Сейчас разница ~9 luminance units,
+     плюс box-shadow ниже для гарантированного elevation. */
+  --bg: #02040a;
   --canvas-subtle: #161b22;
   --canvas-inset: #010409;
-  --card-bg: #0d1117;
+  --card-bg: #131922;
   --card-bg-elev: #161b22;
   --card-bg-hover: #1c2128;
   --border: #30363d;
@@ -115,8 +115,10 @@ html[data-theme="dark"] {
   --info: #4493f8;
 
   --grid-line: #21262d;
-  --shadow-sm: 0 0 0 1px rgba(0, 0, 0, 0);
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  /* Раньше --shadow-sm в dark был полностью прозрачным → карточки совсем
+     без визуального подъёма. Сейчас лёгкий outer-glow для elevation. */
+  --shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.02);
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 
   --skeleton-base: #161b22;
   --skeleton-shine: #21262d;
