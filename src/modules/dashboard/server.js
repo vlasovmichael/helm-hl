@@ -615,9 +615,10 @@ function computeTier(absPct, threshold) {
 }
 
 // Volume multiplier cache for Hot Movers: (5min recent vol) / (avg 5min vol over last hour).
-// Per-coin 30s TTL — мы fetched only когда coin попадает в top, не для всех 230 ассетов.
+// 2026-05-25: TTL поднят 30s → 120s. Vol-mult — медленный показатель (mean of last hour);
+// 30s давал шторм candleSnapshot-запросов с каждого тика дашборда + 429.
 const volMultCache = new Map(); // coin -> { ts, mult }
-const VOL_MULT_TTL_MS = 30_000;
+const VOL_MULT_TTL_MS = 120_000;
 async function fetchVolMult(coin) {
   const cached = volMultCache.get(coin);
   if (cached && Date.now() - cached.ts < VOL_MULT_TTL_MS) return cached.mult;
@@ -1555,6 +1556,17 @@ export function startDashboard() {
     "4h": 30 * 24 * 3600_000,
     "1d": 180 * 24 * 3600_000,
   };
+  // TTL кеша /api/candles по interval: одна свеча обновляется на бирже не чаще
+  // чем раз в interval. Берём ~80% interval как потолок свежести, минимум 30s.
+  const CANDLES_CACHE_TTL = {
+    "1m": 30_000,
+    "5m": 60_000,
+    "15m": 5 * 60_000,
+    "1h": 10 * 60_000,
+    "4h": 15 * 60_000,
+    "1d": 30 * 60_000,
+  };
+  const candlesCache = new Map(); // key=`${coin}|${interval}` → { ts, data, inFlight? }
 
   app.get("/api/candles", async (req, res) => {
     try {
@@ -1567,25 +1579,52 @@ export function startDashboard() {
         ? req.query.interval
         : "5m";
       const windowMs = ALLOWED_INTERVALS[interval];
+      const ttl      = CANDLES_CACHE_TTL[interval] ?? 60_000;
+      const cacheKey = `${coin}|${interval}`;
 
-      const data = await hlInfo(
+      const now    = Date.now();
+      const cached = candlesCache.get(cacheKey);
+      if (cached && cached.data && now - cached.ts < ttl) {
+        return res.json(cached.data);
+      }
+      // Coalesce: если запрос уже в полёте — ждём его (избегаем шторма при
+      // нескольких открытых вкладках дашборда).
+      if (cached?.inFlight) {
+        try {
+          const data = await cached.inFlight;
+          return res.json(Array.isArray(data) ? data : []);
+        } catch {
+          return res.json([]);
+        }
+      }
+
+      const promise = hlInfo(
         {
           type: "candleSnapshot",
-          req: {
-            coin,
-            interval,
-            startTime: Date.now() - windowMs,
-            endTime: Date.now(),
-          },
+          req: { coin, interval, startTime: now - windowMs, endTime: now },
         },
         { label: "dash/candles", timeoutMs: 5000, maxRetries: 2 },
       );
-      if (data && data.error) throw new Error(data.error);
-      res.json(Array.isArray(data) ? data : []);
+      candlesCache.set(cacheKey, { ts: now, data: null, inFlight: promise });
+
+      try {
+        const data = await promise;
+        if (data && data.error) throw new Error(data.error);
+        const arr = Array.isArray(data) ? data : [];
+        candlesCache.set(cacheKey, { ts: Date.now(), data: arr });
+        res.json(arr);
+      } catch (err) {
+        // На ошибке оставляем старый data (если был) и обнуляем inFlight чтобы
+        // не залипать. Следующий запрос попробует снова после TTL stale-data.
+        const prev = candlesCache.get(cacheKey);
+        candlesCache.set(cacheKey, { ts: prev?.ts ?? 0, data: prev?.data ?? null });
+        logger.debug(
+          `[Dashboard] Candles fetch failed for ${req.query.coin}: ${err.message}`,
+        );
+        res.json(prev?.data ?? []);
+      }
     } catch (err) {
-      logger.debug(
-        `[Dashboard] Candles fetch failed for ${req.query.coin}: ${err.message}`,
-      );
+      logger.debug(`[Dashboard] /api/candles error: ${err.message}`);
       res.json([]);
     }
   });

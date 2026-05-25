@@ -12,7 +12,7 @@
 
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
-import { getActivePaperPosition } from '../core/database.js';
+import { getActivePaperPositionByStrategy } from '../core/database.js';
 import { analyzeTrendFollow } from '../modules/strategistTrendFollow.js';
 import { execute } from '../modules/executor/index.js';
 
@@ -20,7 +20,9 @@ export async function tickTrendFollowPaper(hunterData) {
   if (!config.isProduction) return;  // в PAPER-боте ChillBoy идёт через coordinator
   if (!config.trading.chillBoyEnabled || config.trading.chillBoyProdEnabled) return;
 
-  const paperPos = getActivePaperPosition();
+  // ChillBoy-only slot: смотрим строго на свои trend_follow позиции. Fader
+  // paper-позиция теперь живёт в отдельном слоте, не блокирует ChillBoy.
+  const paperPos = getActivePaperPositionByStrategy('trend_follow');
   const signal = await analyzeTrendFollow(hunterData, paperPos);
 
   if (signal.action === 'OPEN' && !paperPos) {

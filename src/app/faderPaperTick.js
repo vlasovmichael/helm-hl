@@ -11,7 +11,7 @@
 
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
-import { getActivePaperPosition } from '../core/database.js';
+import { getActivePaperPositionByStrategy } from '../core/database.js';
 import { analyzeFader } from '../modules/strategistFader.js';
 import { execute } from '../modules/executor/index.js';
 import { state } from './state.js';
@@ -19,7 +19,9 @@ import { state } from './state.js';
 export async function tickFaderPaper(hunterData) {
   if (!config.trading.faderEnabled) return;
 
-  const paperPos = getActivePaperPosition();
+  // Fader-only slot: смотрим строго на свои позиции. ChillBoy paper позиция
+  // не блокирует Fader и наоборот — у каждой стратегии независимый paper slot.
+  const paperPos = getActivePaperPositionByStrategy('fader');
   const signal   = await analyzeFader(hunterData, paperPos);
 
   // Публикуем tier-map для дашборда даже если действия нет.

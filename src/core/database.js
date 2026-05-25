@@ -425,6 +425,29 @@ export function getActivePaperPosition() {
     .get('OPEN');
 }
 
+/**
+ * Возвращает активную PAPER позицию КОНКРЕТНОЙ стратегии (или undefined).
+ * Нужен для независимых paper-слотов: ChillBoy и Fader торгуют параллельно,
+ * каждый видит только свою позицию (а не "слот вообще занят").
+ */
+export function getActivePaperPositionByStrategy(strategyId) {
+  return getDb()
+    .prepare("SELECT * FROM positions WHERE status = ? AND mode = 'PAPER' AND strategy_id = ? ORDER BY id DESC LIMIT 1")
+    .get('OPEN', strategyId);
+}
+
+/**
+ * Все активные PAPER-коины (Set, uppercase). Используется scout.js чтобы пиннить
+ * цены всех shadow-позиций — иначе exit-check не получит свежий price когда
+ * монета выпадает из liquid/hunter scope.
+ */
+export function getActivePaperCoins() {
+  const rows = getDb()
+    .prepare("SELECT DISTINCT coin FROM positions WHERE status = ? AND mode = 'PAPER'")
+    .all('OPEN');
+  return new Set(rows.map((r) => (r.coin || '').toUpperCase()).filter(Boolean));
+}
+
 const EQUITY_SNAPSHOT_RETENTION_MS = 35 * 24 * 3_600_000; // 35 дней
 
 /**
