@@ -1754,7 +1754,7 @@ footer {
 }
 #sec-chillboy .cb-kv {
   display: grid;
-  grid-template-columns: max-content 1fr;
+  grid-template-columns: max-content minmax(0, 1fr);
   column-gap: 0.6rem;
   row-gap: 0.25rem;
   font-family: var(--font-mono);
@@ -1765,6 +1765,8 @@ footer {
 }
 #sec-chillboy .cb-kv .v {
   color: var(--text);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 #sec-chillboy .cb-table {
   width: 100%;
@@ -1796,14 +1798,58 @@ footer {
 @media (max-width: 720px) {
   #sec-chillboy .cb-grid {
     grid-template-columns: 1fr;
+    gap: 0.6rem;
   }
+  #sec-chillboy .cb-section {
+    padding: 0.55rem 0.6rem;
+    min-width: 0;
+  }
+  #cb-watchlist-body,
+  #cb-cooldowns-body,
   #cb-history-body {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+    margin: 0 -0.6rem;
+    padding: 0 0.6rem;
+  }
+  #sec-chillboy .cb-table {
+    font-size: 0.7rem;
   }
   #sec-chillboy .cb-table th,
   #sec-chillboy .cb-table td {
     white-space: nowrap;
+    padding: 0.22rem 0.35rem;
+  }
+  #sec-chillboy .cb-kv {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0.1rem;
+    font-size: 0.76rem;
+  }
+  #sec-chillboy .cb-kv .k {
+    font-size: 0.66rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-top: 0.25rem;
+  }
+  #sec-chillboy .cb-kv .k:first-child {
+    margin-top: 0;
+  }
+  #cb-heartbeat {
+    overflow-wrap: anywhere;
+  }
+  #sec-chillboy #cb-stats-inline {
+    display: block;
+    margin: 4px 0 0 !important;
+    font-size: 10.5px;
+  }
+}
+
+@media (max-width: 480px) {
+  #sec-chillboy .cb-section-title {
+    font-size: 0.68rem;
+  }
+  #sec-chillboy .cb-table {
+    font-size: 0.68rem;
   }
 }
 
