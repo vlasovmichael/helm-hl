@@ -2790,36 +2790,40 @@ setInterval(renderFooter, 1000);
 
   const CHARS = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモ0123456789ABCDEF$%/+-=*<>";
   const CHAR_SIZE = 14;
+  const TRAIL = 18; // длина хвоста капли в символах
   let cols = 0;
-  let drops = [];   // y-позиция головы капли (float, накапливает speeds[i])
-  let speeds = []; // персональная скорость колонки (chars/frame)
+  let drops  = []; // y-позиция головы (float, в символах)
+  let speeds = []; // персональная скорость колонки (символов/кадр)
+  let trails = []; // история последних TRAIL символов каждой колонки
+  let stepCounter = []; // дробный счётчик для «когда сдвинуть символ в trail»
   let colors = computeColors();
 
   function computeColors() {
     const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    // Возвращаем чистые rgb триплеты — alpha подмешиваем при рисовании,
+    // чтобы каждый символ был резким, а трейл затухал шагами а не размывался.
     return isDark
-      ? {
-          fade: "rgba(8,10,14,0.10)",       // плавное затирание следа
-          text: "rgba(34,197,94,0.32)",     // основной зелёный
-          head: "rgba(170,255,200,0.55)",   // яркая голова капли
-        }
-      : {
-          fade: "rgba(255,255,255,0.14)",
-          text: "rgba(20,120,60,0.14)",
-          head: "rgba(20,100,40,0.30)",
-        };
+      ? { head: [180, 255, 200], text: [34, 197, 94] }
+      : { head: [20, 100, 40],   text: [20, 130, 70] };
+  }
+
+  function rgba(rgb, a) {
+    return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${a})`;
+  }
+  function randChar() {
+    return CHARS[Math.floor(Math.random() * CHARS.length)];
   }
 
   function resize() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     cols = Math.floor(canvas.width / CHAR_SIZE);
-    drops  = Array.from({ length: cols }, () => Math.random() * -50);
-    // Скорости 0.15..0.55 символа/кадр → при 12fps это 1.8..6.6 char/сек.
-    // Разброс ×3.7 делает картинку «живой» — соседние колонки не идут в ногу.
+    drops  = Array.from({ length: cols }, () => Math.random() * -10);
     speeds = Array.from({ length: cols }, () => 0.15 + Math.random() * 0.40);
-    ctx.fillStyle = colors.fade.replace(/[\d.]+\)$/, "1)");
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    trails = Array.from({ length: cols }, () =>
+      Array.from({ length: TRAIL }, randChar)
+    );
+    stepCounter = new Array(cols).fill(0);
   }
   window.addEventListener("resize", resize);
   resize();
@@ -2829,24 +2833,48 @@ setInterval(renderFooter, 1000);
   function frame(ts) {
     if (ts - last >= FRAME_MS) {
       last = ts;
-      ctx.fillStyle = colors.fade;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Полностью очищаем canvas — html bg прозрачно покажет базовый цвет темы.
+      // Так каждый символ рисуется поверх чистого фона = идеально резкий.
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.font = `${CHAR_SIZE}px JetBrains Mono, monospace`;
+      ctx.textBaseline = "top";
+
       for (let i = 0; i < cols; i++) {
-        // 8% колонок пропускают кадр — рваный «дыхательный» ритм.
-        if (Math.random() < 0.08) continue;
-        const ch = CHARS[Math.floor(Math.random() * CHARS.length)];
-        const y = drops[i] * CHAR_SIZE;
-        ctx.fillStyle = colors.head;
-        ctx.fillText(ch, i * CHAR_SIZE, y);
-        ctx.fillStyle = colors.text;
-        ctx.fillText(ch, i * CHAR_SIZE, y - CHAR_SIZE);
-        if (y > canvas.height && Math.random() > 0.98) {
+        const headRow = drops[i];
+        // Когда дробная часть пересекла 1 — сдвигаем хвост (новая буква в голове).
+        stepCounter[i] += speeds[i];
+        if (stepCounter[i] >= 1) {
+          stepCounter[i] -= 1;
+          trails[i].push(randChar());
+          trails[i].shift();
+          // Иногда меняем случайный символ в трейле — лёгкое «дрожание».
+          if (Math.random() < 0.3) {
+            const k = Math.floor(Math.random() * (TRAIL - 1));
+            trails[i][k] = randChar();
+          }
+        }
+
+        // Рисуем хвост: t=TRAIL-1 — голова (ярче всего), t=0 — самый старый.
+        for (let t = 0; t < TRAIL; t++) {
+          const y = (headRow - (TRAIL - 1 - t)) * CHAR_SIZE;
+          if (y < -CHAR_SIZE || y > canvas.height) continue;
+          if (t === TRAIL - 1) {
+            ctx.fillStyle = rgba(colors.head, 0.85);
+          } else {
+            // Альфа линейно убывает к хвосту: 0.55..0.05
+            const a = 0.55 * (t / (TRAIL - 1)) + 0.05;
+            ctx.fillStyle = rgba(colors.text, a);
+          }
+          ctx.fillText(trails[i][t], i * CHAR_SIZE, y);
+        }
+
+        drops[i] += speeds[i];
+        // Reset когда вся капля ушла за нижний край.
+        if ((drops[i] - TRAIL) * CHAR_SIZE > canvas.height && Math.random() > 0.97) {
           drops[i] = 0;
-          // Сброс на новую скорость — иначе колонка зацикливается в одном ритме.
+          stepCounter[i] = 0;
           speeds[i] = 0.15 + Math.random() * 0.40;
         }
-        drops[i] += speeds[i];
       }
     }
     requestAnimationFrame(frame);
