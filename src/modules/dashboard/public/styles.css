@@ -1868,6 +1868,88 @@ footer {
   background: rgba(255, 255, 255, 0.04);
 }
 
+/* ── Help icon button (next to card titles) ──────────────── */
+.help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  margin-left: 8px;
+  padding: 2px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 50%;
+  opacity: 0.55;
+  transition: all 0.15s ease;
+}
+.help-btn:hover {
+  opacity: 1;
+  color: var(--accent);
+  background: var(--accent-soft);
+  transform: scale(1.15);
+}
+.help-btn svg { display: block; }
+
+/* ── Help modal content ───────────────────────────────────── */
+.help-section { margin-bottom: 18px; }
+.help-section:last-child { margin-bottom: 0; }
+.help-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 8px;
+  font-family: var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.help-section-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+.help-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.help-table th,
+.help-table td {
+  padding: 6px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: top;
+}
+.help-table th {
+  font-weight: 600;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.help-table tr:last-child td { border-bottom: none; }
+.help-table td:first-child {
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+.help-modal__title {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  font-family: var(--font-sans);
+}
+.help-modal__lead {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 18px;
+  line-height: 1.5;
+}
+@media (max-width: 720px) {
+  .help-table { font-size: 11px; }
+  .help-table th, .help-table td { padding: 5px 6px; }
+}
+
 /* ── Trade modal ──────────────────────────────────────────── */
 .trade-modal[hidden] {
   display: none;

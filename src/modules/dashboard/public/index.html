@@ -91,6 +91,13 @@
         <div class="card-header">
           <div class="card-title" data-num="02" id="price-title">
             Price Performance
+            <button type="button" class="help-btn" data-help="priceChart" aria-label="Объяснение карточки">
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M5.8 5.8c0-1.2 1-2.1 2.2-2.1 1.3 0 2.2.8 2.2 1.9 0 .9-.5 1.4-1.3 1.9-.8.5-.9.9-.9 1.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                <circle cx="8" cy="11.6" r="0.8" fill="currentColor"/>
+              </svg>
+            </button>
           </div>
           <div
             style="
@@ -174,7 +181,16 @@
       <!-- 05 / Hot Movers (manual-trading helper) -->
       <section class="card" id="hot-movers-card">
         <div class="card-header">
-          <div class="card-title" data-num="05" title="Топ монет по абсолютному движению цены за разные окна — для ручной торговли. Показывает всё что двигается, не только пробои порога Hunter.">Hot Movers</div>
+          <div class="card-title" data-num="05" title="Топ монет по абсолютному движению цены за разные окна — для ручной торговли. Показывает всё что двигается, не только пробои порога Hunter.">
+            Hot Movers
+            <button type="button" class="help-btn" data-help="hotMovers" aria-label="Объяснение колонок">
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M5.8 5.8c0-1.2 1-2.1 2.2-2.1 1.3 0 2.2.8 2.2 1.9 0 .9-.5 1.4-1.3 1.9-.8.5-.9.9-.9 1.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                <circle cx="8" cy="11.6" r="0.8" fill="currentColor"/>
+              </svg>
+            </button>
+          </div>
           <div class="signals-meta" id="hot-movers-meta">—</div>
         </div>
         <div class="signals-table-wrap">
@@ -302,7 +318,16 @@
            squeezed-монет, cooldowns, история. Гасится когда CHILL_BOY_PROD_ENABLED=true. -->
       <section class="card" id="sec-chillboy" style="display:none">
         <div class="card-header">
-          <div class="card-title" data-num="06.4" title="Chill Boy: trend-follow squeeze breakout detector. Shadow paper trading — детектор работает в PROD-боте, но не торгует реальный slot. Все данные для решения о промоушене стратегии.">Chill Boy — Shadow Trading</div>
+          <div class="card-title" data-num="06.4" title="Chill Boy: trend-follow squeeze breakout detector. Shadow paper trading — детектор работает в PROD-боте, но не торгует реальный slot. Все данные для решения о промоушене стратегии.">
+            Chill Boy — Shadow Trading
+            <button type="button" class="help-btn" data-help="chillBoy" aria-label="Объяснение карточки">
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.4"/>
+                <path d="M5.8 5.8c0-1.2 1-2.1 2.2-2.1 1.3 0 2.2.8 2.2 1.9 0 .9-.5 1.4-1.3 1.9-.8.5-.9.9-.9 1.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                <circle cx="8" cy="11.6" r="0.8" fill="currentColor"/>
+              </svg>
+            </button>
+          </div>
           <div class="time-ranges">
             <span id="chillboy-card-mode" class="status-pill">PAPER</span>
             <span id="chillboy-card-equity" class="status-pill" style="display:none"></span>
@@ -624,6 +649,13 @@
         });
       })();
     </script>
+    <div id="help-modal" class="trade-modal" hidden>
+      <div class="trade-modal__backdrop" data-close="1"></div>
+      <div class="trade-modal__panel" role="dialog" aria-modal="true">
+        <button class="trade-modal__close" data-close="1" aria-label="Close">×</button>
+        <div id="help-modal-body"></div>
+      </div>
+    </div>
     <div id="trade-modal" class="trade-modal" hidden>
       <div class="trade-modal__backdrop" data-close="1"></div>
       <div class="trade-modal__panel" role="dialog" aria-modal="true">

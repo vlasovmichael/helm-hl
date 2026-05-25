@@ -1333,6 +1333,170 @@ function renderActivity(activity) {
     .join("");
 }
 
+// ── Help modal (mini FAQ per card) ─────────────────────────────────────
+const HELP_CONTENT = {
+  hotMovers: {
+    title: "Hot Movers — как читать таблицу",
+    lead: "Топ-20 монет по абсолютному движению цены. Считай это manual-trading helper: что двигается прямо сейчас, какой импульс, реальный ли объём.",
+    sections: [
+      {
+        title: "Окна 2m / 5m / 15m / 1h",
+        sub: "Изменение цены за окно. Цвет ячейки = тир порога Hunter (STRONG / NORMAL / WEAK). Серая ячейка = меньше WEAK или нет истории.",
+      },
+      {
+        title: "Accel — направление импульса",
+        sub: "Сравниваем 2m с линейной экстраполяцией 5m. Отвечает на вопрос: «движение продолжится или выдыхается?»",
+        rows: [
+          ['<span style="color:var(--red)">▲ 1.5×+</span>', "Импульс <b>усиливается</b> — не фейди ещё"],
+          ['<span class="num-inline-muted">→ 0.7–1.1×</span>', "Темп ровный, нейтрально"],
+          ['<span style="color:var(--green)">▼ 0.4×</span>', "Импульс <b>выдыхается</b> — прайм-момент для фейда"],
+          ['<span style="color:var(--accent)">↻ rev</span>', "Знаки 2m и 5m разошлись — разворот внутри окна, скорее follow, чем fade"],
+        ],
+      },
+      {
+        title: "Vol× — реальность движняка",
+        sub: "Объём за последние 5 мин / средний 5-мин объём за час. Фильтрует фейковые спайки на тонком стакане.",
+        rows: [
+          ['<span style="color:var(--red)">≥ 2.0×</span>', "Крупный объём — реальное позиционирование, фейдить опасно"],
+          ['<span style="color:#f59e0b">1.3–2.0×</span>', "Повышенная активность — осторожный фейд с тугим SL"],
+          ['<span class="num-inline-muted">0.7–1.3×</span>', "Обычный объём — спайк нейтральный"],
+          ['<span style="color:var(--green)">≤ 0.5×</span>', "Тонкий фейк, MM двигает книгу — агрессивный фейд"],
+          ['<span class="num-inline-muted">…</span>', "Загружается (cache miss)"],
+          ['<span class="num-inline-muted">—</span>', "HL не отдаёт candle-data для монеты"],
+        ],
+      },
+      {
+        title: "Trend — anti-trend gate",
+        sub: "Изменение за длинное окно (по умолчанию 60m). Если SHORT-фейд против сильного аптренда — Hunter блокирует вход. Тебе вручную — лишний контекст «куда смотрит дневник».",
+      },
+      {
+        title: "Подсветка строки",
+        sub: "Красный градиент → монета пампит (SHORT-fade кандидат). Зелёный → дампит (LONG-fade). Полоска слева = у бота открыта позиция по этой монете.",
+      },
+      {
+        title: "Комбо Accel + Vol× — основной сигнал",
+        rows: [
+          ['<span style="color:var(--red)">▲</span> + <span style="color:var(--red)">≥2×</span>', "🚫 Стой в стороне. Сильное реальное движение"],
+          ['<span style="color:var(--red)">▲</span> + <span style="color:var(--green)">≤0.5×</span>', "Импульс на пустом стакане — жди ▼, потом фейди"],
+          ['<span style="color:var(--green)">▼</span> + <span style="color:var(--green)">≤0.5×</span>', "🟢 Лучший fade-setup. Фейк выдохся"],
+          ['<span style="color:var(--green)">▼</span> + <span style="color:var(--red)">≥2×</span>', "Темп упал но объём был большой — фейд с тугим SL"],
+          ['<span style="color:var(--accent)">↻</span> + любой', "Не фейди — скорее follow в сторону разворота"],
+        ],
+      },
+    ],
+  },
+  priceChart: {
+    title: "Price Performance — как читать карточку",
+    lead: "Свечной график активной монеты (бот / manual position) или последней траденной монеты в idle-режиме. Над графиком — order-book imbalance bar.",
+    sections: [
+      {
+        title: "Свечи",
+        sub: "Hyperliquid candleSnapshot. Live-свеча апдейтится из mid-price каждый тик; полные исторические свечи периодически re-fetched чтобы не «замёрзнуть» на синтетике.",
+      },
+      {
+        title: "Интервалы 1m–1d",
+        sub: "Глубина истории зависит от интервала: 1m ~12 часов, 5m ~3 дня, 1h ~30 дней, 1d ~180 дней.",
+      },
+      {
+        title: "Order-book imbalance bar",
+        sub: "Зелёная/красная полоска над графиком стримит l2Book через HL WebSocket. Считает USD-нотионал на bid- и ask-сторонах в коридоре ±0.5% от mid.",
+        rows: [
+          ["Зелёная > красной", "Bid-сторона тяжелее → давление вверх"],
+          ["Красная > зелёной", "Ask-сторона тяжелее → давление вниз"],
+          ["Близко 50/50", "Книга сбалансирована"],
+          ['Лейбл "bids 62% / asks 38%"', "Точная пропорция в коридоре ±0.5%"],
+        ],
+      },
+      {
+        title: "Важные оговорки",
+        sub: "L2 на HL агрегированный (nSigFigs), точность ограничена. Imbalance бывает обманчив (spoofing — крупные лимитки снимаются перед исполнением). Используй как контекстный индикатор давления, не как entry-signal сам по себе.",
+      },
+      {
+        title: "Режимы",
+        rows: [
+          ["Бот-позиция", "Свечи + live-цена монеты в открытом slot"],
+          ["Manual position", "Если бот в hands-off + есть ручная позиция — она тут"],
+          ["Idle", "Нет позиций — показывает последнюю траденную монету из истории"],
+        ],
+      },
+    ],
+  },
+  chillBoy: {
+    title: "Chill Boy — Shadow Trading",
+    lead: "Trend-follow squeeze-breakout стратегия #4. Детектор работает в PROD-боте, но НЕ торгует реальный slot — всё в PAPER. Карточка собирает данные для решения о промоушене стратегии в live.",
+    sections: [
+      {
+        title: "Режим",
+        rows: [
+          ['<span class="status-pill">PAPER</span>', "Симуляция на виртуальном балансе (compound seed ~$115)"],
+          ['<span class="status-pill">PROD</span>', "Реальные слоты бота (включается через CHILL_BOY_PROD_ENABLED=true)"],
+        ],
+      },
+      {
+        title: "Active paper position",
+        sub: "Текущая открытая paper-позиция: монета, side, entry, MFE/MAE в реальном времени. Показывается только когда симулятор внутри слота.",
+      },
+      {
+        title: "Watchlist — closest to breakout",
+        sub: "Монеты в состоянии squeeze (низкая волатильность, узкие Bollinger/ATR-bands) — потенциальные брейкаут-кандидаты. Сортировка по близости к пробою.",
+      },
+      {
+        title: "Cooldowns",
+        sub: "Монеты под временным запретом на повторный вход: после SL или TP стратегия даёт монете «остыть». Cooldowns переживают рестарт бота (persist в data/hunter_cooldowns.json).",
+      },
+      {
+        title: "Paper trades history (MFE / MAE)",
+        sub: "Закрытые paper-сделки с метриками экстремумов цены за время удержания. Помогают оценить «упустила ли стратегия профит» / «как далеко уходила в минус».",
+        rows: [
+          ['<span style="color:var(--green)">MFE</span>', "Maximum Favorable Excursion — лучший непойманный профит"],
+          ['<span style="color:var(--red)">MAE</span>', "Maximum Adverse Excursion — глубочайшая просадка"],
+          ["Net", "Фактический P&L по правилам детектора"],
+          ["Reason", "Причина выхода: trend_follow_tp / sl / time_stop / reversal"],
+        ],
+      },
+      {
+        title: "Detector heartbeat",
+        sub: "Низ карточки: tracked (сколько монет в фокусе) · squeezed (сколько в squeeze) · breakouts (сколько пробоев за тик) · slot (IDLE/IN_POS) · cooldowns (re-cooldown + post-SL cooldown).",
+      },
+    ],
+  },
+};
+
+function renderHelpSection(s) {
+  let html = `<div class="help-section">`;
+  html += `<div class="help-section-title">${s.title}</div>`;
+  if (s.sub) html += `<div class="help-section-sub">${s.sub}</div>`;
+  if (Array.isArray(s.rows) && s.rows.length) {
+    html += `<table class="help-table"><tbody>`;
+    for (const r of s.rows) {
+      html += `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`;
+    }
+    html += `</tbody></table>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+function openHelpModal(key) {
+  const content = HELP_CONTENT[key];
+  const modal = document.getElementById("help-modal");
+  const body = document.getElementById("help-modal-body");
+  if (!content || !modal || !body) return;
+  body.innerHTML =
+    `<div class="help-modal__title">${content.title}</div>` +
+    (content.lead ? `<div class="help-modal__lead">${content.lead}</div>` : "") +
+    content.sections.map(renderHelpSection).join("");
+  modal.hidden = false;
+  document.body.style.overflow = "hidden";
+}
+
+function closeHelpModal() {
+  const modal = document.getElementById("help-modal");
+  if (!modal) return;
+  modal.hidden = true;
+  document.body.style.overflow = "";
+}
+
 // ── Trade detail modal ─────────────────────────────────────────────────
 function openTradeModal(html) {
   const modal = document.getElementById("trade-modal");
@@ -1481,10 +1645,19 @@ document.addEventListener("click", (e) => {
     closeTradeModal();
     return;
   }
+  if (e.target.closest("#help-modal [data-close]")) {
+    closeHelpModal();
+    return;
+  }
+  const helpBtn = e.target.closest(".help-btn[data-help]");
+  if (helpBtn) {
+    openHelpModal(helpBtn.dataset.help);
+    return;
+  }
   if (e.target.closest("#activity-container")) onActivityClick(e);
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeTradeModal();
+  if (e.key === "Escape") { closeTradeModal(); closeHelpModal(); }
 });
 
 function fmtMoney(v, signed = true) {
