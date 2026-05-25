@@ -368,6 +368,22 @@ header {
   margin: -1px;
 }
 
+/* Matrix-rain toggle. Стоит рядом с theme-switcher отдельной кнопкой.
+   Один из двух span'ов виден в зависимости от состояния is-off. */
+.matrix-toggle {
+  margin-left: 6px;
+  background: var(--canvas-subtle);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+.matrix-toggle:hover {
+  background: var(--card-bg);
+}
+.matrix-toggle .matrix-toggle-off { display: none; }
+.matrix-toggle.is-off .matrix-toggle-on { display: none; }
+.matrix-toggle.is-off .matrix-toggle-off { display: inline; color: var(--text-muted); }
+
 /* ──────────────────────── Cards */
 .card {
   background: var(--card-bg);

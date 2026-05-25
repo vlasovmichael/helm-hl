@@ -2858,5 +2858,30 @@ setInterval(renderFooter, 1000);
     refreshColors() {
       colors = computeColors();
     },
+    setEnabled(on) {
+      canvas.style.display = on ? "" : "none";
+    },
   };
+})();
+
+// ── Matrix toggle (хедер) ────────────────────────────────────
+(function initMatrixToggle() {
+  const btn = document.getElementById("matrix-toggle");
+  if (!btn) return;
+  const KEY = "matrix_rain_enabled";
+  const stored = localStorage.getItem(KEY);
+  let enabled = stored === null ? true : stored === "1";
+
+  function apply() {
+    btn.setAttribute("aria-pressed", String(enabled));
+    btn.classList.toggle("is-off", !enabled);
+    if (window.__matrixRain) window.__matrixRain.setEnabled(enabled);
+  }
+  apply();
+
+  btn.addEventListener("click", () => {
+    enabled = !enabled;
+    localStorage.setItem(KEY, enabled ? "1" : "0");
+    apply();
+  });
 })();
