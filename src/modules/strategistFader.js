@@ -151,33 +151,39 @@ function computeChopMetrics(coin, now) {
  * 🔴 RED — trending (chopRatio низкий) либо нет данных
  */
 function computeTier(metrics, coin, now, slotState) {
-  if (!metrics) return { tier: 'RED', chopRatio: null, blocked: 'no_history' };
+  if (!metrics) return { tier: 'RED', chopRatio: null, direction: null, blocked: 'no_history' };
   const { chopRatio, rangeBand, movePct } = metrics;
   const min = CHOP_RATIO_MIN();
   const tbMin = CHOP_TREND_BREAK_MIN();
 
+  // Direction: pump → SHORT (fade up), dump → LONG (fade down).
+  // null если движение слишком слабое чтобы говорить о направлении.
+  const direction = Math.abs(movePct) >= 0.3
+    ? (movePct > 0 ? 'SHORT' : 'LONG')
+    : null;
+
   if (chopRatio <= tbMin) {
-    return { tier: 'RED', chopRatio, blocked: 'trending' };
+    return { tier: 'RED', chopRatio, direction, blocked: 'trending' };
   }
   if (slotState === 'busy_self') {
-    return { tier: 'YELLOW', chopRatio, blocked: 'open_position' };
+    return { tier: 'YELLOW', chopRatio, direction, blocked: 'open_position' };
   }
   if (isCoolingDown(coin, now)) {
-    return { tier: 'YELLOW', chopRatio, blocked: 'cooldown' };
+    return { tier: 'YELLOW', chopRatio, direction, blocked: 'cooldown' };
   }
   if (chopRatio < min) {
-    return { tier: 'YELLOW', chopRatio, blocked: 'chop_borderline' };
+    return { tier: 'YELLOW', chopRatio, direction, blocked: 'chop_borderline' };
   }
   // edge-band gate: для GREEN цена должна быть рядом с экстремумом окна
   const inTopBand    = rangeBand >= 1 - EDGE_BAND_PCT();
   const inBottomBand = rangeBand <= EDGE_BAND_PCT();
   if (!inTopBand && !inBottomBand) {
-    return { tier: 'YELLOW', chopRatio, blocked: 'mid_range' };
+    return { tier: 'YELLOW', chopRatio, direction, blocked: 'mid_range' };
   }
   if (Math.abs(movePct) < SPIKE_PCT_MIN()) {
-    return { tier: 'YELLOW', chopRatio, blocked: 'small_impulse' };
+    return { tier: 'YELLOW', chopRatio, direction, blocked: 'small_impulse' };
   }
-  return { tier: 'GREEN', chopRatio };
+  return { tier: 'GREEN', chopRatio, direction };
 }
 
 function updateMfeMae(position, currentPrice) {

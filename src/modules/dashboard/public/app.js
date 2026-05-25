@@ -1153,21 +1153,78 @@ function computeSetup(accelKind, volKind, dir) {
 }
 
 // Fader traffic-light для Setup column (когда FADER_ENABLED=true).
-// Источник истины — `s.fader = { tier: GREEN|YELLOW|RED, chopRatio, blocked? }`
-// из strategistFader.computeTier; здесь только маппинг tier → label/cls/tooltip.
+// Цвет фона — по direction (фейдим вверх или вниз):
+//   SHORT (fade pump)  → зелёный фон + стрелка вниз
+//   LONG  (fade dump)  → красный фон + стрелка вверх
+//   нет направления / SKIP → нейтральный, без цвета
+// Tier влияет на иконку: GO = filled arrow, WAIT = outlined, SKIP = dash.
+function faderIcon(kind, direction) {
+  if (kind === 'skip') {
+    return `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <path d="M3.5 8 L12.5 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>`;
+  }
+  const filled = kind === 'go';
+  if (direction === 'SHORT') {
+    // arrow ↓
+    return filled
+      ? `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+           <path d="M8 2.5 L8 11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+           <path d="M4 9 L8 13 L12 9 Z" fill="currentColor"/>
+         </svg>`
+      : `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+           <path d="M8 2.5 L8 11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>
+           <path d="M4 9 L8 13 L12 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.7"/>
+         </svg>`;
+  }
+  if (direction === 'LONG') {
+    return filled
+      ? `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+           <path d="M8 13.5 L8 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+           <path d="M4 7 L8 3 L12 7 Z" fill="currentColor"/>
+         </svg>`
+      : `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+           <path d="M8 13.5 L8 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>
+           <path d="M4 7 L8 3 L12 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.7"/>
+         </svg>`;
+  }
+  // No direction — small dot
+  return `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+    <circle cx="8" cy="8" r="2" fill="currentColor" opacity="0.55"/>
+  </svg>`;
+}
+
 function computeFaderSetup(fader) {
   if (!fader) {
-    return { label: '<span class="num-inline-muted">—</span>', cls: 'setup-none', title: 'Fader: нет данных' };
+    return { label: faderIcon('skip', null), cls: 'fader-skip', title: 'Fader: нет данных' };
   }
+  const dir = fader.direction || null;
   const chop = fader.chopRatio != null ? ` · chop ${fader.chopRatio.toFixed(2)}` : '';
   const blocked = fader.blocked ? ` · ${fader.blocked}` : '';
+
   if (fader.tier === 'GREEN') {
-    return { label: '🟢 GO', cls: 'setup-fade', title: `Fader: choppy setup ready${chop}` };
+    const cls = dir === 'SHORT' ? 'fader-go-short' : dir === 'LONG' ? 'fader-go-long' : 'fader-wait-neutral';
+    const label = dir === 'SHORT' ? 'SHORT' : dir === 'LONG' ? 'LONG' : 'GO';
+    return {
+      label: `${faderIcon('go', dir)}<span class="fader-lbl">${label}</span>`,
+      cls,
+      title: `Fader GO ${dir ?? ''}: choppy setup ready${chop}`,
+    };
   }
   if (fader.tier === 'YELLOW') {
-    return { label: '🟡 WAIT', cls: 'setup-ok', title: `Fader: borderline${chop}${blocked}` };
+    const cls = dir === 'SHORT' ? 'fader-wait-short' : dir === 'LONG' ? 'fader-wait-long' : 'fader-wait-neutral';
+    return {
+      label: `${faderIcon('wait', dir)}<span class="fader-lbl">WAIT</span>`,
+      cls,
+      title: `Fader WAIT${dir ? ' ' + dir : ''}: borderline${chop}${blocked}`,
+    };
   }
-  return { label: '🔴 SKIP', cls: 'setup-avoid', title: `Fader: trending/no_history${chop}${blocked}` };
+  // RED — нейтральный фон (оператор попросил убрать красный для skip).
+  return {
+    label: `${faderIcon('skip', dir)}<span class="fader-lbl">SKIP</span>`,
+    cls: 'fader-skip',
+    title: `Fader SKIP: trending/no_history${chop}${blocked}`,
+  };
 }
 
 function renderHotMovers(payload) {
