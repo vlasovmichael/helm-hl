@@ -20,10 +20,7 @@
 
 /* ── GitHub Primer: light theme (calm white) ─────────────────────── */
 html[data-theme="light"] {
-  /* Stripe/Notion-паттерн: тёплый серый body + белые карточки.
-     Раньше оба были #ffffff → карточки сливались с body, держались
-     только на тонком --border. */
-  --bg: #e7ebf0;
+  --bg: #ffffff;
   --canvas-subtle: #f6f8fa;
   --canvas-inset: #eaeef2;
   --card-bg: #ffffff;
@@ -72,13 +69,10 @@ html[data-theme="light"] {
 
 /* ── GitHub Primer: dark theme ───────────────────────────────────── */
 html[data-theme="dark"] {
-  /* Тёмный body, карточки явно «поднимаются» над ним. Раньше оба были
-     #0d1117 → карточки сливались. Сейчас разница ~9 luminance units,
-     плюс box-shadow ниже для гарантированного elevation. */
-  --bg: #02040a;
+  --bg: #0d1117;
   --canvas-subtle: #161b22;
   --canvas-inset: #010409;
-  --card-bg: #131922;
+  --card-bg: #0d1117;
   --card-bg-elev: #161b22;
   --card-bg-hover: #1c2128;
   --border: #30363d;
@@ -115,10 +109,8 @@ html[data-theme="dark"] {
   --info: #4493f8;
 
   --grid-line: #21262d;
-  /* Раньше --shadow-sm в dark был полностью прозрачным → карточки совсем
-     без визуального подъёма. Сейчас лёгкий outer-glow для elevation. */
-  --shadow-sm: 0 1px 0 rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.02);
-  --shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 0 0 1px rgba(0, 0, 0, 0);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 
   --skeleton-base: #161b22;
   --skeleton-shine: #21262d;
@@ -132,23 +124,10 @@ html[data-theme="dark"] {
 
 html {
   scroll-behavior: smooth;
-  /* Базовый bg переехал на html, чтобы #matrix-rain (fixed, z-index:-1) был
-     виден сквозь прозрачный body. Карточки имеют свой --card-bg и закрывают
-     дождь — он остаётся только в зазорах. */
-  background-color: var(--bg);
-}
-
-#matrix-rain {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: -1;
-  pointer-events: none;
 }
 
 body {
-  background-color: transparent;
+  background-color: var(--bg);
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 14px;
@@ -376,21 +355,6 @@ header {
   margin: -1px;
 }
 
-/* Matrix-rain toggle. Стоит рядом с theme-switcher отдельной кнопкой.
-   Один из двух span'ов виден в зависимости от состояния is-off. */
-.matrix-toggle {
-  margin-left: 6px;
-  background: var(--canvas-subtle);
-  border: 1px solid var(--border);
-  font-family: var(--font-mono);
-  letter-spacing: 0.02em;
-}
-.matrix-toggle:hover {
-  background: var(--card-bg);
-}
-.matrix-toggle .matrix-toggle-off { display: none; }
-.matrix-toggle.is-off .matrix-toggle-on { display: none; }
-.matrix-toggle.is-off .matrix-toggle-off { display: inline; color: var(--text-muted); }
 
 /* ──────────────────────── Cards */
 .card {
