@@ -407,6 +407,46 @@
         </div>
       </section>
 
+      <!-- 06.6 / Fader — PAPER-only contrarian fade scalper -->
+      <!-- Strategy #5. План: plans/fader-strategy-plan.md. Compound sandbox
+           на FADER_VIRTUAL_BALANCE; net PnL = модельные fees+slip уже вычтены. -->
+      <section class="card" id="sec-fader" style="display:none">
+        <div class="card-header">
+          <div class="card-title" data-num="06.6" title="Fader: contrarian fade scalper. Fade резких импульсов на choppy монетах. PAPER-only, виртуальный compound-счёт.">
+            Fader (PAPER)
+          </div>
+          <div class="time-ranges">
+            <span id="fader-mode-pill" class="status-pill">PAPER</span>
+            <span id="fader-equity-pill" class="status-pill" style="display:none"></span>
+          </div>
+        </div>
+        <div class="cb-grid">
+          <div class="cb-section" id="fader-active-section" style="display:none">
+            <div class="cb-section-title">Active paper position</div>
+            <div id="fader-active-body"></div>
+          </div>
+          <div class="cb-section">
+            <div class="cb-section-title">Watchlist — GREEN candidates</div>
+            <div id="fader-watchlist-body" class="cb-watchlist"><div class="empty-state">no green setups</div></div>
+          </div>
+          <div class="cb-section">
+            <div class="cb-section-title">Config</div>
+            <div id="fader-config-body" style="font-size:11px; opacity:.85">—</div>
+          </div>
+          <div class="cb-section cb-section-full">
+            <div class="cb-section-title">
+              Paper trades history
+              <span id="fader-stats-inline" style="opacity:.75; font-weight:normal; margin-left:8px"></span>
+            </div>
+            <div id="fader-history-body"><div class="empty-state">no closed trades yet</div></div>
+          </div>
+          <div class="cb-section cb-section-full">
+            <div class="cb-section-title" style="opacity:.7">Detector status</div>
+            <div id="fader-heartbeat" style="font-size:11px; opacity:.85">—</div>
+          </div>
+        </div>
+      </section>
+
       <!-- 06.5 / Insights -->
       <section class="card" id="sec-insights">
         <div class="card-header">

@@ -400,6 +400,81 @@ function loadConfig() {
   if (isNaN(chillBoyPaperVirtualUtil) || chillBoyPaperVirtualUtil <= 0 || chillBoyPaperVirtualUtil > 0.95) {
     throw new Error(`CHILL_BOY_PAPER_VIRTUAL_UTILIZATION must be in (0, 0.95]. Got: "${process.env.CHILL_BOY_PAPER_VIRTUAL_UTILIZATION}"`);
   }
+
+  // ── Strategy #5: Fader — contrarian fade scalper (PAPER-only) ──
+  // План: plans/fader-strategy-plan.md.
+  const faderEnabled            = (process.env.FADER_ENABLED || 'false').toLowerCase() === 'true';
+  const faderVirtualBalance     = parseFloat(process.env.FADER_VIRTUAL_BALANCE      || '0');
+  const faderNominalUsd         = parseFloat(process.env.FADER_NOMINAL_USD          || '50');
+  const faderLeverage           = parseFloat(process.env.FADER_LEVERAGE             || '2');
+  const faderSpikeWindowMin     = parseFloat(process.env.FADER_SPIKE_WINDOW_MIN     || '5');
+  const faderSpikePctMin        = parseFloat(process.env.FADER_SPIKE_PCT_MIN        || '1.5');
+  const faderChopRatioMin       = parseFloat(process.env.FADER_CHOP_RATIO_MIN       || '2.0');
+  const faderChopTrendBreakMin  = parseFloat(process.env.FADER_CHOP_TREND_BREAK_MIN || '1.5');
+  const faderEdgeBandPct        = parseFloat(process.env.FADER_EDGE_BAND_PCT        || '0.25');
+  const faderTpReclaimFrac      = parseFloat(process.env.FADER_TP_RECLAIM_FRAC      || '0.4');
+  const faderTpFloorUsd         = parseFloat(process.env.FADER_TP_FLOOR_USD         || '0.20');
+  const faderTpCeilingUsd       = parseFloat(process.env.FADER_TP_CEILING_USD       || '2.00');
+  const faderAdverseKillPct     = parseFloat(process.env.FADER_ADVERSE_KILL_PCT     || '0.20');
+  const faderTimeStopHours      = parseFloat(process.env.FADER_TIME_STOP_HOURS      || '24');
+  const faderReentryCooldownMin = parseFloat(process.env.FADER_REENTRY_COOLDOWN_MIN || '10');
+  const faderLossStreakLimit    = parseInt(process.env.FADER_LOSS_STREAK_LIMIT     || '3', 10);
+  const faderLossStreakWindowMin= parseFloat(process.env.FADER_LOSS_STREAK_WINDOW_MIN || '60');
+  const faderLossStreakPauseMin = parseFloat(process.env.FADER_LOSS_STREAK_PAUSE_MIN  || '60');
+  const faderFeeRoundtripPct    = parseFloat(process.env.FADER_FEE_ROUNDTRIP_PCT    || '0.09'); // 0.045% × 2
+  const faderSlippageRoundtripUsd = parseFloat(process.env.FADER_SLIPPAGE_ROUNDTRIP_USD || '0.10');
+
+  if (isNaN(faderVirtualBalance) || faderVirtualBalance < 0) {
+    throw new Error(`FADER_VIRTUAL_BALANCE must be ≥ 0. Got: "${process.env.FADER_VIRTUAL_BALANCE}"`);
+  }
+  if (isNaN(faderNominalUsd) || faderNominalUsd <= 0) {
+    throw new Error(`FADER_NOMINAL_USD must be positive. Got: "${process.env.FADER_NOMINAL_USD}"`);
+  }
+  if (isNaN(faderLeverage) || faderLeverage <= 0 || faderLeverage > 20) {
+    throw new Error(`FADER_LEVERAGE must be in (0, 20]. Got: "${process.env.FADER_LEVERAGE}"`);
+  }
+  if (isNaN(faderSpikeWindowMin) || faderSpikeWindowMin <= 0) {
+    throw new Error(`FADER_SPIKE_WINDOW_MIN must be positive. Got: "${process.env.FADER_SPIKE_WINDOW_MIN}"`);
+  }
+  if (isNaN(faderSpikePctMin) || faderSpikePctMin <= 0) {
+    throw new Error(`FADER_SPIKE_PCT_MIN must be positive. Got: "${process.env.FADER_SPIKE_PCT_MIN}"`);
+  }
+  if (isNaN(faderChopRatioMin) || faderChopRatioMin <= 0) {
+    throw new Error(`FADER_CHOP_RATIO_MIN must be positive. Got: "${process.env.FADER_CHOP_RATIO_MIN}"`);
+  }
+  if (isNaN(faderChopTrendBreakMin) || faderChopTrendBreakMin <= 0 || faderChopTrendBreakMin > faderChopRatioMin) {
+    throw new Error(`FADER_CHOP_TREND_BREAK_MIN must be in (0, FADER_CHOP_RATIO_MIN]. Got: "${process.env.FADER_CHOP_TREND_BREAK_MIN}"`);
+  }
+  if (isNaN(faderEdgeBandPct) || faderEdgeBandPct <= 0 || faderEdgeBandPct >= 0.5) {
+    throw new Error(`FADER_EDGE_BAND_PCT must be in (0, 0.5). Got: "${process.env.FADER_EDGE_BAND_PCT}"`);
+  }
+  if (isNaN(faderTpReclaimFrac) || faderTpReclaimFrac <= 0 || faderTpReclaimFrac >= 1) {
+    throw new Error(`FADER_TP_RECLAIM_FRAC must be in (0, 1). Got: "${process.env.FADER_TP_RECLAIM_FRAC}"`);
+  }
+  if (isNaN(faderTpFloorUsd) || faderTpFloorUsd < 0) {
+    throw new Error(`FADER_TP_FLOOR_USD must be ≥ 0. Got: "${process.env.FADER_TP_FLOOR_USD}"`);
+  }
+  if (isNaN(faderTpCeilingUsd) || faderTpCeilingUsd <= faderTpFloorUsd) {
+    throw new Error(`FADER_TP_CEILING_USD must be > FADER_TP_FLOOR_USD. Got: "${process.env.FADER_TP_CEILING_USD}"`);
+  }
+  if (isNaN(faderAdverseKillPct) || faderAdverseKillPct <= 0 || faderAdverseKillPct >= 1) {
+    throw new Error(`FADER_ADVERSE_KILL_PCT must be in (0, 1). Got: "${process.env.FADER_ADVERSE_KILL_PCT}"`);
+  }
+  if (isNaN(faderTimeStopHours) || faderTimeStopHours <= 0) {
+    throw new Error(`FADER_TIME_STOP_HOURS must be positive. Got: "${process.env.FADER_TIME_STOP_HOURS}"`);
+  }
+  if (isNaN(faderReentryCooldownMin) || faderReentryCooldownMin < 0) {
+    throw new Error(`FADER_REENTRY_COOLDOWN_MIN must be ≥ 0. Got: "${process.env.FADER_REENTRY_COOLDOWN_MIN}"`);
+  }
+  if (!Number.isInteger(faderLossStreakLimit) || faderLossStreakLimit < 1) {
+    throw new Error(`FADER_LOSS_STREAK_LIMIT must be integer ≥ 1. Got: "${process.env.FADER_LOSS_STREAK_LIMIT}"`);
+  }
+  if (isNaN(faderFeeRoundtripPct) || faderFeeRoundtripPct < 0) {
+    throw new Error(`FADER_FEE_ROUNDTRIP_PCT must be ≥ 0. Got: "${process.env.FADER_FEE_ROUNDTRIP_PCT}"`);
+  }
+  if (isNaN(faderSlippageRoundtripUsd) || faderSlippageRoundtripUsd < 0) {
+    throw new Error(`FADER_SLIPPAGE_ROUNDTRIP_USD must be ≥ 0. Got: "${process.env.FADER_SLIPPAGE_ROUNDTRIP_USD}"`);
+  }
   if (isNaN(riskPctPerTrade) || riskPctPerTrade <= 0 || riskPctPerTrade > 0.1) {
     throw new Error(`RISK_PCT_PER_TRADE must be in (0, 0.1]. Got: "${process.env.RISK_PCT_PER_TRADE}"`);
   }
@@ -580,6 +655,26 @@ function loadConfig() {
       chillBoyPostSlCooldownMin,
       chillBoyPaperVirtualBalance,
       chillBoyPaperVirtualUtil,
+      faderEnabled,
+      faderVirtualBalance,
+      faderNominalUsd,
+      faderLeverage,
+      faderSpikeWindowMin,
+      faderSpikePctMin,
+      faderChopRatioMin,
+      faderChopTrendBreakMin,
+      faderEdgeBandPct,
+      faderTpReclaimFrac,
+      faderTpFloorUsd,
+      faderTpCeilingUsd,
+      faderAdverseKillPct,
+      faderTimeStopHours,
+      faderReentryCooldownMin,
+      faderLossStreakLimit,
+      faderLossStreakWindowMin,
+      faderLossStreakPauseMin,
+      faderFeeRoundtripPct,
+      faderSlippageRoundtripUsd,
       riskBasedSizing,
       riskSizingShadow,
       riskPctPerTrade,

@@ -14,6 +14,7 @@ import { hunterReconcile } from './hunterReconcile.js';
 import { hunterLongReconcile } from './hunterLongReconcile.js';
 import { processHunterTrailArm } from './hunterTrailArm.js';
 import { tickTrendFollowPaper } from './trendFollowPaperTick.js';
+import { tickFaderPaper } from './faderPaperTick.js';
 import { runBalanceDiag } from './balanceDiag.js';
 import { flushBotStatePeriodic } from './lifecycle.js';
 import { state } from './state.js';
@@ -61,8 +62,9 @@ export async function tick() {
         // даже в HANDS-OFF, иначе зависшая ручная PROD-поза подвешивает paper
         // позицию навсегда (инцидент BTC id=90 + PURR HANDS-OFF, 2026-05-22/23).
         await tickTrendFollowPaper(handsOffHunter);
+        await tickFaderPaper(handsOffHunter);
       } catch (err) {
-        logger.debug(`[Tick] HANDS-OFF scan/chillboy failed: ${err.message}`);
+        logger.debug(`[Tick] HANDS-OFF scan/chillboy/fader failed: ${err.message}`);
       }
       return;
     }
@@ -105,6 +107,9 @@ export async function tick() {
 
     // ChillBoy (trend_follow) бумажный слот — независим от реального.
     await tickTrendFollowPaper(hunterData);
+
+    // Fader (Strategy #5) бумажный слот — share общий paper slot с ChillBoy.
+    await tickFaderPaper(hunterData);
 
     await runSmartAlerts(scoutData, signal, activePosition);
 

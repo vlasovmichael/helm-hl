@@ -42,6 +42,9 @@ export const state = {
   // Последний снапшот hunter-scope (для дашборда). Не используется в торговой логике.
   latestHunter:       [],
   latestHunterAt:     0,
+  // Fader tier-map (coin → {tier, chopRatio, blocked?}). Для Setup column в Hot Movers.
+  latestFader:        null,
+  latestFaderAt:      0,
   // Последний успешный saveBotState (для throttle периодического flush из tick'а).
   lastBotStateSaveAt: 0,
   // Метка завершения последнего tick() — для /api/health и Docker HEALTHCHECK.

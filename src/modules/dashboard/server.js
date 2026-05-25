@@ -38,6 +38,8 @@ import {
   HUNTER_TP_PCT,
 } from "../strategistSniper.js";
 import { getChillBoyHeartbeat, getTrendFollowMfeMae } from "../strategistTrendFollow.js";
+import { getFaderHeartbeat, getFaderMfeMae } from "../strategistFader.js";
+import { getFaderVirtualSnapshot } from "../faderVirtualEquity.js";
 import { getVirtualEquitySnapshot } from "../chillBoyVirtualEquity.js";
 import { getNearMisses } from "../nearMisses.js";
 
@@ -188,6 +190,47 @@ async function buildChillBoyPaperPosition() {
   };
 }
 
+// Активная Fader paper-позиция — для одноимённой карточки. Live PnL +
+// distance до TP (SL у Fader нет — adverse-kill симулируется в strategist'е).
+async function buildFaderPaperPosition() {
+  const pos = getActivePaperPosition();
+  if (!pos || pos.strategy_id !== 'fader') return null;
+
+  let livePrice = null;
+  try { livePrice = await getLivePrice(pos.coin); } catch { /* ignore */ }
+
+  const entry  = pos.entry_price;
+  const isLong = (pos.side || '').toLowerCase() === 'long';
+  let unrealPct = null;
+  let unrealUsd = null;
+  if (livePrice && entry) {
+    unrealPct = isLong ? ((livePrice - entry) / entry) * 100 : ((entry - livePrice) / entry) * 100;
+    unrealUsd = pos.size_usd * (unrealPct / 100);
+  }
+  const distPct = (t) => (livePrice && t ? Math.abs(t - livePrice) / livePrice * 100 : null);
+  const mm = getFaderMfeMae(pos.id);
+
+  return {
+    id:           pos.id,
+    coin:         pos.coin,
+    side:         (pos.side || '').toUpperCase(),
+    sizeUsd:      pos.size_usd,
+    entryPrice:   entry,
+    currentPrice: livePrice,
+    entryTime:    pos.entry_time,
+    heldMin:      Math.round((Date.now() - pos.entry_time) / 60_000),
+    tpPrice:      pos.tp_price,
+    tpDistPct:    distPct(pos.tp_price),
+    unrealPct,
+    unrealUsd,
+    mfeUsd: mm?.mfeUsd ?? null,
+    maeUsd: mm?.maeUsd ?? null,
+    mfePct: mm?.mfePct ?? null,
+    maePct: mm?.maePct ?? null,
+    entry_spike_pct: pos.entry_spike_pct ?? null,
+  };
+}
+
 // HL 2026-05-23: unified-by-default. Раньше дашборд отдельно дёргал
 // spotClearinghouseState чтобы показать "Wallet Total", потому что perp
 // accountValue не включал spot. Теперь getAccountSummary() / wallet.js
@@ -332,6 +375,28 @@ async function getStatusData() {
           paperStats: getStrategyStats('trend_follow', 'PAPER'),
           paperTrades: getRecentStrategyTrades('trend_follow', 'PAPER', 10),
           paperPosition: await buildChillBoyPaperPosition(),
+        }
+      : null,
+    fader: config.trading.faderEnabled
+      ? {
+          enabled: true,
+          heartbeat: getFaderHeartbeat(),
+          virtualBalance: config.trading.faderVirtualBalance,
+          virtualEquity:  config.trading.faderVirtualBalance > 0
+            ? getFaderVirtualSnapshot()
+            : null,
+          paperStats:  getStrategyStats('fader', 'PAPER'),
+          paperTrades: getRecentStrategyTrades('fader', 'PAPER', 10),
+          paperPosition: await buildFaderPaperPosition(),
+          config: {
+            nominalUsd:     config.trading.faderNominalUsd,
+            leverage:       config.trading.faderLeverage,
+            spikePctMin:    config.trading.faderSpikePctMin,
+            chopRatioMin:   config.trading.faderChopRatioMin,
+            tpReclaimFrac:  config.trading.faderTpReclaimFrac,
+            adverseKillPct: config.trading.faderAdverseKillPct,
+            timeStopHours:  config.trading.faderTimeStopHours,
+          },
         }
       : null,
     ts: Date.now(),
@@ -602,6 +667,7 @@ async function handleSignals(req, res) {
       : 12;
     const data = Array.isArray(state.latestHunter) ? state.latestHunter : [];
     const now = state.latestHunterAt || Date.now();
+    const faderTiers = state.latestFader instanceof Map ? state.latestFader : null;
     const trendLookback = config.trading.hunterTrendLookbackMin;
     const trendMaxRise = config.trading.hunterTrendMaxRisePct;
     const activeCoin = getActivePosition()?.coin ?? null;
@@ -737,6 +803,7 @@ async function handleSignals(req, res) {
         bufferLen: m.bufLen,
         bufferNeeded: ticksNeeded,
         isActive: activeCoin && m.coin === activeCoin,
+        fader: faderTiers?.get(m.coin) ?? null,
       };
     });
 
@@ -762,6 +829,7 @@ async function handleSignals(req, res) {
       activeCoin,
       count: top.length,
       signals: top,
+      faderEnabled: config.trading.faderEnabled,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

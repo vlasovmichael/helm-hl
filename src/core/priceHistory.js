@@ -55,6 +55,21 @@ export function hasEnoughHistory(coin, minutes, now = Date.now()) {
   return getPriceNMinAgo(coin, minutes, now) !== null;
 }
 
+/**
+ * Возвращает сэмплы за окно последних `minutes` минут (ASC по ts).
+ * Используется Fader-ом для chopRatio (нужен high/low + first/last).
+ */
+export function getSamplesSince(coin, minutes, now = Date.now()) {
+  const arr = buffers.get(coin);
+  if (!arr || arr.length === 0) return [];
+  const fromTs = now - minutes * 60_000;
+  const out = [];
+  for (const s of arr) {
+    if (s.ts >= fromTs) out.push(s);
+  }
+  return out;
+}
+
 /** Снимок для дебага/dashboard. */
 export function getBufferLength(coin) {
   return buffers.get(coin)?.length ?? 0;
