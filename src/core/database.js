@@ -14,6 +14,10 @@ export function initDB() {
 
   // WAL-mode: читатели не блокируют писателей
   db.pragma('journal_mode = WAL');
+  // synchronous=FULL: fsync на каждый commit. После corruption 2026-05-25
+  // (equity_snapshots побилась после рестарта контейнера) — NORMAL оставлял
+  // окно где SIGTERM мог попасть между write и fsync. FULL это окно закрывает.
+  db.pragma('synchronous = FULL');
   db.pragma('foreign_keys = ON');
 
   db.exec(`

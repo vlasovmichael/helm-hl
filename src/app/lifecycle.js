@@ -241,8 +241,13 @@ export async function shutdown(signal) {
 
   if (state.db) {
     try {
+      // TRUNCATE-чекпоинт: сливаем WAL в основной файл и зануляем .wal перед
+      // закрытием. Защита от corruption 2026-05-25: без явного чекпоинта
+      // SIGTERM мог оставить .wal с незакоммиченными страницами, recovery
+      // при следующем старте находил несогласованное состояние.
+      state.db.pragma('wal_checkpoint(TRUNCATE)');
       state.db.close();
-      logger.info('[System] ✅ Database closed');
+      logger.info('[System] ✅ Database closed (WAL truncated)');
     } catch (err) {
       logger.error(`[System] ❌ DB close error: ${err.message}`);
     }
