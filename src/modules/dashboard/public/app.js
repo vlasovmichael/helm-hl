@@ -940,6 +940,26 @@ function applyTheme(mode) {
   if (equityChart) {
     applyChartTheme();
   }
+  if (priceChart) {
+    applyPriceChartTheme();
+  }
+  if (window.__matrixRain) {
+    window.__matrixRain.refreshColors();
+  }
+}
+
+function applyPriceChartTheme() {
+  if (!priceChart) return;
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  const textColor = cssVar("--text-muted") || (isDark ? "#71717A" : "#52525B");
+  const gridColor = cssVar("--grid-line") || (isDark ? "#1F1F23" : "#E4E4E7");
+  const bgColor   = cssVar("--card-bg")   || (isDark ? "#131316" : "#FFFFFF");
+  priceChart.applyOptions({
+    layout: { background: { type: "solid", color: bgColor }, textColor },
+    grid: { vertLines: { color: gridColor }, horzLines: { color: gridColor } },
+    rightPriceScale: { borderColor: gridColor },
+    timeScale: { borderColor: gridColor },
+  });
 }
 
 function cssVar(name) {
@@ -1093,6 +1113,47 @@ function renderBans(status) {
       .join("");
 }
 
+// Setup-вердикт: одна метка из комбо Accel + Vol× + направление.
+// Логика 1:1 с FAQ-таблицей карточки Hot Movers — agg только визуализация,
+// никакой новой стратегической логики, чтобы пользователь видел готовый
+// ответ «заходить / ждать / мимо» без сборки комбо в голове.
+function computeSetup(accelKind, volKind, dir) {
+  // Полное отсутствие данных: пусто.
+  if (!accelKind && !volKind) {
+    return { label: '<span class="num-inline-muted">—</span>', cls: 'setup-none', title: 'Нет данных' };
+  }
+  // Разворот внутри окна — не фейдим, скорее follow.
+  if (accelKind === 'rev') {
+    return { label: '⚠ REV', cls: 'setup-rev', title: 'Разворот внутри окна — не фейди, скорее follow' };
+  }
+  // Импульс ускоряется + крупный объём → большие деньги двигают, мимо.
+  if (accelKind === 'up' && volKind === 'high') {
+    return { label: '🚫 AVOID', cls: 'setup-avoid', title: 'Импульс ускоряется на большом объёме — НЕ фейди' };
+  }
+  // Импульс ускоряется на тонком объёме → готовится фейд, ждём ▼.
+  if (accelKind === 'up' && volKind === 'thin') {
+    return { label: '🟠 PRE', cls: 'setup-pre', title: 'Памп на пустом стакане — жди ▼ затем фейди' };
+  }
+  // Памп без vol-данных и без признаков выдоха — пока стой в стороне.
+  if (accelKind === 'up') {
+    return { label: '🚫 AVOID', cls: 'setup-avoid', title: 'Импульс ускоряется — НЕ фейди ещё' };
+  }
+  // Идеальный fade-сетап: импульс выдыхается на тонком объёме.
+  if (accelKind === 'down' && volKind === 'thin') {
+    return { label: '🟢 FADE', cls: 'setup-fade', title: 'Лучший fade-setup: импульс выдохся на пустом стакане' };
+  }
+  // Импульс выдыхается на большом объёме — фейд с тугим SL.
+  if (accelKind === 'down' && volKind === 'high') {
+    return { label: '🟡 OK*', cls: 'setup-ok', title: 'Темп упал, но объём был большой — фейд с тугим SL' };
+  }
+  // Импульс выдыхается, объём средний или грузится — норм фейд.
+  if (accelKind === 'down') {
+    return { label: '🟡 OK', cls: 'setup-ok', title: volKind ? 'Импульс выдыхается — норм fade' : 'Импульс выдыхается, ждём Vol× для подтверждения' };
+  }
+  // Флэт или нет данных по accel — ждём движение.
+  return { label: '<span class="num-inline-muted">⚪ WAIT</span>', cls: 'setup-wait', title: 'Темп ровный — ждём явного движения' };
+}
+
 function renderHotMovers(payload) {
   const tbody = document.getElementById("hot-movers-tbody");
   const meta = document.getElementById("hot-movers-meta");
@@ -1209,46 +1270,66 @@ function renderHotMovers(payload) {
 
       // Accel: |w2| vs линейная экстраполяция w5 (×0.4). Ratio ≥1.2 = ускорение
       // (не фейди), ≤0.6 = выдыхается (хороший момент), знаки разные = разворот.
+      // accelKind/accelRatio выносим наружу — нужны для Setup-вердикта ниже.
       let accelInner = '<span class="num-inline-muted">—</span>';
+      let accelCellCls = '';
+      let accelKind = null; // 'up' | 'down' | 'flat' | 'rev' | null
+      let accelRatio = null;
       if (w2 && w5 && w2.spikePct != null && w5.spikePct != null) {
         const a = w2.spikePct, b = w5.spikePct;
         if (Math.abs(b) < 0.05) {
           accelInner = '<span class="num-inline-muted">→</span>';
+          accelKind = 'flat';
         } else if ((a > 0) !== (b > 0) && Math.abs(a) > 0.2) {
           accelInner = '<span style="color:var(--accent)">↻ rev</span>';
+          accelKind = 'rev';
         } else {
           const expected = b * 0.4;
           const ratio = expected !== 0 ? Math.abs(a) / Math.abs(expected) : 0;
+          accelRatio = ratio;
           if (ratio >= 1.2) {
             accelInner = `<span style="color:var(--red)">▲ ${ratio.toFixed(1)}×</span>`;
+            accelCellCls = 'num-neg-weak';
+            accelKind = 'up';
           } else if (ratio <= 0.6) {
             accelInner = `<span style="color:var(--green)">▼ ${ratio.toFixed(1)}×</span>`;
+            accelCellCls = 'num-pos-weak';
+            accelKind = 'down';
           } else {
             accelInner = `<span class="num-inline-muted">→ ${ratio.toFixed(1)}×</span>`;
+            accelKind = 'flat';
           }
         }
       }
 
       // Vol×: серверный multiplier (5min recent / avg 5min over hour).
       let volInner = '<span class="num-inline-muted">…</span>';
+      let volCellCls = '';
+      let volKind = null; // 'high' | 'mid' | 'normal' | 'thin' | null
       if (typeof s.volMult === "number" && isFinite(s.volMult)) {
         const v = s.volMult;
         let color = "var(--text-muted)";
-        if (v >= 2) color = "var(--red)";
-        else if (v >= 1.3) color = "var(--orange, #f59e0b)";
-        else if (v <= 0.5) color = "var(--green)";
+        if (v >= 2) { color = "var(--red)"; volCellCls = 'num-neg-weak'; volKind = 'high'; }
+        else if (v >= 1.3) { color = "var(--orange, #f59e0b)"; volKind = 'mid'; }
+        else if (v <= 0.5) { color = "var(--green)"; volCellCls = 'num-pos-weak'; volKind = 'thin'; }
+        else { volKind = 'normal'; }
         volInner = `<span style="color:${color}">${v.toFixed(1)}×</span>`;
       } else if (s.volMult === null) {
         volInner = '<span class="num-inline-muted">—</span>';
       }
 
+      // Setup: агрегированный вердикт «заходить или нет» из комбо Accel + Vol×.
+      // Логика 1:1 с FAQ-таблицей карточки (см. help-блок ниже).
+      const setup = computeSetup(accelKind, volKind, dir);
+
       return `<tr class="${rowCls}">
         <td>${idx + 1}</td>
         <td><span class="signals-price">#${escapeHtml(s.coin)}</span></td>
+        <td class="hm-setup ${setup.cls}" data-w="Setup" title="${setup.title}">${setup.label}</td>
         <td><span class="signals-price">${fmtPrice(s.price)}</span></td>
         ${cells}
-        <td data-w="Acc">${accelInner}</td>
-        <td data-w="Vol">${volInner}</td>
+        <td class="${accelCellCls}" data-w="Acc">${accelInner}</td>
+        <td class="${volCellCls}" data-w="Vol">${volInner}</td>
         <td data-w="Trend">${trendInner}</td>
       </tr>`;
     })
@@ -1478,6 +1559,19 @@ const HELP_CONTENT = {
       {
         title: "Окна 2m / 5m / 15m / 1h",
         sub: "Изменение цены за окно. Цвет ячейки = тир порога Hunter (STRONG / NORMAL / WEAK). Серая ячейка = меньше WEAK или нет истории.",
+      },
+      {
+        title: "Setup — готовый вердикт",
+        sub: "Агрегат Accel + Vol×. Чтобы не собирать комбо в голове.",
+        rows: [
+          ['<span style="color:var(--green); font-weight:700">🟢 FADE</span>', "Лучший fade-setup (▼ Accel + тонкий объём)"],
+          ['<span style="color:#eab308; font-weight:700">🟡 OK</span>', "Импульс выдыхается, норм fade"],
+          ['<span style="color:#eab308; font-weight:700">🟡 OK*</span>', "Фейд с тугим SL (объём был большой)"],
+          ['<span style="color:#f59e0b; font-weight:700">🟠 PRE</span>', "Памп на пустом стакане — жди ▼"],
+          ['<span style="color:var(--red); font-weight:700">🚫 AVOID</span>', "Импульс ускоряется — не фейди"],
+          ['<span style="color:#a855f7; font-weight:700">⚠ REV</span>', "Разворот внутри окна — follow, не fade"],
+          ['<span class="num-inline-muted">⚪ WAIT</span>', "Темп ровный или мало данных"],
+        ],
       },
       {
         title: "Accel — направление импульса",
@@ -2682,3 +2776,78 @@ initWebSocket();
 tick();
 setInterval(tick, REFRESH_MS);
 setInterval(renderFooter, 1000);
+
+// ── Matrix rain background ───────────────────────────────────
+// Тихий фон в стиле Matrix: падающие катаканы в зазорах между карточками.
+// Низкий FPS (~16) чтобы не жечь CPU поверх WS/charts. Цвета тянутся из CSS-vars,
+// поэтому переключение темы вызывает refreshColors() и всё пересчитывается.
+(function initMatrixRain() {
+  const canvas = document.createElement("canvas");
+  canvas.id = "matrix-rain";
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const CHARS = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモ0123456789ABCDEF$%/+-=*<>";
+  const CHAR_SIZE = 14;
+  let cols = 0;
+  let drops = [];
+  let colors = computeColors();
+
+  function computeColors() {
+    const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+    return isDark
+      ? {
+          fade: "rgba(8,10,14,0.10)",       // плавное затирание следа
+          text: "rgba(34,197,94,0.32)",     // основной зелёный
+          head: "rgba(170,255,200,0.55)",   // яркая голова капли
+        }
+      : {
+          fade: "rgba(255,255,255,0.14)",
+          text: "rgba(20,120,60,0.14)",
+          head: "rgba(20,100,40,0.30)",
+        };
+  }
+
+  function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    cols = Math.floor(canvas.width / CHAR_SIZE);
+    drops = Array.from({ length: cols }, () => Math.random() * -50);
+    // Сразу залить фон, иначе первые кадры показывают артефакты предыдущего размера.
+    ctx.fillStyle = colors.fade.replace(/[\d.]+\)$/, "1)");
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  let last = 0;
+  const FRAME_MS = 60; // ~16 fps
+  function frame(ts) {
+    if (ts - last >= FRAME_MS) {
+      last = ts;
+      ctx.fillStyle = colors.fade;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.font = `${CHAR_SIZE}px JetBrains Mono, monospace`;
+      for (let i = 0; i < cols; i++) {
+        const ch = CHARS[Math.floor(Math.random() * CHARS.length)];
+        const y = drops[i] * CHAR_SIZE;
+        ctx.fillStyle = colors.head;
+        ctx.fillText(ch, i * CHAR_SIZE, y);
+        ctx.fillStyle = colors.text;
+        ctx.fillText(ch, i * CHAR_SIZE, y - CHAR_SIZE);
+        if (y > canvas.height && Math.random() > 0.975) drops[i] = 0;
+        drops[i]++;
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // applyTheme() дёргает это после смены темы.
+  window.__matrixRain = {
+    refreshColors() {
+      colors = computeColors();
+    },
+  };
+})();

@@ -124,10 +124,23 @@ html[data-theme="dark"] {
 
 html {
   scroll-behavior: smooth;
+  /* Базовый bg переехал на html, чтобы #matrix-rain (fixed, z-index:-1) был
+     виден сквозь прозрачный body. Карточки имеют свой --card-bg и закрывают
+     дождь — он остаётся только в зазорах. */
+  background-color: var(--bg);
+}
+
+#matrix-rain {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none;
 }
 
 body {
-  background-color: var(--bg);
+  background-color: transparent;
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 14px;
@@ -1123,6 +1136,45 @@ footer {
 .signals-table .signals-price {
   font-weight: 600;
   color: var(--text-primary);
+}
+
+/* ── Hot Movers: Setup verdict cell ──────────────────────────
+   Готовый «заходить/нет» вердикт. Залит цветом сильнее чем
+   tier-cells, чтобы был основной якорь для глаза. */
+.signals-table td.hm-setup {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-align: center;
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+.signals-table td.hm-setup.setup-fade {
+  background: rgba(34, 197, 94, 0.22);
+  color: var(--green);
+}
+.signals-table td.hm-setup.setup-ok {
+  background: rgba(234, 179, 8, 0.18);
+  color: #eab308;
+}
+.signals-table td.hm-setup.setup-pre {
+  background: rgba(245, 158, 11, 0.18);
+  color: #f59e0b;
+}
+.signals-table td.hm-setup.setup-avoid {
+  background: rgba(239, 68, 68, 0.22);
+  color: var(--red);
+}
+.signals-table td.hm-setup.setup-rev {
+  background: rgba(168, 85, 247, 0.18);
+  color: #a855f7;
+}
+.signals-table td.hm-setup.setup-wait,
+.signals-table td.hm-setup.setup-none {
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 500;
 }
 .signals-table .signals-sltp {
   white-space: nowrap;
