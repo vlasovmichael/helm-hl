@@ -6,10 +6,9 @@
 //
 // Возвращает массив объектов {open, high, low, close, time} oldest→newest.
 
-import axios from 'axios';
 import { logger } from '../core/logger.js';
+import { hlInfo } from '../core/hlClient.js';
 
-const HL_API   = 'https://api.hyperliquid.xyz/info';
 const TTL_MS   = 5 * 60_000;
 const INTERVAL = '1h';
 
@@ -54,11 +53,14 @@ export async function getHourlyCandles(coin, lookbackHours, now = Date.now()) {
   }
 
   const startTime = now - lookbackHours * 3_600_000;
-  const promise = axios.post(HL_API, {
-    type: 'candleSnapshot',
-    req:  { coin, interval: INTERVAL, startTime, endTime: now },
-  }).then((res) => {
-    const candles = parseCandles(res.data);
+  const promise = hlInfo(
+    {
+      type: 'candleSnapshot',
+      req:  { coin, interval: INTERVAL, startTime, endTime: now },
+    },
+    { label: `candleCache/${coin}` },
+  ).then((data) => {
+    const candles = parseCandles(data);
     cache.set(coin, { fetchedAt: Date.now(), candles, inflight: null });
     return candles;
   }).catch((err) => {

@@ -1,12 +1,11 @@
-import axios from 'axios';
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { setUniverse, getTradeableSet } from '../core/universe.js';
 import { getRuntimeBlacklist, getOiCapBans } from './executor/index.js';
 import { push as pushPriceHistory } from '../core/priceHistory.js';
 import { getActivePosition, getActivePaperPosition, recordSetupSnapshots } from '../core/database.js';
+import { hlInfo } from '../core/hlClient.js';
 
-const HL_API   = 'https://api.hyperliquid.xyz/info';
 const RTT_LIMIT_MS = 10_000; // отклоняем ответы медленнее 10 с
 
 // ── Predictive Funding ─────────────────────────
@@ -178,8 +177,7 @@ async function fetchPredictedFundings() {
   }
 
   try {
-    const response = await axios.post(HL_API, { type: 'predictedFundings' });
-    const data = response.data;
+    const data = await hlInfo({ type: 'predictedFundings' }, { label: 'scout/predictedFundings' });
 
     if (!Array.isArray(data)) {
       logger.warn(`[Scout] predictedFundings: unexpected shape, ignoring`);
@@ -218,14 +216,12 @@ async function fetchPredictedFundings() {
  */
 async function fetchMarkets() {
   const t0 = Date.now();
-  const response = await axios.post(HL_API, { type: 'metaAndAssetCtxs' });
+  const data = await hlInfo({ type: 'metaAndAssetCtxs' }, { label: 'scout/markets' });
   const rtt = Date.now() - t0;
 
   if (rtt > RTT_LIMIT_MS) {
     throw new Error(`Hyperliquid RTT ${rtt}ms exceeds limit of ${RTT_LIMIT_MS}ms`);
   }
-
-  const data = response.data;
 
   if (!Array.isArray(data) || data.length < 2) {
     throw new Error(

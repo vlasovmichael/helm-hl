@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { config } from "../../core/config.js";
 import { logger, getLogBuffer, subscribeLogs } from "../../core/logger.js";
+import { hlInfo } from "../../core/hlClient.js";
 import {
   getActivePosition,
   getActivePaperPosition,
@@ -556,20 +557,15 @@ async function fetchVolMult(coin) {
   const cached = volMultCache.get(coin);
   if (cached && Date.now() - cached.ts < VOL_MULT_TTL_MS) return cached.mult;
   try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 4000);
     const stripped = String(coin).replace(/-PERP$/i, "").replace(/^@/, "");
     const hlCoin = /^k[A-Z]/.test(stripped) ? stripped : stripped.toUpperCase();
-    const r = await fetch("https://api.hyperliquid.xyz/info", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const data = await hlInfo(
+      {
         type: "candleSnapshot",
         req: { coin: hlCoin, interval: "1m", startTime: Date.now() - 60 * 60_000, endTime: Date.now() },
-      }),
-      signal: ctrl.signal,
-    }).finally(() => clearTimeout(t));
-    const data = await r.json();
+      },
+      { label: "dash/volMult", timeoutMs: 4000, maxRetries: 2 },
+    );
     if (!Array.isArray(data) || data.length < 10) {
       volMultCache.set(coin, { ts: Date.now(), mult: null });
       return null;
@@ -864,19 +860,14 @@ async function getFundingHistory() {
   // Берём за 60 дней — покрывает 30d period с запасом.
   try {
     const startTime = Date.now() - 60 * 24 * 3600_000;
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 8000);
-    const r = await fetch("https://api.hyperliquid.xyz/info", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const data = await hlInfo(
+      {
         type: "userFunding",
         user: config.wallet.address,
         startTime,
-      }),
-      signal: ctrl.signal,
-    }).finally(() => clearTimeout(t));
-    const data = await r.json();
+      },
+      { label: "dash/userFunding", timeoutMs: 8000 },
+    );
     if (!Array.isArray(data)) return fundingCache.deltas;
     // Каждый элемент: { time, hash, delta: { coin, usdc, szi, fundingRate, nSamples } }
     const deltas = data
@@ -1509,12 +1500,8 @@ export function startDashboard() {
         : "5m";
       const windowMs = ALLOWED_INTERVALS[interval];
 
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 5000);
-      const r = await fetch("https://api.hyperliquid.xyz/info", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      const data = await hlInfo(
+        {
           type: "candleSnapshot",
           req: {
             coin,
@@ -1522,11 +1509,9 @@ export function startDashboard() {
             startTime: Date.now() - windowMs,
             endTime: Date.now(),
           },
-        }),
-        signal: ctrl.signal,
-      }).finally(() => clearTimeout(t));
-
-      const data = await r.json();
+        },
+        { label: "dash/candles", timeoutMs: 5000, maxRetries: 2 },
+      );
       if (data && data.error) throw new Error(data.error);
       res.json(Array.isArray(data) ? data : []);
     } catch (err) {

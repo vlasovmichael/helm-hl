@@ -16,11 +16,10 @@
 //   dir: "Open Long" | "Open Short" | "Close Long" | "Close Short" | "Long > Short" | ...
 //   closedPnl: realized PnL для этого fill (строка с float)
 
-import axios from 'axios';
 import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
+import { hlInfo } from '../core/hlClient.js';
 
-const HL_API = 'https://api.hyperliquid.xyz/info';
 const CACHE_TTL_MS = 30_000;  // 30с: fills меняются редко, без смысла спамить API
 const MAX_LOOKBACK_MS = 60 * 24 * 3_600_000;  // 60d — покрывает 30d period с запасом
 
@@ -46,14 +45,13 @@ export async function fetchUserFills(startTime = 0) {
   }
 
   try {
-    const { data } = await axios.post(
-      HL_API,
+    const data = await hlInfo(
       {
         type: 'userFillsByTime',
         user: config.wallet.address,
         startTime: effectiveStart,
       },
-      { timeout: 10_000 },
+      { label: 'userFills', timeoutMs: 10_000 },
     );
 
     if (!Array.isArray(data)) {

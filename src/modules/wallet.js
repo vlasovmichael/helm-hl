@@ -1,9 +1,6 @@
-import axios from 'axios';
 import { config } from '../core/config.js';
-import { retryWithBackoff } from '../core/retry.js';
 import { getCachedBalance } from '../core/balanceCache.js';
-
-const HL_API = 'https://api.hyperliquid.xyz/info';
+import { hlInfo } from '../core/hlClient.js';
 
 // HL 2026-05-23 migration: unified account стал default'ом. Source of truth
 // баланса — spotClearinghouseState. clearinghouseState (perp) теперь by
@@ -15,52 +12,42 @@ const HL_API = 'https://api.hyperliquid.xyz/info';
 //   withdrawable  = spot.USDC.total - spot.USDC.hold
 //   unrealizedPnl = perp.marginSummary.totalUnrealizedPnl
 async function fetchUnifiedBalance() {
-  return retryWithBackoff(
-    async () => {
-      const [perpResp, spotResp] = await Promise.all([
-        axios.post(
-          HL_API,
-          { type: 'clearinghouseState', user: config.wallet.address },
-          { timeout: 10_000 },
-        ),
-        axios.post(
-          HL_API,
-          { type: 'spotClearinghouseState', user: config.wallet.address },
-          { timeout: 10_000 },
-        ),
-      ]);
+  const [perp, spot] = await Promise.all([
+    hlInfo(
+      { type: 'clearinghouseState', user: config.wallet.address },
+      { label: 'wallet/perp', timeoutMs: 10_000 },
+    ),
+    hlInfo(
+      { type: 'spotClearinghouseState', user: config.wallet.address },
+      { label: 'wallet/spot', timeoutMs: 10_000 },
+    ),
+  ]);
 
-      const perp = perpResp.data;
-      const spot = spotResp.data;
-
-      const ms = perp?.marginSummary ?? {};
-      const perpUnrealized = parseFloat(
-        ms.totalUnrealizedPnl ?? ms.unrealizedPnl ?? '0',
-      );
-
-      const balances = spot?.balances ?? [];
-      const usdc = balances.find((b) => {
-        const c = (b?.coin ?? '').toUpperCase();
-        return c === 'USDC' || c === 'USDC-SPOT';
-      });
-      const spotTotal = usdc ? parseFloat(usdc.total ?? '0') : 0;
-      const spotHold  = usdc ? parseFloat(usdc.hold ?? '0')  : 0;
-
-      if (!Number.isFinite(spotTotal) || !Number.isFinite(spotHold)) {
-        throw new Error('Failed to parse spot USDC balance from Hyperliquid');
-      }
-
-      const accountValue = spotTotal + (Number.isFinite(perpUnrealized) ? perpUnrealized : 0);
-      const withdrawable = Math.max(0, spotTotal - spotHold);
-
-      return {
-        accountValue,
-        withdrawable,
-        unrealizedPnl: Number.isFinite(perpUnrealized) ? perpUnrealized : 0,
-      };
-    },
-    { label: 'wallet-get-balance', maxRetries: 3, baseDelayMs: 2000 },
+  const ms = perp?.marginSummary ?? {};
+  const perpUnrealized = parseFloat(
+    ms.totalUnrealizedPnl ?? ms.unrealizedPnl ?? '0',
   );
+
+  const balances = spot?.balances ?? [];
+  const usdc = balances.find((b) => {
+    const c = (b?.coin ?? '').toUpperCase();
+    return c === 'USDC' || c === 'USDC-SPOT';
+  });
+  const spotTotal = usdc ? parseFloat(usdc.total ?? '0') : 0;
+  const spotHold  = usdc ? parseFloat(usdc.hold ?? '0')  : 0;
+
+  if (!Number.isFinite(spotTotal) || !Number.isFinite(spotHold)) {
+    throw new Error('Failed to parse spot USDC balance from Hyperliquid');
+  }
+
+  const accountValue = spotTotal + (Number.isFinite(perpUnrealized) ? perpUnrealized : 0);
+  const withdrawable = Math.max(0, spotTotal - spotHold);
+
+  return {
+    accountValue,
+    withdrawable,
+    unrealizedPnl: Number.isFinite(perpUnrealized) ? perpUnrealized : 0,
+  };
 }
 
 /**

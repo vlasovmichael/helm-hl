@@ -12,12 +12,12 @@
  * из приватного ключа агента.
  */
 
-import axios from "axios";
 import { Hyperliquid } from "hyperliquid";
 import { config } from "../core/config.js";
 import { logger } from "../core/logger.js";
 import { retryWithBackoff } from "../core/retry.js";
 import { getCachedBalance } from "../core/balanceCache.js";
+import { hlInfo } from "../core/hlClient.js";
 
 let sdk = null;
 
@@ -385,10 +385,9 @@ export async function getMeta() {
  */
 export async function getMarkPrice(coin) {
   try {
-    const { data } = await axios.post(
-      "https://api.hyperliquid.xyz/info",
+    const data = await hlInfo(
       { type: "metaAndAssetCtxs" },
-      { timeout: 10_000 },
+      { label: "exchange/markPrice", timeoutMs: 10_000 },
     );
 
     const [meta, ctxs] = data ?? [];
@@ -417,10 +416,9 @@ export async function getMarkPrice(coin) {
  */
 export async function getLivePrice(coin) {
   try {
-    const { data } = await axios.post(
-      "https://api.hyperliquid.xyz/info",
+    const data = await hlInfo(
       { type: "metaAndAssetCtxs" },
-      { timeout: 10_000 },
+      { label: "exchange/livePrice", timeoutMs: 10_000 },
     );
     const [meta, ctxs] = data ?? [];
     const universe = meta?.universe;

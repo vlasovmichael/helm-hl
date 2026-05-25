@@ -1,15 +1,14 @@
 import { readFile } from 'fs/promises';
-import axios from 'axios';
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getActivePosition, closePosition as dbClosePosition } from '../core/database.js';
 import { sendMessage } from './reporter.js';
 import { checkAccountLeverage } from './exchange.js';
 import { restoreCircuitBreaker, restoreSniper, restoreOiCapBans } from './executor/state.js';
+import { hlInfo } from '../core/hlClient.js';
 
 import { state as appState } from '../app/state.js';
 
-const HL_API         = 'https://api.hyperliquid.xyz/info';
 const BOT_STATE_PATH = 'data/bot_state.json';
 
 // ─────────────────────────────────────────────────
@@ -126,10 +125,10 @@ export async function fetchExchangePositions() {
 
   const t0 = Date.now();
   try {
-    const { data } = await axios.post(HL_API, {
-      type: 'clearinghouseState',
-      user: wallet,
-    });
+    const data = await hlInfo(
+      { type: 'clearinghouseState', user: wallet },
+      { label: 'sync/clearinghouse' },
+    );
     const rtt = Date.now() - t0;
 
     const assetPositions = data?.assetPositions;

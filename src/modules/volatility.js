@@ -8,11 +8,9 @@
 // Variant C (gatekeeper): один candleSnapshot на тик максимум,
 // вызывается из executor/index.js → preflightChecks.
 
-import axios from 'axios';
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
-
-const HL_API = 'https://api.hyperliquid.xyz/info';
+import { hlInfo } from '../core/hlClient.js';
 
 // Порог "штиля": если VolIdx < 0.003 (0.3% за 15 мин) — штрафа нет.
 const VOL_IDX_NORMAL_THRESHOLD = 0.003;
@@ -31,11 +29,13 @@ const CANDLE_LOOKBACK_MIN = 15;
 async function fetchCandles(coin) {
   const now = Date.now();
   const startTime = now - CANDLE_LOOKBACK_MIN * 60_000;
-  const { data } = await axios.post(HL_API, {
-    type: 'candleSnapshot',
-    req: { coin, interval: '1m', startTime, endTime: now },
-  });
-  return data;
+  return hlInfo(
+    {
+      type: 'candleSnapshot',
+      req: { coin, interval: '1m', startTime, endTime: now },
+    },
+    { label: `volatility/${coin}` },
+  );
 }
 
 /**
