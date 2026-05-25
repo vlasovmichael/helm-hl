@@ -547,7 +547,58 @@ function computeTier(absPct, threshold) {
   return "NEUTRAL";
 }
 
-function handleSignals(req, res) {
+// Volume multiplier cache for Hot Movers: (5min recent vol) / (avg 5min vol over last hour).
+// Per-coin 30s TTL — мы fetched only когда coin попадает в top, не для всех 230 ассетов.
+const volMultCache = new Map(); // coin -> { ts, mult }
+const VOL_MULT_TTL_MS = 30_000;
+async function fetchVolMult(coin) {
+  const cached = volMultCache.get(coin);
+  if (cached && Date.now() - cached.ts < VOL_MULT_TTL_MS) return cached.mult;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 4000);
+    const stripped = String(coin).replace(/-PERP$/i, "").replace(/^@/, "");
+    const hlCoin = /^k[A-Z]/.test(stripped) ? stripped : stripped.toUpperCase();
+    const r = await fetch("https://api.hyperliquid.xyz/info", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "candleSnapshot",
+        req: { coin: hlCoin, interval: "1m", startTime: Date.now() - 60 * 60_000, endTime: Date.now() },
+      }),
+      signal: ctrl.signal,
+    }).finally(() => clearTimeout(t));
+    const data = await r.json();
+    if (!Array.isArray(data) || data.length < 10) {
+      volMultCache.set(coin, { ts: Date.now(), mult: null });
+      return null;
+    }
+    const vols = data.map((c) => Number(c.v) || 0);
+    const last5 = vols.slice(-5).reduce((a, b) => a + b, 0);
+    const total = vols.reduce((a, b) => a + b, 0);
+    if (total <= 0) {
+      volMultCache.set(coin, { ts: Date.now(), mult: null });
+      return null;
+    }
+    const mult = (last5 * (60 / 5)) / total; // = vol_last_5min / avg_5min_over_hour
+    volMultCache.set(coin, { ts: Date.now(), mult });
+    return mult;
+  } catch {
+    volMultCache.set(coin, { ts: Date.now(), mult: null });
+    return null;
+  }
+}
+
+async function enrichVolMult(items) {
+  // Параллельный fetch для top N; cache absorb-ит большую часть нагрузки.
+  const results = await Promise.allSettled(items.map((it) => fetchVolMult(it.coin)));
+  results.forEach((r, i) => {
+    items[i].volMult = r.status === "fulfilled" ? r.value : null;
+  });
+  return items;
+}
+
+async function handleSignals(req, res) {
   try {
     const limit = req.query.limit
       ? Math.max(1, Math.min(300, parseInt(req.query.limit, 10)))
@@ -691,6 +742,9 @@ function handleSignals(req, res) {
         isActive: activeCoin && m.coin === activeCoin,
       };
     });
+
+    // Обогащаем top vol-мультипликатором (≤20 монет; кеш 30с поглощает повторы).
+    await enrichVolMult(top.slice(0, 20));
 
     res.json({
       ts: state.latestHunterAt || 0,

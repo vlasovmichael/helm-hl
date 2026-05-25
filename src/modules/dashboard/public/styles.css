@@ -1150,6 +1150,28 @@ footer {
   background: var(--accent-soft);
 }
 
+/* Mobile: показываем label окна перед значением, чтобы не теряться в скролле */
+@media (max-width: 720px) {
+  .signals-table th {
+    padding: 6px 6px;
+    font-size: 10px;
+  }
+  .signals-table td {
+    padding: 6px 6px;
+    font-size: 12px;
+  }
+  .signals-table td[data-w]::before {
+    content: attr(data-w);
+    display: block;
+    font-size: 9px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 2px;
+    opacity: 0.7;
+  }
+}
+
 .signals-meta::before {
   content: "";
   display: inline-block;

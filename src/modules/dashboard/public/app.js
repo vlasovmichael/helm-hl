@@ -1122,7 +1122,7 @@ function renderHotMovers(payload) {
 
   if (!enriched.length) {
     tbody.innerHTML =
-      '<tr><td colspan="8" class="empty-state">Waiting for price history…</td></tr>';
+      '<tr><td colspan="10" class="empty-state">Waiting for price history…</td></tr>';
     return;
   }
 
@@ -1200,17 +1200,56 @@ function renderHotMovers(payload) {
         dir === "dump" ? "row-long row-fade-long" : "",
       ].filter(Boolean).join(" ");
 
-      const cells = [w2, w5, w15, w60].map((w) => {
+      const winDefs = [[w2, "2m"], [w5, "5m"], [w15, "15m"], [w60, "1h"]];
+      const cells = winDefs.map(([w, lbl]) => {
         const [inner, cls] = pctCellTiered(w);
-        return `<td${cls ? ` class="${cls}"` : ""}>${inner}</td>`;
+        const klass = ["hm-window", cls].filter(Boolean).join(" ");
+        return `<td class="${klass}" data-w="${lbl}">${inner}</td>`;
       }).join("");
+
+      // Accel: |w2| vs линейная экстраполяция w5 (×0.4). Ratio ≥1.2 = ускорение
+      // (не фейди), ≤0.6 = выдыхается (хороший момент), знаки разные = разворот.
+      let accelInner = '<span class="num-inline-muted">—</span>';
+      if (w2 && w5 && w2.spikePct != null && w5.spikePct != null) {
+        const a = w2.spikePct, b = w5.spikePct;
+        if (Math.abs(b) < 0.05) {
+          accelInner = '<span class="num-inline-muted">→</span>';
+        } else if ((a > 0) !== (b > 0) && Math.abs(a) > 0.2) {
+          accelInner = '<span style="color:var(--accent)">↻ rev</span>';
+        } else {
+          const expected = b * 0.4;
+          const ratio = expected !== 0 ? Math.abs(a) / Math.abs(expected) : 0;
+          if (ratio >= 1.2) {
+            accelInner = `<span style="color:var(--red)">▲ ${ratio.toFixed(1)}×</span>`;
+          } else if (ratio <= 0.6) {
+            accelInner = `<span style="color:var(--green)">▼ ${ratio.toFixed(1)}×</span>`;
+          } else {
+            accelInner = `<span class="num-inline-muted">→ ${ratio.toFixed(1)}×</span>`;
+          }
+        }
+      }
+
+      // Vol×: серверный multiplier (5min recent / avg 5min over hour).
+      let volInner = '<span class="num-inline-muted">…</span>';
+      if (typeof s.volMult === "number" && isFinite(s.volMult)) {
+        const v = s.volMult;
+        let color = "var(--text-muted)";
+        if (v >= 2) color = "var(--red)";
+        else if (v >= 1.3) color = "var(--orange, #f59e0b)";
+        else if (v <= 0.5) color = "var(--green)";
+        volInner = `<span style="color:${color}">${v.toFixed(1)}×</span>`;
+      } else if (s.volMult === null) {
+        volInner = '<span class="num-inline-muted">—</span>';
+      }
 
       return `<tr class="${rowCls}">
         <td>${idx + 1}</td>
         <td><span class="signals-price">#${escapeHtml(s.coin)}</span></td>
         <td><span class="signals-price">${fmtPrice(s.price)}</span></td>
         ${cells}
-        <td>${trendInner}</td>
+        <td data-w="Acc">${accelInner}</td>
+        <td data-w="Vol">${volInner}</td>
+        <td data-w="Trend">${trendInner}</td>
       </tr>`;
     })
     .join("");
