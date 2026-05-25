@@ -712,7 +712,9 @@ header {
   white-space: nowrap;
 }
 @media (max-width: 720px) {
-  .orderbook-label { font-size: 10px; }
+  .orderbook-label {
+    font-size: 10px;
+  }
 }
 
 /* ──────────────────────── Footer */
@@ -1890,11 +1892,17 @@ footer {
   background: var(--accent-soft);
   transform: scale(1.15);
 }
-.help-btn svg { display: block; }
+.help-btn svg {
+  display: block;
+}
 
 /* ── Help modal content ───────────────────────────────────── */
-.help-section { margin-bottom: 18px; }
-.help-section:last-child { margin-bottom: 0; }
+.help-section {
+  margin-bottom: 18px;
+}
+.help-section:last-child {
+  margin-bottom: 0;
+}
 .help-section-title {
   font-size: 13px;
   font-weight: 700;
@@ -1928,7 +1936,9 @@ footer {
   font-size: 11px;
   text-transform: uppercase;
 }
-.help-table tr:last-child td { border-bottom: none; }
+.help-table tr:last-child td {
+  border-bottom: none;
+}
 .help-table td:first-child {
   white-space: nowrap;
   font-family: var(--font-mono);
@@ -1946,8 +1956,13 @@ footer {
   line-height: 1.5;
 }
 @media (max-width: 720px) {
-  .help-table { font-size: 11px; }
-  .help-table th, .help-table td { padding: 5px 6px; }
+  .help-table {
+    font-size: 11px;
+  }
+  .help-table th,
+  .help-table td {
+    padding: 5px 6px;
+  }
 }
 
 /* ── Trade modal ──────────────────────────────────────────── */
@@ -1967,8 +1982,6 @@ footer {
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
   animation: tm-fade-in 180ms ease-out;
 }
 .trade-modal__panel {
