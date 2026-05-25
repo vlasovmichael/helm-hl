@@ -2791,7 +2791,8 @@ setInterval(renderFooter, 1000);
   const CHARS = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモ0123456789ABCDEF$%/+-=*<>";
   const CHAR_SIZE = 14;
   let cols = 0;
-  let drops = [];
+  let drops = [];   // y-позиция головы капли (float, накапливает speeds[i])
+  let speeds = []; // персональная скорость колонки (chars/frame)
   let colors = computeColors();
 
   function computeColors() {
@@ -2813,8 +2814,10 @@ setInterval(renderFooter, 1000);
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
     cols = Math.floor(canvas.width / CHAR_SIZE);
-    drops = Array.from({ length: cols }, () => Math.random() * -50);
-    // Сразу залить фон, иначе первые кадры показывают артефакты предыдущего размера.
+    drops  = Array.from({ length: cols }, () => Math.random() * -50);
+    // Скорости 0.15..0.55 символа/кадр → при 12fps это 1.8..6.6 char/сек.
+    // Разброс ×3.7 делает картинку «живой» — соседние колонки не идут в ногу.
+    speeds = Array.from({ length: cols }, () => 0.15 + Math.random() * 0.40);
     ctx.fillStyle = colors.fade.replace(/[\d.]+\)$/, "1)");
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
@@ -2822,7 +2825,7 @@ setInterval(renderFooter, 1000);
   resize();
 
   let last = 0;
-  const FRAME_MS = 60; // ~16 fps
+  const FRAME_MS = 80; // ~12 fps базовый ритм
   function frame(ts) {
     if (ts - last >= FRAME_MS) {
       last = ts;
@@ -2830,14 +2833,20 @@ setInterval(renderFooter, 1000);
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.font = `${CHAR_SIZE}px JetBrains Mono, monospace`;
       for (let i = 0; i < cols; i++) {
+        // 8% колонок пропускают кадр — рваный «дыхательный» ритм.
+        if (Math.random() < 0.08) continue;
         const ch = CHARS[Math.floor(Math.random() * CHARS.length)];
         const y = drops[i] * CHAR_SIZE;
         ctx.fillStyle = colors.head;
         ctx.fillText(ch, i * CHAR_SIZE, y);
         ctx.fillStyle = colors.text;
         ctx.fillText(ch, i * CHAR_SIZE, y - CHAR_SIZE);
-        if (y > canvas.height && Math.random() > 0.975) drops[i] = 0;
-        drops[i]++;
+        if (y > canvas.height && Math.random() > 0.98) {
+          drops[i] = 0;
+          // Сброс на новую скорость — иначе колонка зацикливается в одном ритме.
+          speeds[i] = 0.15 + Math.random() * 0.40;
+        }
+        drops[i] += speeds[i];
       }
     }
     requestAnimationFrame(frame);
