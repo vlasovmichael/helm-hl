@@ -4,7 +4,7 @@ import { logger } from '../core/logger.js';
 import { setUniverse, getTradeableSet } from '../core/universe.js';
 import { getRuntimeBlacklist, getOiCapBans } from './executor/index.js';
 import { push as pushPriceHistory } from '../core/priceHistory.js';
-import { getActivePosition, getActivePaperPosition } from '../core/database.js';
+import { getActivePosition, getActivePaperPosition, recordSetupSnapshots } from '../core/database.js';
 
 const HL_API   = 'https://api.hyperliquid.xyz/info';
 const RTT_LIMIT_MS = 10_000; // отклоняем ответы медленнее 10 с
@@ -22,6 +22,9 @@ let predictedCache = { ts: 0, map: new Map() };
 // не «дёргался» и позиции не вылетали из-за транзиентных изменений объёма.
 let liquidCache = { ts: 0, set: new Set() };
 let hunterCache = { ts: 0, set: new Set() };
+
+// Setup Scanner: throttle для recordSetupSnapshots. default 60min (config).
+let lastSetupSnapshotTs = 0;
 
 // Предыдущие значения — логируем INFO только при изменении
 let prevFilterSnapshot = '';
@@ -273,6 +276,49 @@ export async function scan() {
 
   // Predictive funding (5min cache, fail-open)
   const predictedFundings = await fetchPredictedFundings();
+
+  // Setup Scanner snapshot — manual-helper. Пишем не чаще раз в
+  // setupSnapshotIntervalMin для всех монет из liquidSet за один заход.
+  // Полностью изолирован от торговой логики: ошибка тут только ворнится.
+  const setupIntervalMs = (config.trading.setupSnapshotIntervalMin || 60) * 60_000;
+  if (Date.now() - lastSetupSnapshotTs >= setupIntervalMs) {
+    try {
+      const snapTs = Date.now();
+      const batch = [];
+      for (let i = 0; i < universe.length; i++) {
+        const coinName = universe[i]?.name;
+        if (!coinName) continue;
+        const cu = coinName.toUpperCase();
+        if (!liquidSet.has(cu)) continue;
+        const ctx = assetCtxs[i];
+        if (!ctx) continue;
+        const mark        = parseFloat(ctx.markPx ?? ctx.midPx ?? NaN);
+        const fundingRate = parseFloat(ctx.funding ?? NaN);
+        const oiCoin      = parseFloat(ctx.openInterest ?? NaN);
+        const premium     = parseFloat(ctx.premium ?? NaN);
+        const vol         = parseFloat(ctx.dayNtlVlm ?? NaN);
+        batch.push({
+          coin:         cu,
+          ts:           snapTs,
+          funding_rate: Number.isFinite(fundingRate) ? fundingRate : null,
+          funding_apy:  Number.isFinite(fundingRate) ? fundingRate * 24 * 365 * 100 : null,
+          oi_usd:       Number.isFinite(oiCoin) && Number.isFinite(mark) ? oiCoin * mark : null,
+          mark:         Number.isFinite(mark) ? mark : null,
+          premium:      Number.isFinite(premium) ? premium : null,
+          vol_24h_usd:  Number.isFinite(vol) ? vol : null,
+        });
+      }
+      if (batch.length) {
+        recordSetupSnapshots(batch);
+        lastSetupSnapshotTs = snapTs;
+        logger.info(
+          `[Scout] setup-snapshot: wrote ${batch.length} rows | next in ${(setupIntervalMs / 60_000).toFixed(0)}min`,
+        );
+      }
+    } catch (err) {
+      logger.warn(`[Scout] setup-snapshot failed: ${err.message}`);
+    }
+  }
 
   // ── Защита: блэклист + universe + runtime + OI cap + liquidity ──
   const tradeable       = getTradeableSet(); // из core/universe.js

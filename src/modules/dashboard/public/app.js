@@ -1255,6 +1255,140 @@ function renderHotMovers(payload) {
     .join("");
 }
 
+function renderSetupScanner(payload) {
+  const tbody = document.getElementById("setup-scanner-tbody");
+  const meta = document.getElementById("setup-scanner-meta");
+  if (!tbody || !meta) return;
+  const rows = Array.isArray(payload?.rows) ? payload.rows : [];
+
+  if (!rows.length) {
+    meta.textContent = "collecting first snapshots…";
+    tbody.innerHTML =
+      '<tr><td colspan="9" class="empty-state">Waiting for first snapshot…</td></tr>';
+    return;
+  }
+
+  // Сортировка: по «насыщенности» сигналов. Прокси-скор:
+  //   |fundingApy| + |premium%|*5 + (fundingPersist.fractionExtreme ?? 0)*20
+  //   + |oi7d.deltaOi|*30 при |deltaPx|<5% (OI ramp без цены)
+  const sigScore = (r) => {
+    let s = Math.abs(r.fundingApy || 0);
+    if (r.premium != null) s += Math.abs(r.premium) * 500; // premium — доля
+    const fp = r.fundingPersist;
+    if (fp && fp.fractionExtreme != null) s += fp.fractionExtreme * 20;
+    const oi = r.oi7d;
+    if (oi && oi.deltaOi != null && oi.deltaPx != null && Math.abs(oi.deltaPx) < 0.05) {
+      s += Math.abs(oi.deltaOi) * 30;
+    }
+    return s;
+  };
+  const enriched = [...rows].sort((a, b) => sigScore(b) - sigScore(a)).slice(0, 25);
+
+  // Honest meta: возраст самого старого ряда (≈ возраст collector'а)
+  const collectorAgeH = rows.reduce((min, r) => {
+    const fpAge = r.fundingPersist?.ageHours ?? 0;
+    return fpAge > min ? fpAge : min;
+  }, 0);
+  const ageLabel =
+    collectorAgeH < 48
+      ? `early data · ${collectorAgeH.toFixed(0)}h collected`
+      : collectorAgeH < 7 * 24
+        ? `${collectorAgeH.toFixed(0)}h collected · persist ready`
+        : collectorAgeH < 30 * 24
+          ? `${(collectorAgeH / 24).toFixed(1)}d collected · 7d ready`
+          : `${(collectorAgeH / 24).toFixed(0)}d collected · full`;
+  meta.textContent = payload?.ts
+    ? `${rows.length} coins · ${ageLabel} · updated ${fmtTime(payload.ts)}`
+    : "—";
+
+  const fmtUsd = (v) => {
+    if (v == null || !isFinite(v)) return '<span class="num-inline-muted">—</span>';
+    if (v >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+    if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
+    if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}K`;
+    return `$${v.toFixed(0)}`;
+  };
+  const fmtPct = (v, digits = 2) => {
+    if (v == null || !isFinite(v)) return "—";
+    const sign = v >= 0 ? "+" : "";
+    return `${sign}${v.toFixed(digits)}%`;
+  };
+  const fundingCell = (apy) => {
+    if (apy == null) return '<span class="num-inline-muted">—</span>';
+    const cls = apy > 0 ? "num-inline-pos" : apy < 0 ? "num-inline-neg" : "num-inline-muted";
+    const tag =
+      Math.abs(apy) > 50
+        ? '<span style="font-weight:700">'
+        : Math.abs(apy) > 20
+          ? "<span>"
+          : '<span style="opacity:0.7">';
+    return `<span class="${cls}">${tag}${fmtPct(apy, 1)}</span></span>`;
+  };
+  const premiumCell = (p) => {
+    if (p == null) return '<span class="num-inline-muted">—</span>';
+    const pct = p * 100;
+    const cls = pct > 0 ? "num-inline-pos" : pct < 0 ? "num-inline-neg" : "num-inline-muted";
+    return `<span class="${cls}">${fmtPct(pct, 3)}</span>`;
+  };
+  const persistCell = (fp) => {
+    if (!fp) return '<span class="num-inline-muted">—</span>';
+    if (fp.etaHours != null) {
+      const eta = fp.etaHours.toFixed(0);
+      return `<span class="num-inline-muted">collecting · ${eta}h</span>`;
+    }
+    const frac = (fp.fractionExtreme * 100).toFixed(0);
+    const color =
+      fp.fractionExtreme >= 0.8
+        ? "var(--red)"
+        : fp.fractionExtreme >= 0.4
+          ? "var(--orange, #f59e0b)"
+          : "var(--text-muted)";
+    return `<span style="color:${color}">${frac}% extreme</span>`;
+  };
+  const oiCell = (oi) => {
+    if (!oi) return '<span class="num-inline-muted">—</span>';
+    if (oi.etaHours != null) {
+      const days = (oi.etaHours / 24).toFixed(1);
+      return `<span class="num-inline-muted">collecting · ${days}d</span>`;
+    }
+    const oiPct = oi.deltaOi * 100;
+    const pxPct = oi.deltaPx != null ? oi.deltaPx * 100 : null;
+    const oiSign = oiPct > 0 ? "+" : "";
+    const pxStr = pxPct != null ? `${pxPct > 0 ? "+" : ""}${pxPct.toFixed(1)}%` : "—";
+    // Highlight: большой OI ramp без движения цены
+    const ramp = Math.abs(oiPct) > 40 && pxPct != null && Math.abs(pxPct) < 5;
+    const cls = ramp ? 'style="color:var(--accent);font-weight:600"' : "";
+    return `<span ${cls}>${oiSign}${oiPct.toFixed(0)}% / ${pxStr}</span>`;
+  };
+  const volRegimeCell = (vr) => {
+    if (!vr) return '<span class="num-inline-muted">—</span>';
+    if (vr.etaHours != null) {
+      const days = (vr.etaHours / 24).toFixed(0);
+      return `<span class="num-inline-muted">collecting · ${days}d</span>`;
+    }
+    const r = vr.ratio;
+    let color = "var(--text-muted)";
+    if (r >= 2) color = "var(--red)";
+    else if (r >= 1.5) color = "var(--orange, #f59e0b)";
+    else if (r <= 0.5) color = "var(--green)";
+    return `<span style="color:${color}">${r.toFixed(2)}×</span>`;
+  };
+
+  tbody.innerHTML = enriched
+    .map((r, idx) => `<tr>
+      <td>${idx + 1}</td>
+      <td><span class="signals-price">#${escapeHtml(r.coin)}</span></td>
+      <td>${fundingCell(r.fundingApy)}</td>
+      <td>${premiumCell(r.premium)}</td>
+      <td>${fmtUsd(r.oiUsd)}</td>
+      <td>${fmtUsd(r.vol24hUsd)}</td>
+      <td>${persistCell(r.fundingPersist)}</td>
+      <td>${oiCell(r.oi7d)}</td>
+      <td>${volRegimeCell(r.volRegime)}</td>
+    </tr>`)
+    .join("");
+}
+
 async function fetchJson(path) {
   const r = await fetch(path);
   if (r.status === 401) window.location.href = "/login";
@@ -1262,15 +1396,17 @@ async function fetchJson(path) {
 }
 
 async function tick() {
-  const [historyR, activityR, taxR, pnlR, moversR, insightsR] = await Promise.allSettled([
+  const [historyR, activityR, taxR, pnlR, moversR, insightsR, setupR] = await Promise.allSettled([
     fetchJson(`/api/history?hours=${currentRangeHours}`),
     fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
     fetchJson("/api/tax-summary"),
     fetchJson("/api/pnl-summary"),
     fetchJson("/api/signals?limit=200"),
     fetchJson("/api/insights"),
+    fetchJson("/api/setup-scanner"),
   ]);
   if (moversR.status === "fulfilled") renderHotMovers(moversR.value);
+  if (setupR.status === "fulfilled") renderSetupScanner(setupR.value);
   if (pnlR.status === "fulfilled") {
     lastPnlSummary = pnlR.value;
     renderPnlSummary();
@@ -1418,6 +1554,50 @@ const HELP_CONTENT = {
           ["Manual position", "Если бот в hands-off + есть ручная позиция — она тут"],
           ["Idle", "Нет позиций — показывает последнюю траденную монету из истории"],
         ],
+      },
+    ],
+  },
+  setupScanner: {
+    title: "Setup Scanner — конвергенция HL-сигналов",
+    lead: "Manual-helper: ищет монеты, где совпали 2-3 ортогональных сигнала (funding extreme + premium, OI ramp без движения цены, vol regime shift). Не торгует, бот не трогает.",
+    sections: [
+      {
+        title: "Источник данных",
+        sub: "Scout раз в 60min (SETUP_SNAPSHOT_INTERVAL_MIN) пишет snapshot по всем монетам из liquidSet (top-50 по 24h vol) в setup_snapshots. Retention 90 дней. HL не отдаёт историю — копим сами с нуля.",
+      },
+      {
+        title: "Funding APY",
+        sub: "Annualized funding (current). > +30% APY = шортов перебор, < -30% = лонгов перебор. Сам по себе шум; ценен в комбо с persist.",
+      },
+      {
+        title: "Premium",
+        sub: "Mark vs oracle. > 0 = mark выше oracle (давление покупателей), < 0 = давление продавцов. Доли %, не путать с funding.",
+      },
+      {
+        title: "Persist 48h",
+        sub: "Доля 48ч-сэмплов с |APY| > 30%. Funding extreme который ДЕРЖИТСЯ ≥48ч = устойчивая разбалансировка позиций, не разовый всплеск.",
+        rows: [
+          ['<span style="color:var(--red)">≥80% extreme</span>', "Перенасыщенная сторона — высокая вероятность сжатия (squeeze)"],
+          ['<span style="color:#f59e0b">40-80%</span>', "Заметное смещение"],
+          ['<span class="num-inline-muted">collecting · Xh</span>', "Недостаточно истории, ждём 48ч"],
+        ],
+      },
+      {
+        title: "OI Δ7d / Px",
+        sub: "Δ Open Interest vs Δ цены за 7 дней. Главный setup-маркер: OI растёт сильно, а цена стоит → накапливают позицию, ждут катализатор.",
+        rows: [
+          ['<span style="color:var(--accent)">+50% / +2%</span>', "Massive accumulation без движения — high-conviction setup"],
+          ['+10% / +30%', "OI просто следует за ценой — нормальный тренд, не setup"],
+          ['<span class="num-inline-muted">collecting · Xd</span>', "Ждём 7 дней истории"],
+        ],
+      },
+      {
+        title: "Vol regime",
+        sub: "Vol 24h / средний 24h vol за 30d. > 1.5× = регулярный объём вырос (рост интереса). < 0.5× = монета остыла. Нужно 30 дней истории.",
+      },
+      {
+        title: "Почему нет суммарного score 0-4",
+        sub: "Пока persist/OI/regime ещё «collecting» — суммарный балл будет враньём. Показываем сигналы по отдельности и красим только те, что готовы. Через ~30 дней появится полноценный score.",
       },
     ],
   },

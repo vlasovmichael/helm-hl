@@ -20,6 +20,7 @@ import {
   getStrategyStats,
   getRecentStrategyTrades,
   getBotOidsSince,
+  getSetupScannerRows,
 } from "../../core/database.js";
 import { getAccountSummary, getPositions, getLivePrice } from "../exchange.js";
 import { fetchUserFills, reconstructManualTrades } from "../userFills.js";
@@ -1362,6 +1363,16 @@ async function handleTradeMarkers(req, res) {
   }
 }
 
+async function handleSetupScanner(_req, res) {
+  try {
+    const rows = getSetupScannerRows();
+    res.json({ ts: Date.now(), count: rows.length, rows });
+  } catch (err) {
+    logger.warn(`[Dashboard] /api/setup-scanner error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+}
+
 async function handleTaxSummary(req, res) {
   try {
     const yearParam = req.query.year ? parseInt(req.query.year, 10) : null;
@@ -1455,6 +1466,7 @@ export function startDashboard() {
   app.get("/api/tax-summary", handleTaxSummary);
   app.get("/api/pnl-summary", handlePnlSummary);
   app.get("/api/insights", handleInsights);
+  app.get("/api/setup-scanner", handleSetupScanner);
   app.get("/api/trade-markers", handleTradeMarkers);
 
   // Debug: посмотреть что реально выдаёт getManualTrades() — для расследования

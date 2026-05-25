@@ -181,6 +181,24 @@ export function initDB() {
       ON tax_outbox (created_at) WHERE pushed_at IS NULL;
   `);
 
+  // Setup Scanner snapshots — manual-helper, копит funding/OI/premium/vol по liquidSet.
+  // Пишется scout.js раз в SETUP_SNAPSHOT_INTERVAL_MIN (default 60); НЕ влияет на торговую логику.
+  // Retention 90 дней (см. recordSetupSnapshots).
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS setup_snapshots (
+      coin         TEXT    NOT NULL,
+      ts           INTEGER NOT NULL,
+      funding_rate REAL,
+      funding_apy  REAL,
+      oi_usd       REAL,
+      mark         REAL,
+      premium      REAL,
+      vol_24h_usd  REAL,
+      PRIMARY KEY (coin, ts)
+    );
+    CREATE INDEX IF NOT EXISTS setup_snapshots_ts_idx ON setup_snapshots (ts);
+  `);
+
   // Bot order id log — для точной фильтрации bot vs manual fills в dashboard'е.
   // Раньше использовали time-based bot window, но bot.entry_time ≠ фактический
   // fill.time (skew 100-1000ms), из-за чего pre-entry fills бота проскакивали
@@ -546,6 +564,113 @@ export function realTradesForDisplay(trades) {
  *
  * @returns {number} кол-во заархивированных записей
  */
+const SETUP_SNAPSHOT_RETENTION_MS = 90 * 24 * 3_600_000;
+
+/**
+ * Bulk-insert snapshot batch (одна транзакция). Дубли по (coin, ts) игнорятся.
+ * Используется scout'ом раз в SETUP_SNAPSHOT_INTERVAL_MIN.
+ * @param {Array<{coin,ts,funding_rate,funding_apy,oi_usd,mark,premium,vol_24h_usd}>} rows
+ */
+export function recordSetupSnapshots(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return 0;
+  const stmt = getDb().prepare(`
+    INSERT OR IGNORE INTO setup_snapshots
+      (coin, ts, funding_rate, funding_apy, oi_usd, mark, premium, vol_24h_usd)
+    VALUES (@coin, @ts, @funding_rate, @funding_apy, @oi_usd, @mark, @premium, @vol_24h_usd)
+  `);
+  const tx = getDb().transaction((batch) => {
+    for (const r of batch) stmt.run(r);
+  });
+  tx(rows);
+  getDb()
+    .prepare('DELETE FROM setup_snapshots WHERE ts < ?')
+    .run(Date.now() - SETUP_SNAPSHOT_RETENTION_MS);
+  return rows.length;
+}
+
+/**
+ * Возвращает агрегированные данные для Setup Scanner-карточки.
+ * Для каждой монеты: current snapshot + history-derived поля (funding persist 48h,
+ * OI/price delta 7d, vol regime 30d). Поля с недостаточной историей возвращают
+ * { ageHours, eta_hours } — UI показывает "collecting · ETA …".
+ *
+ * Тяжёлой работы нет — берём окно 30d (≤36k rows для top-50) и агрегируем в JS.
+ */
+export function getSetupScannerRows() {
+  const now = Date.now();
+  const sinceMs = now - 30 * 86_400_000;
+  const rows = getDb()
+    .prepare(`
+      SELECT coin, ts, funding_rate, funding_apy, oi_usd, mark, premium, vol_24h_usd
+      FROM setup_snapshots
+      WHERE ts >= ?
+      ORDER BY coin, ts ASC
+    `)
+    .all(sinceMs);
+
+  const byCoin = new Map();
+  for (const r of rows) {
+    if (!byCoin.has(r.coin)) byCoin.set(r.coin, []);
+    byCoin.get(r.coin).push(r);
+  }
+
+  const H48 = now - 48 * 3_600_000;
+  const D7  = now - 7  * 86_400_000;
+  const H48_FULL = 48;
+  const D7_FULL  = 7 * 24;
+  const D30_FULL = 30 * 24;
+
+  const out = [];
+  for (const [coin, arr] of byCoin) {
+    const last = arr[arr.length - 1];
+
+    // 48h funding persist
+    const f48 = arr.filter((r) => r.ts >= H48 && r.funding_apy != null);
+    const f48Age = f48.length ? (now - f48[0].ts) / 3_600_000 : 0;
+    const extreme = f48.filter((r) => Math.abs(r.funding_apy) > 30).length;
+    const fundingPersist = f48Age >= H48_FULL - 1 && f48.length
+      ? { ageHours: f48Age, fractionExtreme: extreme / f48.length, samples: f48.length }
+      : { ageHours: f48Age, etaHours: Math.max(0, H48_FULL - f48Age) };
+
+    // 7d OI/price delta
+    const w7 = arr.filter((r) => r.ts >= D7);
+    const w7Age = w7.length ? (now - w7[0].ts) / 3_600_000 : 0;
+    const w7First = w7[0];
+    const oi7d = w7Age >= D7_FULL - 1 && w7First?.oi_usd && last.oi_usd != null
+      ? {
+          ageHours: w7Age,
+          deltaOi: (last.oi_usd - w7First.oi_usd) / w7First.oi_usd,
+          deltaPx: w7First.mark ? (last.mark - w7First.mark) / w7First.mark : null,
+        }
+      : { ageHours: w7Age, etaHours: Math.max(0, D7_FULL - w7Age) };
+
+    // 30d vol regime
+    const v30 = arr.filter((r) => r.vol_24h_usd != null);
+    const v30Age = v30.length ? (now - v30[0].ts) / 3_600_000 : 0;
+    const avgVol30d = v30.length
+      ? v30.reduce((s, r) => s + r.vol_24h_usd, 0) / v30.length
+      : null;
+    const volRegime = v30Age >= D30_FULL - 1 && avgVol30d && last.vol_24h_usd != null
+      ? { ageHours: v30Age, ratio: last.vol_24h_usd / avgVol30d }
+      : { ageHours: v30Age, etaHours: Math.max(0, D30_FULL - v30Age) };
+
+    out.push({
+      coin,
+      ts: last.ts,
+      fundingApy: last.funding_apy,
+      fundingRate: last.funding_rate,
+      mark: last.mark,
+      premium: last.premium,
+      oiUsd: last.oi_usd,
+      vol24hUsd: last.vol_24h_usd,
+      fundingPersist,
+      oi7d,
+      volRegime,
+    });
+  }
+  return out;
+}
+
 export function archiveAndClearHistory() {
   const ARCHIVE_PATH = 'data/history_archive.json';
 

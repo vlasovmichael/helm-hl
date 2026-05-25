@@ -66,6 +66,12 @@ function loadConfig() {
   if (isNaN(liquidMinVolume) || liquidMinVolume < 0) {
     throw new Error(`LIQUID_MIN_VOLUME must be non-negative number. Got: "${process.env.LIQUID_MIN_VOLUME}"`);
   }
+  // ── Setup Scanner snapshot interval (manual-helper, не торговая логика) ──
+  const setupSnapshotIntervalMin = parseInt(process.env.SETUP_SNAPSHOT_INTERVAL_MIN || '60', 10);
+  if (isNaN(setupSnapshotIntervalMin) || setupSnapshotIntervalMin < 1) {
+    throw new Error(`SETUP_SNAPSHOT_INTERVAL_MIN must be integer ≥ 1. Got: "${process.env.SETUP_SNAPSHOT_INTERVAL_MIN}"`);
+  }
+
   if (isNaN(liquidCacheHours) || liquidCacheHours <= 0) {
     throw new Error(`LIQUID_CACHE_HOURS must be positive number. Got: "${process.env.LIQUID_CACHE_HOURS}"`);
   }
@@ -523,6 +529,7 @@ function loadConfig() {
       liquidTopN,
       liquidMinVolume,
       liquidCacheMs: liquidCacheHours * 3_600_000,
+      setupSnapshotIntervalMin,
       fadeEnabled,
       fadeMaxHoldMinutes,
       fadeMinCurrentApy,
