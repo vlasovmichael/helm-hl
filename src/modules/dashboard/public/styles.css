@@ -668,13 +668,51 @@ header {
   display: inline-flex;
   flex-direction: column;
   height: 1.1em;
-  transition: transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.9s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 .digit-reel span {
   display: block;
   height: 1.1em;
   line-height: 1.1em;
   text-align: center;
+}
+
+/* ──────────────────────── Order-book imbalance bar
+   Thin bar above price chart: green = bid liquidity within ±0.5% of mid,
+   red = ask liquidity, widths proportional. Streamed from HL public WS. */
+.orderbook-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 2px 10px;
+}
+.orderbook-track {
+  flex: 1;
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--canvas-subtle);
+  border: 1px solid var(--border);
+}
+.orderbook-bid {
+  background: var(--green);
+  transition: flex-basis 0.4s ease;
+  min-width: 0;
+}
+.orderbook-ask {
+  background: var(--red);
+  transition: flex-basis 0.4s ease;
+  min-width: 0;
+}
+.orderbook-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+@media (max-width: 720px) {
+  .orderbook-label { font-size: 10px; }
 }
 
 /* ──────────────────────── Footer */
@@ -1734,6 +1772,14 @@ footer {
 @media (max-width: 720px) {
   #sec-chillboy .cb-grid {
     grid-template-columns: 1fr;
+  }
+  #cb-history-body {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #sec-chillboy .cb-table th,
+  #sec-chillboy .cb-table td {
+    white-space: nowrap;
   }
 }
 
