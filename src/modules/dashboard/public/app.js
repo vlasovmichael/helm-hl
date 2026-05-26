@@ -173,11 +173,8 @@ function updateAnimatedNumber(elId, newValueStr) {
       reel.className = "digit-reel";
       const startDigit = /[0-9]/.test(charOld) ? Number(charOld) : 0;
       const endDigit = Number(charNew);
-      // Rabbit-style odometer: roll forward through digits, min ~10 steps so
-      // even a +1 change reads as a real spin instead of a snap.
-      const MIN_STEPS = 10;
-      const forwardDist = (endDigit - startDigit + 10) % 10;
-      const totalSteps = forwardDist + Math.ceil((MIN_STEPS - forwardDist) / 10) * 10;
+      // Odometer: только реальная дельта (1→2 = один шаг, не полный оборот).
+      const totalSteps = (endDigit - startDigit + 10) % 10;
       const frames = [];
       for (let k = 0; k <= totalSteps; k++) {
         frames.push(String((startDigit + k) % 10));
@@ -1194,11 +1191,14 @@ function faderIcon(kind, direction) {
   </svg>`;
 }
 
-function computeFaderSetup(fader) {
+function computeFaderSetup(fader, rowDir) {
+  // rowDir: 'pump' → SHORT-fade, 'dump' → LONG-fade. Используем как fallback
+  // и для синхронизации лейбла Setup с row-fade-окраской строки.
+  const rowDirToSide = rowDir === 'pump' ? 'SHORT' : rowDir === 'dump' ? 'LONG' : null;
   if (!fader) {
     return { label: faderIcon('skip', null), cls: 'fader-skip', title: 'Fader: нет данных' };
   }
-  const dir = fader.direction || null;
+  const dir = fader.direction || rowDirToSide || null;
   const chop = fader.chopRatio != null ? ` · chop ${fader.chopRatio.toFixed(2)}` : '';
   const blocked = fader.blocked ? ` · ${fader.blocked}` : '';
 
@@ -1213,10 +1213,11 @@ function computeFaderSetup(fader) {
   }
   if (fader.tier === 'YELLOW') {
     const cls = dir === 'SHORT' ? 'fader-wait-short' : dir === 'LONG' ? 'fader-wait-long' : 'fader-wait-neutral';
+    const label = dir === 'SHORT' ? 'SHORT' : dir === 'LONG' ? 'LONG' : 'WAIT';
     return {
-      label: `${faderIcon('wait', dir)}<span class="fader-lbl">WAIT</span>`,
+      label: `${faderIcon('wait', dir)}<span class="fader-lbl">${label}</span>`,
       cls,
-      title: `Fader WAIT${dir ? ' ' + dir : ''}: borderline${chop}${blocked}`,
+      title: `Fader ${label}${dir ? ' ' + dir : ''}: borderline${chop}${blocked}`,
     };
   }
   // RED — нейтральный фон (оператор попросил убрать красный для skip).
@@ -1395,7 +1396,7 @@ function renderHotMovers(payload) {
       // Setup: при faderEnabled — Fader traffic-light (единый источник истины);
       // иначе — старый Hunter-вердикт по Accel/Vol.
       const setup = faderEnabled
-        ? computeFaderSetup(s.fader)
+        ? computeFaderSetup(s.fader, dir)
         : computeSetup(accelKind, volKind, dir);
 
       return `<tr class="${rowCls}">
