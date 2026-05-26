@@ -2516,3 +2516,66 @@ footer {
 .heatmap-legend > span:last-child {
   margin-left: 4px;
 }
+
+/* ── Manual Toolkit card (external tools) ─────────────── */
+.toolkit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 8px 0 4px;
+}
+@media (max-width: 720px) {
+  .toolkit-grid { grid-template-columns: 1fr; }
+}
+.toolkit-tile {
+  display: block;
+  padding: 14px 16px;
+  background: var(--card-bg, rgba(255,255,255,0.02));
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--text);
+  transition: all 0.18s ease;
+  position: relative;
+}
+.toolkit-tile:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  transform: translateY(-1px);
+}
+.toolkit-tile__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.toolkit-tile__name {
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--font-sans);
+  letter-spacing: 0.01em;
+}
+.toolkit-tile__name::after {
+  content: " ↗";
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 4px;
+}
+.toolkit-tile__sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-bottom: 8px;
+}
+.toolkit-tile__tag {
+  font-size: 11px;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+}
+.toolkit-tile .help-btn {
+  margin-left: 0;
+  z-index: 2;
+}
