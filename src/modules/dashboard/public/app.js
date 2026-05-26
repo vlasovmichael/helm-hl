@@ -1113,39 +1113,47 @@ function renderBans(status) {
 // никакой новой стратегической логики, чтобы пользователь видел готовый
 // ответ «заходить / ждать / мимо» без сборки комбо в голове.
 function computeSetup(accelKind, volKind, dir) {
+  // Все вердикты — про fade. Сторона входа = противоход row-direction:
+  //   pump (row-fade-short) → SHORT, dump (row-fade-long) → LONG.
+  const side = dir === 'pump' ? 'SHORT' : dir === 'dump' ? 'LONG' : null;
+  const sideTag = side ? ` <span class="fader-lbl">${side}</span>` : '';
+  const withSide = (r) => ({ ...r, label: r.label + sideTag });
   // Полное отсутствие данных: пусто.
   if (!accelKind && !volKind) {
     return { label: '<span class="num-inline-muted">—</span>', cls: 'setup-none', title: 'Нет данных' };
   }
   // Разворот внутри окна — не фейдим, скорее follow.
   if (accelKind === 'rev') {
-    return { label: '⚠ REV', cls: 'setup-rev', title: 'Разворот внутри окна — не фейди, скорее follow' };
+    return withSide({ label: '⚠ REV', cls: 'setup-rev', title: 'Разворот внутри окна — не фейди, скорее follow' });
   }
   // Импульс ускоряется + крупный объём → большие деньги двигают, мимо.
   if (accelKind === 'up' && volKind === 'high') {
-    return { label: '🚫 AVOID', cls: 'setup-avoid', title: 'Импульс ускоряется на большом объёме — НЕ фейди' };
+    return withSide({ label: '🚫 AVOID', cls: 'setup-avoid', title: 'Импульс ускоряется на большом объёме — НЕ фейди' });
   }
   // Импульс ускоряется на тонком объёме → готовится фейд, ждём ▼.
   if (accelKind === 'up' && volKind === 'thin') {
-    return { label: '🟠 PRE', cls: 'setup-pre', title: 'Памп на пустом стакане — жди ▼ затем фейди' };
+    return withSide({ label: '🟠 PRE', cls: 'setup-pre', title: 'Памп на пустом стакане — жди ▼ затем фейди' });
   }
   // Памп без vol-данных и без признаков выдоха — пока стой в стороне.
   if (accelKind === 'up') {
-    return { label: '🚫 AVOID', cls: 'setup-avoid', title: 'Импульс ускоряется — НЕ фейди ещё' };
+    return withSide({ label: '🚫 AVOID', cls: 'setup-avoid', title: 'Импульс ускоряется — НЕ фейди ещё' });
   }
   // Идеальный fade-сетап: импульс выдыхается на тонком объёме.
   if (accelKind === 'down' && volKind === 'thin') {
-    return { label: '🟢 FADE', cls: 'setup-fade', title: 'Лучший fade-setup: импульс выдохся на пустом стакане' };
+    return withSide({ label: '🟢 FADE', cls: 'setup-fade', title: 'Лучший fade-setup: импульс выдохся на пустом стакане' });
   }
   // Импульс выдыхается на большом объёме — фейд с тугим SL.
   if (accelKind === 'down' && volKind === 'high') {
-    return { label: '🟡 OK*', cls: 'setup-ok', title: 'Темп упал, но объём был большой — фейд с тугим SL' };
+    return withSide({ label: '🟡 OK*', cls: 'setup-ok', title: 'Темп упал, но объём был большой — фейд с тугим SL' });
   }
   // Импульс выдыхается, объём средний или грузится — норм фейд.
   if (accelKind === 'down') {
-    return { label: '🟡 OK', cls: 'setup-ok', title: volKind ? 'Импульс выдыхается — норм fade' : 'Импульс выдыхается, ждём Vol× для подтверждения' };
+    return withSide({ label: '🟡 OK', cls: 'setup-ok', title: volKind ? 'Импульс выдыхается — норм fade' : 'Импульс выдыхается, ждём Vol× для подтверждения' });
   }
-  // Флэт или нет данных по accel — ждём движение.
+  // Флэт или нет данных по accel: если есть row-направление — показываем сторону, иначе WAIT.
+  if (side) {
+    return { label: `<span class="fader-lbl">${side}</span>`, cls: 'setup-wait', title: `Темп ровный — fade-сторона по row-direction (${side})` };
+  }
   return { label: '<span class="num-inline-muted">⚪ WAIT</span>', cls: 'setup-wait', title: 'Темп ровный — ждём явного движения' };
 }
 
@@ -1236,7 +1244,49 @@ function renderHotMovers(payload) {
   const th = payload?.thresholds || {};
   const faderEnabled = payload?.faderEnabled === true;
 
-  // Sort by max |spikePct| across all windows, desc. Items with no history go last.
+  // Сортировка: «жирные сигналы» наверху. Priority — сила fade-setup'а
+  // (FADE > OK* > OK > PRE > REV/AVOID > WAIT), tiebreak — max |spike|.
+  // Монеты без направления (нет pump/dump) — в конец.
+  const TIER_RANK_LOCAL = { STRONG: 3, NORMAL: 2, WEAK: 1 };
+  const dirOf = (windows) => {
+    let best = null;
+    for (const w of windows) {
+      if (!w.tier || w.tier === "NEUTRAL" || w.spikePct == null) continue;
+      const rank = TIER_RANK_LOCAL[w.tier] || 0;
+      const abs = Math.abs(w.spikePct);
+      if (!best || rank > best.rank || (rank === best.rank && abs > best.abs)) {
+        best = { rank, abs, sign: w.spikePct > 0 ? "pump" : "dump" };
+      }
+    }
+    return best?.sign ?? null;
+  };
+  const setupRank = (s, windows) => {
+    const w2 = windows.find((w) => w.mins === 2);
+    const w5 = windows.find((w) => w.mins === 5);
+    let accelKind = null;
+    if (w2 && w5 && w2.spikePct != null && w5.spikePct != null) {
+      const a = w2.spikePct, b = w5.spikePct;
+      if (Math.abs(b) < 0.05) accelKind = 'flat';
+      else if ((a > 0) !== (b > 0) && Math.abs(a) > 0.2) accelKind = 'rev';
+      else {
+        const ratio = Math.abs(a) / Math.abs(b * 0.4);
+        accelKind = ratio >= 1.2 ? 'up' : ratio <= 0.6 ? 'down' : 'flat';
+      }
+    }
+    let volKind = null;
+    if (typeof s.volMult === "number" && isFinite(s.volMult)) {
+      const v = s.volMult;
+      volKind = v >= 2 ? 'high' : v >= 1.3 ? 'mid' : v <= 0.5 ? 'thin' : 'normal';
+    }
+    if (accelKind === 'down' && volKind === 'thin') return 6; // FADE
+    if (accelKind === 'down' && volKind === 'high') return 5; // OK*
+    if (accelKind === 'down') return 4;                       // OK
+    if (accelKind === 'up' && volKind === 'thin') return 3;   // PRE
+    if (accelKind === 'rev') return 2;
+    if (accelKind === 'up') return 1;                         // AVOID
+    return 0;                                                  // WAIT/none
+  };
+
   const enriched = signals
     .map((s) => {
       const windows = Array.isArray(s.windows) ? s.windows : [];
@@ -1246,14 +1296,18 @@ function renderHotMovers(payload) {
           maxAbs = Math.abs(w.spikePct);
         }
       }
-      return { s, windows, maxAbs };
+      const dir = dirOf(windows);
+      const rank = setupRank(s, windows);
+      // Без направления — задвигаем вниз (нет clean long/short).
+      const sortRank = dir ? rank : -1;
+      return { s, windows, maxAbs, sortRank };
     })
     .filter((x) => x.maxAbs > -Infinity)
-    .sort((a, b) => b.maxAbs - a.maxAbs)
+    .sort((a, b) => (b.sortRank - a.sortRank) || (b.maxAbs - a.maxAbs))
     .slice(0, 20);
 
   meta.textContent = payload?.ts
-    ? `scope ${payload.universeSize} · top ${enriched.length} by max |move| · updated ${fmtTime(payload.ts)}`
+    ? `scope ${payload.universeSize} · top ${enriched.length} by setup strength · updated ${fmtTime(payload.ts)}`
     : "—";
 
   if (!enriched.length) {
