@@ -86,10 +86,12 @@ export async function coordinate(scoutData, activePosition, hunterData = scoutDa
     }
   }
 
-  const carrySignal = analyze(scoutData, undefined);
-  if (carrySignal.action !== 'HOLD') {
-    logger.debug(`[Coordinator] carry → ${carrySignal.action} ${carrySignal.coin}`);
-    return { ...carrySignal, strategy_id: 'carry' };
+  if (config.trading.carryEnabled) {
+    const carrySignal = analyze(scoutData, undefined);
+    if (carrySignal.action !== 'HOLD') {
+      logger.debug(`[Coordinator] carry → ${carrySignal.action} ${carrySignal.coin}`);
+      return { ...carrySignal, strategy_id: 'carry' };
+    }
   }
 
   if (config.trading.fadeEnabled) {
