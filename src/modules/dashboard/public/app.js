@@ -1527,6 +1527,13 @@ function renderSetupScanner(payload) {
   };
   const fundingCell = (apy) => {
     if (apy == null) return '<span class="num-inline-muted">—</span>';
+    // HL funding baseline ≈ 0.00125%/h when premium≈0 → ~10.95% APY.
+    // Values within ±2% of baseline mean "no premium signal", render as neutral.
+    const HL_BASELINE_APY = 10.95;
+    const isNeutral = Math.abs(apy - HL_BASELINE_APY) < 2;
+    if (isNeutral) {
+      return `<span class="num-inline-muted" title="≈ HL baseline (premium ≈ 0)">≈base</span>`;
+    }
     const cls = apy > 0 ? "num-inline-pos" : apy < 0 ? "num-inline-neg" : "num-inline-muted";
     const tag =
       Math.abs(apy) > 50
