@@ -4,6 +4,7 @@ FROM node:20-alpine
 # Без него alpine молча падает на UTC.
 # su-exec нужен entrypoint'у чтобы дропнуть привилегии root → node.
 RUN apk update && apk upgrade --no-cache && apk add --no-cache tzdata su-exec
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
 
 WORKDIR /app
 
