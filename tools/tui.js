@@ -42,24 +42,36 @@ const OB_DEPTH = 8;
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
 function get(url) {
   return new Promise((resolve, reject) => {
+    const u = new URL(url);
     const mod = url.startsWith("https") ? https : http;
-    const opts = { headers: {} };
-    if (AUTH_HEADER && url.startsWith(BASE)) opts.headers["Authorization"] = AUTH_HEADER;
-    const req = mod
-      .get(url, opts, (res) => {
-        let data = "";
-        res.on("data", (c) => (data += c));
-        res.on("end", () => {
-          if (res.statusCode === 401) { reject(new Error("401 Unauthorized — set DASHBOARD_AUTH_USER/PASS")); return; }
-          try {
-            resolve(JSON.parse(data));
-          } catch (e) {
-            reject(new Error("JSON parse: " + e.message));
-          }
-        });
-      })
-      .on("error", reject);
+    const opts = {
+      hostname: u.hostname,
+      port: u.port || (url.startsWith("https") ? 443 : 80),
+      path: u.pathname + u.search,
+      method: "GET",
+      headers: {},
+    };
+    if (AUTH_HEADER && url.startsWith(BASE)) {
+      opts.headers["Authorization"] = AUTH_HEADER;
+    }
+    const req = mod.request(opts, (res) => {
+      let data = "";
+      res.on("data", (c) => (data += c));
+      res.on("end", () => {
+        if (res.statusCode === 401) {
+          reject(new Error("401 Unauthorized"));
+          return;
+        }
+        try {
+          resolve(JSON.parse(data));
+        } catch (e) {
+          reject(new Error("JSON parse: " + e.message));
+        }
+      });
+    });
+    req.on("error", reject);
     req.setTimeout(5000, () => req.destroy(new Error("timeout")));
+    req.end();
   });
 }
 
