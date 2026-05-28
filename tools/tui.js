@@ -29,17 +29,52 @@ const BASE =
     : process.env.DASHBOARD_URL || "http://localhost:3010";
 const HL_API = "https://api.hyperliquid.xyz/info";
 
-// Basic Auth header for dashboard (optional)
+// Dashboard credentials (optional — session cookie auth)
 const AUTH_USER = process.env.DASHBOARD_USER || process.env.DASHBOARD_AUTH_USER || "";
 const AUTH_PASS = process.env.DASHBOARD_PASS || process.env.DASHBOARD_AUTH_PASS || "";
-const AUTH_HEADER =
-  AUTH_USER && AUTH_PASS
-    ? "Basic " + Buffer.from(`${AUTH_USER}:${AUTH_PASS}`).toString("base64")
-    : null;
+let SESSION_COOKIE = "";
 const OB_COINS = ["BTC", "ETH", "SOL"];
 const OB_DEPTH = 8;
 
 // ── HTTP helpers ──────────────────────────────────────────────────────────────
+function dashboardHeaders() {
+  const h = {};
+  if (SESSION_COOKIE) h["Cookie"] = SESSION_COOKIE;
+  return h;
+}
+
+function login() {
+  return new Promise((resolve, reject) => {
+    if (!AUTH_USER || !AUTH_PASS) { resolve(); return; }
+    const body = `user=${encodeURIComponent(AUTH_USER)}&pass=${encodeURIComponent(AUTH_PASS)}`;
+    const u = new URL(`${BASE}/login`);
+    const opts = {
+      hostname: u.hostname,
+      port: u.port || 80,
+      path: u.pathname,
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Content-Length": Buffer.byteLength(body),
+      },
+    };
+    const req = http.request(opts, (res) => {
+      res.resume();
+      res.on("end", () => {
+        if (res.statusCode === 401) { reject(new Error("Login failed — wrong credentials")); return; }
+        const setCookie = res.headers["set-cookie"] || [];
+        const found = setCookie.find((c) => c.startsWith("hl-session="));
+        if (found) SESSION_COOKIE = found.split(";")[0];
+        resolve();
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(5000, () => req.destroy(new Error("login timeout")));
+    req.write(body);
+    req.end();
+  });
+}
+
 function get(url) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);
@@ -49,11 +84,8 @@ function get(url) {
       port: u.port || (url.startsWith("https") ? 443 : 80),
       path: u.pathname + u.search,
       method: "GET",
-      headers: {},
+      headers: url.startsWith(BASE) ? dashboardHeaders() : {},
     };
-    if (AUTH_HEADER && url.startsWith(BASE)) {
-      opts.headers["Authorization"] = AUTH_HEADER;
-    }
     const req = mod.request(opts, (res) => {
       let data = "";
       res.on("data", (c) => (data += c));
@@ -453,6 +485,7 @@ screen.key(["k", "up"], () => {
 // ── Boot ──────────────────────────────────────────────────────────────────────
 screen.render();
 
+await login();
 await Promise.all([refreshAll(), fetchOrderBook()]);
 screen.render();
 
