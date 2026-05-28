@@ -42,8 +42,8 @@ services:
     command: node tools/tui.js
     environment:
       DASHBOARD_URL: http://hl-paper-scanner:3010
-      DASHBOARD_AUTH_USER: ${DASHBOARD_AUTH_USER:-}
-      DASHBOARD_AUTH_PASS: ${DASHBOARD_AUTH_PASS:-}
+      DASHBOARD_AUTH_USER: ${DASHBOARD_USER:-}
+      DASHBOARD_AUTH_PASS: ${DASHBOARD_PASS:-}
     depends_on:
       - hl-paper-scanner
     networks:

@@ -30,8 +30,8 @@ const BASE =
 const HL_API = "https://api.hyperliquid.xyz/info";
 
 // Basic Auth header for dashboard (optional)
-const AUTH_USER = process.env.DASHBOARD_AUTH_USER || "";
-const AUTH_PASS = process.env.DASHBOARD_AUTH_PASS || "";
+const AUTH_USER = process.env.DASHBOARD_USER || process.env.DASHBOARD_AUTH_USER || "";
+const AUTH_PASS = process.env.DASHBOARD_PASS || process.env.DASHBOARD_AUTH_PASS || "";
 const AUTH_HEADER =
   AUTH_USER && AUTH_PASS
     ? "Basic " + Buffer.from(`${AUTH_USER}:${AUTH_PASS}`).toString("base64")
