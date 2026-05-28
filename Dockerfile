@@ -7,8 +7,9 @@ RUN apk update && apk upgrade --no-cache && apk add --no-cache tzdata su-exec
 
 WORKDIR /app
 
+ARG INCLUDE_DEV=false
 COPY package*.json ./
-RUN npm ci --omit=dev || npm install --production
+RUN if [ "$INCLUDE_DEV" = "true" ]; then npm ci; else npm ci --omit=dev; fi
 
 COPY . .
 
