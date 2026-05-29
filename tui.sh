@@ -1,2 +1,2 @@
 #!/bin/sh
-docker compose run --rm tui
+docker compose --profile tui run --rm tui
