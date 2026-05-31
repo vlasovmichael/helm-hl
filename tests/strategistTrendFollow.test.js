@@ -9,7 +9,7 @@ process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000'
 process.env.TELEGRAM_BOT_TOKEN    = '';
 process.env.CHILL_BOY_ENABLED     = 'true';
 
-const { analyzeTrendFollow, resetTrendFollowState } =
+const { analyzeTrendFollow, scanChillBoyRadar, getChillBoySignals, resetTrendFollowState } =
   await import('../src/modules/strategistTrendFollow.js');
 
 const HOUR = 3_600_000;
@@ -27,6 +27,9 @@ function noisyCandles(n, price, hlSpread = 10) {
 function makeFetcher(byCoin) {
   return async (coin) => byCoin[coin] || null;
 }
+
+/** Fetcher без свечей — для exit-тестов (скан идёт всегда, но ничего не находит). */
+const nullFetcher = makeFetcher({});
 
 // ═══════════════════════════════════════════════
 //  Entry detection
@@ -100,14 +103,31 @@ test('IDLE + re-detect cooldown — повторный сигнал в той ж
   assert.equal(second.action, 'HOLD');
 });
 
-test('Slot занят другой стратегией → HOLD без вызова fetcher', async () => {
+test('Slot занят чужой стратегией → HOLD, но скан идёт (радар расцеплен от слота)', async () => {
   resetTrendFollowState();
   let called = 0;
   const fetcher = async () => { called++; return null; };
   const otherPosition = { strategy_id: 'hunter', coin: 'BTC' };
   const r = await analyzeTrendFollow([{ coin: 'BTC', price: 100 }], otherPosition, T0, fetcher);
   assert.equal(r.action, 'HOLD');
-  assert.equal(called, 0);
+  // Скан юниверса для радара/ленты идёт независимо от занятости слота.
+  assert.equal(called, 1);
+});
+
+test('Чужой slot + squeeze+breakout → HOLD (не торгуем), но сигнал в ленте', async () => {
+  resetTrendFollowState();
+  const wide   = noisyCandles(50, 100, 10);
+  const narrow = flatCandles(25, 100, 1);
+  const fetcher = makeFetcher({ BTC: [...wide, ...narrow] });
+  const otherPosition = { strategy_id: 'hunter', coin: 'ETH' };
+  const r = await analyzeTrendFollow([{ coin: 'BTC', price: 103 }], otherPosition, T0, fetcher);
+  // Слот занят чужой позой → бот не входит…
+  assert.equal(r.action, 'HOLD');
+  // …но пробой попал в ленту радара (traded=false).
+  const signals = getChillBoySignals();
+  assert.equal(signals.length, 1);
+  assert.equal(signals[0].coin, 'BTC');
+  assert.equal(signals[0].traded, false);
 });
 
 // ═══════════════════════════════════════════════
@@ -121,7 +141,7 @@ test('exit LONG: цена ≤ SL → CLOSE trend_follow_sl', async () => {
     entry_price: 100, sl_price: 98, tp_price: 106,
     entry_time: T0 - HOUR,
   };
-  const r = await analyzeTrendFollow([{ coin: 'BTC', price: 97 }], position, T0);
+  const r = await analyzeTrendFollow([{ coin: 'BTC', price: 97 }], position, T0, nullFetcher);
   assert.equal(r.action, 'CLOSE');
   assert.equal(r.reason, 'trend_follow_sl');
   assert.equal(r.price, 98);
@@ -134,7 +154,7 @@ test('exit LONG: цена ≥ TP → CLOSE trend_follow_tp', async () => {
     entry_price: 100, sl_price: 98, tp_price: 106,
     entry_time: T0 - HOUR,
   };
-  const r = await analyzeTrendFollow([{ coin: 'BTC', price: 107 }], position, T0);
+  const r = await analyzeTrendFollow([{ coin: 'BTC', price: 107 }], position, T0, nullFetcher);
   assert.equal(r.action, 'CLOSE');
   assert.equal(r.reason, 'trend_follow_tp');
   assert.equal(r.price, 106);
@@ -147,7 +167,7 @@ test('exit SHORT: цена ≥ SL → CLOSE trend_follow_sl', async () => {
     entry_price: 100, sl_price: 102, tp_price: 94,
     entry_time: T0 - HOUR,
   };
-  const r = await analyzeTrendFollow([{ coin: 'BTC', price: 103 }], position, T0);
+  const r = await analyzeTrendFollow([{ coin: 'BTC', price: 103 }], position, T0, nullFetcher);
   assert.equal(r.action, 'CLOSE');
   assert.equal(r.reason, 'trend_follow_sl');
 });
@@ -159,7 +179,7 @@ test('exit SHORT: цена ≤ TP → CLOSE trend_follow_tp', async () => {
     entry_price: 100, sl_price: 102, tp_price: 94,
     entry_time: T0 - HOUR,
   };
-  const r = await analyzeTrendFollow([{ coin: 'BTC', price: 93 }], position, T0);
+  const r = await analyzeTrendFollow([{ coin: 'BTC', price: 93 }], position, T0, nullFetcher);
   assert.equal(r.action, 'CLOSE');
   assert.equal(r.reason, 'trend_follow_tp');
 });
@@ -171,7 +191,7 @@ test('exit: time-stop 6ч → CLOSE trend_follow_time_stop', async () => {
     entry_price: 100, sl_price: 98, tp_price: 106,
     entry_time: T0 - 7 * HOUR,
   };
-  const r = await analyzeTrendFollow([{ coin: 'BTC', price: 100 }], position, T0);
+  const r = await analyzeTrendFollow([{ coin: 'BTC', price: 100 }], position, T0, nullFetcher);
   assert.equal(r.action, 'CLOSE');
   assert.equal(r.reason, 'trend_follow_time_stop');
 });
@@ -183,7 +203,7 @@ test('exit: монета пропала из scoutData → HOLD (ждём сле
     entry_price: 100, sl_price: 98, tp_price: 106,
     entry_time: T0 - HOUR,
   };
-  const r = await analyzeTrendFollow([{ coin: 'ETH', price: 2000 }], position, T0);
+  const r = await analyzeTrendFollow([{ coin: 'ETH', price: 2000 }], position, T0, nullFetcher);
   assert.equal(r.action, 'HOLD');
 });
 
@@ -199,7 +219,7 @@ test('post-SL cooldown: после SL та же монета не входит 2
     entry_price: 100, sl_price: 98, tp_price: 106,
     entry_time: T0 - HOUR,
   };
-  const exitR = await analyzeTrendFollow([{ coin: 'BTC', price: 97 }], position, T0);
+  const exitR = await analyzeTrendFollow([{ coin: 'BTC', price: 97 }], position, T0, nullFetcher);
   assert.equal(exitR.reason, 'trend_follow_sl');
 
   // 2. Через минуту — новый сигнал с пробоем. Должен подавиться post-SL cooldown.
@@ -214,4 +234,23 @@ test('post-SL cooldown: после SL та же монета не входит 2
     [{ coin: 'BTC', price: 103 }], null, T0 + 2.5 * HOUR, fetcher,
   );
   assert.equal(r2.action, 'OPEN');
+});
+
+// ═══════════════════════════════════════════════
+//  Radar scan расцеплен от торгового слота
+// ═══════════════════════════════════════════════
+
+test('scanChillBoyRadar: пробой пишется в ленту, позиция не открывается', async () => {
+  resetTrendFollowState();
+  const wide   = noisyCandles(50, 100, 10);
+  const narrow = flatCandles(25, 100, 1);
+  const fetcher = makeFetcher({ BTC: [...wide, ...narrow] });
+  // Возвращает undefined (не торговый сигнал) — это чистый скан.
+  const out = await scanChillBoyRadar([{ coin: 'BTC', price: 103 }], T0, fetcher);
+  assert.equal(out, undefined);
+  const signals = getChillBoySignals();
+  assert.equal(signals.length, 1);
+  assert.equal(signals[0].coin, 'BTC');
+  assert.equal(signals[0].direction, 'LONG');
+  assert.equal(signals[0].traded, false);   // радар никогда не «торгует»
 });

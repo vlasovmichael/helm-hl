@@ -92,8 +92,9 @@ async function fireChillBoyAlert(text) {
  * @param {{item, signal}} r
  * @param {number} now
  * @param {boolean} traded — этот сигнал бот берёт в работу (первый пробой)
+ * @param {boolean} slotBusy — слот занят (своей/чужой/ручной позой) → бот не входит
  */
-function recordChillBoySignal(r, now, traded) {
+function recordChillBoySignal(r, now, traded, slotBusy) {
   const { item, signal } = r;
   const last = alertCooldown.get(item.coin) ?? 0;
   if (now - last < ALERT_COOLDOWN_MS) return;   // дедуп: не чаще раза в окно
@@ -123,7 +124,11 @@ function recordChillBoySignal(r, now, traded) {
 
   if (!ALERT_ENABLED) return;
   const arrow = direction === 'long' ? '🟢 LONG' : '🔴 SHORT';
-  const tag   = traded ? '🤖 бот входит' : '👀 сигнал (слот занят первым пробоем)';
+  const tag = traded
+    ? '🤖 бот входит'
+    : slotBusy
+      ? '👀 сигнал (слот занят позицией)'
+      : '👀 сигнал (бот уже взял первый пробой)';
   fireChillBoyAlert(
     `🎯 <b>Chill Boy</b> — пробой против рынка\n` +
       `${arrow} <b>#${item.coin}</b> @ $${item.price}\n` +
@@ -168,23 +173,6 @@ function updateTrendFollowMfeMae(position, currentPrice) {
   }
   if (pnlUsd > v.mfeUsd) { v.mfeUsd = pnlUsd; v.mfePct = pnlPct; }
   if (pnlUsd < v.maeUsd) { v.maeUsd = pnlUsd; v.maePct = pnlPct; }
-}
-
-/**
- * Облегчённый heartbeat для тиков, где slot занят и universe не сканируется.
- * Держит dashboard-карточку живой — иначе после рестарта она висит «warming up»,
- * пока ChillBoy в сделке (analyzeTrendFollow уходит в ранний return до снапшота).
- */
-function markBusyHeartbeat(tracked, now) {
-  lastHeartbeat = {
-    tracked, squeezed: 0, breakouts: 0,
-    slot: 'BUSY',
-    reCooldowns: cooldownMap.size,
-    postSlCooldowns: postSlCooldown.size,
-    watchlist: [],
-    cooldownList: buildCooldownList(now),
-    ts: now,
-  };
 }
 
 function buildCooldownList(now) {
@@ -233,33 +221,13 @@ export function getChillBoyHeartbeat() {
 }
 
 /**
- * Анализ trend-follow.
- *
- * @param {Array<{coin: string, price: number}>} scoutData — те же coins что у Hunter
- * @param {Object|null} activePosition — для exit-check (strategy_id='trend_follow')
- * @param {number} [now=Date.now()]
- * @param {Function} [candleFetcher=getHourlyCandles] — DI для тестов
- * @returns {Promise<Object>} signal
- *   { action: 'HOLD' }
- *   { action: 'OPEN', strategy_id, coin, price, direction, sl, tp, atr, entryFeatures }
- *   { action: 'CLOSE', coin, price, reason: 'trend_follow_sl'|'trend_follow_tp'|'trend_follow_time_stop' }
+ * Прогон детектора по всему юниверсу. Чистый скан без побочных решений —
+ * возвращает результаты по каждой монете (или null, если в cooldown / нет свечей).
+ * Не зависит от занятости слота: это «сканер находок», расцепленный от торговли.
  */
-export async function analyzeTrendFollow(scoutData, activePosition, now = Date.now(), candleFetcher = getHourlyCandles) {
-  // Exit для своей позиции
-  if (activePosition?.strategy_id === 'trend_follow') {
-    markBusyHeartbeat(scoutData?.length ?? 0, now);
-    return checkTrendFollowExit(activePosition, scoutData, now);
-  }
-
-  // Если slot занят чужой стратегией — Iter F.1b без эвикшена, HOLD.
-  if (activePosition) {
-    markBusyHeartbeat(scoutData?.length ?? 0, now);
-    return { action: 'HOLD' };
-  }
-
-  // Сканируем universe — ищем squeeze+breakout. Параллельные fetch.
+async function performScan(scoutData, now, candleFetcher) {
   const data = scoutData ?? [];
-  const results = await Promise.all(
+  return Promise.all(
     data.map(async (item) => {
       // Re-detect cooldown
       const lastFired = cooldownMap.get(item.coin) ?? 0;
@@ -281,15 +249,15 @@ export async function analyzeTrendFollow(scoutData, activePosition, now = Date.n
       return { item, signal: sig };
     }),
   );
+}
 
-  // Heartbeat snapshot — обновляем каждый тик (дёшево, results уже посчитаны),
-  // чтобы dashboard-карточка была свежей. В лог пишем раз в 5мин.
-  const tracked  = data.length;
+/** Обновить heartbeat-снимок по результатам скана (dashboard-карточка). */
+function updateHeartbeat(results, tracked, now, slotBusy) {
   const squeezed = results.filter((r) => r?.signal?.inSqueeze).length;
   const hits     = results.filter((r) => r?.signal?.signal).length;
   lastHeartbeat = {
     tracked, squeezed, breakouts: hits,
-    slot: activePosition ? 'BUSY' : 'IDLE',
+    slot: slotBusy ? 'BUSY' : 'IDLE',
     reCooldowns: cooldownMap.size,
     postSlCooldowns: postSlCooldown.size,
     watchlist:    buildWatchlist(results, 5),
@@ -298,21 +266,78 @@ export async function analyzeTrendFollow(scoutData, activePosition, now = Date.n
   };
   if (now - lastHeartbeatAt >= TREND_FOLLOW_HEARTBEAT_MS) {
     logger.info(
-      `[ChillBoy] 💓 tracked=${tracked} squeezed=${squeezed} breakouts=${hits} | slot=${activePosition ? 'BUSY' : 'IDLE'} | cooldowns=${cooldownMap.size}+${postSlCooldown.size}`,
+      `[ChillBoy] 💓 tracked=${tracked} squeezed=${squeezed} breakouts=${hits} | slot=${slotBusy ? 'BUSY' : 'IDLE'} | cooldowns=${cooldownMap.size}+${postSlCooldown.size}`,
     );
     lastHeartbeatAt = now;
   }
+}
+
+/**
+ * Скан + запись радар-сигналов + heartbeat. Это общая «сканерная» половина,
+ * расцепленная от торгового слота. Возвращает первый breakout (`best`), который
+ * бот может взять — но ТОЛЬКО если слот свободен (`canTrade`). Когда слот занят,
+ * best=null (ничего не торгуем), но все пробои всё равно идут в ленту/TG.
+ */
+async function runScan(scoutData, now, candleFetcher, canTrade) {
+  const results = await performScan(scoutData, now, candleFetcher);
+  updateHeartbeat(results, scoutData?.length ?? 0, now, !canTrade);
 
   // Берём первый breakout (по порядку scoutData) — никакого ранжирования по силе
   // на F.1b. Если будет шквал сигналов одновременно, добавим scoring в F.4.
-  // results теперь содержит и не-breakout монеты (для heartbeat) — фильтруем
-  // явно по signal.signal, чтобы не открыть позицию на coil без пробоя.
   const breakoutHits = results.filter((r) => r?.signal?.signal);
-  const best = breakoutHits[0] ?? null;
-  // Радар: пишем ВСЕ пробои в ленту сигналов + шлём TG (дедуп per-coin внутри).
-  // Бот по-прежнему берёт только первый (best); остальные — сигналы для ручной
-  // торговли (а также для случая, когда prod-вход отклонится).
-  for (const r of breakoutHits) recordChillBoySignal(r, now, r === best);
+  const best = canTrade ? (breakoutHits[0] ?? null) : null;
+  // Радар: пишем ВСЕ пробои в ленту сигналов + шлём TG (дедуп per-coin внутри),
+  // независимо от занятости слота. Бот берёт только best (и только если свободен);
+  // остальные — сигналы для ручной торговли.
+  for (const r of breakoutHits) recordChillBoySignal(r, now, r === best, !canTrade);
+  return best;
+}
+
+/**
+ * Радар-скан без торговли. Вызывается из тика в путях, где coordinator не дойдёт
+ * до analyzeTrendFollow (HANDS-OFF / ручная поза), чтобы лента находок и алерты
+ * жили независимо от занятости слота. Никогда не открывает позицию.
+ *
+ * @param {Array<{coin: string, price: number}>} scoutData
+ * @param {number} [now=Date.now()]
+ * @param {Function} [candleFetcher=getHourlyCandles] — DI для тестов
+ */
+export async function scanChillBoyRadar(scoutData, now = Date.now(), candleFetcher = getHourlyCandles) {
+  await runScan(scoutData, now, candleFetcher, false);
+}
+
+/**
+ * Анализ trend-follow.
+ *
+ * Скан юниверса (лента сигналов + heartbeat) идёт ВСЕГДА — независимо от того,
+ * занят ли слот. Торгует (OPEN) только когда слот свободен; при своей позе —
+ * exit-check; при чужой — HOLD.
+ *
+ * @param {Array<{coin: string, price: number}>} scoutData — те же coins что у Hunter
+ * @param {Object|null} activePosition — для exit-check (strategy_id='trend_follow')
+ * @param {number} [now=Date.now()]
+ * @param {Function} [candleFetcher=getHourlyCandles] — DI для тестов
+ * @returns {Promise<Object>} signal
+ *   { action: 'HOLD' }
+ *   { action: 'OPEN', strategy_id, coin, price, direction, sl, tp, atr, entryFeatures }
+ *   { action: 'CLOSE', coin, price, reason: 'trend_follow_sl'|'trend_follow_tp'|'trend_follow_time_stop' }
+ */
+export async function analyzeTrendFollow(scoutData, activePosition, now = Date.now(), candleFetcher = getHourlyCandles) {
+  const slotFree = !activePosition;
+
+  // Скан юниверса для радара/ленты/heartbeat — расцеплен от торгового слота.
+  // canTrade=true только когда слот свободен → best!=null лишь в этом случае.
+  const best = await runScan(scoutData, now, candleFetcher, slotFree);
+
+  // Своя позиция → exit-check (скан выше уже наполнил ленту по другим монетам).
+  if (activePosition?.strategy_id === 'trend_follow') {
+    return checkTrendFollowExit(activePosition, scoutData, now);
+  }
+  // Слот занят чужой/ручной позой — без эвикшена, HOLD (но радар отработал).
+  if (activePosition) {
+    return { action: 'HOLD' };
+  }
+
   if (!best) return { action: 'HOLD' };
 
   const { item, signal } = best;

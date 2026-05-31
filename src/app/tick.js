@@ -6,6 +6,8 @@ import { logger } from '../core/logger.js';
 import { getActivePosition } from '../core/database.js';
 import { scan } from '../modules/scout.js';
 import { coordinate } from '../modules/coordinator.js';
+import { config } from '../core/config.js';
+import { scanChillBoyRadar } from '../modules/strategistTrendFollow.js';
 import { execute } from '../modules/executor/index.js';
 import { tickSniper } from '../modules/executor/sniper.js';
 import { runSmartAlerts } from './alerts.js';
@@ -58,6 +60,12 @@ export async function tick() {
         const { hunterData: handsOffHunter } = await scan();
         state.latestHunter   = handsOffHunter;
         state.latestHunterAt = Date.now();
+        // Радар Chill Boy расцеплен от торгового слота: при ручной позе (HANDS-OFF)
+        // coordinator не вызывается → analyzeTrendFollow не сканирует. Зовём скан
+        // напрямую, чтобы лента находок и TG-алерты жили, пока оператор торгует руками.
+        if (config.trading.chillBoyEnabled) {
+          await scanChillBoyRadar(handsOffHunter);
+        }
         // ChillBoy paper shadow-слот независим от реального слота — должен тикать
         // даже в HANDS-OFF, иначе зависшая ручная PROD-поза подвешивает paper
         // позицию навсегда (инцидент BTC id=90 + PURR HANDS-OFF, 2026-05-22/23).
