@@ -48,12 +48,89 @@ let lastHeartbeat = null;
 // долгосрочно поможет оценить «закрытия в плюсе/минусе раньше времени».
 const trendFollowMfeMaeMap = new Map();
 
+// ── Радар-сигналы (для dashboard-карточки + Telegram-алертов) ───────────────
+// Chill Boy ценен прежде всего как сканер «нашёл монету против рынка». Поэтому
+// каждый обнаруженный пробой пишем в ленту и шлём в TG — независимо от того,
+// войдёт ли бот (бот берёт только первый пробой за тик). Дедуп per-coin, чтобы
+// один и тот же coil не спамил каждый тик.
+// Дефолты заданы прямо здесь (ALERT_ENABLED default ON), чтобы фича работала
+// даже если config-ключи ещё не прописаны; env-override — через config.trading.
+const ALERT_ENABLED     = config.trading.chillBoyAlertEnabled !== false;
+const ALERT_COOLDOWN_MS = (config.trading.chillBoyAlertCooldownMin ?? 45) * 60_000;
+const MAX_RECENT_SIGNALS = 30;
+const alertCooldown = new Map();   // coin → ts последнего записанного сигнала/алерта
+const recentSignals = [];          // ring buffer (новые в начале)
+
 export function resetTrendFollowState() {
   cooldownMap.clear();
   postSlCooldown.clear();
   trendFollowMfeMaeMap.clear();
+  alertCooldown.clear();
+  recentSignals.length = 0;
   lastHeartbeatAt = 0;
   lastHeartbeat = null;
+}
+
+/** Лента последних обнаруженных пробоев (для dashboard «Chill Boy Signals»). */
+export function getChillBoySignals() {
+  return recentSignals.slice(0, 20);
+}
+
+/** Lazy-import reporter, чтобы не тянуть axios в юнит-тестах детектора. */
+async function fireChillBoyAlert(text) {
+  try {
+    const { sendMessage } = await import('./reporter.js');
+    await sendMessage(text, false, { bypassThrottle: true });
+  } catch (err) {
+    logger.warn(`[ChillBoy] TG alert failed: ${err.message}`);
+  }
+}
+
+/**
+ * Записать обнаруженный пробой в ленту + (опц.) отправить TG-алерт.
+ * Дедуп per-coin по ALERT_COOLDOWN_MS — и для буфера, и для алерта.
+ * @param {{item, signal}} r
+ * @param {number} now
+ * @param {boolean} traded — этот сигнал бот берёт в работу (первый пробой)
+ */
+function recordChillBoySignal(r, now, traded) {
+  const { item, signal } = r;
+  const last = alertCooldown.get(item.coin) ?? 0;
+  if (now - last < ALERT_COOLDOWN_MS) return;   // дедуп: не чаще раза в окно
+  alertCooldown.set(item.coin, now);
+
+  const direction = signal.signal;              // 'long' | 'short'
+  const atrValue  = signal.atrShort;
+  const sl = direction === 'long'
+    ? item.price - SL_ATR_MULT * atrValue
+    : item.price + SL_ATR_MULT * atrValue;
+  const tp = direction === 'long'
+    ? item.price + TP_ATR_MULT * atrValue
+    : item.price - TP_ATR_MULT * atrValue;
+
+  recentSignals.unshift({
+    coin:      item.coin,
+    direction: direction.toUpperCase(),
+    price:     item.price,
+    sl, tp, atr: atrValue,
+    ratio:     signal.atrLong ? atrValue / signal.atrLong : null,
+    rangeHigh: signal.range?.high ?? null,
+    rangeLow:  signal.range?.low ?? null,
+    traded:    !!traded,
+    ts:        now,
+  });
+  if (recentSignals.length > MAX_RECENT_SIGNALS) recentSignals.length = MAX_RECENT_SIGNALS;
+
+  if (!ALERT_ENABLED) return;
+  const arrow = direction === 'long' ? '🟢 LONG' : '🔴 SHORT';
+  const tag   = traded ? '🤖 бот входит' : '👀 сигнал (слот занят первым пробоем)';
+  fireChillBoyAlert(
+    `🎯 <b>Chill Boy</b> — пробой против рынка\n` +
+      `${arrow} <b>#${item.coin}</b> @ $${item.price}\n` +
+      `range $${signal.range?.low?.toFixed(6)}–$${signal.range?.high?.toFixed(6)} · ATR ${atrValue.toFixed(6)}\n` +
+      `SL $${sl.toFixed(6)} · TP $${tp.toFixed(6)}\n` +
+      tag,
+  );
 }
 
 /** Текущие MFE/MAE для открытой trend_follow позиции (dashboard, peek). */
@@ -230,7 +307,12 @@ export async function analyzeTrendFollow(scoutData, activePosition, now = Date.n
   // на F.1b. Если будет шквал сигналов одновременно, добавим scoring в F.4.
   // results теперь содержит и не-breakout монеты (для heartbeat) — фильтруем
   // явно по signal.signal, чтобы не открыть позицию на coil без пробоя.
-  const best = results.find((r) => r?.signal?.signal);
+  const breakoutHits = results.filter((r) => r?.signal?.signal);
+  const best = breakoutHits[0] ?? null;
+  // Радар: пишем ВСЕ пробои в ленту сигналов + шлём TG (дедуп per-coin внутри).
+  // Бот по-прежнему берёт только первый (best); остальные — сигналы для ручной
+  // торговли (а также для случая, когда prod-вход отклонится).
+  for (const r of breakoutHits) recordChillBoySignal(r, now, r === best);
   if (!best) return { action: 'HOLD' };
 
   const { item, signal } = best;

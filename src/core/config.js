@@ -357,6 +357,10 @@ function loadConfig() {
   const chillBoyTimeStopHours  = parseFloat(process.env.CHILL_BOY_TIME_STOP_HOURS || '6');
   const chillBoyBalanceUtil    = parseFloat(process.env.CHILL_BOY_BALANCE_UTILIZATION || '0.5');
   const chillBoyPostSlCooldownMin = parseFloat(process.env.CHILL_BOY_POST_SL_COOLDOWN_MIN || '120');
+  // Радар-алерты: TG-уведомление при каждом обнаруженном пробое (signal-radar),
+  // независимо от того, входит ли бот. Дедуп per-coin раз в COOLDOWN_MIN.
+  const chillBoyAlertEnabled     = (process.env.CHILL_BOY_ALERT_ENABLED || 'true').toLowerCase() === 'true';
+  const chillBoyAlertCooldownMin = parseFloat(process.env.CHILL_BOY_ALERT_COOLDOWN_MIN || '45');
   // Виртуальный paper-баланс ChillBoy: позволяет shadow-сделкам открываться,
   // даже когда реальный free-balance занят carry. 0 = старое поведение (real balance).
   const chillBoyPaperVirtualBalance = parseFloat(process.env.CHILL_BOY_PAPER_VIRTUAL_BALANCE || '0');
@@ -655,6 +659,8 @@ function loadConfig() {
       chillBoyTimeStopHours,
       chillBoyBalanceUtil,
       chillBoyPostSlCooldownMin,
+      chillBoyAlertEnabled,
+      chillBoyAlertCooldownMin,
       chillBoyPaperVirtualBalance,
       chillBoyPaperVirtualUtil,
       faderEnabled,

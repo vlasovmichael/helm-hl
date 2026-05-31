@@ -41,6 +41,11 @@ services:
     tty: true
     stdin_open: true
     command: node tools/tui.js
+    # The TUI reuses the app image but runs the terminal UI, not the web server,
+    # so the Dockerfile HEALTHCHECK (pings :3010/api/health) would always fail and
+    # Docker would mark this container "unhealthy". Disable it for the TUI.
+    healthcheck:
+      disable: true
     environment:
       DASHBOARD_URL: http://hl-paper-scanner:3010
       DASHBOARD_AUTH_USER: ${DASHBOARD_USER:-}

@@ -178,10 +178,17 @@
         </div>
       </section>
 
-      <!-- 05 / Hot Movers (manual-trading helper) -->
-      <section class="card" id="hot-movers-card">
-        <div class="card-header">
-          <div class="card-title" data-num="05" title="Топ монет по абсолютному движению цены за разные окна — для ручной торговли. Показывает всё что двигается, не только пробои порога Hunter.">
+      <!-- 05 / Radar — scanner hub. Каждый блок ниже сворачивается (collapse).
+           Состояние open/closed запоминается в localStorage (inline-скрипт внизу). -->
+      <div class="radar-label" id="sec-radar">
+        <span class="radar-label__title" data-num="05">Radar</span>
+        <span class="radar-label__sub">сканеры · клик по шапке — свернуть/развернуть</span>
+      </div>
+
+      <!-- Hot Movers (manual-trading helper) -->
+      <details class="card radar-acc" id="hot-movers-card" data-acc="hotMovers">
+        <summary class="card-header radar-acc__head">
+          <div class="card-title" data-num="05a" title="Топ монет по абсолютному движению цены за разные окна — для ручной торговли. Показывает всё что двигается, не только пробои порога Hunter.">
             Hot Movers
             <button type="button" class="help-btn" data-help="hotMovers" aria-label="Объяснение колонок">
               <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -192,7 +199,8 @@
             </button>
           </div>
           <div class="signals-meta" id="hot-movers-meta">—</div>
-        </div>
+          <span class="radar-badge" aria-hidden="true"></span>
+        </summary>
         <div class="signals-table-wrap">
           <table class="signals-table">
             <thead>
@@ -219,16 +227,17 @@
             </tbody>
           </table>
         </div>
-      </section>
+      </details>
 
-      <!-- 05a / Manual Trading Toolkit — external tools for fader workflow -->
-      <section class="card" id="toolkit-card">
-        <div class="card-header">
-          <div class="card-title" data-num="05a" title="Внешние инструменты для ручного трейдинга: контекст + микро-структура. Жми ? для пошагового гайда.">
+      <!-- Manual Trading Toolkit — external tools for fader workflow -->
+      <details class="card radar-acc" id="toolkit-card" data-acc="toolkit">
+        <summary class="card-header radar-acc__head">
+          <div class="card-title" data-num="05b" title="Внешние инструменты для ручного трейдинга: контекст + микро-структура. Жми ? для пошагового гайда.">
             Manual Toolkit
           </div>
           <div class="signals-meta">deriv context + tape</div>
-        </div>
+          <span class="radar-badge" aria-hidden="true"></span>
+        </summary>
         <div class="toolkit-grid">
           <a class="toolkit-tile" href="https://www.coinglass.com/" target="_blank" rel="noopener">
             <div class="toolkit-tile__head">
@@ -259,12 +268,12 @@
             <div class="toolkit-tile__tag">триггер: когда импульс выдыхается</div>
           </a>
         </div>
-      </section>
+      </details>
 
-      <!-- 05b / Setup Scanner (manual-helper, конвергенция HL-сигналов) -->
-      <section class="card" id="setup-scanner-card">
-        <div class="card-header">
-          <div class="card-title" data-num="05b" title="Конвергенция HL-сигналов: funding extreme + persist, OI ramp, premium/basis, vol regime. Manual-helper, не торгует.">
+      <!-- Setup Scanner (manual-helper, конвергенция HL-сигналов) -->
+      <details class="card radar-acc" id="setup-scanner-card" data-acc="setupScanner">
+        <summary class="card-header radar-acc__head">
+          <div class="card-title" data-num="05c" title="Конвергенция HL-сигналов: funding extreme + persist, OI ramp, premium/basis, vol regime. Manual-helper, не торгует.">
             Setup Scanner
             <button type="button" class="help-btn" data-help="setupScanner" aria-label="Объяснение карточки">
               <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -275,7 +284,8 @@
             </button>
           </div>
           <div class="signals-meta" id="setup-scanner-meta">—</div>
-        </div>
+          <span class="radar-badge" aria-hidden="true"></span>
+        </summary>
         <div class="signals-table-wrap">
           <table class="signals-table">
             <thead>
@@ -300,7 +310,7 @@
             </tbody>
           </table>
         </div>
-      </section>
+      </details>
 
       <!-- 06 / P&L Summary -->
       <section class="card" id="sec-pnl">
@@ -400,8 +410,8 @@
            squeezed-монет, cooldowns, история. Гасится когда CHILL_BOY_PROD_ENABLED=true. -->
       <section class="card" id="sec-chillboy" style="display:none">
         <div class="card-header">
-          <div class="card-title" data-num="06.4" title="Chill Boy: trend-follow squeeze breakout detector. Shadow paper trading — детектор работает в PROD-боте, но не торгует реальный slot. Все данные для решения о промоушене стратегии.">
-            Chill Boy — Shadow Trading
+          <div class="card-title" data-num="06.4" title="Chill Boy: trend-follow squeeze breakout detector. Лента пробоев против рынка — радар находок для ручной торговли + авто-вход (PROD).">
+            Chill Boy — Radar
             <button type="button" class="help-btn" data-help="chillBoy" aria-label="Объяснение карточки">
               <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
                 <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.4"/>
@@ -416,6 +426,11 @@
           </div>
         </div>
         <div class="cb-grid">
+          <!-- Лента последних пробоев (радар находок) -->
+          <div class="cb-section cb-section-full">
+            <div class="cb-section-title">Recent signals — пробои против рынка</div>
+            <div id="cb-signals-body" class="cb-signals"><div class="empty-state">no breakouts yet</div></div>
+          </div>
           <!-- Активная paper позиция (если есть) -->
           <div class="cb-section" id="cb-active-section" style="display:none">
             <div class="cb-section-title">Active paper position</div>
@@ -785,6 +800,67 @@
         <div id="trade-modal-body"></div>
       </div>
     </div>
+    <script>
+      // ── Radar accordions: persist open/closed + collapsed-header badges ──
+      (function () {
+        var accs = Array.prototype.slice.call(
+          document.querySelectorAll("details.radar-acc"),
+        );
+        if (!accs.length) return;
+        var KEY = "hl-radar-acc";
+        var state = {};
+        try {
+          state = JSON.parse(localStorage.getItem(KEY) || "{}");
+        } catch (_) {}
+
+        function updateBadge(d) {
+          var badge = d.querySelector(":scope > summary .radar-badge");
+          if (!badge) return;
+          var rows = d.querySelectorAll("tbody tr");
+          var real = 0,
+            first = "";
+          Array.prototype.forEach.call(rows, function (r) {
+            if (r.querySelector(".empty-state")) return;
+            real++;
+            if (!first) {
+              var pair = r.querySelector("td:nth-child(2)");
+              if (pair) first = pair.textContent.trim();
+            }
+          });
+          badge.textContent = real ? (first ? first + " · " : "") + real : "";
+        }
+
+        accs.forEach(function (d) {
+          var id = d.dataset.acc || d.id;
+          // По умолчанию свёрнуто (declutter); восстанавливаем сохранённое.
+          if (state[id] === true) d.setAttribute("open", "");
+          else d.removeAttribute("open");
+
+          d.addEventListener("toggle", function () {
+            state[id] = d.open;
+            try {
+              localStorage.setItem(KEY, JSON.stringify(state));
+            } catch (_) {}
+            if (!d.open) updateBadge(d);
+          });
+
+          // Клик по «?»-кнопке в шапке не должен сворачивать аккордеон.
+          var help = d.querySelector("summary .help-btn");
+          if (help)
+            help.addEventListener("click", function (e) {
+              e.stopPropagation();
+            });
+        });
+
+        function refresh() {
+          accs.forEach(function (d) {
+            if (!d.open) updateBadge(d);
+          });
+        }
+        setInterval(refresh, 3000);
+        refresh();
+      })();
+    </script>
     <script src="app.js"></script>
   </body>
 </html>

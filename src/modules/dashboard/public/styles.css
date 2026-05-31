@@ -383,6 +383,101 @@ header {
   letter-spacing: -0.01em;
 }
 
+/* ──────────────────────── Radar — collapsible scanner hub */
+.radar-label {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 4px 2px 8px;
+  flex-wrap: wrap;
+}
+.radar-label__title {
+  font-family: var(--font-sans);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+.radar-label__sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.radar-acc {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.radar-acc > .radar-acc__head {
+  cursor: pointer;
+  list-style: none;
+  margin-bottom: 0;
+  padding: 18px 0;
+  user-select: none;
+}
+.radar-acc > .radar-acc__head::-webkit-details-marker {
+  display: none;
+}
+.radar-acc[open] > .radar-acc__head {
+  margin-bottom: 16px;
+}
+.radar-acc > .radar-acc__head::after {
+  content: "▸";
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 12px;
+  transition: transform 0.15s var(--ease);
+}
+.radar-acc[open] > .radar-acc__head::after {
+  transform: rotate(90deg);
+}
+.radar-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--text-secondary);
+}
+.radar-badge:empty {
+  display: none;
+}
+.radar-acc[open] .radar-badge {
+  display: none;
+}
+
+/* Chill Boy — signal feed */
+.cb-signals {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.cb-sig-row {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.cb-sig-dir {
+  font-weight: 600;
+}
+.cb-sig-px {
+  color: var(--text-secondary);
+}
+.cb-sig-age {
+  color: var(--text-muted);
+  float: right;
+}
+.cb-sig-tag {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--border);
+  color: var(--text-secondary);
+}
+.cb-sig-tag.traded {
+  color: var(--green);
+}
+
 /* ──────────────────────── Time-range segmented controls */
 .time-ranges {
   display: inline-flex;

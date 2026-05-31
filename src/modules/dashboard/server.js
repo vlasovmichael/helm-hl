@@ -37,7 +37,7 @@ import {
   HUNTER_SL_PCT,
   HUNTER_TP_PCT,
 } from "../strategistSniper.js";
-import { getChillBoyHeartbeat, getTrendFollowMfeMae } from "../strategistTrendFollow.js";
+import { getChillBoyHeartbeat, getChillBoySignals, getTrendFollowMfeMae } from "../strategistTrendFollow.js";
 import { getFaderHeartbeat, getFaderMfeMae } from "../strategistFader.js";
 import { getFaderVirtualSnapshot } from "../faderVirtualEquity.js";
 import { getVirtualEquitySnapshot } from "../chillBoyVirtualEquity.js";
@@ -368,6 +368,7 @@ async function getStatusData() {
           enabled: true,
           prod: config.isProduction && config.trading.chillBoyProdEnabled,
           heartbeat: getChillBoyHeartbeat(),
+          signals: getChillBoySignals(),
           virtualBalance: config.trading.chillBoyPaperVirtualBalance,
           virtualEquity:  config.trading.chillBoyPaperVirtualBalance > 0
             ? getVirtualEquitySnapshot()

@@ -2586,8 +2586,9 @@ function renderChillBoy(cb) {
 function renderChillBoyCard(cb) {
   const card = document.getElementById("sec-chillboy");
   if (!card) return;
-  // Гасим карточку: стратегия выключена ИЛИ Chill Boy в PROD-режиме
-  if (!cb || !cb.enabled || cb.prod) {
+  // Показываем карточку всегда, когда стратегия включена (paper ИЛИ prod).
+  // Раньше в PROD гасилась, но именно в PROD это главный радар находок.
+  if (!cb || !cb.enabled) {
     card.style.display = "none";
     return;
   }
@@ -2609,11 +2610,51 @@ function renderChillBoyCard(cb) {
     }
   }
 
+  renderChillBoySignals(cb.signals);
   renderChillBoyActivePos(cb.paperPosition);
   renderChillBoyWatchlist(cb.heartbeat?.watchlist);
   renderChillBoyCooldowns(cb.heartbeat?.cooldownList);
   renderChillBoyHistory(cb.paperTrades, cb.paperStats);
   renderChillBoyHeartbeatRaw(cb.heartbeat);
+}
+
+// Лента последних пробоев (радар). Главная ценность Chill Boy — находить монеты,
+// которых не видно на aggr.trade. Свежайший сигнал также кладём в data-атрибут
+// аккордеона для бейджа в свёрнутой шапке (см. inline-скрипт в index.html).
+function renderChillBoySignals(signals) {
+  const body = document.getElementById("cb-signals-body");
+  if (!body) return;
+  const acc = document.getElementById("sec-chillboy");
+  if (!Array.isArray(signals) || signals.length === 0) {
+    body.innerHTML = '<div class="empty-state">no breakouts yet</div>';
+    if (acc) acc.removeAttribute("data-badge-text");
+    return;
+  }
+  const fmtAge = (ts) => {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 90) return `${s}s`;
+    if (s < 5400) return `${Math.floor(s / 60)}m`;
+    return `${Math.floor(s / 3600)}h`;
+  };
+  body.innerHTML = signals
+    .map((s) => {
+      const dir = s.direction === "LONG" ? "🟢 LONG" : "🔴 SHORT";
+      const tag = s.traded
+        ? '<span class="cb-sig-tag traded">бот вошёл</span>'
+        : '<span class="cb-sig-tag">сигнал</span>';
+      return (
+        `<div class="cb-sig-row"><span class="cb-sig-dir">${dir}</span> ` +
+        `<b>#${s.coin}</b> <span class="cb-sig-px">@ $${s.price}</span> ${tag} ` +
+        `<span class="cb-sig-age">${fmtAge(s.ts)} ago</span></div>`
+      );
+    })
+    .join("");
+  // Бейдж: свежайший сигнал (для свёрнутой шапки Radar-аккордеона)
+  if (acc) {
+    const top = signals[0];
+    const d = top.direction === "LONG" ? "▲" : "▼";
+    acc.setAttribute("data-badge-text", `${d} ${top.coin} · ${fmtAge(top.ts)}`);
+  }
 }
 
 function renderChillBoyActivePos(pos) {
