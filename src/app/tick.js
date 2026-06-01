@@ -8,6 +8,7 @@ import { scan } from '../modules/scout.js';
 import { coordinate } from '../modules/coordinator.js';
 import { config } from '../core/config.js';
 import { scanChillBoyRadar } from '../modules/strategistTrendFollow.js';
+import { scanCandyGirlRadar } from '../modules/strategistCandyGirl.js';
 import { execute } from '../modules/executor/index.js';
 import { tickSniper } from '../modules/executor/sniper.js';
 import { runSmartAlerts } from './alerts.js';
@@ -66,6 +67,11 @@ export async function tick() {
         if (config.trading.chillBoyEnabled) {
           await scanChillBoyRadar(handsOffHunter);
         }
+        // Candy Girl радар (signal-only, см. candy_girl_idea.md). Расцеплен от
+        // слота — никогда не торгует, только лента + TG-алерты. Default OFF.
+        if (config.trading.candyGirlEnabled) {
+          await scanCandyGirlRadar(handsOffHunter);
+        }
         // ChillBoy paper shadow-слот независим от реального слота — должен тикать
         // даже в HANDS-OFF, иначе зависшая ручная PROD-поза подвешивает paper
         // позицию навсегда (инцидент BTC id=90 + PURR HANDS-OFF, 2026-05-22/23).
@@ -85,6 +91,16 @@ export async function tick() {
     if (scoutData.length === 0 && hunterData.length === 0) {
       logger.info('[Tick] Scout returned empty data — skipping');
       return;
+    }
+
+    // Candy Girl радар (signal-only). У него нет coordinator-пути (он не торгует),
+    // поэтому сканируем здесь напрямую. Никогда не открывает позицию. Default OFF.
+    if (config.trading.candyGirlEnabled) {
+      try {
+        await scanCandyGirlRadar(scoutData);
+      } catch (err) {
+        logger.debug(`[Tick] Candy Girl radar failed: ${err.message}`);
+      }
     }
 
     // Sniper (PAPER): попытка maker-fill / fallback-таймаут ДО coordinator'а,

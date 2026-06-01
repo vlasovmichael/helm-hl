@@ -406,6 +406,44 @@ function loadConfig() {
     throw new Error(`CHILL_BOY_PAPER_VIRTUAL_UTILIZATION must be in (0, 0.95]. Got: "${process.env.CHILL_BOY_PAPER_VIRTUAL_UTILIZATION}"`);
   }
 
+  // ── Candy Girl — SIGNAL-ONLY радар (1h EMA-тренд + 5m pullback-reclaim) ──
+  // ⚠️ НЕ стратегия: радар алертов для ручной торговли. План: memory/candy_girl_idea.md.
+  // Никогда не открывает позицию. Master-флаг default OFF.
+  const candyGirlEnabled            = (process.env.CANDY_GIRL_ENABLED || 'false').toLowerCase() === 'true';
+  const candyGirlAlertEnabled       = (process.env.CANDY_GIRL_ALERT_ENABLED || 'true').toLowerCase() === 'true';
+  const candyGirlFast1h             = parseInt(process.env.CANDY_GIRL_FAST_1H  || '20', 10);
+  const candyGirlSlow1h             = parseInt(process.env.CANDY_GIRL_SLOW_1H  || '200', 10);
+  const candyGirlSlopeLookback      = parseInt(process.env.CANDY_GIRL_SLOPE_LOOKBACK || '10', 10);
+  const candyGirlEma5m              = parseInt(process.env.CANDY_GIRL_EMA_5M   || '20', 10);
+  const candyGirlPullbackLookback   = parseInt(process.env.CANDY_GIRL_PULLBACK_LOOKBACK || '6', 10);
+  const candyGirlRr                 = parseFloat(process.env.CANDY_GIRL_RR || '2');
+  const candyGirlAlertCooldownMin   = parseFloat(process.env.CANDY_GIRL_ALERT_COOLDOWN_MIN || '45');
+  const candyGirlMaxSignalsPerTick  = parseInt(process.env.CANDY_GIRL_MAX_SIGNALS_PER_TICK || '3', 10);
+  if (!Number.isInteger(candyGirlFast1h) || candyGirlFast1h < 2 || candyGirlFast1h >= candyGirlSlow1h) {
+    throw new Error(`CANDY_GIRL_FAST_1H must be integer in [2, CANDY_GIRL_SLOW_1H). Got: "${process.env.CANDY_GIRL_FAST_1H}"`);
+  }
+  if (!Number.isInteger(candyGirlSlow1h) || candyGirlSlow1h < 10 || candyGirlSlow1h > 400) {
+    throw new Error(`CANDY_GIRL_SLOW_1H must be integer in [10, 400]. Got: "${process.env.CANDY_GIRL_SLOW_1H}"`);
+  }
+  if (!Number.isInteger(candyGirlSlopeLookback) || candyGirlSlopeLookback < 1) {
+    throw new Error(`CANDY_GIRL_SLOPE_LOOKBACK must be positive integer. Got: "${process.env.CANDY_GIRL_SLOPE_LOOKBACK}"`);
+  }
+  if (!Number.isInteger(candyGirlEma5m) || candyGirlEma5m < 2) {
+    throw new Error(`CANDY_GIRL_EMA_5M must be integer ≥ 2. Got: "${process.env.CANDY_GIRL_EMA_5M}"`);
+  }
+  if (!Number.isInteger(candyGirlPullbackLookback) || candyGirlPullbackLookback < 1) {
+    throw new Error(`CANDY_GIRL_PULLBACK_LOOKBACK must be positive integer. Got: "${process.env.CANDY_GIRL_PULLBACK_LOOKBACK}"`);
+  }
+  if (isNaN(candyGirlRr) || candyGirlRr <= 0) {
+    throw new Error(`CANDY_GIRL_RR must be positive. Got: "${process.env.CANDY_GIRL_RR}"`);
+  }
+  if (isNaN(candyGirlAlertCooldownMin) || candyGirlAlertCooldownMin <= 0) {
+    throw new Error(`CANDY_GIRL_ALERT_COOLDOWN_MIN must be positive. Got: "${process.env.CANDY_GIRL_ALERT_COOLDOWN_MIN}"`);
+  }
+  if (!Number.isInteger(candyGirlMaxSignalsPerTick) || candyGirlMaxSignalsPerTick < 1) {
+    throw new Error(`CANDY_GIRL_MAX_SIGNALS_PER_TICK must be positive integer. Got: "${process.env.CANDY_GIRL_MAX_SIGNALS_PER_TICK}"`);
+  }
+
   // ── Strategy #5: Fader — contrarian fade scalper (PAPER-only) ──
   // План: plans/fader-strategy-plan.md.
   const faderEnabled            = (process.env.FADER_ENABLED || 'false').toLowerCase() === 'true';
@@ -663,6 +701,17 @@ function loadConfig() {
       chillBoyAlertCooldownMin,
       chillBoyPaperVirtualBalance,
       chillBoyPaperVirtualUtil,
+      // ── Candy Girl радар (signal-only) ──
+      candyGirlEnabled,
+      candyGirlAlertEnabled,
+      candyGirlFast1h,
+      candyGirlSlow1h,
+      candyGirlSlopeLookback,
+      candyGirlEma5m,
+      candyGirlPullbackLookback,
+      candyGirlRr,
+      candyGirlAlertCooldownMin,
+      candyGirlMaxSignalsPerTick,
       faderEnabled,
       faderVirtualBalance,
       faderNominalUsd,

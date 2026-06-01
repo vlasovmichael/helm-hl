@@ -82,3 +82,58 @@ export function clearCandleCache() {
 export function seedCandleCache(coin, candles, now = Date.now()) {
   cache.set(coin, { fetchedAt: now, candles, inflight: null });
 }
+
+// ── 5-минутные свечи (для Candy Girl радара) ────────────────────────────────
+// Отдельный кэш с более коротким TTL: 5m-свечи закрываются раз в 5 мин, держим
+// 60s чтобы радар видел свежий reclaim, но не молотил API каждый тик.
+const FIVE_MIN_TTL_MS   = 60_000;
+const FIVE_MIN_INTERVAL = '5m';
+const cache5m = new Map();   // coin → { fetchedAt, candles, inflight }
+
+/**
+ * Получает 5m свечи для монеты. Зеркало getHourlyCandles, свой кэш + interval.
+ *
+ * @param {string} coin
+ * @param {number} lookbackMinutes — сколько минут истории нужно
+ * @param {number} [now=Date.now()]
+ * @returns {Promise<Array<{open,high,low,close,time}>|null>}
+ */
+export async function getFiveMinCandles(coin, lookbackMinutes, now = Date.now()) {
+  const cached = cache5m.get(coin);
+  if (cached && now - cached.fetchedAt < FIVE_MIN_TTL_MS) {
+    return cached.candles;
+  }
+  if (cached?.inflight) {
+    try { return await cached.inflight; } catch { return null; }
+  }
+
+  const startTime = now - lookbackMinutes * 60_000;
+  const promise = hlInfo(
+    {
+      type: 'candleSnapshot',
+      req:  { coin, interval: FIVE_MIN_INTERVAL, startTime, endTime: now },
+    },
+    { label: `candleCache5m/${coin}` },
+  ).then((data) => {
+    const candles = parseCandles(data);
+    cache5m.set(coin, { fetchedAt: Date.now(), candles, inflight: null });
+    return candles;
+  }).catch((err) => {
+    cache5m.set(coin, { ...(cache5m.get(coin) || {}), inflight: null });
+    logger.warn(`[CandleCache5m] #${coin} fetch failed: ${err.message}`);
+    return null;
+  });
+
+  cache5m.set(coin, { ...(cached || {}), inflight: promise });
+  return promise;
+}
+
+/** Прямая инжекция 5m-свечей (тесты). */
+export function seedFiveMinCache(coin, candles, now = Date.now()) {
+  cache5m.set(coin, { fetchedAt: now, candles, inflight: null });
+}
+
+/** Очистить 5m-кэш (тесты). */
+export function clearFiveMinCache() {
+  cache5m.clear();
+}

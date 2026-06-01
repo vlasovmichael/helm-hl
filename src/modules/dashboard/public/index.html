@@ -462,6 +462,31 @@
         </div>
       </section>
 
+      <!-- 06.5 / Candy Girl — SIGNAL-ONLY радар (1h EMA-тренд + 5m pullback-reclaim) -->
+      <!-- ⚠️ НЕ стратегия: радар сетапов для РУЧНОЙ торговли. План: memory/candy_girl_idea.md.
+           Никогда не торгует — только лента находок + TG-алерты. Скрыт когда CANDY_GIRL_ENABLED=false. -->
+      <section class="card" id="sec-candygirl" style="display:none">
+        <div class="card-header">
+          <div class="card-title" data-num="06.5" title="Candy Girl: радар сетапов «1h EMA-тренд + откат к 5m EMA20 + reclaim». Сигналы для РУЧНОЙ торговли — бот не входит.">
+            Candy Girl — Radar
+          </div>
+          <div class="time-ranges">
+            <span class="status-pill">SIGNAL-ONLY</span>
+            <span id="candygirl-hb" class="status-pill" style="display:none"></span>
+          </div>
+        </div>
+        <div class="cb-grid">
+          <div class="cb-section cb-section-full">
+            <div class="cb-section-title">Recent setups — тренд + откат-reclaim</div>
+            <div id="cg-signals-body" class="cb-signals"><div class="empty-state">no setups yet</div></div>
+          </div>
+          <div class="cb-section cb-section-full">
+            <div class="cb-section-title" style="opacity:.7">Detector status</div>
+            <div id="cg-heartbeat" style="font-size:11px; opacity:.85">—</div>
+          </div>
+        </div>
+      </section>
+
       <!-- 06.6 / Fader — PAPER-only contrarian fade scalper -->
       <!-- Strategy #5. План: plans/fader-strategy-plan.md. Compound sandbox
            на FADER_VIRTUAL_BALANCE; net PnL = модельные fees+slip уже вычтены. -->

@@ -110,6 +110,7 @@ function initWebSocket() {
         renderBans(msg.data);
         renderChillBoy(msg.data.chillBoy);
         renderChillBoyCard(msg.data.chillBoy);
+        renderCandyGirl(msg.data.candyGirl);
         renderFaderCard(msg.data.fader);
         handlePriceChartUpdate(
           msg.data.activePosition,
@@ -2654,6 +2655,70 @@ function renderChillBoySignals(signals) {
     const top = signals[0];
     const d = top.direction === "LONG" ? "▲" : "▼";
     acc.setAttribute("data-badge-text", `${d} ${top.coin} · ${fmtAge(top.ts)}`);
+  }
+}
+
+// ── Candy Girl — signal-only радар (1h EMA-тренд + 5m pullback-reclaim) ──────
+function renderCandyGirl(cg) {
+  const card = document.getElementById("sec-candygirl");
+  if (!card) return;
+  if (!cg || !cg.enabled) {
+    card.style.display = "none";
+    return;
+  }
+  card.style.display = "";
+
+  const fmtAge = (ts) => {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 90) return `${s}s`;
+    if (s < 5400) return `${Math.floor(s / 60)}m`;
+    return `${Math.floor(s / 3600)}h`;
+  };
+  const fmtPx = (v) => (v == null ? "—" : `$${Number(v).toFixed(6)}`);
+
+  const body = document.getElementById("cg-signals-body");
+  if (body) {
+    const signals = Array.isArray(cg.signals) ? cg.signals : [];
+    if (signals.length === 0) {
+      body.innerHTML = '<div class="empty-state">no setups yet</div>';
+      card.removeAttribute("data-badge-text");
+    } else {
+      body.innerHTML = signals
+        .map((s) => {
+          const dir = s.direction === "LONG" ? "🟢 LONG" : "🔴 SHORT";
+          const risk = Math.abs((s.entry ?? 0) - (s.sl ?? 0));
+          const rr = risk > 0 ? (Math.abs((s.tp ?? 0) - (s.entry ?? 0)) / risk).toFixed(1) : "?";
+          return (
+            `<div class="cb-sig-row"><span class="cb-sig-dir">${dir}</span> ` +
+            `<b>#${s.coin}</b> <span class="cb-sig-px">@ $${s.price}</span> ` +
+            `<span class="cb-sig-tag">сигнал · руками</span> ` +
+            `<span class="cb-sig-age">${fmtAge(s.ts)} ago</span>` +
+            `<div style="font-size:11px; opacity:.8; margin-top:2px">` +
+            `entry ${fmtPx(s.entry)} · SL ${fmtPx(s.sl)} · TP ${fmtPx(s.tp)} (R:R ${rr})</div></div>`
+          );
+        })
+        .join("");
+      const top = signals[0];
+      const d = top.direction === "LONG" ? "▲" : "▼";
+      card.setAttribute("data-badge-text", `${d} ${top.coin} · ${fmtAge(top.ts)}`);
+    }
+  }
+
+  const hb = cg.heartbeat;
+  const hbEl = document.getElementById("cg-heartbeat");
+  if (hbEl) {
+    hbEl.textContent = hb
+      ? `tracked=${hb.tracked} · trending=${hb.trending} · signals=${hb.signals} · cooldowns=${hb.cooldowns}`
+      : "—";
+  }
+  const pill = document.getElementById("candygirl-hb");
+  if (pill) {
+    if (hb) {
+      pill.style.display = "";
+      pill.textContent = `${hb.trending} trending`;
+    } else {
+      pill.style.display = "none";
+    }
   }
 }
 

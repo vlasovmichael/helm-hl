@@ -1,0 +1,183 @@
+// ─────────────────────────────────────────────────
+//  Candy Girl — SIGNAL-ONLY радар (1h EMA-тренд + 5m pullback-reclaim)
+// ─────────────────────────────────────────────────
+// Codename «Chill Boy 2». План: memory/candy_girl_idea.md.
+//
+// ⚠️⚠️ Это РАДАР, НЕ торговая стратегия. Он НИКОГДА не открывает позицию и не
+// возвращает OPEN — только пишет находку в ленту + (опц.) шлёт TG-алерт. Задача:
+// подсветить сетап «тренд по 1h + откат-reclaim по 5m», чтобы оператор собрал 20-30
+// РУЧНЫХ сделок по методу из coaching_session_2026_06_01 и валидировал payoff.
+//
+// Зеркалит радар-половину strategistTrendFollow.js (recordSignal/runScan паттерн),
+// но детектор другой (candyGirlEma) и торгового слота нет вообще.
+//
+// Строгость (анти-фонтан, см. trading_coaching_payoff_leak): дедуп per-coin по
+// ALERT_COOLDOWN, подтверждённый наклон EMA200 уже внутри детектора, кап на число
+// сигналов за тик. Радар не должен усиливать переторговлю — он редкий.
+
+import { config } from '../core/config.js';
+import { logger } from '../core/logger.js';
+import { detectCandyGirlSignal } from './candyGirlEma.js';
+import { getHourlyCandles, getFiveMinCandles } from './candleCache.js';
+
+export const CANDY_GIRL_HEARTBEAT_MS = 5 * 60_000;
+
+// ── Параметры детектора (env-override через config.trading.candyGirl*) ───────
+const FAST_1H        = config.trading.candyGirlFast1h;
+const SLOW_1H        = config.trading.candyGirlSlow1h;
+const SLOPE_LOOKBACK = config.trading.candyGirlSlopeLookback;
+const EMA_5M         = config.trading.candyGirlEma5m;
+const PULLBACK_LB    = config.trading.candyGirlPullbackLookback;
+const RR             = config.trading.candyGirlRr;
+
+// Лента/алерты
+const ALERT_ENABLED      = config.trading.candyGirlAlertEnabled !== false;
+const ALERT_COOLDOWN_MS  = (config.trading.candyGirlAlertCooldownMin ?? 45) * 60_000;
+const MAX_SIGNALS_PER_TICK = config.trading.candyGirlMaxSignalsPerTick ?? 3;
+const MAX_RECENT_SIGNALS = 30;
+
+// Lookback: 1h нужно slow+slope (+буфер); 5m нужно ema+pullback (+буфер).
+const LOOKBACK_HOURS   = SLOW_1H + SLOPE_LOOKBACK + 5;
+const LOOKBACK_MINUTES = (EMA_5M + PULLBACK_LB + 5) * 5;
+
+// Per-coin state
+const alertCooldown = new Map();   // coin → ts последнего записанного сигнала
+const recentSignals = [];          // ring buffer (новые в начале)
+let lastHeartbeat   = null;
+let lastHeartbeatAt = 0;
+
+export function resetCandyGirlState() {
+  alertCooldown.clear();
+  recentSignals.length = 0;
+  lastHeartbeat = null;
+  lastHeartbeatAt = 0;
+}
+
+/** Лента последних обнаруженных сетапов (для dashboard «Candy Girl»). */
+export function getCandyGirlSignals() {
+  return recentSignals.slice(0, 20);
+}
+
+/** Последний снимок состояния детектора (для dashboard). */
+export function getCandyGirlHeartbeat() {
+  return lastHeartbeat;
+}
+
+/** Lazy-import reporter, чтобы не тянуть axios в юнит-тестах детектора. */
+async function fireCandyGirlAlert(text) {
+  try {
+    const { sendMessage } = await import('./reporter.js');
+    await sendMessage(text, false, { bypassThrottle: true });
+  } catch (err) {
+    logger.warn(`[CandyGirl] TG alert failed: ${err.message}`);
+  }
+}
+
+/**
+ * Записать обнаруженный сетап в ленту + (опц.) TG-алерт. Дедуп per-coin.
+ * @param {{item, signal}} r
+ * @param {number} now
+ */
+function recordCandyGirlSignal(r, now) {
+  const { item, signal } = r;
+  const last = alertCooldown.get(item.coin) ?? 0;
+  if (now - last < ALERT_COOLDOWN_MS) return false;   // дедуп
+  alertCooldown.set(item.coin, now);
+
+  const direction = signal.signal;   // 'long' | 'short'
+  recentSignals.unshift({
+    coin:      item.coin,
+    direction: direction.toUpperCase(),
+    price:     item.price,
+    entry:     signal.entry,
+    sl:        signal.sl,
+    tp:        signal.tp,
+    emaFast1h: signal.emaFast1h,
+    emaSlow1h: signal.emaSlow1h,
+    ema5m:     signal.ema5m,
+    rr:        RR,
+    ts:        now,
+  });
+  if (recentSignals.length > MAX_RECENT_SIGNALS) recentSignals.length = MAX_RECENT_SIGNALS;
+
+  if (ALERT_ENABLED) {
+    const arrow = direction === 'long' ? '🟢 LONG' : '🔴 SHORT';
+    const risk = Math.abs(signal.entry - signal.sl);
+    const rrTxt = risk > 0 ? (Math.abs(signal.tp - signal.entry) / risk).toFixed(1) : '?';
+    fireCandyGirlAlert(
+      `🍬 <b>Candy Girl</b> — сетап по тренду\n` +
+        `${arrow} <b>#${item.coin}</b> @ $${item.price}\n` +
+        `1h-тренд ${direction === 'long' ? 'UP' : 'DOWN'} · откат к 5m EMA20 + reclaim\n` +
+        `entry $${fmt(signal.entry)} · SL $${fmt(signal.sl)} · TP $${fmt(signal.tp)} (R:R ${rrTxt})\n` +
+        `👀 сигнал — это РАДАР, бот не входит. Вход и стоп — руками.`,
+    );
+  }
+  return true;
+}
+
+function fmt(v) {
+  return v == null ? '—' : Number(v).toFixed(6);
+}
+
+/** Прогон детектора по всему юниверсу. Чистый скан без побочных решений. */
+async function performScan(scoutData, now, hourlyFetcher, fiveMinFetcher) {
+  const data = scoutData ?? [];
+  return Promise.all(
+    data.map(async (item) => {
+      const candles1h = await hourlyFetcher(item.coin, LOOKBACK_HOURS, now);
+      if (!candles1h || candles1h.length < SLOW_1H + SLOPE_LOOKBACK) return null;
+      const candles5m = await fiveMinFetcher(item.coin, LOOKBACK_MINUTES, now);
+      if (!candles5m || candles5m.length < EMA_5M + PULLBACK_LB + 1) return null;
+
+      const sig = detectCandyGirlSignal(candles1h, candles5m, item.price, {
+        fast1h: FAST_1H, slow1h: SLOW_1H, slopeLookback: SLOPE_LOOKBACK,
+        ema5m: EMA_5M, pullbackLookback: PULLBACK_LB, rr: RR,
+      });
+      return { item, signal: sig };
+    }),
+  );
+}
+
+function updateHeartbeat(results, tracked, now) {
+  const trending = results.filter((r) => r?.signal && r.signal.trend !== 'none').length;
+  const hits     = results.filter((r) => r?.signal?.signal).length;
+  lastHeartbeat = {
+    tracked, trending, signals: hits,
+    cooldowns: alertCooldown.size,
+    ts: now,
+  };
+  if (now - lastHeartbeatAt >= CANDY_GIRL_HEARTBEAT_MS) {
+    logger.info(
+      `[CandyGirl] 💓 tracked=${tracked} trending=${trending} signals=${hits} | cooldowns=${alertCooldown.size}`,
+    );
+    lastHeartbeatAt = now;
+  }
+}
+
+/**
+ * Радар-скан без торговли. НИКОГДА не открывает позицию — только лента + алерты.
+ * Вызывается из тика за флагом config.trading.candyGirlEnabled.
+ *
+ * @param {Array<{coin:string, price:number}>} scoutData
+ * @param {number} [now=Date.now()]
+ * @param {Function} [hourlyFetcher=getHourlyCandles] — DI для тестов
+ * @param {Function} [fiveMinFetcher=getFiveMinCandles] — DI для тестов
+ */
+export async function scanCandyGirlRadar(
+  scoutData,
+  now = Date.now(),
+  hourlyFetcher = getHourlyCandles,
+  fiveMinFetcher = getFiveMinCandles,
+) {
+  const results = await performScan(scoutData, now, hourlyFetcher, fiveMinFetcher);
+  updateHeartbeat(results, scoutData?.length ?? 0, now);
+
+  // Кап на число записанных сигналов за тик (анти-фонтан): берём первые по
+  // порядку scoutData, остальные дропаем — дедуп per-coin всё равно их догонит.
+  const hits = results.filter((r) => r?.signal?.signal);
+  let recorded = 0;
+  for (const r of hits) {
+    if (recorded >= MAX_SIGNALS_PER_TICK) break;
+    if (recordCandyGirlSignal(r, now)) recorded++;
+  }
+}

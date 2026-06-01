@@ -38,6 +38,7 @@ import {
   HUNTER_TP_PCT,
 } from "../strategistSniper.js";
 import { getChillBoyHeartbeat, getChillBoySignals, getTrendFollowMfeMae } from "../strategistTrendFollow.js";
+import { getCandyGirlHeartbeat, getCandyGirlSignals } from "../strategistCandyGirl.js";
 import { getFaderHeartbeat, getFaderMfeMae } from "../strategistFader.js";
 import { getFaderVirtualSnapshot } from "../faderVirtualEquity.js";
 import { getVirtualEquitySnapshot } from "../chillBoyVirtualEquity.js";
@@ -376,6 +377,15 @@ async function getStatusData() {
           paperStats: getStrategyStats('trend_follow', 'PAPER'),
           paperTrades: getRecentStrategyTrades('trend_follow', 'PAPER', 10),
           paperPosition: await buildChillBoyPaperPosition(),
+        }
+      : null,
+    // Candy Girl — signal-only радар (1h EMA-тренд + 5m pullback-reclaim).
+    // Не торгует: только лента сетапов + heartbeat детектора.
+    candyGirl: config.trading.candyGirlEnabled
+      ? {
+          enabled: true,
+          heartbeat: getCandyGirlHeartbeat(),
+          signals: getCandyGirlSignals(),
         }
       : null,
     fader: config.trading.faderEnabled
