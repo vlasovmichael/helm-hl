@@ -25,6 +25,7 @@ import {
 } from "../../core/database.js";
 import { getAccountSummary, getPositions, getLivePrice } from "../exchange.js";
 import { fetchUserFills, reconstructManualTrades } from "../userFills.js";
+import { getMonthlyLedger } from "../ledger.js";
 import { FEE_RATE, MAKER_FEE_RATE } from "../executor/math.js";
 import { getAvailableBalance, getAccountEquity } from "../wallet.js";
 import { getTaxSummary } from "../taxCollector/index.js";
@@ -1458,6 +1459,16 @@ async function handleTaxSummary(req, res) {
   }
 }
 
+async function handleLedger(_req, res) {
+  try {
+    const ledger = await getMonthlyLedger();
+    res.json(ledger);
+  } catch (err) {
+    logger.warn(`[Dashboard] /api/ledger error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+}
+
 function handleLoginGet(req, res) {
   if (!AUTH_ENABLED) return res.redirect(302, "/");
   if (isAuthenticated(req)) return res.redirect(302, "/");
@@ -1536,6 +1547,7 @@ export function startDashboard() {
   app.get("/api/near-misses", handleNearMisses);
   app.get("/api/trade/:id", handleTradeDetail);
   app.get("/api/tax-summary", handleTaxSummary);
+  app.get("/api/ledger", handleLedger);
   app.get("/api/pnl-summary", handlePnlSummary);
   app.get("/api/insights", handleInsights);
   app.get("/api/setup-scanner", handleSetupScanner);
