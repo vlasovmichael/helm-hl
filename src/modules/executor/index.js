@@ -10,7 +10,8 @@ import { getAccountSummary } from '../exchange.js';
 import { getAccountEquity } from '../wallet.js';
 import { checkVolatility } from '../volatility.js';
 import {
-  paperOpen, paperClose, hunterPaperOpen, hunterLongPaperOpen, trendFollowPaperOpen, faderPaperOpen,
+  paperOpen, paperClose, hunterPaperOpen, hunterLongPaperOpen, trendFollowPaperOpen,
+  faderPaperOpen, candyPaperOpen,
 } from './paper.js';
 import {
   productionOpen, productionClose, productionRotate,
@@ -207,6 +208,20 @@ async function handleOpen(signal) {
       );
     }
     return trendFollowPaperOpen(
+      signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
+    );
+  }
+
+  // Candy Girl route (Iter 2): PAPER-only shadow-слот. PROD-путь пока не построен —
+  // open всегда виртуальный (даже в isProduction). Carry-guard'ы применяем (CB/
+  // drawdown/OI), как у trend_follow.
+  if (strategyId === 'candy_girl') {
+    const pre = await preflightChecks(signal.coin, null);
+    if (!pre.allowed) {
+      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
+      return { ok: false };
+    }
+    return candyPaperOpen(
       signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
     );
   }

@@ -36,6 +36,7 @@ import { resolveAsset } from './fill-parser.js';
 import { resolveEntrySize } from './sizing.js';
 import { getVirtualEquity, applyVirtualPnl } from '../chillBoyVirtualEquity.js';
 import { getFaderVirtualEquity, applyFaderVirtualPnl } from '../faderVirtualEquity.js';
+import { getCandyGirlVirtualEquity, applyCandyGirlVirtualPnl } from '../candyGirlVirtualEquity.js';
 
 /**
  * Определяет баланс для расчёта размера позиции.
@@ -364,6 +365,78 @@ export async function trendFollowPaperOpen(coin, price, direction, sl, tp, silen
 }
 
 /**
+ * Открывает виртуальную позицию для Candy Girl (Iter 2 paper-слот).
+ *
+ * Зеркало trendFollowPaperOpen: virtual sandbox (candyGirlVirtualEquity) когда
+ * CANDY_GIRL_PAPER_VIRTUAL_BALANCE>0, иначе реальный paper-баланс. SL/TP заданы
+ * детектором (свинг отката / R:R). strategy_id='candy_girl'. PAPER-only.
+ *
+ * @param {string} coin
+ * @param {number} price
+ * @param {'LONG'|'SHORT'} direction
+ * @param {number} sl
+ * @param {number} tp
+ * @param {boolean} [silent=false]
+ * @param {Object} [entryFeatures=null]
+ */
+export async function candyPaperOpen(coin, price, direction, sl, tp, silent = false, entryFeatures = null) {
+  const virtualMode = config.trading.candyGirlPaperVirtualBalance > 0;
+  const balance = virtualMode ? getCandyGirlVirtualEquity() : await getPaperBalance();
+  if (balance <= 0) {
+    logger.warn(`[Executor] [CandyGirl] Cannot open — balance is $${balance.toFixed(2)}`);
+    return { ok: false };
+  }
+  const balanceTag = virtualMode ? `virtual $${balance.toFixed(2)}` : `real $${balance.toFixed(2)}`;
+
+  const utilization = virtualMode
+    ? config.trading.candyGirlPaperVirtualUtil
+    : config.trading.candyGirlBalanceUtil;
+  const szDecimals = resolvePaperSzDecimals(coin);
+  if (szDecimals == null) return { ok: false };
+  const { sizeUsd, sz, tooSmall } = resolveEntrySize({
+    coin, tag: 'CandyGirl', equity: balance, capBase: balance,
+    capUtil: utilization, price, sl, szDecimals,
+  });
+  if (tooSmall) {
+    const why = sizeUsd < MIN_ORDER_USD
+      ? `size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min`
+      : `sz=${sz} rounds to 0 (szDecimals=${szDecimals}, price $${price})`;
+    logger.warn(
+      `[Executor] [CandyGirl SKIP] #${coin} — ${why} (${(utilization * 100).toFixed(0)}% ${balanceTag})`,
+    );
+    return { ok: false };
+  }
+
+  const fee  = sizeUsd * ONE_LEG;
+  const side = direction === 'LONG' ? 'long' : 'short';
+
+  const id = savePosition({
+    coin,
+    size_usd:    sizeUsd,
+    entry_price: price,
+    entry_apy:   0,
+    entry_time:  Date.now(),
+    mode:        "PAPER",
+    strategy_id: 'candy_girl',
+    side,
+    sl_price:    sl,
+    tp_price:    tp,
+    ...(entryFeatures || {}),
+  });
+
+  logger.info(
+    `[Executor] 🍬 CandyGirl OPEN ${direction} #${coin} | $${sizeUsd.toFixed(2)} (of ${balanceTag}) @ $${price} ` +
+      `| SL $${sl.toFixed(6)} / TP $${tp.toFixed(6)} | fee $${fee.toFixed(4)} | id: ${id}`,
+  );
+
+  notify('afterOpen', {
+    coin, price, sizeUsd, positionId: Number(id), mode: 'PAPER', strategy: 'candy_girl',
+  });
+
+  return { ok: true, positionId: Number(id), sizeUsd };
+}
+
+/**
  * Открывает виртуальную позицию для Strategy #5 Fader.
  *
  * Fader — paper-only contrarian scalper. Размер позиции = NOMINAL × LEVERAGE
@@ -463,7 +536,7 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
     pricePnl = (position.size_usd * (position.entry_price - closePrice)) / position.entry_price;
   } else if (position.strategy_id === 'hunter_long') {
     pricePnl = (position.size_usd * (closePrice - position.entry_price)) / position.entry_price;
-  } else if (position.strategy_id === 'trend_follow') {
+  } else if (position.strategy_id === 'trend_follow' || position.strategy_id === 'candy_girl') {
     const isLong = (position.side || '').toLowerCase() === 'long';
     pricePnl = isLong
       ? (position.size_usd * (closePrice - position.entry_price)) / position.entry_price
@@ -557,6 +630,15 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
     config.trading.chillBoyPaperVirtualBalance > 0
   ) {
     applyVirtualPnl(realizedPnl - totalFee, { coin: position.coin, reason: signal.reason });
+  }
+
+  // Compound sandbox: Candy Girl paper virtual equity (Iter 2).
+  if (
+    position.strategy_id === 'candy_girl' &&
+    position.mode === 'PAPER' &&
+    config.trading.candyGirlPaperVirtualBalance > 0
+  ) {
+    applyCandyGirlVirtualPnl(realizedPnl - totalFee, { coin: position.coin, reason: signal.reason });
   }
 
   // Fader virtual equity — net pnl уже включает modelled fees+slip.

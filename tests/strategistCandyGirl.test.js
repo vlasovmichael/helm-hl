@@ -20,7 +20,7 @@ process.env.CANDY_GIRL_SIGNAL_LOG_ENABLED = 'false'; // без БД в этих 
 
 const {
   scanCandyGirlRadar, getCandyGirlSignals, getCandyGirlHeartbeat, resetCandyGirlState,
-  scoreCandySignal, getCandyGirlRankedHits,
+  scoreCandySignal, getCandyGirlRankedHits, analyzeCandyGirl,
 } = await import('../src/modules/strategistCandyGirl.js');
 
 // ── Helpers: фабрики свечей под нужный сигнал ───
@@ -144,4 +144,108 @@ test('rank: getCandyGirlRankedHits отдаёт сигналы отсортир�
       assert.ok(hits[0].score >= hits[1].score, 'первый score ≥ второго');
     }
   });
+});
+
+// ── Iter 2: paper-слот decision (analyzeCandyGirl) ─────────────────────────
+
+/** Прогнать радар по одному LONG-сетапу, вернуть now скана. */
+async function seedLongHit(coin = 'AAA', price = 215.5) {
+  const now = Date.now();
+  await scanCandyGirlRadar(
+    [{ coin, price }], now,
+    async () => longSetup1h(),
+    async () => longSetup5m(),
+  );
+  return now;
+}
+
+test('analyze: слот свободен + свежий хит → OPEN лучшего сигнала', async () => {
+  resetCandyGirlState();
+  const now = await seedLongHit('AAA', 215.5);
+  const sig = analyzeCandyGirl([{ coin: 'AAA', price: 215.5 }], null, now);
+  assert.equal(sig.action, 'OPEN');
+  assert.equal(sig.strategy_id, 'candy_girl');
+  assert.equal(sig.coin, 'AAA');
+  assert.equal(sig.direction, 'LONG');
+  assert.ok(sig.sl < sig.price && sig.tp > sig.price);
+});
+
+test('analyze: протухшие ранжированные хиты → HOLD', async () => {
+  resetCandyGirlState();
+  const now = await seedLongHit('AAA');
+  // 5 минут спустя хиты считаются устаревшими (> RANKED_HITS_MAX_AGE_MS).
+  const sig = analyzeCandyGirl([{ coin: 'AAA', price: 215.5 }], null, now + 5 * 60_000);
+  assert.equal(sig.action, 'HOLD');
+});
+
+test('analyze: нет хитов вообще → HOLD', () => {
+  resetCandyGirlState();
+  const sig = analyzeCandyGirl([{ coin: 'AAA', price: 100 }], null, Date.now());
+  assert.equal(sig.action, 'HOLD');
+});
+
+test('analyze: чужая поза в слоте → HOLD (не эвиктим)', () => {
+  resetCandyGirlState();
+  const sig = analyzeCandyGirl([], { strategy_id: 'trend_follow', coin: 'XXX' }, Date.now());
+  assert.equal(sig.action, 'HOLD');
+});
+
+// LONG paper-поза: entry 100, sl 95, tp 110.
+function longPos(overrides = {}) {
+  return {
+    strategy_id: 'candy_girl', coin: 'AAA', side: 'long',
+    entry_price: 100, sl_price: 95, tp_price: 110,
+    entry_time: Date.now(), ...overrides,
+  };
+}
+
+test('exit: LONG цена ≥ TP → CLOSE candy_girl_tp по tp_price', () => {
+  resetCandyGirlState();
+  const sig = analyzeCandyGirl([{ coin: 'AAA', price: 111 }], longPos(), Date.now());
+  assert.equal(sig.action, 'CLOSE');
+  assert.equal(sig.reason, 'candy_girl_tp');
+  assert.equal(sig.price, 110);
+});
+
+test('exit: LONG цена ≤ SL → CLOSE candy_girl_sl по sl_price', () => {
+  resetCandyGirlState();
+  const sig = analyzeCandyGirl([{ coin: 'AAA', price: 94 }], longPos(), Date.now());
+  assert.equal(sig.action, 'CLOSE');
+  assert.equal(sig.reason, 'candy_girl_sl');
+  assert.equal(sig.price, 95);
+});
+
+test('exit: SHORT цена ≤ TP → CLOSE (зеркало long)', () => {
+  resetCandyGirlState();
+  const pos = longPos({ side: 'short', entry_price: 100, sl_price: 105, tp_price: 90 });
+  const sig = analyzeCandyGirl([{ coin: 'AAA', price: 89 }], pos, Date.now());
+  assert.equal(sig.action, 'CLOSE');
+  assert.equal(sig.reason, 'candy_girl_tp');
+});
+
+test('exit: время вышло → CLOSE candy_girl_time_stop (даже без монеты в scoutData)', () => {
+  resetCandyGirlState();
+  // entry_time далеко в прошлом → past PAPER_TIMEOUT_MS (default 240 мин).
+  const pos = longPos({ entry_time: Date.now() - 300 * 60_000 });
+  const sig = analyzeCandyGirl([], pos, Date.now());
+  assert.equal(sig.action, 'CLOSE');
+  assert.equal(sig.reason, 'candy_girl_time_stop');
+  assert.equal(sig.price, 100, 'fallback на entry_price когда монеты нет в scoutData');
+});
+
+test('exit: внутри уровней + монеты нет в scoutData → HOLD (ждём time-stop)', () => {
+  resetCandyGirlState();
+  const sig = analyzeCandyGirl([], longPos(), Date.now());
+  assert.equal(sig.action, 'HOLD');
+});
+
+test('analyze: re-entry cooldown после exit блокирует ту же монету', async () => {
+  resetCandyGirlState();
+  const now = await seedLongHit('AAA', 215.5);
+  // Закрываем позу по TP → ставит paperReentryCooldown на AAA.
+  const close = analyzeCandyGirl([{ coin: 'AAA', price: 999 }], longPos({ tp_price: 110 }), now);
+  assert.equal(close.action, 'CLOSE');
+  // Слот снова свободен, хит ещё свежий — но монета на cooldown → HOLD.
+  const reopen = analyzeCandyGirl([{ coin: 'AAA', price: 215.5 }], null, now + 1000);
+  assert.equal(reopen.action, 'HOLD');
 });

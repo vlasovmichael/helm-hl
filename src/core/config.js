@@ -465,6 +465,25 @@ function loadConfig() {
     throw new Error(`CANDY_GIRL_MAX_SIGNALS_PER_TICK must be positive integer. Got: "${process.env.CANDY_GIRL_MAX_SIGNALS_PER_TICK}"`);
   }
 
+  // ── Candy Girl paper-слот (Iter 2): зеркало ChillBoy shadow-слота ──
+  // Радар (выше) только сигналит; paper-слот торгует лучший ранжированный сигнал
+  // виртуально, чтобы собрать P&L с комиссиями перед PROD-гейтом. План:
+  // memory/candy_girl_strategy_plan.md. PROD-путь пока НЕ построен — даже при
+  // candyGirlProdEnabled=true open идёт в PAPER; флаг лишь глушит shadow-слот.
+  const candyGirlProdEnabled        = (process.env.CANDY_GIRL_PROD_ENABLED || 'false').toLowerCase() === 'true';
+  const candyGirlPaperVirtualBalance = parseFloat(process.env.CANDY_GIRL_PAPER_VIRTUAL_BALANCE || '0');
+  const candyGirlPaperVirtualUtil   = parseFloat(process.env.CANDY_GIRL_PAPER_VIRTUAL_UTILIZATION || '0.9');
+  const candyGirlBalanceUtil        = parseFloat(process.env.CANDY_GIRL_BALANCE_UTILIZATION || '0.5');
+  if (isNaN(candyGirlPaperVirtualBalance) || candyGirlPaperVirtualBalance < 0) {
+    throw new Error(`CANDY_GIRL_PAPER_VIRTUAL_BALANCE must be ≥ 0. Got: "${process.env.CANDY_GIRL_PAPER_VIRTUAL_BALANCE}"`);
+  }
+  if (isNaN(candyGirlPaperVirtualUtil) || candyGirlPaperVirtualUtil <= 0 || candyGirlPaperVirtualUtil > 0.95) {
+    throw new Error(`CANDY_GIRL_PAPER_VIRTUAL_UTILIZATION must be in (0, 0.95]. Got: "${process.env.CANDY_GIRL_PAPER_VIRTUAL_UTILIZATION}"`);
+  }
+  if (isNaN(candyGirlBalanceUtil) || candyGirlBalanceUtil <= 0 || candyGirlBalanceUtil > 0.95) {
+    throw new Error(`CANDY_GIRL_BALANCE_UTILIZATION must be in (0, 0.95]. Got: "${process.env.CANDY_GIRL_BALANCE_UTILIZATION}"`);
+  }
+
   // ── Strategy #5: Fader — contrarian fade scalper (PAPER-only) ──
   // План: plans/fader-strategy-plan.md.
   const faderEnabled            = (process.env.FADER_ENABLED || 'false').toLowerCase() === 'true';
@@ -739,6 +758,10 @@ function loadConfig() {
       candyGirlSlopeLookback4h,
       candyGirlSignalLogEnabled,
       candyGirlSignalTimeoutMin,
+      candyGirlProdEnabled,
+      candyGirlPaperVirtualBalance,
+      candyGirlPaperVirtualUtil,
+      candyGirlBalanceUtil,
       faderEnabled,
       faderVirtualBalance,
       faderNominalUsd,

@@ -55,8 +55,17 @@ const LOOKBACK_MINUTES = (EMA_5M + PULLBACK_LB + 5) * 5;
 // 4h: нужно slow4h+slope свечей по 4 часа → в часах ×4 (+буфер).
 const LOOKBACK_HOURS_4H = (SLOW_4H + SLOPE_LB_4H + 5) * 4;
 
+// Paper-слот (Iter 2): таймаут удержания = тот же, что у signal-лога; re-entry
+// cooldown после exit'а = ALERT_COOLDOWN (анти-churn в ту же монету).
+const PAPER_TIMEOUT_MS = SIGNAL_TIMEOUT_MS;
+const PAPER_REENTRY_COOLDOWN_MS = ALERT_COOLDOWN_MS;
+// Ранжированные хиты живут между сканами; перед открытием убеждаемся, что они с
+// текущего тика (radar сканит каждый тик ≈15с) — не торгуем по протухшему скану.
+const RANKED_HITS_MAX_AGE_MS = 60_000;
+
 // Per-coin state
 const alertCooldown = new Map();   // coin → ts последнего записанного сигнала
+const paperReentryCooldown = new Map();  // coin → ts последнего paper-exit'а (анти-churn)
 const recentSignals = [];          // ring buffer (новые в начале)
 let lastHeartbeat   = null;
 let lastHeartbeatAt = 0;
@@ -64,6 +73,7 @@ let lastRankedHits  = { ts: 0, hits: [] };  // ранжированные сиг
 
 export function resetCandyGirlState() {
   alertCooldown.clear();
+  paperReentryCooldown.clear();
   recentSignals.length = 0;
   lastHeartbeat = null;
   lastHeartbeatAt = 0;
@@ -308,4 +318,99 @@ export async function scanCandyGirlRadar(
   } catch (err) {
     logger.warn(`[CandyGirl] resolve failed: ${err.message}`);
   }
+}
+
+// ─────────────────────────────────────────────────
+//  Iter 2 — paper-слот (decision-only, без fetch)
+// ─────────────────────────────────────────────────
+// analyzeCandyGirl НЕ сканирует — переиспользует ранжированные хиты последнего
+// scanCandyGirlRadar (см. getCandyGirlRankedHits) для входа и scoutData для
+// текущей цены при exit-check. Оркестрация (вызов executor) — в
+// app/candyGirlPaperTick.js. Чистое решение здесь, по конвенции strategist'ов.
+
+/**
+ * Exit-check для candy_girl paper-позиции. Sync, без fetch.
+ * Time-stop проверяется ПЕРВЫМ (time-based, не требует свежей цены — иначе
+ * выпавшая из scoutData монета подвисала бы навсегда, ср. checkTrendFollowExit).
+ * SL/TP — по текущей цене из scoutData; если монеты там нет → HOLD.
+ */
+function checkCandyGirlExit(position, scoutData, now) {
+  if (position.entry_time && now - position.entry_time >= PAPER_TIMEOUT_MS) {
+    paperReentryCooldown.set(position.coin, now);
+    return {
+      action: 'CLOSE',
+      coin:   position.coin,
+      price:  (scoutData ?? []).find((x) => x.coin === position.coin)?.price ?? position.entry_price,
+      reason: 'candy_girl_time_stop',
+    };
+  }
+
+  const item = (scoutData ?? []).find((x) => x.coin === position.coin);
+  if (!item) {
+    logger.warn(`[CandyGirl] exit-check: #${position.coin} нет в scoutData — SL/TP пропущены, ждём time-stop`);
+    return { action: 'HOLD' };
+  }
+
+  const isLong = (position.side || '').toLowerCase() === 'long';
+  const price  = item.price;
+
+  if (position.sl_price != null) {
+    const slHit = isLong ? price <= position.sl_price : price >= position.sl_price;
+    if (slHit) {
+      paperReentryCooldown.set(position.coin, now);
+      return { action: 'CLOSE', coin: position.coin, price: position.sl_price, reason: 'candy_girl_sl' };
+    }
+  }
+  if (position.tp_price != null) {
+    const tpHit = isLong ? price >= position.tp_price : price <= position.tp_price;
+    if (tpHit) {
+      paperReentryCooldown.set(position.coin, now);
+      return { action: 'CLOSE', coin: position.coin, price: position.tp_price, reason: 'candy_girl_tp' };
+    }
+  }
+  return { action: 'HOLD' };
+}
+
+/**
+ * Решение для paper-слота Candy Girl.
+ *   • Своя поза → exit-check (SL/TP/time-stop).
+ *   • Чужая поза → HOLD (свой слот, по идее не случается).
+ *   • Слот свободен → OPEN лучшего ранжированного хита последнего скана
+ *     (getCandyGirlRankedHits), если он свежий и монета не на re-entry cooldown.
+ *
+ * @param {Array<{coin:string, price:number}>} scoutData — для exit-цены
+ * @param {Object|null} activePosition — candy_girl paper-позиция (или null)
+ * @param {number} [now=Date.now()]
+ * @returns {Object} signal: HOLD | OPEN | CLOSE
+ */
+export function analyzeCandyGirl(scoutData, activePosition, now = Date.now()) {
+  if (activePosition?.strategy_id === 'candy_girl') {
+    return checkCandyGirlExit(activePosition, scoutData, now);
+  }
+  if (activePosition) return { action: 'HOLD' };
+
+  // Слот свободен → берём лучший хит свежего скана.
+  const ranked = lastRankedHits;
+  if (!ranked || now - ranked.ts > RANKED_HITS_MAX_AGE_MS) return { action: 'HOLD' };
+
+  for (const hit of ranked.hits) {
+    const { item, signal } = hit;
+    if (!signal?.signal || signal.entry == null || signal.sl == null || signal.tp == null) continue;
+    const cd = paperReentryCooldown.get(item.coin) ?? 0;
+    if (now - cd < PAPER_REENTRY_COOLDOWN_MS) continue;   // анти-churn в ту же монету
+    return {
+      action:      'OPEN',
+      strategy_id: 'candy_girl',
+      coin:        item.coin,
+      price:       signal.entry,
+      direction:   signal.signal.toUpperCase(),
+      sl:          signal.sl,
+      tp:          signal.tp,
+      entryFeatures: {
+        entry_trend4h:  signal.trend4h ?? 'none',
+        entry_hour_utc: new Date(now).getUTCHours(),
+      },
+    };
+  }
+  return { action: 'HOLD' };
 }

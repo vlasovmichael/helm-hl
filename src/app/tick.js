@@ -17,6 +17,7 @@ import { hunterReconcile } from './hunterReconcile.js';
 import { hunterLongReconcile } from './hunterLongReconcile.js';
 import { processHunterTrailArm } from './hunterTrailArm.js';
 import { tickTrendFollowPaper } from './trendFollowPaperTick.js';
+import { tickCandyGirlPaper } from './candyGirlPaperTick.js';
 import { tickFaderPaper } from './faderPaperTick.js';
 import { runBalanceDiag } from './balanceDiag.js';
 import { flushBotStatePeriodic } from './lifecycle.js';
@@ -71,6 +72,9 @@ export async function tick() {
         // слота — никогда не торгует, только лента + TG-алерты. Default OFF.
         if (config.trading.candyGirlEnabled) {
           await scanCandyGirlRadar(handsOffHunter);
+          // Candy Girl paper-слот (Iter 2): после радара, переиспользует его
+          // ранжированные хиты. Независим от реального слота (как ChillBoy paper).
+          await tickCandyGirlPaper(handsOffHunter);
         }
         // ChillBoy paper shadow-слот независим от реального слота — должен тикать
         // даже в HANDS-OFF, иначе зависшая ручная PROD-поза подвешивает paper
@@ -98,8 +102,10 @@ export async function tick() {
     if (config.trading.candyGirlEnabled) {
       try {
         await scanCandyGirlRadar(scoutData);
+        // Iter 2 paper-слот: сразу после радара, переиспользует ранжированные хиты.
+        await tickCandyGirlPaper(scoutData);
       } catch (err) {
-        logger.debug(`[Tick] Candy Girl radar failed: ${err.message}`);
+        logger.debug(`[Tick] Candy Girl radar/paper failed: ${err.message}`);
       }
     }
 
