@@ -20,6 +20,7 @@ process.env.CANDY_GIRL_SIGNAL_LOG_ENABLED = 'false'; // без БД в этих 
 
 const {
   scanCandyGirlRadar, getCandyGirlSignals, getCandyGirlHeartbeat, resetCandyGirlState,
+  scoreCandySignal, getCandyGirlRankedHits,
 } = await import('../src/modules/strategistCandyGirl.js');
 
 // ── Helpers: фабрики свечей под нужный сигнал ───
@@ -95,4 +96,52 @@ test('radar: монета без свечей (fetch=null) → пропуск, �
   const scoutData = [{ coin: 'AAA', price: 215.5 }];
   await scanCandyGirlRadar(scoutData, Date.now(), async () => null, async () => null);
   assert.equal(getCandyGirlSignals().length, 0);
+});
+
+// ── Ранжировщик одновременных сигналов (scoreCandySignal) ──────────────────
+
+test('score: 4h-confluence доминирует над силой 1h-тренда', () => {
+  // Выровненный 4h, но слабый 1h-разрыв...
+  const aligned = scoreCandySignal({ signal: 'long', trend4h: 'up', emaFast1h: 101, emaSlow1h: 100 });
+  // ...vs не-выровненный 4h с очень сильным 1h-разрывом.
+  const notAligned = scoreCandySignal({ signal: 'long', trend4h: 'none', emaFast1h: 130, emaSlow1h: 100 });
+  assert.ok(aligned > notAligned, `aligned ${aligned} должен быть выше ${notAligned}`);
+});
+
+test('score: при равном confluence — шире EMA-разрыв выигрывает', () => {
+  const wide = scoreCandySignal({ signal: 'short', trend4h: 'down', emaFast1h: 95, emaSlow1h: 100 });
+  const narrow = scoreCandySignal({ signal: 'short', trend4h: 'down', emaFast1h: 99, emaSlow1h: 100 });
+  assert.ok(wide > narrow);
+});
+
+test('score: нет сигнала → -Infinity', () => {
+  assert.equal(scoreCandySignal({ signal: null }), -Infinity);
+  assert.equal(scoreCandySignal(null), -Infinity);
+});
+
+test('score: short выровнен только с trend4h=down (не up)', () => {
+  const right = scoreCandySignal({ signal: 'short', trend4h: 'down', emaFast1h: 99, emaSlow1h: 100 });
+  const wrong = scoreCandySignal({ signal: 'short', trend4h: 'up', emaFast1h: 99, emaSlow1h: 100 });
+  assert.ok(right > wrong);
+});
+
+test('rank: getCandyGirlRankedHits отдаёт сигналы отсортированными по score', () => {
+  resetCandyGirlState();
+  // Два LONG-сетапа на разных монетах: у BBB разрыв EMA шире → должен быть первым.
+  const hourlyByCoin = {
+    AAA: fromCloses(rising(230, 100, 0.3)),   // умеренный наклон
+    BBB: fromCloses(rising(230, 100, 0.9)),   // крутой наклон → шире EMA-разрыв
+  };
+  const scoutData = [{ coin: 'AAA', price: 215.5 }, { coin: 'BBB', price: 290 }];
+  return scanCandyGirlRadar(
+    scoutData, Date.now(),
+    async (coin) => hourlyByCoin[coin],
+    async () => longSetup5m(),
+  ).then(() => {
+    const { hits } = getCandyGirlRankedHits();
+    assert.ok(hits.length >= 1, 'должен быть хотя бы один сигнал');
+    if (hits.length === 2) {
+      assert.ok(hits[0].score >= hits[1].score, 'первый score ≥ второго');
+    }
+  });
 });

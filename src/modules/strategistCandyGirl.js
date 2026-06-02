@@ -60,12 +60,43 @@ const alertCooldown = new Map();   // coin → ts последнего запи�
 const recentSignals = [];          // ring buffer (новые в начале)
 let lastHeartbeat   = null;
 let lastHeartbeatAt = 0;
+let lastRankedHits  = { ts: 0, hits: [] };  // ранжированные сигналы последнего тика (для paper-слота, Iter 2)
 
 export function resetCandyGirlState() {
   alertCooldown.clear();
   recentSignals.length = 0;
   lastHeartbeat = null;
   lastHeartbeatAt = 0;
+  lastRankedHits = { ts: 0, hits: [] };
+}
+
+/**
+ * Скоринг сигнала для ранжирования ОДНОВРЕМЕННЫХ сетапов (≥2 монеты сигналят в
+ * один тик, слот один — берём лучший). Выше = лучше.
+ *
+ * Приоритет: 4h-confluence (HTF-тренд выровнен с направлением сделки) доминирует —
+ * именно он давал +0.16R эдж в shadow-логе. При равном confluence — сила 1h-тренда:
+ * относительный разрыв EMA fast/slow (шире = увереннее тренд).
+ *
+ * @param {{signal:'long'|'short'|null, trend4h?:string, emaFast1h?:number, emaSlow1h?:number}} sig
+ * @returns {number}
+ */
+export function scoreCandySignal(sig) {
+  if (!sig || !sig.signal) return -Infinity;
+  const aligned =
+    (sig.trend4h === 'up'   && sig.signal === 'long') ||
+    (sig.trend4h === 'down' && sig.signal === 'short');
+  const slow = sig.emaSlow1h;
+  const sepPct =
+    Number.isFinite(slow) && slow > 0 && Number.isFinite(sig.emaFast1h)
+      ? Math.abs(sig.emaFast1h - slow) / slow
+      : 0;
+  return (aligned ? 1 : 0) + sepPct;
+}
+
+/** Ранжированные сигналы последнего скана (для будущего paper-слота). */
+export function getCandyGirlRankedHits() {
+  return lastRankedHits;
 }
 
 /** Лента последних обнаруженных сетапов (для dashboard «Candy Girl»). */
@@ -257,9 +288,14 @@ export async function scanCandyGirlRadar(
   const results = await performScan(scoutData, now, hourlyFetcher, fiveMinFetcher, fourHourFetcher);
   updateHeartbeat(results, scoutData?.length ?? 0, now);
 
-  // Кап на число записанных сигналов за тик (анти-фонтан): берём первые по
-  // порядку scoutData, остальные дропаем — дедуп per-coin всё равно их догонит.
-  const hits = results.filter((r) => r?.signal?.signal);
+  // Ранжируем одновременные сигналы: лучший = 4h-confluence + сильнее 1h-тренд.
+  // Раньше брались первые по порядку scoutData — теперь по score (см.
+  // scoreCandySignal). Кап MAX_SIGNALS_PER_TICK теперь режет ХУДШИЕ, а не случайные.
+  const hits = results
+    .filter((r) => r?.signal?.signal)
+    .map((r) => ({ ...r, score: scoreCandySignal(r.signal) }))
+    .sort((a, b) => b.score - a.score);
+  lastRankedHits = { ts: now, hits };
   let recorded = 0;
   for (const r of hits) {
     if (recorded >= MAX_SIGNALS_PER_TICK) break;
