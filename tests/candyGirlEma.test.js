@@ -178,3 +178,49 @@ test('signal: 1h down + 5m reclaim вниз → short', () => {
   assert.equal(r.entry, 188);
   assert.ok(r.sl > r.entry);
 });
+
+// ── 4h higher-timeframe confluence ─────────────
+
+const SIG_PARAMS_4H = {
+  ...SIG_PARAMS,
+  fast4h: 20, slow4h: 50, slopeLookback4h: 5, htfConfluence: true,
+};
+
+// Готовый 1h-up + 5m reclaim сетап (как в long-тесте выше).
+function longSetupParts() {
+  const c1h = fromCloses(rising(230, 100, 0.5));
+  const base = rising(23, 200, 0.4);
+  const c5m = fromCloses([...base, 206, 205.5, 205, 205.5, 212], 1.5);
+  return { c1h, c5m, price: 215.5 };
+}
+
+test('signal+4h: 4h up совпадает с 1h up → long проходит', () => {
+  const { c1h, c5m, price } = longSetupParts();
+  const c4h = fromCloses(rising(60, 100, 1));   // 4h up-тренд
+  const r = detectCandyGirlSignal(c1h, c5m, price, { ...SIG_PARAMS_4H, candles4h: c4h });
+  assert.equal(r.signal, 'long');
+  assert.equal(r.trend4h, 'up');
+});
+
+test('signal+4h: 4h down против 1h up → сигнал зарезан (htf_mismatch)', () => {
+  const { c1h, c5m, price } = longSetupParts();
+  const c4h = fromCloses(falling(60, 300, 1));  // 4h down-тренд
+  const r = detectCandyGirlSignal(c1h, c5m, price, { ...SIG_PARAMS_4H, candles4h: c4h });
+  assert.equal(r.signal, null);
+  assert.equal(r.trend4h, 'down');
+  assert.equal(r.reason, 'htf_mismatch');
+});
+
+test('signal+4h: confluence off → 4h игнорится, long проходит', () => {
+  const { c1h, c5m, price } = longSetupParts();
+  const c4h = fromCloses(falling(60, 300, 1));
+  const r = detectCandyGirlSignal(c1h, c5m, price, { ...SIG_PARAMS_4H, htfConfluence: false, candles4h: c4h });
+  assert.equal(r.signal, 'long');
+});
+
+test('signal+4h: нет 4h-свечей → back-compat, gate не применяется', () => {
+  const { c1h, c5m, price } = longSetupParts();
+  const r = detectCandyGirlSignal(c1h, c5m, price, SIG_PARAMS_4H);  // candles4h не передан
+  assert.equal(r.signal, 'long');
+  assert.equal(r.trend4h, 'none');
+});

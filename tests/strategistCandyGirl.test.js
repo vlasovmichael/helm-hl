@@ -15,6 +15,8 @@ process.env.BREATHING_MINUTES     = '30';
 process.env.LEVERAGE              = '1';
 process.env.CANDY_GIRL_ENABLED = 'true';
 process.env.CANDY_GIRL_ALERT_ENABLED = 'false';   // не дёргать reporter/сеть
+process.env.CANDY_GIRL_HTF_CONFLUENCE = 'false';  // 4h-фильтр тестим на уровне детектора (без сети)
+process.env.CANDY_GIRL_SIGNAL_LOG_ENABLED = 'false'; // без БД в этих тестах
 
 const {
   scanCandyGirlRadar, getCandyGirlSignals, getCandyGirlHeartbeat, resetCandyGirlState,

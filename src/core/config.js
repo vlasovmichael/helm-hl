@@ -419,6 +419,27 @@ function loadConfig() {
   const candyGirlRr                 = parseFloat(process.env.CANDY_GIRL_RR || '2');
   const candyGirlAlertCooldownMin   = parseFloat(process.env.CANDY_GIRL_ALERT_COOLDOWN_MIN || '45');
   const candyGirlMaxSignalsPerTick  = parseInt(process.env.CANDY_GIRL_MAX_SIGNALS_PER_TICK || '3', 10);
+  // 4h higher-timeframe confluence: сигнал валиден только если 4h-тренд совпадает
+  // с 1h-трендом. EMA20/50 на 4h (≈8 дней истории), легче чем EMA200 на 1h.
+  const candyGirlHtfConfluence      = (process.env.CANDY_GIRL_HTF_CONFLUENCE || 'true').toLowerCase() === 'true';
+  const candyGirlFast4h             = parseInt(process.env.CANDY_GIRL_FAST_4H  || '20', 10);
+  const candyGirlSlow4h             = parseInt(process.env.CANDY_GIRL_SLOW_4H  || '50', 10);
+  const candyGirlSlopeLookback4h    = parseInt(process.env.CANDY_GIRL_SLOPE_LOOKBACK_4H || '5', 10);
+  // Логирование сигналов в БД + авто-резолв TP-before-SL (замер точности).
+  const candyGirlSignalLogEnabled   = (process.env.CANDY_GIRL_SIGNAL_LOG_ENABLED || 'true').toLowerCase() === 'true';
+  const candyGirlSignalTimeoutMin   = parseInt(process.env.CANDY_GIRL_SIGNAL_TIMEOUT_MIN || '240', 10);
+  if (!Number.isInteger(candyGirlFast4h) || candyGirlFast4h < 2 || candyGirlFast4h >= candyGirlSlow4h) {
+    throw new Error(`CANDY_GIRL_FAST_4H must be integer in [2, CANDY_GIRL_SLOW_4H). Got: "${process.env.CANDY_GIRL_FAST_4H}"`);
+  }
+  if (!Number.isInteger(candyGirlSlow4h) || candyGirlSlow4h < 5 || candyGirlSlow4h > 200) {
+    throw new Error(`CANDY_GIRL_SLOW_4H must be integer in [5, 200]. Got: "${process.env.CANDY_GIRL_SLOW_4H}"`);
+  }
+  if (!Number.isInteger(candyGirlSlopeLookback4h) || candyGirlSlopeLookback4h < 1) {
+    throw new Error(`CANDY_GIRL_SLOPE_LOOKBACK_4H must be positive integer. Got: "${process.env.CANDY_GIRL_SLOPE_LOOKBACK_4H}"`);
+  }
+  if (!Number.isInteger(candyGirlSignalTimeoutMin) || candyGirlSignalTimeoutMin < 1) {
+    throw new Error(`CANDY_GIRL_SIGNAL_TIMEOUT_MIN must be positive integer. Got: "${process.env.CANDY_GIRL_SIGNAL_TIMEOUT_MIN}"`);
+  }
   if (!Number.isInteger(candyGirlFast1h) || candyGirlFast1h < 2 || candyGirlFast1h >= candyGirlSlow1h) {
     throw new Error(`CANDY_GIRL_FAST_1H must be integer in [2, CANDY_GIRL_SLOW_1H). Got: "${process.env.CANDY_GIRL_FAST_1H}"`);
   }
@@ -712,6 +733,12 @@ function loadConfig() {
       candyGirlRr,
       candyGirlAlertCooldownMin,
       candyGirlMaxSignalsPerTick,
+      candyGirlHtfConfluence,
+      candyGirlFast4h,
+      candyGirlSlow4h,
+      candyGirlSlopeLookback4h,
+      candyGirlSignalLogEnabled,
+      candyGirlSignalTimeoutMin,
       faderEnabled,
       faderVirtualBalance,
       faderNominalUsd,

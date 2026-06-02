@@ -169,14 +169,35 @@ export function detectCandyGirlSignal(candles1h, candles5m, currentPrice, params
   const {
     fast1h = 20, slow1h = 200, slopeLookback = 10,
     ema5m = 20, pullbackLookback = 6, rr = 2,
+    // 4h higher-timeframe confluence (опционально). Если candles4h не передан —
+    // gate выключен (back-compat), trend4h = 'none'.
+    candles4h = null, fast4h = 20, slow4h = 50, slopeLookback4h = 5,
+    htfConfluence = true,
   } = params || {};
 
   const t = classifyTrend(candles1h, currentPrice, { fast: fast1h, slow: slow1h, slopeLookback });
+
+  // 4h-тренд: тот же классификатор, более лёгкие EMA. Считаем всегда (для UI),
+  // gate применяем только если confluence включён И свечи переданы.
+  let trend4h = 'none';
+  if (Array.isArray(candles4h) && candles4h.length) {
+    trend4h = classifyTrend(candles4h, currentPrice, {
+      fast: fast4h, slow: slow4h, slopeLookback: slopeLookback4h,
+    }).trend;
+  }
+
   const base = {
-    signal: null, trend: t.trend, entry: null, sl: null, tp: null,
+    signal: null, trend: t.trend, trend4h, entry: null, sl: null, tp: null,
     emaFast1h: t.emaFast, emaSlow1h: t.emaSlow, ema5m: null, reason: t.reason,
   };
   if (t.trend === 'none') return base;
+
+  // HTF-gate: 4h должен смотреть в ту же сторону, что 1h. Если 4h-история
+  // недостаточна (trend4h='none') — confluence не подтверждён, скипаем.
+  if (htfConfluence && Array.isArray(candles4h) && candles4h.length && trend4h !== t.trend) {
+    base.reason = trend4h === 'none' ? 'htf_insufficient' : 'htf_mismatch';
+    return base;
+  }
 
   const pb = detectPullbackReclaim(candles5m, t.trend, { ema: ema5m, lookback: pullbackLookback });
   base.ema5m = pb.ema5m;
@@ -192,7 +213,7 @@ export function detectCandyGirlSignal(candles1h, candles5m, currentPrice, params
     if (!(swing < entry)) { base.reason = 'bad_swing'; return base; }
     const risk = entry - swing;
     return {
-      signal: 'long', trend: 'up', entry, sl: swing, tp: entry + rr * risk,
+      signal: 'long', trend: 'up', trend4h, entry, sl: swing, tp: entry + rr * risk,
       emaFast1h: t.emaFast, emaSlow1h: t.emaSlow, ema5m: pb.ema5m, reason: 'signal_long',
     };
   }
@@ -200,7 +221,7 @@ export function detectCandyGirlSignal(candles1h, candles5m, currentPrice, params
   if (!(swing > entry)) { base.reason = 'bad_swing'; return base; }
   const risk = swing - entry;
   return {
-    signal: 'short', trend: 'down', entry, sl: swing, tp: entry - rr * risk,
+    signal: 'short', trend: 'down', trend4h, entry, sl: swing, tp: entry - rr * risk,
     emaFast1h: t.emaFast, emaSlow1h: t.emaSlow, ema5m: pb.ema5m, reason: 'signal_short',
   };
 }

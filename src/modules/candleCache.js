@@ -137,3 +137,58 @@ export function seedFiveMinCache(coin, candles, now = Date.now()) {
 export function clearFiveMinCache() {
   cache5m.clear();
 }
+
+// ── 4-часовые свечи (для Candy Girl 4h HTF-confluence) ──────────────────────
+// 4h-свеча закрывается раз в 4 часа → TTL 15 мин (тренд старшего ТФ медленный,
+// частый refetch смысла не имеет). Своя карта, свой interval.
+const FOUR_HOUR_TTL_MS   = 15 * 60_000;
+const FOUR_HOUR_INTERVAL = '4h';
+const cache4h = new Map();   // coin → { fetchedAt, candles, inflight }
+
+/**
+ * Получает 4h свечи для монеты. Зеркало getHourlyCandles, свой кэш + interval.
+ *
+ * @param {string} coin
+ * @param {number} lookbackHours — сколько часов истории нужно
+ * @param {number} [now=Date.now()]
+ * @returns {Promise<Array<{open,high,low,close,time}>|null>}
+ */
+export async function getFourHourCandles(coin, lookbackHours, now = Date.now()) {
+  const cached = cache4h.get(coin);
+  if (cached && now - cached.fetchedAt < FOUR_HOUR_TTL_MS) {
+    return cached.candles;
+  }
+  if (cached?.inflight) {
+    try { return await cached.inflight; } catch { return null; }
+  }
+
+  const startTime = now - lookbackHours * 3_600_000;
+  const promise = hlInfo(
+    {
+      type: 'candleSnapshot',
+      req:  { coin, interval: FOUR_HOUR_INTERVAL, startTime, endTime: now },
+    },
+    { label: `candleCache4h/${coin}` },
+  ).then((data) => {
+    const candles = parseCandles(data);
+    cache4h.set(coin, { fetchedAt: Date.now(), candles, inflight: null });
+    return candles;
+  }).catch((err) => {
+    cache4h.set(coin, { ...(cache4h.get(coin) || {}), inflight: null });
+    logger.warn(`[CandleCache4h] #${coin} fetch failed: ${err.message}`);
+    return null;
+  });
+
+  cache4h.set(coin, { ...(cached || {}), inflight: promise });
+  return promise;
+}
+
+/** Прямая инжекция 4h-свечей (тесты). */
+export function seedFourHourCache(coin, candles, now = Date.now()) {
+  cache4h.set(coin, { fetchedAt: now, candles, inflight: null });
+}
+
+/** Очистить 4h-кэш (тесты). */
+export function clearFourHourCache() {
+  cache4h.clear();
+}

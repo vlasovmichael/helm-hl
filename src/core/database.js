@@ -220,6 +220,30 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS bot_oid_log_coin_ts_idx ON bot_oid_log (coin, ts);
   `);
 
+  // Candy Girl signal log — каждый записанный радар-сигнал + авто-резолв
+  // (дошёл до TP раньше SL = win, наоборот = loss, ни то ни другое за timeout =
+  // timeout). Нужно чтобы реально измерить точность радара, а не гадать.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS candy_signals (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      coin          TEXT    NOT NULL,
+      direction     TEXT    NOT NULL,
+      ts            INTEGER NOT NULL,
+      price         REAL,
+      entry         REAL,
+      sl            REAL,
+      tp            REAL,
+      rr            REAL,
+      trend4h       TEXT,
+      status        TEXT    NOT NULL DEFAULT 'open',
+      outcome       TEXT,
+      resolved_at   INTEGER,
+      resolved_price REAL
+    );
+    CREATE INDEX IF NOT EXISTS candy_signals_status_idx ON candy_signals (status);
+    CREATE INDEX IF NOT EXISTS candy_signals_ts_idx ON candy_signals (ts);
+  `);
+
   logger.info(`[DB] Initialized at ${DB_PATH}`);
   return db;
 }
@@ -261,6 +285,91 @@ export function getBotOidsSince(sinceMs = 0) {
 
 export function getRawDb() {
   return getDb();
+}
+
+// ── Candy Girl signal log ───────────────────────────────────────────────────
+
+/**
+ * Записать радар-сигнал. Возвращает id строки (для последующего резолва) или null.
+ * @param {{coin,direction,ts,price,entry,sl,tp,rr,trend4h}} s
+ */
+export function recordCandySignal(s) {
+  try {
+    const info = getDb()
+      .prepare(`INSERT INTO candy_signals
+        (coin, direction, ts, price, entry, sl, tp, rr, trend4h, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')`)
+      .run(
+        String(s.coin).toUpperCase(), s.direction, s.ts,
+        s.price ?? null, s.entry ?? null, s.sl ?? null, s.tp ?? null,
+        s.rr ?? null, s.trend4h ?? null,
+      );
+    return Number(info.lastInsertRowid);
+  } catch (err) {
+    logger.warn(`[DB] recordCandySignal(${s?.coin}) failed: ${err.message}`);
+    return null;
+  }
+}
+
+/** Все ещё не зарезолвленные сигналы (для трекера исходов). */
+export function getOpenCandySignals() {
+  try {
+    return getDb().prepare(`SELECT * FROM candy_signals WHERE status = 'open'`).all();
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Зафиксировать исход сигнала.
+ * @param {number} id
+ * @param {'win'|'loss'|'timeout'} outcome
+ * @param {number} resolvedPrice
+ * @param {number} [resolvedAt=Date.now()]
+ */
+export function resolveCandySignal(id, outcome, resolvedPrice, resolvedAt = Date.now()) {
+  try {
+    getDb()
+      .prepare(`UPDATE candy_signals
+        SET status = 'resolved', outcome = ?, resolved_price = ?, resolved_at = ?
+        WHERE id = ?`)
+      .run(outcome, resolvedPrice ?? null, resolvedAt, id);
+  } catch (err) {
+    logger.warn(`[DB] resolveCandySignal(${id}) failed: ${err.message}`);
+  }
+}
+
+/**
+ * Агрегированная статистика сигналов за период (для dashboard).
+ * @param {number} [sinceMs=0]
+ * @returns {{total,resolved,open,win,loss,timeout,winRate}}
+ */
+export function getCandySignalStats(sinceMs = 0) {
+  const empty = { total: 0, resolved: 0, open: 0, win: 0, loss: 0, timeout: 0, winRate: null };
+  try {
+    const r = getDb()
+      .prepare(`SELECT
+          COUNT(*) total,
+          SUM(status = 'open')     open,
+          SUM(outcome = 'win')     win,
+          SUM(outcome = 'loss')    loss,
+          SUM(outcome = 'timeout') timeout
+        FROM candy_signals WHERE ts >= ?`)
+      .get(sinceMs);
+    const win = r.win || 0;
+    const loss = r.loss || 0;
+    const decided = win + loss;   // timeout не считаем в winRate
+    return {
+      total: r.total || 0,
+      open: r.open || 0,
+      win, loss,
+      timeout: r.timeout || 0,
+      resolved: win + loss + (r.timeout || 0),
+      winRate: decided > 0 ? win / decided : null,
+    };
+  } catch {
+    return empty;
+  }
 }
 
 function getDb() {

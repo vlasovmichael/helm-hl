@@ -472,13 +472,33 @@
           </div>
           <div class="time-ranges">
             <span class="status-pill">SIGNAL-ONLY</span>
+            <span id="candygirl-acc" class="status-pill" style="display:none" title="Точность: TP раньше SL по 5m-свечам. Timeout не учитывается в %."></span>
             <span id="candygirl-hb" class="status-pill" style="display:none"></span>
           </div>
         </div>
         <div class="cb-grid">
           <div class="cb-section cb-section-full">
-            <div class="cb-section-title">Recent setups — тренд + откат-reclaim</div>
-            <div id="cg-signals-body" class="cb-signals"><div class="empty-state">no setups yet</div></div>
+            <div class="cb-section-title">Recent setups — 4h+1h тренд + 5m откат-reclaim</div>
+            <div class="signals-table-wrap">
+              <table class="signals-table">
+                <thead>
+                  <tr>
+                    <th title="Направление сделки">Dir</th>
+                    <th>Coin</th>
+                    <th title="Цена в момент сигнала">Price</th>
+                    <th title="Точка входа (5m reclaim close)">Entry</th>
+                    <th title="Стоп-лосс — под/над свингом отката">SL</th>
+                    <th title="Тейк-профит — R:R к стопу">TP</th>
+                    <th title="Reward:Risk">R:R</th>
+                    <th title="Старший тренд 4h (confluence-фильтр)">4h</th>
+                    <th title="Возраст сигнала">Age</th>
+                  </tr>
+                </thead>
+                <tbody id="cg-signals-tbody">
+                  <tr><td colspan="9" class="empty-state">no setups yet</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
           <div class="cb-section cb-section-full">
             <div class="cb-section-title" style="opacity:.7">Detector status</div>

@@ -1094,6 +1094,13 @@ footer {
 .signals-table tr.is-active {
   background: var(--accent-soft);
 }
+/* Candy Girl signal rows — лёгкий tint по направлению. */
+.signals-table tr.cg-sig-row.dir-long {
+  background: rgba(61, 220, 132, 0.07);
+}
+.signals-table tr.cg-sig-row.dir-short {
+  background: rgba(255, 92, 92, 0.07);
+}
 .signals-coin {
   font-weight: 600;
 }

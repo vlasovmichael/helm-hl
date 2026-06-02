@@ -38,7 +38,7 @@ import {
   HUNTER_TP_PCT,
 } from "../strategistSniper.js";
 import { getChillBoyHeartbeat, getChillBoySignals, getTrendFollowMfeMae } from "../strategistTrendFollow.js";
-import { getCandyGirlHeartbeat, getCandyGirlSignals } from "../strategistCandyGirl.js";
+import { getCandyGirlHeartbeat, getCandyGirlSignals, getCandyGirlStats } from "../strategistCandyGirl.js";
 import { getFaderHeartbeat, getFaderMfeMae } from "../strategistFader.js";
 import { getFaderVirtualSnapshot } from "../faderVirtualEquity.js";
 import { getVirtualEquitySnapshot } from "../chillBoyVirtualEquity.js";
@@ -386,6 +386,7 @@ async function getStatusData() {
           enabled: true,
           heartbeat: getCandyGirlHeartbeat(),
           signals: getCandyGirlSignals(),
+          stats: getCandyGirlStats(),
         }
       : null,
     fader: config.trading.faderEnabled
