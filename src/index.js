@@ -16,6 +16,9 @@ import { drainOutbox as taxDrainOutbox } from './modules/taxCollector/pusher.js'
 import { state, TICK_INTERVAL_MS, INTEGRITY_GRACE_PERIOD_MS, SHUTDOWN_TIMEOUT_MS } from './app/state.js';
 import { tick } from './app/tick.js';
 import { restoreHunterTrailIfNeeded } from './app/hunterTrailArm.js';
+import { startPriceFeed } from './core/priceFeed.js';
+import { startWsExitLoop } from './app/wsExitTick.js';
+import { startWsEntryLoop } from './app/wsEntryTick.js';
 import { shutdown } from './app/lifecycle.js';
 import { createStatusCollector } from './app/status.js';
 
@@ -70,6 +73,11 @@ async function main() {
   // ── Web Dashboard (localhost:3000) ─────────────
   startDashboard();
 
+  // ── WS price feed (Stage 1: shadow) ────────────
+  // Gated на HL_WS_FEED_ENABLED. Поднимает allMids-фид + сверяет с поллингом,
+  // торговую логику не трогает. Fail-soft: ошибки WS не валят бота.
+  startPriceFeed();
+
   // ── Tax Collector — ежедневный сбор PIT-38 в 03:00 (Europe/Warsaw) ──
   // Fail-soft: модуль сам отключается, если BINANCE_API_KEY не задан.
   cron.schedule(
@@ -114,6 +122,16 @@ async function main() {
   await tick();
 
   state.tickTimer = setInterval(tick, TICK_INTERVAL_MS);
+
+  // ── WS-tick exits (Stage 2) ────────────────────
+  // Считает выходы активной hunter/hunter_long позиции на живых WS-ценах между
+  // 15-сек тиками. Gated на HL_WS_EXITS_ENABLED, делит mutex с tick().
+  startWsExitLoop();
+
+  // ── WS-tick entries (Stage 3) ──────────────────
+  // Открывает hunter/hunter_long быстрее 15-сек скана. Gated на
+  // HL_WS_ENTRIES_ENABLED (default OFF, меняет частоту входов), mutex с tick().
+  startWsEntryLoop();
 
   const handleSignal = (signal) => {
     setTimeout(() => {

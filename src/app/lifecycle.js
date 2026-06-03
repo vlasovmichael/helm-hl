@@ -11,6 +11,9 @@ import { disconnectExchange } from '../modules/exchange.js';
 import { sendMessage, stopCallbackPolling, formatUptime } from '../modules/reporter.js';
 import { serializeCircuitBreaker, serializeSniper, serializeOiCapBans } from '../modules/executor/state.js';
 import { stopDashboard } from '../modules/dashboard/server.js';
+import { stopPriceFeed } from '../core/priceFeed.js';
+import { stopWsExitLoop } from './wsExitTick.js';
+import { stopWsEntryLoop } from './wsEntryTick.js';
 import { state, BOT_STATE_PATH, BOT_STATE_FLUSH_INTERVAL_MS } from './state.js';
 
 /**
@@ -176,6 +179,9 @@ export async function shutdown(signal) {
     state.tickTimer = null;
   }
   stopCallbackPolling();
+  stopWsEntryLoop();
+  stopWsExitLoop();
+  stopPriceFeed();
   try {
     await stopDashboard();
   } catch (err) {

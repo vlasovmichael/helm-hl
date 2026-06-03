@@ -698,6 +698,19 @@ function loadConfig() {
     );
   }
 
+  // ── WS price feed (Stage 1 shadow / Stage 2 exits) ─────────
+  // wsFeedEnabled — поднимает allMids WS-фид (тень: кэш + сверка с поллингом).
+  // wsExitsEnabled — выходы активной hunter/hunter_long позиции считаются на
+  //   WS-тиках (не раз в 15с). Требует включённого фида. Default OFF — включать
+  //   только после суток наблюдения тени (см. ws_price_feed_plan.md).
+  const wsFeedEnabled     = (process.env.HL_WS_FEED_ENABLED    || 'false').toLowerCase() === 'true';
+  const wsExitsEnabled    = (process.env.HL_WS_EXITS_ENABLED   || 'false').toLowerCase() === 'true';
+  const wsExitIntervalMs  = parseInt(process.env.HL_WS_EXIT_INTERVAL_MS  || '2000', 10);
+  // Stage 3: входы на WS-тиках (быстрее 15с). Поведение-меняющая — default OFF,
+  // требует wsFeedEnabled. См. ws_price_feed_plan.md.
+  const wsEntriesEnabled  = (process.env.HL_WS_ENTRIES_ENABLED || 'false').toLowerCase() === 'true';
+  const wsEntryIntervalMs = parseInt(process.env.HL_WS_ENTRY_INTERVAL_MS || '2000', 10);
+
   return {
     mode,
     isProduction: mode === 'PRODUCTION',
@@ -866,6 +879,12 @@ function loadConfig() {
       marketRegimeBtcPumpPct,
       marketRegimeBtcLookbackMin,
       negativeFundingSoftExitMinPnlPct,
+      // ── WS price feed ──
+      wsFeedEnabled,
+      wsExitsEnabled,
+      wsExitIntervalMs,
+      wsEntriesEnabled,
+      wsEntryIntervalMs,
     },
 
     risk: {

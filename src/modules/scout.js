@@ -3,6 +3,7 @@ import { logger } from '../core/logger.js';
 import { setUniverse, getTradeableSet } from '../core/universe.js';
 import { getRuntimeBlacklist, getOiCapBans } from './executor/index.js';
 import { push as pushPriceHistory } from '../core/priceHistory.js';
+import { comparePoll } from '../core/priceFeed.js';
 import { getActivePosition, getActivePaperCoins, recordSetupSnapshots } from '../core/database.js';
 import { hlInfo } from '../core/hlClient.js';
 
@@ -396,6 +397,10 @@ export async function scan() {
 
     const price = parseFloat(ctx.markPx ?? ctx.midPx ?? 0);
     if (isNaN(price)) continue;
+
+    // Stage 1 WS-фид: сверяем поллинговую цену с живой WS-ценой. No-op, если
+    // фид выключен/нет данных. Решений не меняет — только диагностика.
+    comparePoll(coin, price);
 
     // ── Hunter scope: shirоkий volume-floor, отдельная вселенная ──
     // Paper-shadow позицию (ChillBoy virtual) пинним даже если её coin выпал
