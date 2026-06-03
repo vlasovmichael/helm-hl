@@ -193,6 +193,29 @@ function loadConfig() {
     throw new Error(`CARRY_MAX_HOLD_MIN must be ≥ 0. Got: "${process.env.CARRY_MAX_HOLD_MIN}"`);
   }
 
+  // ── Carry entry trend gate (Дед v3 — симметрия к v2 «цена решает») ──
+  // v2 сделал ВЫХОД price-aware (храповик + цена>фандинг). Но ВХОД остался
+  // funding-only: берём топ-APY монету, у которой сейчас сильнейшее направленное
+  // давление → fade-short часто продолжает ехать против нас, и underwater-дед
+  // сидит до CARRY_MAX_HOLD_MIN (8ч), т.к. guards в минусе не фолсят.
+  // Velocity gate ловит резкий СПАЙК (30м/3%, 2ч/5%), но медленный грайнд
+  // (≤ этих порогов, но устойчиво против нас прямо сейчас) проходит.
+  // Этот гейт: не открываемся, пока за CARRY_ENTRY_TREND_LOOKBACK_MIN цена ещё
+  // движется adversely > CARRY_ENTRY_TREND_ADVERSE_PCT — ждём, пока импульс
+  // выдохнется/развернётся (fade хочет реверсию, а не вход в живой тренд).
+  // Default off — включается флагом. paper-first.
+  const carryEntryTrendEnabled =
+    (process.env.CARRY_ENTRY_TREND_ENABLED || 'false').toLowerCase() === 'true';
+  const carryEntryTrendLookbackMin = parseFloat(process.env.CARRY_ENTRY_TREND_LOOKBACK_MIN || '15');
+  const carryEntryTrendAdversePct  = parseFloat(process.env.CARRY_ENTRY_TREND_ADVERSE_PCT  || '0.6');
+
+  if (isNaN(carryEntryTrendLookbackMin) || carryEntryTrendLookbackMin <= 0 || carryEntryTrendLookbackMin > 240) {
+    throw new Error(`CARRY_ENTRY_TREND_LOOKBACK_MIN must be in (0, 240]. Got: "${process.env.CARRY_ENTRY_TREND_LOOKBACK_MIN}"`);
+  }
+  if (isNaN(carryEntryTrendAdversePct) || carryEntryTrendAdversePct <= 0) {
+    throw new Error(`CARRY_ENTRY_TREND_ADVERSE_PCT must be positive. Got: "${process.env.CARRY_ENTRY_TREND_ADVERSE_PCT}"`);
+  }
+
   // ── Carry long side (symmetric to short on negative funding) ──
   // Default false: исторически Grandfather только шортил при положительном
   // funding. Long-ветка зеркальна: при отрицательном funding (шорты платят
@@ -830,6 +853,9 @@ function loadConfig() {
       carryStaleMinPnlEquity,
       carryApyDecayExitRatio,
       carryMaxHoldMin,
+      carryEntryTrendEnabled,
+      carryEntryTrendLookbackMin,
+      carryEntryTrendAdversePct,
       carryLongEnabled,
       marketRegimeVelocityEnabled,
       marketRegimeCoinPumpPct,

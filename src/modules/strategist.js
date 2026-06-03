@@ -236,6 +236,48 @@ function evaluateVelocityGate(coin, side, currentPrice) {
 }
 
 /**
+ * Carry entry trend gate (Дед v3). Вход-аналог v2 «цена решает».
+ *
+ * Не открываемся, пока за CARRY_ENTRY_TREND_LOOKBACK_MIN цена ещё движется
+ * adversely > CARRY_ENTRY_TREND_ADVERSE_PCT — т.е. импульс прямо сейчас против
+ * нашей стороны. Fade/carry хочет реверсию, а не вход в живой тренд; ждём, пока
+ * движение выдохнется/развернётся. Закрывает медленный грайнд, который velocity
+ * gate (резкий спайк) пропускает.
+ *
+ *   short: цена ещё растёт > порога за окно → block (шортим в живой памп)
+ *   long:  цена ещё падает > порога за окно → block (лонгуем в живой дамп)
+ *
+ * Окно короткое (default 15мин): монета, что пампанула 2ч назад и встала на
+ * плато, пройдёт (recent move ≈ 0) — это валидный fade-сетап. Блокируем только
+ * пока adverse-импульс ещё жив.
+ *
+ * Если истории на окно ещё нет — PASS (не дублируем restart-blackout velocity
+ * gate'а; это более тонкий фильтр поверх него).
+ *
+ * @returns {{ block: true, reason: string } | { block: false, diag: string }}
+ */
+function evaluateEntryTrendGate(coin, side, currentPrice) {
+  const t = config.trading;
+  const lookback  = t.carryEntryTrendLookbackMin;
+  const threshold = t.carryEntryTrendAdversePct;
+
+  const past = getPriceNMinAgo(coin, lookback);
+  if (past == null) {
+    return { block: false, diag: `no ${lookback}min history (pass)` };
+  }
+  const movePct = ((currentPrice - past) / past) * 100;
+  const adverse = side === 'short' ? movePct : -movePct;
+  if (adverse > threshold) {
+    const dir = side === 'short' ? 'rising' : 'falling';
+    return {
+      block: true,
+      reason: `still ${dir} ${movePct >= 0 ? '+' : ''}${movePct.toFixed(2)}% in ${lookback}min (threshold ${threshold}%, momentum against ${side})`,
+    };
+  }
+  return { block: false, diag: `${lookback}m=${movePct >= 0 ? '+' : ''}${movePct.toFixed(2)}%` };
+}
+
+/**
  * Market-Regime BTC gate (Iter B). Глобальный фильтр: если BTC двинулся
  * adversely > порога за окно lookback — блокируем новый вход.
  *
@@ -391,6 +433,21 @@ export function analyze(scoutData, activePosition) {
         return { action: 'HOLD' };
       }
       logger.info(`[Strategist] BTC regime PASS — ${gate.diag} (side=${bestSide})`);
+    }
+
+    // Entry trend gate (Дед v3): не входим, пока импульс ещё против нас за
+    // последние N минут. Симметрия к v2 «цена решает» — теперь и на входе.
+    if (config.trading.carryEntryTrendEnabled) {
+      const gate = evaluateEntryTrendGate(best.coin, bestSide, best.price);
+      if (gate.block) {
+        logger.info(
+          `[Strategist] HOLD (entry trend) — ${best.coin} ${gate.reason}`,
+        );
+        return { action: 'HOLD' };
+      }
+      logger.info(
+        `[Strategist] entry trend PASS — ${best.coin} ${gate.diag} (side=${bestSide})`,
+      );
     }
 
     logger.info(
