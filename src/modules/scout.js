@@ -422,7 +422,11 @@ export async function scan() {
     }
 
     // ── Carry/Fade scope: тот же price + funding, но только для liquidSet ──
-    const isHeld = coinUpper === activeCoin;
+    // isHeld: главная активная поза ИЛИ любой активный paper-коин (ChillBoy/
+    // Fader/CandyGirl). CandyGirl exit-check читает scoutData (не hunterData),
+    // поэтому held paper-coin обязан попасть и сюда — иначе SL/TP пропускаются
+    // и сыплется "#COIN нет в scoutData" (SUI 2026-06-03).
+    const isHeld = coinUpper === activeCoin || isHeldPaper;
     if (liquidSet.size > 0 && !liquidSet.has(coinUpper) && !isHeld) {
       skippedIlliquid++;
       continue;

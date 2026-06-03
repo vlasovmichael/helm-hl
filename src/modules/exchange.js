@@ -246,13 +246,14 @@ export async function checkAccountLeverage(maxSafe = 1) {
  * @returns {Promise<Array>}
  */
 export async function getPositions() {
-  return retryWithBackoff(
-    () =>
-      sdk.info.perpetuals
-        .getClearinghouseState(config.wallet.address)
-        .then((state) => state?.assetPositions ?? []),
-    { label: "get-positions", maxRetries: 3 },
+  // Через hlInfo (а не raw SDK), чтобы все /info-запросы шли через единый
+  // rate-limiter. Раньше SDK-вызовы балансов/позиций конкурировали с candle-
+  // флудом за IP-бюджет 1200/min без координации → "unknown error"/$0.
+  const state = await hlInfo(
+    { type: "clearinghouseState", user: config.wallet.address },
+    { label: "get-positions" },
   );
+  return state?.assetPositions ?? [];
 }
 
 /**
@@ -265,8 +266,9 @@ export async function getPositions() {
  */
 export async function fetchSpotUsdcBalance() {
   try {
-    const state = await sdk.info.spot.getSpotClearinghouseState(
-      config.wallet.address,
+    const state = await hlInfo(
+      { type: "spotClearinghouseState", user: config.wallet.address },
+      { label: "spot-balance" },
     );
     const usdc = (state?.balances ?? []).find((b) => {
       const c = (b.coin ?? "").toUpperCase();
@@ -296,30 +298,29 @@ export async function fetchSpotUsdcBalance() {
  *   unrealizedPnl = perp.marginSummary.totalUnrealizedPnl
  */
 async function fetchBalanceFromSdk() {
-  return retryWithBackoff(
-    async () => {
-      const [perpState, spotUsdc] = await Promise.all([
-        sdk.info.perpetuals.getClearinghouseState(config.wallet.address),
-        fetchSpotUsdcBalance(),
-      ]);
+  // Оба чтения идут через hlInfo (единый rate-limiter + внутренний retry).
+  const [perpState, spotUsdc] = await Promise.all([
+    hlInfo(
+      { type: "clearinghouseState", user: config.wallet.address },
+      { label: "balance-perp" },
+    ),
+    fetchSpotUsdcBalance(),
+  ]);
 
-      const ms = perpState?.marginSummary ?? {};
-      const perpUnrealized = parseFloat(
-        ms.totalUnrealizedPnl ?? ms.unrealizedPnl ?? "0",
-      );
-      const upnl = Number.isFinite(perpUnrealized) ? perpUnrealized : 0;
-
-      const accountValue = spotUsdc.total + upnl;
-      const withdrawable = Math.max(0, spotUsdc.total - spotUsdc.hold);
-
-      return {
-        accountValue,
-        withdrawable,
-        unrealizedPnl: upnl,
-      };
-    },
-    { label: "exchange-get-balance", maxRetries: 3 },
+  const ms = perpState?.marginSummary ?? {};
+  const perpUnrealized = parseFloat(
+    ms.totalUnrealizedPnl ?? ms.unrealizedPnl ?? "0",
   );
+  const upnl = Number.isFinite(perpUnrealized) ? perpUnrealized : 0;
+
+  const accountValue = spotUsdc.total + upnl;
+  const withdrawable = Math.max(0, spotUsdc.total - spotUsdc.hold);
+
+  return {
+    accountValue,
+    withdrawable,
+    unrealizedPnl: upnl,
+  };
 }
 
 /**
@@ -356,9 +357,9 @@ export async function getAccountSummary() {
  * @returns {Promise<Object>}
  */
 export async function getClearinghouseStateFull() {
-  return retryWithBackoff(
-    () => sdk.info.perpetuals.getClearinghouseState(config.wallet.address),
-    { label: "get-clearinghouse-state-full", maxRetries: 3 },
+  return hlInfo(
+    { type: "clearinghouseState", user: config.wallet.address },
+    { label: "get-clearinghouse-state-full" },
   );
 }
 
@@ -368,10 +369,7 @@ export async function getClearinghouseStateFull() {
  * @returns {Promise<Object>}
  */
 export async function getMeta() {
-  return retryWithBackoff(() => sdk.info.perpetuals.getMeta(), {
-    label: "get-meta",
-    maxRetries: 2,
-  });
+  return hlInfo({ type: "meta" }, { label: "get-meta", maxRetries: 2 });
 }
 
 /**
