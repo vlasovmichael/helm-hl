@@ -65,6 +65,23 @@ export function findAsset(coin) {
 }
 
 /**
+ * Возвращает каноничное имя монеты для HL API, где регистр важен.
+ *
+ * Внутри бот нормализует все монеты в UPPERCASE (KSHIB, KBONK) для
+ * консистентности БД/филлов/прайс-фида. Но HL candleSnapshot требует
+ * ТОЧНОЕ имя из universe — у k-монет оно со строчной k (kSHIB), иначе 500.
+ * Резолвим через case-insensitive findAsset; фолбэк — исходная строка
+ * (universe ещё не загружен или монета не найдена).
+ *
+ * @param {string} coin
+ * @returns {string}
+ */
+export function resolveApiCoin(coin) {
+  const asset = findAsset(coin);
+  return asset ? asset.name : coin;
+}
+
+/**
  * Возвращает true если кеш свежий (< 5 мин) и не пустой.
  * @returns {boolean}
  */

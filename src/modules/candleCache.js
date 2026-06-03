@@ -8,6 +8,7 @@
 
 import { logger } from '../core/logger.js';
 import { hlInfo } from '../core/hlClient.js';
+import { resolveApiCoin } from '../core/universe.js';
 
 const TTL_MS   = 5 * 60_000;
 const INTERVAL = '1h';
@@ -56,7 +57,7 @@ export async function getHourlyCandles(coin, lookbackHours, now = Date.now()) {
   const promise = hlInfo(
     {
       type: 'candleSnapshot',
-      req:  { coin, interval: INTERVAL, startTime, endTime: now },
+      req:  { coin: resolveApiCoin(coin), interval: INTERVAL, startTime, endTime: now },
     },
     { label: `candleCache/${coin}` },
   ).then((data) => {
@@ -111,7 +112,7 @@ export async function getFiveMinCandles(coin, lookbackMinutes, now = Date.now())
   const promise = hlInfo(
     {
       type: 'candleSnapshot',
-      req:  { coin, interval: FIVE_MIN_INTERVAL, startTime, endTime: now },
+      req:  { coin: resolveApiCoin(coin), interval: FIVE_MIN_INTERVAL, startTime, endTime: now },
     },
     { label: `candleCache5m/${coin}` },
   ).then((data) => {
@@ -166,7 +167,7 @@ export async function getFourHourCandles(coin, lookbackHours, now = Date.now()) 
   const promise = hlInfo(
     {
       type: 'candleSnapshot',
-      req:  { coin, interval: FOUR_HOUR_INTERVAL, startTime, endTime: now },
+      req:  { coin: resolveApiCoin(coin), interval: FOUR_HOUR_INTERVAL, startTime, endTime: now },
     },
     { label: `candleCache4h/${coin}` },
   ).then((data) => {

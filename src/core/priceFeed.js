@@ -79,9 +79,18 @@ export function comparePoll(coin, pollPrice) {
   if (!ENABLED || !Number.isFinite(pollPrice) || pollPrice <= 0) return;
   const live = prices.get(String(coin).toUpperCase());
   if (!live) return;
-  const absPct = Math.abs(live.price - pollPrice) / pollPrice * 100;
+  const absDiff = Math.abs(live.price - pollPrice);
+  const absPct  = absDiff / pollPrice * 100;
   cmpCount++;
   cmpSumAbsPct += absPct;
+
+  // Noise floor: микро-монеты ($0.00017) теряют значащие цифры при усечении
+  // одного из источников — разница в последнем знаке раздувается в большой %.
+  // Игнорируем расхождение в пределах пол-ULP более грубого (меньше знаков
+  // после запятой) источника: это шум округления, а не реальный вик.
+  const ulp = Math.pow(10, -Math.min(decimalsOf(pollPrice), decimalsOf(live.price)));
+  if (absDiff <= ulp / 2) return;
+
   if (absPct > cmpMaxAbsPct) {
     cmpMaxAbsPct = absPct;
     cmpMaxCoin = coin;
@@ -93,6 +102,19 @@ export function comparePoll(coin, pollPrice) {
       `Δ=${absPct.toFixed(3)}% (ws age ${age}ms)`,
     );
   }
+}
+
+/** Кол-во знаков после запятой в десятичной записи числа (для noise-floor). */
+function decimalsOf(x) {
+  const s = String(x);
+  // Малые числа (< 1e-6) JS печатает в экспоненте: "1e-7".
+  if (s.includes('e') || s.includes('E')) {
+    const [mant, exp] = s.toLowerCase().split('e');
+    const mantDec = mant.includes('.') ? mant.split('.')[1].length : 0;
+    return Math.max(0, mantDec - Number(exp));
+  }
+  const dot = s.indexOf('.');
+  return dot === -1 ? 0 : s.length - dot - 1;
 }
 
 /** Снимок состояния для health/дашборда. */
