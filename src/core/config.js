@@ -112,6 +112,34 @@ function loadConfig() {
   // re-entry через 17ч → второй stop-out. Дефолт 720мин (12ч).
   const carryLossCooldownMin = parseFloat(process.env.CARRY_LOSS_COOLDOWN_MIN || '720');
 
+  // ── Дед v2: breakeven храповик + «цена > фандинг» ──
+  // Проблема: дед — funding-машина, держит позицию ради высокого APY и отдаёт
+  // реальный ценовой подарок ($1+) обратно в 0, ждя negative_funding/apy_below.
+  // На депо $50-100 funding = шум, деньги делает движение цены (carry = mean-rev).
+  //
+  // BE_RATCHET: как только цена дала даже небольшой плюс (peak ≥ arm), ставим
+  // жёсткий пол на breakeven. Дед больше НИКОГДА не отдаёт подарок в 0 — выходит
+  // в безубыток. Ловит подарки МЕНЬШЕ trail-arm (1.2% eq). Arm двойной: $-порог
+  // ИЛИ %-equity порог (что сработает первым), чтоб защищать и мелкое депо.
+  //   FLOOR_PCT_EQUITY: пол по цене как % equity. 0 = чистый breakeven.
+  const carryBeRatchetEnabled = (process.env.CARRY_BE_RATCHET_ENABLED || 'true').toLowerCase() === 'true';
+  const carryBeArmPctEquity   = parseFloat(process.env.CARRY_BE_ARM_PCT_EQUITY || '0.5');
+  const carryBeArmUsd         = parseFloat(process.env.CARRY_BE_ARM_USD         || '0.40');
+  const carryBeFloorPctEquity = parseFloat(process.env.CARRY_BE_FLOOR_PCT_EQUITY || '0');
+  // PRICE_OVER_FUNDING: пока цена в плюсе и trail/ratchet взведён — funding-выходы
+  // (apy_below / apy_decay / stale) НЕ выдёргивают деда. Пусть trail едет, выход
+  // отдаём ценовой логике. Hard-выходы (negative_funding, spike) остаются.
+  const carryPriceOverFunding = (process.env.CARRY_PRICE_OVER_FUNDING || 'true').toLowerCase() === 'true';
+  if (isNaN(carryBeArmPctEquity) || carryBeArmPctEquity <= 0) {
+    throw new Error(`CARRY_BE_ARM_PCT_EQUITY must be positive number. Got: "${process.env.CARRY_BE_ARM_PCT_EQUITY}"`);
+  }
+  if (isNaN(carryBeArmUsd) || carryBeArmUsd < 0) {
+    throw new Error(`CARRY_BE_ARM_USD must be ≥ 0. Got: "${process.env.CARRY_BE_ARM_USD}"`);
+  }
+  if (isNaN(carryBeFloorPctEquity) || carryBeFloorPctEquity < 0) {
+    throw new Error(`CARRY_BE_FLOOR_PCT_EQUITY must be ≥ 0. Got: "${process.env.CARRY_BE_FLOOR_PCT_EQUITY}"`);
+  }
+
   // Vol-based position sizing для carry: на high-vol монетах режем размер позиции,
   // чтобы lose-trade не съедал N win-trades. Формула: size × clamp(1 - volIdx × penalty, minMult, 1).
   // penalty=50, minMult=0.4: VolIdx=0.003→×1.00, 0.008→×0.60, 0.015→×0.40.
@@ -791,6 +819,11 @@ function loadConfig() {
       carryTrailGiveBackPct,
       carrySpikeProtectionPct,
       carryLossCooldownMin,
+      carryBeRatchetEnabled,
+      carryBeArmPctEquity,
+      carryBeArmUsd,
+      carryBeFloorPctEquity,
+      carryPriceOverFunding,
       carryVolSizePenalty,
       carryVolSizeMinMult,
       carryStaleTimeoutMin,

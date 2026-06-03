@@ -28,7 +28,7 @@ process.env.MIN_HOLD_TIME_MINUTES = '60';
 process.env.BREATHING_MINUTES     = '30';
 process.env.LEVERAGE              = '1';
 
-const { analyze, hoursToBreakeven, calculatePaybackHours, _resetCarryLossCooldown } =
+const { analyze, hoursToBreakeven, calculatePaybackHours, _resetCarryLossCooldown, _resetBeRatchet } =
   await import('../src/modules/strategist.js');
 const { _resetBalanceCache, _seedBalanceCache } =
   await import('../src/core/balanceCache.js');
@@ -67,6 +67,7 @@ function makePosition(coin, entryApy, opts = {}) {
 function resetState() {
   analyze([], undefined);
   _resetCarryLossCooldown();
+  _resetBeRatchet();
   _resetBalanceCache();
 }
 
@@ -817,4 +818,71 @@ test('Iter 1.1: ROTATE — переходит на лучший short, игно�
   } finally {
     restore();
   }
+});
+
+// ═══════════════════════════════════════════════
+//  Дед v2 — breakeven храповик + «цена > фандинг»
+// ═══════════════════════════════════════════════
+
+test('BE ratchet: подарок ≥ $arm взвёл храповик, цена назад в 0 → CLOSE breakeven_ratchet', () => {
+  resetState();
+  // SHORT @100, size $100, qty=1. Без equity-кэша → arm по $-порогу ($0.40).
+  const pos = makePosition('XMR', 40, { entry_price: 100 });
+  // Тик 1: цена 99 → price-PnL = +$1.00 ≥ $0.40 → храповик взведён (> breakeven → HOLD)
+  const r1 = analyze([makeScoutItem('XMR', 40, { price: 99, slowApy: 40 })], pos);
+  assert.equal(r1.action, 'HOLD');
+  // Тик 2: цена вернулась к 100 → price-PnL = $0 ≤ floor(0) → дед НЕ отдаёт в 0
+  const r2 = analyze([makeScoutItem('XMR', 40, { price: 100, slowApy: 40 })], pos);
+  assert.equal(r2.action, 'CLOSE');
+  assert.equal(r2.reason, 'breakeven_ratchet');
+  assert.equal(r2.coin, 'XMR');
+});
+
+test('BE ratchet: подарок был, но цена ещё в плюсе (выше пола) → HOLD', () => {
+  resetState();
+  const pos = makePosition('XMR', 40, { entry_price: 100 });
+  analyze([makeScoutItem('XMR', 40, { price: 99, slowApy: 40 })], pos); // армится
+  const r = analyze([makeScoutItem('XMR', 40, { price: 99.5, slowApy: 40 })], pos);
+  assert.equal(r.action, 'HOLD');
+});
+
+test('BE ratchet: цена не давала плюса → храповик не взводится, обычная логика', () => {
+  resetState();
+  const restore = freezeTime(2026, 3, 15, 12, 30);
+  try {
+    const pos = makePosition('XMR', 20, { entry_price: 100, entry_time: Date.now() - 50 * HOUR_MS });
+    const r = analyze([makeScoutItem('XMR', 20, { price: 100, slowApy: 14 })], pos);
+    assert.equal(r.action, 'CLOSE');
+    assert.equal(r.reason, 'apy_below_threshold');
+  } finally {
+    restore();
+  }
+});
+
+test('Цена > фандинг: армлен ценовой winner + slowApy упал → HOLD (не apy_below)', () => {
+  resetState();
+  const pos = makePosition('XMR', 20, { entry_price: 100, entry_time: Date.now() - 50 * HOUR_MS });
+  const r = analyze([makeScoutItem('XMR', 20, { price: 99, slowApy: 14 })], pos);
+  assert.equal(r.action, 'HOLD');
+});
+
+test('Цена > фандинг: армлен winner + apy_decay сработал бы → HOLD (не apy_decay)', () => {
+  resetState();
+  const restore = freezeTime(2026, 3, 15, 12, 30);
+  try {
+    const pos = makePosition('XMR', 50, { entry_price: 100, entry_time: Date.now() - 60 * 60_000 });
+    const r = analyze([makeScoutItem('XMR', 50, { price: 99, slowApy: 10 })], pos);
+    assert.equal(r.action, 'HOLD');
+  } finally {
+    restore();
+  }
+});
+
+test('Цена > фандинг: negative_funding (hard) НЕ блокируется храповиком', () => {
+  resetState();
+  const pos = makePosition('XMR', 40, { entry_price: 100 });
+  analyze([makeScoutItem('XMR', 40, { price: 99, slowApy: 40, fundingRate: -1e-6 })], pos);
+  const r = analyze([makeScoutItem('XMR', 40, { price: 99, slowApy: 40, fundingRate: -1e-6 })], pos);
+  assert.equal(r.action, 'CLOSE');
+  assert.equal(r.reason, 'negative_funding'); // +1% < soft порог 2% → hard
 });

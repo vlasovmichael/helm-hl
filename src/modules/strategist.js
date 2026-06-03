@@ -19,6 +19,11 @@ const {
   carryTrailGiveBackPct: CARRY_TRAIL_GIVE_BACK_PCT,
   carrySpikeProtectionPct: CARRY_SPIKE_PROTECTION_PCT,
   carryLossCooldownMin: CARRY_LOSS_COOLDOWN_MIN,
+  carryBeRatchetEnabled: CARRY_BE_RATCHET_ENABLED,
+  carryBeArmPctEquity: CARRY_BE_ARM_PCT_EQUITY,
+  carryBeArmUsd: CARRY_BE_ARM_USD,
+  carryBeFloorPctEquity: CARRY_BE_FLOOR_PCT_EQUITY,
+  carryPriceOverFunding: CARRY_PRICE_OVER_FUNDING,
   carryStaleTimeoutMin: CARRY_STALE_TIMEOUT_MIN,
   carryStaleMinPnlEquity: CARRY_STALE_MIN_PNL_EQUITY,
   carryApyDecayExitRatio: CARRY_APY_DECAY_EXIT_RATIO,
@@ -86,6 +91,17 @@ let delistCooldown = { coin: null, until: 0 };
 // мониторим оба сигнала параллельно: arm/close по тому, который сработал первым.
 const peakUnrealizedPct = new Map();
 const peakEquityPct     = new Map();
+
+// Дед v2 — breakeven храповик: coin → true, как только цена дала плюс ≥ BE arm
+// (либо $-порог, либо %-equity порог). Один раз взведённый, держится до закрытия
+// позиции / возврата в Сценарий А (clear вместе с peak-картами). Пока взведён —
+// price-PnL не имеет права уйти ниже breakeven-пола (CLOSE breakeven_ratchet).
+const beRatchetArmed = new Map();
+
+/** Test helper: очистить состояние breakeven храповика. */
+export function _resetBeRatchet() {
+  beRatchetArmed.clear();
+}
 
 // Per-coin loss cooldown: после price_spike_protection блокируем монету
 // на CARRY_LOSS_COOLDOWN_MIN минут. Защита от паттерна VVV 2026-05-10/11:
@@ -268,6 +284,7 @@ export function analyze(scoutData, activePosition) {
     disappearedStreak = 0;
     peakUnrealizedPct.clear();
     peakEquityPct.clear();
+    beRatchetArmed.clear();
 
     // Per-coin loss cooldown: после price_spike_protection монета на N мин в бане.
     // Фильтруем кандидатов ДО выбора best — иначе бот может HOLD'ить на cooldown'нутой
@@ -413,6 +430,7 @@ export function analyze(scoutData, activePosition) {
       delistCooldown = { coin: currentCoin, until: Date.now() + DELIST_COOLDOWN_MINUTES * 60_000 };
       peakUnrealizedPct.delete(currentCoin);
       peakEquityPct.delete(currentCoin);
+      beRatchetArmed.delete(currentCoin);
       logger.warn(
         `[Strategist] CLOSE — ${currentCoin} confirmed delisted (${DELIST_CONFIRM_TICKS} ticks) | ` +
           `cooldown ${DELIST_COOLDOWN_MINUTES}min`,
@@ -534,6 +552,63 @@ export function analyze(scoutData, activePosition) {
     }
   }
 
+  // 3.4 Breakeven храповик (дед v2): как только цена дала плюс ≥ BE arm (любой из
+  //     порогов: $-абсолютный ИЛИ %-equity), взводим храповик и больше НИКОГДА не
+  //     даём price-PnL уйти ниже breakeven-пола. Ловит подарки МЕНЬШЕ trail-arm
+  //     (1.2% eq) — именно те, что дед раньше отдавал обратно в 0. Идёт ВЫШЕ
+  //     funding-выходов, игнорирует minHold (защитный, не soft-выход).
+  let priceProtectionArmed = false;
+  if (CARRY_BE_RATCHET_ENABLED) {
+    const qty       = activePosition.size_usd / activePosition.entry_price;
+    const pricePnlUsd = unrealizedUsd(posSide, activePosition.entry_price, current.price, qty);
+    const eq        = getCachedAccountValueSync();
+    const pricePnlEqPct = eq && eq > 0 ? (pricePnlUsd / eq) * 100 : null;
+
+    // Arm: $-порог ИЛИ %-equity порог (что сработает первым).
+    const armNow =
+      pricePnlUsd >= CARRY_BE_ARM_USD ||
+      (pricePnlEqPct !== null && pricePnlEqPct >= CARRY_BE_ARM_PCT_EQUITY);
+    if (armNow) beRatchetArmed.set(currentCoin, true);
+
+    if (beRatchetArmed.get(currentCoin)) {
+      priceProtectionArmed = true;
+      // Пол: price-PnL опустился до/ниже breakeven (FLOOR=0) → выходим в безубыток.
+      // С equity сравниваем по %, без кэша — по $ (floor=0).
+      const belowFloor =
+        pricePnlEqPct !== null
+          ? pricePnlEqPct <= CARRY_BE_FLOOR_PCT_EQUITY
+          : pricePnlUsd <= 0;
+      if (belowFloor) {
+        logger.warn(
+          `[Strategist] CLOSE — ${currentCoin} breakeven ratchet: price-PnL ` +
+            `${pricePnlUsd >= 0 ? '+' : ''}$${pricePnlUsd.toFixed(2)}` +
+            `${pricePnlEqPct !== null ? ` (${pricePnlEqPct.toFixed(2)}% eq)` : ''} ` +
+            `≤ floor ${CARRY_BE_FLOOR_PCT_EQUITY}% — не отдаём подарок в 0`,
+        );
+        peakUnrealizedPct.delete(currentCoin);
+        peakEquityPct.delete(currentCoin);
+        beRatchetArmed.delete(currentCoin);
+        return {
+          action: 'CLOSE',
+          coin:   currentCoin,
+          price:  current.price,
+          reason: 'breakeven_ratchet',
+        };
+      }
+    }
+  }
+
+  // priceProtectionArmed также истина, если взведён обычный trailing (peak ≥ arm).
+  // Используется ниже гейтом «цена > фандинг»: пока цена защищена trail/ratchet,
+  // funding-выходы (apy_decay / stale / apy_below) не выдёргивают деда — пусть едет.
+  if (
+    (peakUnrealizedPct.get(currentCoin) ?? 0) >= CARRY_TRAIL_ARM_PCT ||
+    (peakEquityPct.get(currentCoin) ?? 0) >= CARRY_TRAIL_ARM_PCT_EQUITY
+  ) {
+    priceProtectionArmed = true;
+  }
+  const fundingExitBlocked = CARRY_PRICE_OVER_FUNDING && priceProtectionArmed;
+
   // 3.5 Smart guards против "тихих" carry-позиций (FARTCOIN 2026-05-13).
   //
   // КРИТИЧНО: оба guard'а фолсят ТОЛЬКО при unrealizedPct ≥ 0. Если позиция
@@ -551,8 +626,14 @@ export function analyze(scoutData, activePosition) {
     const currentAbs = Math.abs(current.slowApy);
     const ratio      = currentAbs / entryAbs;
     if (ratio < CARRY_APY_DECAY_EXIT_RATIO) {
-      // Funding gate: не выходим в окне выплаты — теряем накопленный funding.
-      if (isInFundingGate()) {
+      // Цена > фандинг (дед v2): trail/ratchet взведён — не выходим по распаду
+      // APY, пусть ценовой winner едет. Выход отдаём trailing/breakeven.
+      if (fundingExitBlocked) {
+        logger.info(
+          `[Strategist] HOLD (price>funding) — ${currentCoin} apy_decay ${(ratio * 100).toFixed(0)}% ` +
+            `but price protection armed — trail/ratchet рулит выходом`,
+        );
+      } else if (isInFundingGate()) {
         logger.info(
           `[Strategist] HOLD (funding gate) — ${currentCoin} apy_decay ${(ratio * 100).toFixed(0)}% ` +
             `but ${minutesUntilNextFunding().toFixed(1)}min to funding payout`,
@@ -589,7 +670,12 @@ export function analyze(scoutData, activePosition) {
       const peakEquityVal = peakEquityPct.get(currentCoin) ?? 0;
       const bestEverEqPct = Math.max(equityPctNow, peakEquityVal);
       if (bestEverEqPct < CARRY_STALE_MIN_PNL_EQUITY) {
-        if (isInFundingGate()) {
+        if (fundingExitBlocked) {
+          logger.info(
+            `[Strategist] HOLD (price>funding) — ${currentCoin} stale ${held.toFixed(0)}min ` +
+              `but price protection armed — trail/ratchet рулит выходом`,
+          );
+        } else if (isInFundingGate()) {
           logger.info(
             `[Strategist] HOLD (funding gate) — ${currentCoin} stale ${held.toFixed(0)}min but ` +
               `${minutesUntilNextFunding().toFixed(1)}min to funding payout`,
@@ -668,6 +754,15 @@ export function analyze(scoutData, activePosition) {
     // Пример: minApy=30, exitBuffer=5 → выходим только ниже 25%
     // Для long-стороны slowApy отрицательный — сравниваем по модулю.
     if (Math.abs(current.slowApy) < effectiveExitApy) {
+      // Цена > фандинг (дед v2): trail/ratchet взведён — не режем по падению APY,
+      // пусть ценовой winner едет. Выход отдаём trailing/breakeven.
+      if (fundingExitBlocked) {
+        logger.info(
+          `[Strategist] HOLD (price>funding) — ${currentCoin} slowApy ${current.slowApy.toFixed(2)}% ` +
+            `< exit ${effectiveExitApy}% but price protection armed — trail/ratchet рулит выходом`,
+        );
+        return { action: 'HOLD' };
+      }
       // Funding-Aware Gate: не выходим в окне выплаты — потеряем накопленный фандинг
       if (isInFundingGate()) {
         logger.info(
@@ -682,6 +777,7 @@ export function analyze(scoutData, activePosition) {
       );
       peakUnrealizedPct.delete(currentCoin);
       peakEquityPct.delete(currentCoin);
+      beRatchetArmed.delete(currentCoin);
       maybeSetLossCooldown(currentCoin, posSide, activePosition.entry_price, current.price, 'apy_below_threshold');
       return {
         action: 'CLOSE',
@@ -770,6 +866,7 @@ export function analyze(scoutData, activePosition) {
         );
         peakUnrealizedPct.delete(currentCoin);
         peakEquityPct.delete(currentCoin);
+        beRatchetArmed.delete(currentCoin);
         maybeSetLossCooldown(currentCoin, posSide, activePosition.entry_price, current.price, 'rotate_better_apy');
         return {
           action:       'ROTATE',
