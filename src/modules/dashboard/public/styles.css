@@ -1912,22 +1912,24 @@ footer {
   }
 }
 
-/* ── Chill Boy Shadow Trading card ─────────────────────────── */
-#sec-chillboy .cb-grid {
+/* ── Shadow-trading cards (Chill Boy / Candy Girl / Fader) ─────
+   .cb-* — общие утилиты для трёх strategy-карточек. Раньше были заскоплены
+   на #sec-chillboy, из-за чего Candy Girl и Fader рендерились без стилей. */
+:is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
 }
-#sec-chillboy .cb-section {
+:is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-section {
   background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 0.6rem 0.75rem;
 }
-#sec-chillboy .cb-section-full {
+:is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-section-full {
   grid-column: 1 / -1;
 }
-#sec-chillboy .cb-section-title {
+:is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-section-title {
   font-size: 0.72rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -1935,7 +1937,7 @@ footer {
   color: var(--text-muted);
   margin-bottom: 0.45rem;
 }
-#sec-chillboy .cb-kv {
+:is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-kv {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
   column-gap: 0.6rem;
@@ -1943,84 +1945,87 @@ footer {
   font-family: var(--font-mono);
   font-size: 0.78rem;
 }
-#sec-chillboy .cb-kv .k {
+:is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-kv .k {
   color: var(--text-muted);
 }
-#sec-chillboy .cb-kv .v {
+:is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-kv .v {
   color: var(--text);
   min-width: 0;
   overflow-wrap: anywhere;
 }
-#sec-chillboy .cb-table {
+:is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-table {
   width: 100%;
   border-collapse: collapse;
   font-family: var(--font-mono);
   font-size: 0.74rem;
 }
-#sec-chillboy .cb-table th {
+:is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-table th {
   text-align: left;
   font-weight: 500;
   color: var(--text-muted);
   border-bottom: 1px solid var(--border);
   padding: 0.25rem 0.4rem;
 }
-#sec-chillboy .cb-table td {
+:is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-table td {
   padding: 0.2rem 0.4rem;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
 }
-#sec-chillboy .cb-table tr:last-child td {
+:is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-table tr:last-child td {
   border-bottom: none;
 }
-#sec-chillboy .cb-pos-pnl.positive {
+:is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-pos-pnl.positive {
   color: var(--green);
 }
-#sec-chillboy .cb-pos-pnl.negative {
+:is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-pos-pnl.negative {
   color: var(--red);
 }
 
 @media (max-width: 720px) {
-  #sec-chillboy .cb-grid {
+  :is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-grid {
     grid-template-columns: 1fr;
     gap: 0.6rem;
   }
-  #sec-chillboy .cb-section {
+  :is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-section {
     padding: 0.55rem 0.6rem;
     min-width: 0;
   }
   #cb-watchlist-body,
   #cb-cooldowns-body,
-  #cb-history-body {
+  #cb-history-body,
+  #cg-active-body,
+  #cg-history-body,
+  #fader-history-body {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     margin: 0 -0.6rem;
     padding: 0 0.6rem;
   }
-  #sec-chillboy .cb-table {
+  :is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-table {
     font-size: 0.7rem;
   }
-  #sec-chillboy .cb-table th,
-  #sec-chillboy .cb-table td {
+  :is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-table th,
+  :is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-table td {
     white-space: nowrap;
     padding: 0.22rem 0.35rem;
   }
-  #sec-chillboy .cb-kv {
+  :is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-kv {
     grid-template-columns: minmax(0, 1fr);
     row-gap: 0.1rem;
     font-size: 0.76rem;
   }
-  #sec-chillboy .cb-kv .k {
+  :is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-kv .k {
     font-size: 0.66rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     margin-top: 0.25rem;
   }
-  #sec-chillboy .cb-kv .k:first-child {
+  :is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-kv .k:first-child {
     margin-top: 0;
   }
   #cb-heartbeat {
     overflow-wrap: anywhere;
   }
-  #sec-chillboy #cb-stats-inline {
+  :is(#sec-chillboy, #sec-candygirl, #sec-fader) #cb-stats-inline {
     display: block;
     margin: 4px 0 0 !important;
     font-size: 10.5px;
@@ -2028,10 +2033,10 @@ footer {
 }
 
 @media (max-width: 480px) {
-  #sec-chillboy .cb-section-title {
+  :is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-section-title {
     font-size: 0.68rem;
   }
-  #sec-chillboy .cb-table {
+  :is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-table {
     font-size: 0.68rem;
   }
 }

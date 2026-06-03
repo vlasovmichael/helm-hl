@@ -2785,16 +2785,26 @@ function renderCandyGirlActivePos(pos) {
   const heldStr = pos.heldMin >= 60
     ? `${Math.floor(pos.heldMin / 60)}h ${pos.heldMin % 60}m`
     : `${pos.heldMin}m`;
+  const sl = `${fmtPx(pos.slPrice)}${pos.slDistPct != null ? ` <span style="opacity:.6">(${pos.slDistPct.toFixed(2)}%)</span>` : ""}`;
+  const tp = `${fmtPx(pos.tpPrice)}${pos.tpDistPct != null ? ` <span style="opacity:.6">(${pos.tpDistPct.toFixed(2)}%)</span>` : ""}`;
 
   body.innerHTML = `
-    <div class="cb-kv">
-      <div class="k">Coin / side</div>      <div class="v"><b>${pos.coin}</b> · ${pos.side}</div>
-      <div class="k">Size</div>             <div class="v">$${pos.sizeUsd.toFixed(2)}</div>
-      <div class="k">Entry / current</div>  <div class="v">${fmtPx(pos.entryPrice)} → ${fmtPx(pos.currentPrice)}</div>
-      <div class="k">Unrealized</div>       <div class="v"><span class="${pnlCls}">${fmtUsd(pos.unrealUsd)} (${fmtPct(pos.unrealPct)})</span></div>
-      <div class="k">Held</div>             <div class="v">${heldStr}</div>
-      <div class="k">SL / TP</div>          <div class="v">${fmtPx(pos.slPrice)} (${pos.slDistPct != null ? pos.slDistPct.toFixed(2) + "% away" : "—"}) · ${fmtPx(pos.tpPrice)} (${pos.tpDistPct != null ? pos.tpDistPct.toFixed(2) + "% away" : "—"})</div>
-    </div>
+    <table class="cb-table">
+      <thead><tr>
+        <th>Coin</th><th>Side</th><th>Size</th><th>Entry → Cur</th>
+        <th>Unreal</th><th>Held</th><th>SL</th><th>TP</th>
+      </tr></thead>
+      <tbody><tr>
+        <td><b>${pos.coin}</b></td>
+        <td>${(pos.side || "").toUpperCase()}</td>
+        <td>$${pos.sizeUsd.toFixed(2)}</td>
+        <td>${fmtPx(pos.entryPrice)}<br><span style="opacity:.65">${fmtPx(pos.currentPrice)}</span></td>
+        <td><span class="${pnlCls}"><b>${fmtUsd(pos.unrealUsd)}</b><br>${fmtPct(pos.unrealPct)}</span></td>
+        <td>${heldStr}</td>
+        <td>${sl}</td>
+        <td>${tp}</td>
+      </tr></tbody>
+    </table>
   `;
 }
 
