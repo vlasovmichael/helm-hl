@@ -2749,6 +2749,101 @@ function renderCandyGirl(cg) {
       pill.style.display = "none";
     }
   }
+
+  // Paper shadow-слот (Iter 2): equity-пилюля + активная позиция + история.
+  const eqPill = document.getElementById("candygirl-card-equity");
+  if (eqPill) {
+    const ve = cg.virtualEquity;
+    if (ve && cg.virtualBalance > 0) {
+      const pnl = ve.pnlTotal ?? 0;
+      const sign = pnl >= 0 ? "+" : "−";
+      eqPill.style.display = "";
+      eqPill.textContent = `paper $${ve.equity.toFixed(2)} (${sign}$${Math.abs(pnl).toFixed(2)})`;
+      eqPill.style.color = pnl >= 0 ? "var(--green,#3ddc84)" : "var(--red,#ff5c5c)";
+    } else {
+      eqPill.style.display = "none";
+    }
+  }
+  renderCandyGirlActivePos(cg.paperPosition);
+  renderCandyGirlHistory(cg.paperTrades, cg.paperStats);
+}
+
+function renderCandyGirlActivePos(pos) {
+  const section = document.getElementById("cg-active-section");
+  const body    = document.getElementById("cg-active-body");
+  if (!section || !body) return;
+  if (!pos) {
+    section.style.display = "none";
+    return;
+  }
+  section.style.display = "";
+
+  const fmtUsd = (v) => (v == null ? "—" : (v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`));
+  const fmtPct = (v) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`);
+  const fmtPx  = (v) => (v == null ? "—" : `$${v.toFixed(6)}`);
+  const pnlCls = (pos.unrealUsd ?? 0) >= 0 ? "cb-pos-pnl positive" : "cb-pos-pnl negative";
+  const heldStr = pos.heldMin >= 60
+    ? `${Math.floor(pos.heldMin / 60)}h ${pos.heldMin % 60}m`
+    : `${pos.heldMin}m`;
+
+  body.innerHTML = `
+    <div class="cb-kv">
+      <div class="k">Coin / side</div>      <div class="v"><b>${pos.coin}</b> · ${pos.side}</div>
+      <div class="k">Size</div>             <div class="v">$${pos.sizeUsd.toFixed(2)}</div>
+      <div class="k">Entry / current</div>  <div class="v">${fmtPx(pos.entryPrice)} → ${fmtPx(pos.currentPrice)}</div>
+      <div class="k">Unrealized</div>       <div class="v"><span class="${pnlCls}">${fmtUsd(pos.unrealUsd)} (${fmtPct(pos.unrealPct)})</span></div>
+      <div class="k">Held</div>             <div class="v">${heldStr}</div>
+      <div class="k">SL / TP</div>          <div class="v">${fmtPx(pos.slPrice)} (${pos.slDistPct != null ? pos.slDistPct.toFixed(2) + "% away" : "—"}) · ${fmtPx(pos.tpPrice)} (${pos.tpDistPct != null ? pos.tpDistPct.toFixed(2) + "% away" : "—"})</div>
+    </div>
+  `;
+}
+
+function renderCandyGirlHistory(trades, stats) {
+  const body   = document.getElementById("cg-history-body");
+  const inline = document.getElementById("cg-stats-inline");
+  if (!body) return;
+
+  if (inline && stats && stats.n > 0) {
+    const fmt = (v) => (v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`);
+    inline.textContent = `n=${stats.n} · net ${fmt(stats.sumNet)} · avg ${fmt(stats.avgNet)} · win ${(stats.winRate * 100).toFixed(0)}% · best ${fmt(stats.bestNet)} · worst ${fmt(stats.worstNet)}`;
+  } else if (inline) {
+    inline.textContent = "";
+  }
+
+  if (!Array.isArray(trades) || trades.length === 0) {
+    body.innerHTML = '<div class="empty-state">no closed trades yet</div>';
+    return;
+  }
+  const fmtUsd = (v) => (v == null ? "—" : (v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`));
+  const fmtTs = (ms) => {
+    if (!ms) return "—";
+    const dt = new Date(ms);
+    return `${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")} ${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
+  };
+  const fmtHold = (sec) => {
+    if (sec == null) return "—";
+    if (sec < 60) return `${Math.round(sec)}s`;
+    if (sec < 3600) return `${Math.round(sec / 60)}m`;
+    return `${(sec / 3600).toFixed(1)}h`;
+  };
+  const rows = trades.map((t) => {
+    const net = (t.realized_pnl || 0) - (t.fee_paid || 0);
+    const color = net >= 0 ? "var(--green)" : "var(--red)";
+    return `<tr>
+      <td>${fmtTs(t.entry_time)}<br><span style="opacity:.65">${fmtTs(t.closed_at)}</span></td>
+      <td><b>${t.coin}</b><br><span style="opacity:.65">${(t.side || "").toUpperCase()}</span></td>
+      <td>$${(t.entry_price ?? 0).toFixed(6)}<br><span style="opacity:.65">$${(t.close_price ?? 0).toFixed(6)}</span></td>
+      <td style="color:${color}"><b>${fmtUsd(net)}</b></td>
+      <td>${fmtHold(t.hold_seconds)}</td>
+      <td style="opacity:.75">${t.reason || "—"}</td>
+    </tr>`;
+  }).join("");
+  body.innerHTML = `
+    <table class="cb-table">
+      <thead><tr><th>Open / Close</th><th>Coin</th><th>Entry / Exit</th><th>Net</th><th>Held</th><th>Reason</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
 }
 
 function renderChillBoyActivePos(pos) {

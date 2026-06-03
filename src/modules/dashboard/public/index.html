@@ -475,11 +475,12 @@
            Никогда не торгует — только лента находок + TG-алерты. Скрыт когда CANDY_GIRL_ENABLED=false. -->
       <section class="card" id="sec-candygirl" style="display:none">
         <div class="card-header">
-          <div class="card-title" data-num="06.5" title="Candy Girl: радар сетапов «1h EMA-тренд + откат к 5m EMA20 + reclaim». Сигналы для РУЧНОЙ торговли — бот не входит.">
-            Candy Girl — Radar
+          <div class="card-title" data-num="06.5" title="Candy Girl: радар сетапов «1h EMA-тренд + откат к 5m EMA20 + reclaim» (сигналы для РУЧНОЙ торговли) + PAPER shadow-слот (compound-песочница, бот тестирует те же сетапы виртуально).">
+            Candy Girl — Radar + Paper
           </div>
           <div class="time-ranges">
-            <span class="status-pill">SIGNAL-ONLY</span>
+            <span class="status-pill">RADAR</span>
+            <span id="candygirl-card-equity" class="status-pill" style="display:none" title="Paper shadow-слот: виртуальный equity (compound). PROD-сделок нет."></span>
             <span id="candygirl-acc" class="status-pill" style="display:none" title="Точность: TP раньше SL по 5m-свечам. Timeout не учитывается в %."></span>
             <span id="candygirl-hb" class="status-pill" style="display:none"></span>
           </div>
@@ -507,6 +508,19 @@
                 </tbody>
               </table>
             </div>
+          </div>
+          <!-- Активная paper позиция shadow-слота (если есть) -->
+          <div class="cb-section cb-section-full" id="cg-active-section" style="display:none">
+            <div class="cb-section-title">Active paper position</div>
+            <div id="cg-active-body"></div>
+          </div>
+          <!-- Paper trades history -->
+          <div class="cb-section cb-section-full">
+            <div class="cb-section-title">
+              Paper trades history
+              <span id="cg-stats-inline" style="opacity:.75; font-weight:normal; margin-left:8px"></span>
+            </div>
+            <div id="cg-history-body"><div class="empty-state">no closed trades yet</div></div>
           </div>
           <div class="cb-section cb-section-full">
             <div class="cb-section-title" style="opacity:.7">Detector status</div>

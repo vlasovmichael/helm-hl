@@ -14,6 +14,7 @@ import { hlInfo } from "../../core/hlClient.js";
 import {
   getActivePosition,
   getActivePaperPosition,
+  getActivePaperPositionByStrategy,
   getHistorySince,
   getArchivedHistorySince,
   getEquitySnapshotsSince,
@@ -40,6 +41,7 @@ import {
 } from "../strategistSniper.js";
 import { getChillBoyHeartbeat, getChillBoySignals, getTrendFollowMfeMae } from "../strategistTrendFollow.js";
 import { getCandyGirlHeartbeat, getCandyGirlSignals, getCandyGirlStats } from "../strategistCandyGirl.js";
+import { getCandyGirlVirtualEquitySnapshot } from "../candyGirlVirtualEquity.js";
 import { getFaderHeartbeat, getFaderMfeMae } from "../strategistFader.js";
 import { getFaderVirtualSnapshot } from "../faderVirtualEquity.js";
 import { getVirtualEquitySnapshot } from "../chillBoyVirtualEquity.js";
@@ -233,6 +235,44 @@ async function buildFaderPaperPosition() {
   };
 }
 
+// Активная Candy Girl paper-позиция — независимый слот (strategy_id='candy_girl',
+// compound-песочница). PAPER-only, показываем всегда когда есть открытая позиция,
+// независимо от режима бота. SL+TP заданы детектором, MFE/MAE-трекера нет.
+async function buildCandyGirlPaperPosition() {
+  const pos = getActivePaperPositionByStrategy('candy_girl');
+  if (!pos) return null;
+
+  let livePrice = null;
+  try { livePrice = await getLivePrice(pos.coin); } catch { /* ignore */ }
+
+  const entry  = pos.entry_price;
+  const isLong = (pos.side || '').toLowerCase() === 'long';
+  let unrealPct = null;
+  let unrealUsd = null;
+  if (livePrice && entry) {
+    unrealPct = isLong ? ((livePrice - entry) / entry) * 100 : ((entry - livePrice) / entry) * 100;
+    unrealUsd = pos.size_usd * (unrealPct / 100);
+  }
+  const distPct = (t) => (livePrice && t ? Math.abs(t - livePrice) / livePrice * 100 : null);
+
+  return {
+    id:           pos.id,
+    coin:         pos.coin,
+    side:         (pos.side || '').toUpperCase(),
+    sizeUsd:      pos.size_usd,
+    entryPrice:   entry,
+    currentPrice: livePrice,
+    entryTime:    pos.entry_time,
+    heldMin:      Math.round((Date.now() - pos.entry_time) / 60_000),
+    slPrice:      pos.sl_price,
+    tpPrice:      pos.tp_price,
+    slDistPct:    distPct(pos.sl_price),
+    tpDistPct:    distPct(pos.tp_price),
+    unrealPct,
+    unrealUsd,
+  };
+}
+
 // HL 2026-05-23: unified-by-default. Раньше дашборд отдельно дёргал
 // spotClearinghouseState чтобы показать "Wallet Total", потому что perp
 // accountValue не включал spot. Теперь getAccountSummary() / wallet.js
@@ -380,14 +420,22 @@ async function getStatusData() {
           paperPosition: await buildChillBoyPaperPosition(),
         }
       : null,
-    // Candy Girl — signal-only радар (1h EMA-тренд + 5m pullback-reclaim).
-    // Не торгует: только лента сетапов + heartbeat детектора.
+    // Candy Girl — радар (1h EMA-тренд + 5m pullback-reclaim) + paper shadow-слот
+    // (Iter 2): независимый compound-слот strategy_id='candy_girl', PAPER-only.
     candyGirl: config.trading.candyGirlEnabled
       ? {
           enabled: true,
+          prod: config.isProduction && config.trading.candyGirlProdEnabled,
           heartbeat: getCandyGirlHeartbeat(),
           signals: getCandyGirlSignals(),
           stats: getCandyGirlStats(),
+          virtualBalance: config.trading.candyGirlPaperVirtualBalance,
+          virtualEquity:  config.trading.candyGirlPaperVirtualBalance > 0
+            ? getCandyGirlVirtualEquitySnapshot()
+            : null,
+          paperStats:  getStrategyStats('candy_girl', 'PAPER'),
+          paperTrades: getRecentStrategyTrades('candy_girl', 'PAPER', 10),
+          paperPosition: await buildCandyGirlPaperPosition(),
         }
       : null,
     fader: config.trading.faderEnabled
