@@ -641,6 +641,25 @@ export function getStrategyStats(strategyId, mode) {
 }
 
 /**
+ * Net P&L и число сделок стратегии/режима, закрытых после sinceMs.
+ * Для summary «за день / за неделю» под таблицей paper-слота.
+ *
+ * @returns {{ n: number, net: number }}
+ */
+export function getStrategyPnlSince(strategyId, mode, sinceMs) {
+  const row = getDb()
+    .prepare(`
+      SELECT
+        COUNT(*)                                  AS n,
+        COALESCE(SUM(realized_pnl - fee_paid), 0) AS net
+      FROM history
+      WHERE strategy_id = ? AND mode = ? AND closed_at >= ?
+    `)
+    .get(strategyId, mode, sinceMs);
+  return { n: row.n, net: row.net };
+}
+
+/**
  * Последние N сделок стратегии/режима для карточки на dashboard.
  */
 export function getRecentStrategyTrades(strategyId, mode, limit = 10) {

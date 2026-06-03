@@ -1980,6 +1980,28 @@ footer {
   color: var(--red);
 }
 
+/* Candy Girl paper P&L summary под таблицей истории */
+#sec-candygirl .cg-summary {
+  display: flex;
+  gap: 1.25rem;
+  margin-top: 0.55rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+#sec-candygirl .cg-sum-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+#sec-candygirl .cg-sum-label {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+}
+
 @media (max-width: 720px) {
   :is(#sec-chillboy, #sec-candygirl, #sec-fader) .cb-grid {
     grid-template-columns: 1fr;

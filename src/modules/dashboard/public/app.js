@@ -2765,7 +2765,7 @@ function renderCandyGirl(cg) {
     }
   }
   renderCandyGirlActivePos(cg.paperPosition);
-  renderCandyGirlHistory(cg.paperTrades, cg.paperStats);
+  renderCandyGirlHistory(cg.paperTrades, cg.paperStats, cg.paperPeriod);
 }
 
 function renderCandyGirlActivePos(pos) {
@@ -2808,7 +2808,7 @@ function renderCandyGirlActivePos(pos) {
   `;
 }
 
-function renderCandyGirlHistory(trades, stats) {
+function renderCandyGirlHistory(trades, stats, period) {
   const body   = document.getElementById("cg-history-body");
   const inline = document.getElementById("cg-stats-inline");
   if (!body) return;
@@ -2820,8 +2820,22 @@ function renderCandyGirlHistory(trades, stats) {
     inline.textContent = "";
   }
 
+  // Summary под таблицей: P&L за день и за неделю (профит/убыток paper-слота).
+  const periodHtml = (() => {
+    if (!period) return "";
+    const cell = (label, p) => {
+      const net = p?.net ?? 0;
+      const n   = p?.n ?? 0;
+      const color = net >= 0 ? "var(--green)" : "var(--red)";
+      const txt = net >= 0 ? `+$${net.toFixed(2)}` : `-$${Math.abs(net).toFixed(2)}`;
+      return `<span class="cg-sum-item"><span class="cg-sum-label">${label}</span>` +
+             `<b style="color:${color}">${txt}</b> <span style="opacity:.55">(${n})</span></span>`;
+    };
+    return `<div class="cg-summary">${cell("Today", period.day)}${cell("Week", period.week)}</div>`;
+  })();
+
   if (!Array.isArray(trades) || trades.length === 0) {
-    body.innerHTML = '<div class="empty-state">no closed trades yet</div>';
+    body.innerHTML = '<div class="empty-state">no closed trades yet</div>' + periodHtml;
     return;
   }
   const fmtUsd = (v) => (v == null ? "—" : (v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`));
@@ -2853,7 +2867,7 @@ function renderCandyGirlHistory(trades, stats) {
       <thead><tr><th>Open / Close</th><th>Coin</th><th>Entry / Exit</th><th>Net</th><th>Held</th><th>Reason</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
-  `;
+  ` + periodHtml;
 }
 
 function renderChillBoyActivePos(pos) {

@@ -21,6 +21,7 @@ import {
   realTradesForDisplay,
   getStrategyStats,
   getRecentStrategyTrades,
+  getStrategyPnlSince,
   getBotOidsSince,
   getSetupScannerRows,
 } from "../../core/database.js";
@@ -235,6 +236,13 @@ async function buildFaderPaperPosition() {
   };
 }
 
+// Локальная полночь сегодня в ms — граница «за день» для paper-summary.
+function startOfTodayMs() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
 // Активная Candy Girl paper-позиция — независимый слот (strategy_id='candy_girl',
 // compound-песочница). PAPER-only, показываем всегда когда есть открытая позиция,
 // независимо от режима бота. SL+TP заданы детектором, MFE/MAE-трекера нет.
@@ -435,6 +443,10 @@ async function getStatusData() {
             : null,
           paperStats:  getStrategyStats('candy_girl', 'PAPER'),
           paperTrades: getRecentStrategyTrades('candy_girl', 'PAPER', 10),
+          paperPeriod: {
+            day:  getStrategyPnlSince('candy_girl', 'PAPER', startOfTodayMs()),
+            week: getStrategyPnlSince('candy_girl', 'PAPER', Date.now() - 7 * 86_400_000),
+          },
           paperPosition: await buildCandyGirlPaperPosition(),
         }
       : null,
