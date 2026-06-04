@@ -5,6 +5,7 @@
 
 import { sendMessage } from '../reporter.js';
 import { logger } from '../../core/logger.js';
+import { config } from '../../core/config.js';
 
 // ─────────────────────────────────────────────────
 //  Throttle для повторяющихся алертов
@@ -537,6 +538,7 @@ export async function notifyOpenRejected({ coin, error, sz, price, banMinutes })
 }
 
 export async function notifyOpenSkipped({ coin, reason }) {
+  if (!config.telegram.notifications) return;
   if (shouldThrottle(`${coin}_open_skipped`)) return;
   await sendMessage(
     `⚠️ <b>[OPEN SKIPPED] #${coin}</b>\n${reason}`
@@ -583,6 +585,7 @@ export async function notifyExternalClose({ coin, sizeUsd, entryPrice, holdHours
 }
 
 export async function notifySlippageBan({ coin, slipLabel, banMinutes }) {
+  if (!config.telegram.notifications) return;
   if (shouldThrottle(`${coin}_slippage_ban`)) return;
   await sendMessage(
     `🚫 <b>[SLIPPAGE BAN] #${coin}</b>\n` +
@@ -608,6 +611,7 @@ export async function notifyCircuitBreaker({ losses, pauseMinutes, lastCoin, las
 }
 
 export async function notifyOpenBlocked({ coin, reason, details }) {
+  if (!config.telegram.notifications) return;
   if (shouldThrottle(`${coin}_open_blocked`)) return;
   await sendMessage(
     `⛔ <b>[OPEN BLOCKED] #${coin}</b>\n` +
@@ -618,6 +622,7 @@ export async function notifyOpenBlocked({ coin, reason, details }) {
 }
 
 export async function notifyOiCapBan({ coin, banMinutes = 30 }) {
+  if (!config.telegram.notifications) return;
   if (shouldThrottle(`${coin}_oicap`)) return;
   await sendMessage(
     `⚠️ <b>[OI CAP BAN] #${coin}</b>\n` +

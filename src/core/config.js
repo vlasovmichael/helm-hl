@@ -899,6 +899,14 @@ function loadConfig() {
       chatId:          process.env.TELEGRAM_CHAT_ID    || null,
       silentStartHour: parseInt(process.env.SILENT_START_HOUR || '22', 10),
       silentEndHour:   parseInt(process.env.SILENT_END_HOUR   || '9',  10),
+
+      // ── Шумовые уведомления (один общий рубильник, по умолчанию ВЫКЛ) ──
+      // Информационные алерты, которые сыпались каждый тик: FOMO, аномалия APY,
+      // PnL-качель ±3%, OPEN BLOCKED/SKIPPED, OI CAP BAN, SLIPPAGE BAN.
+      // Сделки, SL/TP, ошибки и аварийные события (FAILED/REJECTED/CIRCUIT/
+      // DRAWDOWN/внешнее закрытие) НЕ зависят от флага — они приходят всегда.
+      // TG_NOTIFICATIONS=true чтобы вернуть весь шум.
+      notifications: process.env.TG_NOTIFICATIONS === 'true',
     },
 
     // ── Binance (read-only, для Tax Collector) ──

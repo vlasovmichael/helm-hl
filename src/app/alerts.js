@@ -34,7 +34,7 @@ export async function runSmartAlerts(scoutData, signal, activePosition) {
   const skipNoisy = uptimeMs < 60_000; // Пропускаем Recap/FOMO в первые 60с
 
   // ── 1. Аномалия APY (только при открытой позиции) ─────────────────
-  if (activePosition) {
+  if (config.telegram.notifications && activePosition) {
     const coin    = activePosition.coin;
     const current = scoutData.find((m) => m.coin === coin);
     const prevApy = state.prevApyMap.get(coin);
@@ -54,6 +54,7 @@ export async function runSmartAlerts(scoutData, signal, activePosition) {
 
   // ── 2. FOMO-алерт (позиция открыта, ротация невыгодна) ───────────
   if (
+    config.telegram.notifications &&
     !skipNoisy &&
     activePosition &&
     signal.action === 'HOLD' &&
@@ -75,7 +76,7 @@ export async function runSmartAlerts(scoutData, signal, activePosition) {
   }
 
   // ── 3. PnL Alert (unrealized PnL > ±3% от equity) ────────────────
-  if (activePosition && now - state.lastPnlAlert >= PNL_ALERT_COOLDOWN_MS) {
+  if (config.telegram.notifications && activePosition && now - state.lastPnlAlert >= PNL_ALERT_COOLDOWN_MS) {
     try {
       const markPrice = await getMarkPrice(activePosition.coin);
       if (markPrice != null) {
