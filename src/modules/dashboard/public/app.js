@@ -3318,9 +3318,9 @@ function renderSmartSignals() {
     : "neutral";
 
   if (macroEl) {
-    const label = _macroPct == null ? ""
+    const macroLabel = _macroPct == null ? ""
       : `BTC 4h ${_macroPct > 0 ? "+" : ""}${_macroPct.toFixed(1)}% · ${macroDir === "bull" ? "▲ BULL" : macroDir === "bear" ? "▼ BEAR" : "● FLAT"}`;
-    macroEl.textContent = label;
+    macroEl.dataset.macro = macroLabel;
     macroEl.style.color = macroDir === "bull" ? "var(--green)" : macroDir === "bear" ? "var(--red)" : "var(--text-muted)";
   }
 
@@ -3386,22 +3386,30 @@ function renderSmartSignals() {
     }
   }
 
-  // Setup-only (score ≥ 2, не в HM и не в CG)
+  // Setup-only — все монеты с mark price, без порога по score (watchlist fallback)
   for (const r of _lastSetupRowsCache) {
     if (items.find(i => i.coin === r.coin)) continue;
     const ss = _smartScoreSetup(r);
-    if (ss < 2) continue;
     const direction = (r.fundingApy || 0) < 0 ? "LONG" : "SHORT";
     const entry = Number(r.mark || 0);
     if (!entry) continue;
     const SL = 0.025;
     const sl = direction === "SHORT" ? entry * (1 + SL) : entry * (1 - SL);
     const tp = direction === "SHORT" ? entry * (1 - SL * 2) : entry * (1 + SL * 2);
-    const score = ss * 4 + macroBonus(direction);
+    // proxy score: |fundingApy| + funding persist fraction + OI delta
+    const fp = r.fundingPersist;
+    const oi = r.oi7d;
+    let proxy = Math.min(Math.abs(r.fundingApy || 0) / 10, 5); // 0-5
+    if (fp?.fractionExtreme != null) proxy += fp.fractionExtreme * 3;
+    if (oi?.deltaOi != null) proxy += Math.abs(oi.deltaOi) * 2;
+    if (r.premium != null) proxy += Math.abs(r.premium) * 200;
+    const score = ss * 4 + proxy + macroBonus(direction);
+    const why = ss > 0
+      ? [`HL${ss}`, ...(Math.abs(r.fundingApy || 0) > 100 ? ["fund"] : [])]
+      : Math.abs(r.fundingApy || 0) > 50 ? ["fund"] : ["watch"];
     items.push({
       coin: r.coin, direction, entry, sl, tp, rr: "2.0",
-      trend4h: null, score,
-      why: [`HL${ss}`, ...(Math.abs(r.fundingApy || 0) > 100 ? ["fund"] : [])],
+      trend4h: null, score, why,
       conflict: isConflict(direction),
     });
   }
@@ -3409,8 +3417,24 @@ function renderSmartSignals() {
   items.sort((a, b) => b.score - a.score);
   const top10 = items.slice(0, 10);
 
+  // Статус данных для мета-строки
+  const collectorAgeH = _lastSetupRowsCache.reduce((mx, r) => {
+    const age = r.fundingPersist?.ageHours ?? 0;
+    return age > mx ? age : mx;
+  }, 0);
+  const dataReady = collectorAgeH >= 48;
+  const dataLabel = collectorAgeH < 1 ? "collecting…"
+    : collectorAgeH < 48 ? `warming up · ${collectorAgeH.toFixed(0)}h / 48h`
+    : collectorAgeH < 168 ? `${collectorAgeH.toFixed(0)}h data · OI 7d pending`
+    : `${(collectorAgeH / 24).toFixed(0)}d data · full`;
+
+  if (macroEl) {
+    const parts = [macroEl.dataset.macro, `${_lastSetupRowsCache.length} coins · ${dataLabel}`].filter(Boolean);
+    macroEl.textContent = parts.join(" · ");
+  }
+
   if (!top10.length) {
-    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">no signals yet</td></tr>';
+    tbody.innerHTML = `<tr><td colspan="9" class="empty-state">${dataLabel}</td></tr>`;
     return;
   }
 
