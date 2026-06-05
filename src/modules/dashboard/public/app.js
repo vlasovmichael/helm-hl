@@ -3452,10 +3452,21 @@ function renderSmartSignals() {
       : item.trend4h === "up"
         ? '<span style="color:var(--green);font-family:var(--font-mono)">▲</span>'
         : '<span style="color:var(--red);font-family:var(--font-mono)">▼</span>';
-    const whyHtml = item.why.map(w => {
-      const isCg = w === "CG";
-      return `<span style="font-size:9px;padding:1px 5px;border-radius:3px;font-weight:600;letter-spacing:.04em;${isCg ? "background:var(--accent-soft);color:var(--accent-strong);border:1px solid var(--accent-line)" : "background:var(--canvas-inset);color:var(--text-secondary);border:1px solid var(--border-muted)"}">${w}</span>`;
-    }).join(" ");
+    // Один главный тег + опциональный score
+    const LABEL_MAP = {
+      "CG":    { text: "entry ready", style: "background:var(--accent-soft);color:var(--accent-strong);border:1px solid var(--accent-line)" },
+      "spike": { text: "spike",       style: "background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)" },
+      "fund":  { text: "funding",     style: "background:var(--canvas-inset);color:var(--text-secondary);border:1px solid var(--border-muted)" },
+      "watch": { text: "watch",       style: "background:none;color:var(--text-faint);border:1px solid var(--hairline)" },
+    };
+    const PRIORITY = ["CG", "spike", "fund"];
+    const primary = PRIORITY.find(k => item.why.includes(k)) ?? "watch";
+    const lbl = LABEL_MAP[primary];
+    const hlTag = item.why.find(w => /^HL\d$/.test(w));
+    const scoreHtml = hlTag
+      ? `<span style="font-size:11px;padding:2px 6px;border-radius:3px;font-weight:600;background:var(--canvas-inset);color:var(--text-secondary);border:1px solid var(--border-muted)">${hlTag.replace("HL", "")} / 4</span>`
+      : "";
+    const whyHtml = `<span style="font-size:11px;padding:2px 6px;border-radius:3px;font-weight:600;${lbl.style}">${lbl.text}</span> ${scoreHtml}`;
     const rowOpacity = item.conflict ? "opacity:.45;" : "";
     const conflictIcon = item.conflict ? ' <span style="color:var(--red);font-size:10px" title="Macro conflict">⚠</span>' : "";
     const topGlow = idx === 0 && !item.conflict
