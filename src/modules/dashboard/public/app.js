@@ -3468,6 +3468,20 @@ function renderSmartSignals() {
       ? `<span style="font-size:11px;padding:2px 6px;border-radius:3px;font-weight:600;background:var(--canvas-inset);color:var(--text-secondary);border:1px solid var(--border-muted)">${hlTag.replace("HL", "")} / 4</span>`
       : "";
     const whyHtml = `<span style="font-size:11px;padding:2px 6px;border-radius:3px;font-weight:600;${lbl.style}">${lbl.text}</span> ${scoreHtml}`;
+    // Timing: ищем монету в HM — dump для LONG = момент входа, pump для SHORT
+    const hm = _hmSignalsCache.find(m => m.coin === item.coin && m.best?.spikePct != null);
+    let timingHtml = `<span style="font-family:var(--font-mono);font-size:11px;color:var(--text-faint)">—</span>`;
+    if (hm) {
+      const spike = hm.best.spikePct;
+      const goodForLong  = isLong  && spike < -1.5; // монета упала → хороший вход для лонга
+      const goodForShort = !isLong && spike > 1.5;  // монета пампит → хороший вход для шорта
+      if (goodForLong) {
+        timingHtml = `<span style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#fff;background:var(--green);padding:2px 8px;border-radius:4px;white-space:nowrap">long now</span>`;
+      } else if (goodForShort) {
+        timingHtml = `<span style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#fff;background:var(--red);padding:2px 8px;border-radius:4px;white-space:nowrap">short now</span>`;
+      }
+    }
+
     const rowOpacity = item.conflict ? "opacity:.45;" : "";
     const conflictIcon = item.conflict ? ' <span style="color:var(--red);font-size:10px" title="Macro conflict">⚠</span>' : "";
     const topGlow = idx === 0 && !item.conflict
@@ -3483,6 +3497,7 @@ function renderSmartSignals() {
       <td style="${TDR}font-family:var(--font-mono);font-size:12px">${item.rr}</td>
       <td style="${TDC}">${trend4hHtml}</td>
       <td style="${TD}display:flex;gap:3px;flex-wrap:wrap">${whyHtml}</td>
+      <td style="${TDC}">${timingHtml}</td>
     </tr>`;
   }).join("");
 }
