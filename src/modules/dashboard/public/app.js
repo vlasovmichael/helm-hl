@@ -25,6 +25,7 @@ let _hmSignalsCache = [];
 let _lastSetupRowsCache = [];
 let _macroPct = null;
 let _macroFetchedAt = 0;
+let _btcMomentum1m = null;
 let equityChart = null;
 let priceChart = null;
 let priceSeries = null;
@@ -1625,7 +1626,7 @@ async function fetchJson(path) {
 }
 
 async function tick() {
-  const [historyR, activityR, taxR, pnlR, insightsR, setupR, hmR] = await Promise.allSettled([
+  const [historyR, activityR, taxR, pnlR, insightsR, setupR, hmR, btcR] = await Promise.allSettled([
     fetchJson(`/api/history?hours=${currentRangeHours}`),
     fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
     fetchJson("/api/tax-summary"),
@@ -1633,6 +1634,7 @@ async function tick() {
     fetchJson("/api/insights"),
     fetchJson("/api/setup-scanner"),
     fetchJson("/api/signals?limit=30"),
+    fetchJson("/api/candles?coin=BTC&interval=1m"),
   ]);
   if (setupR.status === "fulfilled") {
     renderSetupScanner(setupR.value);
@@ -1640,6 +1642,16 @@ async function tick() {
   }
   if (hmR.status === "fulfilled" && Array.isArray(hmR.value)) {
     _hmSignalsCache = hmR.value;
+  }
+  if (btcR.status === "fulfilled" && Array.isArray(btcR.value) && btcR.value.length >= 2) {
+    const candles = btcR.value;
+    const prev = candles[candles.length - 2];
+    const last = candles[candles.length - 1];
+    const prevClose = prev?.c ?? prev?.close;
+    const lastClose = last?.c ?? last?.close;
+    if (prevClose && lastClose) {
+      _btcMomentum1m = (lastClose - prevClose) / prevClose * 100;
+    }
   }
   await fetchMacroIfStale();
   renderSmartSignals();
@@ -2464,46 +2476,8 @@ function renderChillBoySignals(signals) {
   }
 }
 
-// ── Signal Banner — выводим последний Candy Girl сигнал крупно вверху ──────
-function renderSignalBanner(cg) {
-  const banner = document.getElementById("sec-signal-banner");
-  if (!banner) return;
-  const inner = document.getElementById("signal-banner-inner");
-  const dirEl = document.getElementById("signal-banner-dir");
-  const detailEl = document.getElementById("signal-banner-detail");
-  const ageEl = document.getElementById("signal-banner-age");
-
-  const signals = cg?.signals;
-  const top = Array.isArray(signals) && signals.length > 0 ? signals[0] : null;
-  const STALE_MS = 4 * 60 * 60 * 1000; // скрываем через 4ч
-
-  if (!top || Date.now() - top.ts > STALE_MS) {
-    banner.style.display = "none";
-    return;
-  }
-
-  banner.style.display = "";
-  const isLong = top.direction === "LONG";
-  inner.className = isLong ? "dir-long" : "dir-short";
-
-  const arrow = isLong ? "▲ LONG" : "▼ SHORT";
-  dirEl.textContent = `${arrow}  #${top.coin}`;
-
-  const fmtPx = (v) => (v == null ? "—" : `$${Number(v).toPrecision(5)}`);
-  const risk = Math.abs((top.entry ?? 0) - (top.sl ?? 0));
-  const rr = risk > 0 ? (Math.abs((top.tp ?? 0) - (top.entry ?? 0)) / risk).toFixed(1) : "?";
-  const htf = top.trend4h && top.trend4h !== "none" ? `  ·  4h ${top.trend4h.toUpperCase()}` : "";
-  detailEl.innerHTML =
-    `entry ${fmtPx(top.entry)}  ·  SL ${fmtPx(top.sl)}  ·  TP ${fmtPx(top.tp)}  ·  R:R ${rr}${htf}`;
-
-  const s = Math.floor((Date.now() - top.ts) / 1000);
-  const age = s < 90 ? `${s}s ago` : s < 5400 ? `${Math.floor(s / 60)}m ago` : `${Math.floor(s / 3600)}h ago`;
-  ageEl.textContent = age;
-}
-
 // ── Candy Girl — signal-only радар (1h EMA-тренд + 5m pullback-reclaim) ──────
 function renderCandyGirl(cg) {
-  renderSignalBanner(cg);
   _cgSignalsCache = Array.isArray(cg?.signals) ? cg.signals : [];
   renderSmartSignals();
 
@@ -3327,6 +3301,14 @@ function renderSmartSignals() {
   const TIER_SCORE = { STRONG: 3, NORMAL: 2, WEAK: 1 };
   const setupMap = new Map((_lastSetupRowsCache || []).map(r => [r.coin, _smartScoreSetup(r)]));
 
+  // BTC 1m momentum penalty: если BTC активно движется против направления сигнала
+  const btcPressurePenalty = (dir) => {
+    if (_btcMomentum1m == null) return 0;
+    if (dir === "SHORT" && _btcMomentum1m > 0.3) return -4;  // BTC памп → SHORT конфликт
+    if (dir === "LONG"  && _btcMomentum1m < -0.3) return -4; // BTC дамп → LONG конфликт
+    return 0;
+  };
+
   function macroBonus(dir) {
     if (macroDir === "neutral") return 0;
     if (dir === "LONG" && macroDir === "bull") return 2;
@@ -3334,7 +3316,12 @@ function renderSmartSignals() {
     return -3; // conflict
   }
   function isConflict(dir) {
-    return (dir === "LONG" && macroDir === "bear") || (dir === "SHORT" && macroDir === "bull");
+    const macroCon = (dir === "LONG" && macroDir === "bear") || (dir === "SHORT" && macroDir === "bull");
+    const momentumCon = _btcMomentum1m != null && (
+      (dir === "SHORT" && _btcMomentum1m > 0.5) ||
+      (dir === "LONG"  && _btcMomentum1m < -0.5)
+    );
+    return macroCon || momentumCon;
   }
 
   const items = [];
@@ -3351,7 +3338,7 @@ function renderSmartSignals() {
       : (s.direction === "SHORT" && s.trend4h === "down") ? 2
       : -1;
     const setupBonus = (setupMap.get(s.coin) || 0) * 2;
-    const score = 40 + Number(rr) * 3 + trendBonus + macroBonus(s.direction) + setupBonus;
+    const score = 40 + Number(rr) * 3 + trendBonus + macroBonus(s.direction) + setupBonus + btcPressurePenalty(s.direction);
     items.push({
       coin: s.coin, direction: s.direction,
       entry, sl, tp, rr,
@@ -3376,7 +3363,7 @@ function renderSmartSignals() {
       const entry = Number(m.price);
       const sl = direction === "SHORT" ? entry * (1 + SL) : entry * (1 - SL);
       const tp = direction === "SHORT" ? entry * (1 - SL * 2) : entry * (1 + SL * 2);
-      const score = tierS * 3 + macroBonus(direction) + setupBonus;
+      const score = tierS * 3 + macroBonus(direction) + setupBonus + btcPressurePenalty(direction);
       items.push({
         coin: m.coin, direction, entry, sl, tp, rr: "2.0",
         trend4h: null, score,
@@ -3455,13 +3442,14 @@ function renderSmartSignals() {
         : '<span style="color:var(--red);font-family:var(--font-mono)">▼</span>';
     // Один главный тег + опциональный score
     const LABEL_MAP = {
-      "CG":    { text: "entry ready", style: "background:var(--accent-soft);color:var(--accent-strong);border:1px solid var(--accent-line)" },
-      "spike": { text: "spike",       style: "background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)" },
-      "fund":  { text: "funding",     style: "background:var(--canvas-inset);color:var(--text-secondary);border:1px solid var(--border-muted)" },
-      "watch": { text: "watch",       style: "background:none;color:var(--text-faint);border:1px solid var(--hairline)" },
+      "CG":       { text: "entry ready", style: "background:var(--accent-soft);color:var(--accent-strong);border:1px solid var(--accent-line)" },
+      "spike":    { text: "spike",       style: "background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)" },
+      "fund":     { text: "funding",     style: "background:var(--canvas-inset);color:var(--text-secondary);border:1px solid var(--border-muted)" },
+      "watch":    { text: "watch",       style: "background:none;color:var(--text-faint);border:1px solid var(--hairline)" },
+      "conflict": { text: "conflict",    style: "background:none;color:var(--text-faint);border:1px solid var(--hairline)" },
     };
     const PRIORITY = ["CG", "spike", "fund"];
-    const primary = PRIORITY.find(k => item.why.includes(k)) ?? "watch";
+    const primary = item.conflict ? "conflict" : (PRIORITY.find(k => item.why.includes(k)) ?? "watch");
     const lbl = LABEL_MAP[primary];
     const hlTag = item.why.find(w => /^HL\d$/.test(w));
     const scoreHtml = hlTag
