@@ -20,6 +20,11 @@ function formatUptime(minutes) {
 }
 
 const REFRESH_MS = 10_000;
+let _cgSignalsCache = [];
+let _hmSignalsCache = [];
+let _lastSetupRowsCache = [];
+let _macroPct = null;
+let _macroFetchedAt = 0;
 let equityChart = null;
 let priceChart = null;
 let priceSeries = null;
@@ -1620,15 +1625,24 @@ async function fetchJson(path) {
 }
 
 async function tick() {
-  const [historyR, activityR, taxR, pnlR, insightsR, setupR] = await Promise.allSettled([
+  const [historyR, activityR, taxR, pnlR, insightsR, setupR, hmR] = await Promise.allSettled([
     fetchJson(`/api/history?hours=${currentRangeHours}`),
     fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
     fetchJson("/api/tax-summary"),
     fetchJson("/api/pnl-summary"),
     fetchJson("/api/insights"),
     fetchJson("/api/setup-scanner"),
+    fetchJson("/api/signals?limit=30"),
   ]);
-  if (setupR.status === "fulfilled") renderSetupScanner(setupR.value);
+  if (setupR.status === "fulfilled") {
+    renderSetupScanner(setupR.value);
+    _lastSetupRowsCache = Array.isArray(setupR.value?.rows) ? setupR.value.rows : [];
+  }
+  if (hmR.status === "fulfilled" && Array.isArray(hmR.value)) {
+    _hmSignalsCache = hmR.value;
+  }
+  await fetchMacroIfStale();
+  renderSmartSignals();
   if (pnlR.status === "fulfilled") {
     lastPnlSummary = pnlR.value;
     renderPnlSummary();
@@ -2490,6 +2504,8 @@ function renderSignalBanner(cg) {
 // ── Candy Girl — signal-only радар (1h EMA-тренд + 5m pullback-reclaim) ──────
 function renderCandyGirl(cg) {
   renderSignalBanner(cg);
+  _cgSignalsCache = Array.isArray(cg?.signals) ? cg.signals : [];
+  renderSmartSignals();
 
   const card = document.getElementById("sec-candygirl");
   if (!card) return;
@@ -3250,6 +3266,186 @@ async function fetchInitialLogs() {
   } catch (err) {
     console.error("[Logs] initial fetch failed", err);
   }
+}
+
+// ── Smart Signals ──────────────────────────────────────────────────────────
+async function fetchMacroIfStale() {
+  if (Date.now() - _macroFetchedAt < 5 * 60_000) return;
+  try {
+    const candles = await fetchJson("/api/candles?coin=BTC&interval=4h");
+    if (Array.isArray(candles) && candles.length >= 2) {
+      const last = candles[candles.length - 1];
+      const prev = candles[candles.length - 2];
+      const c = Number(last.c ?? last.close);
+      const o = Number(prev.c ?? prev.close ?? prev.o);
+      if (o && c) _macroPct = (c - o) / o * 100;
+    }
+    _macroFetchedAt = Date.now();
+  } catch (_) {}
+}
+
+function _smartScoreSetup(r) {
+  let s = 0;
+  const fp = r.fundingPersist;
+  if (fp?.fractionExtreme != null && fp.fractionExtreme > 0.4 && Math.abs(r.fundingApy || 0) > 50) s++;
+  const oi = r.oi7d;
+  if (oi?.deltaOi != null && oi?.deltaPx != null && oi.deltaOi > 0.5 && Math.abs(oi.deltaPx) < 0.07) s++;
+  if (r.premium != null && Math.abs(r.premium) > 0.001) s++;
+  const vr = r.volRegime;
+  if (vr?.ratio != null && vr.ratio > 1.5) s++;
+  return s;
+}
+
+function _smartFmtPx(v) {
+  if (v == null || !isFinite(Number(v))) return "—";
+  const n = Number(v);
+  if (n >= 10000) return `$${n.toFixed(0)}`;
+  if (n >= 100) return `$${n.toFixed(1)}`;
+  if (n >= 1) return `$${n.toFixed(3)}`;
+  if (n >= 0.01) return `$${n.toFixed(4)}`;
+  if (n >= 0.0001) return `$${n.toFixed(5)}`;
+  return `$${n.toFixed(6)}`;
+}
+
+function renderSmartSignals() {
+  const tbody = document.getElementById("smart-tbody");
+  const macroEl = document.getElementById("smart-macro");
+  if (!tbody) return;
+
+  const macroDir = _macroPct == null ? "neutral"
+    : _macroPct > 0.5 ? "bull"
+    : _macroPct < -0.5 ? "bear"
+    : "neutral";
+
+  if (macroEl) {
+    const label = _macroPct == null ? ""
+      : `BTC 4h ${_macroPct > 0 ? "+" : ""}${_macroPct.toFixed(1)}% · ${macroDir === "bull" ? "▲ BULL" : macroDir === "bear" ? "▼ BEAR" : "● FLAT"}`;
+    macroEl.textContent = label;
+    macroEl.style.color = macroDir === "bull" ? "var(--green)" : macroDir === "bear" ? "var(--red)" : "var(--text-muted)";
+  }
+
+  const TIER_SCORE = { STRONG: 3, NORMAL: 2, WEAK: 1 };
+  const setupMap = new Map((_lastSetupRowsCache || []).map(r => [r.coin, _smartScoreSetup(r)]));
+
+  function macroBonus(dir) {
+    if (macroDir === "neutral") return 0;
+    if (dir === "LONG" && macroDir === "bull") return 2;
+    if (dir === "SHORT" && macroDir === "bear") return 2;
+    return -3; // conflict
+  }
+  function isConflict(dir) {
+    return (dir === "LONG" && macroDir === "bear") || (dir === "SHORT" && macroDir === "bull");
+  }
+
+  const items = [];
+
+  // CG signals — structured (entry/sl/tp/trend4h уже есть)
+  for (const s of _cgSignalsCache) {
+    const entry = Number(s.entry);
+    const sl = Number(s.sl);
+    const tp = Number(s.tp);
+    const risk = Math.abs(sl - entry);
+    const rr = risk > 0 ? (Math.abs(tp - entry) / risk).toFixed(1) : "2.0";
+    const trendBonus = s.trend4h == null ? 0
+      : (s.direction === "LONG" && s.trend4h === "up") ? 2
+      : (s.direction === "SHORT" && s.trend4h === "down") ? 2
+      : -1;
+    const setupBonus = (setupMap.get(s.coin) || 0) * 2;
+    const score = 40 + Number(rr) * 3 + trendBonus + macroBonus(s.direction) + setupBonus;
+    items.push({
+      coin: s.coin, direction: s.direction,
+      entry, sl, tp, rr,
+      trend4h: s.trend4h, score,
+      why: ["CG", ...(setupMap.get(s.coin) >= 2 ? [`HL${setupMap.get(s.coin)}`] : [])],
+      conflict: isConflict(s.direction),
+    });
+  }
+
+  // HM signals — рассчитываем entry/sl/tp из текущей цены
+  for (const m of _hmSignalsCache) {
+    if (!m.best?.tier || m.best.tier === "NEUTRAL") continue;
+    const direction = m.best.side === "SHORT" ? "SHORT" : "LONG";
+    const tierS = TIER_SCORE[m.best.tier] || 0;
+    const setupBonus = (setupMap.get(m.coin) || 0) * 2;
+    const existing = items.find(i => i.coin === m.coin);
+    if (existing) {
+      existing.score += tierS * 3;
+      if (!existing.why.includes("spike")) existing.why.push("spike");
+    } else {
+      const SL = 0.025;
+      const entry = Number(m.price);
+      const sl = direction === "SHORT" ? entry * (1 + SL) : entry * (1 - SL);
+      const tp = direction === "SHORT" ? entry * (1 - SL * 2) : entry * (1 + SL * 2);
+      const score = tierS * 3 + macroBonus(direction) + setupBonus;
+      items.push({
+        coin: m.coin, direction, entry, sl, tp, rr: "2.0",
+        trend4h: null, score,
+        why: ["spike", ...(setupMap.get(m.coin) >= 2 ? [`HL${setupMap.get(m.coin)}`] : [])],
+        conflict: isConflict(direction),
+      });
+    }
+  }
+
+  // Setup-only (score ≥ 2, не в HM и не в CG)
+  for (const r of _lastSetupRowsCache) {
+    if (items.find(i => i.coin === r.coin)) continue;
+    const ss = _smartScoreSetup(r);
+    if (ss < 2) continue;
+    const direction = (r.fundingApy || 0) < 0 ? "LONG" : "SHORT";
+    const entry = Number(r.mark || 0);
+    if (!entry) continue;
+    const SL = 0.025;
+    const sl = direction === "SHORT" ? entry * (1 + SL) : entry * (1 - SL);
+    const tp = direction === "SHORT" ? entry * (1 - SL * 2) : entry * (1 + SL * 2);
+    const score = ss * 4 + macroBonus(direction);
+    items.push({
+      coin: r.coin, direction, entry, sl, tp, rr: "2.0",
+      trend4h: null, score,
+      why: [`HL${ss}`, ...(Math.abs(r.fundingApy || 0) > 100 ? ["fund"] : [])],
+      conflict: isConflict(direction),
+    });
+  }
+
+  items.sort((a, b) => b.score - a.score);
+  const top10 = items.slice(0, 10);
+
+  if (!top10.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-state">no signals yet</td></tr>';
+    return;
+  }
+
+  const TD = "padding:8px 10px;border-bottom:1px solid var(--hairline);vertical-align:middle;";
+  const TDR = TD + "text-align:right;";
+  const TDC = TD + "text-align:center;";
+
+  tbody.innerHTML = top10.map((item, idx) => {
+    const isLong = item.direction === "LONG";
+    const dirHtml = isLong
+      ? '<span style="color:var(--green);font-weight:700;font-family:var(--font-mono);font-size:12px">▲ LONG</span>'
+      : '<span style="color:var(--red);font-weight:700;font-family:var(--font-mono);font-size:12px">▼ SHORT</span>';
+    const trend4hHtml = item.trend4h == null
+      ? '<span style="opacity:.35;font-family:var(--font-mono)">—</span>'
+      : item.trend4h === "up"
+        ? '<span style="color:var(--green);font-family:var(--font-mono)">▲</span>'
+        : '<span style="color:var(--red);font-family:var(--font-mono)">▼</span>';
+    const whyHtml = item.why.map(w => {
+      const isCg = w === "CG";
+      return `<span style="font-size:9px;padding:1px 5px;border-radius:3px;font-weight:600;letter-spacing:.04em;${isCg ? "background:var(--accent-soft);color:var(--accent-strong);border:1px solid var(--accent-line)" : "background:var(--canvas-inset);color:var(--text-secondary);border:1px solid var(--border-muted)"}">${w}</span>`;
+    }).join(" ");
+    const rowOpacity = item.conflict ? "opacity:.45;" : "";
+    const conflictIcon = item.conflict ? ' <span style="color:var(--red);font-size:10px" title="Macro conflict">⚠</span>' : "";
+    return `<tr style="${rowOpacity}">
+      <td style="${TD}font-family:var(--font-mono);color:var(--text-faint);font-size:11px">${idx + 1}</td>
+      <td style="${TD}font-weight:700;font-size:14px">#${item.coin}${conflictIcon}</td>
+      <td style="${TD}">${dirHtml}</td>
+      <td style="${TDR}font-family:var(--font-mono);font-size:12px">${_smartFmtPx(item.entry)}</td>
+      <td style="${TDR}font-family:var(--font-mono);font-size:12px;color:var(--red)">${_smartFmtPx(item.sl)}</td>
+      <td style="${TDR}font-family:var(--font-mono);font-size:12px;color:var(--green)">${_smartFmtPx(item.tp)}</td>
+      <td style="${TDR}font-family:var(--font-mono);font-size:12px">${item.rr}</td>
+      <td style="${TDC}">${trend4hHtml}</td>
+      <td style="${TD}display:flex;gap:3px;flex-wrap:wrap">${whyHtml}</td>
+    </tr>`;
+  }).join("");
 }
 
 bindLogsUi();
