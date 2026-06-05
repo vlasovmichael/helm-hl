@@ -909,6 +909,12 @@ function loadConfig() {
       notifications: process.env.TG_NOTIFICATIONS === 'true',
     },
 
+    ntfy: {
+      url:   process.env.NTFY_URL   || 'http://ntfy:80',
+      topic: process.env.NTFY_TOPIC || 'hl-signals',
+      token: process.env.NTFY_TOKEN || '',
+    },
+
     // ── Binance (read-only, для Tax Collector) ──
     // Модуль taxCollector сам проверяет наличие ключей через isConfigured()
     // и тихо отключается, если их нет. Не блокируем старт бота.

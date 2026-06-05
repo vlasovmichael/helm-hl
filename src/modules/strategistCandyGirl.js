@@ -181,6 +181,40 @@ async function fireCandyGirlAlert(text) {
   }
 }
 
+async function fireNtfyAlert(coin, direction, entry, sl, tp, price) {
+  const { url, topic, token } = config.ntfy;
+  if (!url || !topic) return;
+  const arrow = direction === 'LONG' ? '▲' : '▼';
+  const risk = Math.abs((entry ?? 0) - (sl ?? 0));
+  const rr = risk > 0 ? (Math.abs((tp ?? 0) - (entry ?? 0)) / risk).toFixed(1) : '?';
+  try {
+    const { default: https } = await import('node:https');
+    const { default: http } = await import('node:http');
+    const body = JSON.stringify({
+      topic,
+      title: `${arrow} ${direction} #${coin}`,
+      message: `@ $${price}\nentry $${entry} · SL $${sl} · TP $${tp} (R:R ${rr})`,
+      priority: 4,
+      tags: [direction === 'LONG' ? 'green_circle' : 'red_circle'],
+    });
+    const u = new URL(`${url}/`);
+    const lib = u.protocol === 'https:' ? https : http;
+    const headers = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    await new Promise((resolve, reject) => {
+      const req = lib.request({ hostname: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80), path: '/', method: 'POST', headers }, (res) => {
+        res.resume();
+        res.on('end', resolve);
+      });
+      req.on('error', reject);
+      req.write(body);
+      req.end();
+    });
+  } catch (err) {
+    logger.warn(`[CandyGirl] ntfy alert failed: ${err.message}`);
+  }
+}
+
 /**
  * Записать обнаруженный сетап в ленту + (опц.) TG-алерт. Дедуп per-coin.
  * @param {{item, signal}} r
@@ -230,6 +264,7 @@ function recordCandyGirlSignal(r, now) {
         `entry $${fmt(signal.entry)} · SL $${fmt(signal.sl)} · TP $${fmt(signal.tp)} (R:R ${rrTxt})\n` +
         `👀 сигнал — это РАДАР, бот не входит. Вход и стоп — руками.`,
     );
+    fireNtfyAlert(item.coin, entry.direction, signal.entry, signal.sl, signal.tp, item.price);
   }
   return true;
 }

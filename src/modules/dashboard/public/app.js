@@ -2450,8 +2450,47 @@ function renderChillBoySignals(signals) {
   }
 }
 
+// ── Signal Banner — выводим последний Candy Girl сигнал крупно вверху ──────
+function renderSignalBanner(cg) {
+  const banner = document.getElementById("sec-signal-banner");
+  if (!banner) return;
+  const inner = document.getElementById("signal-banner-inner");
+  const dirEl = document.getElementById("signal-banner-dir");
+  const detailEl = document.getElementById("signal-banner-detail");
+  const ageEl = document.getElementById("signal-banner-age");
+
+  const signals = cg?.signals;
+  const top = Array.isArray(signals) && signals.length > 0 ? signals[0] : null;
+  const STALE_MS = 4 * 60 * 60 * 1000; // скрываем через 4ч
+
+  if (!top || Date.now() - top.ts > STALE_MS) {
+    banner.style.display = "none";
+    return;
+  }
+
+  banner.style.display = "";
+  const isLong = top.direction === "LONG";
+  inner.className = isLong ? "dir-long" : "dir-short";
+
+  const arrow = isLong ? "▲ LONG" : "▼ SHORT";
+  dirEl.textContent = `${arrow}  #${top.coin}`;
+
+  const fmtPx = (v) => (v == null ? "—" : `$${Number(v).toPrecision(5)}`);
+  const risk = Math.abs((top.entry ?? 0) - (top.sl ?? 0));
+  const rr = risk > 0 ? (Math.abs((top.tp ?? 0) - (top.entry ?? 0)) / risk).toFixed(1) : "?";
+  const htf = top.trend4h && top.trend4h !== "none" ? `  ·  4h ${top.trend4h.toUpperCase()}` : "";
+  detailEl.innerHTML =
+    `entry ${fmtPx(top.entry)}  ·  SL ${fmtPx(top.sl)}  ·  TP ${fmtPx(top.tp)}  ·  R:R ${rr}${htf}`;
+
+  const s = Math.floor((Date.now() - top.ts) / 1000);
+  const age = s < 90 ? `${s}s ago` : s < 5400 ? `${Math.floor(s / 60)}m ago` : `${Math.floor(s / 3600)}h ago`;
+  ageEl.textContent = age;
+}
+
 // ── Candy Girl — signal-only радар (1h EMA-тренд + 5m pullback-reclaim) ──────
 function renderCandyGirl(cg) {
+  renderSignalBanner(cg);
+
   const card = document.getElementById("sec-candygirl");
   if (!card) return;
   if (!cg || !cg.enabled) {
