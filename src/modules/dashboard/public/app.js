@@ -3458,7 +3458,10 @@ function renderSmartSignals() {
     }).join(" ");
     const rowOpacity = item.conflict ? "opacity:.45;" : "";
     const conflictIcon = item.conflict ? ' <span style="color:var(--red);font-size:10px" title="Macro conflict">⚠</span>' : "";
-    return `<tr style="${rowOpacity}">
+    const topGlow = idx === 0 && !item.conflict
+      ? (isLong ? "background:var(--green-soft);" : "background:var(--red-soft);")
+      : "";
+    return `<tr style="${rowOpacity}${topGlow}">
       <td style="${TD}font-family:var(--font-mono);color:var(--text-faint);font-size:11px">${idx + 1}</td>
       <td style="${TD}font-weight:700;font-size:14px">#${item.coin}${conflictIcon}</td>
       <td style="${TD}">${dirHtml}</td>
