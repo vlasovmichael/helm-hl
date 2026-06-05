@@ -3424,8 +3424,9 @@ function renderSmartSignals() {
   }, 0);
   const dataReady = collectorAgeH >= 48;
   const dataLabel = collectorAgeH < 1 ? "collecting…"
-    : collectorAgeH < 48 ? `warming up · ${collectorAgeH.toFixed(0)}h / 48h`
-    : collectorAgeH < 168 ? `${collectorAgeH.toFixed(0)}h data · OI 7d pending`
+    : collectorAgeH < 24 ? `warming up · ${collectorAgeH.toFixed(0)}h / 48h`
+    : collectorAgeH < 48 ? `almost ready · ${collectorAgeH.toFixed(0)}h / 48h`
+    : collectorAgeH < 168 ? `${collectorAgeH.toFixed(0)}h data · OI pending`
     : `${(collectorAgeH / 24).toFixed(0)}d data · full`;
 
   if (macroEl) {
