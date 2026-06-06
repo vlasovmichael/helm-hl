@@ -1624,8 +1624,9 @@ async function handleSetupScanner(_req, res) {
 
 const WHALE_DEFAULT_ADDRESS = "0x3ed4033676d0bdb3938728ca4ac673d00e74bd06";
 const WHALE_CACHE_TTL_MS = 30_000;
-const whaleCache = new Map();       // address → { ts, data }
-const whalePrevPositions = new Map(); // address → positions[]
+const whaleCache = new Map();          // address → { ts, data }
+const whalePrevPositions = new Map();  // address → positions[]
+const whaleFirstSeenAt = new Map();    // "addr:coin" → timestamp when position first detected
 
 // ntfy helper for whale alerts — separate topic from strategy alerts
 async function fireWhaleNtfy(title, message) {
@@ -1665,20 +1666,24 @@ async function fireWhaleNtfy(title, message) {
 function computeWhaleDelta(addr, newPositions) {
   const prev = whalePrevPositions.get(addr) ?? [];
   const delta = [];
+  const now = Date.now();
 
   const prevMap = new Map(prev.map((p) => [p.coin, p]));
   const newMap  = new Map(newPositions.map((p) => [p.coin, p]));
 
-  // Opened
+  // Opened — record firstSeenAt
   for (const [coin, p] of newMap) {
     if (!prevMap.has(coin)) {
+      const key = `${addr}:${coin}`;
+      if (!whaleFirstSeenAt.has(key)) whaleFirstSeenAt.set(key, now);
       delta.push({ coin, type: "opened", prevSizeUsd: null, sizeUsd: p.sizeUsd, side: p.side });
     }
   }
-  // Closed
+  // Closed — remove firstSeenAt
   for (const [coin, p] of prevMap) {
     if (!newMap.has(coin)) {
-      delta.push({ coin, type: "closed", prevSizeUsd: p.sizeUsd, sizeUsd: null, side: p.side });
+      whaleFirstSeenAt.delete(`${addr}:${coin}`);
+      delta.push({ coin, type: "closed", prevSizeUsd: p.sizeUsd, sizeUsd: null, side: p.side, closedAt: now });
     }
   }
   // Size changed >20%
@@ -1752,6 +1757,8 @@ async function handleWhaleWatch(req, res) {
         const uPnl = parseFloat(p.unrealizedPnl ?? "0");
         const lev = p.leverage?.value != null ? parseFloat(p.leverage.value) : null;
         const liqPx = p.liquidationPx != null ? parseFloat(p.liquidationPx) : null;
+        const key = `${addr}:${p.coin}`;
+        if (!whaleFirstSeenAt.has(key)) whaleFirstSeenAt.set(key, Date.now());
         return {
           coin: p.coin,
           side: szi < 0 ? "SHORT" : "LONG",
@@ -1762,6 +1769,7 @@ async function handleWhaleWatch(req, res) {
           leverage: Number.isFinite(lev) ? lev : null,
           liquidationPrice: Number.isFinite(liqPx) ? liqPx : null,
           leverageType: p.leverage?.type ?? null,
+          firstSeenAt: whaleFirstSeenAt.get(key),
         };
       });
 
@@ -1825,6 +1833,8 @@ async function fetchWhaleSingle(addr) {
       const entryPx = parseFloat(p.entryPx ?? "0");
       const uPnl = parseFloat(p.unrealizedPnl ?? "0");
       const lev = p.leverage?.value != null ? parseFloat(p.leverage.value) : null;
+      const key = `${addr}:${p.coin}`;
+      if (!whaleFirstSeenAt.has(key)) whaleFirstSeenAt.set(key, Date.now());
       return {
         coin: p.coin,
         side: szi < 0 ? "SHORT" : "LONG",
@@ -1833,6 +1843,7 @@ async function fetchWhaleSingle(addr) {
         sizeUsd: Math.abs(szi) * entryPx,
         unrealizedPnl: uPnl,
         leverage: Number.isFinite(lev) ? lev : null,
+        firstSeenAt: whaleFirstSeenAt.get(key),
       };
     });
 

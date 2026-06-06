@@ -3708,6 +3708,16 @@ function fmtNotional(v) {
   return `$${v.toFixed(0)}`;
 }
 
+function fmtSince(ts) {
+  if (!ts) return "—";
+  const diff = Math.max(0, Date.now() - ts);
+  const h = Math.floor(diff / 3_600_000);
+  const m = Math.floor((diff % 3_600_000) / 60_000);
+  if (h >= 24) return `${Math.floor(h / 24)}d${h % 24}h`;
+  if (h >= 1) return `${h}h${m}m`;
+  return `${m}m`;
+}
+
 function fmtPnlColored(v) {
   if (v == null || !Number.isFinite(v)) return `<span>—</span>`;
   const color = v >= 0 ? "var(--green)" : "var(--red)";
@@ -3797,7 +3807,7 @@ function renderWhaleWatch(results) {
   _wwDeltaMap = newDeltaMap;
 
   if (allRows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">нет открытых perp позиций</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">нет открытых perp позиций</td></tr>';
     if (biasEl) biasEl.textContent = "";
     if (footerEl) footerEl.textContent = "";
     // Re-render BTC Div to clear whale column
@@ -3836,6 +3846,7 @@ function renderWhaleWatch(results) {
       deltaBadge = `<span style="margin-left:4px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
     }
 
+    const sinceStr = p._closed ? "—" : fmtSince(p.firstSeenAt);
     const rowOpacity = p._closed ? "opacity:.5;" : "";
     return `<tr style="${rowOpacity}">
       <td style="color:var(--text-muted);font-size:12px">${escapeHtml(p.label)}</td>
@@ -3845,6 +3856,7 @@ function renderWhaleWatch(results) {
       <td class="r" style="color:var(--text-muted)">${levStr}</td>
       <td class="r">${fmtPnlColored(p.unrealizedPnl)}</td>
       <td class="r" style="color:var(--text-muted)">${escapeHtml(entryStr)}</td>
+      <td class="r" style="color:var(--text-faint);font-size:11px">${sinceStr}</td>
     </tr>`;
   }).join("");
 
@@ -3876,9 +3888,19 @@ async function fetchWhaleWatch() {
   try {
     const batch = await fetchJson(`/api/whale-watch/batch?addresses=${encodeURIComponent(addrs)}`);
     const byAddr = new Map((batch.results ?? []).map((r) => [r.address, r.data]));
-    renderWhaleWatch(list.map((w) => ({ label: w.label, address: w.address, data: byAddr.get(w.address) ?? null })));
+    const mapped = list.map((w) => ({ label: w.label, address: w.address, data: byAddr.get(w.address) ?? null }));
+    // If all addresses returned null data (API error), show error state
+    if (mapped.every((m) => !m.data)) {
+      const tbody = document.getElementById("ww-tbody");
+      if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="empty-state" style="color:var(--red)">ошибка загрузки — HL API медленный</td></tr>';
+      return;
+    }
+    renderWhaleWatch(mapped);
   } catch {
-    // silent — stale data stays
+    const tbody = document.getElementById("ww-tbody");
+    if (tbody && tbody.innerHTML.includes("загружаем")) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state" style="color:var(--red)">ошибка загрузки</td></tr>';
+    }
   }
 }
 

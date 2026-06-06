@@ -1476,6 +1476,10 @@ footer {
     -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zm.5 4a.5.5 0 0 0-1 0v4.25c0 .133.053.26.146.354l2.5 2.5a.5.5 0 0 0 .708-.708L8.5 8.043V4z'/></svg>");
     mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zm.5 4a.5.5 0 0 0-1 0v4.25c0 .133.053.26.146.354l2.5 2.5a.5.5 0 0 0 .708-.708L8.5 8.043V4z'/></svg>");
   }
+  .bottom-nav-btn[data-target="sec-whale"] .nav-icon {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M2 10c0-2.76 2.24-5 5-5 1.7 0 3.18.85 4.1 2.14C12.28 6.43 13.58 6 15 6v1.5c-1.1 0-2.1.47-2.82 1.22A4.99 4.99 0 0 1 7 10H2zm0 2h5a4 4 0 0 0 3.46-2H2v2z'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M2 10c0-2.76 2.24-5 5-5 1.7 0 3.18.85 4.1 2.14C12.28 6.43 13.58 6 15 6v1.5c-1.1 0-2.1.47-2.82 1.22A4.99 4.99 0 0 1 7 10H2zm0 2h5a4 4 0 0 0 3.46-2H2v2z'/></svg>");
+  }
   .bottom-nav-btn:active {
     transform: scale(0.96);
   }
@@ -2737,5 +2741,38 @@ footer {
 .toolkit-tile .help-btn {
   margin-left: 0;
   z-index: 2;
+}
+
+/* ──────────────────────── BTC Divergence — mobile compact */
+@media (max-width: 720px) {
+  #div-table th,
+  #div-table td {
+    padding: 6px 6px;
+    font-size: 12px;
+  }
+  /* Hide Price column on small screens — vs BTC is more actionable */
+  #div-table th:nth-child(2),
+  #div-table td:nth-child(2) {
+    display: none;
+  }
+}
+
+/* ──────────────────────── Whale Watch — mobile compact */
+@media (max-width: 720px) {
+  #ww-table th,
+  #ww-table td {
+    padding: 6px 6px;
+    font-size: 12px;
+  }
+  /* Hide Lev column on small screens */
+  #ww-table th:nth-child(5),
+  #ww-table td:nth-child(5) {
+    display: none;
+  }
+  /* Since column: shorter text */
+  #ww-table th:nth-child(8),
+  #ww-table td:nth-child(8) {
+    font-size: 10px;
+  }
 }
 
