@@ -125,6 +125,37 @@
         </div>
       </section>
 
+      <!-- 02.5 / Whale Watch -->
+      <section class="card" id="sec-whale">
+        <div class="card-header">
+          <div class="card-title" data-num="02.5" title="Perp-позиции произвольного HL-адреса. Обновляется раз в 30 секунд.">Whale Watch 🐋</div>
+          <span id="ww-bias" style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted)"></span>
+          <button id="ww-addr-btn" title="Сменить адрес" style="margin-left:auto;background:none;border:1px solid var(--hairline);border-radius:4px;color:var(--text-muted);font-size:10px;font-family:var(--font-mono);padding:2px 8px;cursor:pointer">⚙ addr</button>
+        </div>
+        <div id="ww-addr-row" style="display:none;padding:6px 10px;gap:6px;align-items:center">
+          <input id="ww-addr-input" type="text" placeholder="0x..." style="flex:1;background:var(--bg-card);border:1px solid var(--hairline);border-radius:4px;color:var(--text-primary);font-family:var(--font-mono);font-size:11px;padding:4px 8px" />
+          <button id="ww-addr-save" style="background:var(--accent,#6366f1);color:#fff;border:none;border-radius:4px;padding:4px 12px;font-size:11px;cursor:pointer">Save</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse" id="ww-table">
+            <thead>
+              <tr>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:left;border-bottom:1px solid var(--hairline)">Coin</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:right;border-bottom:1px solid var(--hairline)">Side</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:right;border-bottom:1px solid var(--hairline)">Size $</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:right;border-bottom:1px solid var(--hairline)">Lev</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:right;border-bottom:1px solid var(--hairline)" title="Unrealized P&L">uPnL $</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:right;border-bottom:1px solid var(--hairline)">Entry</th>
+              </tr>
+            </thead>
+            <tbody id="ww-tbody">
+              <tr><td colspan="6" class="empty-state">загружаем…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="ww-footer" style="padding:4px 10px 6px;font-size:10px;font-family:var(--font-mono);color:var(--text-faint)"></div>
+      </section>
+
       <!-- 03 / Live Logs -->
       <section class="card" id="sec-logs">
         <div class="card-header">

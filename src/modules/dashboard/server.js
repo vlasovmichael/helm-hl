@@ -1617,6 +1617,80 @@ async function handleSetupScanner(_req, res) {
   }
 }
 
+// ─────────────────────────────────────────────────
+//  Whale Watch — perp positions of any HL address
+// ─────────────────────────────────────────────────
+
+const WHALE_DEFAULT_ADDRESS = "0x3ed4033676d0bdb3938728ca4ac673d00e74bd06";
+const WHALE_CACHE_TTL_MS = 30_000;
+const whaleCache = new Map(); // address → { ts, data }
+
+async function handleWhaleWatch(req, res) {
+  const addr = (req.query.address || WHALE_DEFAULT_ADDRESS).toLowerCase().trim();
+  if (!/^0x[0-9a-f]{40}$/.test(addr)) {
+    return res.status(400).json({ error: "Invalid address format" });
+  }
+
+  const cached = whaleCache.get(addr);
+  if (cached && Date.now() - cached.ts < WHALE_CACHE_TTL_MS) {
+    return res.json(cached.data);
+  }
+
+  try {
+    const state = await hlInfo(
+      { type: "clearinghouseState", user: addr },
+      { label: "dash/whaleWatch", timeoutMs: 8_000, maxRetries: 2 },
+    );
+
+    const positions = (state?.assetPositions ?? [])
+      .map((ap) => ap?.position)
+      .filter((p) => p?.coin && parseFloat(p.szi ?? "0") !== 0)
+      .map((p) => {
+        const szi = parseFloat(p.szi ?? "0");
+        const entryPx = parseFloat(p.entryPx ?? "0");
+        const uPnl = parseFloat(p.unrealizedPnl ?? "0");
+        const lev = p.leverage?.value != null ? parseFloat(p.leverage.value) : null;
+        const liqPx = p.liquidationPx != null ? parseFloat(p.liquidationPx) : null;
+        return {
+          coin: p.coin,
+          side: szi < 0 ? "SHORT" : "LONG",
+          szi: Math.abs(szi),
+          entryPrice: entryPx,
+          sizeUsd: Math.abs(szi) * entryPx,
+          unrealizedPnl: uPnl,
+          leverage: Number.isFinite(lev) ? lev : null,
+          liquidationPrice: Number.isFinite(liqPx) ? liqPx : null,
+          leverageType: p.leverage?.type ?? null,
+        };
+      });
+
+    // Direction bias: % of total notional that's SHORT vs LONG
+    const totalNotional = positions.reduce((s, p) => s + p.sizeUsd, 0);
+    const shortNotional = positions.filter((p) => p.side === "SHORT").reduce((s, p) => s + p.sizeUsd, 0);
+    const longNotional = totalNotional - shortNotional;
+    const bias = totalNotional > 0
+      ? { shortPct: (shortNotional / totalNotional) * 100, longPct: (longNotional / totalNotional) * 100 }
+      : null;
+
+    const data = {
+      address: addr,
+      ts: Date.now(),
+      count: positions.length,
+      positions,
+      totalNotional,
+      totalUnrealizedPnl: positions.reduce((s, p) => s + p.unrealizedPnl, 0),
+      bias,
+    };
+    whaleCache.set(addr, { ts: Date.now(), data });
+    res.json(data);
+  } catch (err) {
+    logger.warn(`[Dashboard] /api/whale-watch error: ${err.message}`);
+    const stale = whaleCache.get(addr);
+    if (stale) return res.json({ ...stale.data, stale: true });
+    res.status(500).json({ error: err.message });
+  }
+}
+
 async function handleTaxSummary(req, res) {
   try {
     const yearParam = req.query.year ? parseInt(req.query.year, 10) : null;
@@ -1725,6 +1799,7 @@ export function startDashboard() {
   app.get("/api/trade-markers", handleTradeMarkers);
   app.get("/api/btc-divergence", handleBtcDivergence);
   app.get("/api/btc-divergence/all", handleBtcDivergenceAll);
+  app.get("/api/whale-watch", handleWhaleWatch);
 
   // Debug: посмотреть что реально выдаёт getManualTrades() — для расследования
   // багов в reconstructManualTrades. JSON со списком всех восстановленных

@@ -3668,3 +3668,116 @@ tick();
 setInterval(tick, REFRESH_MS);
 setInterval(renderFooter, 1000);
 
+// ── Whale Watch ──────────────────────────────────
+
+const WW_DEFAULT_ADDRESS = "0x3ed4033676d0bdb3938728ca4ac673d00e74bd06";
+const WW_STORAGE_KEY = "ww-address";
+
+function wwGetAddress() {
+  return localStorage.getItem(WW_STORAGE_KEY) || WW_DEFAULT_ADDRESS;
+}
+
+function fmtNotional(v) {
+  if (v == null || !Number.isFinite(v)) return "—";
+  if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(v) >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
+  return `$${v.toFixed(0)}`;
+}
+
+function fmtPnlColored(v) {
+  if (v == null || !Number.isFinite(v)) return `<span>—</span>`;
+  const color = v >= 0 ? "var(--green)" : "var(--red)";
+  const sign = v >= 0 ? "+" : "";
+  return `<span style="color:${color}">${sign}${fmtNotional(v)}</span>`;
+}
+
+function renderWhaleWatch(data) {
+  const tbody = document.getElementById("ww-tbody");
+  const biasEl = document.getElementById("ww-bias");
+  const footerEl = document.getElementById("ww-footer");
+  if (!tbody) return;
+
+  if (!data || data.count === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">нет открытых perp позиций</td></tr>';
+    if (biasEl) biasEl.textContent = "";
+    if (footerEl) footerEl.textContent = "";
+    return;
+  }
+
+  const sorted = [...data.positions].sort((a, b) => b.sizeUsd - a.sizeUsd);
+
+  tbody.innerHTML = sorted.map((p) => {
+    const sideColor = p.side === "SHORT" ? "var(--red)" : "var(--green)";
+    const levStr = p.leverage != null ? `${p.leverage}×` : "—";
+    const entryStr = p.entryPrice >= 1000
+      ? p.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })
+      : p.entryPrice.toFixed(4);
+    return `<tr>
+      <td style="font-weight:600">${escapeHtml(p.coin)}</td>
+      <td style="text-align:right;color:${sideColor};font-weight:700">${p.side}</td>
+      <td style="text-align:right;font-family:var(--font-mono)">${fmtNotional(p.sizeUsd)}</td>
+      <td style="text-align:right;font-family:var(--font-mono)">${levStr}</td>
+      <td style="text-align:right;font-family:var(--font-mono)">${fmtPnlColored(p.unrealizedPnl)}</td>
+      <td style="text-align:right;font-family:var(--font-mono);color:var(--text-muted)">${escapeHtml(entryStr)}</td>
+    </tr>`;
+  }).join("");
+
+  if (biasEl && data.bias) {
+    const s = data.bias.shortPct.toFixed(0);
+    const l = data.bias.longPct.toFixed(0);
+    const col = data.bias.shortPct > 60 ? "var(--red)" : data.bias.longPct > 60 ? "var(--green)" : "var(--text-muted)";
+    biasEl.style.color = col;
+    biasEl.textContent = `SHORT ${s}% · LONG ${l}% · total ${fmtNotional(data.totalNotional)} · uPnL ${data.totalUnrealizedPnl >= 0 ? "+" : ""}${fmtNotional(data.totalUnrealizedPnl)}`;
+  } else if (biasEl) {
+    biasEl.textContent = "";
+  }
+
+  if (footerEl) {
+    const addr = data.address;
+    const short = `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+    const age = data.ts ? Math.round((Date.now() - data.ts) / 1000) : null;
+    const staleNote = data.stale ? " ⚠ stale" : "";
+    footerEl.textContent = `addr: ${short}${staleNote}${age != null ? ` · ${age}s ago` : ""}`;
+  }
+}
+
+async function fetchWhaleWatch() {
+  try {
+    const addr = wwGetAddress();
+    const data = await fetchJson(`/api/whale-watch?address=${encodeURIComponent(addr)}`);
+    renderWhaleWatch(data);
+  } catch {
+    // silent — stale data stays visible
+  }
+}
+
+// Address editor UI
+(function initWhaleWatchUi() {
+  const btn = document.getElementById("ww-addr-btn");
+  const row = document.getElementById("ww-addr-row");
+  const input = document.getElementById("ww-addr-input");
+  const save = document.getElementById("ww-addr-save");
+  if (!btn || !row || !input || !save) return;
+
+  btn.addEventListener("click", () => {
+    const visible = row.style.display !== "none";
+    row.style.display = visible ? "none" : "flex";
+    if (!visible) input.value = wwGetAddress();
+  });
+
+  save.addEventListener("click", () => {
+    const val = input.value.trim().toLowerCase();
+    if (/^0x[0-9a-f]{40}$/.test(val)) {
+      localStorage.setItem(WW_STORAGE_KEY, val);
+      row.style.display = "none";
+      fetchWhaleWatch();
+    } else {
+      input.style.borderColor = "var(--red)";
+      setTimeout(() => { input.style.borderColor = ""; }, 1500);
+    }
+  });
+})();
+
+fetchWhaleWatch();
+setInterval(fetchWhaleWatch, 30_000);
+
