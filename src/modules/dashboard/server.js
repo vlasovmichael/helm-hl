@@ -1801,6 +1801,82 @@ async function handleWhaleWatch(req, res) {
 }
 
 // ─────────────────────────────────────────────────
+//  Whale Watch Batch — fetch multiple addresses in one request
+//  Uses direct axios (NOT hlInfo semaphore) so it never blocks Scout.
+//  Sequential with 80ms gap to stay within HL rate limits.
+// ─────────────────────────────────────────────────
+
+async function fetchWhaleSingle(addr) {
+  const cached = whaleCache.get(addr);
+  if (cached && Date.now() - cached.ts < WHALE_CACHE_TTL_MS) {
+    return cached.data;
+  }
+  const resp = await axios.post(
+    "https://api.hyperliquid.xyz/info",
+    { type: "clearinghouseState", user: addr },
+    { timeout: 10_000, headers: { "Content-Type": "application/json" } },
+  );
+  const state = resp.data;
+  const positions = (state?.assetPositions ?? [])
+    .map((ap) => ap?.position)
+    .filter((p) => p?.coin && parseFloat(p.szi ?? "0") !== 0)
+    .map((p) => {
+      const szi = parseFloat(p.szi ?? "0");
+      const entryPx = parseFloat(p.entryPx ?? "0");
+      const uPnl = parseFloat(p.unrealizedPnl ?? "0");
+      const lev = p.leverage?.value != null ? parseFloat(p.leverage.value) : null;
+      return {
+        coin: p.coin,
+        side: szi < 0 ? "SHORT" : "LONG",
+        szi: Math.abs(szi),
+        entryPrice: entryPx,
+        sizeUsd: Math.abs(szi) * entryPx,
+        unrealizedPnl: uPnl,
+        leverage: Number.isFinite(lev) ? lev : null,
+      };
+    });
+
+  const totalNotional = positions.reduce((s, p) => s + p.sizeUsd, 0);
+  const shortNotional = positions.filter((p) => p.side === "SHORT").reduce((s, p) => s + p.sizeUsd, 0);
+  const bias = totalNotional > 0
+    ? { shortPct: (shortNotional / totalNotional) * 100, longPct: ((totalNotional - shortNotional) / totalNotional) * 100 }
+    : null;
+
+  const delta = computeWhaleDelta(addr, positions);
+  whalePrevPositions.set(addr, positions);
+  if (delta.length > 0) maybeFireWhaleDeltaAlerts(addr, delta).catch(() => {});
+
+  const data = {
+    address: addr, ts: Date.now(), count: positions.length, positions,
+    totalNotional, totalUnrealizedPnl: positions.reduce((s, p) => s + p.unrealizedPnl, 0),
+    bias, delta,
+  };
+  whaleCache.set(addr, { ts: Date.now(), data });
+  return data;
+}
+
+async function handleWhaleWatchBatch(req, res) {
+  const raw = (req.query.addresses || "").split(",").map((a) => a.trim().toLowerCase()).filter(Boolean);
+  const addrs = raw.filter((a) => /^0x[0-9a-f]{40}$/.test(a)).slice(0, 50);
+  if (addrs.length === 0) return res.status(400).json({ error: "No valid addresses" });
+
+  const results = [];
+  for (const addr of addrs) {
+    try {
+      const data = await fetchWhaleSingle(addr);
+      results.push({ address: addr, data });
+    } catch (err) {
+      const stale = whaleCache.get(addr);
+      results.push({ address: addr, data: stale ? { ...stale.data, stale: true } : null, error: err.message });
+    }
+    // small gap between sequential requests to respect HL rate limits
+    if (addrs.indexOf(addr) < addrs.length - 1) await new Promise((r) => setTimeout(r, 80));
+  }
+
+  res.json({ ts: Date.now(), count: results.length, results });
+}
+
+// ─────────────────────────────────────────────────
 //  HL Leaderboard — top accounts by accountValue
 // ─────────────────────────────────────────────────
 
@@ -1955,6 +2031,7 @@ export function startDashboard() {
   app.get("/api/btc-divergence", handleBtcDivergence);
   app.get("/api/btc-divergence/all", handleBtcDivergenceAll);
   app.get("/api/whale-watch", handleWhaleWatch);
+  app.get("/api/whale-watch/batch", handleWhaleWatchBatch);
   app.get("/api/whale-leaderboard", handleWhaleLeaderboard);
 
   // Debug: посмотреть что реально выдаёт getManualTrades() — для расследования

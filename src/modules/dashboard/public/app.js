@@ -3575,13 +3575,15 @@ function divRenderRows(coins, btcPct, hasPast) {
     const { relColor, coinColor, signal, signalColor, isBtc } = divSignalInfo(c, btcPct, hasPast);
     const rel = c.relPct;
     const whaleEntries = _wwPositionsMap.get(c.coin.toUpperCase());
-    const whaleCell = whaleEntries
-      ? whaleEntries.map((w) => {
-          const col = w.side === "SHORT" ? "var(--red)" : "var(--green)";
-          const arr = w.side === "SHORT" ? "↓" : "↑";
-          return `<span style="color:${col};font-weight:700">${arr}${fmtNotional(w.sizeUsd)}</span>`;
-        }).join(" ")
-      : "";
+    let whaleCell = "";
+    if (whaleEntries?.length) {
+      const shortSum = whaleEntries.filter((w) => w.side === "SHORT").reduce((s, w) => s + w.sizeUsd, 0);
+      const longSum  = whaleEntries.filter((w) => w.side === "LONG").reduce((s, w) => s + w.sizeUsd, 0);
+      const parts = [];
+      if (shortSum > 0) parts.push(`<span style="color:var(--red);font-weight:700">↓${fmtNotional(shortSum)}</span>`);
+      if (longSum  > 0) parts.push(`<span style="color:var(--green);font-weight:700">↑${fmtNotional(longSum)}</span>`);
+      whaleCell = parts.join(" ");
+    }
     return `<tr>
       <td style="font-weight:600">${c.coin}</td>
       <td class="r">${fmtPrice(c.price)}</td>
@@ -3596,7 +3598,7 @@ function divRenderRows(coins, btcPct, hasPast) {
 async function divFetchAll() {
   const win = _divWindow === "all" ? "15m" : _divWindow;
   const tbody = document.getElementById("div-tbody");
-  if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="empty-state">загружаем все монеты…</td></tr>`;
+  if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="empty-state">загружаем все монеты…</td></tr>`;
   try {
     const d = await fetchJson(`/api/btc-divergence/all?window=${win}`);
     if (!d?.coins) return;
@@ -3867,16 +3869,17 @@ function renderWhaleWatch(results) {
 async function fetchWhaleWatch() {
   const list = wwGetList();
   wwRenderChips();
-  const results = await Promise.allSettled(
-    list.map((w) => fetchJson(`/api/whale-watch?address=${encodeURIComponent(w.address)}`))
-  );
-  renderWhaleWatch(
-    list.map((w, i) => ({
-      label: w.label,
-      address: w.address,
-      data: results[i].status === "fulfilled" ? results[i].value : null,
-    }))
-  );
+  if (list.length === 0) { renderWhaleWatch([]); return; }
+
+  // Single batch request — sequential on the server, doesn't block hlInfo semaphore
+  const addrs = list.map((w) => w.address).join(",");
+  try {
+    const batch = await fetchJson(`/api/whale-watch/batch?addresses=${encodeURIComponent(addrs)}`);
+    const byAddr = new Map((batch.results ?? []).map((r) => [r.address, r.data]));
+    renderWhaleWatch(list.map((w) => ({ label: w.label, address: w.address, data: byAddr.get(w.address) ?? null })));
+  } catch {
+    // silent — stale data stays
+  }
 }
 
 // Add address form UI
