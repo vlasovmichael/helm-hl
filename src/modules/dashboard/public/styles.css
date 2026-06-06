@@ -1116,6 +1116,36 @@ footer {
   color: var(--text-muted);
 }
 
+/* Shared data table used by BTC Divergence and Whale Watch */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+.data-table th {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--hairline);
+  text-align: left;
+  white-space: nowrap;
+}
+.data-table th.r { text-align: right; }
+.data-table th.c { text-align: center; }
+.data-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--hairline);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.data-table td.r { text-align: right; }
+.data-table td.c { text-align: center; }
+.data-table tbody tr:hover { background: var(--card-bg-hover, rgba(255,255,255,.03)); }
+
 .signals-status {
   display: inline-block;
   padding: 1px 8px;

@@ -3560,23 +3560,17 @@ function divSignalInfo(c, btcPct, hasPast) {
     : c.coinPct > 0 ? "var(--green)" : c.coinPct < 0 ? "var(--red)" : "var(--text-muted)";
   let signal = "—";
   if (hasPast && rel != null && btcPct != null && !isBtc) {
-    if (btcPct > 0.3 && rel <= -1.5) signal = "SHORT ↓";
-    else if (btcPct < -0.3 && rel >= 1.5) signal = "LONG ↑";
-    else if (Math.abs(rel) >= 0.8) signal = rel < 0 ? "weak" : "strong";
+    if (btcPct > 0.3 && rel <= -1.5) signal = "SHORT";
+    else if (btcPct < -0.3 && rel >= 1.5) signal = "LONG";
   }
-  const signalColor = signal.startsWith("SHORT") ? "var(--red)"
-    : signal.startsWith("LONG") ? "var(--green)"
-    : signal === "weak" ? "color-mix(in srgb, var(--red) 60%, var(--text-muted))"
-    : signal === "strong" ? "color-mix(in srgb, var(--green) 60%, var(--text-muted))"
+  const signalColor = signal === "SHORT" ? "var(--red)"
+    : signal === "LONG" ? "var(--green)"
     : "var(--text-faint)";
   return { relColor, coinColor, signal, signalColor, isBtc };
 }
 
 function divRenderRows(coins, btcPct, hasPast) {
   const fmtPct = (v) => v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(2)}%`;
-  const TD  = "padding:6px 10px;border-bottom:1px solid var(--hairline);font-family:var(--font-mono);font-size:12px;";
-  const TDR = TD + "text-align:right;";
-  const TDC = TD + "text-align:center;";
   return coins.map((c) => {
     const { relColor, coinColor, signal, signalColor, isBtc } = divSignalInfo(c, btcPct, hasPast);
     const rel = c.relPct;
@@ -3589,12 +3583,12 @@ function divRenderRows(coins, btcPct, hasPast) {
         }).join(" ")
       : "";
     return `<tr>
-      <td style="${TD}font-weight:600">${c.coin}</td>
-      <td style="${TDR}">${fmtPrice(c.price)}</td>
-      <td style="${TDR}color:${coinColor}">${hasPast ? fmtPct(c.coinPct) : "—"}</td>
-      <td style="${TDR}color:${relColor};font-weight:${Math.abs(rel ?? 0) >= 1.5 ? 600 : 400}">${hasPast && !isBtc ? fmtPct(rel) : isBtc ? "baseline" : "—"}</td>
-      <td style="${TDC}color:${signalColor};font-weight:600;font-size:11px">${signal}</td>
-      <td style="${TDR}font-size:11px">${whaleCell}</td>
+      <td style="font-weight:600">${c.coin}</td>
+      <td class="r">${fmtPrice(c.price)}</td>
+      <td class="r" style="color:${coinColor}">${hasPast ? fmtPct(c.coinPct) : "—"}</td>
+      <td class="r" style="color:${relColor};font-weight:${Math.abs(rel ?? 0) >= 1.5 ? 600 : 400}">${hasPast && !isBtc ? fmtPct(rel) : isBtc ? "baseline" : "—"}</td>
+      <td class="c" style="color:${signalColor};font-weight:700">${signal}</td>
+      <td class="r">${whaleCell}</td>
     </tr>`;
   }).join("");
 }
@@ -3778,9 +3772,6 @@ function renderWhaleWatch(results) {
 
   allRows.sort((a, b) => b.sizeUsd - a.sizeUsd);
 
-  const TD  = "padding:7px 10px;border-bottom:1px solid var(--hairline);font-family:var(--font-mono);font-size:13px;";
-  const TDR = TD + "text-align:right;";
-
   tbody.innerHTML = allRows.map((p) => {
     const sideColor = p.side === "SHORT" ? "var(--red)" : "var(--green)";
     const levStr = p.leverage != null ? `${p.leverage}×` : "—";
@@ -3790,13 +3781,13 @@ function renderWhaleWatch(results) {
         ? p.entryPrice.toFixed(2)
         : p.entryPrice.toFixed(5);
     return `<tr>
-      <td style="${TD}color:var(--text-muted);font-size:11px">${escapeHtml(p.label)}</td>
-      <td style="${TD}font-weight:700">${escapeHtml(p.coin)}</td>
-      <td style="${TDR}color:${sideColor};font-weight:700">${p.side}</td>
-      <td style="${TDR}">${fmtNotional(p.sizeUsd)}</td>
-      <td style="${TDR}color:var(--text-muted)">${levStr}</td>
-      <td style="${TDR}">${fmtPnlColored(p.unrealizedPnl)}</td>
-      <td style="${TDR}color:var(--text-muted)">${escapeHtml(entryStr)}</td>
+      <td style="color:var(--text-muted);font-size:12px">${escapeHtml(p.label)}</td>
+      <td style="font-weight:700">${escapeHtml(p.coin)}</td>
+      <td class="r" style="color:${sideColor};font-weight:700">${p.side}</td>
+      <td class="r">${fmtNotional(p.sizeUsd)}</td>
+      <td class="r" style="color:var(--text-muted)">${levStr}</td>
+      <td class="r">${fmtPnlColored(p.unrealizedPnl)}</td>
+      <td class="r" style="color:var(--text-muted)">${escapeHtml(entryStr)}</td>
     </tr>`;
   }).join("");
 
