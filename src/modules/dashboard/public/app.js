@@ -26,6 +26,7 @@ let _lastSetupRowsCache = [];
 let _macroPct = null;
 let _macroFetchedAt = 0;
 let _btcMomentum1m = null;
+let _tickReady = false; // true after first tick() completes — prevents half-baked SmartSignals renders
 let equityChart = null;
 let priceChart = null;
 let priceSeries = null;
@@ -1654,6 +1655,7 @@ async function tick() {
     }
   }
   await fetchMacroIfStale();
+  _tickReady = true;
   renderSmartSignals();
   if (pnlR.status === "fulfilled") {
     lastPnlSummary = pnlR.value;
@@ -2479,7 +2481,7 @@ function renderChillBoySignals(signals) {
 // ── Candy Girl — signal-only радар (1h EMA-тренд + 5m pullback-reclaim) ──────
 function renderCandyGirl(cg) {
   _cgSignalsCache = Array.isArray(cg?.signals) ? cg.signals : [];
-  renderSmartSignals();
+  if (_tickReady) renderSmartSignals();
 
   const card = document.getElementById("sec-candygirl");
   if (!card) return;
