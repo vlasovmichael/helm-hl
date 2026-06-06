@@ -3694,6 +3694,9 @@ let _wwPositionsMap = new Map();
 // Map<"address:coin", delta> — cleared on next poll if no new delta
 let _wwDeltaMap = new Map();
 
+// True after first successful render — prevents error from overwriting real data on poll failure
+let _wwHasData = false;
+
 function wwGetList() {
   try {
     const raw = localStorage.getItem(WW_STORAGE_KEY);
@@ -3761,6 +3764,7 @@ let _wwLastResults = null;
 
 function renderWhaleWatch(results) {
   _wwLastResults = results;
+  _wwHasData = true;
   const tbody = document.getElementById("ww-tbody");
   const biasEl = document.getElementById("ww-bias");
   const footerEl = document.getElementById("ww-footer");
@@ -3916,17 +3920,18 @@ async function fetchWhaleWatch() {
     const batch = await fetchJson(`/api/whale-watch/batch?addresses=${encodeURIComponent(addrs)}`);
     const byAddr = new Map((batch.results ?? []).map((r) => [r.address, r.data]));
     const mapped = list.map((w) => ({ label: w.label, address: w.address, data: byAddr.get(w.address) ?? null }));
-    // If all addresses returned null data (API error), show error state
     if (mapped.every((m) => !m.data)) {
-      const tbody = document.getElementById("ww-tbody");
-      if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="empty-state" style="color:var(--red)">ошибка загрузки — HL API медленный</td></tr>';
+      if (!_wwHasData) {
+        const tbody = document.getElementById("ww-tbody");
+        if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="empty-state" style="color:var(--red)">ошибка загрузки — HL API недоступен</td></tr>';
+      }
       return;
     }
     renderWhaleWatch(mapped);
-  } catch {
-    const tbody = document.getElementById("ww-tbody");
-    if (tbody && tbody.innerHTML.includes("загружаем")) {
-      tbody.innerHTML = '<tr><td colspan="8" class="empty-state" style="color:var(--red)">ошибка загрузки</td></tr>';
+  } catch (err) {
+    if (!_wwHasData) {
+      const tbody = document.getElementById("ww-tbody");
+      if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state" style="color:var(--red)">ошибка: ${err?.message ?? "неизвестно"}</td></tr>`;
     }
   }
 }

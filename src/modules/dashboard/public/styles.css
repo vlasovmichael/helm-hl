@@ -2759,9 +2759,14 @@ footer {
     padding: 6px 6px;
     font-size: 12px;
   }
-  /* Hide Price column on small screens — vs BTC is more actionable */
+  /* Hide Price column — vs BTC is more actionable */
   #div-table th:nth-child(2),
   #div-table td:nth-child(2) {
+    display: none;
+  }
+  /* Hide Whale column — dedicated section in nav */
+  #div-table th:nth-child(6),
+  #div-table td:nth-child(6) {
     display: none;
   }
 }
