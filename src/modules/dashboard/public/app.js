@@ -985,6 +985,15 @@ function fmtUsd(n) {
 function fmtPct(n) {
   return `${(n || 0).toFixed(2)}%`;
 }
+function fmtPrice(p) {
+  if (p == null || !Number.isFinite(Number(p))) return "—";
+  p = Number(p);
+  if (p >= 10000) return `$${p.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  if (p >= 1000) return `$${p.toFixed(1)}`;
+  if (p >= 100) return `$${p.toFixed(2)}`;
+  if (p >= 1) return `$${p.toFixed(4)}`;
+  return `$${p.toPrecision(4)}`;
+}
 function escapeHtml(s) {
   return String(s || "").replace(
     /[&<>"']/g,
@@ -1062,7 +1071,7 @@ function renderPosition(pos) {
     <div class="data-grid">
       <div class="grid-item"><div class="item-label">Coin · Side</div><div class="item-value highlight">#${pos.coin} <span class="${sideCls}" style="font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px; margin-left:4px;">${side}</span></div></div>
       <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(pos.sizeUsd)}</div></div>
-      <div class="grid-item"><div class="item-label">Entry</div><div class="item-value">$${pos.entryPrice}</div></div>
+      <div class="grid-item"><div class="item-label">Entry</div><div class="item-value">${fmtPrice(pos.entryPrice)}</div></div>
       <div class="grid-item"><div class="item-label">APY · Held</div><div class="item-value">${fmtPct(pos.entryApy)} · ${pos.heldHours.toFixed(1)}h</div></div>
     </div>${pnlBlock}`;
 }
@@ -1079,9 +1088,9 @@ function renderManualPositions(list) {
   const blocks = list
     .map((p) => {
       const sideCls = p.side === "SHORT" ? "negative" : "positive";
-      const liq = p.liquidationPrice != null ? `$${p.liquidationPrice}` : "—";
+      const liq = p.liquidationPrice != null ? fmtPrice(p.liquidationPrice) : "—";
       const lev = p.leverage != null ? `${p.leverage}x` : "—";
-      const cur = p.currentPrice != null ? `$${p.currentPrice}` : "—";
+      const cur = p.currentPrice != null ? fmtPrice(p.currentPrice) : "—";
       return `
       <div style="margin-top:0.75rem; padding:0.75rem; border:1px dashed var(--border); border-radius:8px;">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:0.5rem;">
@@ -1091,7 +1100,7 @@ function renderManualPositions(list) {
         </div>
         <div class="data-grid">
           <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}</div></div>
-          <div class="grid-item"><div class="item-label">Entry · Now</div><div class="item-value">$${p.entryPrice} · ${cur}</div></div>
+          <div class="grid-item"><div class="item-label">Entry · Now</div><div class="item-value">${fmtPrice(p.entryPrice)} · ${cur}</div></div>
           <div class="grid-item"><div class="item-label">uPnL</div><div class="item-value ${cls(p.unrealizedPnl)}">${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}</div></div>
           <div class="grid-item"><div class="item-label">Liq</div><div class="item-value">${liq}</div></div>
         </div>
