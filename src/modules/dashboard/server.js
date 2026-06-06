@@ -1851,7 +1851,7 @@ export function startDashboard() {
       ws.send(JSON.stringify({ type: "status", data }));
       ws.send(JSON.stringify({ type: "logs:init", entries: getLogBuffer() }));
       if (divergenceSnapshots.length > 0) {
-        ws.send(JSON.stringify({ type: "btc-divergence", data: buildDivergencePayload() }));
+        ws.send(JSON.stringify({ type: "btc-divergence", data: buildDivergencePayload(DIVERGENCE_WATCHLIST) }));
       }
     } catch (err) {
       logger.error(`[Dashboard] WS initial send failed: ${err.message}`);
