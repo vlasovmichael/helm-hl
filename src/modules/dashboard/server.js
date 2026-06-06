@@ -8,6 +8,7 @@ import crypto from "node:crypto";
 import { WebSocketServer } from "ws";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import axios from "axios";
 import { config } from "../../core/config.js";
 import { logger, getLogBuffer, subscribeLogs } from "../../core/logger.js";
 import { hlInfo } from "../../core/hlClient.js";
@@ -1623,7 +1624,107 @@ async function handleSetupScanner(_req, res) {
 
 const WHALE_DEFAULT_ADDRESS = "0x3ed4033676d0bdb3938728ca4ac673d00e74bd06";
 const WHALE_CACHE_TTL_MS = 30_000;
-const whaleCache = new Map(); // address → { ts, data }
+const whaleCache = new Map();       // address → { ts, data }
+const whalePrevPositions = new Map(); // address → positions[]
+
+// ntfy helper for whale alerts — separate topic from strategy alerts
+async function fireWhaleNtfy(title, message) {
+  const { url, topic, token } = config.ntfy;
+  if (!url || !url.startsWith("https://")) return;  // skip docker-internal or missing
+  const whaleTopic = process.env.NTFY_TOPIC_WHALE || topic;
+  if (!whaleTopic) return;
+  try {
+    const { default: https } = await import("node:https");
+    const body = JSON.stringify({
+      topic: whaleTopic,
+      title,
+      message,
+      priority: 4,
+      tags: ["whale"],
+    });
+    const u = new URL(`${url}/`);
+    const headers = {
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(body),
+    };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    await new Promise((resolve, reject) => {
+      const req = https.request(
+        { hostname: u.hostname, port: u.port || 443, path: "/", method: "POST", headers },
+        (res) => { res.resume(); res.on("end", resolve); },
+      );
+      req.on("error", reject);
+      req.write(body);
+      req.end();
+    });
+  } catch (err) {
+    logger.debug(`[Dashboard] whale ntfy failed: ${err.message}`);
+  }
+}
+
+function computeWhaleDelta(addr, newPositions) {
+  const prev = whalePrevPositions.get(addr) ?? [];
+  const delta = [];
+
+  const prevMap = new Map(prev.map((p) => [p.coin, p]));
+  const newMap  = new Map(newPositions.map((p) => [p.coin, p]));
+
+  // Opened
+  for (const [coin, p] of newMap) {
+    if (!prevMap.has(coin)) {
+      delta.push({ coin, type: "opened", prevSizeUsd: null, sizeUsd: p.sizeUsd, side: p.side });
+    }
+  }
+  // Closed
+  for (const [coin, p] of prevMap) {
+    if (!newMap.has(coin)) {
+      delta.push({ coin, type: "closed", prevSizeUsd: p.sizeUsd, sizeUsd: null, side: p.side });
+    }
+  }
+  // Size changed >20%
+  for (const [coin, p] of newMap) {
+    const old = prevMap.get(coin);
+    if (!old) continue;
+    if (old.sizeUsd === 0) continue;
+    const pctChange = (p.sizeUsd - old.sizeUsd) / old.sizeUsd;
+    if (Math.abs(pctChange) >= 0.2) {
+      delta.push({
+        coin,
+        type: pctChange > 0 ? "size_up" : "size_down",
+        prevSizeUsd: old.sizeUsd,
+        sizeUsd: p.sizeUsd,
+        side: p.side,
+      });
+    }
+  }
+
+  return delta;
+}
+
+function fmtWhaleNotional(v) {
+  if (v == null) return "?";
+  if (Math.abs(v) >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`;
+  if (Math.abs(v) >= 1_000) return `$${(v / 1_000).toFixed(0)}K`;
+  return `$${v.toFixed(0)}`;
+}
+
+async function maybeFireWhaleDeltaAlerts(addr, delta) {
+  const shortAddr = `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+  for (const d of delta) {
+    const isSignificant = d.type === "opened" || d.type === "closed"
+      || (d.sizeUsd != null && d.sizeUsd >= 500_000)
+      || (d.prevSizeUsd != null && d.prevSizeUsd >= 500_000);
+    if (!isSignificant) continue;
+
+    const emoji = d.type === "opened" ? "🐋" : d.type === "closed" ? "🔴" : d.type === "size_up" ? "📈" : "📉";
+    const sizeStr = d.sizeUsd != null ? fmtWhaleNotional(d.sizeUsd) : fmtWhaleNotional(d.prevSizeUsd);
+    const title = `${emoji} Whale ${shortAddr} ${d.type.replace("_", " ")} ${d.coin} ${d.side} ${sizeStr}`;
+    const message = d.prevSizeUsd != null && d.sizeUsd != null
+      ? `${fmtWhaleNotional(d.prevSizeUsd)} → ${fmtWhaleNotional(d.sizeUsd)}`
+      : `Size: ${sizeStr}`;
+    await fireWhaleNtfy(title, message);
+  }
+}
 
 async function handleWhaleWatch(req, res) {
   const addr = (req.query.address || WHALE_DEFAULT_ADDRESS).toLowerCase().trim();
@@ -1672,6 +1773,13 @@ async function handleWhaleWatch(req, res) {
       ? { shortPct: (shortNotional / totalNotional) * 100, longPct: (longNotional / totalNotional) * 100 }
       : null;
 
+    // Delta tracking — only computed on fresh fetch (TTL expired)
+    const delta = computeWhaleDelta(addr, positions);
+    whalePrevPositions.set(addr, positions);
+    if (delta.length > 0) {
+      maybeFireWhaleDeltaAlerts(addr, delta).catch(() => {});
+    }
+
     const data = {
       address: addr,
       ts: Date.now(),
@@ -1680,6 +1788,7 @@ async function handleWhaleWatch(req, res) {
       totalNotional,
       totalUnrealizedPnl: positions.reduce((s, p) => s + p.unrealizedPnl, 0),
       bias,
+      delta,
     };
     whaleCache.set(addr, { ts: Date.now(), data });
     res.json(data);
@@ -1687,6 +1796,52 @@ async function handleWhaleWatch(req, res) {
     logger.warn(`[Dashboard] /api/whale-watch error: ${err.message}`);
     const stale = whaleCache.get(addr);
     if (stale) return res.json({ ...stale.data, stale: true });
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// ─────────────────────────────────────────────────
+//  HL Leaderboard — top accounts by accountValue
+// ─────────────────────────────────────────────────
+
+const LEADERBOARD_URL = "https://stats-data.hyperliquid.xyz/Mainnet/leaderboard";
+const LEADERBOARD_CACHE_TTL_MS = 10 * 60_000;
+let leaderboardCache = { ts: 0, data: null };
+
+async function handleWhaleLeaderboard(_req, res) {
+  try {
+    if (leaderboardCache.data && Date.now() - leaderboardCache.ts < LEADERBOARD_CACHE_TTL_MS) {
+      return res.json(leaderboardCache.data);
+    }
+
+    const response = await axios.get(LEADERBOARD_URL, { timeout: 15_000 });
+    const rows = response.data?.leaderboardRows ?? [];
+
+    const top30 = rows
+      .slice() // don't mutate
+      .sort((a, b) => parseFloat(b.accountValue ?? "0") - parseFloat(a.accountValue ?? "0"))
+      .slice(0, 30)
+      .map((r) => {
+        const perf = {};
+        for (const [window, wdata] of r.windowPerformances ?? []) {
+          perf[window] = wdata;
+        }
+        return {
+          address:    r.ethAddress,
+          displayName: r.displayName || null,
+          accountValue: parseFloat(r.accountValue ?? "0"),
+          pnl30d:  parseFloat(perf.month?.pnl  ?? "0"),
+          roi30d:  parseFloat(perf.month?.roi  ?? "0"),
+          vlm30d:  parseFloat(perf.month?.vlm  ?? "0"),
+        };
+      });
+
+    const data = { ts: Date.now(), count: top30.length, rows: top30 };
+    leaderboardCache = { ts: Date.now(), data };
+    res.json(data);
+  } catch (err) {
+    logger.warn(`[Dashboard] /api/whale-leaderboard error: ${err.message}`);
+    if (leaderboardCache.data) return res.json({ ...leaderboardCache.data, stale: true });
     res.status(500).json({ error: err.message });
   }
 }
@@ -1800,6 +1955,7 @@ export function startDashboard() {
   app.get("/api/btc-divergence", handleBtcDivergence);
   app.get("/api/btc-divergence/all", handleBtcDivergenceAll);
   app.get("/api/whale-watch", handleWhaleWatch);
+  app.get("/api/whale-leaderboard", handleWhaleLeaderboard);
 
   // Debug: посмотреть что реально выдаёт getManualTrades() — для расследования
   // багов в reconstructManualTrades. JSON со списком всех восстановленных

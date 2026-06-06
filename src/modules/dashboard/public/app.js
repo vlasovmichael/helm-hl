@@ -3681,6 +3681,9 @@ const WW_DEFAULTS = [
 // Map<COIN, [{label, side, sizeUsd}]> — shared with divRenderRows for BTC Div integration
 let _wwPositionsMap = new Map();
 
+// Map<"address:coin", delta> — cleared on next poll if no new delta
+let _wwDeltaMap = new Map();
+
 function wwGetList() {
   try {
     const raw = localStorage.getItem(WW_STORAGE_KEY);
@@ -3748,9 +3751,16 @@ function renderWhaleWatch(results) {
   const allRows = [];
   let fetchedAt = null;
 
-  for (const { label, data } of results) {
+  // Build a new delta map for this render cycle
+  const newDeltaMap = new Map();
+
+  for (const { label, address, data } of results) {
     if (!data || data.error) continue;
     fetchedAt = Math.max(fetchedAt ?? 0, data.ts ?? 0);
+    // Index deltas by "address:coin"
+    for (const d of data.delta ?? []) {
+      newDeltaMap.set(`${address}:${d.coin}`, d);
+    }
     for (const p of data.positions ?? []) {
       const key = p.coin.toUpperCase();
       if (!_wwPositionsMap.has(key)) _wwPositionsMap.set(key, []);
@@ -3758,9 +3768,31 @@ function renderWhaleWatch(results) {
       totalNotional += p.sizeUsd;
       totalPnl += p.unrealizedPnl;
       if (p.side === "SHORT") totalShortNotional += p.sizeUsd;
-      allRows.push({ label, ...p });
+      allRows.push({ label, address, ...p });
+    }
+    // Also add "closed" rows from delta (still show for 1 cycle)
+    for (const d of data.delta ?? []) {
+      if (d.type === "closed") {
+        // Only add if not already in positions
+        if (!allRows.some((r) => r.address === address && r.coin === d.coin)) {
+          allRows.push({
+            label,
+            address,
+            coin: d.coin,
+            side: d.side,
+            sizeUsd: d.prevSizeUsd ?? 0,
+            unrealizedPnl: 0,
+            leverage: null,
+            entryPrice: 0,
+            _closed: true,
+          });
+        }
+      }
     }
   }
+
+  // Merge old deltas for coins still visible, replace with new ones
+  _wwDeltaMap = newDeltaMap;
 
   if (allRows.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" class="empty-state">нет открытых perp позиций</td></tr>';
@@ -3780,12 +3812,34 @@ function renderWhaleWatch(results) {
       ? p.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })
       : p.entryPrice >= 1
         ? p.entryPrice.toFixed(2)
-        : p.entryPrice.toFixed(5);
-    return `<tr>
+        : p.entryPrice > 0 ? p.entryPrice.toFixed(5) : "—";
+
+    // Delta badge
+    const deltaKey = `${p.address}:${p.coin}`;
+    const d = _wwDeltaMap.get(deltaKey);
+    let deltaBadge = "";
+    if (d) {
+      if (d.type === "opened") {
+        deltaBadge = `<span style="margin-left:4px;background:var(--green);color:#000;font-size:9px;font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">NEW</span>`;
+      } else if (d.type === "closed" || p._closed) {
+        deltaBadge = `<span style="margin-left:4px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
+      } else if (d.type === "size_up") {
+        const diff = (d.sizeUsd ?? 0) - (d.prevSizeUsd ?? 0);
+        deltaBadge = `<span style="margin-left:4px;color:var(--green);font-size:9px;font-weight:700;vertical-align:middle">+${fmtNotional(diff)}</span>`;
+      } else if (d.type === "size_down") {
+        const diff = (d.sizeUsd ?? 0) - (d.prevSizeUsd ?? 0);
+        deltaBadge = `<span style="margin-left:4px;color:var(--red);font-size:9px;font-weight:700;vertical-align:middle">${fmtNotional(diff)}</span>`;
+      }
+    } else if (p._closed) {
+      deltaBadge = `<span style="margin-left:4px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
+    }
+
+    const rowOpacity = p._closed ? "opacity:.5;" : "";
+    return `<tr style="${rowOpacity}">
       <td style="color:var(--text-muted);font-size:12px">${escapeHtml(p.label)}</td>
       <td style="font-weight:700">${escapeHtml(p.coin)}</td>
       <td class="r" style="color:${sideColor};font-weight:700">${p.side}</td>
-      <td class="r">${fmtNotional(p.sizeUsd)}</td>
+      <td class="r">${fmtNotional(p.sizeUsd)}${deltaBadge}</td>
       <td class="r" style="color:var(--text-muted)">${levStr}</td>
       <td class="r">${fmtPnlColored(p.unrealizedPnl)}</td>
       <td class="r" style="color:var(--text-muted)">${escapeHtml(entryStr)}</td>
@@ -3819,6 +3873,7 @@ async function fetchWhaleWatch() {
   renderWhaleWatch(
     list.map((w, i) => ({
       label: w.label,
+      address: w.address,
       data: results[i].status === "fulfilled" ? results[i].value : null,
     }))
   );
@@ -3863,4 +3918,82 @@ async function fetchWhaleWatch() {
 
 fetchWhaleWatch();
 setInterval(fetchWhaleWatch, 30_000);
+
+// ── Whale Leaderboard ─────────────────────────────
+
+async function fetchAndRenderLeaderboard() {
+  const loadBtn = document.getElementById("ww-lb-load");
+  const metaEl  = document.getElementById("ww-lb-meta");
+  const wrap    = document.getElementById("ww-lb-table-wrap");
+  const tbody   = document.getElementById("ww-lb-tbody");
+  if (!loadBtn || !tbody) return;
+
+  loadBtn.disabled = true;
+  loadBtn.textContent = "Loading…";
+  if (metaEl) metaEl.textContent = "";
+
+  try {
+    const data = await fetchJson("/api/whale-leaderboard");
+    const rows = data.rows ?? [];
+    const list = wwGetList();
+    const watchedAddresses = new Set(list.map((w) => w.address.toLowerCase()));
+
+    tbody.innerHTML = rows.map((r, idx) => {
+      const short = `${r.address.slice(0, 6)}…${r.address.slice(-4)}`;
+      const nameStr = r.displayName ? `${escapeHtml(r.displayName)} <span style="opacity:.5;font-size:10px">${short}</span>` : short;
+      const roi = Number.isFinite(r.roi30d) ? `${(r.roi30d * 100).toFixed(1)}%` : "—";
+      const pnlColor = r.pnl30d >= 0 ? "var(--green)" : "var(--red)";
+      const pnlSign  = r.pnl30d >= 0 ? "+" : "";
+      const alreadyAdded = watchedAddresses.has(r.address.toLowerCase());
+      const addBtn = alreadyAdded
+        ? `<button disabled style="font-size:10px;padding:2px 7px;border:1px solid var(--hairline);border-radius:4px;background:none;color:var(--text-faint);cursor:default">✓</button>`
+        : `<button data-lb-add="${escapeHtml(r.address)}" data-lb-name="${escapeHtml(r.displayName || short)}" style="font-size:10px;padding:2px 7px;border:1px solid var(--hairline);border-radius:4px;background:none;color:var(--text-muted);cursor:pointer">+ Add</button>`;
+      return `<tr>
+        <td style="color:var(--text-faint);font-size:11px">${idx + 1}</td>
+        <td style="font-family:var(--font-mono);font-size:11px">${nameStr}</td>
+        <td class="r">${fmtNotional(r.accountValue)}</td>
+        <td class="r" style="color:${pnlColor}">${pnlSign}${fmtNotional(r.pnl30d)}</td>
+        <td class="r" style="color:${pnlColor}">${roi}</td>
+        <td class="r" style="color:var(--text-muted)">${fmtNotional(r.vlm30d)}</td>
+        <td>${addBtn}</td>
+      </tr>`;
+    }).join("");
+
+    // Bind add buttons
+    tbody.querySelectorAll("[data-lb-add]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const addr = btn.dataset.lbAdd.toLowerCase();
+        const name = btn.dataset.lbName || `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+        const list = wwGetList();
+        if (!list.some((w) => w.address === addr)) {
+          list.push({ label: name, address: addr });
+          wwSaveList(list);
+        }
+        btn.disabled = true;
+        btn.textContent = "✓";
+        btn.style.color = "var(--text-faint)";
+        btn.style.cursor = "default";
+        fetchWhaleWatch();
+      });
+    });
+
+    if (wrap) wrap.style.display = "";
+    if (metaEl) {
+      const age = data.ts ? `${Math.round((Date.now() - data.ts) / 1000)}s ago` : "";
+      metaEl.textContent = `${rows.length} accounts${data.stale ? " (stale)" : ""}${age ? " · " + age : ""}`;
+    }
+    loadBtn.textContent = "Refresh";
+  } catch (err) {
+    loadBtn.textContent = "Error — retry";
+    if (metaEl) metaEl.textContent = err.message;
+  } finally {
+    loadBtn.disabled = false;
+  }
+}
+
+(function initLeaderboardUi() {
+  const loadBtn = document.getElementById("ww-lb-load");
+  if (!loadBtn) return;
+  loadBtn.addEventListener("click", fetchAndRenderLeaderboard);
+})();
 

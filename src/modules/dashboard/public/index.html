@@ -159,6 +159,22 @@
           </table>
         </div>
         <div id="ww-footer" style="padding:4px 10px 6px;font-size:11px;font-family:var(--font-mono);color:var(--text-faint)"></div>
+        <div id="ww-leaderboard-section" style="border-top:1px solid var(--hairline);padding:8px 10px 4px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">HL Leaderboard</span>
+            <button id="ww-lb-load" style="background:none;border:1px solid var(--hairline);border-radius:4px;color:var(--text-muted);font-size:11px;font-family:var(--font-mono);padding:2px 8px;cursor:pointer;white-space:nowrap">Load top 30</button>
+            <span id="ww-lb-meta" style="font-size:10px;font-family:var(--font-mono);color:var(--text-faint)"></span>
+          </div>
+          <div style="overflow-x:auto;display:none" id="ww-lb-table-wrap">
+            <table class="data-table" id="ww-lb-table">
+              <thead><tr>
+                <th>#</th><th>Address / Name</th><th class="r">Account $</th>
+                <th class="r">30d PnL</th><th class="r">30d ROI</th><th class="r">30d Vol</th><th></th>
+              </tr></thead>
+              <tbody id="ww-lb-tbody"></tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       <!-- 03 / Live Logs -->
