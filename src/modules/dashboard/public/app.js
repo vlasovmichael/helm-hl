@@ -3681,6 +3681,8 @@ setInterval(renderFooter, 1000);
 
 // ── Whale Watch ──────────────────────────────────
 
+let _wwSort = { key: "sizeUsd", desc: true };
+
 const WW_STORAGE_KEY = "ww-addresses-v2";
 const WW_DEFAULTS = [
   { label: "Василий", address: "0x3ed4033676d0bdb3938728ca4ac673d00e74bd06" },
@@ -3755,7 +3757,10 @@ function wwRenderChips() {
   });
 }
 
+let _wwLastResults = null;
+
 function renderWhaleWatch(results) {
+  _wwLastResults = results;
   const tbody = document.getElementById("ww-tbody");
   const biasEl = document.getElementById("ww-bias");
   const footerEl = document.getElementById("ww-footer");
@@ -3821,7 +3826,23 @@ function renderWhaleWatch(results) {
     return;
   }
 
-  allRows.sort((a, b) => b.sizeUsd - a.sizeUsd);
+  // Apply current sort — closed rows always go to the bottom
+  allRows.sort((a, b) => {
+    if (a._closed !== b._closed) return a._closed ? 1 : -1;
+    const { key, desc } = _wwSort;
+    const va = a[key] ?? (typeof a[key] === "string" ? "" : -Infinity);
+    const vb = b[key] ?? (typeof b[key] === "string" ? "" : -Infinity);
+    if (typeof va === "string") return desc ? vb.localeCompare(va) : va.localeCompare(vb);
+    return desc ? vb - va : va - vb;
+  });
+
+  // Sync header indicators
+  document.querySelectorAll("#ww-table th[data-ww-sort]").forEach((th) => {
+    const active = th.dataset.wwSort === _wwSort.key;
+    th.classList.toggle("ww-sort-active", active);
+    th.classList.toggle("ww-sort-asc", active && !_wwSort.desc);
+    th.classList.toggle("ww-sort-desc", active && _wwSort.desc);
+  });
 
   tbody.innerHTML = allRows.map((p) => {
     const sideColor = p.side === "SHORT" ? "var(--red)" : "var(--green)";
@@ -3949,6 +3970,19 @@ async function fetchWhaleWatch() {
 
 fetchWhaleWatch();
 setInterval(fetchWhaleWatch, 30_000);
+
+// Sortable column headers — re-sort without a new fetch
+document.getElementById("ww-table")?.addEventListener("click", (e) => {
+  const th = e.target.closest("th[data-ww-sort]");
+  if (!th) return;
+  const key = th.dataset.wwSort;
+  if (_wwSort.key === key) {
+    _wwSort.desc = !_wwSort.desc;
+  } else {
+    _wwSort = { key, desc: key !== "coin" }; // strings default asc, numbers default desc
+  }
+  if (_wwLastResults) renderWhaleWatch(_wwLastResults);
+});
 
 // ── Whale Leaderboard ─────────────────────────────
 
