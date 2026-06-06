@@ -228,13 +228,12 @@ function handleBtcDivergenceAll(req, res) {
   const allCoins = Object.keys(current.prices).filter((c) => c !== "BTC");
   const result = calcDivergenceWindow(current, mins, allCoins);
 
-  // Скор для сортировки: сильный сигнал сверху
+  // Скор для сортировки: сильный сигнал сверху, монеты без истории в конец
   const btcPct = result.btcPct ?? 0;
   result.coins = result.coins
-    .filter((c) => c.relPct != null)
     .sort((a, b) => {
       const score = (c) => {
-        if (!result.hasPast) return 0;
+        if (!result.hasPast || c.relPct == null) return -1;
         if (btcPct > 0.3 && c.relPct <= -1.5) return 100 + Math.abs(c.relPct);   // SHORT signal
         if (btcPct < -0.3 && c.relPct >= 1.5) return 100 + c.relPct;             // LONG signal
         return Math.abs(c.relPct);                                                 // слабый сигнал

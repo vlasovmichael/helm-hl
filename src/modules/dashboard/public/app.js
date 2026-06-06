@@ -3606,10 +3606,16 @@ async function divFetchAll() {
     const thChange = document.getElementById("div-th-change");
     if (thChange) thChange.textContent = `${win} %`;
     if (metaEl) {
-      const btcLabel = d.btcPct != null ? `BTC ${win} ${d.btcPct > 0 ? "+" : ""}${d.btcPct.toFixed(2)}% · top 40` : "все монеты";
-      metaEl.textContent = btcLabel;
+      const label = d.btcPct != null
+        ? `BTC ${win} ${d.btcPct > 0 ? "+" : ""}${d.btcPct.toFixed(2)}% · ${d.coins.length} монет`
+        : `${d.coins.length} монет · накапливаем историю…`;
+      metaEl.textContent = label;
       metaEl.style.color = d.btcPct == null ? "var(--text-muted)"
         : d.btcPct > 0.3 ? "var(--green)" : d.btcPct < -0.3 ? "var(--red)" : "var(--text-muted)";
+    }
+    if (d.coins.length === 0) {
+      if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="empty-state">накапливаем историю…</td></tr>`;
+      return;
     }
     if (tbody) tbody.innerHTML = divRenderRows(d.coins, d.btcPct, d.hasPast);
   } catch { /* silent */ }
