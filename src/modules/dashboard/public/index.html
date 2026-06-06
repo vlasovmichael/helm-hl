@@ -94,30 +94,25 @@
         <div id="manual-positions-container"></div>
       </section>
 
-      <!-- 02 / Smart Signals -->
-      <section class="card" id="sec-smart">
+      <!-- 02 / BTC Divergence -->
+      <section class="card" id="sec-divergence">
         <div class="card-header">
-          <div class="card-title" data-num="02">Smart Signals</div>
-          <span id="smart-macro" style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted)"></span>
+          <div class="card-title" data-num="02" title="Относительная сила/слабость монеты vs BTC за 15 мин. Монета слабее BTC = кандидат на шорт. Монета сильнее BTC на падении = кандидат на лонг.">BTC Divergence</div>
+          <span id="div-meta" style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted)"></span>
         </div>
         <div style="overflow-x:auto">
-          <table style="width:100%;border-collapse:collapse" id="smart-table">
+          <table style="width:100%;border-collapse:collapse" id="div-table">
             <thead>
               <tr>
-                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:left;border-bottom:1px solid var(--hairline);width:20px">#</th>
                 <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:left;border-bottom:1px solid var(--hairline)">Coin</th>
-                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:left;border-bottom:1px solid var(--hairline)">Dir</th>
-                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:right;border-bottom:1px solid var(--hairline)">Entry</th>
-                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:right;border-bottom:1px solid var(--hairline)">SL</th>
-                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:right;border-bottom:1px solid var(--hairline)">TP</th>
-                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:right;border-bottom:1px solid var(--hairline)">R:R</th>
-                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:center;border-bottom:1px solid var(--hairline)">4h</th>
-                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:left;border-bottom:1px solid var(--hairline)">Why</th>
-                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:center;border-bottom:1px solid var(--hairline)">Timing</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:right;border-bottom:1px solid var(--hairline)">Price</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:right;border-bottom:1px solid var(--hairline)" title="Изменение монеты за 15 мин">15m %</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:right;border-bottom:1px solid var(--hairline)" title="Разница между изменением монеты и BTC за 15 мин. Красный = монета слабее BTC (шорт-кандидат). Зелёный = монета сильнее BTC (лонг-кандидат).">vs BTC</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:center;border-bottom:1px solid var(--hairline)">Signal</th>
               </tr>
             </thead>
-            <tbody id="smart-tbody">
-              <tr><td colspan="10" class="empty-state">loading…</td></tr>
+            <tbody id="div-tbody">
+              <tr><td colspan="5" class="empty-state">накапливаем историю (1 мин)…</td></tr>
             </tbody>
           </table>
         </div>

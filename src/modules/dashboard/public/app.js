@@ -130,6 +130,8 @@ function initWebSocket() {
         ingestLogs(msg.entries || [], true);
       } else if (msg.type === "log") {
         ingestLogs([msg.entry], false);
+      } else if (msg.type === "btc-divergence") {
+        renderBtcDivergence(msg.data);
       }
     } catch (err) {
       console.error("[WS] Error:", err);
@@ -3488,6 +3490,79 @@ function renderSmartSignals() {
       <td style="${TDC}">${trend4hHtml}</td>
       <td style="${TD}display:flex;gap:3px;flex-wrap:wrap">${whyHtml}</td>
       <td style="${TDC}">${timingHtml}</td>
+    </tr>`;
+  }).join("");
+}
+
+function renderBtcDivergence(data) {
+  const tbody = document.getElementById("div-tbody");
+  const metaEl = document.getElementById("div-meta");
+  if (!tbody) return;
+
+  if (!data?.coins?.length) {
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">накапливаем историю (1 мин)…</td></tr>`;
+    return;
+  }
+
+  const { coins, btcPct, hasPast, updatedAt } = data;
+
+  if (metaEl) {
+    const age = updatedAt ? Math.round((Date.now() - updatedAt) / 1000) : null;
+    const btcLabel = btcPct != null ? `BTC 15m ${btcPct > 0 ? "+" : ""}${btcPct.toFixed(2)}%` : "BTC —";
+    metaEl.textContent = age != null ? `${btcLabel} · ${age}s ago` : btcLabel;
+    metaEl.style.color = btcPct == null ? "var(--text-muted)"
+      : btcPct > 0.3 ? "var(--green)"
+      : btcPct < -0.3 ? "var(--red)"
+      : "var(--text-muted)";
+  }
+
+  const fmtPx = (p) => {
+    if (p == null) return "—";
+    if (p >= 1000) return "$" + p.toLocaleString("en-US", { maximumFractionDigits: 0 });
+    if (p >= 1) return "$" + p.toFixed(3);
+    return "$" + p.toPrecision(4);
+  };
+
+  const fmtPct = (v) => v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(2)}%`;
+
+  const TD  = "padding:6px 10px;border-bottom:1px solid var(--hairline);font-family:var(--font-mono);font-size:12px;";
+  const TDR = TD + "text-align:right;";
+  const TDC = TD + "text-align:center;";
+
+  tbody.innerHTML = coins.map((c) => {
+    const isBtc = c.coin === "BTC";
+    const rel = c.relPct;
+    const coin15 = c.coinPct;
+
+    const relColor = !hasPast || rel == null ? "var(--text-muted)"
+      : rel <= -1.5 ? "var(--red)"
+      : rel >= 1.5 ? "var(--green)"
+      : "var(--text-muted)";
+
+    const coinColor = !hasPast || coin15 == null ? "var(--text-muted)"
+      : coin15 > 0 ? "var(--green)"
+      : coin15 < 0 ? "var(--red)"
+      : "var(--text-muted)";
+
+    let signal = "—";
+    if (hasPast && rel != null && btcPct != null && !isBtc) {
+      if (btcPct > 0.3 && rel <= -1.5) signal = "SHORT ↓";
+      else if (btcPct < -0.3 && rel >= 1.5) signal = "LONG ↑";
+      else if (Math.abs(rel) >= 0.8) signal = rel < 0 ? "weak" : "strong";
+    }
+
+    const signalColor = signal.startsWith("SHORT") ? "var(--red)"
+      : signal.startsWith("LONG") ? "var(--green)"
+      : signal === "weak" ? "color-mix(in srgb, var(--red) 60%, var(--text-muted))"
+      : signal === "strong" ? "color-mix(in srgb, var(--green) 60%, var(--text-muted))"
+      : "var(--text-faint)";
+
+    return `<tr>
+      <td style="${TD}font-weight:600">${c.coin}</td>
+      <td style="${TDR}">${fmtPx(c.price)}</td>
+      <td style="${TDR}color:${coinColor}">${hasPast ? fmtPct(coin15) : "—"}</td>
+      <td style="${TDR}color:${relColor};font-weight:${Math.abs(rel ?? 0) >= 1.5 ? 600 : 400}">${hasPast && !isBtc ? fmtPct(rel) : isBtc ? "baseline" : "—"}</td>
+      <td style="${TDC}color:${signalColor};font-weight:600;font-size:11px">${signal}</td>
     </tr>`;
   }).join("");
 }

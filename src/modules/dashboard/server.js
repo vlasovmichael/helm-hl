@@ -140,6 +140,77 @@ let wss = null;
 let broadcastTimer = null;
 let heartbeatTimer = null;
 let unsubscribeLogs = null;
+let divergenceTimer = null;
+
+// ─────────────────────────────────────────────────
+//  BTC Divergence — watchlist vs BTC snapshot ring buffer
+// ─────────────────────────────────────────────────
+const DIVERGENCE_WATCHLIST = ["BTC", "HYPE", "ZEC", "WLD", "NEAR", "LIT", "ASTER"];
+const DIVERGENCE_SNAPSHOT_MS = 60_000;   // снимок раз в минуту
+const DIVERGENCE_SNAPSHOTS = 31;         // 30 минут истории
+
+// Ring buffer: [{ts, prices: {BTC: x, HYPE: y, ...}}]
+const divergenceSnapshots = [];
+
+async function takeDivergenceSnapshot() {
+  try {
+    const data = await hlInfo(
+      { type: "metaAndAssetCtxs" },
+      { label: "dashboard/divergence", timeoutMs: 10_000 },
+    );
+    const [meta, ctxs] = data ?? [];
+    if (!Array.isArray(meta?.universe) || !Array.isArray(ctxs)) return;
+
+    const snap = { ts: Date.now(), prices: {} };
+    for (const coin of DIVERGENCE_WATCHLIST) {
+      const idx = meta.universe.findIndex((a) => (a.name ?? "").toUpperCase() === coin);
+      if (idx === -1 || !ctxs[idx]) continue;
+      const px = parseFloat(ctxs[idx].midPx ?? ctxs[idx].markPx ?? "0");
+      if (px > 0) snap.prices[coin] = px;
+    }
+    divergenceSnapshots.push(snap);
+    if (divergenceSnapshots.length > DIVERGENCE_SNAPSHOTS) divergenceSnapshots.shift();
+
+    if (wss && wss.clients.size > 0) {
+      const payload = buildDivergencePayload();
+      const msg = JSON.stringify({ type: "btc-divergence", data: payload });
+      for (const client of wss.clients) {
+        if (client.readyState === 1) client.send(msg);
+      }
+    }
+  } catch { /* silent — не ломаем дашборд */ }
+}
+
+function buildDivergencePayload() {
+  const now = Date.now();
+  const current = divergenceSnapshots[divergenceSnapshots.length - 1];
+  if (!current) return { coins: [], updatedAt: null, hasPast: false };
+
+  const targetTs = now - 15 * 60_000;
+  let past = null;
+  for (const snap of divergenceSnapshots) {
+    if (snap.ts <= targetTs) past = snap;
+    else break;
+  }
+
+  const btcNow = current.prices["BTC"];
+  const btcPast = past?.prices["BTC"];
+  const btcPct = btcNow && btcPast ? ((btcNow - btcPast) / btcPast) * 100 : null;
+
+  const coins = DIVERGENCE_WATCHLIST.map((coin) => {
+    const pxNow = current.prices[coin];
+    const pxPast = past?.prices[coin];
+    const coinPct = pxNow && pxPast ? ((pxNow - pxPast) / pxPast) * 100 : null;
+    const relPct = coinPct != null && btcPct != null ? coinPct - btcPct : null;
+    return { coin, price: pxNow ?? null, coinPct, btcPct, relPct };
+  });
+
+  return { coins, btcPct, updatedAt: current.ts, hasPast: past !== null };
+}
+
+function handleBtcDivergence(_req, res) {
+  res.json(buildDivergencePayload());
+}
 
 // ─────────────────────────────────────────────────
 //  Status Logic (Shared)
@@ -1612,6 +1683,7 @@ export function startDashboard() {
   app.get("/api/insights", handleInsights);
   app.get("/api/setup-scanner", handleSetupScanner);
   app.get("/api/trade-markers", handleTradeMarkers);
+  app.get("/api/btc-divergence", handleBtcDivergence);
 
   // Debug: посмотреть что реально выдаёт getManualTrades() — для расследования
   // багов в reconstructManualTrades. JSON со списком всех восстановленных
@@ -1737,6 +1809,9 @@ export function startDashboard() {
       const data = await getStatusData();
       ws.send(JSON.stringify({ type: "status", data }));
       ws.send(JSON.stringify({ type: "logs:init", entries: getLogBuffer() }));
+      if (divergenceSnapshots.length > 0) {
+        ws.send(JSON.stringify({ type: "btc-divergence", data: buildDivergencePayload() }));
+      }
     } catch (err) {
       logger.error(`[Dashboard] WS initial send failed: ${err.message}`);
     }
@@ -1764,6 +1839,9 @@ export function startDashboard() {
     }
   });
 
+  takeDivergenceSnapshot();
+  divergenceTimer = setInterval(takeDivergenceSnapshot, DIVERGENCE_SNAPSHOT_MS);
+
   broadcastTimer = setInterval(async () => {
     if (!wss || wss.clients.size === 0) return;
     try {
@@ -1783,6 +1861,7 @@ export function startDashboard() {
 }
 
 export function stopDashboard() {
+  if (divergenceTimer) { clearInterval(divergenceTimer); divergenceTimer = null; }
   if (broadcastTimer) clearInterval(broadcastTimer);
   if (heartbeatTimer) clearInterval(heartbeatTimer);
   if (unsubscribeLogs) {
