@@ -3595,10 +3595,15 @@ function divRenderRows(coins, btcPct, hasPast) {
   }).join("");
 }
 
+let _divAllFetching = false;
+
 async function divFetchAll() {
+  if (_divAllFetching) return;
+  _divAllFetching = true;
   const win = _divWindow === "all" ? "15m" : _divWindow;
   const tbody = document.getElementById("div-tbody");
-  if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="empty-state">загружаем все монеты…</td></tr>`;
+  const hasContent = tbody && tbody.children.length > 0 && !tbody.querySelector(".empty-state");
+  if (!hasContent && tbody) tbody.innerHTML = `<tr><td colspan="6" class="empty-state">загружаем все монеты…</td></tr>`;
   try {
     const d = await fetchJson(`/api/btc-divergence/all?window=${win}`);
     if (!d?.coins) return;
@@ -3619,6 +3624,7 @@ async function divFetchAll() {
     }
     if (tbody) tbody.innerHTML = divRenderRows(d.coins, d.btcPct, d.hasPast);
   } catch { /* silent */ }
+  finally { _divAllFetching = false; }
 }
 
 function renderBtcDivergence(data) {

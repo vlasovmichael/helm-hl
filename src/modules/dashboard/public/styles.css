@@ -2752,22 +2752,53 @@ footer {
   z-index: 2;
 }
 
-/* ──────────────────────── BTC Divergence — mobile compact */
+/* ──────────────────────── BTC Divergence — mobile card layout */
 @media (max-width: 720px) {
-  #div-table th,
+  /* Collapse table structure into block elements */
+  #div-table,
+  #div-table tbody { display: block; }
+  #div-table thead { display: none; }
+
+  #div-table tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto auto;
+    grid-template-areas:
+      "coin  signal"
+      "chg   whale"
+      "rel   whale";
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--hairline);
+    gap: 1px 10px;
+  }
   #div-table td {
-    padding: 6px 6px;
+    padding: 0;
+    border: none;
+    white-space: normal;
     font-size: 12px;
+    display: block;
   }
-  /* Hide Price column — vs BTC is more actionable */
-  #div-table th:nth-child(2),
-  #div-table td:nth-child(2) {
-    display: none;
-  }
-  /* Hide Whale column — dedicated section in nav */
-  #div-table th:nth-child(6),
+  /* Coin — bold, top-left */
+  #div-table td:nth-child(1) { grid-area: coin; font-size: 13px; font-weight: 700; }
+  /* Price — hidden */
+  #div-table td:nth-child(2) { display: none; }
+  /* Change% — middle-left */
+  #div-table td:nth-child(3) { grid-area: chg; font-size: 11px; }
+  /* vs BTC — bottom-left */
+  #div-table td:nth-child(4) { grid-area: rel; font-size: 11px; text-align: left; }
+  /* Signal — top-right, badge-style */
+  #div-table td:nth-child(5) { grid-area: signal; text-align: right; font-weight: 700; }
+  /* Whale — right column, spans 2 rows, vertically centered */
   #div-table td:nth-child(6) {
-    display: none;
+    grid-area: whale;
+    text-align: right;
+    display: flex !important;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 2px;
+    font-size: 11px;
+    min-width: 60px;
   }
 }
 
