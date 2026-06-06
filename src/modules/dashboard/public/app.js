@@ -3716,8 +3716,9 @@ function wwRenderChips() {
   const list = wwGetList();
   chips.innerHTML = list.map((w, i) => {
     const short = `${w.address.slice(0, 6)}…${w.address.slice(-4)}`;
+    const labelDiffersFromShort = w.label !== short;
     return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--bg-header);border:1px solid var(--hairline);border-radius:4px;padding:2px 7px;font-family:var(--font-mono);font-size:10px;color:var(--text-muted)" title="${escapeHtml(w.address)}">
-      ${escapeHtml(w.label)} <span style="opacity:.5;font-size:9px">${short}</span>
+      ${escapeHtml(w.label)}${labelDiffersFromShort ? ` <span style="opacity:.5;font-size:9px">${short}</span>` : ""}
       <button data-ww-remove="${i}" style="background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:11px;padding:0 0 0 3px;line-height:1" title="Удалить">×</button>
     </span>`;
   }).join("");
