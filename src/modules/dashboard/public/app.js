@@ -3580,12 +3580,21 @@ function divRenderRows(coins, btcPct, hasPast) {
   return coins.map((c) => {
     const { relColor, coinColor, signal, signalColor, isBtc } = divSignalInfo(c, btcPct, hasPast);
     const rel = c.relPct;
+    const whaleEntries = _wwPositionsMap.get(c.coin.toUpperCase());
+    const whaleCell = whaleEntries
+      ? whaleEntries.map((w) => {
+          const col = w.side === "SHORT" ? "var(--red)" : "var(--green)";
+          const arr = w.side === "SHORT" ? "↓" : "↑";
+          return `<span style="color:${col};font-weight:700">${arr}${fmtNotional(w.sizeUsd)}</span>`;
+        }).join(" ")
+      : "";
     return `<tr>
       <td style="${TD}font-weight:600">${c.coin}</td>
       <td style="${TDR}">${fmtPrice(c.price)}</td>
       <td style="${TDR}color:${coinColor}">${hasPast ? fmtPct(c.coinPct) : "—"}</td>
       <td style="${TDR}color:${relColor};font-weight:${Math.abs(rel ?? 0) >= 1.5 ? 600 : 400}">${hasPast && !isBtc ? fmtPct(rel) : isBtc ? "baseline" : "—"}</td>
       <td style="${TDC}color:${signalColor};font-weight:600;font-size:11px">${signal}</td>
+      <td style="${TDR}font-size:11px">${whaleCell}</td>
     </tr>`;
   }).join("");
 }
@@ -3670,11 +3679,27 @@ setInterval(renderFooter, 1000);
 
 // ── Whale Watch ──────────────────────────────────
 
-const WW_DEFAULT_ADDRESS = "0x3ed4033676d0bdb3938728ca4ac673d00e74bd06";
-const WW_STORAGE_KEY = "ww-address";
+const WW_STORAGE_KEY = "ww-addresses-v2";
+const WW_DEFAULTS = [
+  { label: "Василий", address: "0x3ed4033676d0bdb3938728ca4ac673d00e74bd06" },
+];
 
-function wwGetAddress() {
-  return localStorage.getItem(WW_STORAGE_KEY) || WW_DEFAULT_ADDRESS;
+// Map<COIN, [{label, side, sizeUsd}]> — shared with divRenderRows for BTC Div integration
+let _wwPositionsMap = new Map();
+
+function wwGetList() {
+  try {
+    const raw = localStorage.getItem(WW_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch { /* ignore */ }
+  return WW_DEFAULTS;
+}
+
+function wwSaveList(list) {
+  localStorage.setItem(WW_STORAGE_KEY, JSON.stringify(list));
 }
 
 function fmtNotional(v) {
@@ -3691,90 +3716,156 @@ function fmtPnlColored(v) {
   return `<span style="color:${color}">${sign}${fmtNotional(v)}</span>`;
 }
 
-function renderWhaleWatch(data) {
+function wwRenderChips() {
+  const chips = document.getElementById("ww-chips");
+  if (!chips) return;
+  const list = wwGetList();
+  chips.innerHTML = list.map((w, i) => {
+    const short = `${w.address.slice(0, 6)}…${w.address.slice(-4)}`;
+    return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--bg-header);border:1px solid var(--hairline);border-radius:4px;padding:2px 7px;font-family:var(--font-mono);font-size:10px;color:var(--text-muted)" title="${escapeHtml(w.address)}">
+      ${escapeHtml(w.label)} <span style="opacity:.5;font-size:9px">${short}</span>
+      <button data-ww-remove="${i}" style="background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:11px;padding:0 0 0 3px;line-height:1" title="Удалить">×</button>
+    </span>`;
+  }).join("");
+  chips.querySelectorAll("[data-ww-remove]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.wwRemove, 10);
+      const list = wwGetList();
+      list.splice(idx, 1);
+      wwSaveList(list);
+      wwRenderChips();
+      fetchWhaleWatch();
+    });
+  });
+}
+
+function renderWhaleWatch(results) {
   const tbody = document.getElementById("ww-tbody");
   const biasEl = document.getElementById("ww-bias");
   const footerEl = document.getElementById("ww-footer");
   if (!tbody) return;
 
-  if (!data || data.count === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">нет открытых perp позиций</td></tr>';
+  // Rebuild positions map for BTC Divergence integration
+  _wwPositionsMap = new Map();
+  let totalNotional = 0;
+  let totalShortNotional = 0;
+  let totalPnl = 0;
+  const allRows = [];
+  let fetchedAt = null;
+
+  for (const { label, data } of results) {
+    if (!data || data.error) continue;
+    fetchedAt = Math.max(fetchedAt ?? 0, data.ts ?? 0);
+    for (const p of data.positions ?? []) {
+      const key = p.coin.toUpperCase();
+      if (!_wwPositionsMap.has(key)) _wwPositionsMap.set(key, []);
+      _wwPositionsMap.get(key).push({ label, side: p.side, sizeUsd: p.sizeUsd });
+      totalNotional += p.sizeUsd;
+      totalPnl += p.unrealizedPnl;
+      if (p.side === "SHORT") totalShortNotional += p.sizeUsd;
+      allRows.push({ label, ...p });
+    }
+  }
+
+  if (allRows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">нет открытых perp позиций</td></tr>';
     if (biasEl) biasEl.textContent = "";
     if (footerEl) footerEl.textContent = "";
+    // Re-render BTC Div to clear whale column
+    renderBtcDivergence(null);
     return;
   }
 
-  const sorted = [...data.positions].sort((a, b) => b.sizeUsd - a.sizeUsd);
+  allRows.sort((a, b) => b.sizeUsd - a.sizeUsd);
 
-  tbody.innerHTML = sorted.map((p) => {
+  const TD  = "padding:7px 10px;border-bottom:1px solid var(--hairline);font-family:var(--font-mono);font-size:13px;";
+  const TDR = TD + "text-align:right;";
+
+  tbody.innerHTML = allRows.map((p) => {
     const sideColor = p.side === "SHORT" ? "var(--red)" : "var(--green)";
     const levStr = p.leverage != null ? `${p.leverage}×` : "—";
     const entryStr = p.entryPrice >= 1000
       ? p.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })
-      : p.entryPrice.toFixed(4);
+      : p.entryPrice >= 1
+        ? p.entryPrice.toFixed(2)
+        : p.entryPrice.toFixed(5);
     return `<tr>
-      <td style="font-weight:600">${escapeHtml(p.coin)}</td>
-      <td style="text-align:right;color:${sideColor};font-weight:700">${p.side}</td>
-      <td style="text-align:right;font-family:var(--font-mono)">${fmtNotional(p.sizeUsd)}</td>
-      <td style="text-align:right;font-family:var(--font-mono)">${levStr}</td>
-      <td style="text-align:right;font-family:var(--font-mono)">${fmtPnlColored(p.unrealizedPnl)}</td>
-      <td style="text-align:right;font-family:var(--font-mono);color:var(--text-muted)">${escapeHtml(entryStr)}</td>
+      <td style="${TD}color:var(--text-muted);font-size:11px">${escapeHtml(p.label)}</td>
+      <td style="${TD}font-weight:700">${escapeHtml(p.coin)}</td>
+      <td style="${TDR}color:${sideColor};font-weight:700">${p.side}</td>
+      <td style="${TDR}">${fmtNotional(p.sizeUsd)}</td>
+      <td style="${TDR}color:var(--text-muted)">${levStr}</td>
+      <td style="${TDR}">${fmtPnlColored(p.unrealizedPnl)}</td>
+      <td style="${TDR}color:var(--text-muted)">${escapeHtml(entryStr)}</td>
     </tr>`;
   }).join("");
 
-  if (biasEl && data.bias) {
-    const s = data.bias.shortPct.toFixed(0);
-    const l = data.bias.longPct.toFixed(0);
-    const col = data.bias.shortPct > 60 ? "var(--red)" : data.bias.longPct > 60 ? "var(--green)" : "var(--text-muted)";
+  if (biasEl) {
+    const shortPct = totalNotional > 0 ? (totalShortNotional / totalNotional) * 100 : 0;
+    const longPct = 100 - shortPct;
+    const col = shortPct > 60 ? "var(--red)" : longPct > 60 ? "var(--green)" : "var(--text-muted)";
     biasEl.style.color = col;
-    biasEl.textContent = `SHORT ${s}% · LONG ${l}% · total ${fmtNotional(data.totalNotional)} · uPnL ${data.totalUnrealizedPnl >= 0 ? "+" : ""}${fmtNotional(data.totalUnrealizedPnl)}`;
-  } else if (biasEl) {
-    biasEl.textContent = "";
+    const pnlSign = totalPnl >= 0 ? "+" : "";
+    biasEl.textContent = `SHORT ${shortPct.toFixed(0)}% · LONG ${longPct.toFixed(0)}% · ${fmtNotional(totalNotional)} · uPnL ${pnlSign}${fmtNotional(totalPnl)}`;
   }
 
   if (footerEl) {
-    const addr = data.address;
-    const short = `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-    const age = data.ts ? Math.round((Date.now() - data.ts) / 1000) : null;
-    const staleNote = data.stale ? " ⚠ stale" : "";
-    footerEl.textContent = `addr: ${short}${staleNote}${age != null ? ` · ${age}s ago` : ""}`;
+    const age = fetchedAt ? Math.round((Date.now() - fetchedAt) / 1000) : null;
+    footerEl.textContent = `${results.length} address${results.length > 1 ? "es" : ""}${age != null ? ` · ${age}s ago` : ""}`;
   }
+
+  // Re-render BTC Div with updated whale data
+  renderBtcDivergence(null);
 }
 
 async function fetchWhaleWatch() {
-  try {
-    const addr = wwGetAddress();
-    const data = await fetchJson(`/api/whale-watch?address=${encodeURIComponent(addr)}`);
-    renderWhaleWatch(data);
-  } catch {
-    // silent — stale data stays visible
-  }
+  const list = wwGetList();
+  wwRenderChips();
+  const results = await Promise.allSettled(
+    list.map((w) => fetchJson(`/api/whale-watch?address=${encodeURIComponent(w.address)}`))
+  );
+  renderWhaleWatch(
+    list.map((w, i) => ({
+      label: w.label,
+      data: results[i].status === "fulfilled" ? results[i].value : null,
+    }))
+  );
 }
 
-// Address editor UI
+// Add address form UI
 (function initWhaleWatchUi() {
-  const btn = document.getElementById("ww-addr-btn");
-  const row = document.getElementById("ww-addr-row");
-  const input = document.getElementById("ww-addr-input");
-  const save = document.getElementById("ww-addr-save");
-  if (!btn || !row || !input || !save) return;
+  const addBtn = document.getElementById("ww-add-btn");
+  const form = document.getElementById("ww-form");
+  const labelInput = document.getElementById("ww-form-label");
+  const addrInput = document.getElementById("ww-form-addr");
+  const saveBtn = document.getElementById("ww-form-save");
+  const cancelBtn = document.getElementById("ww-form-cancel");
+  if (!addBtn || !form) return;
 
-  btn.addEventListener("click", () => {
-    const visible = row.style.display !== "none";
-    row.style.display = visible ? "none" : "flex";
-    if (!visible) input.value = wwGetAddress();
+  addBtn.addEventListener("click", () => {
+    form.style.display = "flex";
+    labelInput.value = "";
+    addrInput.value = "";
+    labelInput.focus();
   });
 
-  save.addEventListener("click", () => {
-    const val = input.value.trim().toLowerCase();
-    if (/^0x[0-9a-f]{40}$/.test(val)) {
-      localStorage.setItem(WW_STORAGE_KEY, val);
-      row.style.display = "none";
-      fetchWhaleWatch();
-    } else {
-      input.style.borderColor = "var(--red)";
-      setTimeout(() => { input.style.borderColor = ""; }, 1500);
+  cancelBtn?.addEventListener("click", () => { form.style.display = "none"; });
+
+  saveBtn?.addEventListener("click", () => {
+    const addr = addrInput.value.trim().toLowerCase();
+    const label = labelInput.value.trim() || `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+    if (!/^0x[0-9a-f]{40}$/.test(addr)) {
+      addrInput.style.borderColor = "var(--red)";
+      setTimeout(() => { addrInput.style.borderColor = ""; }, 1500);
+      return;
     }
+    const list = wwGetList();
+    if (!list.some((w) => w.address === addr)) {
+      list.push({ label, address: addr });
+      wwSaveList(list);
+    }
+    form.style.display = "none";
+    fetchWhaleWatch();
   });
 })();
 
