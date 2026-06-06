@@ -3503,21 +3503,33 @@ function renderSmartSignals() {
   }).join("");
 }
 
+let _divData = null;
+let _divWindow = "15m";
+
 function renderBtcDivergence(data) {
+  if (data) _divData = data;
+  if (!_divData) return;
+
   const tbody = document.getElementById("div-tbody");
   const metaEl = document.getElementById("div-meta");
+  const thChange = document.getElementById("div-th-change");
   if (!tbody) return;
 
-  if (!data?.coins?.length) {
-    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">накапливаем историю (1 мин)…</td></tr>`;
+  const windowData = _divData.windows?.[_divWindow];
+  if (!windowData?.coins?.length) {
+    const mins = _divWindow === "1h" ? 60 : parseInt(_divWindow);
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">накапливаем историю (нужно ${mins} мин)…</td></tr>`;
     return;
   }
 
-  const { coins, btcPct, hasPast, updatedAt } = data;
+  if (thChange) thChange.textContent = `${_divWindow} %`;
+
+  const { coins, btcPct, hasPast } = windowData;
+  const { updatedAt } = _divData;
 
   if (metaEl) {
     const age = updatedAt ? Math.round((Date.now() - updatedAt) / 1000) : null;
-    const btcLabel = btcPct != null ? `BTC 15m ${btcPct > 0 ? "+" : ""}${btcPct.toFixed(2)}%` : "BTC —";
+    const btcLabel = btcPct != null ? `BTC ${_divWindow} ${btcPct > 0 ? "+" : ""}${btcPct.toFixed(2)}%` : "BTC —";
     metaEl.textContent = age != null ? `${btcLabel} · ${age}s ago` : btcLabel;
     metaEl.style.color = btcPct == null ? "var(--text-muted)"
       : btcPct > 0.3 ? "var(--green)"
@@ -3525,15 +3537,7 @@ function renderBtcDivergence(data) {
       : "var(--text-muted)";
   }
 
-  const fmtPx = (p) => {
-    if (p == null) return "—";
-    if (p >= 1000) return "$" + p.toLocaleString("en-US", { maximumFractionDigits: 0 });
-    if (p >= 1) return "$" + p.toFixed(3);
-    return "$" + p.toPrecision(4);
-  };
-
   const fmtPct = (v) => v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(2)}%`;
-
   const TD  = "padding:6px 10px;border-bottom:1px solid var(--hairline);font-family:var(--font-mono);font-size:12px;";
   const TDR = TD + "text-align:right;";
   const TDC = TD + "text-align:center;";
@@ -3541,16 +3545,16 @@ function renderBtcDivergence(data) {
   tbody.innerHTML = coins.map((c) => {
     const isBtc = c.coin === "BTC";
     const rel = c.relPct;
-    const coin15 = c.coinPct;
+    const coinPct = c.coinPct;
 
     const relColor = !hasPast || rel == null ? "var(--text-muted)"
       : rel <= -1.5 ? "var(--red)"
       : rel >= 1.5 ? "var(--green)"
       : "var(--text-muted)";
 
-    const coinColor = !hasPast || coin15 == null ? "var(--text-muted)"
-      : coin15 > 0 ? "var(--green)"
-      : coin15 < 0 ? "var(--red)"
+    const coinColor = !hasPast || coinPct == null ? "var(--text-muted)"
+      : coinPct > 0 ? "var(--green)"
+      : coinPct < 0 ? "var(--red)"
       : "var(--text-muted)";
 
     let signal = "—";
@@ -3568,13 +3572,21 @@ function renderBtcDivergence(data) {
 
     return `<tr>
       <td style="${TD}font-weight:600">${c.coin}</td>
-      <td style="${TDR}">${fmtPx(c.price)}</td>
-      <td style="${TDR}color:${coinColor}">${hasPast ? fmtPct(coin15) : "—"}</td>
+      <td style="${TDR}">${fmtPrice(c.price)}</td>
+      <td style="${TDR}color:${coinColor}">${hasPast ? fmtPct(coinPct) : "—"}</td>
       <td style="${TDR}color:${relColor};font-weight:${Math.abs(rel ?? 0) >= 1.5 ? 600 : 400}">${hasPast && !isBtc ? fmtPct(rel) : isBtc ? "baseline" : "—"}</td>
       <td style="${TDC}color:${signalColor};font-weight:600;font-size:11px">${signal}</td>
     </tr>`;
   }).join("");
 }
+
+document.getElementById("div-tabs")?.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-window]");
+  if (!btn) return;
+  _divWindow = btn.dataset.window;
+  document.querySelectorAll("#div-tabs .range-btn").forEach((b) => b.classList.toggle("active", b === btn));
+  renderBtcDivergence(null);
+});
 
 bindLogsUi();
 fetchInitialLogs();

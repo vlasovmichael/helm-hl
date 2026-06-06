@@ -147,7 +147,7 @@ let divergenceTimer = null;
 // ─────────────────────────────────────────────────
 const DIVERGENCE_WATCHLIST = ["BTC", "HYPE", "ZEC", "WLD", "NEAR", "LIT", "ASTER"];
 const DIVERGENCE_SNAPSHOT_MS = 60_000;   // снимок раз в минуту
-const DIVERGENCE_SNAPSHOTS = 31;         // 30 минут истории
+const DIVERGENCE_SNAPSHOTS = 62;         // 61 минута истории (покрывает окно 1h)
 
 // Ring buffer: [{ts, prices: {BTC: x, HYPE: y, ...}}]
 const divergenceSnapshots = [];
@@ -181,12 +181,10 @@ async function takeDivergenceSnapshot() {
   } catch { /* silent — не ломаем дашборд */ }
 }
 
-function buildDivergencePayload() {
-  const now = Date.now();
-  const current = divergenceSnapshots[divergenceSnapshots.length - 1];
-  if (!current) return { coins: [], updatedAt: null, hasPast: false };
+const DIVERGENCE_WINDOWS = { "5m": 5, "15m": 15, "1h": 60 };
 
-  const targetTs = now - 15 * 60_000;
+function calcDivergenceWindow(current, minutes) {
+  const targetTs = Date.now() - minutes * 60_000;
   let past = null;
   for (const snap of divergenceSnapshots) {
     if (snap.ts <= targetTs) past = snap;
@@ -205,7 +203,18 @@ function buildDivergencePayload() {
     return { coin, price: pxNow ?? null, coinPct, btcPct, relPct };
   });
 
-  return { coins, btcPct, updatedAt: current.ts, hasPast: past !== null };
+  return { coins, btcPct, hasPast: past !== null };
+}
+
+function buildDivergencePayload() {
+  const current = divergenceSnapshots[divergenceSnapshots.length - 1];
+  if (!current) return { windows: {}, updatedAt: null };
+
+  const windows = {};
+  for (const [label, mins] of Object.entries(DIVERGENCE_WINDOWS)) {
+    windows[label] = calcDivergenceWindow(current, mins);
+  }
+  return { windows, updatedAt: current.ts };
 }
 
 function handleBtcDivergence(_req, res) {
