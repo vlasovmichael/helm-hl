@@ -94,7 +94,34 @@
         <div id="manual-positions-container"></div>
       </section>
 
-      <!-- 02 / Price Performance — удалён: свечи смотрим в TradingView -->
+      <!-- 02 / Smart Signals -->
+      <section class="card" id="sec-smart">
+        <div class="card-header">
+          <div class="card-title" data-num="02">Smart Signals</div>
+          <span id="smart-macro" style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted)"></span>
+        </div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse" id="smart-table">
+            <thead>
+              <tr>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:left;border-bottom:1px solid var(--hairline);width:20px">#</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:left;border-bottom:1px solid var(--hairline)">Coin</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:left;border-bottom:1px solid var(--hairline)">Dir</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:right;border-bottom:1px solid var(--hairline)">Entry</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:right;border-bottom:1px solid var(--hairline)">SL</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:right;border-bottom:1px solid var(--hairline)">TP</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:right;border-bottom:1px solid var(--hairline)">R:R</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:center;border-bottom:1px solid var(--hairline)">4h</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:left;border-bottom:1px solid var(--hairline)">Why</th>
+                <th style="font-family:var(--font-mono);font-size:9px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-faint);padding:6px 10px;text-align:center;border-bottom:1px solid var(--hairline)">Timing</th>
+              </tr>
+            </thead>
+            <tbody id="smart-tbody">
+              <tr><td colspan="10" class="empty-state">loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
 
       <!-- 03 / Live Logs -->
       <section class="card" id="sec-logs">
