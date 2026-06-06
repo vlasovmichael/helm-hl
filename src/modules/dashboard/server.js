@@ -146,10 +146,10 @@ let divergenceTimer = null;
 //  BTC Divergence — watchlist vs BTC snapshot ring buffer
 // ─────────────────────────────────────────────────
 const DIVERGENCE_WATCHLIST = ["BTC", "HYPE", "ZEC", "WLD", "NEAR", "LIT", "ASTER"];
-const DIVERGENCE_SNAPSHOT_MS = 60_000;   // снимок раз в минуту
-const DIVERGENCE_SNAPSHOTS = 62;         // 61 минута истории (покрывает окно 1h)
+const DIVERGENCE_SNAPSHOT_MS = 60_000;
+const DIVERGENCE_SNAPSHOTS = 62;         // 61 минута (покрывает 1h окно)
 
-// Ring buffer: [{ts, prices: {BTC: x, HYPE: y, ...}}]
+// Ring buffer: [{ts, prices: {COIN: price, ...}}] — хранит ВСЕ монеты с HL
 const divergenceSnapshots = [];
 
 async function takeDivergenceSnapshot() {
@@ -161,29 +161,30 @@ async function takeDivergenceSnapshot() {
     const [meta, ctxs] = data ?? [];
     if (!Array.isArray(meta?.universe) || !Array.isArray(ctxs)) return;
 
+    // Сохраняем ВСЕ монеты — нужно для таба "All"
     const snap = { ts: Date.now(), prices: {} };
-    for (const coin of DIVERGENCE_WATCHLIST) {
-      const idx = meta.universe.findIndex((a) => (a.name ?? "").toUpperCase() === coin);
-      if (idx === -1 || !ctxs[idx]) continue;
-      const px = parseFloat(ctxs[idx].midPx ?? ctxs[idx].markPx ?? "0");
-      if (px > 0) snap.prices[coin] = px;
+    for (let i = 0; i < meta.universe.length; i++) {
+      const name = (meta.universe[i]?.name ?? "").toUpperCase();
+      if (!name || !ctxs[i]) continue;
+      const px = parseFloat(ctxs[i].midPx ?? ctxs[i].markPx ?? "0");
+      if (px > 0) snap.prices[name] = px;
     }
     divergenceSnapshots.push(snap);
     if (divergenceSnapshots.length > DIVERGENCE_SNAPSHOTS) divergenceSnapshots.shift();
 
     if (wss && wss.clients.size > 0) {
-      const payload = buildDivergencePayload();
+      const payload = buildDivergencePayload(DIVERGENCE_WATCHLIST);
       const msg = JSON.stringify({ type: "btc-divergence", data: payload });
       for (const client of wss.clients) {
         if (client.readyState === 1) client.send(msg);
       }
     }
-  } catch { /* silent — не ломаем дашборд */ }
+  } catch { /* silent */ }
 }
 
 const DIVERGENCE_WINDOWS = { "5m": 5, "15m": 15, "1h": 60 };
 
-function calcDivergenceWindow(current, minutes) {
+function calcDivergenceWindow(current, minutes, coins) {
   const targetTs = Date.now() - minutes * 60_000;
   let past = null;
   for (const snap of divergenceSnapshots) {
@@ -195,7 +196,7 @@ function calcDivergenceWindow(current, minutes) {
   const btcPast = past?.prices["BTC"];
   const btcPct = btcNow && btcPast ? ((btcNow - btcPast) / btcPast) * 100 : null;
 
-  const coins = DIVERGENCE_WATCHLIST.map((coin) => {
+  const rows = coins.map((coin) => {
     const pxNow = current.prices[coin];
     const pxPast = past?.prices[coin];
     const coinPct = pxNow && pxPast ? ((pxNow - pxPast) / pxPast) * 100 : null;
@@ -203,22 +204,52 @@ function calcDivergenceWindow(current, minutes) {
     return { coin, price: pxNow ?? null, coinPct, btcPct, relPct };
   });
 
-  return { coins, btcPct, hasPast: past !== null };
+  return { coins: rows, btcPct, hasPast: past !== null };
 }
 
-function buildDivergencePayload() {
+function buildDivergencePayload(coins) {
   const current = divergenceSnapshots[divergenceSnapshots.length - 1];
   if (!current) return { windows: {}, updatedAt: null };
 
   const windows = {};
   for (const [label, mins] of Object.entries(DIVERGENCE_WINDOWS)) {
-    windows[label] = calcDivergenceWindow(current, mins);
+    windows[label] = calcDivergenceWindow(current, mins, coins);
   }
   return { windows, updatedAt: current.ts };
 }
 
-function handleBtcDivergence(_req, res) {
-  res.json(buildDivergencePayload());
+function handleBtcDivergenceAll(req, res) {
+  const current = divergenceSnapshots[divergenceSnapshots.length - 1];
+  if (!current) return res.json({ coins: [], btcPct: null, hasPast: false, window: "15m" });
+
+  const win = ["5m", "15m", "1h"].includes(req.query.window) ? req.query.window : "15m";
+  const mins = DIVERGENCE_WINDOWS[win];
+  const allCoins = Object.keys(current.prices).filter((c) => c !== "BTC");
+  const result = calcDivergenceWindow(current, mins, allCoins);
+
+  // Скор для сортировки: сильный сигнал сверху
+  const btcPct = result.btcPct ?? 0;
+  result.coins = result.coins
+    .filter((c) => c.relPct != null)
+    .sort((a, b) => {
+      const score = (c) => {
+        if (!result.hasPast) return 0;
+        if (btcPct > 0.3 && c.relPct <= -1.5) return 100 + Math.abs(c.relPct);   // SHORT signal
+        if (btcPct < -0.3 && c.relPct >= 1.5) return 100 + c.relPct;             // LONG signal
+        return Math.abs(c.relPct);                                                 // слабый сигнал
+      };
+      return score(b) - score(a);
+    })
+    .slice(0, 40);
+
+  res.json({ ...result, window: win });
+}
+
+function handleBtcDivergence(req, res) {
+  const coins = req.query.coins
+    ? req.query.coins.split(",").map((c) => c.trim().toUpperCase()).filter(Boolean)
+    : DIVERGENCE_WATCHLIST;
+  res.json(buildDivergencePayload(coins));
 }
 
 // ─────────────────────────────────────────────────
@@ -1693,6 +1724,7 @@ export function startDashboard() {
   app.get("/api/setup-scanner", handleSetupScanner);
   app.get("/api/trade-markers", handleTradeMarkers);
   app.get("/api/btc-divergence", handleBtcDivergence);
+  app.get("/api/btc-divergence/all", handleBtcDivergenceAll);
 
   // Debug: посмотреть что реально выдаёт getManualTrades() — для расследования
   // багов в reconstructManualTrades. JSON со списком всех восстановленных

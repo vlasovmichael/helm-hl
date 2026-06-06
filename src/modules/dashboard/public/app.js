@@ -1638,20 +1638,15 @@ async function fetchJson(path) {
 }
 
 async function tick() {
-  const [historyR, activityR, taxR, pnlR, insightsR, setupR, hmR, btcR] = await Promise.allSettled([
+  const [historyR, activityR, taxR, pnlR, insightsR, hmR, btcR] = await Promise.allSettled([
     fetchJson(`/api/history?hours=${currentRangeHours}`),
     fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
     fetchJson("/api/tax-summary"),
     fetchJson("/api/pnl-summary"),
     fetchJson("/api/insights"),
-    fetchJson("/api/setup-scanner"),
     fetchJson("/api/signals?limit=30"),
     fetchJson("/api/candles?coin=BTC&interval=1m"),
   ]);
-  if (setupR.status === "fulfilled") {
-    renderSetupScanner(setupR.value);
-    _lastSetupRowsCache = Array.isArray(setupR.value?.rows) ? setupR.value.rows : [];
-  }
   if (hmR.status === "fulfilled" && Array.isArray(hmR.value)) {
     _hmSignalsCache = hmR.value;
   }
@@ -3505,16 +3500,130 @@ function renderSmartSignals() {
 
 let _divData = null;
 let _divWindow = "15m";
+const DIV_DEFAULT_WATCHLIST = ["BTC", "HYPE", "ZEC", "WLD", "NEAR", "LIT", "ASTER"];
+
+function divGetWatchlist() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("hl-div-watchlist") || "null");
+    if (Array.isArray(saved) && saved.length) return saved;
+  } catch {}
+  return [...DIV_DEFAULT_WATCHLIST];
+}
+
+function divSaveWatchlist(list) {
+  localStorage.setItem("hl-div-watchlist", JSON.stringify(list));
+}
+
+function divRenderWatchlistBar() {
+  const bar = document.getElementById("div-watchlist-bar");
+  if (!bar || _divWindow === "all") { if (bar) bar.style.display = "none"; return; }
+  bar.style.display = "flex";
+  const list = divGetWatchlist();
+  const defaults = new Set(DIV_DEFAULT_WATCHLIST);
+  bar.innerHTML = list.map((coin) => {
+    const removable = !defaults.has(coin);
+    return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--surface-2,rgba(255,255,255,.06));border:1px solid var(--hairline);border-radius:4px;padding:2px 6px;font-family:var(--font-mono);font-size:10px;">
+      ${coin}${removable ? `<button data-remove="${coin}" style="background:none;border:none;cursor:pointer;color:var(--text-faint);padding:0;line-height:1;font-size:11px;" title="Убрать">×</button>` : ""}
+    </span>`;
+  }).join("") +
+  `<span style="display:inline-flex;align-items:center;gap:3px;">
+    <input id="div-add-input" placeholder="+ COIN" style="width:60px;background:transparent;border:1px dashed var(--hairline);border-radius:4px;padding:2px 5px;font-family:var(--font-mono);font-size:10px;color:inherit;outline:none;" maxlength="10" autocomplete="off" spellcheck="false"/>
+  </span>`;
+
+  bar.querySelector("#div-add-input")?.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const val = e.target.value.trim().toUpperCase();
+    if (!val) return;
+    const l = divGetWatchlist();
+    if (!l.includes(val)) { l.push(val); divSaveWatchlist(l); }
+    e.target.value = "";
+    divRenderWatchlistBar();
+    renderBtcDivergence(null);
+  });
+
+  bar.querySelectorAll("[data-remove]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const l = divGetWatchlist().filter((c) => c !== btn.dataset.remove);
+      divSaveWatchlist(l);
+      divRenderWatchlistBar();
+      renderBtcDivergence(null);
+    });
+  });
+}
+
+function divSignalInfo(c, btcPct, hasPast) {
+  const rel = c.relPct;
+  const isBtc = c.coin === "BTC";
+  const relColor = !hasPast || rel == null ? "var(--text-muted)"
+    : rel <= -1.5 ? "var(--red)" : rel >= 1.5 ? "var(--green)" : "var(--text-muted)";
+  const coinColor = !hasPast || c.coinPct == null ? "var(--text-muted)"
+    : c.coinPct > 0 ? "var(--green)" : c.coinPct < 0 ? "var(--red)" : "var(--text-muted)";
+  let signal = "—";
+  if (hasPast && rel != null && btcPct != null && !isBtc) {
+    if (btcPct > 0.3 && rel <= -1.5) signal = "SHORT ↓";
+    else if (btcPct < -0.3 && rel >= 1.5) signal = "LONG ↑";
+    else if (Math.abs(rel) >= 0.8) signal = rel < 0 ? "weak" : "strong";
+  }
+  const signalColor = signal.startsWith("SHORT") ? "var(--red)"
+    : signal.startsWith("LONG") ? "var(--green)"
+    : signal === "weak" ? "color-mix(in srgb, var(--red) 60%, var(--text-muted))"
+    : signal === "strong" ? "color-mix(in srgb, var(--green) 60%, var(--text-muted))"
+    : "var(--text-faint)";
+  return { relColor, coinColor, signal, signalColor, isBtc };
+}
+
+function divRenderRows(coins, btcPct, hasPast) {
+  const fmtPct = (v) => v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(2)}%`;
+  const TD  = "padding:6px 10px;border-bottom:1px solid var(--hairline);font-family:var(--font-mono);font-size:12px;";
+  const TDR = TD + "text-align:right;";
+  const TDC = TD + "text-align:center;";
+  return coins.map((c) => {
+    const { relColor, coinColor, signal, signalColor, isBtc } = divSignalInfo(c, btcPct, hasPast);
+    const rel = c.relPct;
+    return `<tr>
+      <td style="${TD}font-weight:600">${c.coin}</td>
+      <td style="${TDR}">${fmtPrice(c.price)}</td>
+      <td style="${TDR}color:${coinColor}">${hasPast ? fmtPct(c.coinPct) : "—"}</td>
+      <td style="${TDR}color:${relColor};font-weight:${Math.abs(rel ?? 0) >= 1.5 ? 600 : 400}">${hasPast && !isBtc ? fmtPct(rel) : isBtc ? "baseline" : "—"}</td>
+      <td style="${TDC}color:${signalColor};font-weight:600;font-size:11px">${signal}</td>
+    </tr>`;
+  }).join("");
+}
+
+async function divFetchAll() {
+  const win = _divWindow === "all" ? "15m" : _divWindow;
+  const tbody = document.getElementById("div-tbody");
+  if (tbody) tbody.innerHTML = `<tr><td colspan="5" class="empty-state">загружаем все монеты…</td></tr>`;
+  try {
+    const d = await fetchJson(`/api/btc-divergence/all?window=${win}`);
+    if (!d?.coins) return;
+    const metaEl = document.getElementById("div-meta");
+    const thChange = document.getElementById("div-th-change");
+    if (thChange) thChange.textContent = `${win} %`;
+    if (metaEl) {
+      const btcLabel = d.btcPct != null ? `BTC ${win} ${d.btcPct > 0 ? "+" : ""}${d.btcPct.toFixed(2)}% · top 40` : "все монеты";
+      metaEl.textContent = btcLabel;
+      metaEl.style.color = d.btcPct == null ? "var(--text-muted)"
+        : d.btcPct > 0.3 ? "var(--green)" : d.btcPct < -0.3 ? "var(--red)" : "var(--text-muted)";
+    }
+    if (tbody) tbody.innerHTML = divRenderRows(d.coins, d.btcPct, d.hasPast);
+  } catch { /* silent */ }
+}
 
 function renderBtcDivergence(data) {
   if (data) _divData = data;
-  if (!_divData) return;
 
+  divRenderWatchlistBar();
+
+  if (_divWindow === "all") { divFetchAll(); return; }
+
+  if (!_divData) return;
   const tbody = document.getElementById("div-tbody");
   const metaEl = document.getElementById("div-meta");
   const thChange = document.getElementById("div-th-change");
   if (!tbody) return;
 
+  const watchlist = divGetWatchlist();
   const windowData = _divData.windows?.[_divWindow];
   if (!windowData?.coins?.length) {
     const mins = _divWindow === "1h" ? 60 : parseInt(_divWindow);
@@ -3523,61 +3632,22 @@ function renderBtcDivergence(data) {
   }
 
   if (thChange) thChange.textContent = `${_divWindow} %`;
-
-  const { coins, btcPct, hasPast } = windowData;
+  const { coins: allCoins, btcPct, hasPast } = windowData;
   const { updatedAt } = _divData;
+
+  // Фильтруем по вотчлисту, добавляем монеты которые пользователь добавил
+  const watchSet = new Set(watchlist);
+  const coins = allCoins.filter((c) => watchSet.has(c.coin));
 
   if (metaEl) {
     const age = updatedAt ? Math.round((Date.now() - updatedAt) / 1000) : null;
     const btcLabel = btcPct != null ? `BTC ${_divWindow} ${btcPct > 0 ? "+" : ""}${btcPct.toFixed(2)}%` : "BTC —";
     metaEl.textContent = age != null ? `${btcLabel} · ${age}s ago` : btcLabel;
     metaEl.style.color = btcPct == null ? "var(--text-muted)"
-      : btcPct > 0.3 ? "var(--green)"
-      : btcPct < -0.3 ? "var(--red)"
-      : "var(--text-muted)";
+      : btcPct > 0.3 ? "var(--green)" : btcPct < -0.3 ? "var(--red)" : "var(--text-muted)";
   }
 
-  const fmtPct = (v) => v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(2)}%`;
-  const TD  = "padding:6px 10px;border-bottom:1px solid var(--hairline);font-family:var(--font-mono);font-size:12px;";
-  const TDR = TD + "text-align:right;";
-  const TDC = TD + "text-align:center;";
-
-  tbody.innerHTML = coins.map((c) => {
-    const isBtc = c.coin === "BTC";
-    const rel = c.relPct;
-    const coinPct = c.coinPct;
-
-    const relColor = !hasPast || rel == null ? "var(--text-muted)"
-      : rel <= -1.5 ? "var(--red)"
-      : rel >= 1.5 ? "var(--green)"
-      : "var(--text-muted)";
-
-    const coinColor = !hasPast || coinPct == null ? "var(--text-muted)"
-      : coinPct > 0 ? "var(--green)"
-      : coinPct < 0 ? "var(--red)"
-      : "var(--text-muted)";
-
-    let signal = "—";
-    if (hasPast && rel != null && btcPct != null && !isBtc) {
-      if (btcPct > 0.3 && rel <= -1.5) signal = "SHORT ↓";
-      else if (btcPct < -0.3 && rel >= 1.5) signal = "LONG ↑";
-      else if (Math.abs(rel) >= 0.8) signal = rel < 0 ? "weak" : "strong";
-    }
-
-    const signalColor = signal.startsWith("SHORT") ? "var(--red)"
-      : signal.startsWith("LONG") ? "var(--green)"
-      : signal === "weak" ? "color-mix(in srgb, var(--red) 60%, var(--text-muted))"
-      : signal === "strong" ? "color-mix(in srgb, var(--green) 60%, var(--text-muted))"
-      : "var(--text-faint)";
-
-    return `<tr>
-      <td style="${TD}font-weight:600">${c.coin}</td>
-      <td style="${TDR}">${fmtPrice(c.price)}</td>
-      <td style="${TDR}color:${coinColor}">${hasPast ? fmtPct(coinPct) : "—"}</td>
-      <td style="${TDR}color:${relColor};font-weight:${Math.abs(rel ?? 0) >= 1.5 ? 600 : 400}">${hasPast && !isBtc ? fmtPct(rel) : isBtc ? "baseline" : "—"}</td>
-      <td style="${TDC}color:${signalColor};font-weight:600;font-size:11px">${signal}</td>
-    </tr>`;
-  }).join("");
+  tbody.innerHTML = divRenderRows(coins, btcPct, hasPast);
 }
 
 document.getElementById("div-tabs")?.addEventListener("click", (e) => {

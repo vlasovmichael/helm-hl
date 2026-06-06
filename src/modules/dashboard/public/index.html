@@ -102,9 +102,11 @@
             <button class="range-btn" data-window="5m">5m</button>
             <button class="range-btn active" data-window="15m">15m</button>
             <button class="range-btn" data-window="1h">1h</button>
+            <button class="range-btn" data-window="all">All ↓</button>
           </div>
           <span id="div-meta" style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted)"></span>
         </div>
+        <div id="div-watchlist-bar" style="display:flex;align-items:center;gap:6px;padding:6px 10px 0;flex-wrap:wrap"></div>
         <div style="overflow-x:auto">
           <table style="width:100%;border-collapse:collapse" id="div-table">
             <thead>
@@ -162,56 +164,7 @@
         </div>
       </section>
 
-      <!-- 05 / Radar — scanner hub. Каждый блок ниже сворачивается (collapse).
-           Состояние open/closed запоминается в localStorage (inline-скрипт внизу). -->
-      <div class="radar-label" id="sec-radar">
-        <span class="radar-label__title" data-num="05">Radar</span>
-        <span class="radar-label__sub">сканеры · клик по шапке — свернуть/развернуть</span>
-      </div>
-
-      <!-- 05a Hot Movers + 05b Manual Toolkit удалены (движение/контекст — в aggr.trade) -->
-
-      <!-- Setup Scanner (manual-helper, конвергенция HL-сигналов) -->
-      <details class="card radar-acc" id="setup-scanner-card" data-acc="setupScanner">
-        <summary class="card-header radar-acc__head">
-          <div class="card-title" data-num="05c" title="Конвергенция HL-сигналов: funding extreme + persist, OI ramp, premium/basis, vol regime. Manual-helper, не торгует.">
-            Setup Scanner
-            <button type="button" class="help-btn" data-help="setupScanner" aria-label="Объяснение карточки">
-              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-                <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.4"/>
-                <path d="M5.8 5.8c0-1.2 1-2.1 2.2-2.1 1.3 0 2.2.8 2.2 1.9 0 .9-.5 1.4-1.3 1.9-.8.5-.9.9-.9 1.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                <circle cx="8" cy="11.6" r="0.8" fill="currentColor"/>
-              </svg>
-            </button>
-          </div>
-          <div class="signals-meta" id="setup-scanner-meta">—</div>
-          <span class="radar-badge" aria-hidden="true"></span>
-        </summary>
-        <div class="signals-table-wrap">
-          <table class="signals-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Pair</th>
-                <th title="Annualized funding (current snapshot)">Funding APY</th>
-                <th title="Mark vs oracle premium %">Premium</th>
-                <th title="Open Interest в USD (nominal)">OI</th>
-                <th title="24h volume USD">Vol 24h</th>
-                <th title="Доля 48ч-сэмплов с |APY| > 30%">Persist 48h</th>
-                <th title="Δ OI vs Δ price за 7d. OI ramp без движения цены = накопление">OI Δ7d / Px</th>
-                <th title="Vol 24h / средний 24h-объём за 30d. >1.5× = regime shift">Vol regime</th>
-              </tr>
-            </thead>
-            <tbody id="setup-scanner-tbody">
-              <tr>
-                <td colspan="9" class="empty-state">
-                  Waiting for first snapshot…
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </details>
+      <!-- Setup Scanner удалён (BTC Divergence заменяет) -->
 
       <!-- 06 / P&L Summary -->
       <section class="card" id="sec-pnl">
