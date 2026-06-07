@@ -217,20 +217,40 @@ let obReconnectTimer = null;
 
 function subscribeOrderBook(coin) {
   if (obCoin === coin && obWs && obWs.readyState === WebSocket.OPEN) return;
-  if (obReconnectTimer) { clearTimeout(obReconnectTimer); obReconnectTimer = null; }
+  if (obReconnectTimer) {
+    clearTimeout(obReconnectTimer);
+    obReconnectTimer = null;
+  }
   obCoin = coin;
-  if (obWs) { try { obWs.close(); } catch {} obWs = null; }
-  if (!coin) { renderOrderBookBar(null); return; }
+  if (obWs) {
+    try {
+      obWs.close();
+    } catch {}
+    obWs = null;
+  }
+  if (!coin) {
+    renderOrderBookBar(null);
+    return;
+  }
   openObWs(coin);
 }
 
 function openObWs(coin) {
   let ws;
-  try { ws = new WebSocket("wss://api.hyperliquid.xyz/ws"); } catch { return; }
+  try {
+    ws = new WebSocket("wss://api.hyperliquid.xyz/ws");
+  } catch {
+    return;
+  }
   obWs = ws;
   ws.onopen = () => {
     if (obCoin !== coin || obWs !== ws) return;
-    ws.send(JSON.stringify({ method: "subscribe", subscription: { type: "l2Book", coin } }));
+    ws.send(
+      JSON.stringify({
+        method: "subscribe",
+        subscription: { type: "l2Book", coin },
+      }),
+    );
   };
   ws.onmessage = (e) => {
     if (obCoin !== coin || obWs !== ws) return;
@@ -245,10 +265,16 @@ function openObWs(coin) {
     if (obWs !== ws) return;
     obWs = null;
     if (obCoin === coin) {
-      obReconnectTimer = setTimeout(() => { if (obCoin === coin) openObWs(coin); }, 2000);
+      obReconnectTimer = setTimeout(() => {
+        if (obCoin === coin) openObWs(coin);
+      }, 2000);
     }
   };
-  ws.onerror = () => { try { ws.close(); } catch {} };
+  ws.onerror = () => {
+    try {
+      ws.close();
+    } catch {}
+  };
 }
 
 function renderOrderBookBar(data) {
@@ -260,28 +286,40 @@ function renderOrderBookBar(data) {
   }
   const bids = data.levels[0] || [];
   const asks = data.levels[1] || [];
-  if (!bids.length || !asks.length) { wrap.style.display = "none"; return; }
+  if (!bids.length || !asks.length) {
+    wrap.style.display = "none";
+    return;
+  }
   const bestBid = Number(bids[0].px);
   const bestAsk = Number(asks[0].px);
-  if (!(bestBid > 0) || !(bestAsk > 0)) { wrap.style.display = "none"; return; }
+  if (!(bestBid > 0) || !(bestAsk > 0)) {
+    wrap.style.display = "none";
+    return;
+  }
   const mid = (bestBid + bestAsk) / 2;
   const lo = mid * (1 - OB_RANGE);
   const hi = mid * (1 + OB_RANGE);
-  let bidUsd = 0, askUsd = 0;
+  let bidUsd = 0,
+    askUsd = 0;
   for (const lv of bids) {
-    const px = Number(lv.px), sz = Number(lv.sz);
+    const px = Number(lv.px),
+      sz = Number(lv.sz);
     if (!(px > 0) || !(sz > 0)) continue;
     if (px < lo) break;
     bidUsd += px * sz;
   }
   for (const lv of asks) {
-    const px = Number(lv.px), sz = Number(lv.sz);
+    const px = Number(lv.px),
+      sz = Number(lv.sz);
     if (!(px > 0) || !(sz > 0)) continue;
     if (px > hi) break;
     askUsd += px * sz;
   }
   const total = bidUsd + askUsd;
-  if (total <= 0) { wrap.style.display = "none"; return; }
+  if (total <= 0) {
+    wrap.style.display = "none";
+    return;
+  }
   const bidPct = (bidUsd / total) * 100;
   const askPct = 100 - bidPct;
   wrap.style.display = "flex";
@@ -290,7 +328,8 @@ function renderOrderBookBar(data) {
   const labelEl = document.getElementById("orderbook-label");
   if (bidEl) bidEl.style.flexBasis = bidPct.toFixed(2) + "%";
   if (askEl) askEl.style.flexBasis = askPct.toFixed(2) + "%";
-  if (labelEl) labelEl.textContent = `bids ${bidPct.toFixed(0)}% / asks ${askPct.toFixed(0)}% · ±0.5%`;
+  if (labelEl)
+    labelEl.textContent = `bids ${bidPct.toFixed(0)}% / asks ${askPct.toFixed(0)}% · ±0.5%`;
 }
 
 // ── Price Chart Logic ────────────────────────────
@@ -713,13 +752,11 @@ function initPriceChart() {
     priceLineVisible: false,
     lastValueVisible: false,
   });
-  priceChart
-    .priceScale("vol")
-    .applyOptions({
-      scaleMargins: { top: 0.82, bottom: 0 },
-      borderVisible: false,
-      visible: false,
-    });
+  priceChart.priceScale("vol").applyOptions({
+    scaleMargins: { top: 0.82, bottom: 0 },
+    borderVisible: false,
+    visible: false,
+  });
 
   if (!window.__priceChartResizeBound) {
     window.__priceChartResizeBound = true;
@@ -963,7 +1000,7 @@ function applyPriceChartTheme() {
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
   const textColor = cssVar("--text-muted") || (isDark ? "#71717A" : "#52525B");
   const gridColor = cssVar("--grid-line") || (isDark ? "#1F1F23" : "#E4E4E7");
-  const bgColor   = cssVar("--card-bg")   || (isDark ? "#131316" : "#FFFFFF");
+  const bgColor = cssVar("--card-bg") || (isDark ? "#131316" : "#FFFFFF");
   priceChart.applyOptions({
     layout: { background: { type: "solid", color: bgColor }, textColor },
     grid: { vertLines: { color: gridColor }, horzLines: { color: gridColor } },
@@ -989,7 +1026,8 @@ function fmtPct(n) {
 function fmtPrice(p) {
   if (p == null || !Number.isFinite(Number(p))) return "—";
   p = Number(p);
-  if (p >= 10000) return `$${p.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  if (p >= 10000)
+    return `$${p.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
   if (p >= 1000) return `$${p.toFixed(1)}`;
   if (p >= 100) return `$${p.toFixed(2)}`;
   if (p >= 1) return `$${p.toFixed(4)}`;
@@ -1089,7 +1127,8 @@ function renderManualPositions(list) {
   const blocks = list
     .map((p) => {
       const sideCls = p.side === "SHORT" ? "negative" : "positive";
-      const liq = p.liquidationPrice != null ? fmtPrice(p.liquidationPrice) : "—";
+      const liq =
+        p.liquidationPrice != null ? fmtPrice(p.liquidationPrice) : "—";
       const lev = p.leverage != null ? `${p.leverage}x` : "—";
       const cur = p.currentPrice != null ? fmtPrice(p.currentPrice) : "—";
       return `
@@ -1138,51 +1177,77 @@ function renderBans(status) {
 // ответ «заходить / ждать / мимо» без сборки комбо в голове.
 // SVG-иконки для Setup пилл
 const _SVG_ARROW_DOWN = `<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px"><path d="M6 1v8M3 7l3 3 3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
-const _SVG_ARROW_UP   = `<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px"><path d="M6 11V3M3 5l3-3 3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
-const _SVG_WAIT       = `<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px;opacity:0.7"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M6 4v2.5l1.5 1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/></svg>`;
+const _SVG_ARROW_UP = `<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px"><path d="M6 11V3M3 5l3-3 3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+const _SVG_WAIT = `<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px;opacity:0.7"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M6 4v2.5l1.5 1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/></svg>`;
 
 function computeSetup(accelKind, volKind, dir) {
   // fade direction: pump → SHORT entry, dump → LONG entry
-  const side = dir === 'pump' ? 'SHORT' : dir === 'dump' ? 'LONG' : null;
-  const goShort = side === 'SHORT';
-  const goLong  = side === 'LONG';
+  const side = dir === "pump" ? "SHORT" : dir === "dump" ? "LONG" : null;
+  const goShort = side === "SHORT";
+  const goLong = side === "LONG";
 
   if (!accelKind && !volKind) {
     // Нет accel/vol данных, но есть направление движения → WAIT с уклоном,
     // чтобы колонка не пустовала. Чистое «—» только когда вообще нет движения.
-    if (side) return {
-      label: `<span class="setup-pill">${_SVG_WAIT}WAIT</span>`,
-      cls: goShort ? 'setup-wait-short' : 'setup-wait-long',
-      title: 'Движение есть, ждём accel/vol данных',
+    if (side)
+      return {
+        label: `<span class="setup-pill">${_SVG_WAIT} WAIT</span>`,
+        cls: goShort ? "setup-wait-short" : "setup-wait-long",
+        title: "Движение есть, ждём accel/vol данных",
+      };
+    return {
+      label: '<span class="num-inline-muted">—</span>',
+      cls: "setup-none",
+      title: "Нет данных",
     };
-    return { label: '<span class="num-inline-muted">—</span>', cls: 'setup-none', title: 'Нет данных' };
   }
   // Momentum decelerating → ready to fade
-  if (accelKind === 'down') {
-    if (goShort) return {
-      label: `<span class="setup-pill">${_SVG_ARROW_DOWN}SHORT</span>`,
-      cls: 'setup-short',
-      title: volKind === 'thin' ? 'Лучший fade: памп выдохся на пустом стакане → SHORT' : 'Памп выдыхается → fade SHORT',
+  if (accelKind === "down") {
+    if (goShort)
+      return {
+        label: `<span class="setup-pill">${_SVG_ARROW_DOWN}SHORT</span>`,
+        cls: "setup-short",
+        title:
+          volKind === "thin"
+            ? "Лучший fade: памп выдохся на пустом стакане → SHORT"
+            : "Памп выдыхается → fade SHORT",
+      };
+    if (goLong)
+      return {
+        label: `<span class="setup-pill">${_SVG_ARROW_UP}LONG</span>`,
+        cls: "setup-long",
+        title:
+          volKind === "thin"
+            ? "Лучший fade: дамп выдохся на пустом стакане → LONG"
+            : "Дамп выдыхается → fade LONG",
+      };
+    return {
+      label: '<span class="num-inline-muted">—</span>',
+      cls: "setup-none",
+      title: "Выдыхается, нет направления",
     };
-    if (goLong) return {
-      label: `<span class="setup-pill">${_SVG_ARROW_UP}LONG</span>`,
-      cls: 'setup-long',
-      title: volKind === 'thin' ? 'Лучший fade: дамп выдохся на пустом стакане → LONG' : 'Дамп выдыхается → fade LONG',
-    };
-    return { label: '<span class="num-inline-muted">—</span>', cls: 'setup-none', title: 'Выдыхается, нет направления' };
   }
   // Accelerating / reversal / flat → wait
   if (side) {
-    const title = accelKind === 'rev' ? 'Разворот — не фейди сейчас'
-                : accelKind === 'up'  ? (volKind === 'thin' ? 'Тонкий стакан — ждём выдоха' : 'Импульс ускоряется — ждём')
-                : 'Темп ровный — ждём выдоха';
+    const title =
+      accelKind === "rev"
+        ? "Разворот — не фейди сейчас"
+        : accelKind === "up"
+          ? volKind === "thin"
+            ? "Тонкий стакан — ждём выдоха"
+            : "Импульс ускоряется — ждём"
+          : "Темп ровный — ждём выдоха";
     return {
-      label: `<span class="setup-pill">${_SVG_WAIT}WAIT</span>`,
-      cls: goShort ? 'setup-wait-short' : 'setup-wait-long',
+      label: `<span class="setup-pill">${_SVG_WAIT} WAIT</span>`,
+      cls: goShort ? "setup-wait-short" : "setup-wait-long",
       title,
     };
   }
-  return { label: '<span class="num-inline-muted">—</span>', cls: 'setup-none', title: 'Нет направления' };
+  return {
+    label: '<span class="num-inline-muted">—</span>',
+    cls: "setup-none",
+    title: "Нет направления",
+  };
 }
 
 // Fader traffic-light для Setup column (когда FADER_ENABLED=true).
@@ -1192,13 +1257,13 @@ function computeSetup(accelKind, volKind, dir) {
 //   нет направления / SKIP → нейтральный, без цвета
 // Tier влияет на иконку: GO = filled arrow, WAIT = outlined, SKIP = dash.
 function faderIcon(kind, direction) {
-  if (kind === 'skip') {
+  if (kind === "skip") {
     return `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
       <path d="M3.5 8 L12.5 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
     </svg>`;
   }
-  const filled = kind === 'go';
-  if (direction === 'SHORT') {
+  const filled = kind === "go";
+  if (direction === "SHORT") {
     // arrow ↓
     return filled
       ? `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
@@ -1210,7 +1275,7 @@ function faderIcon(kind, direction) {
            <path d="M4 9 L8 13 L12 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.7"/>
          </svg>`;
   }
-  if (direction === 'LONG') {
+  if (direction === "LONG") {
     return filled
       ? `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
            <path d="M8 13.5 L8 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -1230,36 +1295,52 @@ function faderIcon(kind, direction) {
 function computeFaderSetup(fader, rowDir) {
   // rowDir: 'pump' → SHORT-fade, 'dump' → LONG-fade. Используем как fallback
   // и для синхронизации лейбла Setup с row-fade-окраской строки.
-  const rowDirToSide = rowDir === 'pump' ? 'SHORT' : rowDir === 'dump' ? 'LONG' : null;
+  const rowDirToSide =
+    rowDir === "pump" ? "SHORT" : rowDir === "dump" ? "LONG" : null;
   if (!fader) {
-    return { label: faderIcon('skip', null), cls: 'fader-skip', title: 'Fader: нет данных' };
-  }
-  const dir = fader.direction || rowDirToSide || null;
-  const chop = fader.chopRatio != null ? ` · chop ${fader.chopRatio.toFixed(2)}` : '';
-  const blocked = fader.blocked ? ` · ${fader.blocked}` : '';
-
-  if (fader.tier === 'GREEN') {
-    const cls = dir === 'SHORT' ? 'fader-go-short' : dir === 'LONG' ? 'fader-go-long' : 'fader-wait-neutral';
-    const label = dir === 'SHORT' ? 'SHORT' : dir === 'LONG' ? 'LONG' : 'GO';
     return {
-      label: `${faderIcon('go', dir)}<span class="fader-lbl">${label}</span>`,
-      cls,
-      title: `Fader GO ${dir ?? ''}: choppy setup ready${chop}`,
+      label: faderIcon("skip", null),
+      cls: "fader-skip",
+      title: "Fader: нет данных",
     };
   }
-  if (fader.tier === 'YELLOW') {
-    const cls = dir === 'SHORT' ? 'fader-wait-short' : dir === 'LONG' ? 'fader-wait-long' : 'fader-wait-neutral';
-    const label = dir === 'SHORT' ? 'SHORT' : dir === 'LONG' ? 'LONG' : 'WAIT';
+  const dir = fader.direction || rowDirToSide || null;
+  const chop =
+    fader.chopRatio != null ? ` · chop ${fader.chopRatio.toFixed(2)}` : "";
+  const blocked = fader.blocked ? ` · ${fader.blocked}` : "";
+
+  if (fader.tier === "GREEN") {
+    const cls =
+      dir === "SHORT"
+        ? "fader-go-short"
+        : dir === "LONG"
+          ? "fader-go-long"
+          : "fader-wait-neutral";
+    const label = dir === "SHORT" ? "SHORT" : dir === "LONG" ? "LONG" : "GO";
     return {
-      label: `${faderIcon('wait', dir)}<span class="fader-lbl">${label}</span>`,
+      label: `${faderIcon("go", dir)}<span class="fader-lbl">${label}</span>`,
       cls,
-      title: `Fader ${label}${dir ? ' ' + dir : ''}: borderline${chop}${blocked}`,
+      title: `Fader GO ${dir ?? ""}: choppy setup ready${chop}`,
+    };
+  }
+  if (fader.tier === "YELLOW") {
+    const cls =
+      dir === "SHORT"
+        ? "fader-wait-short"
+        : dir === "LONG"
+          ? "fader-wait-long"
+          : "fader-wait-neutral";
+    const label = dir === "SHORT" ? "SHORT" : dir === "LONG" ? "LONG" : "WAIT";
+    return {
+      label: `${faderIcon("wait", dir)}<span class="fader-lbl">${label}</span>`,
+      cls,
+      title: `Fader ${label}${dir ? " " + dir : ""}: borderline${chop}${blocked}`,
     };
   }
   // RED — нейтральный фон (оператор попросил убрать красный для skip).
   return {
-    label: `${faderIcon('skip', dir)}<span class="fader-lbl">SKIP</span>`,
-    cls: 'fader-skip',
+    label: `${faderIcon("skip", dir)}<span class="fader-lbl">SKIP</span>`,
+    cls: "fader-skip",
     title: `Fader SKIP: trending/no_history${chop}${blocked}`,
   };
 }
@@ -1296,26 +1377,28 @@ function renderHotMovers(payload) {
     const w5 = windows.find((w) => w.mins === 5);
     let accelKind = null;
     if (w2 && w5 && w2.spikePct != null && w5.spikePct != null) {
-      const a = w2.spikePct, b = w5.spikePct;
-      if (Math.abs(b) < 0.05) accelKind = 'flat';
-      else if ((a > 0) !== (b > 0) && Math.abs(a) > 0.2) accelKind = 'rev';
+      const a = w2.spikePct,
+        b = w5.spikePct;
+      if (Math.abs(b) < 0.05) accelKind = "flat";
+      else if (a > 0 !== b > 0 && Math.abs(a) > 0.2) accelKind = "rev";
       else {
         const ratio = Math.abs(a) / Math.abs(b * 0.4);
-        accelKind = ratio >= 1.2 ? 'up' : ratio <= 0.6 ? 'down' : 'flat';
+        accelKind = ratio >= 1.2 ? "up" : ratio <= 0.6 ? "down" : "flat";
       }
     }
     let volKind = null;
     if (typeof s.volMult === "number" && isFinite(s.volMult)) {
       const v = s.volMult;
-      volKind = v >= 2 ? 'high' : v >= 1.3 ? 'mid' : v <= 0.5 ? 'thin' : 'normal';
+      volKind =
+        v >= 2 ? "high" : v >= 1.3 ? "mid" : v <= 0.5 ? "thin" : "normal";
     }
-    if (accelKind === 'down' && volKind === 'thin') return 6; // FADE
-    if (accelKind === 'down' && volKind === 'high') return 5; // OK*
-    if (accelKind === 'down') return 4;                       // OK
-    if (accelKind === 'up' && volKind === 'thin') return 3;   // PRE
-    if (accelKind === 'rev') return 2;
-    if (accelKind === 'up') return 1;                         // AVOID
-    return 0;                                                  // WAIT/none
+    if (accelKind === "down" && volKind === "thin") return 6; // FADE
+    if (accelKind === "down" && volKind === "high") return 5; // OK*
+    if (accelKind === "down") return 4; // OK
+    if (accelKind === "up" && volKind === "thin") return 3; // PRE
+    if (accelKind === "rev") return 2;
+    if (accelKind === "up") return 1; // AVOID
+    return 0; // WAIT/none
   };
 
   const enriched = signals
@@ -1334,7 +1417,7 @@ function renderHotMovers(payload) {
       return { s, windows, maxAbs, sortRank };
     })
     .filter((x) => x.maxAbs > -Infinity)
-    .sort((a, b) => (b.sortRank - a.sortRank) || (b.maxAbs - a.maxAbs))
+    .sort((a, b) => b.sortRank - a.sortRank || b.maxAbs - a.maxAbs)
     .slice(0, 20);
 
   meta.textContent = payload?.ts
@@ -1372,7 +1455,8 @@ function renderHotMovers(payload) {
     return "";
   };
   const pctCellTiered = (w) => {
-    if (!w || w.spikePct == null) return ['<span class="num-inline-muted">—</span>', ""];
+    if (!w || w.spikePct == null)
+      return ['<span class="num-inline-muted">—</span>', ""];
     const v = w.spikePct;
     const arrow = v > 0 ? "▲" : v < 0 ? "▼" : "·";
     const cls = tierCellCls(w);
@@ -1424,16 +1508,29 @@ function renderHotMovers(payload) {
       // fade-тиров, поэтому карточка «дышит» даже когда сигналов нет.
       let domMove = 0;
       for (const w of x.windows) {
-        if (w.spikePct != null && Math.abs(w.spikePct) > Math.abs(domMove)) domMove = w.spikePct;
+        if (w.spikePct != null && Math.abs(w.spikePct) > Math.abs(domMove))
+          domMove = w.spikePct;
       }
       const moveAbs = Math.abs(domMove);
-      const heatLvl = moveAbs >= 1.5 ? "strong" : moveAbs >= 0.6 ? "mid" : moveAbs >= 0.1 ? "weak" : "";
-      const heatCls = heatLvl ? `${domMove > 0 ? "row-up" : "row-down"} row-heat-${heatLvl}` : "";
+      const heatLvl =
+        moveAbs >= 1.5
+          ? "strong"
+          : moveAbs >= 0.6
+            ? "mid"
+            : moveAbs >= 0.1
+              ? "weak"
+              : "";
+      const heatCls = heatLvl
+        ? `${domMove > 0 ? "row-up" : "row-down"} row-heat-${heatLvl}`
+        : "";
 
       // Setup-направление: tier-сигнал если есть, иначе по движению цены — чтобы
       // вердикт не пустовал в тихом рынке (показываем WAIT с направлением вместо «—»).
-      const setupDir = dir ?? (heatLvl ? (domMove > 0 ? "pump" : "dump") : null);
-      const rowCls = [s.isActive ? "is-active" : "", heatCls].filter(Boolean).join(" ");
+      const setupDir =
+        dir ?? (heatLvl ? (domMove > 0 ? "pump" : "dump") : null);
+      const rowCls = [s.isActive ? "is-active" : "", heatCls]
+        .filter(Boolean)
+        .join(" ");
 
       // Биржевая flash-вспышка: цена выросла с прошлого рендера → зелёный,
       // упала → красный. Анимация играет один раз на новом DOM-узле.
@@ -1444,58 +1541,75 @@ function renderHotMovers(payload) {
       }
       if (s.price != null) _hmPrevPrices.set(s.coin, s.price);
 
-      const winDefs = [[w2, "2m"], [w5, "5m"], [w15, "15m"]];
-      const cells = winDefs.map(([w, lbl]) => {
-        const [inner, cls] = pctCellTiered(w);
-        const klass = ["hm-window", cls].filter(Boolean).join(" ");
-        return `<td class="${klass}" data-w="${lbl}">${inner}</td>`;
-      }).join("");
+      const winDefs = [
+        [w2, "2m"],
+        [w5, "5m"],
+        [w15, "15m"],
+      ];
+      const cells = winDefs
+        .map(([w, lbl]) => {
+          const [inner, cls] = pctCellTiered(w);
+          const klass = ["hm-window", cls].filter(Boolean).join(" ");
+          return `<td class="${klass}" data-w="${lbl}">${inner}</td>`;
+        })
+        .join("");
 
       // Accel: |w2| vs линейная экстраполяция w5 (×0.4). Ratio ≥1.2 = ускорение
       // (не фейди), ≤0.6 = выдыхается (хороший момент), знаки разные = разворот.
       // accelKind/accelRatio выносим наружу — нужны для Setup-вердикта ниже.
       let accelInner = '<span class="num-inline-muted">—</span>';
-      let accelCellCls = '';
+      let accelCellCls = "";
       let accelKind = null; // 'up' | 'down' | 'flat' | 'rev' | null
       let accelRatio = null;
       if (w2 && w5 && w2.spikePct != null && w5.spikePct != null) {
-        const a = w2.spikePct, b = w5.spikePct;
+        const a = w2.spikePct,
+          b = w5.spikePct;
         if (Math.abs(b) < 0.05) {
           accelInner = '<span class="num-inline-muted">→</span>';
-          accelKind = 'flat';
-        } else if ((a > 0) !== (b > 0) && Math.abs(a) > 0.2) {
+          accelKind = "flat";
+        } else if (a > 0 !== b > 0 && Math.abs(a) > 0.2) {
           accelInner = '<span style="color:var(--accent)">↻ rev</span>';
-          accelKind = 'rev';
+          accelKind = "rev";
         } else {
           const expected = b * 0.4;
           const ratio = expected !== 0 ? Math.abs(a) / Math.abs(expected) : 0;
           accelRatio = ratio;
           if (ratio >= 1.2) {
             accelInner = `<span style="color:var(--red)">▲ ${ratio.toFixed(1)}×</span>`;
-            accelCellCls = 'num-neg-weak';
-            accelKind = 'up';
+            accelCellCls = "num-neg-weak";
+            accelKind = "up";
           } else if (ratio <= 0.6) {
             accelInner = `<span style="color:var(--green)">▼ ${ratio.toFixed(1)}×</span>`;
-            accelCellCls = 'num-pos-weak';
-            accelKind = 'down';
+            accelCellCls = "num-pos-weak";
+            accelKind = "down";
           } else {
             accelInner = `<span class="num-inline-muted">→ ${ratio.toFixed(1)}×</span>`;
-            accelKind = 'flat';
+            accelKind = "flat";
           }
         }
       }
 
       // Vol×: серверный multiplier (5min recent / avg 5min over hour).
       let volInner = '<span class="num-inline-muted">…</span>';
-      let volCellCls = '';
+      let volCellCls = "";
       let volKind = null; // 'high' | 'mid' | 'normal' | 'thin' | null
       if (typeof s.volMult === "number" && isFinite(s.volMult)) {
         const v = s.volMult;
         let color = "var(--text-muted)";
-        if (v >= 2) { color = "var(--red)"; volCellCls = 'num-neg-weak'; volKind = 'high'; }
-        else if (v >= 1.3) { color = "var(--orange, #f59e0b)"; volKind = 'mid'; }
-        else if (v <= 0.5) { color = "var(--green)"; volCellCls = 'num-pos-weak'; volKind = 'thin'; }
-        else { volKind = 'normal'; }
+        if (v >= 2) {
+          color = "var(--red)";
+          volCellCls = "num-neg-weak";
+          volKind = "high";
+        } else if (v >= 1.3) {
+          color = "var(--orange, #f59e0b)";
+          volKind = "mid";
+        } else if (v <= 0.5) {
+          color = "var(--green)";
+          volCellCls = "num-pos-weak";
+          volKind = "thin";
+        } else {
+          volKind = "normal";
+        }
         volInner = `<span style="color:${color}">${v.toFixed(1)}×</span>`;
       } else if (s.volMult === null) {
         volInner = '<span class="num-inline-muted">—</span>';
@@ -1504,19 +1618,20 @@ function renderHotMovers(payload) {
       // Setup: при faderEnabled И наличии fader-тира — Fader traffic-light.
       // Если fader-данных по монете нет (tier-map пуст / монета не попала в скан) —
       // НЕ оставляем пустой прочерк, а показываем Hunter-вердикт по Accel/Vol.
-      const setup = (faderEnabled && s.fader)
-        ? computeFaderSetup(s.fader, setupDir)
-        : computeSetup(accelKind, volKind, setupDir);
+      const setup =
+        faderEnabled && s.fader
+          ? computeFaderSetup(s.fader, setupDir)
+          : computeSetup(accelKind, volKind, setupDir);
 
       // OI delta 5m
       let oiInner = '<span class="num-inline-muted">—</span>';
-      let oiCellCls = '';
+      let oiCellCls = "";
       if (typeof s.oiDelta5m === "number" && isFinite(s.oiDelta5m)) {
         const v = s.oiDelta5m;
         const arrow = v > 0 ? "▲" : "▼";
         if (Math.abs(v) >= 3) {
           oiCellCls = v > 0 ? "num-neg-weak" : "num-pos-weak"; // OI растёт при памп = плохо; падает = ликвидации
-          oiInner = `<span style="color:${v > 0 ? 'var(--red)' : 'var(--green)'};font-weight:600">${arrow} ${fmtPct(v)}</span>`;
+          oiInner = `<span style="color:${v > 0 ? "var(--red)" : "var(--green)"};font-weight:600">${arrow} ${fmtPct(v)}</span>`;
         } else if (Math.abs(v) >= 1) {
           oiInner = `<span style="color:var(--text-muted)">${arrow} ${fmtPct(v)}</span>`;
         } else {
@@ -1560,12 +1675,19 @@ function renderSetupScanner(payload) {
     const fp = r.fundingPersist;
     if (fp && fp.fractionExtreme != null) s += fp.fractionExtreme * 20;
     const oi = r.oi7d;
-    if (oi && oi.deltaOi != null && oi.deltaPx != null && Math.abs(oi.deltaPx) < 0.05) {
+    if (
+      oi &&
+      oi.deltaOi != null &&
+      oi.deltaPx != null &&
+      Math.abs(oi.deltaPx) < 0.05
+    ) {
       s += Math.abs(oi.deltaOi) * 30;
     }
     return s;
   };
-  const enriched = [...rows].sort((a, b) => sigScore(b) - sigScore(a)).slice(0, 25);
+  const enriched = [...rows]
+    .sort((a, b) => sigScore(b) - sigScore(a))
+    .slice(0, 25);
 
   // Honest meta: возраст самого старого ряда (≈ возраст collector'а)
   const collectorAgeH = rows.reduce((min, r) => {
@@ -1585,7 +1707,8 @@ function renderSetupScanner(payload) {
     : "—";
 
   const fmtUsd = (v) => {
-    if (v == null || !isFinite(v)) return '<span class="num-inline-muted">—</span>';
+    if (v == null || !isFinite(v))
+      return '<span class="num-inline-muted">—</span>';
     if (v >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
     if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
     if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}K`;
@@ -1605,7 +1728,12 @@ function renderSetupScanner(payload) {
     if (isNeutral) {
       return `<span class="num-inline-muted" title="≈ HL baseline (premium ≈ 0)">≈base</span>`;
     }
-    const cls = apy > 0 ? "num-inline-pos" : apy < 0 ? "num-inline-neg" : "num-inline-muted";
+    const cls =
+      apy > 0
+        ? "num-inline-pos"
+        : apy < 0
+          ? "num-inline-neg"
+          : "num-inline-muted";
     const tag =
       Math.abs(apy) > 50
         ? '<span style="font-weight:700">'
@@ -1617,7 +1745,12 @@ function renderSetupScanner(payload) {
   const premiumCell = (p) => {
     if (p == null) return '<span class="num-inline-muted">—</span>';
     const pct = p * 100;
-    const cls = pct > 0 ? "num-inline-pos" : pct < 0 ? "num-inline-neg" : "num-inline-muted";
+    const cls =
+      pct > 0
+        ? "num-inline-pos"
+        : pct < 0
+          ? "num-inline-neg"
+          : "num-inline-muted";
     return `<span class="${cls}">${fmtPct(pct, 3)}</span>`;
   };
   const persistCell = (fp) => {
@@ -1644,7 +1777,8 @@ function renderSetupScanner(payload) {
     const oiPct = oi.deltaOi * 100;
     const pxPct = oi.deltaPx != null ? oi.deltaPx * 100 : null;
     const oiSign = oiPct > 0 ? "+" : "";
-    const pxStr = pxPct != null ? `${pxPct > 0 ? "+" : ""}${pxPct.toFixed(1)}%` : "—";
+    const pxStr =
+      pxPct != null ? `${pxPct > 0 ? "+" : ""}${pxPct.toFixed(1)}%` : "—";
     // Highlight: большой OI ramp без движения цены
     const ramp = Math.abs(oiPct) > 40 && pxPct != null && Math.abs(pxPct) < 5;
     const cls = ramp ? 'style="color:var(--accent);font-weight:600"' : "";
@@ -1665,7 +1799,8 @@ function renderSetupScanner(payload) {
   };
 
   tbody.innerHTML = enriched
-    .map((r, idx) => `<tr>
+    .map(
+      (r, idx) => `<tr>
       <td>${idx + 1}</td>
       <td><span class="signals-price">#${escapeHtml(r.coin)}</span></td>
       <td>${fundingCell(r.fundingApy)}</td>
@@ -1675,7 +1810,8 @@ function renderSetupScanner(payload) {
       <td>${persistCell(r.fundingPersist)}</td>
       <td>${oiCell(r.oi7d)}</td>
       <td>${volRegimeCell(r.volRegime)}</td>
-    </tr>`)
+    </tr>`,
+    )
     .join("");
 }
 
@@ -1686,27 +1822,32 @@ async function fetchJson(path) {
 }
 
 async function tick() {
-  const [historyR, activityR, taxR, pnlR, insightsR, hmR, btcR] = await Promise.allSettled([
-    fetchJson(`/api/history?hours=${currentRangeHours}`),
-    fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
-    fetchJson("/api/tax-summary"),
-    fetchJson("/api/pnl-summary"),
-    fetchJson("/api/insights"),
-    fetchJson("/api/signals?limit=30"),
-    fetchJson("/api/candles?coin=BTC&interval=1m"),
-  ]);
+  const [historyR, activityR, taxR, pnlR, insightsR, hmR, btcR] =
+    await Promise.allSettled([
+      fetchJson(`/api/history?hours=${currentRangeHours}`),
+      fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
+      fetchJson("/api/tax-summary"),
+      fetchJson("/api/pnl-summary"),
+      fetchJson("/api/insights"),
+      fetchJson("/api/signals?limit=30"),
+      fetchJson("/api/candles?coin=BTC&interval=1m"),
+    ]);
   if (hmR.status === "fulfilled" && hmR.value?.signals) {
     _hmSignalsCache = hmR.value.signals;
     renderHotMovers(hmR.value);
   }
-  if (btcR.status === "fulfilled" && Array.isArray(btcR.value) && btcR.value.length >= 2) {
+  if (
+    btcR.status === "fulfilled" &&
+    Array.isArray(btcR.value) &&
+    btcR.value.length >= 2
+  ) {
     const candles = btcR.value;
     const prev = candles[candles.length - 2];
     const last = candles[candles.length - 1];
     const prevClose = prev?.c ?? prev?.close;
     const lastClose = last?.c ?? last?.close;
     if (prevClose && lastClose) {
-      _btcMomentum1m = (lastClose - prevClose) / prevClose * 100;
+      _btcMomentum1m = ((lastClose - prevClose) / prevClose) * 100;
     }
   }
   await fetchMacroIfStale();
@@ -1762,7 +1903,8 @@ function renderActivity(activity) {
         ? '<span class="manual-badge" style="background:rgba(234,179,8,0.12); color:var(--yellow,#eab308); border:1px solid rgba(234,179,8,0.3); padding:1px 6px; border-radius:4px; font-size:9px; font-family:var(--font-mono); font-weight:700; margin-left:6px;">MANUAL</span>'
         : "";
       const pnlVal = e.pnl || 0;
-      const canOpen = e.kind === "close" || e.kind === "manual_close" || e.kind === "open";
+      const canOpen =
+        e.kind === "close" || e.kind === "manual_close" || e.kind === "open";
       const clickable = canOpen ? "clickable" : "";
       const idxAttr = canOpen ? `data-activity-idx="${idx}"` : "";
       return `
@@ -1796,18 +1938,33 @@ const HELP_CONTENT = {
         title: "Persist 48h",
         sub: "Доля 48ч-сэмплов с |APY| > 30%. Funding extreme который ДЕРЖИТСЯ ≥48ч = устойчивая разбалансировка позиций, не разовый всплеск.",
         rows: [
-          ['<span style="color:var(--red)">≥80% extreme</span>', "Перенасыщенная сторона — высокая вероятность сжатия (squeeze)"],
+          [
+            '<span style="color:var(--red)">≥80% extreme</span>',
+            "Перенасыщенная сторона — высокая вероятность сжатия (squeeze)",
+          ],
           ['<span style="color:#f59e0b">40-80%</span>', "Заметное смещение"],
-          ['<span class="num-inline-muted">collecting · Xh</span>', "Недостаточно истории, ждём 48ч"],
+          [
+            '<span class="num-inline-muted">collecting · Xh</span>',
+            "Недостаточно истории, ждём 48ч",
+          ],
         ],
       },
       {
         title: "OI Δ7d / Px",
         sub: "Δ Open Interest vs Δ цены за 7 дней. Главный setup-маркер: OI растёт сильно, а цена стоит → накапливают позицию, ждут катализатор.",
         rows: [
-          ['<span style="color:var(--accent)">+50% / +2%</span>', "Massive accumulation без движения — high-conviction setup"],
-          ['+10% / +30%', "OI просто следует за ценой — нормальный тренд, не setup"],
-          ['<span class="num-inline-muted">collecting · Xd</span>', "Ждём 7 дней истории"],
+          [
+            '<span style="color:var(--accent)">+50% / +2%</span>',
+            "Massive accumulation без движения — high-conviction setup",
+          ],
+          [
+            "+10% / +30%",
+            "OI просто следует за ценой — нормальный тренд, не setup",
+          ],
+          [
+            '<span class="num-inline-muted">collecting · Xd</span>',
+            "Ждём 7 дней истории",
+          ],
         ],
       },
       {
@@ -1827,8 +1984,14 @@ const HELP_CONTENT = {
       {
         title: "Режим",
         rows: [
-          ['<span class="status-pill">PAPER</span>', "Симуляция на виртуальном балансе (compound seed ~$115)"],
-          ['<span class="status-pill">PROD</span>', "Реальные слоты бота (включается через CHILL_BOY_PROD_ENABLED=true)"],
+          [
+            '<span class="status-pill">PAPER</span>',
+            "Симуляция на виртуальном балансе (compound seed ~$115)",
+          ],
+          [
+            '<span class="status-pill">PROD</span>',
+            "Реальные слоты бота (включается через CHILL_BOY_PROD_ENABLED=true)",
+          ],
         ],
       },
       {
@@ -1847,10 +2010,19 @@ const HELP_CONTENT = {
         title: "Paper trades history (MFE / MAE)",
         sub: "Закрытые paper-сделки с метриками экстремумов цены за время удержания. Помогают оценить «упустила ли стратегия профит» / «как далеко уходила в минус».",
         rows: [
-          ['<span style="color:var(--green)">MFE</span>', "Maximum Favorable Excursion — лучший непойманный профит"],
-          ['<span style="color:var(--red)">MAE</span>', "Maximum Adverse Excursion — глубочайшая просадка"],
+          [
+            '<span style="color:var(--green)">MFE</span>',
+            "Maximum Favorable Excursion — лучший непойманный профит",
+          ],
+          [
+            '<span style="color:var(--red)">MAE</span>',
+            "Maximum Adverse Excursion — глубочайшая просадка",
+          ],
           ["Net", "Фактический P&L по правилам детектора"],
-          ["Reason", "Причина выхода: trend_follow_tp / sl / time_stop / reversal"],
+          [
+            "Reason",
+            "Причина выхода: trend_follow_tp / sl / time_stop / reversal",
+          ],
         ],
       },
       {
@@ -1883,7 +2055,9 @@ function openHelpModal(key) {
   if (!content || !modal || !body) return;
   body.innerHTML =
     `<div class="help-modal__title">${content.title}</div>` +
-    (content.lead ? `<div class="help-modal__lead">${content.lead}</div>` : "") +
+    (content.lead
+      ? `<div class="help-modal__lead">${content.lead}</div>`
+      : "") +
     content.sections.map(renderHelpSection).join("");
   modal.hidden = false;
   document.body.style.overflow = "hidden";
@@ -1918,7 +2092,8 @@ function tmHeader({ coin, side, kindLabel, strat, isManual, when }) {
     ? `<span class="tm-side-chip ${sideClass}">${side === "LONG" ? "▲" : "▼"} ${side}</span>`
     : "";
   // strategyDisplayName('manual') уже отдаёт '🖐 Manual' — не дублируем эмодзи.
-  const stratText = isManual && !/manual/i.test(strat) ? `${strat} · 🖐 Manual` : strat;
+  const stratText =
+    isManual && !/manual/i.test(strat) ? `${strat} · 🖐 Manual` : strat;
   return `
     <div class="tm-header">
       <div class="tm-coin-badge">${coin.slice(0, 4)}</div>
@@ -1950,10 +2125,22 @@ function tradeModalHtmlFromActivity(e) {
   const side = e.side ? e.side.toUpperCase() : null;
 
   const cells = [];
-  if (e.entryPrice != null) cells.push(`<div class="tm-cell"><div class="tm-cell-label">Entry</div><div class="tm-cell-value">$${fmtPx(e.entryPrice)}</div></div>`);
-  if (e.closePrice != null) cells.push(`<div class="tm-cell"><div class="tm-cell-label">Close</div><div class="tm-cell-value">$${fmtPx(e.closePrice)}</div></div>`);
-  if (e.sizeUsd != null) cells.push(`<div class="tm-cell"><div class="tm-cell-label">Size</div><div class="tm-cell-value">$${e.sizeUsd.toFixed(2)}</div></div>`);
-  if (e.reason) cells.push(`<div class="tm-cell"><div class="tm-cell-label">Reason</div><div class="tm-cell-value">${e.reason}</div></div>`);
+  if (e.entryPrice != null)
+    cells.push(
+      `<div class="tm-cell"><div class="tm-cell-label">Entry</div><div class="tm-cell-value">$${fmtPx(e.entryPrice)}</div></div>`,
+    );
+  if (e.closePrice != null)
+    cells.push(
+      `<div class="tm-cell"><div class="tm-cell-label">Close</div><div class="tm-cell-value">$${fmtPx(e.closePrice)}</div></div>`,
+    );
+  if (e.sizeUsd != null)
+    cells.push(
+      `<div class="tm-cell"><div class="tm-cell-label">Size</div><div class="tm-cell-value">$${e.sizeUsd.toFixed(2)}</div></div>`,
+    );
+  if (e.reason)
+    cells.push(
+      `<div class="tm-cell"><div class="tm-cell-label">Reason</div><div class="tm-cell-value">${e.reason}</div></div>`,
+    );
 
   return `
     ${tmHeader({ coin: e.coin, side, kindLabel, strat, isManual, when })}
@@ -1972,15 +2159,16 @@ function tradeDetailHtml(t) {
   const pnl = t.realized_pnl || 0;
   const fee = t.fee_paid || 0;
   const grossPnl = pnl + fee;
-  const holdMs = t.closed_at && t.entry_time ? t.closed_at - t.entry_time : null;
+  const holdMs =
+    t.closed_at && t.entry_time ? t.closed_at - t.entry_time : null;
   const holdStr =
     holdMs == null
       ? "—"
       : holdMs < 60_000
-      ? `${Math.round(holdMs / 1000)}s`
-      : holdMs < 3600_000
-      ? `${Math.round(holdMs / 60_000)}m`
-      : `${(holdMs / 3600_000).toFixed(1)}h`;
+        ? `${Math.round(holdMs / 1000)}s`
+        : holdMs < 3600_000
+          ? `${Math.round(holdMs / 60_000)}m`
+          : `${(holdMs / 3600_000).toFixed(1)}h`;
   const sl = t.sl_price;
   const tp = t.tp_price;
   const opened = t.entry_time ? new Date(t.entry_time).toLocaleString() : "—";
@@ -1993,11 +2181,24 @@ function tradeDetailHtml(t) {
     `<div class="tm-cell"><div class="tm-cell-label">Size</div><div class="tm-cell-value">$${(t.size_usd || 0).toFixed(2)}</div></div>`,
     `<div class="tm-cell"><div class="tm-cell-label">Hold</div><div class="tm-cell-value">${holdStr}</div></div>`,
   ];
-  if (sl != null) cells.push(`<div class="tm-cell"><div class="tm-cell-label">Stop Loss</div><div class="tm-cell-value">$${fmtPx(sl)}</div></div>`);
-  if (tp != null) cells.push(`<div class="tm-cell"><div class="tm-cell-label">Take Profit</div><div class="tm-cell-value">$${fmtPx(tp)}</div></div>`);
-  cells.push(`<div class="tm-cell"><div class="tm-cell-label">Gross PnL</div><div class="tm-cell-value ${grossPnl >= 0 ? "positive" : "negative"}">${grossPnl >= 0 ? "+" : "−"}$${Math.abs(grossPnl).toFixed(4)}</div></div>`);
-  cells.push(`<div class="tm-cell"><div class="tm-cell-label">Fees</div><div class="tm-cell-value muted">−$${Math.abs(fee).toFixed(4)}</div></div>`);
-  if (t.reason) cells.push(`<div class="tm-cell full"><div class="tm-cell-label">Close reason</div><div class="tm-cell-value">${t.reason}</div></div>`);
+  if (sl != null)
+    cells.push(
+      `<div class="tm-cell"><div class="tm-cell-label">Stop Loss</div><div class="tm-cell-value">$${fmtPx(sl)}</div></div>`,
+    );
+  if (tp != null)
+    cells.push(
+      `<div class="tm-cell"><div class="tm-cell-label">Take Profit</div><div class="tm-cell-value">$${fmtPx(tp)}</div></div>`,
+    );
+  cells.push(
+    `<div class="tm-cell"><div class="tm-cell-label">Gross PnL</div><div class="tm-cell-value ${grossPnl >= 0 ? "positive" : "negative"}">${grossPnl >= 0 ? "+" : "−"}$${Math.abs(grossPnl).toFixed(4)}</div></div>`,
+  );
+  cells.push(
+    `<div class="tm-cell"><div class="tm-cell-label">Fees</div><div class="tm-cell-value muted">−$${Math.abs(fee).toFixed(4)}</div></div>`,
+  );
+  if (t.reason)
+    cells.push(
+      `<div class="tm-cell full"><div class="tm-cell-label">Close reason</div><div class="tm-cell-value">${t.reason}</div></div>`,
+    );
 
   return `
     ${tmHeader({ coin: t.coin, side: direction, kindLabel: "TRADE", strat, isManual, when: `id ${t.id}` })}
@@ -2031,10 +2232,13 @@ async function onActivityClick(e) {
     try {
       const r = await fetchJson(`/api/trade/${evt.id}`);
       const slot = document.getElementById("tm-detail-slot");
-      if (slot && r?.trade) slot.outerHTML = `<div class="tm-section">${tradeDetailHtml(r.trade)}</div>`;
+      if (slot && r?.trade)
+        slot.outerHTML = `<div class="tm-section">${tradeDetailHtml(r.trade)}</div>`;
     } catch (err) {
       const slot = document.getElementById("tm-detail-slot");
-      if (slot) slot.innerHTML = '<div class="tm-sub">Не удалось загрузить детали</div>';
+      if (slot)
+        slot.innerHTML =
+          '<div class="tm-sub">Не удалось загрузить детали</div>';
     }
   }
 }
@@ -2056,7 +2260,10 @@ document.addEventListener("click", (e) => {
   if (e.target.closest("#activity-container")) onActivityClick(e);
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { closeTradeModal(); closeHelpModal(); }
+  if (e.key === "Escape") {
+    closeTradeModal();
+    closeHelpModal();
+  }
 });
 
 function fmtMoney(v, signed = true) {
@@ -2408,7 +2615,10 @@ function renderChillBoy(cb) {
       vEl.style.display = "";
       const ve = cb.virtualEquity;
       const sign = ve.pnlTotal >= 0 ? "+" : "-";
-      const color = ve.pnlTotal >= 0 ? "var(--accent-positive, #4caf50)" : "var(--accent-negative, #f44336)";
+      const color =
+        ve.pnlTotal >= 0
+          ? "var(--accent-positive, #4caf50)"
+          : "var(--accent-negative, #f44336)";
       vEl.innerHTML =
         `sandbox: <b>$${ve.equity.toFixed(2)}</b> ` +
         `<span style="color:${color}">(${sign}$${Math.abs(ve.pnlTotal).toFixed(2)} · ` +
@@ -2427,7 +2637,8 @@ function renderChillBoy(cb) {
     const s = cb.paperStats;
     if (s.n > 0) {
       psEl.style.display = "";
-      const fmt = (v) => (v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`);
+      const fmt = (v) =>
+        v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`;
       psEl.innerHTML =
         `<b>Paper:</b> n=${s.n} · net ${fmt(s.sumNet)} · avg ${fmt(s.avgNet)} · ` +
         `worst ${fmt(s.worstNet)} · best ${fmt(s.bestNet)} · ` +
@@ -2446,7 +2657,10 @@ function renderChillBoy(cb) {
         const sign = net >= 0 ? "+" : "-";
         const dt = new Date(t.closed_at);
         const ts = `${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")} ${String(dt.getHours()).padStart(2, "0")}:${String(dt.getMinutes()).padStart(2, "0")}`;
-        const color = net >= 0 ? "var(--accent-positive, #4caf50)" : "var(--accent-negative, #f44336)";
+        const color =
+          net >= 0
+            ? "var(--accent-positive, #4caf50)"
+            : "var(--accent-negative, #f44336)";
         return `<div>${ts} · ${t.side.toUpperCase()} ${t.coin} · <span style="color:${color}">${sign}$${Math.abs(net).toFixed(2)}</span> · ${t.reason}</div>`;
       })
       .join("");
@@ -2554,15 +2768,18 @@ function renderCandyGirl(cg) {
   };
   const fmtPx = (v) => (v == null ? "—" : `$${Number(v).toFixed(6)}`);
   const trendIcon = (t) =>
-    t === "up" ? '<span style="color:var(--green,#3ddc84)">▲ up</span>'
-    : t === "down" ? '<span style="color:var(--red,#ff5c5c)">▼ down</span>'
-    : '<span style="opacity:.5">—</span>';
+    t === "up"
+      ? '<span style="color:var(--green,#3ddc84)">▲ up</span>'
+      : t === "down"
+        ? '<span style="color:var(--red,#ff5c5c)">▼ down</span>'
+        : '<span style="opacity:.5">—</span>';
 
   const tbody = document.getElementById("cg-signals-tbody");
   if (tbody) {
     const signals = Array.isArray(cg.signals) ? cg.signals : [];
     if (signals.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" class="empty-state">no setups yet</td></tr>';
+      tbody.innerHTML =
+        '<tr><td colspan="9" class="empty-state">no setups yet</td></tr>';
       card.removeAttribute("data-badge-text");
     } else {
       tbody.innerHTML = signals
@@ -2572,7 +2789,10 @@ function renderCandyGirl(cg) {
             ? '<span style="color:var(--green,#3ddc84)">🟢 LONG</span>'
             : '<span style="color:var(--red,#ff5c5c)">🔴 SHORT</span>';
           const risk = Math.abs((s.entry ?? 0) - (s.sl ?? 0));
-          const rr = risk > 0 ? (Math.abs((s.tp ?? 0) - (s.entry ?? 0)) / risk).toFixed(1) : "?";
+          const rr =
+            risk > 0
+              ? (Math.abs((s.tp ?? 0) - (s.entry ?? 0)) / risk).toFixed(1)
+              : "?";
           return (
             `<tr class="cg-sig-row ${isLong ? "dir-long" : "dir-short"}">` +
             `<td>${dir}</td>` +
@@ -2590,7 +2810,10 @@ function renderCandyGirl(cg) {
         .join("");
       const top = signals[0];
       const d = top.direction === "LONG" ? "▲" : "▼";
-      card.setAttribute("data-badge-text", `${d} ${top.coin} · ${fmtAge(top.ts)}`);
+      card.setAttribute(
+        "data-badge-text",
+        `${d} ${top.coin} · ${fmtAge(top.ts)}`,
+      );
     }
   }
 
@@ -2637,7 +2860,8 @@ function renderCandyGirl(cg) {
       const sign = pnl >= 0 ? "+" : "−";
       eqPill.style.display = "";
       eqPill.textContent = `paper $${ve.equity.toFixed(2)} (${sign}$${Math.abs(pnl).toFixed(2)})`;
-      eqPill.style.color = pnl >= 0 ? "var(--green,#3ddc84)" : "var(--red,#ff5c5c)";
+      eqPill.style.color =
+        pnl >= 0 ? "var(--green,#3ddc84)" : "var(--red,#ff5c5c)";
     } else {
       eqPill.style.display = "none";
     }
@@ -2648,7 +2872,7 @@ function renderCandyGirl(cg) {
 
 function renderCandyGirlActivePos(pos) {
   const section = document.getElementById("cg-active-section");
-  const body    = document.getElementById("cg-active-body");
+  const body = document.getElementById("cg-active-body");
   if (!section || !body) return;
   if (!pos) {
     section.style.display = "none";
@@ -2656,13 +2880,21 @@ function renderCandyGirlActivePos(pos) {
   }
   section.style.display = "";
 
-  const fmtUsd = (v) => (v == null ? "—" : (v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`));
-  const fmtPct = (v) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`);
-  const fmtPx  = (v) => (v == null ? "—" : `$${v.toFixed(6)}`);
-  const pnlCls = (pos.unrealUsd ?? 0) >= 0 ? "cb-pos-pnl positive" : "cb-pos-pnl negative";
-  const heldStr = pos.heldMin >= 60
-    ? `${Math.floor(pos.heldMin / 60)}h ${pos.heldMin % 60}m`
-    : `${pos.heldMin}m`;
+  const fmtUsd = (v) =>
+    v == null
+      ? "—"
+      : v >= 0
+        ? `+$${v.toFixed(2)}`
+        : `-$${Math.abs(v).toFixed(2)}`;
+  const fmtPct = (v) =>
+    v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
+  const fmtPx = (v) => (v == null ? "—" : `$${v.toFixed(6)}`);
+  const pnlCls =
+    (pos.unrealUsd ?? 0) >= 0 ? "cb-pos-pnl positive" : "cb-pos-pnl negative";
+  const heldStr =
+    pos.heldMin >= 60
+      ? `${Math.floor(pos.heldMin / 60)}h ${pos.heldMin % 60}m`
+      : `${pos.heldMin}m`;
   const sl = `${fmtPx(pos.slPrice)}${pos.slDistPct != null ? ` <span style="opacity:.6">(${pos.slDistPct.toFixed(2)}%)</span>` : ""}`;
   const tp = `${fmtPx(pos.tpPrice)}${pos.tpDistPct != null ? ` <span style="opacity:.6">(${pos.tpDistPct.toFixed(2)}%)</span>` : ""}`;
 
@@ -2687,12 +2919,13 @@ function renderCandyGirlActivePos(pos) {
 }
 
 function renderCandyGirlHistory(trades, stats, period) {
-  const body   = document.getElementById("cg-history-body");
+  const body = document.getElementById("cg-history-body");
   const inline = document.getElementById("cg-stats-inline");
   if (!body) return;
 
   if (inline && stats && stats.n > 0) {
-    const fmt = (v) => (v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`);
+    const fmt = (v) =>
+      v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`;
     inline.textContent = `n=${stats.n} · net ${fmt(stats.sumNet)} · avg ${fmt(stats.avgNet)} · win ${(stats.winRate * 100).toFixed(0)}% · best ${fmt(stats.bestNet)} · worst ${fmt(stats.worstNet)}`;
   } else if (inline) {
     inline.textContent = "";
@@ -2703,20 +2936,29 @@ function renderCandyGirlHistory(trades, stats, period) {
     if (!period) return "";
     const cell = (label, p) => {
       const net = p?.net ?? 0;
-      const n   = p?.n ?? 0;
+      const n = p?.n ?? 0;
       const color = net >= 0 ? "var(--green)" : "var(--red)";
-      const txt = net >= 0 ? `+$${net.toFixed(2)}` : `-$${Math.abs(net).toFixed(2)}`;
-      return `<span class="cg-sum-item"><span class="cg-sum-label">${label}</span>` +
-             `<b style="color:${color}">${txt}</b> <span style="opacity:.55">(${n})</span></span>`;
+      const txt =
+        net >= 0 ? `+$${net.toFixed(2)}` : `-$${Math.abs(net).toFixed(2)}`;
+      return (
+        `<span class="cg-sum-item"><span class="cg-sum-label">${label}</span>` +
+        `<b style="color:${color}">${txt}</b> <span style="opacity:.55">(${n})</span></span>`
+      );
     };
     return `<div class="cg-summary">${cell("Today", period.day)}${cell("Week", period.week)}</div>`;
   })();
 
   if (!Array.isArray(trades) || trades.length === 0) {
-    body.innerHTML = '<div class="empty-state">no closed trades yet</div>' + periodHtml;
+    body.innerHTML =
+      '<div class="empty-state">no closed trades yet</div>' + periodHtml;
     return;
   }
-  const fmtUsd = (v) => (v == null ? "—" : (v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`));
+  const fmtUsd = (v) =>
+    v == null
+      ? "—"
+      : v >= 0
+        ? `+$${v.toFixed(2)}`
+        : `-$${Math.abs(v).toFixed(2)}`;
   const fmtTs = (ms) => {
     if (!ms) return "—";
     const dt = new Date(ms);
@@ -2728,10 +2970,11 @@ function renderCandyGirlHistory(trades, stats, period) {
     if (sec < 3600) return `${Math.round(sec / 60)}m`;
     return `${(sec / 3600).toFixed(1)}h`;
   };
-  const rows = trades.map((t) => {
-    const net = (t.realized_pnl || 0) - (t.fee_paid || 0);
-    const color = net >= 0 ? "var(--green)" : "var(--red)";
-    return `<tr>
+  const rows = trades
+    .map((t) => {
+      const net = (t.realized_pnl || 0) - (t.fee_paid || 0);
+      const color = net >= 0 ? "var(--green)" : "var(--red)";
+      return `<tr>
       <td>${fmtTs(t.entry_time)}<br><span style="opacity:.65">${fmtTs(t.closed_at)}</span></td>
       <td><b>${t.coin}</b><br><span style="opacity:.65">${(t.side || "").toUpperCase()}</span></td>
       <td>$${(t.entry_price ?? 0).toFixed(6)}<br><span style="opacity:.65">$${(t.close_price ?? 0).toFixed(6)}</span></td>
@@ -2739,8 +2982,10 @@ function renderCandyGirlHistory(trades, stats, period) {
       <td>${fmtHold(t.hold_seconds)}</td>
       <td style="opacity:.75">${t.reason || "—"}</td>
     </tr>`;
-  }).join("");
-  body.innerHTML = `
+    })
+    .join("");
+  body.innerHTML =
+    `
     <table class="cb-table">
       <thead><tr><th>Open / Close</th><th>Coin</th><th>Entry / Exit</th><th>Net</th><th>Held</th><th>Reason</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -2750,7 +2995,7 @@ function renderCandyGirlHistory(trades, stats, period) {
 
 function renderChillBoyActivePos(pos) {
   const section = document.getElementById("cb-active-section");
-  const body    = document.getElementById("cb-active-body");
+  const body = document.getElementById("cb-active-body");
   if (!section || !body) return;
   if (!pos) {
     section.style.display = "none";
@@ -2758,13 +3003,21 @@ function renderChillBoyActivePos(pos) {
   }
   section.style.display = "";
 
-  const fmtUsd = (v) => (v == null ? "—" : (v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`));
-  const fmtPct = (v) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`);
-  const fmtPx  = (v) => (v == null ? "—" : `$${v.toFixed(6)}`);
-  const pnlCls = (pos.unrealUsd ?? 0) >= 0 ? "cb-pos-pnl positive" : "cb-pos-pnl negative";
-  const heldStr = pos.heldMin >= 60
-    ? `${Math.floor(pos.heldMin / 60)}h ${pos.heldMin % 60}m`
-    : `${pos.heldMin}m`;
+  const fmtUsd = (v) =>
+    v == null
+      ? "—"
+      : v >= 0
+        ? `+$${v.toFixed(2)}`
+        : `-$${Math.abs(v).toFixed(2)}`;
+  const fmtPct = (v) =>
+    v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
+  const fmtPx = (v) => (v == null ? "—" : `$${v.toFixed(6)}`);
+  const pnlCls =
+    (pos.unrealUsd ?? 0) >= 0 ? "cb-pos-pnl positive" : "cb-pos-pnl negative";
+  const heldStr =
+    pos.heldMin >= 60
+      ? `${Math.floor(pos.heldMin / 60)}h ${pos.heldMin % 60}m`
+      : `${pos.heldMin}m`;
 
   body.innerHTML = `
     <div class="cb-kv">
@@ -2789,16 +3042,18 @@ function renderChillBoyWatchlist(items) {
     body.innerHTML = '<div class="empty-state">no squeezed coins</div>';
     return;
   }
-  const rows = items.map((w) => {
-    const ratio = w.ratio != null ? w.ratio.toFixed(2) : "—";
-    return `<tr>
+  const rows = items
+    .map((w) => {
+      const ratio = w.ratio != null ? w.ratio.toFixed(2) : "—";
+      return `<tr>
       <td><b>${w.coin}</b></td>
       <td>$${w.price.toFixed(6)}</td>
       <td>r=${ratio}</td>
       <td>↑${w.distUpPct.toFixed(2)}%</td>
       <td>↓${w.distDownPct.toFixed(2)}%</td>
     </tr>`;
-  }).join("");
+    })
+    .join("");
   body.innerHTML = `
     <table class="cb-table">
       <thead><tr><th>Coin</th><th>Price</th><th>Squeeze</th><th>to high</th><th>to low</th></tr></thead>
@@ -2814,23 +3069,27 @@ function renderChillBoyCooldowns(items) {
     body.innerHTML = '<div class="empty-state">none</div>';
     return;
   }
-  const rows = items.map((c) => {
-    const remainStr = c.remainMs > 60000
-      ? `${Math.round(c.remainMs / 60000)}m`
-      : `${Math.round(c.remainMs / 1000)}s`;
-    const kindLabel = c.kind === "post_sl" ? "post-SL" : "re-entry";
-    return `<tr><td><b>${c.coin}</b></td><td>${kindLabel}</td><td>${remainStr}</td></tr>`;
-  }).join("");
+  const rows = items
+    .map((c) => {
+      const remainStr =
+        c.remainMs > 60000
+          ? `${Math.round(c.remainMs / 60000)}m`
+          : `${Math.round(c.remainMs / 1000)}s`;
+      const kindLabel = c.kind === "post_sl" ? "post-SL" : "re-entry";
+      return `<tr><td><b>${c.coin}</b></td><td>${kindLabel}</td><td>${remainStr}</td></tr>`;
+    })
+    .join("");
   body.innerHTML = `<table class="cb-table"><thead><tr><th>Coin</th><th>Kind</th><th>Remaining</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function renderChillBoyHistory(trades, stats) {
-  const body  = document.getElementById("cb-history-body");
+  const body = document.getElementById("cb-history-body");
   const inline = document.getElementById("cb-stats-inline");
   if (!body) return;
 
   if (inline && stats && stats.n > 0) {
-    const fmt = (v) => (v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`);
+    const fmt = (v) =>
+      v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`;
     inline.textContent = `n=${stats.n} · net ${fmt(stats.sumNet)} · avg ${fmt(stats.avgNet)} · win ${(stats.winRate * 100).toFixed(0)}% · best ${fmt(stats.bestNet)} · worst ${fmt(stats.worstNet)}`;
   } else if (inline) {
     inline.textContent = "";
@@ -2840,7 +3099,12 @@ function renderChillBoyHistory(trades, stats) {
     body.innerHTML = '<div class="empty-state">no closed trades yet</div>';
     return;
   }
-  const fmtUsd = (v) => (v == null ? "—" : (v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`));
+  const fmtUsd = (v) =>
+    v == null
+      ? "—"
+      : v >= 0
+        ? `+$${v.toFixed(2)}`
+        : `-$${Math.abs(v).toFixed(2)}`;
   const fmtTs = (ms) => {
     if (!ms) return "—";
     const dt = new Date(ms);
@@ -2852,11 +3116,12 @@ function renderChillBoyHistory(trades, stats) {
     if (sec < 3600) return `${Math.round(sec / 60)}m`;
     return `${(sec / 3600).toFixed(1)}h`;
   };
-  const rows = trades.map((t) => {
-    const net = (t.realized_pnl || 0) - (t.fee_paid || 0);
-    const cls = net >= 0 ? "positive" : "negative";
-    const color = net >= 0 ? "var(--green)" : "var(--red)";
-    return `<tr>
+  const rows = trades
+    .map((t) => {
+      const net = (t.realized_pnl || 0) - (t.fee_paid || 0);
+      const cls = net >= 0 ? "positive" : "negative";
+      const color = net >= 0 ? "var(--green)" : "var(--red)";
+      return `<tr>
       <td>${fmtTs(t.entry_time)}<br><span style="opacity:.65">${fmtTs(t.closed_at)}</span></td>
       <td><b>${t.coin}</b><br><span style="opacity:.65">${(t.side || "").toUpperCase()}</span></td>
       <td>$${(t.entry_price ?? 0).toFixed(6)}<br><span style="opacity:.65">$${(t.close_price ?? 0).toFixed(6)}</span></td>
@@ -2868,7 +3133,8 @@ function renderChillBoyHistory(trades, stats) {
       <td>${fmtHold(t.hold_seconds)}</td>
       <td style="opacity:.75">${t.reason || "—"}</td>
     </tr>`;
-  }).join("");
+    })
+    .join("");
   body.innerHTML = `
     <table class="cb-table">
       <thead><tr><th>Open / Close</th><th>Coin</th><th>Entry / Exit</th><th>Net</th><th>MFE / MAE</th><th>Held</th><th>Reason</th></tr></thead>
@@ -2885,7 +3151,8 @@ function renderChillBoyHeartbeatRaw(hb) {
     return;
   }
   const ageSec = Math.floor((Date.now() - hb.ts) / 1000);
-  const age = ageSec < 90 ? `${ageSec}s ago` : `${Math.floor(ageSec / 60)}m ago`;
+  const age =
+    ageSec < 90 ? `${ageSec}s ago` : `${Math.floor(ageSec / 60)}m ago`;
   el.textContent =
     `tracked ${hb.tracked} · squeezed ${hb.squeezed} · breakouts ${hb.breakouts} · ` +
     `slot ${hb.slot} · cooldowns ${hb.reCooldowns} re + ${hb.postSlCooldowns} post-SL · ${age}`;
@@ -2923,18 +3190,29 @@ function renderFaderCard(f) {
 
 function renderFaderActivePos(pos) {
   const section = document.getElementById("fader-active-section");
-  const body    = document.getElementById("fader-active-body");
+  const body = document.getElementById("fader-active-body");
   if (!section || !body) return;
-  if (!pos) { section.style.display = "none"; return; }
+  if (!pos) {
+    section.style.display = "none";
+    return;
+  }
   section.style.display = "";
 
-  const fmtUsd = (v) => (v == null ? "—" : (v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`));
-  const fmtPct = (v) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`);
-  const fmtPx  = (v) => (v == null ? "—" : `$${v.toFixed(6)}`);
-  const pnlCls = (pos.unrealUsd ?? 0) >= 0 ? "cb-pos-pnl positive" : "cb-pos-pnl negative";
-  const heldStr = pos.heldMin >= 60
-    ? `${Math.floor(pos.heldMin / 60)}h ${pos.heldMin % 60}m`
-    : `${pos.heldMin}m`;
+  const fmtUsd = (v) =>
+    v == null
+      ? "—"
+      : v >= 0
+        ? `+$${v.toFixed(2)}`
+        : `-$${Math.abs(v).toFixed(2)}`;
+  const fmtPct = (v) =>
+    v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
+  const fmtPx = (v) => (v == null ? "—" : `$${v.toFixed(6)}`);
+  const pnlCls =
+    (pos.unrealUsd ?? 0) >= 0 ? "cb-pos-pnl positive" : "cb-pos-pnl negative";
+  const heldStr =
+    pos.heldMin >= 60
+      ? `${Math.floor(pos.heldMin / 60)}h ${pos.heldMin % 60}m`
+      : `${pos.heldMin}m`;
 
   body.innerHTML = `
     <div class="cb-kv">
@@ -2960,17 +3238,24 @@ function renderFaderWatchlist(items) {
     body.innerHTML = '<div class="empty-state">no green setups</div>';
     return;
   }
-  const rows = items.map((w) => `<tr>
+  const rows = items
+    .map(
+      (w) => `<tr>
     <td><b>${w.coin}</b></td>
     <td>chop ${(w.chopRatio ?? 0).toFixed(2)}</td>
-  </tr>`).join("");
+  </tr>`,
+    )
+    .join("");
   body.innerHTML = `<table class="cb-table"><thead><tr><th>Coin</th><th>chopRatio</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function renderFaderConfig(cfg) {
   const body = document.getElementById("fader-config-body");
   if (!body) return;
-  if (!cfg) { body.textContent = "—"; return; }
+  if (!cfg) {
+    body.textContent = "—";
+    return;
+  }
   body.innerHTML =
     `nominal $${cfg.nominalUsd} × ${cfg.leverage}x · ` +
     `spike ≥ ${cfg.spikePctMin}% · chop > ${cfg.chopRatioMin} · ` +
@@ -2980,12 +3265,13 @@ function renderFaderConfig(cfg) {
 }
 
 function renderFaderHistory(trades, stats) {
-  const body  = document.getElementById("fader-history-body");
+  const body = document.getElementById("fader-history-body");
   const inline = document.getElementById("fader-stats-inline");
   if (!body) return;
 
   if (inline && stats && stats.n > 0) {
-    const fmt = (v) => (v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`);
+    const fmt = (v) =>
+      v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`;
     inline.textContent = `n=${stats.n} · net ${fmt(stats.sumNet)} · avg ${fmt(stats.avgNet)} · win ${(stats.winRate * 100).toFixed(0)}% · best ${fmt(stats.bestNet)} · worst ${fmt(stats.worstNet)}`;
   } else if (inline) {
     inline.textContent = "";
@@ -2995,7 +3281,12 @@ function renderFaderHistory(trades, stats) {
     body.innerHTML = '<div class="empty-state">no closed trades yet</div>';
     return;
   }
-  const fmtUsd = (v) => (v == null ? "—" : (v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`));
+  const fmtUsd = (v) =>
+    v == null
+      ? "—"
+      : v >= 0
+        ? `+$${v.toFixed(2)}`
+        : `-$${Math.abs(v).toFixed(2)}`;
   const fmtTs = (ms) => {
     if (!ms) return "—";
     const dt = new Date(ms);
@@ -3007,10 +3298,11 @@ function renderFaderHistory(trades, stats) {
     if (sec < 3600) return `${Math.round(sec / 60)}m`;
     return `${(sec / 3600).toFixed(1)}h`;
   };
-  const rows = trades.map((t) => {
-    const net = (t.realized_pnl || 0) - (t.fee_paid || 0);
-    const color = net >= 0 ? "var(--green)" : "var(--red)";
-    return `<tr>
+  const rows = trades
+    .map((t) => {
+      const net = (t.realized_pnl || 0) - (t.fee_paid || 0);
+      const color = net >= 0 ? "var(--green)" : "var(--red)";
+      return `<tr>
       <td>${fmtTs(t.entry_time)}<br><span style="opacity:.65">${fmtTs(t.closed_at)}</span></td>
       <td><b>${t.coin}</b><br><span style="opacity:.65">${(t.side || "").toUpperCase()}</span></td>
       <td>$${(t.entry_price ?? 0).toFixed(6)}<br><span style="opacity:.65">$${(t.close_price ?? 0).toFixed(6)}</span></td>
@@ -3022,7 +3314,8 @@ function renderFaderHistory(trades, stats) {
       <td>${fmtHold(t.hold_seconds)}</td>
       <td style="opacity:.75">${t.reason || "—"}</td>
     </tr>`;
-  }).join("");
+    })
+    .join("");
   body.innerHTML = `
     <table class="cb-table">
       <thead><tr><th>Open / Close</th><th>Coin</th><th>Entry / Exit</th><th>Net</th><th>MFE / MAE</th><th>Held</th><th>Reason</th></tr></thead>
@@ -3034,9 +3327,13 @@ function renderFaderHistory(trades, stats) {
 function renderFaderHeartbeatRaw(hb) {
   const el = document.getElementById("fader-heartbeat");
   if (!el) return;
-  if (!hb) { el.textContent = "warming up…"; return; }
+  if (!hb) {
+    el.textContent = "warming up…";
+    return;
+  }
   const ageSec = Math.floor((Date.now() - hb.ts) / 1000);
-  const age = ageSec < 90 ? `${ageSec}s ago` : `${Math.floor(ageSec / 60)}m ago`;
+  const age =
+    ageSec < 90 ? `${ageSec}s ago` : `${Math.floor(ageSec / 60)}m ago`;
   el.textContent =
     `tracked ${hb.tracked} · GREEN ${hb.green} · YELLOW ${hb.yellow} · RED ${hb.red} · ` +
     `slot ${hb.slot} · cooldowns ${hb.cooldowns} · recentLosses ${hb.recentLosses} · ${age}`;
@@ -3309,7 +3606,7 @@ async function fetchMacroIfStale() {
       const prev = candles[candles.length - 2];
       const c = Number(last.c ?? last.close);
       const o = Number(prev.c ?? prev.close ?? prev.o);
-      if (o && c) _macroPct = (c - o) / o * 100;
+      if (o && c) _macroPct = ((c - o) / o) * 100;
     }
     _macroFetchedAt = Date.now();
   } catch (_) {}
@@ -3318,9 +3615,20 @@ async function fetchMacroIfStale() {
 function _smartScoreSetup(r) {
   let s = 0;
   const fp = r.fundingPersist;
-  if (fp?.fractionExtreme != null && fp.fractionExtreme > 0.4 && Math.abs(r.fundingApy || 0) > 50) s++;
+  if (
+    fp?.fractionExtreme != null &&
+    fp.fractionExtreme > 0.4 &&
+    Math.abs(r.fundingApy || 0) > 50
+  )
+    s++;
   const oi = r.oi7d;
-  if (oi?.deltaOi != null && oi?.deltaPx != null && oi.deltaOi > 0.5 && Math.abs(oi.deltaPx) < 0.07) s++;
+  if (
+    oi?.deltaOi != null &&
+    oi?.deltaPx != null &&
+    oi.deltaOi > 0.5 &&
+    Math.abs(oi.deltaPx) < 0.07
+  )
+    s++;
   if (r.premium != null && Math.abs(r.premium) > 0.001) s++;
   const vr = r.volRegime;
   if (vr?.ratio != null && vr.ratio > 1.5) s++;
@@ -3343,26 +3651,39 @@ function renderSmartSignals() {
   const macroEl = document.getElementById("smart-macro");
   if (!tbody) return;
 
-  const macroDir = _macroPct == null ? "neutral"
-    : _macroPct > 0.5 ? "bull"
-    : _macroPct < -0.5 ? "bear"
-    : "neutral";
+  const macroDir =
+    _macroPct == null
+      ? "neutral"
+      : _macroPct > 0.5
+        ? "bull"
+        : _macroPct < -0.5
+          ? "bear"
+          : "neutral";
 
   if (macroEl) {
-    const macroLabel = _macroPct == null ? ""
-      : `BTC 4h ${_macroPct > 0 ? "+" : ""}${_macroPct.toFixed(1)}% · ${macroDir === "bull" ? "▲ BULL" : macroDir === "bear" ? "▼ BEAR" : "● FLAT"}`;
+    const macroLabel =
+      _macroPct == null
+        ? ""
+        : `BTC 4h ${_macroPct > 0 ? "+" : ""}${_macroPct.toFixed(1)}% · ${macroDir === "bull" ? "▲ BULL" : macroDir === "bear" ? "▼ BEAR" : "● FLAT"}`;
     macroEl.dataset.macro = macroLabel;
-    macroEl.style.color = macroDir === "bull" ? "var(--green)" : macroDir === "bear" ? "var(--red)" : "var(--text-muted)";
+    macroEl.style.color =
+      macroDir === "bull"
+        ? "var(--green)"
+        : macroDir === "bear"
+          ? "var(--red)"
+          : "var(--text-muted)";
   }
 
   const TIER_SCORE = { STRONG: 3, NORMAL: 2, WEAK: 1 };
-  const setupMap = new Map((_lastSetupRowsCache || []).map(r => [r.coin, _smartScoreSetup(r)]));
+  const setupMap = new Map(
+    (_lastSetupRowsCache || []).map((r) => [r.coin, _smartScoreSetup(r)]),
+  );
 
   // BTC 1m momentum penalty: если BTC активно движется против направления сигнала
   const btcPressurePenalty = (dir) => {
     if (_btcMomentum1m == null) return 0;
-    if (dir === "SHORT" && _btcMomentum1m > 0.3) return -4;  // BTC памп → SHORT конфликт
-    if (dir === "LONG"  && _btcMomentum1m < -0.3) return -4; // BTC дамп → LONG конфликт
+    if (dir === "SHORT" && _btcMomentum1m > 0.3) return -4; // BTC памп → SHORT конфликт
+    if (dir === "LONG" && _btcMomentum1m < -0.3) return -4; // BTC дамп → LONG конфликт
     return 0;
   };
 
@@ -3373,11 +3694,13 @@ function renderSmartSignals() {
     return -3; // conflict
   }
   function isConflict(dir) {
-    const macroCon = (dir === "LONG" && macroDir === "bear") || (dir === "SHORT" && macroDir === "bull");
-    const momentumCon = _btcMomentum1m != null && (
-      (dir === "SHORT" && _btcMomentum1m > 0.5) ||
-      (dir === "LONG"  && _btcMomentum1m < -0.5)
-    );
+    const macroCon =
+      (dir === "LONG" && macroDir === "bear") ||
+      (dir === "SHORT" && macroDir === "bull");
+    const momentumCon =
+      _btcMomentum1m != null &&
+      ((dir === "SHORT" && _btcMomentum1m > 0.5) ||
+        (dir === "LONG" && _btcMomentum1m < -0.5));
     return macroCon || momentumCon;
   }
 
@@ -3390,17 +3713,35 @@ function renderSmartSignals() {
     const tp = Number(s.tp);
     const risk = Math.abs(sl - entry);
     const rr = risk > 0 ? (Math.abs(tp - entry) / risk).toFixed(1) : "2.0";
-    const trendBonus = s.trend4h == null ? 0
-      : (s.direction === "LONG" && s.trend4h === "up") ? 2
-      : (s.direction === "SHORT" && s.trend4h === "down") ? 2
-      : -1;
+    const trendBonus =
+      s.trend4h == null
+        ? 0
+        : s.direction === "LONG" && s.trend4h === "up"
+          ? 2
+          : s.direction === "SHORT" && s.trend4h === "down"
+            ? 2
+            : -1;
     const setupBonus = (setupMap.get(s.coin) || 0) * 2;
-    const score = 40 + Number(rr) * 3 + trendBonus + macroBonus(s.direction) + setupBonus + btcPressurePenalty(s.direction);
+    const score =
+      40 +
+      Number(rr) * 3 +
+      trendBonus +
+      macroBonus(s.direction) +
+      setupBonus +
+      btcPressurePenalty(s.direction);
     items.push({
-      coin: s.coin, direction: s.direction,
-      entry, sl, tp, rr,
-      trend4h: s.trend4h, score,
-      why: ["CG", ...(setupMap.get(s.coin) >= 2 ? [`HL${setupMap.get(s.coin)}`] : [])],
+      coin: s.coin,
+      direction: s.direction,
+      entry,
+      sl,
+      tp,
+      rr,
+      trend4h: s.trend4h,
+      score,
+      why: [
+        "CG",
+        ...(setupMap.get(s.coin) >= 2 ? [`HL${setupMap.get(s.coin)}`] : []),
+      ],
       conflict: isConflict(s.direction),
     });
   }
@@ -3411,7 +3752,7 @@ function renderSmartSignals() {
     const direction = m.best.side === "SHORT" ? "SHORT" : "LONG";
     const tierS = TIER_SCORE[m.best.tier] || 0;
     const setupBonus = (setupMap.get(m.coin) || 0) * 2;
-    const existing = items.find(i => i.coin === m.coin);
+    const existing = items.find((i) => i.coin === m.coin);
     if (existing) {
       existing.score += tierS * 3;
       if (!existing.why.includes("spike")) existing.why.push("spike");
@@ -3419,12 +3760,26 @@ function renderSmartSignals() {
       const SL = 0.025;
       const entry = Number(m.price);
       const sl = direction === "SHORT" ? entry * (1 + SL) : entry * (1 - SL);
-      const tp = direction === "SHORT" ? entry * (1 - SL * 2) : entry * (1 + SL * 2);
-      const score = tierS * 3 + macroBonus(direction) + setupBonus + btcPressurePenalty(direction);
+      const tp =
+        direction === "SHORT" ? entry * (1 - SL * 2) : entry * (1 + SL * 2);
+      const score =
+        tierS * 3 +
+        macroBonus(direction) +
+        setupBonus +
+        btcPressurePenalty(direction);
       items.push({
-        coin: m.coin, direction, entry, sl, tp, rr: "2.0",
-        trend4h: null, score,
-        why: ["spike", ...(setupMap.get(m.coin) >= 2 ? [`HL${setupMap.get(m.coin)}`] : [])],
+        coin: m.coin,
+        direction,
+        entry,
+        sl,
+        tp,
+        rr: "2.0",
+        trend4h: null,
+        score,
+        why: [
+          "spike",
+          ...(setupMap.get(m.coin) >= 2 ? [`HL${setupMap.get(m.coin)}`] : []),
+        ],
         conflict: isConflict(direction),
       });
     }
@@ -3432,14 +3787,15 @@ function renderSmartSignals() {
 
   // Setup-only — все монеты с mark price, без порога по score (watchlist fallback)
   for (const r of _lastSetupRowsCache) {
-    if (items.find(i => i.coin === r.coin)) continue;
+    if (items.find((i) => i.coin === r.coin)) continue;
     const ss = _smartScoreSetup(r);
     const direction = (r.fundingApy || 0) < 0 ? "LONG" : "SHORT";
     const entry = Number(r.mark || 0);
     if (!entry) continue;
     const SL = 0.025;
     const sl = direction === "SHORT" ? entry * (1 + SL) : entry * (1 - SL);
-    const tp = direction === "SHORT" ? entry * (1 - SL * 2) : entry * (1 + SL * 2);
+    const tp =
+      direction === "SHORT" ? entry * (1 - SL * 2) : entry * (1 + SL * 2);
     // proxy score: |fundingApy| + funding persist fraction + OI delta
     const fp = r.fundingPersist;
     const oi = r.oi7d;
@@ -3448,12 +3804,22 @@ function renderSmartSignals() {
     if (oi?.deltaOi != null) proxy += Math.abs(oi.deltaOi) * 2;
     if (r.premium != null) proxy += Math.abs(r.premium) * 200;
     const score = ss * 4 + proxy + macroBonus(direction);
-    const why = ss > 0
-      ? [`HL${ss}`, ...(Math.abs(r.fundingApy || 0) > 100 ? ["fund"] : [])]
-      : Math.abs(r.fundingApy || 0) > 50 ? ["fund"] : ["watch"];
+    const why =
+      ss > 0
+        ? [`HL${ss}`, ...(Math.abs(r.fundingApy || 0) > 100 ? ["fund"] : [])]
+        : Math.abs(r.fundingApy || 0) > 50
+          ? ["fund"]
+          : ["watch"];
     items.push({
-      coin: r.coin, direction, entry, sl, tp, rr: "2.0",
-      trend4h: null, score, why,
+      coin: r.coin,
+      direction,
+      entry,
+      sl,
+      tp,
+      rr: "2.0",
+      trend4h: null,
+      score,
+      why,
       conflict: isConflict(direction),
     });
   }
@@ -3467,14 +3833,22 @@ function renderSmartSignals() {
     return age > mx ? age : mx;
   }, 0);
   const dataReady = collectorAgeH >= 48;
-  const dataLabel = collectorAgeH < 1 ? "collecting…"
-    : collectorAgeH < 24 ? `warming up · ${collectorAgeH.toFixed(0)}h / 48h`
-    : collectorAgeH < 48 ? `almost ready · ${collectorAgeH.toFixed(0)}h / 48h`
-    : collectorAgeH < 168 ? `${collectorAgeH.toFixed(0)}h data · OI pending`
-    : `${(collectorAgeH / 24).toFixed(0)}d data · full`;
+  const dataLabel =
+    collectorAgeH < 1
+      ? "collecting…"
+      : collectorAgeH < 24
+        ? `warming up · ${collectorAgeH.toFixed(0)}h / 48h`
+        : collectorAgeH < 48
+          ? `almost ready · ${collectorAgeH.toFixed(0)}h / 48h`
+          : collectorAgeH < 168
+            ? `${collectorAgeH.toFixed(0)}h data · OI pending`
+            : `${(collectorAgeH / 24).toFixed(0)}d data · full`;
 
   if (macroEl) {
-    const parts = [macroEl.dataset.macro, `${_lastSetupRowsCache.length} coins · ${dataLabel}`].filter(Boolean);
+    const parts = [
+      macroEl.dataset.macro,
+      `${_lastSetupRowsCache.length} coins · ${dataLabel}`,
+    ].filter(Boolean);
     macroEl.textContent = parts.join(" · ");
   }
 
@@ -3483,56 +3857,88 @@ function renderSmartSignals() {
     return;
   }
 
-  const TD = "padding:8px 10px;border-bottom:1px solid var(--hairline);vertical-align:middle;";
+  const TD =
+    "padding:8px 10px;border-bottom:1px solid var(--hairline);vertical-align:middle;";
   const TDR = TD + "text-align:right;";
   const TDC = TD + "text-align:center;";
 
-  tbody.innerHTML = top10.map((item, idx) => {
-    const isLong = item.direction === "LONG";
-    const dirHtml = isLong
-      ? '<span style="color:var(--green);font-weight:700;font-family:var(--font-mono);font-size:12px">▲ LONG</span>'
-      : '<span style="color:var(--red);font-weight:700;font-family:var(--font-mono);font-size:12px">▼ SHORT</span>';
-    const trend4hHtml = item.trend4h == null
-      ? '<span style="opacity:.35;font-family:var(--font-mono)">—</span>'
-      : item.trend4h === "up"
-        ? '<span style="color:var(--green);font-family:var(--font-mono)">▲</span>'
-        : '<span style="color:var(--red);font-family:var(--font-mono)">▼</span>';
-    // Один главный тег + опциональный score
-    const LABEL_MAP = {
-      "CG":       { text: "entry ready", style: "background:var(--accent-soft);color:var(--accent-strong);border:1px solid var(--accent-line)" },
-      "spike":    { text: "spike",       style: "background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)" },
-      "fund":     { text: "funding",     style: "background:var(--canvas-inset);color:var(--text-secondary);border:1px solid var(--border-muted)" },
-      "watch":    { text: "watch",       style: "background:none;color:var(--text-faint);border:1px solid var(--hairline)" },
-      "conflict": { text: "conflict",    style: "background:none;color:var(--text-faint);border:1px solid var(--hairline)" },
-    };
-    const PRIORITY = ["CG", "spike", "fund"];
-    const primary = item.conflict ? "conflict" : (PRIORITY.find(k => item.why.includes(k)) ?? "watch");
-    const lbl = LABEL_MAP[primary];
-    const hlTag = item.why.find(w => /^HL\d$/.test(w));
-    const scoreHtml = hlTag
-      ? `<span style="font-size:11px;padding:2px 6px;border-radius:3px;font-weight:600;background:var(--canvas-inset);color:var(--text-secondary);border:1px solid var(--border-muted)">${hlTag.replace("HL", "")} / 4</span>`
-      : "";
-    const whyHtml = `<span style="font-size:11px;padding:2px 6px;border-radius:3px;font-weight:600;${lbl.style}">${lbl.text}</span> ${scoreHtml}`;
-    // Timing: ищем монету в HM — dump для LONG = момент входа, pump для SHORT
-    const hm = _hmSignalsCache.find(m => m.coin === item.coin && m.best?.spikePct != null);
-    let timingHtml = `<span style="font-family:var(--font-mono);font-size:11px;color:var(--text-faint)">—</span>`;
-    if (hm) {
-      const spike = hm.best.spikePct;
-      const goodForLong  = isLong  && spike < -1.5; // монета упала → хороший вход для лонга
-      const goodForShort = !isLong && spike > 1.5;  // монета пампит → хороший вход для шорта
-      if (goodForLong) {
-        timingHtml = `<span style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#fff;background:var(--green);padding:2px 8px;border-radius:4px;white-space:nowrap">long now</span>`;
-      } else if (goodForShort) {
-        timingHtml = `<span style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#fff;background:var(--red);padding:2px 8px;border-radius:4px;white-space:nowrap">short now</span>`;
+  tbody.innerHTML = top10
+    .map((item, idx) => {
+      const isLong = item.direction === "LONG";
+      const dirHtml = isLong
+        ? '<span style="color:var(--green);font-weight:700;font-family:var(--font-mono);font-size:12px">▲ LONG</span>'
+        : '<span style="color:var(--red);font-weight:700;font-family:var(--font-mono);font-size:12px">▼ SHORT</span>';
+      const trend4hHtml =
+        item.trend4h == null
+          ? '<span style="opacity:.35;font-family:var(--font-mono)">—</span>'
+          : item.trend4h === "up"
+            ? '<span style="color:var(--green);font-family:var(--font-mono)">▲</span>'
+            : '<span style="color:var(--red);font-family:var(--font-mono)">▼</span>';
+      // Один главный тег + опциональный score
+      const LABEL_MAP = {
+        CG: {
+          text: "entry ready",
+          style:
+            "background:var(--accent-soft);color:var(--accent-strong);border:1px solid var(--accent-line)",
+        },
+        spike: {
+          text: "spike",
+          style:
+            "background:var(--warn-soft);color:var(--warn);border:1px solid var(--warn)",
+        },
+        fund: {
+          text: "funding",
+          style:
+            "background:var(--canvas-inset);color:var(--text-secondary);border:1px solid var(--border-muted)",
+        },
+        watch: {
+          text: "watch",
+          style:
+            "background:none;color:var(--text-faint);border:1px solid var(--hairline)",
+        },
+        conflict: {
+          text: "conflict",
+          style:
+            "background:none;color:var(--text-faint);border:1px solid var(--hairline)",
+        },
+      };
+      const PRIORITY = ["CG", "spike", "fund"];
+      const primary = item.conflict
+        ? "conflict"
+        : (PRIORITY.find((k) => item.why.includes(k)) ?? "watch");
+      const lbl = LABEL_MAP[primary];
+      const hlTag = item.why.find((w) => /^HL\d$/.test(w));
+      const scoreHtml = hlTag
+        ? `<span style="font-size:11px;padding:2px 6px;border-radius:3px;font-weight:600;background:var(--canvas-inset);color:var(--text-secondary);border:1px solid var(--border-muted)">${hlTag.replace("HL", "")} / 4</span>`
+        : "";
+      const whyHtml = `<span style="font-size:11px;padding:2px 6px;border-radius:3px;font-weight:600;${lbl.style}">${lbl.text}</span> ${scoreHtml}`;
+      // Timing: ищем монету в HM — dump для LONG = момент входа, pump для SHORT
+      const hm = _hmSignalsCache.find(
+        (m) => m.coin === item.coin && m.best?.spikePct != null,
+      );
+      let timingHtml = `<span style="font-family:var(--font-mono);font-size:11px;color:var(--text-faint)">—</span>`;
+      if (hm) {
+        const spike = hm.best.spikePct;
+        const goodForLong = isLong && spike < -1.5; // монета упала → хороший вход для лонга
+        const goodForShort = !isLong && spike > 1.5; // монета пампит → хороший вход для шорта
+        if (goodForLong) {
+          timingHtml = `<span style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#fff;background:var(--green);padding:2px 8px;border-radius:4px;white-space:nowrap">long now</span>`;
+        } else if (goodForShort) {
+          timingHtml = `<span style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:#fff;background:var(--red);padding:2px 8px;border-radius:4px;white-space:nowrap">short now</span>`;
+        }
       }
-    }
 
-    const rowOpacity = item.conflict ? "opacity:.45;" : "";
-    const conflictIcon = item.conflict ? ' <span style="color:var(--red);font-size:10px" title="Macro conflict">⚠</span>' : "";
-    const topGlow = idx === 0 && !item.conflict
-      ? (isLong ? "background:var(--green-soft);" : "background:var(--red-soft);")
-      : "";
-    return `<tr style="${rowOpacity}${topGlow}">
+      const rowOpacity = item.conflict ? "opacity:.45;" : "";
+      const conflictIcon = item.conflict
+        ? ' <span style="color:var(--red);font-size:10px" title="Macro conflict">⚠</span>'
+        : "";
+      const topGlow =
+        idx === 0 && !item.conflict
+          ? isLong
+            ? "background:var(--green-soft);"
+            : "background:var(--red-soft);"
+          : "";
+      return `<tr style="${rowOpacity}${topGlow}">
       <td style="${TD}font-family:var(--font-mono);color:var(--text-faint);font-size:11px">${idx + 1}</td>
       <td style="${TD}font-weight:700;font-size:14px">#${item.coin}${conflictIcon}</td>
       <td style="${TD}">${dirHtml}</td>
@@ -3544,16 +3950,27 @@ function renderSmartSignals() {
       <td style="${TD}display:flex;gap:3px;flex-wrap:wrap">${whyHtml}</td>
       <td style="${TDC}">${timingHtml}</td>
     </tr>`;
-  }).join("");
+    })
+    .join("");
 }
 
 let _divData = null;
 let _divWindow = "15m";
-const DIV_DEFAULT_WATCHLIST = ["BTC", "HYPE", "ZEC", "WLD", "NEAR", "LIT", "ASTER"];
+const DIV_DEFAULT_WATCHLIST = [
+  "BTC",
+  "HYPE",
+  "ZEC",
+  "WLD",
+  "NEAR",
+  "LIT",
+  "ASTER",
+];
 
 function divGetWatchlist() {
   try {
-    const saved = JSON.parse(localStorage.getItem("hl-div-watchlist") || "null");
+    const saved = JSON.parse(
+      localStorage.getItem("hl-div-watchlist") || "null",
+    );
     if (Array.isArray(saved) && saved.length) return saved;
   } catch {}
   return [...DIV_DEFAULT_WATCHLIST];
@@ -3565,17 +3982,23 @@ function divSaveWatchlist(list) {
 
 function divRenderWatchlistBar() {
   const bar = document.getElementById("div-watchlist-bar");
-  if (!bar || _divWindow === "all") { if (bar) bar.style.display = "none"; return; }
+  if (!bar || _divWindow === "all") {
+    if (bar) bar.style.display = "none";
+    return;
+  }
   bar.style.display = "flex";
   const list = divGetWatchlist();
   const defaults = new Set(DIV_DEFAULT_WATCHLIST);
-  bar.innerHTML = list.map((coin) => {
-    const removable = !defaults.has(coin);
-    return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--surface-2,rgba(255,255,255,.06));border:1px solid var(--hairline);border-radius:4px;padding:2px 6px;font-family:var(--font-mono);font-size:10px;">
+  bar.innerHTML =
+    list
+      .map((coin) => {
+        const removable = !defaults.has(coin);
+        return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--surface-2,rgba(255,255,255,.06));border:1px solid var(--hairline);border-radius:4px;padding:2px 6px;font-family:var(--font-mono);font-size:10px;">
       ${coin}${removable ? `<button data-remove="${coin}" style="background:none;border:none;cursor:pointer;color:var(--text-faint);padding:0;line-height:1;font-size:11px;" title="Убрать">×</button>` : ""}
     </span>`;
-  }).join("") +
-  `<span style="display:inline-flex;align-items:center;gap:3px;">
+      })
+      .join("") +
+    `<span style="display:inline-flex;align-items:center;gap:3px;">
     <input id="div-add-input" placeholder="+ COIN" style="width:60px;background:transparent;border:1px dashed var(--hairline);border-radius:4px;padding:2px 5px;font-family:var(--font-mono);font-size:10px;color:inherit;outline:none;" maxlength="10" autocomplete="off" spellcheck="false"/>
   </span>`;
 
@@ -3584,7 +4007,10 @@ function divRenderWatchlistBar() {
     const val = e.target.value.trim().toUpperCase();
     if (!val) return;
     const l = divGetWatchlist();
-    if (!l.includes(val)) { l.push(val); divSaveWatchlist(l); }
+    if (!l.includes(val)) {
+      l.push(val);
+      divSaveWatchlist(l);
+    }
     e.target.value = "";
     divRenderWatchlistBar();
     divRefresh();
@@ -3603,37 +4029,68 @@ function divRenderWatchlistBar() {
 function divSignalInfo(c, btcPct, hasPast) {
   const rel = c.relPct;
   const isBtc = c.coin === "BTC";
-  const relColor = !hasPast || rel == null ? "var(--text-muted)"
-    : rel <= -1.5 ? "var(--red)" : rel >= 1.5 ? "var(--green)" : "var(--text-muted)";
-  const coinColor = !hasPast || c.coinPct == null ? "var(--text-muted)"
-    : c.coinPct > 0 ? "var(--green)" : c.coinPct < 0 ? "var(--red)" : "var(--text-muted)";
+  const relColor =
+    !hasPast || rel == null
+      ? "var(--text-muted)"
+      : rel <= -1.5
+        ? "var(--red)"
+        : rel >= 1.5
+          ? "var(--green)"
+          : "var(--text-muted)";
+  const coinColor =
+    !hasPast || c.coinPct == null
+      ? "var(--text-muted)"
+      : c.coinPct > 0
+        ? "var(--green)"
+        : c.coinPct < 0
+          ? "var(--red)"
+          : "var(--text-muted)";
   let signal = "—";
   if (hasPast && rel != null && btcPct != null && !isBtc) {
     if (btcPct > 0.3 && rel <= -1.5) signal = "SHORT";
     else if (btcPct < -0.3 && rel >= 1.5) signal = "LONG";
   }
-  const signalColor = signal === "SHORT" ? "var(--red)"
-    : signal === "LONG" ? "var(--green)"
-    : "var(--text-faint)";
+  const signalColor =
+    signal === "SHORT"
+      ? "var(--red)"
+      : signal === "LONG"
+        ? "var(--green)"
+        : "var(--text-faint)";
   return { relColor, coinColor, signal, signalColor, isBtc };
 }
 
 function divRenderRows(coins, btcPct, hasPast) {
-  const fmtPct = (v) => v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(2)}%`;
-  return coins.map((c) => {
-    const { relColor, coinColor, signal, signalColor, isBtc } = divSignalInfo(c, btcPct, hasPast);
-    const rel = c.relPct;
-    const whaleEntries = _wwPositionsMap.get(c.coin.toUpperCase());
-    let whaleCell = "";
-    if (whaleEntries?.length) {
-      const shortSum = whaleEntries.filter((w) => w.side === "SHORT").reduce((s, w) => s + w.sizeUsd, 0);
-      const longSum  = whaleEntries.filter((w) => w.side === "LONG").reduce((s, w) => s + w.sizeUsd, 0);
-      const parts = [];
-      if (shortSum > 0) parts.push(`<span style="color:var(--red);font-weight:700">↓${fmtNotional(shortSum)}</span>`);
-      if (longSum  > 0) parts.push(`<span style="color:var(--green);font-weight:700">↑${fmtNotional(longSum)}</span>`);
-      whaleCell = parts.join(" ");
-    }
-    return `<tr>
+  const fmtPct = (v) =>
+    v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(2)}%`;
+  return coins
+    .map((c) => {
+      const { relColor, coinColor, signal, signalColor, isBtc } = divSignalInfo(
+        c,
+        btcPct,
+        hasPast,
+      );
+      const rel = c.relPct;
+      const whaleEntries = _wwPositionsMap.get(c.coin.toUpperCase());
+      let whaleCell = "";
+      if (whaleEntries?.length) {
+        const shortSum = whaleEntries
+          .filter((w) => w.side === "SHORT")
+          .reduce((s, w) => s + w.sizeUsd, 0);
+        const longSum = whaleEntries
+          .filter((w) => w.side === "LONG")
+          .reduce((s, w) => s + w.sizeUsd, 0);
+        const parts = [];
+        if (shortSum > 0)
+          parts.push(
+            `<span style="color:var(--red);font-weight:700">↓${fmtNotional(shortSum)}</span>`,
+          );
+        if (longSum > 0)
+          parts.push(
+            `<span style="color:var(--green);font-weight:700">↑${fmtNotional(longSum)}</span>`,
+          );
+        whaleCell = parts.join(" ");
+      }
+      return `<tr>
       <td style="font-weight:600">${c.coin}</td>
       <td class="r">${fmtPrice(c.price)}</td>
       <td class="r" style="color:${coinColor}">${hasPast ? fmtPct(c.coinPct) : "—"}</td>
@@ -3641,7 +4098,8 @@ function divRenderRows(coins, btcPct, hasPast) {
       <td class="c" style="color:${signalColor};font-weight:700">${signal}</td>
       <td class="r">${whaleCell}</td>
     </tr>`;
-  }).join("");
+    })
+    .join("");
 }
 
 let _divAllFetching = false;
@@ -3651,8 +4109,10 @@ async function divFetchAll() {
   _divAllFetching = true;
   const win = _divWindow === "all" ? "15m" : _divWindow;
   const tbody = document.getElementById("div-tbody");
-  const hasContent = tbody && tbody.children.length > 0 && !tbody.querySelector(".empty-state");
-  if (!hasContent && tbody) tbody.innerHTML = `<tr><td colspan="6" class="empty-state">загружаем все монеты…</td></tr>`;
+  const hasContent =
+    tbody && tbody.children.length > 0 && !tbody.querySelector(".empty-state");
+  if (!hasContent && tbody)
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">загружаем все монеты…</td></tr>`;
   try {
     const d = await fetchJson(`/api/btc-divergence/all?window=${win}`);
     if (!d?.coins) return;
@@ -3660,33 +4120,51 @@ async function divFetchAll() {
     const thChange = document.getElementById("div-th-change");
     if (thChange) thChange.textContent = `${win} %`;
     if (metaEl) {
-      const label = d.btcPct != null
-        ? `BTC ${win} ${d.btcPct > 0 ? "+" : ""}${d.btcPct.toFixed(2)}% · ${d.coins.length} монет`
-        : `${d.coins.length} монет · накапливаем историю…`;
+      const label =
+        d.btcPct != null
+          ? `BTC ${win} ${d.btcPct > 0 ? "+" : ""}${d.btcPct.toFixed(2)}% · ${d.coins.length} монет`
+          : `${d.coins.length} монет · накапливаем историю…`;
       metaEl.textContent = label;
-      metaEl.style.color = d.btcPct == null ? "var(--text-muted)"
-        : d.btcPct > 0.3 ? "var(--green)" : d.btcPct < -0.3 ? "var(--red)" : "var(--text-muted)";
+      metaEl.style.color =
+        d.btcPct == null
+          ? "var(--text-muted)"
+          : d.btcPct > 0.3
+            ? "var(--green)"
+            : d.btcPct < -0.3
+              ? "var(--red)"
+              : "var(--text-muted)";
     }
     if (d.coins.length === 0) {
-      if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="empty-state">накапливаем историю…</td></tr>`;
+      if (tbody)
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">накапливаем историю…</td></tr>`;
       return;
     }
     if (tbody) tbody.innerHTML = divRenderRows(d.coins, d.btcPct, d.hasPast);
-  } catch { /* silent */ }
-  finally { _divAllFetching = false; }
+  } catch {
+    /* silent */
+  } finally {
+    _divAllFetching = false;
+  }
 }
 
 // Тянем дивергенцию по ТЕКУЩЕМУ вотчлисту (включая монеты, добавленные оператором).
 // WS-пуш шлёт только дефолтный список, поэтому источник истины для табов
 // 5m/15m/1h — этот fetch. BTC всегда нужен как baseline.
 async function divRefresh() {
-  if (_divWindow === "all") { renderBtcDivergence(null); return; }
+  if (_divWindow === "all") {
+    renderBtcDivergence(null);
+    return;
+  }
   const wl = divGetWatchlist();
   const coins = wl.includes("BTC") ? wl : ["BTC", ...wl];
   try {
-    const d = await fetchJson(`/api/btc-divergence?coins=${encodeURIComponent(coins.join(","))}`);
+    const d = await fetchJson(
+      `/api/btc-divergence?coins=${encodeURIComponent(coins.join(","))}`,
+    );
     if (d?.windows) renderBtcDivergence(d);
-  } catch { /* silent */ }
+  } catch {
+    /* silent */
+  }
 }
 
 function renderBtcDivergence(data) {
@@ -3694,7 +4172,10 @@ function renderBtcDivergence(data) {
 
   divRenderWatchlistBar();
 
-  if (_divWindow === "all") { divFetchAll(); return; }
+  if (_divWindow === "all") {
+    divFetchAll();
+    return;
+  }
 
   if (!_divData) return;
   const tbody = document.getElementById("div-tbody");
@@ -3720,10 +4201,19 @@ function renderBtcDivergence(data) {
 
   if (metaEl) {
     const age = updatedAt ? Math.round((Date.now() - updatedAt) / 1000) : null;
-    const btcLabel = btcPct != null ? `BTC ${_divWindow} ${btcPct > 0 ? "+" : ""}${btcPct.toFixed(2)}%` : "BTC —";
+    const btcLabel =
+      btcPct != null
+        ? `BTC ${_divWindow} ${btcPct > 0 ? "+" : ""}${btcPct.toFixed(2)}%`
+        : "BTC —";
     metaEl.textContent = age != null ? `${btcLabel} · ${age}s ago` : btcLabel;
-    metaEl.style.color = btcPct == null ? "var(--text-muted)"
-      : btcPct > 0.3 ? "var(--green)" : btcPct < -0.3 ? "var(--red)" : "var(--text-muted)";
+    metaEl.style.color =
+      btcPct == null
+        ? "var(--text-muted)"
+        : btcPct > 0.3
+          ? "var(--green)"
+          : btcPct < -0.3
+            ? "var(--red)"
+            : "var(--text-muted)";
   }
 
   tbody.innerHTML = divRenderRows(coins, btcPct, hasPast);
@@ -3733,7 +4223,9 @@ document.getElementById("div-tabs")?.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-window]");
   if (!btn) return;
   _divWindow = btn.dataset.window;
-  document.querySelectorAll("#div-tabs .range-btn").forEach((b) => b.classList.toggle("active", b === btn));
+  document
+    .querySelectorAll("#div-tabs .range-btn")
+    .forEach((b) => b.classList.toggle("active", b === btn));
   divRefresh();
 });
 
@@ -3744,7 +4236,7 @@ applyTheme(getStoredTheme());
 initEquityChart();
 initWebSocket();
 tick();
-divRefresh();               // первичная загрузка дивергенции (до первого WS-пуша)
+divRefresh(); // первичная загрузка дивергенции (до первого WS-пуша)
 setInterval(tick, REFRESH_MS);
 setInterval(renderFooter, 1000);
 
@@ -3773,7 +4265,9 @@ function wwGetList() {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return WW_DEFAULTS;
 }
 
@@ -3809,14 +4303,16 @@ function wwRenderChips() {
   const chips = document.getElementById("ww-chips");
   if (!chips) return;
   const list = wwGetList();
-  chips.innerHTML = list.map((w, i) => {
-    const short = `${w.address.slice(0, 6)}…${w.address.slice(-4)}`;
-    const labelDiffersFromShort = w.label !== short;
-    return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--bg-header);border:1px solid var(--hairline);border-radius:4px;padding:2px 7px;font-family:var(--font-mono);font-size:10px;color:var(--text-muted)" title="${escapeHtml(w.address)}">
+  chips.innerHTML = list
+    .map((w, i) => {
+      const short = `${w.address.slice(0, 6)}…${w.address.slice(-4)}`;
+      const labelDiffersFromShort = w.label !== short;
+      return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--bg-header);border:1px solid var(--hairline);border-radius:4px;padding:2px 7px;font-family:var(--font-mono);font-size:10px;color:var(--text-muted)" title="${escapeHtml(w.address)}">
       ${escapeHtml(w.label)}${labelDiffersFromShort ? ` <span style="opacity:.5;font-size:9px">${short}</span>` : ""}
       <button data-ww-remove="${i}" style="background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:11px;padding:0 0 0 3px;line-height:1" title="Удалить">×</button>
     </span>`;
-  }).join("");
+    })
+    .join("");
   chips.querySelectorAll("[data-ww-remove]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const idx = parseInt(btn.dataset.wwRemove, 10);
@@ -3860,7 +4356,9 @@ function renderWhaleWatch(results) {
     for (const p of data.positions ?? []) {
       const key = p.coin.toUpperCase();
       if (!_wwPositionsMap.has(key)) _wwPositionsMap.set(key, []);
-      _wwPositionsMap.get(key).push({ label, side: p.side, sizeUsd: p.sizeUsd });
+      _wwPositionsMap
+        .get(key)
+        .push({ label, side: p.side, sizeUsd: p.sizeUsd });
       totalNotional += p.sizeUsd;
       totalPnl += p.unrealizedPnl;
       if (p.side === "SHORT") totalShortNotional += p.sizeUsd;
@@ -3891,7 +4389,8 @@ function renderWhaleWatch(results) {
   _wwDeltaMap = newDeltaMap;
 
   if (allRows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">нет открытых perp позиций</td></tr>';
+    tbody.innerHTML =
+      '<tr><td colspan="8" class="empty-state">нет открытых perp позиций</td></tr>';
     if (biasEl) biasEl.textContent = "";
     if (footerEl) footerEl.textContent = "";
     // Re-render BTC Div to clear whale column
@@ -3905,7 +4404,8 @@ function renderWhaleWatch(results) {
     const { key, desc } = _wwSort;
     const va = a[key] ?? (typeof a[key] === "string" ? "" : -Infinity);
     const vb = b[key] ?? (typeof b[key] === "string" ? "" : -Infinity);
-    if (typeof va === "string") return desc ? vb.localeCompare(va) : va.localeCompare(vb);
+    if (typeof va === "string")
+      return desc ? vb.localeCompare(va) : va.localeCompare(vb);
     return desc ? vb - va : va - vb;
   });
 
@@ -3917,38 +4417,42 @@ function renderWhaleWatch(results) {
     th.classList.toggle("ww-sort-desc", active && _wwSort.desc);
   });
 
-  tbody.innerHTML = allRows.map((p) => {
-    const sideColor = p.side === "SHORT" ? "var(--red)" : "var(--green)";
-    const levStr = p.leverage != null ? `${p.leverage}×` : "—";
-    const entryStr = p.entryPrice >= 1000
-      ? p.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })
-      : p.entryPrice >= 1
-        ? p.entryPrice.toFixed(2)
-        : p.entryPrice > 0 ? p.entryPrice.toFixed(5) : "—";
+  tbody.innerHTML = allRows
+    .map((p) => {
+      const sideColor = p.side === "SHORT" ? "var(--red)" : "var(--green)";
+      const levStr = p.leverage != null ? `${p.leverage}×` : "—";
+      const entryStr =
+        p.entryPrice >= 1000
+          ? p.entryPrice.toLocaleString(undefined, { maximumFractionDigits: 0 })
+          : p.entryPrice >= 1
+            ? p.entryPrice.toFixed(2)
+            : p.entryPrice > 0
+              ? p.entryPrice.toFixed(5)
+              : "—";
 
-    // Delta badge
-    const deltaKey = `${p.address}:${p.coin}`;
-    const d = _wwDeltaMap.get(deltaKey);
-    let deltaBadge = "";
-    if (d) {
-      if (d.type === "opened") {
-        deltaBadge = `<span style="margin-left:4px;background:var(--green);color:#000;font-size:9px;font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">NEW</span>`;
-      } else if (d.type === "closed" || p._closed) {
+      // Delta badge
+      const deltaKey = `${p.address}:${p.coin}`;
+      const d = _wwDeltaMap.get(deltaKey);
+      let deltaBadge = "";
+      if (d) {
+        if (d.type === "opened") {
+          deltaBadge = `<span style="margin-left:4px;background:var(--green);color:#000;font-size:9px;font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">NEW</span>`;
+        } else if (d.type === "closed" || p._closed) {
+          deltaBadge = `<span style="margin-left:4px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
+        } else if (d.type === "size_up") {
+          const diff = (d.sizeUsd ?? 0) - (d.prevSizeUsd ?? 0);
+          deltaBadge = `<span style="margin-left:4px;color:var(--green);font-size:9px;font-weight:700;vertical-align:middle">+${fmtNotional(diff)}</span>`;
+        } else if (d.type === "size_down") {
+          const diff = (d.sizeUsd ?? 0) - (d.prevSizeUsd ?? 0);
+          deltaBadge = `<span style="margin-left:4px;color:var(--red);font-size:9px;font-weight:700;vertical-align:middle">${fmtNotional(diff)}</span>`;
+        }
+      } else if (p._closed) {
         deltaBadge = `<span style="margin-left:4px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
-      } else if (d.type === "size_up") {
-        const diff = (d.sizeUsd ?? 0) - (d.prevSizeUsd ?? 0);
-        deltaBadge = `<span style="margin-left:4px;color:var(--green);font-size:9px;font-weight:700;vertical-align:middle">+${fmtNotional(diff)}</span>`;
-      } else if (d.type === "size_down") {
-        const diff = (d.sizeUsd ?? 0) - (d.prevSizeUsd ?? 0);
-        deltaBadge = `<span style="margin-left:4px;color:var(--red);font-size:9px;font-weight:700;vertical-align:middle">${fmtNotional(diff)}</span>`;
       }
-    } else if (p._closed) {
-      deltaBadge = `<span style="margin-left:4px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
-    }
 
-    const sinceStr = p._closed ? "—" : fmtSince(p.firstSeenAt);
-    const rowOpacity = p._closed ? "opacity:.5;" : "";
-    return `<tr style="${rowOpacity}">
+      const sinceStr = p._closed ? "—" : fmtSince(p.firstSeenAt);
+      const rowOpacity = p._closed ? "opacity:.5;" : "";
+      return `<tr style="${rowOpacity}">
       <td style="color:var(--text-muted);font-size:12px">${escapeHtml(p.label)}</td>
       <td style="font-weight:700">${escapeHtml(p.coin)}</td>
       <td class="r" style="color:${sideColor};font-weight:700">${p.side}</td>
@@ -3958,12 +4462,19 @@ function renderWhaleWatch(results) {
       <td class="r" style="color:var(--text-muted)">${escapeHtml(entryStr)}</td>
       <td class="r" style="color:var(--text-faint);font-size:11px">${sinceStr}</td>
     </tr>`;
-  }).join("");
+    })
+    .join("");
 
   if (biasEl) {
-    const shortPct = totalNotional > 0 ? (totalShortNotional / totalNotional) * 100 : 0;
+    const shortPct =
+      totalNotional > 0 ? (totalShortNotional / totalNotional) * 100 : 0;
     const longPct = 100 - shortPct;
-    const col = shortPct > 60 ? "var(--red)" : longPct > 60 ? "var(--green)" : "var(--text-muted)";
+    const col =
+      shortPct > 60
+        ? "var(--red)"
+        : longPct > 60
+          ? "var(--green)"
+          : "var(--text-muted)";
     biasEl.style.color = col;
     const pnlSign = totalPnl >= 0 ? "+" : "";
     biasEl.textContent = `SHORT ${shortPct.toFixed(0)}% · LONG ${longPct.toFixed(0)}% · ${fmtNotional(totalNotional)} · uPnL ${pnlSign}${fmtNotional(totalPnl)}`;
@@ -3981,18 +4492,31 @@ function renderWhaleWatch(results) {
 async function fetchWhaleWatch() {
   const list = wwGetList();
   wwRenderChips();
-  if (list.length === 0) { renderWhaleWatch([]); return; }
+  if (list.length === 0) {
+    renderWhaleWatch([]);
+    return;
+  }
 
   // Single batch request — sequential on the server, doesn't block hlInfo semaphore
   const addrs = list.map((w) => w.address).join(",");
   try {
-    const batch = await fetchJson(`/api/whale-watch/batch?addresses=${encodeURIComponent(addrs)}`);
-    const byAddr = new Map((batch.results ?? []).map((r) => [r.address, r.data]));
-    const mapped = list.map((w) => ({ label: w.label, address: w.address, data: byAddr.get(w.address) ?? null }));
+    const batch = await fetchJson(
+      `/api/whale-watch/batch?addresses=${encodeURIComponent(addrs)}`,
+    );
+    const byAddr = new Map(
+      (batch.results ?? []).map((r) => [r.address, r.data]),
+    );
+    const mapped = list.map((w) => ({
+      label: w.label,
+      address: w.address,
+      data: byAddr.get(w.address) ?? null,
+    }));
     if (mapped.every((m) => !m.data)) {
       if (!_wwHasData) {
         const tbody = document.getElementById("ww-tbody");
-        if (tbody) tbody.innerHTML = '<tr><td colspan="8" class="empty-state" style="color:var(--red)">ошибка загрузки — HL API недоступен</td></tr>';
+        if (tbody)
+          tbody.innerHTML =
+            '<tr><td colspan="8" class="empty-state" style="color:var(--red)">ошибка загрузки — HL API недоступен</td></tr>';
       }
       return;
     }
@@ -4000,7 +4524,8 @@ async function fetchWhaleWatch() {
   } catch (err) {
     if (!_wwHasData) {
       const tbody = document.getElementById("ww-tbody");
-      if (tbody) tbody.innerHTML = `<tr><td colspan="8" class="empty-state" style="color:var(--red)">ошибка: ${err?.message ?? "неизвестно"}</td></tr>`;
+      if (tbody)
+        tbody.innerHTML = `<tr><td colspan="8" class="empty-state" style="color:var(--red)">ошибка: ${err?.message ?? "неизвестно"}</td></tr>`;
     }
   }
 }
@@ -4022,14 +4547,19 @@ async function fetchWhaleWatch() {
     labelInput.focus();
   });
 
-  cancelBtn?.addEventListener("click", () => { form.style.display = "none"; });
+  cancelBtn?.addEventListener("click", () => {
+    form.style.display = "none";
+  });
 
   saveBtn?.addEventListener("click", () => {
     const addr = addrInput.value.trim().toLowerCase();
-    const label = labelInput.value.trim() || `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+    const label =
+      labelInput.value.trim() || `${addr.slice(0, 6)}…${addr.slice(-4)}`;
     if (!/^0x[0-9a-f]{40}$/.test(addr)) {
       addrInput.style.borderColor = "var(--red)";
-      setTimeout(() => { addrInput.style.borderColor = ""; }, 1500);
+      setTimeout(() => {
+        addrInput.style.borderColor = "";
+      }, 1500);
       return;
     }
     const list = wwGetList();
@@ -4062,9 +4592,9 @@ document.getElementById("ww-table")?.addEventListener("click", (e) => {
 
 async function fetchAndRenderLeaderboard() {
   const loadBtn = document.getElementById("ww-lb-load");
-  const metaEl  = document.getElementById("ww-lb-meta");
-  const wrap    = document.getElementById("ww-lb-table-wrap");
-  const tbody   = document.getElementById("ww-lb-tbody");
+  const metaEl = document.getElementById("ww-lb-meta");
+  const wrap = document.getElementById("ww-lb-table-wrap");
+  const tbody = document.getElementById("ww-lb-tbody");
   if (!loadBtn || !tbody) return;
 
   loadBtn.disabled = true;
@@ -4077,17 +4607,22 @@ async function fetchAndRenderLeaderboard() {
     const list = wwGetList();
     const watchedAddresses = new Set(list.map((w) => w.address.toLowerCase()));
 
-    tbody.innerHTML = rows.map((r, idx) => {
-      const short = `${r.address.slice(0, 6)}…${r.address.slice(-4)}`;
-      const nameStr = r.displayName ? `${escapeHtml(r.displayName)} <span style="opacity:.5;font-size:10px">${short}</span>` : short;
-      const roi = Number.isFinite(r.roi30d) ? `${(r.roi30d * 100).toFixed(1)}%` : "—";
-      const pnlColor = r.pnl30d >= 0 ? "var(--green)" : "var(--red)";
-      const pnlSign  = r.pnl30d >= 0 ? "+" : "";
-      const alreadyAdded = watchedAddresses.has(r.address.toLowerCase());
-      const addBtn = alreadyAdded
-        ? `<button disabled style="font-size:10px;padding:2px 7px;border:1px solid var(--hairline);border-radius:4px;background:none;color:var(--text-faint);cursor:default">✓</button>`
-        : `<button data-lb-add="${escapeHtml(r.address)}" data-lb-name="${escapeHtml(r.displayName || short)}" style="font-size:10px;padding:2px 7px;border:1px solid var(--hairline);border-radius:4px;background:none;color:var(--text-muted);cursor:pointer">+ Add</button>`;
-      return `<tr>
+    tbody.innerHTML = rows
+      .map((r, idx) => {
+        const short = `${r.address.slice(0, 6)}…${r.address.slice(-4)}`;
+        const nameStr = r.displayName
+          ? `${escapeHtml(r.displayName)} <span style="opacity:.5;font-size:10px">${short}</span>`
+          : short;
+        const roi = Number.isFinite(r.roi30d)
+          ? `${(r.roi30d * 100).toFixed(1)}%`
+          : "—";
+        const pnlColor = r.pnl30d >= 0 ? "var(--green)" : "var(--red)";
+        const pnlSign = r.pnl30d >= 0 ? "+" : "";
+        const alreadyAdded = watchedAddresses.has(r.address.toLowerCase());
+        const addBtn = alreadyAdded
+          ? `<button disabled style="font-size:10px;padding:2px 7px;border:1px solid var(--hairline);border-radius:4px;background:none;color:var(--text-faint);cursor:default">✓</button>`
+          : `<button data-lb-add="${escapeHtml(r.address)}" data-lb-name="${escapeHtml(r.displayName || short)}" style="font-size:10px;padding:2px 7px;border:1px solid var(--hairline);border-radius:4px;background:none;color:var(--text-muted);cursor:pointer">+ Add</button>`;
+        return `<tr>
         <td style="color:var(--text-faint);font-size:11px">${idx + 1}</td>
         <td style="font-family:var(--font-mono);font-size:11px">${nameStr}</td>
         <td class="r">${fmtNotional(r.accountValue)}</td>
@@ -4096,13 +4631,15 @@ async function fetchAndRenderLeaderboard() {
         <td class="r" style="color:var(--text-muted)">${fmtNotional(r.vlm30d)}</td>
         <td>${addBtn}</td>
       </tr>`;
-    }).join("");
+      })
+      .join("");
 
     // Bind add buttons
     tbody.querySelectorAll("[data-lb-add]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const addr = btn.dataset.lbAdd.toLowerCase();
-        const name = btn.dataset.lbName || `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+        const name =
+          btn.dataset.lbName || `${addr.slice(0, 6)}…${addr.slice(-4)}`;
         const list = wwGetList();
         if (!list.some((w) => w.address === addr)) {
           list.push({ label: name, address: addr });
@@ -4118,7 +4655,9 @@ async function fetchAndRenderLeaderboard() {
 
     if (wrap) wrap.style.display = "";
     if (metaEl) {
-      const age = data.ts ? `${Math.round((Date.now() - data.ts) / 1000)}s ago` : "";
+      const age = data.ts
+        ? `${Math.round((Date.now() - data.ts) / 1000)}s ago`
+        : "";
       metaEl.textContent = `${rows.length} accounts${data.stale ? " (stale)" : ""}${age ? " · " + age : ""}`;
     }
     loadBtn.textContent = "Refresh";
@@ -4135,4 +4674,3 @@ async function fetchAndRenderLeaderboard() {
   if (!loadBtn) return;
   loadBtn.addEventListener("click", fetchAndRenderLeaderboard);
 })();
-
