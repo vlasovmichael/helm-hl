@@ -2928,6 +2928,36 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   color: var(--text-muted);
   margin-left: auto;
   font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.market-context .mc-fng-cap {
+  font-size: 13px;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+.market-context .mc-fng-class {
+  font-size: 14px;
+  font-weight: 600;
+}
+.fng-gauge {
+  display: block;
+  overflow: visible;
+}
+.fng-gauge .fng-needle {
+  stroke: var(--text-primary);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+.fng-gauge .fng-hub {
+  fill: var(--text-primary);
+}
+.fng-gauge .fng-num {
+  fill: var(--text-primary);
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 /* Светофор «можно/нельзя»: зелёный = есть чёткий фонд (RISK-ON или RISK-OFF),
    можно входить по нему; жёлтый = MIXED, жди; серый = нет данных.
