@@ -2,6 +2,7 @@ import axios from 'axios';
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { formatTaxSummaryForTelegram } from './taxCollector/index.js';
+import { getFlags, setFlag } from '../core/runtimeFlags.js';
 
 /**
  * Форматирует длительность в минутах в человеко-читаемую строку.
@@ -494,9 +495,118 @@ async function handleStatusCallback(callbackQueryId) {
 }
 
 /**
+// ─────────────────────────────────────────────────
+//  Strategy control helpers
+// ─────────────────────────────────────────────────
+
+const STRATEGY_ALIASES = {
+  hunter:     'hunter',
+  hunterlong: 'hunterLong',
+  long:       'hunterLong',
+  chill:      'chillBoy',
+  chillboy:   'chillBoy',
+  carry:      'carry',
+};
+
+const STRATEGY_LABELS = {
+  hunter:     'Hunter SHORT',
+  hunterLong: 'Hunter Long',
+  chillBoy:   'Chill Boy',
+  carry:      'Carry',
+};
+
+// Default effective state (env-based) for display when no override set
+function envDefault(key) {
+  const t = config.trading;
+  if (key === 'hunter')     return t.hunterEnabled && (!config.isProduction || t.hunterProdEnabled);
+  if (key === 'hunterLong') return t.hunterLongEnabled && (!config.isProduction || t.hunterLongProdEnabled);
+  if (key === 'chillBoy')   return t.chillBoyEnabled;
+  if (key === 'carry')      return t.carryEnabled !== false;
+  return false;
+}
+
+function stratLine(key, flags) {
+  const v = flags[key];
+  const effective = (v !== null && v !== undefined) ? Boolean(v) : envDefault(key);
+  const icon  = effective ? '✅' : '🔴';
+  const note  = (v !== null && v !== undefined) ? ' <i>(override)</i>' : '';
+  return `${icon} ${STRATEGY_LABELS[key]}${note}`;
+}
+
+async function sendStrategiesMessage(prefix = '') {
+  const flags = getFlags();
+  const pauseLine = flags.paused
+    ? '⏸ <b>Бот на паузе</b> — новые входы заблокированы'
+    : '▶️ Бот активен';
+
+  const text =
+    `${prefix}🎛 <b>Стратегии</b>\n` +
+    `<code>─────────────────────</code>\n` +
+    `${stratLine('hunter',     flags)}\n` +
+    `${stratLine('hunterLong', flags)}\n` +
+    `${stratLine('chillBoy',   flags)}\n` +
+    `${stratLine('carry',      flags)}\n` +
+    `<code>─────────────────────</code>\n` +
+    `${pauseLine}`;
+
+  const keyboard = {
+    inline_keyboard: [
+      [
+        { text: '🔫 Hunter ON',  callback_data: 'strat_hunter_on'  },
+        { text: '🔫 Hunter OFF', callback_data: 'strat_hunter_off' },
+      ],
+      [
+        { text: '📈 Long ON',  callback_data: 'strat_hunterlong_on'  },
+        { text: '📈 Long OFF', callback_data: 'strat_hunterlong_off' },
+      ],
+      [
+        { text: '🌊 Chill ON',  callback_data: 'strat_chill_on'  },
+        { text: '🌊 Chill OFF', callback_data: 'strat_chill_off' },
+      ],
+      [
+        { text: '💸 Carry ON',  callback_data: 'strat_carry_on'  },
+        { text: '💸 Carry OFF', callback_data: 'strat_carry_off' },
+      ],
+      [
+        { text: '⏸ Пауза',    callback_data: 'bot_pause'  },
+        { text: '▶️ Продолжить', callback_data: 'bot_resume' },
+      ],
+    ],
+  };
+
+  if (!TG_BASE || !config.telegram.chatId) return;
+  const silent = isSilentHour();
+  try {
+    await axios.post(`${TG_BASE}/sendMessage`, {
+      chat_id:              config.telegram.chatId,
+      text,
+      parse_mode:           'HTML',
+      disable_notification: silent,
+      reply_markup:         keyboard,
+    });
+  } catch (err) {
+    logger.error(`[Reporter] sendStrategiesMessage failed: ${err.response?.data?.description ?? err.message}`);
+  }
+}
+
+async function handleStrategyCallback(data) {
+  // data = 'strat_<alias>_<on|off>'
+  const parts  = data.split('_');   // ['strat', 'hunter', 'on'] or ['strat','hunterlong','on']
+  const action = parts[parts.length - 1];                  // 'on' | 'off'
+  const alias  = parts.slice(1, -1).join('');              // 'hunter' | 'hunterlong' | 'chill' | 'carry'
+  const key    = STRATEGY_ALIASES[alias];
+  if (!key || (action !== 'on' && action !== 'off')) return;
+
+  const enable = action === 'on';
+  setFlag(key, enable);
+  logger.info(`[Reporter] Strategy button: ${key} = ${enable}`);
+  await sendStrategiesMessage(`${enable ? '✅' : '🔴'} <b>${STRATEGY_LABELS[key]}</b> ${enable ? 'включён' : 'выключен'}\n\n`);
+}
+
+/**
  * Запускает polling Telegram getUpdates для обработки:
- *  - callback_query (нажатие кнопки "📊 Статус")
- *  - message        (текстовая команда /status)
+ *  - callback_query (кнопки)
+ *  - message        (текстовые команды)
  *
  * Вызывается при старте бота.
  */
@@ -506,7 +616,20 @@ export function startCallbackPolling() {
     return;
   }
 
-  logger.info('[Reporter] Starting callback & command polling (/status button + command)');
+  logger.info('[Reporter] Starting callback & command polling');
+
+  // Регистрируем команды для нативного меню Telegram (/ подсказки)
+  axios.post(`${TG_BASE}/setMyCommands`, {
+    commands: [
+      { command: 'status',     description: 'Статус бота и позиции' },
+      { command: 'strategies', description: 'Состояние стратегий' },
+      { command: 'pause',      description: 'Заморозить новые входы' },
+      { command: 'resume',     description: 'Возобновить торговлю' },
+      { command: 'on',         description: 'Включить стратегию: hunter / long / chill / carry' },
+      { command: 'off',        description: 'Выключить стратегию: hunter / long / chill / carry' },
+      { command: 'tax',        description: 'Налоговый отчёт [год]' },
+    ],
+  }).catch((err) => logger.warn(`[Reporter] setMyCommands failed: ${err.message}`));
 
   pollingTimer = setInterval(async () => {
     try {
@@ -524,11 +647,25 @@ export function startCallbackPolling() {
       for (const update of data.result) {
         lastUpdateId = update.update_id;
 
-        // ── Кнопка "📊 Статус" ──────────────────
+        // ── Кнопки inline-keyboard ───────────────
         const cb = update.callback_query;
-        if (cb?.data === 'bot_status') {
-          logger.info(`[Reporter] Status button pressed by ${cb.from?.username ?? cb.from?.id}`);
-          await handleStatusCallback(cb.id);
+        if (cb) {
+          // Отвечаем на callback чтобы кнопка не зависла
+          await axios.post(`${TG_BASE}/answerCallbackQuery`, { callback_query_id: cb.id })
+            .catch(() => {});
+
+          if (cb.data === 'bot_status') {
+            logger.info(`[Reporter] Status button by ${cb.from?.username ?? cb.from?.id}`);
+            await handleStatusCallback(null);
+          } else if (cb.data === 'bot_pause') {
+            setFlag('paused', true);
+            await sendMessage('⏸ <b>Новые входы заморожены</b>\n/resume чтобы возобновить.');
+          } else if (cb.data === 'bot_resume') {
+            setFlag('paused', false);
+            await sendMessage('▶️ <b>Торговля возобновлена</b>');
+          } else if (cb.data?.startsWith('strat_')) {
+            await handleStrategyCallback(cb.data);
+          }
           continue;
         }
 
@@ -549,7 +686,6 @@ export function startCallbackPolling() {
 
           logger.info(`[Reporter] /tax command from ${msg.from?.username ?? msg.from?.id}`);
 
-          // /tax 2025 — опциональный год
           const parts = msg.text.trim().split(/\s+/);
           const year  = parts[1] ? parseInt(parts[1], 10) : null;
 
@@ -560,6 +696,52 @@ export function startCallbackPolling() {
             logger.warn(`[Reporter] /tax handler failed: ${err.message}`);
             await sendMessage(`⚠️ Tax summary error: ${err.message}`);
           }
+          continue;
+        }
+
+        // ── /pause / /resume ─────────────────────
+        if (msg?.text?.startsWith('/pause')) {
+          if (String(msg.chat.id) !== String(config.telegram.chatId)) continue;
+          setFlag('paused', true);
+          logger.info(`[Reporter] /pause by ${msg.from?.username ?? msg.from?.id}`);
+          await sendStrategiesMessage('⏸ <b>Новые входы заморожены</b>\n\n');
+          continue;
+        }
+
+        if (msg?.text?.startsWith('/resume')) {
+          if (String(msg.chat.id) !== String(config.telegram.chatId)) continue;
+          setFlag('paused', false);
+          logger.info(`[Reporter] /resume by ${msg.from?.username ?? msg.from?.id}`);
+          await sendStrategiesMessage('▶️ <b>Торговля возобновлена</b>\n\n');
+          continue;
+        }
+
+        // ── /on <strategy> / /off <strategy> ─────
+        if (msg?.text?.startsWith('/on ') || msg?.text?.startsWith('/off ')) {
+          if (String(msg.chat.id) !== String(config.telegram.chatId)) continue;
+          const parts   = msg.text.trim().split(/\s+/);
+          const enable  = parts[0] === '/on';
+          const alias   = (parts[1] || '').toLowerCase();
+          const key     = STRATEGY_ALIASES[alias];
+          if (!key) {
+            await sendMessage(
+              `⚠️ Неизвестная стратегия: <code>${alias}</code>\n` +
+              `Доступные: <code>hunter</code>, <code>long</code>, <code>chill</code>, <code>carry</code>`,
+            );
+          } else {
+            setFlag(key, enable);
+            logger.info(`[Reporter] /${parts[0]} ${key} by ${msg.from?.username ?? msg.from?.id}`);
+            await sendStrategiesMessage(`${enable ? '✅' : '🔴'} <b>${STRATEGY_LABELS[key]}</b> ${enable ? 'включён' : 'выключен'}\n\n`);
+          }
+          continue;
+        }
+
+        // ── /strategies ───────────────────────────
+        if (msg?.text?.startsWith('/strategies')) {
+          if (String(msg.chat.id) !== String(config.telegram.chatId)) continue;
+          logger.info(`[Reporter] /strategies by ${msg.from?.username ?? msg.from?.id}`);
+          await sendStrategiesMessage();
+          continue;
         }
       }
     } catch (err) {
