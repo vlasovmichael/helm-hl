@@ -743,8 +743,11 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
     }
   }
 
-  // Circuit breaker: фиксируем убыток
-  if (realizedPnl < 0) {
+  // Circuit breaker: фиксируем убыток только для реальных стратегий.
+  // trend_follow (ChillBoy) и candy_girl торгуют в виртуальных sandbox-слотах —
+  // их PAPER убытки не должны блокировать реальные Hunter сделки.
+  const virtualSandbox = position.strategy_id === 'trend_follow' || position.strategy_id === 'candy_girl';
+  if (realizedPnl < 0 && !virtualSandbox) {
     const tripped = recordLoss(position.coin, realizedPnl);
     if (tripped) {
       logger.error(
