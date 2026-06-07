@@ -94,6 +94,35 @@
         <div id="manual-positions-container"></div>
       </section>
 
+      <!-- 01.5 / Hot Movers — live price spikes + OI delta -->
+      <section class="card" id="sec-movers">
+        <div class="card-header">
+          <div class="card-title" data-num="01.5" title="Монеты с наибольшими ценовыми движениями. Setup = fade-оценка (FADE/PRE/AVOID). OI 5m = изменение открытого интереса за 5 минут.">Hot Movers</div>
+          <span id="hot-movers-meta" style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted)"></span>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:24px">#</th>
+                <th>Coin</th>
+                <th class="c" title="Fade setup: FADE=выдохся/тонкий объём, PRE=ждём, AVOID=ускорение">Setup</th>
+                <th class="r">Price</th>
+                <th class="r">2m%</th>
+                <th class="r">5m%</th>
+                <th class="r">15m%</th>
+                <th class="r" title="Ускорение: |2m| vs экстраполяция 5m. ▼=выдыхается (fade), ▲=ускоряется (avoid)">Acc</th>
+                <th class="r" title="OI change за 5 минут. Растёт = новые позиции; падает = закрытия/ликвидации">OI 5m</th>
+                <th class="r" title="Тренд за 15m (anti-trend gate Hunter'а)">Trend</th>
+              </tr>
+            </thead>
+            <tbody id="hot-movers-tbody">
+              <tr><td colspan="10" class="empty-state">Waiting for price history…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- 02 / BTC Divergence -->
       <section class="card" id="sec-divergence">
         <div class="card-header">

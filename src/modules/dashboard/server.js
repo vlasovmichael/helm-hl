@@ -153,6 +153,40 @@ const DIVERGENCE_SNAPSHOTS = 62;         // 61 минута (покрывает 
 // Ring buffer: [{ts, prices: {COIN: price, ...}}] — хранит ВСЕ монеты с HL
 const divergenceSnapshots = [];
 
+// ─────────────────────────────────────────────────
+//  OI history — ring buffer для oiDelta в /api/signals
+// ─────────────────────────────────────────────────
+// Снапшот берётся из state.latestHunter каждые 30с.
+// Нужно ~20 снапшотов для 15m окна (30с × 30 = 15 мин).
+const OI_SNAPSHOT_MS  = 30_000;
+const OI_MAX_SNAPS    = 40;   // 20 мин запаса
+const _oiHistory      = new Map(); // coin → [{ts, oiUsd}]
+
+function takeOiSnapshot() {
+  const data = state.latestHunter;
+  if (!Array.isArray(data) || data.length === 0) return;
+  const ts = Date.now();
+  for (const item of data) {
+    if (item.oiUsd == null) continue;
+    let arr = _oiHistory.get(item.coin);
+    if (!arr) { arr = []; _oiHistory.set(item.coin, arr); }
+    arr.push({ ts, oiUsd: item.oiUsd });
+    if (arr.length > OI_MAX_SNAPS) arr.shift();
+  }
+}
+
+function getOiNMinAgo(coin, mins, now) {
+  const arr = _oiHistory.get(coin);
+  if (!arr || arr.length < 2) return null;
+  const target = now - mins * 60_000;
+  let best = null;
+  for (const snap of arr) {
+    if (snap.ts <= target) best = snap;
+    else break;
+  }
+  return best?.oiUsd ?? null;
+}
+
 async function takeDivergenceSnapshot() {
   try {
     const data = await hlInfo(
@@ -960,6 +994,12 @@ async function handleSignals(req, res) {
         }
       }
 
+      const oiNow  = data.find((d) => d.coin === m.coin)?.oiUsd ?? null;
+      const oiP5   = getOiNMinAgo(m.coin, 5, now);
+      const oiP15  = getOiNMinAgo(m.coin, 15, now);
+      const oiDelta5m  = oiNow != null && oiP5  != null && oiP5  > 0 ? ((oiNow - oiP5)  / oiP5)  * 100 : null;
+      const oiDelta15m = oiNow != null && oiP15 != null && oiP15 > 0 ? ((oiNow - oiP15) / oiP15) * 100 : null;
+
       return {
         rank: idx + 1,
         coin: m.coin,
@@ -989,6 +1029,8 @@ async function handleSignals(req, res) {
         bufferNeeded: ticksNeeded,
         isActive: activeCoin && m.coin === activeCoin,
         fader: faderTiers?.get(m.coin) ?? null,
+        oiDelta5m,
+        oiDelta15m,
       };
     });
 
@@ -2200,6 +2242,8 @@ export function startDashboard() {
 
   takeDivergenceSnapshot();
   divergenceTimer = setInterval(takeDivergenceSnapshot, DIVERGENCE_SNAPSHOT_MS);
+
+  setInterval(takeOiSnapshot, OI_SNAPSHOT_MS);
 
   broadcastTimer = setInterval(async () => {
     if (!wss || wss.clients.size === 0) return;

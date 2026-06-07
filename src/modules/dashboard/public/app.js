@@ -1413,7 +1413,7 @@ function renderHotMovers(payload) {
         dir === "dump" ? "row-long row-fade-long" : "",
       ].filter(Boolean).join(" ");
 
-      const winDefs = [[w2, "2m"], [w5, "5m"], [w15, "15m"], [w60, "1h"]];
+      const winDefs = [[w2, "2m"], [w5, "5m"], [w15, "15m"]];
       const cells = winDefs.map(([w, lbl]) => {
         const [inner, cls] = pctCellTiered(w);
         const klass = ["hm-window", cls].filter(Boolean).join(" ");
@@ -1476,6 +1476,22 @@ function renderHotMovers(payload) {
         ? computeFaderSetup(s.fader, dir)
         : computeSetup(accelKind, volKind, dir);
 
+      // OI delta 5m
+      let oiInner = '<span class="num-inline-muted">—</span>';
+      let oiCellCls = '';
+      if (typeof s.oiDelta5m === "number" && isFinite(s.oiDelta5m)) {
+        const v = s.oiDelta5m;
+        const arrow = v > 0 ? "▲" : "▼";
+        if (Math.abs(v) >= 3) {
+          oiCellCls = v > 0 ? "num-neg-weak" : "num-pos-weak"; // OI растёт при памп = плохо; падает = ликвидации
+          oiInner = `<span style="color:${v > 0 ? 'var(--red)' : 'var(--green)'};font-weight:600">${arrow} ${fmtPct(v)}</span>`;
+        } else if (Math.abs(v) >= 1) {
+          oiInner = `<span style="color:var(--text-muted)">${arrow} ${fmtPct(v)}</span>`;
+        } else {
+          oiInner = `<span class="num-inline-muted">${fmtPct(v)}</span>`;
+        }
+      }
+
       return `<tr class="${rowCls}">
         <td>${idx + 1}</td>
         <td><span class="signals-price">#${escapeHtml(s.coin)}</span></td>
@@ -1483,7 +1499,7 @@ function renderHotMovers(payload) {
         <td><span class="signals-price">${fmtPrice(s.price)}</span></td>
         ${cells}
         <td class="${accelCellCls}" data-w="Acc">${accelInner}</td>
-        <td class="${volCellCls}" data-w="Vol">${volInner}</td>
+        <td class="${oiCellCls}" data-w="OI">${oiInner}</td>
         <td data-w="Trend">${trendInner}</td>
       </tr>`;
     })
@@ -1647,8 +1663,9 @@ async function tick() {
     fetchJson("/api/signals?limit=30"),
     fetchJson("/api/candles?coin=BTC&interval=1m"),
   ]);
-  if (hmR.status === "fulfilled" && Array.isArray(hmR.value)) {
-    _hmSignalsCache = hmR.value;
+  if (hmR.status === "fulfilled" && hmR.value?.signals) {
+    _hmSignalsCache = hmR.value.signals;
+    renderHotMovers(hmR.value);
   }
   if (btcR.status === "fulfilled" && Array.isArray(btcR.value) && btcR.value.length >= 2) {
     const candles = btcR.value;
