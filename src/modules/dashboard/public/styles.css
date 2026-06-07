@@ -2895,26 +2895,28 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   align-items: center;
   gap: 16px;
   flex-wrap: wrap;
-  padding: 8px 14px;
+  padding: 10px 16px;
   margin: 0 0 14px;
   border: 1px solid var(--border);
   border-left: 3px solid var(--border-strong);
   border-radius: 8px;
   background: var(--card-bg-elev);
-  font-size: 12px;
+  font-size: 14px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.2px;
 }
 .market-context .mc-verdict {
   font-weight: 700;
+  font-size: 15px;
   text-transform: uppercase;
   letter-spacing: 0.6px;
 }
 .market-context .mc-btc {
   color: var(--text-secondary);
   display: flex;
-  gap: 12px;
+  gap: 14px;
   flex-wrap: wrap;
+  font-size: 14px;
 }
 .market-context .mc-btc .up {
   color: var(--green);
@@ -2925,6 +2927,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
 .market-context .mc-fng {
   color: var(--text-muted);
   margin-left: auto;
+  font-size: 14px;
 }
 .market-context.risk-on {
   border-left-color: var(--green-line);

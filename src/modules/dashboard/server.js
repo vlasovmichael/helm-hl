@@ -337,12 +337,43 @@ async function getFearGreed() {
   return { value: fngCache.value, label: fngCache.label };
 }
 
-// % изменения BTC за N минут из локального буфера. null если истории мало.
-function btcMovePct(minutes, now) {
-  const past = getPriceNMinAgo("BTC", minutes, now);
-  const cur = getPriceNMinAgo("BTC", 0, now);
-  if (past == null || cur == null) return null;
-  return ((cur - past) / past) * 100;
+// BTC % за 15m/1h/4h из 15m-свечей HL (не priceHistory — тот пуст первые 4ч
+// после рестарта). Кэш 60с, чтобы не дёргать HL на каждый поллинг дашборды.
+const BTC_CANDLES_TTL_MS = 60_000;
+let btcMovesCache = { moves: null, ts: 0 };
+
+async function getBtcMoves() {
+  if (btcMovesCache.moves && Date.now() - btcMovesCache.ts < BTC_CANDLES_TTL_MS) {
+    return btcMovesCache.moves;
+  }
+  const now = Date.now();
+  let candles;
+  try {
+    candles = await hlInfo(
+      {
+        type: "candleSnapshot",
+        req: { coin: "BTC", interval: "15m", startTime: now - 5 * 3600_000, endTime: now },
+      },
+      { label: "dash/market-context", timeoutMs: 5000, maxRetries: 1 },
+    );
+  } catch {
+    return btcMovesCache.moves; // stale (или null) — полоса деградирует тихо
+  }
+  if (!Array.isArray(candles) || candles.length < 2) return btcMovesCache.moves;
+
+  const closes = candles.map((c) => Number(c.c)).filter((n) => Number.isFinite(n));
+  const last = closes[closes.length - 1];
+  // back(n) = close n свечей назад (1 свеча 15m). null если не накопилось.
+  const back = (n) => (closes.length > n ? closes[closes.length - 1 - n] : null);
+  const pct = (prev) => (prev != null && prev !== 0 ? ((last - prev) / prev) * 100 : null);
+
+  const moves = {
+    m15: pct(back(1)),   // 1×15m
+    m1h: pct(back(4)),   // 4×15m
+    m4h: pct(back(16)),  // 16×15m
+  };
+  btcMovesCache = { moves, ts: Date.now() };
+  return moves;
 }
 
 // Вердикт по фону. 1h = главный тренд, 15m = подтверждение моментума.
@@ -359,18 +390,15 @@ function classifyRegime(m15, m1h) {
 }
 
 async function handleMarketContext(_req, res) {
-  const now = Date.now();
-  const m15 = btcMovePct(15, now);
-  const m1h = btcMovePct(60, now);
-  const m4h = btcMovePct(240, now);
-  const { verdict, arrow } = classifyRegime(m15, m1h);
-  const fng = await getFearGreed();
+  const [moves, fng] = await Promise.all([getBtcMoves(), getFearGreed()]);
+  const btc = moves || { m15: null, m1h: null, m4h: null };
+  const { verdict, arrow } = classifyRegime(btc.m15, btc.m1h);
   res.json({
     verdict,
     arrow,
-    btc: { m15, m1h, m4h },
+    btc,
     fearGreed: fng.value != null ? { value: fng.value, label: fng.label } : null,
-    ts: now,
+    ts: Date.now(),
   });
 }
 
