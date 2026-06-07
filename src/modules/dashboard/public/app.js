@@ -1691,14 +1691,14 @@ function mcMoveSpan(label, pct) {
 function renderMarketContext(d) {
   const el = document.getElementById("market-context");
   if (!el || !d) return;
+  // Светофор «можно/нельзя»: чёткий фонд (RISK-ON/OFF) = go (зелёный),
+  // MIXED = wait (жёлтый), всё прочее = unknown (серый).
   const cls =
-    d.verdict === "RISK_ON"
-      ? "risk-on"
-      : d.verdict === "RISK_OFF"
-        ? "risk-off"
-        : d.verdict === "MIXED"
-          ? "mixed"
-          : "unknown";
+    d.verdict === "RISK_ON" || d.verdict === "RISK_OFF"
+      ? "go"
+      : d.verdict === "MIXED"
+        ? "wait"
+        : "unknown";
   el.className = `market-context ${cls}`;
   const verdictEl = document.getElementById("mc-verdict");
   const btcEl = document.getElementById("mc-btc");

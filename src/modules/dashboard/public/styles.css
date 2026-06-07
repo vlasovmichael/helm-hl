@@ -2929,25 +2929,22 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   margin-left: auto;
   font-size: 14px;
 }
-.market-context.risk-on {
+/* Светофор «можно/нельзя»: зелёный = есть чёткий фонд (RISK-ON или RISK-OFF),
+   можно входить по нему; жёлтый = MIXED, жди; серый = нет данных.
+   Направление (вверх/вниз) читается из подписи RISK-ON ↑ / RISK-OFF ↓. */
+.market-context.go {
   border-left-color: var(--green-line);
   background: var(--green-soft);
 }
-.market-context.risk-on .mc-verdict {
+.market-context.go .mc-verdict {
   color: var(--green);
 }
-.market-context.risk-off {
-  border-left-color: var(--red-line);
-  background: var(--red-soft);
+.market-context.wait {
+  border-left-color: var(--warn);
+  background: var(--warn-soft);
 }
-.market-context.risk-off .mc-verdict {
-  color: var(--red);
-}
-.market-context.mixed {
-  border-left-color: var(--accent-line);
-}
-.market-context.mixed .mc-verdict {
-  color: var(--accent-strong);
+.market-context.wait .mc-verdict {
+  color: var(--warn);
 }
 .market-context.unknown .mc-verdict {
   color: var(--text-muted);
