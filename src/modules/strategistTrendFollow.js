@@ -80,7 +80,7 @@ export function getChillBoySignals() {
 async function fireChillBoyAlert(text) {
   try {
     const { sendMessage } = await import('./reporter.js');
-    await sendMessage(text, false, { bypassThrottle: true });
+    await sendMessage(text, false);
   } catch (err) {
     logger.warn(`[ChillBoy] TG alert failed: ${err.message}`);
   }
@@ -123,12 +123,12 @@ function recordChillBoySignal(r, now, traded, slotBusy) {
   if (recentSignals.length > MAX_RECENT_SIGNALS) recentSignals.length = MAX_RECENT_SIGNALS;
 
   if (!ALERT_ENABLED) return;
+  // Не спамим когда слот занят paper-позой или чужой позой — не actionable.
+  if (slotBusy && !traded) return;
   const arrow = direction === 'long' ? '🟢 LONG' : '🔴 SHORT';
   const tag = traded
     ? '🤖 бот входит'
-    : slotBusy
-      ? '👀 сигнал (слот занят позицией)'
-      : '👀 сигнал (бот уже взял первый пробой)';
+    : '👀 сигнал (слот свободен)';
   fireChillBoyAlert(
     `🎯 <b>Chill Boy</b> — пробой против рынка\n` +
       `${arrow} <b>#${item.coin}</b> @ $${item.price}\n` +
