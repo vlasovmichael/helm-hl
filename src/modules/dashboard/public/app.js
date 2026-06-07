@@ -1410,14 +1410,19 @@ function renderHotMovers(payload) {
           : `<span class="${trendPct > 0 ? "num-inline-pos" : "num-inline-neg"}">${trendPct > 0 ? "▲" : "▼"} ${fmtPct(trendPct)}</span> <span class="num-inline-muted">/ ${trendLbl}</span>`;
 
       const bestDir = bestDirection(x.windows);
-      const dir = bestDir?.sign ?? null;
-      const strong = (bestDir?.rank ?? 0) >= 3; // STRONG-тир → ярче тинт
-      const rowCls = [
-        s.isActive ? "is-active" : "",
-        dir === "pump" ? "row-short row-fade-short" : "",
-        dir === "dump" ? "row-long row-fade-long" : "",
-        dir && strong ? "row-fade-strong" : "",
-      ].filter(Boolean).join(" ");
+      const dir = bestDir?.sign ?? null; // fade-направление для Setup-вердикта
+
+      // Living heatmap: тинт строки по доминирующему движению цены (как на бирже —
+      // вверх зелёный, вниз красный), интенсивность по |move|. Не зависит от
+      // fade-тиров, поэтому карточка «дышит» даже когда сигналов нет.
+      let domMove = 0;
+      for (const w of x.windows) {
+        if (w.spikePct != null && Math.abs(w.spikePct) > Math.abs(domMove)) domMove = w.spikePct;
+      }
+      const moveAbs = Math.abs(domMove);
+      const heatLvl = moveAbs >= 1.5 ? "strong" : moveAbs >= 0.6 ? "mid" : moveAbs >= 0.1 ? "weak" : "";
+      const heatCls = heatLvl ? `${domMove > 0 ? "row-up" : "row-down"} row-heat-${heatLvl}` : "";
+      const rowCls = [s.isActive ? "is-active" : "", heatCls].filter(Boolean).join(" ");
 
       // Биржевая flash-вспышка: цена выросла с прошлого рендера → зелёный,
       // упала → красный. Анимация играет один раз на новом DOM-узле.

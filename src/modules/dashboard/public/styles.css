@@ -1367,35 +1367,46 @@ footer {
   margin: 0 4px;
 }
 
-.signals-table tr.row-short td:first-child {
-  box-shadow: inset 3px 0 0 var(--red);
-}
-.signals-table tr.row-long td:first-child {
-  box-shadow: inset 3px 0 0 var(--green);
-}
 .signals-table tr.is-active td:first-child {
   box-shadow: inset 3px 0 0 var(--accent);
 }
-/* строки-светофор: pump = красный фон (SHORT fade), dump = зелёный (LONG fade).
-   STRONG-тир (row-fade-strong) — насыщеннее, чтобы карточка «сияла». */
-.signals-table tr.row-fade-short {
-  background: linear-gradient(90deg, rgba(239, 68, 68, 0.16) 0%, rgba(239, 68, 68, 0.05) 60%, transparent 100%);
+
+/* ── Living heatmap: тинт строки по движению цены (как на бирже) ──
+   row-up = зелёный, row-down = красный; интенсивность weak/mid/strong
+   по величине |доминирующего движения|. Не зависит от fade-сигналов,
+   поэтому карточка «дышит» даже в тихом рынке. */
+.signals-table tr.row-up.row-heat-weak {
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.07) 0%, transparent 85%);
 }
-.signals-table tr.row-fade-long {
-  background: linear-gradient(90deg, rgba(34, 197, 94, 0.16) 0%, rgba(34, 197, 94, 0.05) 60%, transparent 100%);
+.signals-table tr.row-up.row-heat-mid {
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.17) 0%, rgba(34, 197, 94, 0.04) 65%, transparent 100%);
 }
-.signals-table tr.row-fade-short.row-fade-strong {
-  background: linear-gradient(90deg, rgba(239, 68, 68, 0.32) 0%, rgba(239, 68, 68, 0.09) 60%, transparent 100%);
+.signals-table tr.row-up.row-heat-strong {
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.32) 0%, rgba(34, 197, 94, 0.08) 65%, transparent 100%);
 }
-.signals-table tr.row-fade-long.row-fade-strong {
-  background: linear-gradient(90deg, rgba(34, 197, 94, 0.32) 0%, rgba(34, 197, 94, 0.09) 60%, transparent 100%);
+.signals-table tr.row-down.row-heat-weak {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.07) 0%, transparent 85%);
 }
-.signals-table tr.row-fade-short.row-fade-strong td:first-child {
-  box-shadow: inset 3px 0 0 var(--red), inset 0 0 12px -6px rgba(239, 68, 68, 0.8);
+.signals-table tr.row-down.row-heat-mid {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.17) 0%, rgba(239, 68, 68, 0.04) 65%, transparent 100%);
 }
-.signals-table tr.row-fade-long.row-fade-strong td:first-child {
-  box-shadow: inset 3px 0 0 var(--green), inset 0 0 12px -6px rgba(34, 197, 94, 0.8);
+.signals-table tr.row-down.row-heat-strong {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.32) 0%, rgba(239, 68, 68, 0.08) 65%, transparent 100%);
 }
+/* левая кромка — акцент по силе движения */
+.signals-table tr.row-up.row-heat-mid td:first-child    { box-shadow: inset 3px 0 0 rgba(34, 197, 94, 0.6); }
+.signals-table tr.row-down.row-heat-mid td:first-child  { box-shadow: inset 3px 0 0 rgba(239, 68, 68, 0.6); }
+.signals-table tr.row-up.row-heat-strong td:first-child {
+  box-shadow: inset 3px 0 0 var(--green), inset 0 0 12px -6px rgba(34, 197, 94, 0.85);
+}
+.signals-table tr.row-down.row-heat-strong td:first-child {
+  box-shadow: inset 3px 0 0 var(--red), inset 0 0 12px -6px rgba(239, 68, 68, 0.85);
+}
+/* price ячейка — живой цвет по движению */
+.signals-table tr.row-up   .signals-price { color: #4ade80; }
+.signals-table tr.row-down .signals-price { color: #f87171; }
+/* активная позиция бота — перебивает heatmap */
+.signals-table tr.is-active { background: var(--accent-soft) !important; }
 
 /* Биржевые flash-вспышки на ячейке цены при изменении (зелёный вверх / красный вниз). */
 @keyframes hmFlashUp {
@@ -1412,17 +1423,6 @@ footer {
 @media (prefers-reduced-motion: reduce) {
   .signals-table td.hm-price-cell.hm-flash-up,
   .signals-table td.hm-price-cell.hm-flash-down { animation: none; }
-}
-/* price ячейка — живой цвет как на бирже */
-.signals-table tr.row-fade-short .signals-price {
-  color: #f87171;
-}
-.signals-table tr.row-fade-long .signals-price {
-  color: #4ade80;
-}
-.signals-table tr.row-fade-short.is-active,
-.signals-table tr.row-fade-long.is-active {
-  background: var(--accent-soft);
 }
 
 /* Mobile: показываем label окна перед значением, чтобы не теряться в скролле */
