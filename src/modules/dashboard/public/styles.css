@@ -2886,3 +2886,66 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   }
 }
 
+
+/* ───────────────────────────────────────────────
+   Market Context bar — вердикт по фону (risk-on/off)
+   ─────────────────────────────────────────────── */
+.market-context {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  margin: 0 0 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--card-bg-elev);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
+}
+.market-context .mc-verdict {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+.market-context .mc-btc {
+  color: var(--text-secondary);
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.market-context .mc-btc .up {
+  color: var(--green);
+}
+.market-context .mc-btc .down {
+  color: var(--red);
+}
+.market-context .mc-fng {
+  color: var(--text-muted);
+  margin-left: auto;
+}
+.market-context.risk-on {
+  border-left-color: var(--green-line);
+  background: var(--green-soft);
+}
+.market-context.risk-on .mc-verdict {
+  color: var(--green);
+}
+.market-context.risk-off {
+  border-left-color: var(--red-line);
+  background: var(--red-soft);
+}
+.market-context.risk-off .mc-verdict {
+  color: var(--red);
+}
+.market-context.mixed {
+  border-left-color: var(--accent-line);
+}
+.market-context.mixed .mc-verdict {
+  color: var(--accent-strong);
+}
+.market-context.unknown .mc-verdict {
+  color: var(--text-muted);
+}

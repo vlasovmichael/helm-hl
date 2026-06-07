@@ -1674,8 +1674,54 @@ async function fetchJson(path) {
   return r.json();
 }
 
+// Market Context bar — вердикт по фону (risk-on/off). Деградирует тихо,
+// если priceHistory ещё пуст (первые минуты после рестарта бота).
+const MC_VERDICT_LABEL = {
+  RISK_ON: "RISK-ON",
+  RISK_OFF: "RISK-OFF",
+  MIXED: "MIXED",
+  UNKNOWN: "—",
+};
+function mcMoveSpan(label, pct) {
+  if (pct == null) return `<span>${label} —</span>`;
+  const cls = pct >= 0 ? "up" : "down";
+  const sign = pct >= 0 ? "+" : "";
+  return `<span class="${cls}">${label} ${sign}${pct.toFixed(2)}%</span>`;
+}
+function renderMarketContext(d) {
+  const el = document.getElementById("market-context");
+  if (!el || !d) return;
+  const cls =
+    d.verdict === "RISK_ON"
+      ? "risk-on"
+      : d.verdict === "RISK_OFF"
+        ? "risk-off"
+        : d.verdict === "MIXED"
+          ? "mixed"
+          : "unknown";
+  el.className = `market-context ${cls}`;
+  const verdictEl = document.getElementById("mc-verdict");
+  const btcEl = document.getElementById("mc-btc");
+  const fngEl = document.getElementById("mc-fng");
+  if (verdictEl) {
+    verdictEl.textContent = `MARKET: ${MC_VERDICT_LABEL[d.verdict] || "—"} ${d.arrow || ""}`.trim();
+  }
+  if (btcEl) {
+    const b = d.btc || {};
+    btcEl.innerHTML =
+      mcMoveSpan("BTC 15m", b.m15) +
+      mcMoveSpan("1h", b.m1h) +
+      mcMoveSpan("4h", b.m4h);
+  }
+  if (fngEl) {
+    fngEl.textContent = d.fearGreed
+      ? `F&G ${d.fearGreed.value} ${d.fearGreed.label || ""}`.trim()
+      : "";
+  }
+}
+
 async function tick() {
-  const [historyR, activityR, taxR, pnlR, insightsR, hmR, btcR] =
+  const [historyR, activityR, taxR, pnlR, insightsR, hmR, btcR, mcR] =
     await Promise.allSettled([
       fetchJson(`/api/history?hours=${currentRangeHours}`),
       fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
@@ -1684,7 +1730,9 @@ async function tick() {
       fetchJson("/api/insights"),
       fetchJson("/api/signals?limit=30"),
       fetchJson("/api/candles?coin=BTC&interval=1m"),
+      fetchJson("/api/market-context"),
     ]);
+  if (mcR.status === "fulfilled") renderMarketContext(mcR.value);
   if (hmR.status === "fulfilled" && hmR.value?.signals) {
     _hmSignalsCache = hmR.value.signals;
     renderHotMovers(hmR.value);

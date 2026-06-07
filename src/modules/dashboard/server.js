@@ -305,6 +305,76 @@ function handleBtcDivergence(req, res) {
 }
 
 // ─────────────────────────────────────────────────
+//  Market Context — «вердикт по фону» (risk-on/off)
+// ─────────────────────────────────────────────────
+// Отвечает на один вопрос: вход сейчас идёт ПО фону рынка или ПРОТИВ.
+// Источник тренда — локальный priceHistory BTC (без сети). Sentiment —
+// Fear & Greed Index (alternative.me, бесплатно, кэш 30 мин). Это НЕ
+// новостная лента (commodity), а сжатый вердикт для ручного трейда.
+
+const FNG_TTL_MS = 30 * 60_000;
+let fngCache = { value: null, label: null, ts: 0 };
+
+async function getFearGreed() {
+  if (fngCache.value != null && Date.now() - fngCache.ts < FNG_TTL_MS) {
+    return { value: fngCache.value, label: fngCache.label };
+  }
+  try {
+    const { data } = await axios.get("https://api.alternative.me/fng/?limit=1", {
+      timeout: 4000,
+    });
+    const row = data?.data?.[0];
+    if (row) {
+      fngCache = {
+        value: Number(row.value),
+        label: row.value_classification || null,
+        ts: Date.now(),
+      };
+    }
+  } catch {
+    /* сеть упала — отдаём stale (или null), полоса деградирует тихо */
+  }
+  return { value: fngCache.value, label: fngCache.label };
+}
+
+// % изменения BTC за N минут из локального буфера. null если истории мало.
+function btcMovePct(minutes, now) {
+  const past = getPriceNMinAgo("BTC", minutes, now);
+  const cur = getPriceNMinAgo("BTC", 0, now);
+  if (past == null || cur == null) return null;
+  return ((cur - past) / past) * 100;
+}
+
+// Вердикт по фону. 1h = главный тренд, 15m = подтверждение моментума.
+// Порог ±0.5% по 1h отсекает боковик-шум (BTC «дышит» в этих пределах).
+function classifyRegime(m15, m1h) {
+  if (m1h == null) return { verdict: "UNKNOWN", arrow: "•" };
+  if (m1h > 0.5 && (m15 == null || m15 >= -0.1)) {
+    return { verdict: "RISK_ON", arrow: "▲" };
+  }
+  if (m1h < -0.5 && (m15 == null || m15 <= 0.1)) {
+    return { verdict: "RISK_OFF", arrow: "▼" };
+  }
+  return { verdict: "MIXED", arrow: "≈" };
+}
+
+async function handleMarketContext(_req, res) {
+  const now = Date.now();
+  const m15 = btcMovePct(15, now);
+  const m1h = btcMovePct(60, now);
+  const m4h = btcMovePct(240, now);
+  const { verdict, arrow } = classifyRegime(m15, m1h);
+  const fng = await getFearGreed();
+  res.json({
+    verdict,
+    arrow,
+    btc: { m15, m1h, m4h },
+    fearGreed: fng.value != null ? { value: fng.value, label: fng.label } : null,
+    ts: now,
+  });
+}
+
+// ─────────────────────────────────────────────────
 //  Status Logic (Shared)
 // ─────────────────────────────────────────────────
 
@@ -2101,6 +2171,7 @@ export function startDashboard() {
   app.get("/api/setup-scanner", handleSetupScanner);
   app.get("/api/trade-markers", handleTradeMarkers);
   app.get("/api/btc-divergence", handleBtcDivergence);
+  app.get("/api/market-context", handleMarketContext);
   app.get("/api/btc-divergence/all", handleBtcDivergenceAll);
   app.get("/api/whale-watch", handleWhaleWatch);
   app.get("/api/whale-watch/batch", handleWhaleWatchBatch);
