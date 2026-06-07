@@ -1135,49 +1135,46 @@ function renderBans(status) {
 // Логика 1:1 с FAQ-таблицей карточки Hot Movers — agg только визуализация,
 // никакой новой стратегической логики, чтобы пользователь видел готовый
 // ответ «заходить / ждать / мимо» без сборки комбо в голове.
+// SVG-иконки для Setup пилл
+const _SVG_ARROW_DOWN = `<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px"><path d="M6 1v8M3 7l3 3 3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+const _SVG_ARROW_UP   = `<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px"><path d="M6 11V3M3 5l3-3 3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
+const _SVG_WAIT       = `<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px;opacity:0.7"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M6 4v2.5l1.5 1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/></svg>`;
+
 function computeSetup(accelKind, volKind, dir) {
-  // Все вердикты — про fade. Сторона входа = противоход row-direction:
-  //   pump (row-fade-short) → SHORT, dump (row-fade-long) → LONG.
+  // fade direction: pump → SHORT entry, dump → LONG entry
   const side = dir === 'pump' ? 'SHORT' : dir === 'dump' ? 'LONG' : null;
-  const sideTag = side ? ` <span class="fader-lbl">${side}</span>` : '';
-  const withSide = (r) => ({ ...r, label: r.label + sideTag });
-  // Полное отсутствие данных: пусто.
+  const goShort = side === 'SHORT';
+  const goLong  = side === 'LONG';
+
   if (!accelKind && !volKind) {
     return { label: '<span class="num-inline-muted">—</span>', cls: 'setup-none', title: 'Нет данных' };
   }
-  // Разворот внутри окна — не фейдим, скорее follow.
-  if (accelKind === 'rev') {
-    return withSide({ label: '⚠ REV', cls: 'setup-rev', title: 'Разворот внутри окна — не фейди, скорее follow' });
-  }
-  // Импульс ускоряется + крупный объём → большие деньги двигают, мимо.
-  if (accelKind === 'up' && volKind === 'high') {
-    return withSide({ label: '🚫 AVOID', cls: 'setup-avoid', title: 'Импульс ускоряется на большом объёме — НЕ фейди' });
-  }
-  // Импульс ускоряется на тонком объёме → готовится фейд, ждём ▼.
-  if (accelKind === 'up' && volKind === 'thin') {
-    return withSide({ label: '🟠 PRE', cls: 'setup-pre', title: 'Памп на пустом стакане — жди ▼ затем фейди' });
-  }
-  // Памп без vol-данных и без признаков выдоха — пока стой в стороне.
-  if (accelKind === 'up') {
-    return withSide({ label: '🚫 AVOID', cls: 'setup-avoid', title: 'Импульс ускоряется — НЕ фейди ещё' });
-  }
-  // Идеальный fade-сетап: импульс выдыхается на тонком объёме.
-  if (accelKind === 'down' && volKind === 'thin') {
-    return withSide({ label: '🟢 FADE', cls: 'setup-fade', title: 'Лучший fade-setup: импульс выдохся на пустом стакане' });
-  }
-  // Импульс выдыхается на большом объёме — фейд с тугим SL.
-  if (accelKind === 'down' && volKind === 'high') {
-    return withSide({ label: '🟡 OK*', cls: 'setup-ok', title: 'Темп упал, но объём был большой — фейд с тугим SL' });
-  }
-  // Импульс выдыхается, объём средний или грузится — норм фейд.
+  // Momentum decelerating → ready to fade
   if (accelKind === 'down') {
-    return withSide({ label: '🟡 OK', cls: 'setup-ok', title: volKind ? 'Импульс выдыхается — норм fade' : 'Импульс выдыхается, ждём Vol× для подтверждения' });
+    if (goShort) return {
+      label: `<span class="setup-pill">${_SVG_ARROW_DOWN}SHORT</span>`,
+      cls: 'setup-short',
+      title: volKind === 'thin' ? 'Лучший fade: памп выдохся на пустом стакане → SHORT' : 'Памп выдыхается → fade SHORT',
+    };
+    if (goLong) return {
+      label: `<span class="setup-pill">${_SVG_ARROW_UP}LONG</span>`,
+      cls: 'setup-long',
+      title: volKind === 'thin' ? 'Лучший fade: дамп выдохся на пустом стакане → LONG' : 'Дамп выдыхается → fade LONG',
+    };
+    return { label: '<span class="num-inline-muted">—</span>', cls: 'setup-none', title: 'Выдыхается, нет направления' };
   }
-  // Флэт или нет данных по accel: если есть row-направление — показываем сторону, иначе WAIT.
+  // Accelerating / reversal / flat → wait
   if (side) {
-    return { label: `<span class="fader-lbl">${side}</span>`, cls: 'setup-wait', title: `Темп ровный — fade-сторона по row-direction (${side})` };
+    const title = accelKind === 'rev' ? 'Разворот — не фейди сейчас'
+                : accelKind === 'up'  ? (volKind === 'thin' ? 'Тонкий стакан — ждём выдоха' : 'Импульс ускоряется — ждём')
+                : 'Темп ровный — ждём выдоха';
+    return {
+      label: `<span class="setup-pill">${_SVG_WAIT}WAIT</span>`,
+      cls: goShort ? 'setup-wait-short' : 'setup-wait-long',
+      title,
+    };
   }
-  return { label: '<span class="num-inline-muted">⚪ WAIT</span>', cls: 'setup-wait', title: 'Темп ровный — ждём явного движения' };
+  return { label: '<span class="num-inline-muted">—</span>', cls: 'setup-none', title: 'Нет направления' };
 }
 
 // Fader traffic-light для Setup column (когда FADER_ENABLED=true).

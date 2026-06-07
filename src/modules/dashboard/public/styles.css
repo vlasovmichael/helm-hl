@@ -1268,8 +1268,10 @@ footer {
 }
 
 /* ── Hot Movers: Setup verdict cell ──────────────────────────
-   Готовый «заходить/нет» вердикт. Залит цветом сильнее чем
-   tier-cells, чтобы был основной якорь для глаза. */
+   SHORT = fade the pump (красный пилл со стрелкой вниз)
+   LONG  = fade the dump (зелёный пилл со стрелкой вверх)
+   WAIT  = ждём сигнала (dim, с едва заметным намёком на цвет)
+   —     = нет данных */
 .signals-table td.hm-setup {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -1277,33 +1279,48 @@ footer {
   white-space: nowrap;
   text-align: center;
   border-radius: 4px;
-  padding: 4px 6px;
+  padding: 3px 7px;
+  letter-spacing: 0.4px;
 }
-.signals-table td.hm-setup.setup-fade {
+/* SHORT: fade pump → красный как на бирже «продажа» */
+.signals-table td.hm-setup.setup-short {
+  background: rgba(239, 68, 68, 0.25);
+  color: #f87171;
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.4);
+}
+/* LONG: fade dump → зелёный как на бирже «покупка» */
+.signals-table td.hm-setup.setup-long {
   background: rgba(34, 197, 94, 0.22);
-  color: var(--green);
+  color: #4ade80;
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.35);
 }
-.signals-table td.hm-setup.setup-ok {
-  background: rgba(234, 179, 8, 0.18);
-  color: #eab308;
+/* WAIT с намёком на направление */
+.signals-table td.hm-setup.setup-wait-short {
+  background: rgba(239, 68, 68, 0.07);
+  color: rgba(239, 68, 68, 0.6);
+  font-weight: 500;
 }
-.signals-table td.hm-setup.setup-pre {
-  background: rgba(245, 158, 11, 0.18);
-  color: #f59e0b;
-}
-.signals-table td.hm-setup.setup-avoid {
-  background: rgba(239, 68, 68, 0.22);
-  color: var(--red);
-}
-.signals-table td.hm-setup.setup-rev {
-  background: rgba(168, 85, 247, 0.18);
-  color: #a855f7;
+.signals-table td.hm-setup.setup-wait-long {
+  background: rgba(34, 197, 94, 0.07);
+  color: rgba(34, 197, 94, 0.6);
+  font-weight: 500;
 }
 .signals-table td.hm-setup.setup-wait,
 .signals-table td.hm-setup.setup-none {
   background: transparent;
   color: var(--text-muted);
   font-weight: 500;
+}
+/* иконки в Setup ячейке */
+.signals-table td.hm-setup svg {
+  vertical-align: middle;
+  margin-right: 3px;
+  flex-shrink: 0;
+}
+.signals-table td.hm-setup .setup-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
 }
 
 /* ── Fader Setup column (Strategy #5) ──
@@ -1337,10 +1354,6 @@ footer {
   color: var(--text-faint);
   font-weight: 500;
 }
-.signals-table td.hm-setup svg {
-  vertical-align: middle;
-  margin-right: 4px;
-}
 .signals-table td.hm-setup .fader-lbl {
   vertical-align: middle;
   font-size: 11px;
@@ -1355,19 +1368,27 @@ footer {
 }
 
 .signals-table tr.row-short td:first-child {
-  box-shadow: inset 2px 0 0 var(--red);
+  box-shadow: inset 3px 0 0 var(--red);
 }
 .signals-table tr.row-long td:first-child {
-  box-shadow: inset 2px 0 0 var(--green);
+  box-shadow: inset 3px 0 0 var(--green);
 }
 .signals-table tr.is-active td:first-child {
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
+/* строки: pump = бледно-красный фон (SHORT fade), dump = бледно-зелёный (LONG fade) */
 .signals-table tr.row-fade-short {
-  background: linear-gradient(90deg, rgba(239, 68, 68, 0.1), transparent 75%);
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.08) 0%, rgba(239, 68, 68, 0.03) 50%, transparent 100%);
 }
 .signals-table tr.row-fade-long {
-  background: linear-gradient(90deg, rgba(34, 197, 94, 0.1), transparent 75%);
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.08) 0%, rgba(34, 197, 94, 0.03) 50%, transparent 100%);
+}
+/* price ячейка — живой цвет как на бирже */
+.signals-table tr.row-fade-short .signals-price {
+  color: #f87171;
+}
+.signals-table tr.row-fade-long .signals-price {
+  color: #4ade80;
 }
 .signals-table tr.row-fade-short.is-active,
 .signals-table tr.row-fade-long.is-active {
