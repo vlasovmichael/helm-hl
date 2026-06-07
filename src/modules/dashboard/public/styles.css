@@ -1294,15 +1294,11 @@ footer {
   color: #4ade80;
   box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.35);
 }
-/* WAIT с намёком на направление */
-.signals-table td.hm-setup.setup-wait-short {
-  background: rgba(239, 68, 68, 0.07);
-  color: rgba(239, 68, 68, 0.6);
-  font-weight: 500;
-}
+/* WAIT — нейтральный серый, без тревожного тинта (это «ждём», не сигнал) */
+.signals-table td.hm-setup.setup-wait-short,
 .signals-table td.hm-setup.setup-wait-long {
-  background: rgba(34, 197, 94, 0.07);
-  color: rgba(34, 197, 94, 0.6);
+  background: transparent;
+  color: var(--text-muted);
   font-weight: 500;
 }
 .signals-table td.hm-setup.setup-wait,
@@ -1371,42 +1367,19 @@ footer {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-/* ── Living heatmap: тинт строки по движению цены (как на бирже) ──
-   row-up = зелёный, row-down = красный; интенсивность weak/mid/strong
-   по величине |доминирующего движения|. Не зависит от fade-сигналов,
-   поэтому карточка «дышит» даже в тихом рынке. */
-.signals-table tr.row-up.row-heat-weak {
-  background: linear-gradient(90deg, rgba(34, 197, 94, 0.07) 0%, transparent 85%);
-}
-.signals-table tr.row-up.row-heat-mid {
-  background: linear-gradient(90deg, rgba(34, 197, 94, 0.17) 0%, rgba(34, 197, 94, 0.04) 65%, transparent 100%);
-}
-.signals-table tr.row-up.row-heat-strong {
-  background: linear-gradient(90deg, rgba(34, 197, 94, 0.32) 0%, rgba(34, 197, 94, 0.08) 65%, transparent 100%);
-}
-.signals-table tr.row-down.row-heat-weak {
-  background: linear-gradient(90deg, rgba(239, 68, 68, 0.07) 0%, transparent 85%);
-}
-.signals-table tr.row-down.row-heat-mid {
-  background: linear-gradient(90deg, rgba(239, 68, 68, 0.17) 0%, rgba(239, 68, 68, 0.04) 65%, transparent 100%);
-}
-.signals-table tr.row-down.row-heat-strong {
-  background: linear-gradient(90deg, rgba(239, 68, 68, 0.32) 0%, rgba(239, 68, 68, 0.08) 65%, transparent 100%);
-}
-/* левая кромка — акцент по силе движения */
-.signals-table tr.row-up.row-heat-mid td:first-child    { box-shadow: inset 3px 0 0 rgba(34, 197, 94, 0.6); }
-.signals-table tr.row-down.row-heat-mid td:first-child  { box-shadow: inset 3px 0 0 rgba(239, 68, 68, 0.6); }
-.signals-table tr.row-up.row-heat-strong td:first-child {
-  box-shadow: inset 3px 0 0 var(--green), inset 0 0 12px -6px rgba(34, 197, 94, 0.85);
-}
-.signals-table tr.row-down.row-heat-strong td:first-child {
-  box-shadow: inset 3px 0 0 var(--red), inset 0 0 12px -6px rgba(239, 68, 68, 0.85);
-}
-/* price ячейка — живой цвет по движению */
-.signals-table tr.row-up   .signals-price { color: #4ade80; }
-.signals-table tr.row-down .signals-price { color: #f87171; }
-/* активная позиция бота — перебивает heatmap */
-.signals-table tr.is-active { background: var(--accent-soft) !important; }
+/* ── Hot Movers: чистая биржевая раскраска ──
+   Без заливки всей строки (на микро-движениях это шум). Направление несут:
+   цвет цены + цвет процентов + тонкая левая кромка ТОЛЬКО на заметном
+   движении (mid ≥0.6% / strong ≥1.5%) + flash при изменении цены.
+   Слабые движения (<0.6%) — строка чистая, ничего не отвлекает. */
+.signals-table tr.row-up.row-heat-mid    td:first-child { box-shadow: inset 2px 0 0 rgba(34, 197, 94, 0.5); }
+.signals-table tr.row-down.row-heat-mid  td:first-child { box-shadow: inset 2px 0 0 rgba(239, 68, 68, 0.5); }
+.signals-table tr.row-up.row-heat-strong td:first-child { box-shadow: inset 3px 0 0 var(--green); }
+.signals-table tr.row-down.row-heat-strong td:first-child { box-shadow: inset 3px 0 0 var(--red); }
+/* цена — цвет по направлению движения (theme-aware, в тон процентам) */
+.signals-table tr.row-up   .signals-price { color: var(--green); }
+.signals-table tr.row-down .signals-price { color: var(--red); }
+.signals-table tr.is-active td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 
 /* Биржевые flash-вспышки на ячейке цены при изменении (зелёный вверх / красный вниз). */
 @keyframes hmFlashUp {
