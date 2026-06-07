@@ -8,6 +8,7 @@ import crypto from "node:crypto";
 import { WebSocketServer } from "ws";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { readFileSync } from "node:fs";
 import axios from "axios";
 import { config } from "../../core/config.js";
 import { logger, getLogBuffer, subscribeLogs } from "../../core/logger.js";
@@ -135,6 +136,23 @@ function authGate(req, res, next) {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PUBLIC_DIR = join(__dirname, "public");
+
+// Cache-bust: меняется на каждый рестарт/деплой контейнера. Index.html отдаётся
+// со штампом ?v=ASSET_VERSION на app.js/styles.css → браузер и Cloudflare
+// гарантированно тянут свежие ассеты после деплоя, без ручного сброса кэша.
+const ASSET_VERSION = Date.now().toString(36);
+function handleIndex(_req, res) {
+  try {
+    const html = readFileSync(join(PUBLIC_DIR, "index.html"), "utf8")
+      .replace('src="app.js"', `src="app.js?v=${ASSET_VERSION}"`)
+      .replace('href="/styles.css"', `href="/styles.css?v=${ASSET_VERSION}"`);
+    res.set("Cache-Control", "no-cache");
+    res.type("html").send(html);
+  } catch (err) {
+    logger.warn(`[Dashboard] index render failed: ${err.message}`);
+    res.status(500).send("index load error");
+  }
+}
 
 let server = null;
 let wss = null;
@@ -2067,6 +2085,8 @@ export function startDashboard() {
   app.get("/login", handleLoginGet);
   app.post("/login", handleLoginPost);
   app.get("/logout", handleLogout);
+  app.get("/", handleIndex);
+  app.get("/index.html", handleIndex);
   app.get("/api/status", handleStatus);
   app.get("/api/history", handleHistory);
   app.get("/api/activity", handleActivity);

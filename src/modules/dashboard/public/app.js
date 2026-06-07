@@ -1148,6 +1148,13 @@ function computeSetup(accelKind, volKind, dir) {
   const goLong  = side === 'LONG';
 
   if (!accelKind && !volKind) {
+    // Нет accel/vol данных, но есть направление движения → WAIT с уклоном,
+    // чтобы колонка не пустовала. Чистое «—» только когда вообще нет движения.
+    if (side) return {
+      label: `<span class="setup-pill">${_SVG_WAIT}WAIT</span>`,
+      cls: goShort ? 'setup-wait-short' : 'setup-wait-long',
+      title: 'Движение есть, ждём accel/vol данных',
+    };
     return { label: '<span class="num-inline-muted">—</span>', cls: 'setup-none', title: 'Нет данных' };
   }
   // Momentum decelerating → ready to fade
@@ -1422,6 +1429,10 @@ function renderHotMovers(payload) {
       const moveAbs = Math.abs(domMove);
       const heatLvl = moveAbs >= 1.5 ? "strong" : moveAbs >= 0.6 ? "mid" : moveAbs >= 0.1 ? "weak" : "";
       const heatCls = heatLvl ? `${domMove > 0 ? "row-up" : "row-down"} row-heat-${heatLvl}` : "";
+
+      // Setup-направление: tier-сигнал если есть, иначе по движению цены — чтобы
+      // вердикт не пустовал в тихом рынке (показываем WAIT с направлением вместо «—»).
+      const setupDir = dir ?? (heatLvl ? (domMove > 0 ? "pump" : "dump") : null);
       const rowCls = [s.isActive ? "is-active" : "", heatCls].filter(Boolean).join(" ");
 
       // Биржевая flash-вспышка: цена выросла с прошлого рендера → зелёный,
@@ -1494,8 +1505,8 @@ function renderHotMovers(payload) {
       // Если fader-данных по монете нет (tier-map пуст / монета не попала в скан) —
       // НЕ оставляем пустой прочерк, а показываем Hunter-вердикт по Accel/Vol.
       const setup = (faderEnabled && s.fader)
-        ? computeFaderSetup(s.fader, dir)
-        : computeSetup(accelKind, volKind, dir);
+        ? computeFaderSetup(s.fader, setupDir)
+        : computeSetup(accelKind, volKind, setupDir);
 
       // OI delta 5m
       let oiInner = '<span class="num-inline-muted">—</span>';
