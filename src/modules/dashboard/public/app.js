@@ -1180,168 +1180,91 @@ const _SVG_ARROW_DOWN = `<svg viewBox="0 0 12 12" width="11" height="11" aria-hi
 const _SVG_ARROW_UP = `<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px"><path d="M6 11V3M3 5l3-3 3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
 const _SVG_WAIT = `<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px;opacity:0.7"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M6 4v2.5l1.5 1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/></svg>`;
 
-function computeSetup(accelKind, volKind, dir) {
-  // fade direction: pump → SHORT entry, dump → LONG entry
-  const side = dir === "pump" ? "SHORT" : dir === "dump" ? "LONG" : null;
-  const goShort = side === "SHORT";
-  const goLong = side === "LONG";
+// ── Momentum-режим ────────────────────────────────────────────────────────
+// В отличие от фейда, едем ПО движению. Направление = знак взвешенного хода
+// по окнам (2m/5m/15m/1h, длинные окна весомее). accel/vol — подтверждение.
+const _MOM_WEIGHTS = { 2: 0.2, 5: 0.4, 15: 0.8, 60: 1.2 };
 
-  if (!accelKind && !volKind) {
-    // Нет accel/vol данных, но есть направление движения → WAIT с уклоном,
-    // чтобы колонка не пустовала. Чистое «—» только когда вообще нет движения.
-    if (side)
-      return {
-        label: `<span class="setup-pill">${_SVG_WAIT} WAIT</span>`,
-        cls: goShort ? "setup-wait-short" : "setup-wait-long",
-        title: "Движение есть, ждём accel/vol данных",
-      };
+function deriveAccelKind(w2, w5) {
+  if (!w2 || !w5 || w2.spikePct == null || w5.spikePct == null) return null;
+  const a = w2.spikePct,
+    b = w5.spikePct;
+  if (Math.abs(b) < 0.05) return "flat";
+  if (a > 0 !== b > 0 && Math.abs(a) > 0.2) return "rev";
+  const ratio = Math.abs(a) / Math.abs(b * 0.4);
+  return ratio >= 1.2 ? "up" : ratio <= 0.6 ? "down" : "flat";
+}
+
+function deriveVolKind(volMult) {
+  if (typeof volMult !== "number" || !isFinite(volMult)) return null;
+  if (volMult >= 2) return "high";
+  if (volMult >= 1.3) return "mid";
+  if (volMult <= 0.5) return "thin";
+  return "normal";
+}
+
+// Возвращает {label, cls, title, score, side}. score — для сортировки.
+function computeMomentum(windows, accelKind, volKind) {
+  let weighted = 0;
+  let haveData = false;
+  for (const w of windows) {
+    if (w.spikePct == null) continue;
+    const wt = _MOM_WEIGHTS[w.mins];
+    if (wt == null) continue;
+    weighted += w.spikePct * wt;
+    haveData = true;
+  }
+  if (!haveData) {
     return {
       label: '<span class="num-inline-muted">—</span>',
       cls: "setup-none",
       title: "Нет данных",
+      score: 0,
+      side: null,
     };
   }
-  // Momentum decelerating → ready to fade
-  if (accelKind === "down") {
-    if (goShort)
-      return {
-        label: `<span class="setup-pill">${_SVG_ARROW_DOWN}SHORT</span>`,
-        cls: "setup-short",
-        title:
-          volKind === "thin"
-            ? "Лучший fade: памп выдохся на пустом стакане → SHORT"
-            : "Памп выдыхается → fade SHORT",
-      };
-    if (goLong)
-      return {
-        label: `<span class="setup-pill">${_SVG_ARROW_UP}LONG</span>`,
-        cls: "setup-long",
-        title:
-          volKind === "thin"
-            ? "Лучший fade: дамп выдохся на пустом стакане → LONG"
-            : "Дамп выдыхается → fade LONG",
-      };
+  const up = weighted > 0;
+  const side = up ? "LONG" : "SHORT";
+  let score = Math.abs(weighted);
+  // Ускорение относительно тренда: ↑ подтверждает, выдох/разворот — штрафуют.
+  if (accelKind === "up") score *= 1.15;
+  else if (accelKind === "down") score *= 0.8;
+  else if (accelKind === "rev") score *= 0.6;
+  // Объём подтверждает реальность хода.
+  if (volKind === "high") score *= 1.15;
+  else if (volKind === "thin") score *= 0.85;
+
+  const arrow = up ? _SVG_ARROW_UP : _SVG_ARROW_DOWN;
+  if (score >= 3) {
+    // STRONG ≥6 помечаем точкой; NORMAL — обычный пилл.
+    const dot = score >= 6 ? " ●" : "";
+    const confirm =
+      (accelKind === "up" ? "accel↑ " : "") + (volKind === "high" ? "vol↑" : "");
     return {
-      label: '<span class="num-inline-muted">—</span>',
-      cls: "setup-none",
-      title: "Выдыхается, нет направления",
+      label: `<span class="setup-pill">${arrow}${side}${dot}</span>`,
+      cls: up ? "setup-long" : "setup-short",
+      title:
+        `Momentum ${side} (score ${score.toFixed(1)})` +
+        (confirm ? " · " + confirm.trim() : ""),
+      score,
+      side,
     };
   }
-  // Accelerating / reversal / flat → wait
-  if (side) {
-    const title =
-      accelKind === "rev"
-        ? "Разворот — не фейди сейчас"
-        : accelKind === "up"
-          ? volKind === "thin"
-            ? "Тонкий стакан — ждём выдоха"
-            : "Импульс ускоряется — ждём"
-          : "Темп ровный — ждём выдоха";
+  if (score >= 1.5) {
     return {
-      label: `<span class="setup-pill">${_SVG_WAIT} WAIT</span>`,
-      cls: goShort ? "setup-wait-short" : "setup-wait-long",
-      title,
+      label: `<span class="setup-pill">${arrow}${side}</span>`,
+      cls: up ? "setup-wait-long" : "setup-wait-short",
+      title: `Слабый momentum ${side} (score ${score.toFixed(1)}) — наблюдаем`,
+      score,
+      side,
     };
   }
   return {
-    label: '<span class="num-inline-muted">—</span>',
-    cls: "setup-none",
-    title: "Нет направления",
-  };
-}
-
-// Fader traffic-light для Setup column (когда FADER_ENABLED=true).
-// Цвет фона — по direction (фейдим вверх или вниз):
-//   SHORT (fade pump)  → зелёный фон + стрелка вниз
-//   LONG  (fade dump)  → красный фон + стрелка вверх
-//   нет направления / SKIP → нейтральный, без цвета
-// Tier влияет на иконку: GO = filled arrow, WAIT = outlined, SKIP = dash.
-function faderIcon(kind, direction) {
-  if (kind === "skip") {
-    return `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-      <path d="M3.5 8 L12.5 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-    </svg>`;
-  }
-  const filled = kind === "go";
-  if (direction === "SHORT") {
-    // arrow ↓
-    return filled
-      ? `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-           <path d="M8 2.5 L8 11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-           <path d="M4 9 L8 13 L12 9 Z" fill="currentColor"/>
-         </svg>`
-      : `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-           <path d="M8 2.5 L8 11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>
-           <path d="M4 9 L8 13 L12 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.7"/>
-         </svg>`;
-  }
-  if (direction === "LONG") {
-    return filled
-      ? `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-           <path d="M8 13.5 L8 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-           <path d="M4 7 L8 3 L12 7 Z" fill="currentColor"/>
-         </svg>`
-      : `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-           <path d="M8 13.5 L8 5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.7"/>
-           <path d="M4 7 L8 3 L12 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.7"/>
-         </svg>`;
-  }
-  // No direction — small dot
-  return `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-    <circle cx="8" cy="8" r="2" fill="currentColor" opacity="0.55"/>
-  </svg>`;
-}
-
-function computeFaderSetup(fader, rowDir) {
-  // rowDir: 'pump' → SHORT-fade, 'dump' → LONG-fade. Используем как fallback
-  // и для синхронизации лейбла Setup с row-fade-окраской строки.
-  const rowDirToSide =
-    rowDir === "pump" ? "SHORT" : rowDir === "dump" ? "LONG" : null;
-  if (!fader) {
-    return {
-      label: faderIcon("skip", null),
-      cls: "fader-skip",
-      title: "Fader: нет данных",
-    };
-  }
-  const dir = fader.direction || rowDirToSide || null;
-  const chop =
-    fader.chopRatio != null ? ` · chop ${fader.chopRatio.toFixed(2)}` : "";
-  const blocked = fader.blocked ? ` · ${fader.blocked}` : "";
-
-  if (fader.tier === "GREEN") {
-    const cls =
-      dir === "SHORT"
-        ? "fader-go-short"
-        : dir === "LONG"
-          ? "fader-go-long"
-          : "fader-wait-neutral";
-    const label = dir === "SHORT" ? "SHORT" : dir === "LONG" ? "LONG" : "GO";
-    return {
-      label: `${faderIcon("go", dir)}<span class="fader-lbl">${label}</span>`,
-      cls,
-      title: `Fader GO ${dir ?? ""}: choppy setup ready${chop}`,
-    };
-  }
-  if (fader.tier === "YELLOW") {
-    const cls =
-      dir === "SHORT"
-        ? "fader-wait-short"
-        : dir === "LONG"
-          ? "fader-wait-long"
-          : "fader-wait-neutral";
-    const label = dir === "SHORT" ? "SHORT" : dir === "LONG" ? "LONG" : "WAIT";
-    return {
-      label: `${faderIcon("wait", dir)}<span class="fader-lbl">${label}</span>`,
-      cls,
-      title: `Fader ${label}${dir ? " " + dir : ""}: borderline${chop}${blocked}`,
-    };
-  }
-  // RED — нейтральный фон (оператор попросил убрать красный для skip).
-  return {
-    label: `${faderIcon("skip", dir)}<span class="fader-lbl">SKIP</span>`,
-    cls: "fader-skip",
-    title: `Fader SKIP: trending/no_history${chop}${blocked}`,
+    label: `<span class="setup-pill">${_SVG_WAIT} WAIT</span>`,
+    cls: up ? "setup-wait-long" : "setup-wait-short",
+    title: "Хода мало — ждём явный тренд",
+    score,
+    side,
   };
 }
 
@@ -1354,53 +1277,9 @@ function renderHotMovers(payload) {
   if (!tbody || !meta) return;
   const signals = Array.isArray(payload?.signals) ? payload.signals : [];
   const th = payload?.thresholds || {};
-  const faderEnabled = payload?.faderEnabled === true;
 
-  // Сортировка: «жирные сигналы» наверху. Priority — сила fade-setup'а
-  // (FADE > OK* > OK > PRE > REV/AVOID > WAIT), tiebreak — max |spike|.
-  // Монеты без направления (нет pump/dump) — в конец.
-  const TIER_RANK_LOCAL = { STRONG: 3, NORMAL: 2, WEAK: 1 };
-  const dirOf = (windows) => {
-    let best = null;
-    for (const w of windows) {
-      if (!w.tier || w.tier === "NEUTRAL" || w.spikePct == null) continue;
-      const rank = TIER_RANK_LOCAL[w.tier] || 0;
-      const abs = Math.abs(w.spikePct);
-      if (!best || rank > best.rank || (rank === best.rank && abs > best.abs)) {
-        best = { rank, abs, sign: w.spikePct > 0 ? "pump" : "dump" };
-      }
-    }
-    return best?.sign ?? null;
-  };
-  const setupRank = (s, windows) => {
-    const w2 = windows.find((w) => w.mins === 2);
-    const w5 = windows.find((w) => w.mins === 5);
-    let accelKind = null;
-    if (w2 && w5 && w2.spikePct != null && w5.spikePct != null) {
-      const a = w2.spikePct,
-        b = w5.spikePct;
-      if (Math.abs(b) < 0.05) accelKind = "flat";
-      else if (a > 0 !== b > 0 && Math.abs(a) > 0.2) accelKind = "rev";
-      else {
-        const ratio = Math.abs(a) / Math.abs(b * 0.4);
-        accelKind = ratio >= 1.2 ? "up" : ratio <= 0.6 ? "down" : "flat";
-      }
-    }
-    let volKind = null;
-    if (typeof s.volMult === "number" && isFinite(s.volMult)) {
-      const v = s.volMult;
-      volKind =
-        v >= 2 ? "high" : v >= 1.3 ? "mid" : v <= 0.5 ? "thin" : "normal";
-    }
-    if (accelKind === "down" && volKind === "thin") return 6; // FADE
-    if (accelKind === "down" && volKind === "high") return 5; // OK*
-    if (accelKind === "down") return 4; // OK
-    if (accelKind === "up" && volKind === "thin") return 3; // PRE
-    if (accelKind === "rev") return 2;
-    if (accelKind === "up") return 1; // AVOID
-    return 0; // WAIT/none
-  };
-
+  // Сортировка: по силе momentum'а (взвешенный ход по окнам + подтверждение
+  // accel/vol). Едем ПО движению — ZEC-тип грайнда всплывает наверх как LONG.
   const enriched = signals
     .map((s) => {
       const windows = Array.isArray(s.windows) ? s.windows : [];
@@ -1410,18 +1289,21 @@ function renderHotMovers(payload) {
           maxAbs = Math.abs(w.spikePct);
         }
       }
-      const dir = dirOf(windows);
-      const rank = setupRank(s, windows);
-      // Без направления — задвигаем вниз (нет clean long/short).
-      const sortRank = dir ? rank : -1;
-      return { s, windows, maxAbs, sortRank };
+      const w2 = windows.find((w) => w.mins === 2);
+      const w5 = windows.find((w) => w.mins === 5);
+      const mom = computeMomentum(
+        windows,
+        deriveAccelKind(w2, w5),
+        deriveVolKind(s.volMult),
+      );
+      return { s, windows, maxAbs, momScore: mom.score };
     })
     .filter((x) => x.maxAbs > -Infinity)
-    .sort((a, b) => b.sortRank - a.sortRank || b.maxAbs - a.maxAbs)
+    .sort((a, b) => b.momScore - a.momScore || b.maxAbs - a.maxAbs)
     .slice(0, 20);
 
   meta.textContent = payload?.ts
-    ? `scope ${payload.universeSize} · top ${enriched.length} by setup strength · updated ${fmtTime(payload.ts)}`
+    ? `scope ${payload.universeSize} · top ${enriched.length} by momentum · updated ${fmtTime(payload.ts)}`
     : "—";
 
   if (!enriched.length) {
@@ -1468,24 +1350,6 @@ function renderHotMovers(payload) {
   const findWin = (windows, mins) => windows.find((w) => w.mins === mins);
   const winByLabel = (windows, label) => windows.find((w) => w.label === label);
 
-  // Direction для подсветки всей строки: берём окно с лучшим тиром (STRONG>NORMAL>WEAK),
-  // tiebreak — наибольший |spike|. pump → SHORT-fade (красный), dump → LONG-fade (зелёный).
-  const TIER_RANK = { STRONG: 3, NORMAL: 2, WEAK: 1 };
-  // Возвращает {sign, rank} лучшего окна — sign для направления fade, rank для
-  // насыщенности подсветки строки (STRONG=3 → яркий тинт).
-  const bestDirection = (windows) => {
-    let best = null;
-    for (const w of windows) {
-      if (!w.tier || w.tier === "NEUTRAL" || w.spikePct == null) continue;
-      const rank = TIER_RANK[w.tier] || 0;
-      const abs = Math.abs(w.spikePct);
-      if (!best || rank > best.rank || (rank === best.rank && abs > best.abs)) {
-        best = { rank, abs, sign: w.spikePct > 0 ? "pump" : "dump" };
-      }
-    }
-    return best;
-  };
-
   tbody.innerHTML = enriched
     .map((x, idx) => {
       const s = x.s;
@@ -1499,9 +1363,6 @@ function renderHotMovers(payload) {
         trendPct == null
           ? '<span class="num-inline-muted">—</span>'
           : `<span class="${trendPct > 0 ? "num-inline-pos" : "num-inline-neg"}">${trendPct > 0 ? "▲" : "▼"} ${fmtPct(trendPct)}</span> <span class="num-inline-muted">/ ${trendLbl}</span>`;
-
-      const bestDir = bestDirection(x.windows);
-      const dir = bestDir?.sign ?? null; // fade-направление для Setup-вердикта
 
       // Living heatmap: тинт строки по доминирующему движению цены (как на бирже —
       // вверх зелёный, вниз красный), интенсивность по |move|. Не зависит от
@@ -1524,10 +1385,6 @@ function renderHotMovers(payload) {
         ? `${domMove > 0 ? "row-up" : "row-down"} row-heat-${heatLvl}`
         : "";
 
-      // Setup-направление: tier-сигнал если есть, иначе по движению цены — чтобы
-      // вердикт не пустовал в тихом рынке (показываем WAIT с направлением вместо «—»).
-      const setupDir =
-        dir ?? (heatLvl ? (domMove > 0 ? "pump" : "dump") : null);
       const rowCls = [s.isActive ? "is-active" : "", heatCls]
         .filter(Boolean)
         .join(" ");
@@ -1615,13 +1472,9 @@ function renderHotMovers(payload) {
         volInner = '<span class="num-inline-muted">—</span>';
       }
 
-      // Setup: при faderEnabled И наличии fader-тира — Fader traffic-light.
-      // Если fader-данных по монете нет (tier-map пуст / монета не попала в скан) —
-      // НЕ оставляем пустой прочерк, а показываем Hunter-вердикт по Accel/Vol.
-      const setup =
-        faderEnabled && s.fader
-          ? computeFaderSetup(s.fader, setupDir)
-          : computeSetup(accelKind, volKind, setupDir);
+      // Setup: momentum-вердикт — направление ПО движению (вверх LONG, вниз
+      // SHORT), сила по взвешенному ходу окон с подтверждением accel/vol.
+      const setup = computeMomentum(x.windows, accelKind, volKind);
 
       // OI delta 5m
       let oiInner = '<span class="num-inline-muted">—</span>';
