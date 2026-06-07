@@ -131,7 +131,8 @@ function initWebSocket() {
       } else if (msg.type === "log") {
         ingestLogs([msg.entry], false);
       } else if (msg.type === "btc-divergence") {
-        renderBtcDivergence(msg.data);
+        // WS-пуш = триггер «данные обновились»; перетягиваем по своему вотчлисту.
+        divRefresh();
       }
     } catch (err) {
       console.error("[WS] Error:", err);
@@ -1256,6 +1257,9 @@ function computeFaderSetup(fader, rowDir) {
   };
 }
 
+// Предыдущая цена по монете — для биржевых flash-вспышек при изменении цены.
+const _hmPrevPrices = new Map();
+
 function renderHotMovers(payload) {
   const tbody = document.getElementById("hot-movers-tbody");
   const meta = document.getElementById("hot-movers-meta");
@@ -1376,6 +1380,8 @@ function renderHotMovers(payload) {
   // Direction для подсветки всей строки: берём окно с лучшим тиром (STRONG>NORMAL>WEAK),
   // tiebreak — наибольший |spike|. pump → SHORT-fade (красный), dump → LONG-fade (зелёный).
   const TIER_RANK = { STRONG: 3, NORMAL: 2, WEAK: 1 };
+  // Возвращает {sign, rank} лучшего окна — sign для направления fade, rank для
+  // насыщенности подсветки строки (STRONG=3 → яркий тинт).
   const bestDirection = (windows) => {
     let best = null;
     for (const w of windows) {
@@ -1386,7 +1392,7 @@ function renderHotMovers(payload) {
         best = { rank, abs, sign: w.spikePct > 0 ? "pump" : "dump" };
       }
     }
-    return best?.sign ?? null;
+    return best;
   };
 
   tbody.innerHTML = enriched
@@ -1403,12 +1409,24 @@ function renderHotMovers(payload) {
           ? '<span class="num-inline-muted">—</span>'
           : `<span class="${trendPct > 0 ? "num-inline-pos" : "num-inline-neg"}">${trendPct > 0 ? "▲" : "▼"} ${fmtPct(trendPct)}</span> <span class="num-inline-muted">/ ${trendLbl}</span>`;
 
-      const dir = bestDirection(x.windows);
+      const bestDir = bestDirection(x.windows);
+      const dir = bestDir?.sign ?? null;
+      const strong = (bestDir?.rank ?? 0) >= 3; // STRONG-тир → ярче тинт
       const rowCls = [
         s.isActive ? "is-active" : "",
         dir === "pump" ? "row-short row-fade-short" : "",
         dir === "dump" ? "row-long row-fade-long" : "",
+        dir && strong ? "row-fade-strong" : "",
       ].filter(Boolean).join(" ");
+
+      // Биржевая flash-вспышка: цена выросла с прошлого рендера → зелёный,
+      // упала → красный. Анимация играет один раз на новом DOM-узле.
+      const prevPx = _hmPrevPrices.get(s.coin);
+      let flashCls = "";
+      if (prevPx != null && s.price != null && s.price !== prevPx) {
+        flashCls = s.price > prevPx ? "hm-flash-up" : "hm-flash-down";
+      }
+      if (s.price != null) _hmPrevPrices.set(s.coin, s.price);
 
       const winDefs = [[w2, "2m"], [w5, "5m"], [w15, "15m"]];
       const cells = winDefs.map(([w, lbl]) => {
@@ -1467,9 +1485,10 @@ function renderHotMovers(payload) {
         volInner = '<span class="num-inline-muted">—</span>';
       }
 
-      // Setup: при faderEnabled — Fader traffic-light (единый источник истины);
-      // иначе — старый Hunter-вердикт по Accel/Vol.
-      const setup = faderEnabled
+      // Setup: при faderEnabled И наличии fader-тира — Fader traffic-light.
+      // Если fader-данных по монете нет (tier-map пуст / монета не попала в скан) —
+      // НЕ оставляем пустой прочерк, а показываем Hunter-вердикт по Accel/Vol.
+      const setup = (faderEnabled && s.fader)
         ? computeFaderSetup(s.fader, dir)
         : computeSetup(accelKind, volKind, dir);
 
@@ -1493,7 +1512,7 @@ function renderHotMovers(payload) {
         <td>${idx + 1}</td>
         <td><span class="signals-price">#${escapeHtml(s.coin)}</span></td>
         <td class="hm-setup ${setup.cls}" data-w="Setup" title="${setup.title}">${setup.label}</td>
-        <td><span class="signals-price">${fmtPrice(s.price)}</span></td>
+        <td class="hm-price-cell ${flashCls}"><span class="signals-price">${fmtPrice(s.price)}</span></td>
         ${cells}
         <td class="${accelCellCls}" data-w="Acc">${accelInner}</td>
         <td class="${oiCellCls}" data-w="OI">${oiInner}</td>
@@ -3552,7 +3571,7 @@ function divRenderWatchlistBar() {
     if (!l.includes(val)) { l.push(val); divSaveWatchlist(l); }
     e.target.value = "";
     divRenderWatchlistBar();
-    renderBtcDivergence(null);
+    divRefresh();
   });
 
   bar.querySelectorAll("[data-remove]").forEach((btn) => {
@@ -3560,7 +3579,7 @@ function divRenderWatchlistBar() {
       const l = divGetWatchlist().filter((c) => c !== btn.dataset.remove);
       divSaveWatchlist(l);
       divRenderWatchlistBar();
-      renderBtcDivergence(null);
+      divRefresh();
     });
   });
 }
@@ -3641,6 +3660,19 @@ async function divFetchAll() {
   finally { _divAllFetching = false; }
 }
 
+// Тянем дивергенцию по ТЕКУЩЕМУ вотчлисту (включая монеты, добавленные оператором).
+// WS-пуш шлёт только дефолтный список, поэтому источник истины для табов
+// 5m/15m/1h — этот fetch. BTC всегда нужен как baseline.
+async function divRefresh() {
+  if (_divWindow === "all") { renderBtcDivergence(null); return; }
+  const wl = divGetWatchlist();
+  const coins = wl.includes("BTC") ? wl : ["BTC", ...wl];
+  try {
+    const d = await fetchJson(`/api/btc-divergence?coins=${encodeURIComponent(coins.join(","))}`);
+    if (d?.windows) renderBtcDivergence(d);
+  } catch { /* silent */ }
+}
+
 function renderBtcDivergence(data) {
   if (data) _divData = data;
 
@@ -3686,7 +3718,7 @@ document.getElementById("div-tabs")?.addEventListener("click", (e) => {
   if (!btn) return;
   _divWindow = btn.dataset.window;
   document.querySelectorAll("#div-tabs .range-btn").forEach((b) => b.classList.toggle("active", b === btn));
-  renderBtcDivergence(null);
+  divRefresh();
 });
 
 bindLogsUi();
@@ -3696,6 +3728,7 @@ applyTheme(getStoredTheme());
 initEquityChart();
 initWebSocket();
 tick();
+divRefresh();               // первичная загрузка дивергенции (до первого WS-пуша)
 setInterval(tick, REFRESH_MS);
 setInterval(renderFooter, 1000);
 

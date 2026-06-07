@@ -1376,12 +1376,42 @@ footer {
 .signals-table tr.is-active td:first-child {
   box-shadow: inset 3px 0 0 var(--accent);
 }
-/* строки: pump = бледно-красный фон (SHORT fade), dump = бледно-зелёный (LONG fade) */
+/* строки-светофор: pump = красный фон (SHORT fade), dump = зелёный (LONG fade).
+   STRONG-тир (row-fade-strong) — насыщеннее, чтобы карточка «сияла». */
 .signals-table tr.row-fade-short {
-  background: linear-gradient(90deg, rgba(239, 68, 68, 0.08) 0%, rgba(239, 68, 68, 0.03) 50%, transparent 100%);
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.16) 0%, rgba(239, 68, 68, 0.05) 60%, transparent 100%);
 }
 .signals-table tr.row-fade-long {
-  background: linear-gradient(90deg, rgba(34, 197, 94, 0.08) 0%, rgba(34, 197, 94, 0.03) 50%, transparent 100%);
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.16) 0%, rgba(34, 197, 94, 0.05) 60%, transparent 100%);
+}
+.signals-table tr.row-fade-short.row-fade-strong {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.32) 0%, rgba(239, 68, 68, 0.09) 60%, transparent 100%);
+}
+.signals-table tr.row-fade-long.row-fade-strong {
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.32) 0%, rgba(34, 197, 94, 0.09) 60%, transparent 100%);
+}
+.signals-table tr.row-fade-short.row-fade-strong td:first-child {
+  box-shadow: inset 3px 0 0 var(--red), inset 0 0 12px -6px rgba(239, 68, 68, 0.8);
+}
+.signals-table tr.row-fade-long.row-fade-strong td:first-child {
+  box-shadow: inset 3px 0 0 var(--green), inset 0 0 12px -6px rgba(34, 197, 94, 0.8);
+}
+
+/* Биржевые flash-вспышки на ячейке цены при изменении (зелёный вверх / красный вниз). */
+@keyframes hmFlashUp {
+  0%   { background: rgba(34, 197, 94, 0.55); }
+  100% { background: transparent; }
+}
+@keyframes hmFlashDown {
+  0%   { background: rgba(239, 68, 68, 0.55); }
+  100% { background: transparent; }
+}
+.signals-table td.hm-price-cell { border-radius: 4px; }
+.signals-table td.hm-price-cell.hm-flash-up   { animation: hmFlashUp 0.75s ease-out; }
+.signals-table td.hm-price-cell.hm-flash-down { animation: hmFlashDown 0.75s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .signals-table td.hm-price-cell.hm-flash-up,
+  .signals-table td.hm-price-cell.hm-flash-down { animation: none; }
 }
 /* price ячейка — живой цвет как на бирже */
 .signals-table tr.row-fade-short .signals-price {
