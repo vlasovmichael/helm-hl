@@ -18,6 +18,10 @@ import { logger } from "../core/logger.js";
 import { retryWithBackoff } from "../core/retry.js";
 import { getCachedBalance } from "../core/balanceCache.js";
 import { hlInfo } from "../core/hlClient.js";
+import {
+  getLivePrice as feedGetLivePrice,
+  isFeedFresh,
+} from "../core/priceFeed.js";
 
 let sdk = null;
 
@@ -408,11 +412,24 @@ export async function getMarkPrice(coin) {
 }
 
 /**
- * Live trade-side price для дашборда. Предпочитает midPx (близко к last trade),
- * фолбэк — markPx. Используется только для отображения "Now" линии на графике
- * чтобы цена совпадала с close последней свечи.
+ * Live trade-side price для дашборда. Используется только для отображения
+ * "Now" линии на графике, чтобы цена совпадала с close последней свечи.
+ *
+ * Источник #1 — WS-фид allMids (priceFeed): мгновенно, без HTTP. Дашборд
+ * рендерит цену в 5+ местах на каждый рефреш, и раньше каждый вызов летел
+ * тяжёлым metaAndAssetCtxs (все ~760 монет) → штормил rate-limit → 429 →
+ * бэклог в hlClient → Scout ловил RTT > 10s. Теперь берём mid из того же
+ * WS-кэша, что и торговые тики. HTTP остаётся только фолбэком, если фид
+ * протух (reconnect и т.п.).
  */
 export async function getLivePrice(coin) {
+  // Fast path: свежий WS-фид.
+  if (isFeedFresh()) {
+    const live = feedGetLivePrice(coin);
+    if (live && live.price > 0) return live.price;
+  }
+
+  // Фолбэк: фид протух или монеты в кэше нет — добираем по HTTP.
   try {
     const data = await hlInfo(
       { type: "metaAndAssetCtxs" },
