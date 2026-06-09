@@ -27,6 +27,22 @@ let _macroPct = null;
 let _macroFetchedAt = 0;
 let _btcMomentum1m = null;
 let _tickReady = false; // true after first tick() completes — prevents half-baked SmartSignals renders
+
+// Активные монеты (позиция бота + все ручные/HANDS-OFF). Подсвечиваем их во
+// всех лентах монет (Hot Movers / Divergence / Candy Girl), чтобы оператор видел
+// свою монету выделенной, пока торгует руками (2026-06-09).
+let activeCoinSet = new Set();
+function updateActiveCoinSet(activePosition, manualPositions) {
+  const next = new Set();
+  if (activePosition?.coin) next.add(activePosition.coin);
+  if (Array.isArray(manualPositions))
+    for (const p of manualPositions) if (p?.coin) next.add(p.coin);
+  activeCoinSet = next;
+}
+function isActiveCoin(coin) {
+  return coin != null && activeCoinSet.has(coin);
+}
+
 let equityChart = null;
 let priceChart = null;
 let priceSeries = null;
@@ -112,6 +128,7 @@ function initWebSocket() {
       const msg = JSON.parse(event.data);
       if (msg.type === "status") {
         renderHeader(msg.data);
+        updateActiveCoinSet(msg.data.activePosition, msg.data.manualPositions);
         renderPosition(msg.data.activePosition);
         renderManualPositions(msg.data.manualPositions);
         renderBans(msg.data);
@@ -1144,7 +1161,6 @@ function renderManualPositions(list) {
           <div class="grid-item"><div class="item-label">uPnL</div><div class="item-value ${cls(p.unrealizedPnl)}">${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}</div></div>
           <div class="grid-item"><div class="item-label">Liq</div><div class="item-value">${liq}</div></div>
         </div>
-        <div style="margin-top:0.5rem; font-size:11px; color:var(--text-muted, #888);">Открыта вручную — бот не управляет. Закрой на бирже, чтобы продолжил работу.</div>
       </div>`;
     })
     .join("");
@@ -2746,8 +2762,9 @@ function renderCandyGirl(cg) {
             risk > 0
               ? (Math.abs((s.tp ?? 0) - (s.entry ?? 0)) / risk).toFixed(1)
               : "?";
+          const activeCls = isActiveCoin(s.coin) ? " is-active" : "";
           return (
-            `<tr class="cg-sig-row ${isLong ? "dir-long" : "dir-short"}">` +
+            `<tr class="cg-sig-row ${isLong ? "dir-long" : "dir-short"}${activeCls}">` +
             `<td>${dir}</td>` +
             `<td><b>#${s.coin}</b></td>` +
             `<td>$${s.price}</td>` +
@@ -4043,7 +4060,7 @@ function divRenderRows(coins, btcPct, hasPast) {
           );
         whaleCell = parts.join(" ");
       }
-      return `<tr>
+      return `<tr class="${isActiveCoin(c.coin) ? "is-active" : ""}">
       <td style="font-weight:600">${c.coin}</td>
       <td class="r">${fmtPrice(c.price)}</td>
       <td class="r" style="color:${coinColor}">${hasPast ? fmtPct(c.coinPct) : "—"}</td>

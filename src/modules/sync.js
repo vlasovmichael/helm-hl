@@ -282,22 +282,9 @@ export async function handleOrphaned(exchangePos) {
   appState.manualPositionCoins.add(exchangePos.coin);
   appState.manualWarningThrottle.set(exchangePos.coin, Date.now());
 
-  const liqLine = exchangePos.liquidationPx != null
-    ? `🔻 Ликвидация: <b>$${exchangePos.liquidationPx}</b>\n`
-    : '';
-
-  await sendMessage(
-    `🖐 <b>Ручная позиция #${exchangePos.coin} (${side})</b>\n` +
-    `<code>═════════════════════</code>\n` +
-    `📐 Размер: <b>${Math.abs(exchangePos.szi)} ${exchangePos.coin}</b> (~$${sizeUsd.toFixed(2)})\n` +
-    `💵 Entry: <b>$${exchangePos.entryPx}</b>\n` +
-    `${liqLine}` +
-    `💰 uPnL: <b>$${exchangePos.unrealizedPnl.toFixed(4)}</b>\n` +
-    `<code>═════════════════════</code>\n` +
-    `🤖 Бот в режиме <b>HANDS-OFF</b>: не управляет твоей позицией и не открывает свою.\n` +
-    `Закрой руками — бот автоматом продолжит работу.`,
-    true,
-  );
+  // TG-уведомление о ручной позиции на старте убрано (2026-06-09): ручная
+  // торговля — основной режим оператора, поза видна на дашборде/бирже. Лог выше
+  // остаётся для диагностики.
 
   return null;
 }

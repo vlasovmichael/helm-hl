@@ -260,20 +260,12 @@ export async function orphanCheck() {
       state.manualWarningThrottle.set(exPos.coin, now);
       const side = exPos.szi < 0 ? 'SHORT' : 'LONG';
       const sizeUsd = Math.abs(exPos.szi) * exPos.entryPx;
+      // TG-уведомление о ручной позиции убрано (2026-06-09): ручная торговля —
+      // основной режим оператора, поза и так видна на дашборде/бирже. Оставляем
+      // только лог для диагностики.
       logger.warn(
-        `[Manual] 🖐 Manual ${side} detected #${exPos.coin} szi=${exPos.szi} entry=$${exPos.entryPx} — bot paused`,
+        `[Manual] 🖐 Manual ${side} detected #${exPos.coin} szi=${exPos.szi} entry=$${exPos.entryPx} (~$${sizeUsd.toFixed(2)}) — bot paused`,
       );
-      await sendMessage(
-        `🖐 <b>Ручная позиция #${exPos.coin} (${side})</b>\n` +
-          `<code>─────────────────────</code>\n` +
-          `📐 Размер: <b>${Math.abs(exPos.szi)} ${exPos.coin}</b> (~$${sizeUsd.toFixed(2)})\n` +
-          `💵 Entry: <b>$${exPos.entryPx}</b>\n` +
-          `💰 uPnL: <b>$${exPos.unrealizedPnl.toFixed(4)}</b>\n` +
-          `<code>─────────────────────</code>\n` +
-          `🤖 Бот в режиме <b>HANDS-OFF</b>: не лезет в твою позицию и не открывает свою.\n` +
-          `Закрой руками — бот автоматом вернётся к работе.`,
-        true,
-      ).catch(() => {});
     }
   }
 

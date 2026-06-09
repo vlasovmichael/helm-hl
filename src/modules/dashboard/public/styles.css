@@ -1420,7 +1420,17 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
 /* цена — цвет по направлению движения (theme-aware, в тон процентам) */
 .signals-table tr.row-up   .signals-price { color: var(--green); }
 .signals-table tr.row-down .signals-price { color: var(--red); }
-.signals-table tr.is-active td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+
+/* Активная монета (позиция бота ИЛИ ручная) — всегда поверх heat-раскраски:
+   фон-акцент + жирная левая кромка. !important, т.к. heat-классы выше по
+   специфичности и иначе перебивают кромку, когда монета ещё и двигается. */
+.signals-table tr.is-active,
+.data-table tr.is-active { background: var(--accent-soft) !important; }
+.signals-table tr.is-active td:first-child,
+.data-table tr.is-active td:first-child {
+  box-shadow: inset 4px 0 0 var(--accent) !important;
+  font-weight: 700;
+}
 
 /* Биржевые flash-вспышки на ячейке цены при изменении (зелёный вверх / красный вниз). */
 @keyframes hmFlashUp {

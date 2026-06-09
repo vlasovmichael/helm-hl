@@ -1005,7 +1005,12 @@ async function handleSignals(req, res) {
     const faderTiers = state.latestFader instanceof Map ? state.latestFader : null;
     const trendLookback = config.trading.hunterTrendLookbackMin;
     const trendMaxRise = config.trading.hunterTrendMaxRisePct;
+    // Активные монеты для подсветки в Hot Movers: позиция бота + все ручные
+    // (HANDS-OFF) позиции. Юзер торгует руками часами — хочет видеть свою
+    // монету выделенной во всех лентах (2026-06-09).
     const activeCoin = getActivePosition()?.coin ?? null;
+    const activeCoins = new Set(state.manualPositionCoins);
+    if (activeCoin) activeCoins.add(activeCoin);
 
     const ticksNeeded = Math.max(
       2,
@@ -1143,7 +1148,7 @@ async function handleSignals(req, res) {
         tpPct: tp != null ? HUNTER_TP_PCT : null,
         bufferLen: m.bufLen,
         bufferNeeded: ticksNeeded,
-        isActive: activeCoin && m.coin === activeCoin,
+        isActive: activeCoins.has(m.coin),
         fader: faderTiers?.get(m.coin) ?? null,
         oiDelta5m,
         oiDelta15m,
