@@ -19,6 +19,7 @@ import { restoreHunterTrailIfNeeded } from './app/hunterTrailArm.js';
 import { startPriceFeed } from './core/priceFeed.js';
 import { startWsExitLoop } from './app/wsExitTick.js';
 import { startWsEntryLoop } from './app/wsEntryTick.js';
+import { startSetupSwingAlerts } from './modules/setupScannerAlerts.js';
 import { shutdown } from './app/lifecycle.js';
 import { createStatusCollector } from './app/status.js';
 
@@ -77,6 +78,11 @@ async function main() {
   // Gated на HL_WS_FEED_ENABLED. Поднимает allMids-фид + сверяет с поллингом,
   // торговую логику не трогает. Fail-soft: ошибки WS не валят бота.
   startPriceFeed();
+
+  // ── Setup Scanner Swing — entry/exit ntfy-алерты ──
+  // Контекст-пуши для ручной торговли (вход в зону / контекст против позиции).
+  // Не торгует. Gated на SETUP_SWING_ALERT_ENABLED (default on). Fail-soft.
+  startSetupSwingAlerts();
 
   // ── Tax Collector — ежедневный сбор PIT-38 в 03:00 (Europe/Warsaw) ──
   // Fail-soft: модуль сам отключается, если BINANCE_API_KEY не задан.

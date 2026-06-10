@@ -50,6 +50,7 @@ import { getFaderVirtualSnapshot } from "../faderVirtualEquity.js";
 import { getVirtualEquitySnapshot } from "../chillBoyVirtualEquity.js";
 import { getNearMisses } from "../nearMisses.js";
 import { enrichSwingSignals } from "../setupScannerSwing.js";
+import { evaluateExitContext, parseAccountPositions } from "../setupScannerAlerts.js";
 
 const HOST = "0.0.0.0";
 const PORT = 3010;
@@ -1773,7 +1774,31 @@ async function handleTradeMarkers(req, res) {
 
 async function handleSetupScanner(_req, res) {
   try {
-    const rows = enrichSwingSignals(getSetupScannerRows());
+    const baseRows = getSetupScannerRows();
+
+    // Открытые позиции счёта (ручные и ботовые): их монеты показываем всегда,
+    // даже если collector их не трекает, + exit-контекст в строке.
+    let positions = [];
+    try {
+      positions = parseAccountPositions(await getPositions());
+    } catch {
+      /* fail-soft: карточка живёт без позиций */
+    }
+    const known = new Set(baseRows.map((r) => r.coin));
+    for (const p of positions) {
+      if (!known.has(p.coin)) baseRows.push({ coin: p.coin });
+    }
+
+    const rows = enrichSwingSignals(baseRows);
+    const posByCoin = new Map(positions.map((p) => [p.coin, p]));
+    for (const r of rows) {
+      const p = posByCoin.get(r.coin);
+      if (!p) continue;
+      const ev = evaluateExitContext(p.side, r.swing);
+      r.swing.pos = p.side;
+      r.swing.exitLevel = ev.level;   // null | 'ema20' | 'trend'
+      r.swing.exitReason = ev.reason;
+    }
     res.json({ ts: Date.now(), count: rows.length, rows });
   } catch (err) {
     logger.warn(`[Dashboard] /api/setup-scanner error: ${err.message}`);

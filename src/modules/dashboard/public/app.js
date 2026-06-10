@@ -1599,10 +1599,11 @@ function renderSetupScanner(payload) {
   }
   document.getElementById("setup-scanner-skeleton")?.classList.add("hidden");
 
-  // Сортировка: LONG/SHORT первыми (по силе), затем WAIT с посчитанным
-  // трендом, pending в самом низу. Внутри ранга — по силе, потом по объёму.
+  // Сортировка: монеты с ОТКРЫТОЙ позицией всегда сверху, затем LONG/SHORT
+  // (по силе), затем WAIT с посчитанным трендом, pending в самом низу.
   const rank = (r) => {
     const s = r.swing || {};
+    if (s.pos) return 3;
     if (s.signal === "LONG" || s.signal === "SHORT") return 2;
     if (!s.pending) return 1;
     return 0;
@@ -1643,7 +1644,16 @@ function renderSetupScanner(payload) {
   };
   // Entry-зона: где цена относительно 1h EMA20. zone = откат к EMA, ищи вход;
   // extended = растянута по тренду, не гнаться; mid = между. Тайминг (5m) — сам.
+  // По монете с открытой позицией колонка превращается в exit-контекст.
   const entryCell = (s) => {
+    if (s.pos) {
+      const t = escapeHtml(s.exitReason || "");
+      if (s.exitLevel === "trend")
+        return `<span style="color:var(--red);font-weight:700" title="${t}">⚠ exit?</span>`;
+      if (s.exitLevel === "ema20")
+        return `<span style="color:var(--orange, #f59e0b);font-weight:600" title="${t}">⚠ EMA20</span>`;
+      return `<span style="color:var(--green)" title="${t}">hold</span>`;
+    }
     const ext = s.ext1h;
     const extStr =
       ext != null ? `${ext >= 0 ? "+" : ""}${ext.toFixed(1)}%` : "";
@@ -1655,6 +1665,10 @@ function renderSetupScanner(payload) {
       return `<span class="num-inline-muted" title="Цена между EMA20 и растяжкой (${extStr})">mid</span>`;
     return '<span class="num-inline-muted">—</span>';
   };
+  const posPill = (s) =>
+    s.pos
+      ? ` <span class="swing-badge ${s.pos === "long" ? "long" : "short"}" style="font-size:9px;padding:0 5px" title="Открытая позиция на счёте">POS·${s.pos === "long" ? "L" : "S"}</span>`
+      : "";
 
   tbody.innerHTML = sorted
     .map((r) => {
@@ -1665,7 +1679,7 @@ function renderSetupScanner(payload) {
       if (r.fundingPersist?.fractionExtreme != null)
         det.push(`funding extreme ${(r.fundingPersist.fractionExtreme * 100).toFixed(0)}% of 48h`);
       return `<tr title="${escapeHtml(det.join(" · "))}">
-      <td><span class="signals-price">#${escapeHtml(r.coin)}</span></td>
+      <td><span class="signals-price">#${escapeHtml(r.coin)}</span>${posPill(s)}</td>
       <td class="c">${badge(s.signal)}</td>
       <td class="c">${arrowCell(s.trend4h)}&nbsp;${arrowCell(s.trend1h)}</td>
       <td class="c">${entryCell(s)}</td>
@@ -1903,8 +1917,23 @@ const HELP_CONTENT = {
         sub: "Позиция цены и EMA20 относительно медленной EMA (200 на 1h, 50 на 4h — те же ~200 часов). ↑ = цена и EMA20 выше; ↓ = ниже; − = смешанно. Связь с фейдом: 4h range (−) → фейд ок; чёткий 4h тренд → фейд против него = самоубийство.",
       },
       {
+        title: "Позиция открыта — exit-контекст",
+        sub: "Монеты с открытой позицией на счёте (ручной или ботовой) поднимаются в топ с бейджем POS, Entry-колонка показывает контекст удержания. Дублируется ntfy-пушем (тихий час 00–08: пуш беззвучный).",
+        rows: [
+          ['<span style="color:var(--green)">hold</span>', "Тренд за позицию — контекст не против тебя"],
+          [
+            '<span style="color:#f59e0b">⚠ EMA20</span>',
+            "Цена закрепилась за 1h EMA20 против позиции — импульс теряется",
+          ],
+          [
+            '<span style="color:var(--red)">⚠ exit?</span>',
+            "1h тренд развернулся против позиции — контекст сломан. Не команда: проверь график и свой стоп",
+          ],
+        ],
+      },
+      {
         title: "Entry — можно ли прямо сейчас",
-        sub: "Сигнал = направление, Entry = тайминг. Где цена относительно 1h EMA20 (зоны отката):",
+        sub: "Сигнал = направление, Entry = тайминг. Где цена относительно 1h EMA20 (зоны отката). Вход в зону тоже дублируется ntfy-пушем:",
         rows: [
           [
             '<span style="color:var(--green);font-weight:600">✓ zone</span>',
