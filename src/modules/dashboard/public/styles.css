@@ -3015,3 +3015,23 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   background: rgba(128, 128, 128, 0.08);
   border: 1px solid var(--hairline);
 }
+
+/* ── Setup Scanner (Swing) — row tint по сигналу ──────────
+   Вся строка дышит направлением: LONG зелёным, SHORT красным.
+   .sw-hot (цена в entry-зоне или открыта позиция) = ярче + кромка слева. */
+#setup-scanner-table tr.sw-long  { background: rgba(14, 203, 129, 0.05); }
+#setup-scanner-table tr.sw-short { background: rgba(246, 70, 92, 0.05); }
+#setup-scanner-table tr.sw-long.sw-hot {
+  background: rgba(14, 203, 129, 0.12);
+}
+#setup-scanner-table tr.sw-long.sw-hot td:first-child {
+  box-shadow: inset 3px 0 0 var(--green);
+}
+#setup-scanner-table tr.sw-short.sw-hot {
+  background: rgba(246, 70, 92, 0.12);
+}
+#setup-scanner-table tr.sw-short.sw-hot td:first-child {
+  box-shadow: inset 3px 0 0 var(--red);
+}
+#setup-scanner-table tr.sw-long  .signals-price { color: var(--green); }
+#setup-scanner-table tr.sw-short .signals-price { color: var(--red); }

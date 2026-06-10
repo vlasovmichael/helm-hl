@@ -1670,19 +1670,58 @@ function renderSetupScanner(payload) {
       ? ` <span class="swing-badge ${s.pos === "long" ? "long" : "short"}" style="font-size:9px;padding:0 5px" title="Открытая позиция на счёте">POS·${s.pos === "long" ? "L" : "S"}</span>`
       : "";
 
+  // Данные-колонки: OI/Px 7d (подсвечен, когда подтверждает сигнал), funding, vol.
+  const fmtSignedPct = (v) =>
+    v == null || !isFinite(v) ? "—" : `${v >= 0 ? "+" : ""}${(v * 100).toFixed(0)}%`;
+  const oiPxCell = (r, s) => {
+    const oi = r.oi7d;
+    if (!oi) return '<span class="num-inline-muted">—</span>';
+    if (oi.etaHours != null)
+      return `<span class="num-inline-muted" title="История копится">· ${(oi.etaHours / 24).toFixed(1)}d</span>`;
+    const txt = `${fmtSignedPct(oi.deltaOi)} / ${fmtSignedPct(oi.deltaPx)}`;
+    const confirms = s.signal === "LONG" || s.signal === "SHORT";
+    return confirms
+      ? `<span style="color:var(--accent);font-weight:600">${txt}</span>`
+      : `<span class="num-inline-muted">${txt}</span>`;
+  };
+  const fundingCell = (apy) => {
+    if (apy == null || !isFinite(apy)) return '<span class="num-inline-muted">—</span>';
+    const HL_BASELINE_APY = 10.95;
+    if (Math.abs(apy - HL_BASELINE_APY) < 2)
+      return '<span class="num-inline-muted" title="≈ HL baseline (premium ≈ 0)">≈base</span>';
+    const txt = `${apy >= 0 ? "+" : ""}${apy.toFixed(0)}%`;
+    if (Math.abs(apy) > 30)
+      return `<span style="color:var(--orange, #f59e0b);font-weight:600" title="Funding-экстрим — перекос позиций">${txt}</span>`;
+    return `<span style="color:var(--text-muted)">${txt}</span>`;
+  };
+  const volCell = (vr) => {
+    if (!vr || vr.ratio == null)
+      return '<span class="num-inline-muted">—</span>';
+    const v = vr.ratio;
+    const color = v >= 2 ? "var(--red)" : v >= 1.5 ? "var(--orange, #f59e0b)" : v <= 0.5 ? "var(--text-faint)" : "var(--text-muted)";
+    return `<span style="color:${color}">${v.toFixed(1)}×</span>`;
+  };
+  // Тинт всей строки по сигналу; ярче, когда цена в зоне входа.
+  const rowCls = (s) => {
+    const dir = s.signal === "LONG" ? "sw-long" : s.signal === "SHORT" ? "sw-short" : "";
+    if (!dir) return "";
+    return s.entryZone === "zone" || s.pos ? `${dir} sw-hot` : dir;
+  };
+
   tbody.innerHTML = sorted
     .map((r) => {
       const s = r.swing || {};
-      // Детали — только в tooltip (минимализм по требованию)
       const det = [...(s.reasons || [])];
-      if (r.volRegime?.ratio != null) det.push(`vol ${r.volRegime.ratio.toFixed(1)}× vs 30d`);
       if (r.fundingPersist?.fractionExtreme != null)
         det.push(`funding extreme ${(r.fundingPersist.fractionExtreme * 100).toFixed(0)}% of 48h`);
-      return `<tr title="${escapeHtml(det.join(" · "))}">
+      return `<tr class="${rowCls(s)}" title="${escapeHtml(det.join(" · "))}">
       <td><span class="signals-price">#${escapeHtml(r.coin)}</span>${posPill(s)}</td>
       <td class="c">${badge(s.signal)}</td>
       <td class="c">${arrowCell(s.trend4h)}&nbsp;${arrowCell(s.trend1h)}</td>
       <td class="c">${entryCell(s)}</td>
+      <td class="r">${oiPxCell(r, s)}</td>
+      <td class="r">${fundingCell(r.fundingApy)}</td>
+      <td class="r">${volCell(r.volRegime)}</td>
     </tr>`;
     })
     .join("");
