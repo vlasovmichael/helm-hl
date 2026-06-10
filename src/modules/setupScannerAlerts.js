@@ -4,18 +4,19 @@
 // Два вида сигналов поверх setupScannerSwing.js:
 //
 //  ENTRY: монета с swing-сигналом LONG/SHORT вошла в entry-зону (цена у 1h
-//  EMA20) → пуш «иди смотреть глазами». Алерт только на ПЕРЕХОДЕ в зону;
-//  первый прогон после рестарта лишь записывает состояние (анти-спам).
+//  EMA20) → пуш «иди смотреть глазами». Алерт на переходе в зону; монета,
+//  уже стоящая в зоне на старте воркера, тоже алертит — анти-спам держится
+//  не на baseline-молчанке, а на ПЕРСИСТЕНТНОМ кулдауне (переживает рестарт).
 //
 //  EXIT: по ОТКРЫТОЙ позиции на счёте (ручной или ботовой) swing-контекст
 //  уходит → пуш. Два уровня: 'ema20' (цена закрепилась против позиции за 1h
 //  EMA20 — импульс теряется) и 'trend' (1h тренд развернулся — контекст
-//  сломан). Пуш на эскалации уровня. После рестарта может прислать повторно
-//  один раз — это осознанно: инфа по живой позиции важнее анти-спама.
+//  сломан). Пуш на эскалации уровня, кулдаун тоже персистентный.
 //
 // ⚠️ Это КОНТЕКСТ-алерты, не команды: не TP/SL, без цен входа/выхода.
 // Решение и инвалидация — у оператора. Fail-soft: ошибки не валят бота.
 
+import { readFileSync, writeFileSync } from 'node:fs';
 import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
 import { getSetupScannerRows } from '../core/database.js';
@@ -140,9 +141,35 @@ const prevEntryState = new Map(); // coin → 'LONG'|'SHORT'|null (в зоне �
 const entryAlertAt   = new Map(); // 'coin:side' → ts
 const prevExitLevel  = new Map(); // 'coin:side' → null|'ema20'|'trend'
 const exitAlertAt    = new Map(); // 'coin:side' → ts
-let firstRunDone = false;
 
 const EXIT_RANK = { ema20: 1, trend: 2 };
+
+// Кулдауны переживают рестарт (data/swing_alert_state.json) — иначе каждый
+// деплой обнулял бы анти-спам и монета, висящая в зоне, либо спамила бы после
+// каждого рестарта, либо (с baseline-молчанкой) не алертила бы вовсе.
+// Инцидент BNB 2026-06-11: серия деплоев подряд → «✓ zone» без единого пуша.
+const STATE_FILE = 'data/swing_alert_state.json';
+
+function loadAlertState() {
+  try {
+    const raw = JSON.parse(readFileSync(STATE_FILE, 'utf-8'));
+    for (const [k, v] of Object.entries(raw.entryAlertAt ?? {})) entryAlertAt.set(k, v);
+    for (const [k, v] of Object.entries(raw.exitAlertAt ?? {}))  exitAlertAt.set(k, v);
+  } catch {
+    // файла нет / битый — начинаем с нуля
+  }
+}
+
+function saveAlertState() {
+  try {
+    writeFileSync(STATE_FILE, JSON.stringify({
+      entryAlertAt: Object.fromEntries(entryAlertAt),
+      exitAlertAt:  Object.fromEntries(exitAlertAt),
+    }));
+  } catch (err) {
+    logger.warn(`[SwingAlerts] state save failed: ${err.message}`);
+  }
+}
 
 async function runOnce(now = Date.now()) {
   const rows = getSetupScannerRows();
@@ -174,13 +201,16 @@ async function runOnce(now = Date.now()) {
       (s.signal === 'LONG' || s.signal === 'SHORT') && s.entryZone === 'zone'
         ? s.signal
         : null;
+    // Переход в зону (после рестарта prev=null → монета уже в зоне тоже
+    // алертит, персистентный кулдаун защищает от деплой-спама).
     const prev = prevEntryState.get(r.coin) ?? null;
     prevEntryState.set(r.coin, cur);
-    if (!firstRunDone || !cur || cur === prev) continue;
+    if (!cur || cur === prev) continue;
 
     const key = `${r.coin}:${cur}`;
     if (now - (entryAlertAt.get(key) ?? 0) < ENTRY_COOLDOWN_MS) continue;
     entryAlertAt.set(key, now);
+    saveAlertState();
 
     const ext = s.ext1h != null ? `${s.ext1h >= 0 ? '+' : ''}${s.ext1h.toFixed(1)}%` : '—';
     logger.info(`[SwingAlerts] 🎯 entry zone: ${cur} #${r.coin} (ext ${ext})`);
@@ -206,6 +236,7 @@ async function runOnce(now = Date.now()) {
 
     if (now - (exitAlertAt.get(key) ?? 0) < EXIT_COOLDOWN_MS) continue;
     exitAlertAt.set(key, now);
+    saveAlertState();
 
     const sizeTxt = p.sizeUsd ? ` ($${p.sizeUsd.toFixed(0)})` : '';
     logger.info(`[SwingAlerts] ⚠️ exit context: #${p.coin} ${p.side} → ${ev.level}`);
@@ -216,14 +247,15 @@ async function runOnce(now = Date.now()) {
     );
   }
   // Закрытые позиции — чистим стейт, чтобы новая поза алертила заново.
+  let cleaned = false;
   for (const k of [...prevExitLevel.keys()]) {
     if (!activeKeys.has(k)) {
       prevExitLevel.delete(k);
       exitAlertAt.delete(k);
+      cleaned = true;
     }
   }
-
-  firstRunDone = true;
+  if (cleaned) saveAlertState();
 }
 
 /** Запуск воркера. Независим от открытого дашборда. */
@@ -232,11 +264,13 @@ export function startSetupSwingAlerts() {
     logger.info('[SwingAlerts] disabled (SETUP_SWING_ALERT_ENABLED=false)');
     return;
   }
+  loadAlertState();
   const timer = setInterval(() => {
     runOnce().catch((err) => logger.warn(`[SwingAlerts] tick failed: ${err.message}`));
   }, INTERVAL_MS);
   timer.unref?.();
-  // Первый прогон сразу: прогревает trend-кэш и записывает baseline-состояния.
+  // Первый прогон сразу: прогревает trend-кэш; монеты уже в зоне алертят,
+  // если по ним не было пуша в пределах кулдауна (персист на диске).
   runOnce().catch((err) => logger.warn(`[SwingAlerts] warmup failed: ${err.message}`));
   logger.info(`[SwingAlerts] started — every ${INTERVAL_MS / 60_000}min, topic=${process.env.NTFY_TOPIC_SWING || config.ntfy.topic || '—'}`);
 }
@@ -247,5 +281,4 @@ export function clearSwingAlertState() {
   entryAlertAt.clear();
   prevExitLevel.clear();
   exitAlertAt.clear();
-  firstRunDone = false;
 }
