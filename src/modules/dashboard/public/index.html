@@ -108,7 +108,7 @@
       <!-- 01.5 / Hot Movers — live price spikes + OI delta -->
       <section class="card" id="sec-movers">
         <div class="card-header">
-          <div class="card-title" data-num="01.5" title="Монеты с наибольшими ценовыми движениями. Setup: SHORT/LONG = сигнал для входа против движения (fade); WAIT = ждём выдоха импульса. OI 5m = изменение открытого интереса за 5 минут.">Hot Movers</div>
+          <div class="card-title" data-num="01.5" title="Монеты с наибольшими ценовыми движениями. Setup: режим выбирает OI — цена↑+OI↑ = TREND LONG (по движению), цена↑+OI↓ = FADE SHORT (выдох/short-covering), зеркально вниз. Без OI-подтверждения — приглушённый вердикт. Причина — в tooltip ячейки Setup.">Hot Movers</div>
           <span id="hot-movers-meta" style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted)"></span>
         </div>
         <div style="overflow-x:auto">
@@ -163,6 +163,40 @@
               <tr><td colspan="6" class="empty-state">накапливаем историю…</td></tr>
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <!-- 02.2 / Setup Scanner — Swing -->
+      <section class="card" id="sec-setup-scanner">
+        <div class="card-header">
+          <div class="card-title" data-num="02.2" title="Свинг-биас (1+ день): направление по тренду 4h+1h, OI подтверждает, funding — флаг осторожности. Контекст для ручного входа, не команда.">
+            Setup Scanner · Swing
+            <button class="help-btn" data-help="setupScanner" title="Как это читать">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </button>
+          </div>
+          <span id="setup-scanner-meta" style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted)"></span>
+        </div>
+        <div style="position:relative;min-height:180px">
+          <div class="card-skeleton" id="setup-scanner-skeleton">
+            <div class="skeleton-row" style="width: 60%"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row" style="width: 80%"></div>
+          </div>
+          <div style="overflow-x:auto">
+            <table class="data-table" id="setup-scanner-table">
+              <thead>
+                <tr>
+                  <th>Coin</th>
+                  <th class="c">Signal</th>
+                  <th class="c" title="Тренд по EMA: 4h (главный) и 1h (подтверждение)">4h / 1h</th>
+                </tr>
+              </thead>
+              <tbody id="setup-scanner-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </section>
 

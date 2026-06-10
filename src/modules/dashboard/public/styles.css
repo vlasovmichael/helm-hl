@@ -2989,3 +2989,29 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
 .market-context.unknown .mc-verdict {
   color: var(--text-muted);
 }
+
+/* ── Setup Scanner (Swing) — signal badges ───────────────── */
+.swing-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.swing-badge.long {
+  color: var(--green);
+  background: rgba(14, 203, 129, 0.12);
+  border: 1px solid rgba(14, 203, 129, 0.3);
+}
+.swing-badge.short {
+  color: var(--red);
+  background: rgba(246, 70, 92, 0.12);
+  border: 1px solid rgba(246, 70, 92, 0.3);
+}
+.swing-badge.wait {
+  color: var(--text-muted);
+  background: rgba(128, 128, 128, 0.08);
+  border: 1px solid var(--hairline);
+}

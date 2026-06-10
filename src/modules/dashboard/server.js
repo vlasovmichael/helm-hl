@@ -49,6 +49,7 @@ import { getFaderHeartbeat, getFaderMfeMae } from "../strategistFader.js";
 import { getFaderVirtualSnapshot } from "../faderVirtualEquity.js";
 import { getVirtualEquitySnapshot } from "../chillBoyVirtualEquity.js";
 import { getNearMisses } from "../nearMisses.js";
+import { enrichSwingSignals } from "../setupScannerSwing.js";
 
 const HOST = "0.0.0.0";
 const PORT = 3010;
@@ -1772,7 +1773,7 @@ async function handleTradeMarkers(req, res) {
 
 async function handleSetupScanner(_req, res) {
   try {
-    const rows = getSetupScannerRows();
+    const rows = enrichSwingSignals(getSetupScannerRows());
     res.json({ ts: Date.now(), count: rows.length, rows });
   } catch (err) {
     logger.warn(`[Dashboard] /api/setup-scanner error: ${err.message}`);

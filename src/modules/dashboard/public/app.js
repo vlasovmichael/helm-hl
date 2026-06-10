@@ -1196,10 +1196,40 @@ const _SVG_ARROW_DOWN = `<svg viewBox="0 0 12 12" width="11" height="11" aria-hi
 const _SVG_ARROW_UP = `<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px"><path d="M6 11V3M3 5l3-3 3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
 const _SVG_WAIT = `<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px;opacity:0.7"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M6 4v2.5l1.5 1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/></svg>`;
 
-// ── Momentum-режим ────────────────────────────────────────────────────────
-// В отличие от фейда, едем ПО движению. Направление = знак взвешенного хода
-// по окнам (2m/5m/15m/1h, длинные окна весомее). accel/vol — подтверждение.
+// ── OI-режим (шаг 2 плана setup-scanner-signals) ─────────────────────────
+// Фейд и тренд НЕ объединяем как два сигнала — режим выбирает OI:
+//   цена↑ + OI↑ = новые лонги заходят → TREND LONG (едем по движению)
+//   цена↑ + OI↓ = short-covering / выдох → FADE SHORT (против движения)
+//   цена↓ + OI↑ = новые шорты давят    → TREND SHORT
+//   цена↓ + OI↓ = лонгов вынесло, выдох → FADE LONG
+// OI флэт/нет данных → как раньше momentum по движению, но «не подтверждён».
+// Направление цены = знак взвешенного хода по окнам (длинные весомее).
 const _MOM_WEIGHTS = { 2: 0.2, 5: 0.4, 15: 0.8, 60: 1.2 };
+
+// OI-направление: 15m дельта надёжнее (5m шумная), берём её если есть.
+function deriveOiKind(s) {
+  const d15 = s?.oiDelta15m, d5 = s?.oiDelta5m;
+  if (typeof d15 === "number" && isFinite(d15)) {
+    if (d15 >= 1) return "up";
+    if (d15 <= -1) return "down";
+    return "flat";
+  }
+  if (typeof d5 === "number" && isFinite(d5)) {
+    if (d5 >= 0.5) return "up";
+    if (d5 <= -0.5) return "down";
+    return "flat";
+  }
+  return null;
+}
+
+function oiDeltaStr(s) {
+  const d15 = s?.oiDelta15m, d5 = s?.oiDelta5m;
+  if (typeof d15 === "number" && isFinite(d15))
+    return `${d15 >= 0 ? "+" : ""}${d15.toFixed(1)}%/15m`;
+  if (typeof d5 === "number" && isFinite(d5))
+    return `${d5 >= 0 ? "+" : ""}${d5.toFixed(1)}%/5m`;
+  return "—";
+}
 
 function deriveAccelKind(w2, w5) {
   if (!w2 || !w5 || w2.spikePct == null || w5.spikePct == null) return null;
@@ -1219,8 +1249,9 @@ function deriveVolKind(volMult) {
   return "normal";
 }
 
-// Возвращает {label, cls, title, score, side}. score — для сортировки.
-function computeMomentum(windows, accelKind, volKind) {
+// Возвращает {label, cls, title, score, side, mode}. score — для сортировки.
+// mode: 'trend' | 'fade' | null (OI флэт/нет данных → режим не подтверждён).
+function computeMomentum(windows, accelKind, volKind, signal) {
   let weighted = 0;
   let haveData = false;
   for (const w of windows) {
@@ -1237,10 +1268,10 @@ function computeMomentum(windows, accelKind, volKind) {
       title: "Нет данных",
       score: 0,
       side: null,
+      mode: null,
     };
   }
-  const up = weighted > 0;
-  const side = up ? "LONG" : "SHORT";
+  const priceUp = weighted > 0;
   let score = Math.abs(weighted);
   // Ускорение относительно тренда: ↑ подтверждает, выдох/разворот — штрафуют.
   if (accelKind === "up") score *= 1.15;
@@ -1250,37 +1281,70 @@ function computeMomentum(windows, accelKind, volKind) {
   if (volKind === "high") score *= 1.15;
   else if (volKind === "thin") score *= 0.85;
 
-  const arrow = up ? _SVG_ARROW_UP : _SVG_ARROW_DOWN;
-  if (score >= 3) {
+  // OI решает режим: trend = по движению, fade = против.
+  const oiKind = deriveOiKind(signal);
+  const oiStr = oiDeltaStr(signal);
+  let side, mode, why;
+  if (oiKind === "up") {
+    mode = "trend";
+    side = priceUp ? "LONG" : "SHORT";
+    why = priceUp
+      ? `цена↑ + OI↑ (${oiStr}) = новые лонги, реальный спрос`
+      : `цена↓ + OI↑ (${oiStr}) = новые шорты давят`;
+  } else if (oiKind === "down") {
+    mode = "fade";
+    side = priceUp ? "SHORT" : "LONG";
+    why = priceUp
+      ? `цена↑ + OI↓ (${oiStr}) = short-covering / выдох`
+      : `цена↓ + OI↓ (${oiStr}) = лонгов вынесло, выдох`;
+  } else {
+    // OI флэт или нет данных — направление по движению, режим не подтверждён.
+    mode = null;
+    side = priceUp ? "LONG" : "SHORT";
+    why = oiKind === "flat" ? `OI флэт (${oiStr}) — режим не подтверждён` : "OI: нет данных";
+  }
+
+  const sideUp = side === "LONG";
+  const arrow = sideUp ? _SVG_ARROW_UP : _SVG_ARROW_DOWN;
+  const modeTag = mode
+    ? `<span style="opacity:.65;font-size:9px;font-weight:600"> ${mode.toUpperCase()}</span>`
+    : "";
+
+  if (score >= 3 && mode) {
     // STRONG ≥6 помечаем точкой; NORMAL — обычный пилл.
     const dot = score >= 6 ? " ●" : "";
     const confirm =
       (accelKind === "up" ? "accel↑ " : "") + (volKind === "high" ? "vol↑" : "");
     return {
-      label: `<span class="setup-pill">${arrow}${side}${dot}</span>`,
-      cls: up ? "setup-long" : "setup-short",
+      label: `<span class="setup-pill">${arrow}${side}${dot}${modeTag}</span>`,
+      cls: sideUp ? "setup-long" : "setup-short",
       title:
-        `Momentum ${side} (score ${score.toFixed(1)})` +
+        `${mode.toUpperCase()} ${side} (score ${score.toFixed(1)}) · ${why}` +
         (confirm ? " · " + confirm.trim() : ""),
       score,
       side,
+      mode,
     };
   }
   if (score >= 1.5) {
     return {
-      label: `<span class="setup-pill">${arrow}${side}</span>`,
-      cls: up ? "setup-wait-long" : "setup-wait-short",
-      title: `Слабый momentum ${side} (score ${score.toFixed(1)}) — наблюдаем`,
-      score,
+      label: `<span class="setup-pill">${arrow}${side}${modeTag}</span>`,
+      cls: sideUp ? "setup-wait-long" : "setup-wait-short",
+      title: mode
+        ? `Слабый ${mode.toUpperCase()} ${side} (score ${score.toFixed(1)}) · ${why} — наблюдаем`
+        : `Momentum ${side} (score ${score.toFixed(1)}) · ${why} — наблюдаем`,
+      score: mode ? score : score * 0.7, // без OI-подтверждения ниже в сортировке
       side,
+      mode,
     };
   }
   return {
     label: `<span class="setup-pill">${_SVG_WAIT} WAIT</span>`,
-    cls: up ? "setup-wait-long" : "setup-wait-short",
-    title: "Хода мало — ждём явный тренд",
+    cls: sideUp ? "setup-wait-long" : "setup-wait-short",
+    title: `Хода мало — ждём явный сетап · ${why}`,
     score,
     side,
+    mode,
   };
 }
 
@@ -1311,6 +1375,7 @@ function renderHotMovers(payload) {
         windows,
         deriveAccelKind(w2, w5),
         deriveVolKind(s.volMult),
+        s,
       );
       return { s, windows, maxAbs, momScore: mom.score };
     })
@@ -1488,19 +1553,19 @@ function renderHotMovers(payload) {
         volInner = '<span class="num-inline-muted">—</span>';
       }
 
-      // Setup: momentum-вердикт — направление ПО движению (вверх LONG, вниз
-      // SHORT), сила по взвешенному ходу окон с подтверждением accel/vol.
-      const setup = computeMomentum(x.windows, accelKind, volKind);
+      // Setup: ОДИН сетап + причина. Режим выбирает OI (trend/fade), сила по
+      // взвешенному ходу окон с подтверждением accel/vol.
+      const setup = computeMomentum(x.windows, accelKind, volKind, x.s);
 
-      // OI delta 5m
+      // OI delta 5m — нейтральная раскраска: OI сам по себе не хорош/плох,
+      // его смысл зависит от направления цены (режим выбирает Setup-вердикт).
       let oiInner = '<span class="num-inline-muted">—</span>';
-      let oiCellCls = "";
+      const oiCellCls = "";
       if (typeof s.oiDelta5m === "number" && isFinite(s.oiDelta5m)) {
         const v = s.oiDelta5m;
         const arrow = v > 0 ? "▲" : "▼";
         if (Math.abs(v) >= 3) {
-          oiCellCls = v > 0 ? "num-neg-weak" : "num-pos-weak"; // OI растёт при памп = плохо; падает = ликвидации
-          oiInner = `<span style="color:${v > 0 ? "var(--red)" : "var(--green)"};font-weight:600">${arrow} ${fmtPct(v)}</span>`;
+          oiInner = `<span style="color:var(--accent);font-weight:600">${arrow} ${fmtPct(v)}</span>`;
         } else if (Math.abs(v) >= 1) {
           oiInner = `<span style="color:var(--text-muted)">${arrow} ${fmtPct(v)}</span>`;
         } else {
@@ -1530,157 +1595,60 @@ function renderSetupScanner(payload) {
 
   if (!rows.length) {
     meta.textContent = "collecting first snapshots…";
-    tbody.innerHTML =
-      '<tr><td colspan="9" class="empty-state">Waiting for first snapshot…</td></tr>';
-    return;
+    return; // skeleton остаётся до первых данных
   }
+  document.getElementById("setup-scanner-skeleton")?.classList.add("hidden");
 
-  // Сортировка: по «насыщенности» сигналов. Прокси-скор:
-  //   |fundingApy| + |premium%|*5 + (fundingPersist.fractionExtreme ?? 0)*20
-  //   + |oi7d.deltaOi|*30 при |deltaPx|<5% (OI ramp без цены)
-  const sigScore = (r) => {
-    let s = Math.abs(r.fundingApy || 0);
-    if (r.premium != null) s += Math.abs(r.premium) * 500; // premium — доля
-    const fp = r.fundingPersist;
-    if (fp && fp.fractionExtreme != null) s += fp.fractionExtreme * 20;
-    const oi = r.oi7d;
-    if (
-      oi &&
-      oi.deltaOi != null &&
-      oi.deltaPx != null &&
-      Math.abs(oi.deltaPx) < 0.05
-    ) {
-      s += Math.abs(oi.deltaOi) * 30;
-    }
-    return s;
+  // Сортировка: LONG/SHORT первыми (по силе), затем WAIT с посчитанным
+  // трендом, pending в самом низу. Внутри ранга — по силе, потом по объёму.
+  const rank = (r) => {
+    const s = r.swing || {};
+    if (s.signal === "LONG" || s.signal === "SHORT") return 2;
+    if (!s.pending) return 1;
+    return 0;
   };
-  const enriched = [...rows]
-    .sort((a, b) => sigScore(b) - sigScore(a))
-    .slice(0, 25);
+  const sorted = [...rows]
+    .sort((a, b) => {
+      const d = rank(b) - rank(a);
+      if (d) return d;
+      const ds = (b.swing?.strength || 0) - (a.swing?.strength || 0);
+      if (ds) return ds;
+      return (b.vol24hUsd || 0) - (a.vol24hUsd || 0);
+    })
+    .slice(0, 30);
 
-  // Honest meta: возраст самого старого ряда (≈ возраст collector'а)
-  const collectorAgeH = rows.reduce((min, r) => {
-    const fpAge = r.fundingPersist?.ageHours ?? 0;
-    return fpAge > min ? fpAge : min;
-  }, 0);
-  const ageLabel =
-    collectorAgeH < 48
-      ? `early data · ${collectorAgeH.toFixed(0)}h collected`
-      : collectorAgeH < 7 * 24
-        ? `${collectorAgeH.toFixed(0)}h collected · persist ready`
-        : collectorAgeH < 30 * 24
-          ? `${(collectorAgeH / 24).toFixed(1)}d collected · 7d ready`
-          : `${(collectorAgeH / 24).toFixed(0)}d collected · full`;
-  meta.textContent = payload?.ts
-    ? `${rows.length} coins · ${ageLabel} · updated ${fmtTime(payload.ts)}`
-    : "—";
+  const pending = rows.filter((r) => r.swing?.pending).length;
+  meta.textContent =
+    `${rows.length} coins` +
+    (pending ? ` · trends ${rows.length - pending}/${rows.length}` : "") +
+    (payload?.ts ? ` · updated ${fmtTime(payload.ts)}` : "");
 
-  const fmtUsd = (v) => {
-    if (v == null || !isFinite(v))
-      return '<span class="num-inline-muted">—</span>';
-    if (v >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
-    if (v >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
-    if (v >= 1e3) return `$${(v / 1e3).toFixed(0)}K`;
-    return `$${v.toFixed(0)}`;
+  const arrowCell = (t) => {
+    if (t === "up") return '<span style="color:var(--green)">↑</span>';
+    if (t === "down") return '<span style="color:var(--red)">↓</span>';
+    if (t === "none") return '<span class="num-inline-muted">−</span>';
+    return '<span class="num-inline-muted">·</span>'; // тренд ещё считается
   };
-  const fmtPct = (v, digits = 2) => {
-    if (v == null || !isFinite(v)) return "—";
-    const sign = v >= 0 ? "+" : "";
-    return `${sign}${v.toFixed(digits)}%`;
-  };
-  const fundingCell = (apy) => {
-    if (apy == null) return '<span class="num-inline-muted">—</span>';
-    // HL funding baseline ≈ 0.00125%/h when premium≈0 → ~10.95% APY.
-    // Values within ±2% of baseline mean "no premium signal", render as neutral.
-    const HL_BASELINE_APY = 10.95;
-    const isNeutral = Math.abs(apy - HL_BASELINE_APY) < 2;
-    if (isNeutral) {
-      return `<span class="num-inline-muted" title="≈ HL baseline (premium ≈ 0)">≈base</span>`;
-    }
-    const cls =
-      apy > 0
-        ? "num-inline-pos"
-        : apy < 0
-          ? "num-inline-neg"
-          : "num-inline-muted";
-    const tag =
-      Math.abs(apy) > 50
-        ? '<span style="font-weight:700">'
-        : Math.abs(apy) > 20
-          ? "<span>"
-          : '<span style="opacity:0.7">';
-    return `<span class="${cls}">${tag}${fmtPct(apy, 1)}</span></span>`;
-  };
-  const premiumCell = (p) => {
-    if (p == null) return '<span class="num-inline-muted">—</span>';
-    const pct = p * 100;
-    const cls =
-      pct > 0
-        ? "num-inline-pos"
-        : pct < 0
-          ? "num-inline-neg"
-          : "num-inline-muted";
-    return `<span class="${cls}">${fmtPct(pct, 3)}</span>`;
-  };
-  const persistCell = (fp) => {
-    if (!fp) return '<span class="num-inline-muted">—</span>';
-    if (fp.etaHours != null) {
-      const eta = fp.etaHours.toFixed(0);
-      return `<span class="num-inline-muted">collecting · ${eta}h</span>`;
-    }
-    const frac = (fp.fractionExtreme * 100).toFixed(0);
-    const color =
-      fp.fractionExtreme >= 0.8
-        ? "var(--red)"
-        : fp.fractionExtreme >= 0.4
-          ? "var(--orange, #f59e0b)"
-          : "var(--text-muted)";
-    return `<span style="color:${color}">${frac}% extreme</span>`;
-  };
-  const oiCell = (oi) => {
-    if (!oi) return '<span class="num-inline-muted">—</span>';
-    if (oi.etaHours != null) {
-      const days = (oi.etaHours / 24).toFixed(1);
-      return `<span class="num-inline-muted">collecting · ${days}d</span>`;
-    }
-    const oiPct = oi.deltaOi * 100;
-    const pxPct = oi.deltaPx != null ? oi.deltaPx * 100 : null;
-    const oiSign = oiPct > 0 ? "+" : "";
-    const pxStr =
-      pxPct != null ? `${pxPct > 0 ? "+" : ""}${pxPct.toFixed(1)}%` : "—";
-    // Highlight: большой OI ramp без движения цены
-    const ramp = Math.abs(oiPct) > 40 && pxPct != null && Math.abs(pxPct) < 5;
-    const cls = ramp ? 'style="color:var(--accent);font-weight:600"' : "";
-    return `<span ${cls}>${oiSign}${oiPct.toFixed(0)}% / ${pxStr}</span>`;
-  };
-  const volRegimeCell = (vr) => {
-    if (!vr) return '<span class="num-inline-muted">—</span>';
-    if (vr.etaHours != null) {
-      const days = (vr.etaHours / 24).toFixed(0);
-      return `<span class="num-inline-muted">collecting · ${days}d</span>`;
-    }
-    const r = vr.ratio;
-    let color = "var(--text-muted)";
-    if (r >= 2) color = "var(--red)";
-    else if (r >= 1.5) color = "var(--orange, #f59e0b)";
-    else if (r <= 0.5) color = "var(--green)";
-    return `<span style="color:${color}">${r.toFixed(2)}×</span>`;
+  const badge = (sig) => {
+    if (sig === "LONG") return '<span class="swing-badge long">LONG</span>';
+    if (sig === "SHORT") return '<span class="swing-badge short">SHORT</span>';
+    return '<span class="swing-badge wait">WAIT</span>';
   };
 
-  tbody.innerHTML = enriched
-    .map(
-      (r, idx) => `<tr>
-      <td>${idx + 1}</td>
+  tbody.innerHTML = sorted
+    .map((r) => {
+      const s = r.swing || {};
+      // Детали — только в tooltip (минимализм по требованию)
+      const det = [...(s.reasons || [])];
+      if (r.volRegime?.ratio != null) det.push(`vol ${r.volRegime.ratio.toFixed(1)}× vs 30d`);
+      if (r.fundingPersist?.fractionExtreme != null)
+        det.push(`funding extreme ${(r.fundingPersist.fractionExtreme * 100).toFixed(0)}% of 48h`);
+      return `<tr title="${escapeHtml(det.join(" · "))}">
       <td><span class="signals-price">#${escapeHtml(r.coin)}</span></td>
-      <td>${fundingCell(r.fundingApy)}</td>
-      <td>${premiumCell(r.premium)}</td>
-      <td>${fmtUsd(r.oiUsd)}</td>
-      <td>${fmtUsd(r.vol24hUsd)}</td>
-      <td>${persistCell(r.fundingPersist)}</td>
-      <td>${oiCell(r.oi7d)}</td>
-      <td>${volRegimeCell(r.volRegime)}</td>
-    </tr>`,
-    )
+      <td class="c">${badge(s.signal)}</td>
+      <td class="c">${arrowCell(s.trend4h)}&nbsp;${arrowCell(s.trend1h)}</td>
+    </tr>`;
+    })
     .join("");
 }
 
@@ -1888,9 +1856,30 @@ function renderActivity(activity) {
 // ── Help modal (mini FAQ per card) ─────────────────────────────────────
 const HELP_CONTENT = {
   setupScanner: {
-    title: "Setup Scanner — конвергенция HL-сигналов",
-    lead: "Manual-helper: ищет монеты, где совпали 2-3 ортогональных сигнала (funding extreme + premium, OI ramp без движения цены, vol regime shift). Не торгует, бот не трогает.",
+    title: "Setup Scanner · Swing — направление на 1+ день",
+    lead: "Биас/контекст для ручного свинга, НЕ команда на вход. Направление задаёт тренд (4h главный + 1h подтверждение), OI подтверждает реальность движения, funding — флаг осторожности. Вход и инвалидацию ставишь сам.",
     sections: [
+      {
+        title: "Сигнал v1",
+        rows: [
+          [
+            '<span class="swing-badge long">LONG</span>',
+            "4h↑ + 1h↑, OI растёт вместе с ценой за 7д (реальный спрос), funding не в эйфории",
+          ],
+          [
+            '<span class="swing-badge short">SHORT</span>',
+            "4h↓ + 1h↓, OI растёт на падении (давят шорты), funding не в панике",
+          ],
+          [
+            '<span class="swing-badge wait">WAIT</span>',
+            "Тренды разошлись, OI не подтверждает или funding в экстриме. Подробности — в tooltip строки",
+          ],
+        ],
+      },
+      {
+        title: "Тренд 4h / 1h",
+        sub: "Позиция цены и EMA20 относительно медленной EMA (200 на 1h, 50 на 4h — те же ~200 часов). ↑ = цена и EMA20 выше; ↓ = ниже; − = смешанно. Связь с фейдом: 4h range (−) → фейд ок; чёткий 4h тренд → фейд против него = самоубийство.",
+      },
       {
         title: "Источник данных",
         sub: "Scout раз в 60min (SETUP_SNAPSHOT_INTERVAL_MIN) пишет snapshot по всем монетам из liquidSet (top-50 по 24h vol) в setup_snapshots. Retention 90 дней. HL не отдаёт историю — копим сами с нуля.",
@@ -4209,6 +4198,20 @@ tick();
 divRefresh(); // первичная загрузка дивергенции (до первого WS-пуша)
 setInterval(tick, REFRESH_MS);
 setInterval(renderFooter, 1000);
+
+// ── Setup Scanner (Swing) ────────────────────────
+// Свинг-данные меняются медленно (тренды 4h/1h, OI 7d) — поллим раз в 60с.
+// Каждый запрос дотягивает stale-тренды на бэке, поэтому первые минуты после
+// рестарта часть строк «computing trend…» — это норма.
+async function fetchSetupScanner() {
+  try {
+    renderSetupScanner(await fetchJson("/api/setup-scanner"));
+  } catch (_) {
+    /* best-effort: skeleton/прошлые данные остаются */
+  }
+}
+fetchSetupScanner();
+setInterval(fetchSetupScanner, 60_000);
 
 // ── Whale Watch ──────────────────────────────────
 
