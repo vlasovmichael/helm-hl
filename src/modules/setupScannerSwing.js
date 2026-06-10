@@ -121,6 +121,33 @@ export function scoreSwingSignal({ trend4h, trend1h, oi7d, fundingApy }) {
   return { signal: dir === 'up' ? 'LONG' : 'SHORT', strength, reasons };
 }
 
+// Entry-зона: где цена относительно 1h EMA20 (зоны отката). Отвечает на
+// «можно прямо сейчас?»: zone = цена откатила к EMA20, ищи вход по тренду;
+// extended = растянута от EMA — гнаться поздно, жди отката; mid = между.
+// Таймингом входа (5m reclaim) НЕ занимается — это работа оператора/Candy Girl.
+const ENTRY_ZONE_PCT     = 0.5; // |ext| ≤ 0.5% от EMA20 (или откат за неё) = зона
+const ENTRY_EXTENDED_PCT = 2.5; // растяжка ≥ 2.5% по тренду = chase
+
+/**
+ * @param {'LONG'|'SHORT'|'WAIT'} signal
+ * @param {number|null} extPct — (price − ema20_1h) / ema20_1h × 100
+ * @returns {'zone'|'mid'|'extended'|null} null для WAIT/нет данных
+ */
+export function classifyEntryZone(signal, extPct) {
+  if (extPct == null || !Number.isFinite(extPct)) return null;
+  if (signal === 'LONG') {
+    if (extPct <= ENTRY_ZONE_PCT) return 'zone';        // у/ниже EMA20 — откат
+    if (extPct >= ENTRY_EXTENDED_PCT) return 'extended'; // улетела вверх — chase
+    return 'mid';
+  }
+  if (signal === 'SHORT') {
+    if (extPct >= -ENTRY_ZONE_PCT) return 'zone';
+    if (extPct <= -ENTRY_EXTENDED_PCT) return 'extended';
+    return 'mid';
+  }
+  return null;
+}
+
 // ── Trend-кэш + фоновое обновление ───────────────────────────────────────────
 // Дашборд поллит /api/setup-scanner раз в 60с. Ответ всегда мгновенный: отдаём
 // кэш, stale-монеты обновляем в фоне (concurrency 3, поверх TTL-кэша свечей).
@@ -139,6 +166,8 @@ async function refreshCoin(coin, now) {
       ts: Date.now(),
       t1h: classifySwingTrend(c1h ?? [], TF_1H),
       t4h: classifySwingTrend(c4h ?? [], TF_4H),
+      // close текущей 1h-свечи = почти live-цена (TTL кэша 5 мин) — для Entry-зоны
+      px: c1h?.at(-1)?.close ?? null,
     });
   } catch (err) {
     logger.warn(`[SetupSwing] #${coin} trend refresh failed: ${err.message}`);
@@ -179,7 +208,10 @@ export function enrichSwingSignals(rows, now = Date.now()) {
     const trend4h = t?.t4h?.trend ?? null;
     const trend1h = t?.t1h?.trend ?? null;
     const scored = scoreSwingSignal({ trend4h, trend1h, oi7d: r.oi7d, fundingApy: r.fundingApy });
-    return { ...r, swing: { ...scored, trend4h, trend1h, pending: !t } };
+    const ema20 = t?.t1h?.emaFast;
+    const ext1h = t?.px != null && ema20 ? ((t.px - ema20) / ema20) * 100 : null;
+    const entryZone = classifyEntryZone(scored.signal, ext1h);
+    return { ...r, swing: { ...scored, trend4h, trend1h, ext1h, entryZone, pending: !t } };
   });
 }
 

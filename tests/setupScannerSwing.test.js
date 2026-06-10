@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const {
-  classifySwingTrend, scoreSwingSignal,
+  classifySwingTrend, scoreSwingSignal, classifyEntryZone,
 } = await import('../src/modules/setupScannerSwing.js');
 
 // ── Helpers ────────────────────────────────────
@@ -115,4 +115,28 @@ test('WAIT (pending): тренд ещё не посчитан', () => {
   const r = scoreSwingSignal({ trend4h: null, trend1h: null, oi7d: OI_UP, fundingApy: 5 });
   assert.equal(r.signal, 'WAIT');
   assert.ok(r.reasons.some((s) => s.includes('computing')));
+});
+
+// ── classifyEntryZone ──────────────────────────
+
+test('entryZone LONG: откат к/ниже EMA20 = zone', () => {
+  assert.equal(classifyEntryZone('LONG', -1.2), 'zone');
+  assert.equal(classifyEntryZone('LONG', 0.3), 'zone');
+});
+
+test('entryZone LONG: растянута вверх = extended, между = mid', () => {
+  assert.equal(classifyEntryZone('LONG', 3.1), 'extended');
+  assert.equal(classifyEntryZone('LONG', 1.5), 'mid');
+});
+
+test('entryZone SHORT: зеркало (откат вверх = zone, растянута вниз = extended)', () => {
+  assert.equal(classifyEntryZone('SHORT', 0.8), 'zone');
+  assert.equal(classifyEntryZone('SHORT', -0.2), 'zone');
+  assert.equal(classifyEntryZone('SHORT', -3.0), 'extended');
+  assert.equal(classifyEntryZone('SHORT', -1.5), 'mid');
+});
+
+test('entryZone: WAIT или нет данных → null', () => {
+  assert.equal(classifyEntryZone('WAIT', 1.0), null);
+  assert.equal(classifyEntryZone('LONG', null), null);
 });

@@ -1607,10 +1607,17 @@ function renderSetupScanner(payload) {
     if (!s.pending) return 1;
     return 0;
   };
+  const zoneRank = (r) => {
+    const z = r.swing?.entryZone;
+    return z === "zone" ? 2 : z === "mid" ? 1 : 0;
+  };
   const sorted = [...rows]
     .sort((a, b) => {
       const d = rank(b) - rank(a);
       if (d) return d;
+      // Среди сигналов: сначала те, где цена в зоне входа (actionable now)
+      const dz = zoneRank(b) - zoneRank(a);
+      if (dz) return dz;
       const ds = (b.swing?.strength || 0) - (a.swing?.strength || 0);
       if (ds) return ds;
       return (b.vol24hUsd || 0) - (a.vol24hUsd || 0);
@@ -1634,6 +1641,20 @@ function renderSetupScanner(payload) {
     if (sig === "SHORT") return '<span class="swing-badge short">SHORT</span>';
     return '<span class="swing-badge wait">WAIT</span>';
   };
+  // Entry-зона: где цена относительно 1h EMA20. zone = откат к EMA, ищи вход;
+  // extended = растянута по тренду, не гнаться; mid = между. Тайминг (5m) — сам.
+  const entryCell = (s) => {
+    const ext = s.ext1h;
+    const extStr =
+      ext != null ? `${ext >= 0 ? "+" : ""}${ext.toFixed(1)}%` : "";
+    if (s.entryZone === "zone")
+      return `<span style="color:var(--green);font-weight:600" title="Цена у 1h EMA20 (${extStr}) — зона отката, ищи вход по тренду">✓ zone</span>`;
+    if (s.entryZone === "extended")
+      return `<span style="color:var(--orange, #f59e0b)" title="Цена растянута от 1h EMA20 (${extStr}) — гнаться поздно, жди отката">wait ${extStr}</span>`;
+    if (s.entryZone === "mid")
+      return `<span class="num-inline-muted" title="Цена между EMA20 и растяжкой (${extStr})">mid</span>`;
+    return '<span class="num-inline-muted">—</span>';
+  };
 
   tbody.innerHTML = sorted
     .map((r) => {
@@ -1647,6 +1668,7 @@ function renderSetupScanner(payload) {
       <td><span class="signals-price">#${escapeHtml(r.coin)}</span></td>
       <td class="c">${badge(s.signal)}</td>
       <td class="c">${arrowCell(s.trend4h)}&nbsp;${arrowCell(s.trend1h)}</td>
+      <td class="c">${entryCell(s)}</td>
     </tr>`;
     })
     .join("");
@@ -1879,6 +1901,24 @@ const HELP_CONTENT = {
       {
         title: "Тренд 4h / 1h",
         sub: "Позиция цены и EMA20 относительно медленной EMA (200 на 1h, 50 на 4h — те же ~200 часов). ↑ = цена и EMA20 выше; ↓ = ниже; − = смешанно. Связь с фейдом: 4h range (−) → фейд ок; чёткий 4h тренд → фейд против него = самоубийство.",
+      },
+      {
+        title: "Entry — можно ли прямо сейчас",
+        sub: "Сигнал = направление, Entry = тайминг. Где цена относительно 1h EMA20 (зоны отката):",
+        rows: [
+          [
+            '<span style="color:var(--green);font-weight:600">✓ zone</span>',
+            "Цена у/за EMA20 — откат случился, ищи вход по тренду (5m reclaim — глазами)",
+          ],
+          [
+            '<span class="num-inline-muted">mid</span>',
+            "Между зоной и растяжкой — можно ждать лучшую цену",
+          ],
+          [
+            '<span style="color:#f59e0b">wait −3.2%</span>',
+            "Цена растянута от EMA20 по тренду — гнаться поздно (chase), жди отката",
+          ],
+        ],
       },
       {
         title: "Источник данных",
