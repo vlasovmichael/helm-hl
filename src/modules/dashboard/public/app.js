@@ -1649,9 +1649,9 @@ function renderSetupScanner(payload) {
   // созрел); «…» = свинг даёт направление+зону, но 5m-вход ещё не напечатался.
   const candyChip = (s, showWait) => {
     if (s.candy?.confirmed)
-      return ` <span class="swing-badge" style="background:rgba(236,72,153,.22);color:#ec4899;font-size:10px;padding:1px 6px;font-weight:700" title="Candy Girl: 5m reclaim по тренду подтверждён ${s.candy.ageMin}m назад — тайминг входа созрел">🍬 вход${s.candy.ageMin != null ? ` ${s.candy.ageMin}m` : ""}</span>`;
+      return ` <span class="swing-badge" style="background:rgba(236,72,153,.22);color:#ec4899;font-size:10px;padding:1px 6px;font-weight:700" title="Candy Girl: 5m reclaim по тренду подтверждён ${s.candy.ageMin}m назад — тайминг входа созрел">🍬 GO${s.candy.ageMin != null ? ` ${s.candy.ageMin}m` : ""}</span>`;
     if (showWait)
-      return ` <span class="swing-badge" style="background:rgba(127,127,127,.12);color:var(--text-muted);font-size:10px;padding:1px 6px" title="Свинг даёт направление и зону, но Candy Girl ещё не подтвердил 5m-вход (reclaim не напечатался или радар выключен)">🍬 ждём</span>`;
+      return ` <span class="swing-badge" style="background:rgba(127,127,127,.12);color:var(--text-muted);font-size:10px;padding:1px 6px" title="Свинг даёт направление и зону, но Candy Girl ещё не подтвердил 5m-вход (reclaim не напечатался или радар выключен)">🍬 wait</span>`;
     return "";
   };
   const entryCell = (s) => {
@@ -2023,8 +2023,8 @@ const HELP_CONTENT = {
             "Цена растянута от EMA20 по тренду — гнаться поздно (chase), жди отката",
           ],
           [
-            '<span style="color:#ec4899;font-weight:700">🍬 вход 12m</span>',
-            "Candy Girl подтвердил 5m reclaim по тому же направлению (≤90m назад) — тайминг входа созрел. «🍬 ждём» = свинг даёт зону, но 5m-вход ещё не напечатался (или радар выключен)",
+            '<span style="color:#ec4899;font-weight:700">🍬 GO 12m</span>',
+            "Candy Girl подтвердил 5m reclaim по тому же направлению (≤90m назад) — тайминг входа созрел. «🍬 wait» = свинг даёт зону, но 5m-вход ещё не напечатался (или радар выключен)",
           ],
         ],
       },
