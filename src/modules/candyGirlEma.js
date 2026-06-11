@@ -89,13 +89,19 @@ export function classifyTrend(candles1h, currentPrice, params) {
 /**
  * Pullback + reclaim на 5m относительно 5m EMA20.
  *
+ * ⚠️ Reclaim — это СОБЫТИЕ ПЕРЕСЕЧЕНИЯ, а не состояние «close выше EMA». Иначе в
+ * ровном гринде вдоль EMA20 каждая свеча = «откат был + close выше» → сигнал на
+ * каждый чих (см. диалог 2026-06-11). Требуем свежий кросс: предыдущая close на
+ * стороне отката, текущая вернулась на трендовую сторону.
+ *
  * UP-тренд (ищем LONG):
  *   - в последних `lookback` ЗАКРЫТЫХ свечах (исключая последнюю-reclaim) цена
  *     откатывала к/ниже EMA20 (была свеча с low ≤ ema или close ≤ ema);
- *   - последняя 5m close снова ВЫШЕ EMA20 (reclaim).
+ *   - ПРЕДЫДУЩАЯ 5m close была ≤ EMA20 (ещё в откате), а ПОСЛЕДНЯЯ снова ВЫШЕ
+ *     EMA20 (свежий reclaim-кросс).
  *   → entry = последняя close, swingLow = минимальный low окна отката (для SL).
  *
- * DOWN-тренд (ищем SHORT) — зеркало (откат вверх к/над EMA, reclaim вниз).
+ * DOWN-тренд (ищем SHORT) — зеркало (откат вверх к/над EMA, reclaim-кросс вниз).
  *
  * @param {Array<{high:number,low:number,close:number}>} candles5m — oldest→newest
  * @param {'up'|'down'} trend
@@ -137,14 +143,20 @@ export function detectPullbackReclaim(candles5m, trend, params) {
   if (!pulled) {
     return { ok: false, entry: lastClose, swing: null, ema5m, reason: 'no_pullback' };
   }
+
+  // Свежий reclaim-кросс: предыдущая close должна быть на стороне отката.
+  const prevClose = closes[lastIdx - 1];
+  const prevEma   = emaArr[lastIdx - 1];
   if (trend === 'up') {
-    if (lastClose > ema5m) {
+    const freshCross = prevEma != null && prevClose <= prevEma && lastClose > ema5m;
+    if (freshCross) {
       return { ok: true, entry: lastClose, swing: swingLow, ema5m, reason: 'reclaim_long' };
     }
     return { ok: false, entry: lastClose, swing: swingLow, ema5m, reason: 'no_reclaim' };
   }
   // down
-  if (lastClose < ema5m) {
+  const freshCross = prevEma != null && prevClose >= prevEma && lastClose < ema5m;
+  if (freshCross) {
     return { ok: true, entry: lastClose, swing: swingHigh, ema5m, reason: 'reclaim_short' };
   }
   return { ok: false, entry: lastClose, swing: swingHigh, ema5m, reason: 'no_reclaim' };

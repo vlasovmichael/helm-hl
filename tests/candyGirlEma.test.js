@@ -94,8 +94,8 @@ const PB_PARAMS = { ema: 20, lookback: 6 };
 test('detectPullbackReclaim UP: откат ниже EMA + reclaim → ok long', () => {
   // 23 растущих + откат (4 ниже) + reclaim
   const base = rising(23, 100, 0.4);            // → ~108.8
-  const dip  = [106, 105.5, 105, 105.5];        // провал ниже ema
-  const reclaim = [110];                        // прыжок вверх
+  const dip  = [106, 104, 103, 102];            // провал ниже ema, посл. close < ema
+  const reclaim = [110];                        // прыжок вверх (свежий кросс)
   const candles = fromCloses([...base, ...dip, ...reclaim], 1.5);
   const r = detectPullbackReclaim(candles, 'up', PB_PARAMS);
   assert.equal(r.ok, true);
@@ -121,10 +121,24 @@ test('detectPullbackReclaim UP: откат есть, но последняя с�
   assert.equal(r.reason, 'no_reclaim');
 });
 
+// Регресс (2026-06-11): после reclaim'а следующая свеча НЕ должна перефаривать.
+// Старая state-based логика печатала сигнал на каждой свече выше EMA → спам в
+// гринде. Теперь reclaim — событие кросса: prev close уже выше EMA → нет сигнала.
+test('detectPullbackReclaim UP: свеча после reclaim не перефаривает → no_reclaim', () => {
+  const base = rising(23, 100, 0.4);
+  const dip     = [106, 104, 103, 102];  // настоящий откат под EMA
+  const reclaim = 110;                    // тут был бы сигнал
+  const after   = 111;                    // следующая свеча: prev close (110) уже > EMA
+  const candles = fromCloses([...base, ...dip, reclaim, after], 1.5);
+  const r = detectPullbackReclaim(candles, 'up', PB_PARAMS);
+  assert.equal(r.ok, false);
+  assert.equal(r.reason, 'no_reclaim');
+});
+
 test('detectPullbackReclaim DOWN: откат выше EMA + reclaim вниз → ok short', () => {
   const base = falling(23, 120, 0.4);
-  const bounce = [114, 114.5, 115, 114.5];   // отскок выше ema
-  const reclaim = [110];                     // возврат вниз
+  const bounce = [114, 116, 117, 118];       // отскок выше ema, посл. close > ema
+  const reclaim = [110];                     // возврат вниз (свежий кросс)
   const candles = fromCloses([...base, ...bounce, ...reclaim], 1.5);
   const r = detectPullbackReclaim(candles, 'down', PB_PARAMS);
   assert.equal(r.ok, true);
@@ -154,7 +168,7 @@ test('signal: 1h up + 5m pullback-reclaim → long с R:R 2:1', () => {
   const c1h = fromCloses(rising(230, 100, 0.5));
   const price = 215.5;  // > последней 1h close (~214.5), up-тренд
   const base = rising(23, 200, 0.4);
-  const dip  = [206, 205.5, 205, 205.5];
+  const dip  = [206, 204, 203, 202];
   const reclaim = [212];
   const c5m = fromCloses([...base, ...dip, ...reclaim], 1.5);
   const r = detectCandyGirlSignal(c1h, c5m, price, SIG_PARAMS);
@@ -170,7 +184,7 @@ test('signal: 1h down + 5m reclaim вниз → short', () => {
   const c1h = fromCloses(falling(230, 300, 0.5));
   const price = 184.5;  // < последней 1h close
   const base = falling(23, 200, 0.4);
-  const bounce = [194, 194.5, 195, 194.5];
+  const bounce = [194, 196, 197, 198];
   const reclaim = [188];
   const c5m = fromCloses([...base, ...bounce, ...reclaim], 1.5);
   const r = detectCandyGirlSignal(c1h, c5m, price, SIG_PARAMS);
@@ -190,7 +204,7 @@ const SIG_PARAMS_4H = {
 function longSetupParts() {
   const c1h = fromCloses(rising(230, 100, 0.5));
   const base = rising(23, 200, 0.4);
-  const c5m = fromCloses([...base, 206, 205.5, 205, 205.5, 212], 1.5);
+  const c5m = fromCloses([...base, 206, 204, 203, 202, 212], 1.5);
   return { c1h, c5m, price: 215.5 };
 }
 

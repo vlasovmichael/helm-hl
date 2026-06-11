@@ -34,7 +34,7 @@ function rising(n, start, step) { return Array.from({ length: n }, (_, i) => sta
 function longSetup1h() { return fromCloses(rising(230, 100, 0.5)); }
 function longSetup5m() {
   const base = rising(23, 200, 0.4);
-  return fromCloses([...base, 206, 205.5, 205, 205.5, 212]);
+  return fromCloses([...base, 206, 204, 203, 202, 212]);
 }
 // Нет сетапа: плоский 1h → trend none.
 function flat1h() { return fromCloses(Array(230).fill(100)); }
