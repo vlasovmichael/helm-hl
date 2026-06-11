@@ -1667,8 +1667,30 @@ function renderSetupScanner(payload) {
   };
   const posPill = (s) =>
     s.pos
-      ? ` <span class="swing-badge ${s.pos === "long" ? "long" : "short"}" style="font-size:9px;padding:0 5px" title="Открытая позиция на счёте">POS·${s.pos === "long" ? "L" : "S"}</span>`
+      ? ` <span class="swing-badge ${s.pos === "long" ? "long" : "short"}" style="font-size:9px;padding:0 5px" title="Открытая позиция на счёте${s.entryPx ? ` · entry $${s.entryPx}` : ""}">POS·${s.pos === "long" ? "L" : "S"}</span>`
       : "";
+  // SL/TP-строка под тикером позиции: дистанции от entry + R:R.
+  // Красным — нет стопа / стоп не с той стороны; оранжевым — R:R < 2 (правило 2:1).
+  const slTpLine = (s) => {
+    if (!s.pos || !s.slTp) return "";
+    const x = s.slTp;
+    if (x.noSl)
+      return '<div style="font-size:9px;color:var(--red);font-weight:700;margin-top:1px">⚠ NO SL</div>';
+    if (x.slWrongSide)
+      return `<div style="font-size:9px;color:var(--red);font-weight:700;margin-top:1px" title="SL $${x.sl} — не с той стороны от входа">⚠ SL?</div>`;
+    const risk = x.riskPct != null ? `SL −${x.riskPct.toFixed(1)}%` : `SL $${x.sl}`;
+    const tp =
+      x.tp == null
+        ? '<span style="color:var(--orange, #f59e0b)">TP —</span>'
+        : x.rewardPct != null
+          ? `TP +${x.rewardPct.toFixed(1)}%`
+          : `TP $${x.tp}`;
+    const rr =
+      x.rr != null
+        ? ` · <span style="color:${x.rr < 2 ? "var(--orange, #f59e0b)" : "var(--green)"}">R:R ${x.rr.toFixed(1)}</span>`
+        : "";
+    return `<div style="font-size:9px;color:var(--text-muted);font-family:var(--font-mono);margin-top:1px" title="SL $${x.sl ?? "—"} · TP $${x.tp ?? "—"} · entry $${s.entryPx ?? "—"}">${risk} · ${tp}${rr}</div>`;
+  };
 
   // Данные-колонки: OI/Px 7d (подсвечен, когда подтверждает сигнал), funding, vol.
   const fmtSignedPct = (v) =>
@@ -1715,7 +1737,7 @@ function renderSetupScanner(payload) {
       if (r.fundingPersist?.fractionExtreme != null)
         det.push(`funding extreme ${(r.fundingPersist.fractionExtreme * 100).toFixed(0)}% of 48h`);
       return `<tr class="${rowCls(s)}" title="${escapeHtml(det.join(" · "))}">
-      <td><span class="signals-price">#${escapeHtml(r.coin)}</span>${posPill(s)}</td>
+      <td><span class="signals-price">#${escapeHtml(r.coin)}</span>${posPill(s)}${slTpLine(s)}</td>
       <td class="c">${badge(s.signal)}</td>
       <td class="c">${arrowCell(s.trend4h)}&nbsp;${arrowCell(s.trend1h)}</td>
       <td class="c">${entryCell(s)}</td>
@@ -1957,7 +1979,7 @@ const HELP_CONTENT = {
       },
       {
         title: "Позиция открыта — exit-контекст",
-        sub: "Монеты с открытой позицией на счёте (ручной или ботовой) поднимаются в топ с бейджем POS, Entry-колонка показывает контекст удержания. Дублируется ntfy-пушем (тихий час 00–08: пуш беззвучный).",
+        sub: "Монеты с открытой позицией на счёте (ручной или ботовой) поднимаются в топ с бейджем POS, Entry-колонка показывает контекст удержания, под тикером — твои SL/TP с биржи: дистанции от входа + R:R (оранжевый если R:R < 2, красный ⚠ NO SL если стопа нет). Дублируется ntfy-пушем (тихий час 00–08: пуш беззвучный).",
         rows: [
           ['<span style="color:var(--green)">hold</span>', "Тренд за позицию — контекст не против тебя"],
           [

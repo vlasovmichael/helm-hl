@@ -8,7 +8,7 @@ process.env.TRADING_MODE          = 'PAPER';
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 const {
-  evaluateExitContext, parseAccountPositions, isQuietHour,
+  evaluateExitContext, parseAccountPositions, isQuietHour, analyzeSlTp,
 } = await import('../src/modules/setupScannerAlerts.js');
 
 // ── evaluateExitContext ────────────────────────
@@ -64,6 +64,56 @@ test('parseAccountPositions: long/short по знаку szi, пустые ски
   ]);
   assert.deepEqual(out.map((p) => [p.coin, p.side]), [['BCH', 'short'], ['SOL', 'long']]);
   assert.equal(out[0].sizeUsd, 290.1);
+});
+
+// ── analyzeSlTp ────────────────────────────────
+// Фикстура = реальные ордера оператора 2026-06-11 (ETH short, SL/TP position tpsl).
+
+const ETH_ORDERS = [
+  { coin: 'ETH', isTrigger: true, reduceOnly: true, orderType: 'Stop Market', triggerPx: '1677.3' },
+  { coin: 'ETH', isTrigger: true, reduceOnly: true, orderType: 'Take Profit Market', triggerPx: '1488.3' },
+  { coin: 'BNB', isTrigger: true, reduceOnly: true, orderType: 'Stop Market', triggerPx: '615.17' },
+];
+
+test('analyzeSlTp: SHORT с SL выше и TP ниже → дистанции и R:R', () => {
+  const r = analyzeSlTp({ coin: 'ETH', side: 'short', entryPx: 1622.6 }, ETH_ORDERS);
+  assert.equal(r.sl, 1677.3);
+  assert.equal(r.tp, 1488.3);
+  assert.ok(Math.abs(r.riskPct - 3.37) < 0.05);
+  assert.ok(Math.abs(r.rewardPct - 8.28) < 0.05);
+  assert.ok(Math.abs(r.rr - 2.45) < 0.05);
+  assert.equal(r.noSl, false);
+  assert.equal(r.slWrongSide, false);
+});
+
+test('analyzeSlTp: чужие монеты не подмешиваются', () => {
+  const r = analyzeSlTp({ coin: 'BNB', side: 'short', entryPx: 586.07 }, ETH_ORDERS);
+  assert.equal(r.sl, 615.17);
+  assert.equal(r.tp, null);
+  assert.equal(r.rr, null);
+});
+
+test('analyzeSlTp: нет стопа → noSl', () => {
+  const r = analyzeSlTp({ coin: 'SOL', side: 'long', entryPx: 62 }, ETH_ORDERS);
+  assert.equal(r.noSl, true);
+  assert.equal(r.sl, null);
+});
+
+test('analyzeSlTp: стоп не с той стороны → slWrongSide', () => {
+  // LONG со «стопом» ВЫШЕ входа — инвалидации нет.
+  const r = analyzeSlTp({ coin: 'ETH', side: 'long', entryPx: 1622.6 }, ETH_ORDERS);
+  assert.equal(r.slWrongSide, true);
+});
+
+test('analyzeSlTp: LONG зеркало — SL ниже, TP выше', () => {
+  const orders = [
+    { coin: 'SOL', isTrigger: true, reduceOnly: true, orderType: 'Stop Market', triggerPx: '60' },
+    { coin: 'SOL', isTrigger: true, reduceOnly: true, orderType: 'Take Profit Market', triggerPx: '70' },
+  ];
+  const r = analyzeSlTp({ coin: 'SOL', side: 'long', entryPx: 62 }, orders);
+  assert.ok(Math.abs(r.riskPct - 3.23) < 0.05);
+  assert.ok(Math.abs(r.rr - 4.0) < 0.05);
+  assert.equal(r.slWrongSide, false);
 });
 
 // ── isQuietHour ────────────────────────────────

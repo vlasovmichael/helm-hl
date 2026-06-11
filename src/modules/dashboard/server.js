@@ -27,7 +27,7 @@ import {
   getBotOidsSince,
   getSetupScannerRows,
 } from "../../core/database.js";
-import { getAccountSummary, getPositions, getLivePrice } from "../exchange.js";
+import { getAccountSummary, getPositions, getLivePrice, getFrontendOpenOrders } from "../exchange.js";
 import { fetchUserFills, reconstructManualTrades } from "../userFills.js";
 import { getMonthlyLedger } from "../ledger.js";
 import { FEE_RATE, MAKER_FEE_RATE } from "../executor/math.js";
@@ -50,7 +50,7 @@ import { getFaderVirtualSnapshot } from "../faderVirtualEquity.js";
 import { getVirtualEquitySnapshot } from "../chillBoyVirtualEquity.js";
 import { getNearMisses } from "../nearMisses.js";
 import { enrichSwingSignals } from "../setupScannerSwing.js";
-import { evaluateExitContext, parseAccountPositions } from "../setupScannerAlerts.js";
+import { evaluateExitContext, parseAccountPositions, analyzeSlTp } from "../setupScannerAlerts.js";
 
 const HOST = "0.0.0.0";
 const PORT = 3010;
@@ -1789,6 +1789,16 @@ async function handleSetupScanner(_req, res) {
       if (!known.has(p.coin)) baseRows.push({ coin: p.coin });
     }
 
+    // SL/TP-ордера позиций (один запрос на все монеты, fail-soft)
+    let openOrders = [];
+    if (positions.length) {
+      try {
+        openOrders = await getFrontendOpenOrders();
+      } catch {
+        /* fail-soft */
+      }
+    }
+
     const rows = enrichSwingSignals(baseRows);
     const posByCoin = new Map(positions.map((p) => [p.coin, p]));
     for (const r of rows) {
@@ -1798,6 +1808,8 @@ async function handleSetupScanner(_req, res) {
       r.swing.pos = p.side;
       r.swing.exitLevel = ev.level;   // null | 'ema20' | 'trend'
       r.swing.exitReason = ev.reason;
+      r.swing.entryPx = p.entryPx;
+      r.swing.slTp = analyzeSlTp(p, openOrders);
     }
     res.json({ ts: Date.now(), count: rows.length, rows });
   } catch (err) {

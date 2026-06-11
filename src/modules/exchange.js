@@ -261,6 +261,21 @@ export async function getPositions() {
 }
 
 /**
+ * Открытые ордера (включая trigger SL/TP) в формате фронтенда HL:
+ * orderType 'Stop Market' / 'Take Profit Market', triggerPx, reduceOnly.
+ * Используется Setup Scanner'ом для отображения SL/TP операторских позиций.
+ *
+ * @returns {Promise<Array>}
+ */
+export async function getFrontendOpenOrders() {
+  const orders = await hlInfo(
+    { type: "frontendOpenOrders", user: config.wallet.address },
+    { label: "frontend-open-orders" },
+  );
+  return Array.isArray(orders) ? orders : [];
+}
+
+/**
  * Запрашивает USDC из spotClearinghouseState. Возвращает {total, hold}.
  * Используется как primary source баланса в unified mode (см.
  * memory/hl_unified_migration_2026_05_23.md). SDK маркирует spot-токены

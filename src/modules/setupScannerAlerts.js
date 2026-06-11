@@ -20,7 +20,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
 import { getSetupScannerRows } from '../core/database.js';
-import { getPositions } from './exchange.js';
+import { getPositions, getFrontendOpenOrders } from './exchange.js';
 import { enrichSwingSignals, requestSwingTrendRefresh } from './setupScannerSwing.js';
 
 const ENABLED =
@@ -69,7 +69,7 @@ export function evaluateExitContext(side, swing) {
   return { level: null, reason: `контекст за позицию (${tfStr})` };
 }
 
-/** assetPositions из clearinghouseState → [{coin, side, sizeUsd}] */
+/** assetPositions из clearinghouseState → [{coin, side, sizeUsd, entryPx}] */
 export function parseAccountPositions(assetPositions) {
   const out = [];
   for (const ap of assetPositions ?? []) {
@@ -80,9 +80,45 @@ export function parseAccountPositions(assetPositions) {
       coin: p.coin,
       side: szi > 0 ? 'long' : 'short',
       sizeUsd: Math.abs(parseFloat(p.positionValue ?? '0')) || null,
+      entryPx: parseFloat(p.entryPx ?? '0') || null,
     });
   }
   return out;
+}
+
+/**
+ * SL/TP-разбор позиции по открытым trigger-ордерам (frontendOpenOrders).
+ * Считает дистанции от entry и R:R, флагует отсутствие стопа / R:R < 2
+ * (правило оператора) / стоп не с той стороны.
+ *
+ * @param {{coin:string, side:'long'|'short', entryPx:number|null}} pos
+ * @param {Array} orders — frontendOpenOrders
+ * @returns {{sl:number|null, tp:number|null, riskPct:number|null, rewardPct:number|null,
+ *            rr:number|null, noSl:boolean, slWrongSide:boolean}}
+ */
+export function analyzeSlTp(pos, orders) {
+  const triggers = (orders ?? []).filter(
+    (o) => o?.coin === pos.coin && o.isTrigger && o.reduceOnly,
+  );
+  const slOrder = triggers.find((o) => /stop/i.test(o.orderType ?? ''));
+  const tpOrder = triggers.find((o) => /take profit/i.test(o.orderType ?? ''));
+  const sl = slOrder ? parseFloat(slOrder.triggerPx) : null;
+  const tp = tpOrder ? parseFloat(tpOrder.triggerPx) : null;
+  const entry = pos.entryPx;
+
+  let riskPct = null, rewardPct = null, rr = null, slWrongSide = false;
+  if (entry) {
+    if (sl != null) {
+      // Дистанция до стопа в сторону убытка; отрицательная = стоп не с той стороны.
+      riskPct = (pos.side === 'short' ? (sl - entry) / entry : (entry - sl) / entry) * 100;
+      slWrongSide = riskPct <= 0;
+    }
+    if (tp != null) {
+      rewardPct = (pos.side === 'short' ? (entry - tp) / entry : (tp - entry) / entry) * 100;
+    }
+    if (riskPct > 0 && rewardPct != null) rr = rewardPct / riskPct;
+  }
+  return { sl, tp, riskPct, rewardPct, rr, noSl: sl == null, slWrongSide };
 }
 
 // ── ntfy ─────────────────────────────────────────────────────────────────────
@@ -222,10 +258,41 @@ async function runOnce(now = Date.now()) {
   }
 
   // ── EXIT: эскалация уровня по открытым позициям ──
+  let orders = [];
+  if (positions.length) {
+    try {
+      orders = await getFrontendOpenOrders();
+    } catch (err) {
+      logger.debug(`[SwingAlerts] open orders failed: ${err.message}`);
+    }
+  }
   const activeKeys = new Set();
   for (const p of positions) {
     const r = byCoin.get(p.coin);
     if (!r) continue;
+    const slTp = analyzeSlTp(p, orders);
+    const slTpTxt = slTp.noSl
+      ? '⚠ SL НЕ СТОИТ'
+      : `SL $${slTp.sl}${slTp.riskPct != null ? ` (риск ${slTp.riskPct.toFixed(1)}%)` : ''}` +
+        (slTp.tp != null ? ` · TP $${slTp.tp}` : ' · TP не стоит') +
+        (slTp.rr != null ? ` · R:R ${slTp.rr.toFixed(1)}` : '');
+
+    // Позиция без стопа — отдельный алерт сразу (главный леак оператора).
+    const noSlKey = `${p.coin}:${p.side}:nosl`;
+    if (slTp.noSl || slTp.slWrongSide) {
+      if (now - (exitAlertAt.get(noSlKey) ?? 0) >= EXIT_COOLDOWN_MS) {
+        exitAlertAt.set(noSlKey, now);
+        saveAlertState();
+        const what = slTp.noSl ? 'без стопа' : `стоп не с той стороны (SL $${slTp.sl})`;
+        logger.info(`[SwingAlerts] 🚨 no-SL: #${p.coin} ${p.side} ${what}`);
+        await fireNtfy(
+          `🚨 #${p.coin} ${p.side.toUpperCase()} ${what}`,
+          `Позиция ${p.sizeUsd ? `$${p.sizeUsd.toFixed(0)} ` : ''}живёт без инвалидации — поставь стоп СЕЙЧАС, потом разберёмся, держать ли.`,
+          ['rotating_light'],
+        );
+      }
+    }
+
     const ev = evaluateExitContext(p.side, r.swing);
     const key = `${p.coin}:${p.side}`;
     activeKeys.add(key);
@@ -242,7 +309,7 @@ async function runOnce(now = Date.now()) {
     logger.info(`[SwingAlerts] ⚠️ exit context: #${p.coin} ${p.side} → ${ev.level}`);
     await fireNtfy(
       `⚠️ #${p.coin} ${p.side.toUpperCase()}${sizeTxt} — контекст уходит`,
-      `${ev.reason}\nЭто не команда закрыть — проверь график и свой стоп.`,
+      `${ev.reason}\n${slTpTxt}\nЭто не команда закрыть — проверь график и свой стоп.`,
       ['warning'],
     );
   }
@@ -251,6 +318,12 @@ async function runOnce(now = Date.now()) {
   for (const k of [...prevExitLevel.keys()]) {
     if (!activeKeys.has(k)) {
       prevExitLevel.delete(k);
+      exitAlertAt.delete(k);
+      cleaned = true;
+    }
+  }
+  for (const k of [...exitAlertAt.keys()]) {
+    if (k.endsWith(':nosl') && !activeKeys.has(k.slice(0, -5))) {
       exitAlertAt.delete(k);
       cleaned = true;
     }
