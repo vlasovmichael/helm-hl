@@ -193,7 +193,7 @@ async function fireNtfyAlert(coin, direction, entry, sl, tp, price) {
     const { default: http } = await import('node:http');
     const body = JSON.stringify({
       topic,
-      title: `${arrow} ${direction} #${coin}`,
+      title: `🍬 ${arrow} ${direction} #${coin}`,
       message: `@ $${price}\nentry $${entry} · SL $${sl} · TP $${tp} (R:R ${rr})`,
       priority: 4,
       tags: [direction === 'LONG' ? 'green_circle' : 'red_circle'],

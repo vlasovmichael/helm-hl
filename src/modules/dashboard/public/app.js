@@ -1649,9 +1649,9 @@ function renderSetupScanner(payload) {
   // созрел); «…» = свинг даёт направление+зону, но 5m-вход ещё не напечатался.
   const candyChip = (s, showWait) => {
     if (s.candy?.confirmed)
-      return ` <span class="swing-badge" style="background:rgba(236,72,153,.16);color:#ec4899;font-size:9px;padding:0 5px" title="Candy Girl: 5m reclaim по тренду подтверждён ${s.candy.ageMin}m назад — тайминг входа созрел">🍬✓${s.candy.ageMin != null ? ` ${s.candy.ageMin}m` : ""}</span>`;
+      return ` <span class="swing-badge" style="background:rgba(236,72,153,.18);color:#ec4899;font-size:10px;padding:1px 6px;font-weight:600" title="Candy Girl: 5m reclaim по тренду подтверждён ${s.candy.ageMin}m назад — тайминг входа созрел">🍬 ✓${s.candy.ageMin != null ? ` ${s.candy.ageMin}m` : ""}</span>`;
     if (showWait)
-      return ` <span class="num-inline-muted" style="font-size:9px" title="Свинг даёт направление и зону, но Candy Girl ещё не подтвердил 5m-вход (reclaim не напечатался или радар выключен)">🍬…</span>`;
+      return ` <span class="swing-badge" style="background:rgba(236,72,153,.08);color:var(--text-muted);font-size:10px;padding:1px 6px" title="Свинг даёт направление и зону, но Candy Girl ещё не подтвердил 5m-вход (reclaim не напечатался или радар выключен)">🍬 5m?</span>`;
     return "";
   };
   const entryCell = (s) => {
@@ -2023,8 +2023,8 @@ const HELP_CONTENT = {
             "Цена растянута от EMA20 по тренду — гнаться поздно (chase), жди отката",
           ],
           [
-            '<span style="color:#ec4899">🍬✓ 12m</span>',
-            "Candy Girl подтвердил 5m reclaim по тому же направлению (≤90m назад) — тайминг входа созрел. «🍬…» = ждём 5m-вход (или радар выключен)",
+            '<span style="color:#ec4899">🍬 ✓ 12m</span>',
+            "Candy Girl подтвердил 5m reclaim по тому же направлению (≤90m назад) — тайминг входа созрел. «🍬 5m?» = ждём 5m-вход (или радар выключен)",
           ],
         ],
       },
