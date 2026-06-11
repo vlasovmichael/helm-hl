@@ -148,6 +148,32 @@ export function classifyEntryZone(signal, extPct) {
   return null;
 }
 
+// ── Связка с Candy Girl (слой 5m-тайминга) ───────────────────────────────────
+// Свинг даёт направление + зону (1h), Candy Girl — «5m reclaim напечатался».
+// Свежий сигнал Candy Girl по той же монете и в ту же сторону = тайминг входа
+// созрел. Старше окна / нет сигнала → связки нет (UI покажет «ждём»).
+const CANDY_FRESH_MS = 90 * 60_000;
+
+/**
+ * Ищет свежее подтверждение Candy Girl для свинг-сигнала.
+ *
+ * @param {string} coin
+ * @param {'LONG'|'SHORT'|'WAIT'} signal — свинг-вердикт
+ * @param {Array<{coin:string, direction:string, ts:number}>} candySignals — newest-first
+ * @returns {{confirmed:true, ageMin:number}|null}
+ */
+export function findCandyConfirm(coin, signal, candySignals, now = Date.now(), freshMs = CANDY_FRESH_MS) {
+  if (signal !== 'LONG' && signal !== 'SHORT') return null;
+  if (!Array.isArray(candySignals)) return null;
+  for (const c of candySignals) {            // newest-first: первый матч = самый свежий
+    if (c?.coin !== coin) continue;
+    if ((c.direction || '').toUpperCase() !== signal) continue;
+    const age = now - (c.ts ?? 0);
+    return age <= freshMs ? { confirmed: true, ageMin: Math.max(0, Math.round(age / 60_000)) } : null;
+  }
+  return null;
+}
+
 // ── Trend-кэш + фоновое обновление ───────────────────────────────────────────
 // Дашборд поллит /api/setup-scanner раз в 60с. Ответ всегда мгновенный: отдаём
 // кэш, stale-монеты обновляем в фоне (concurrency 3, поверх TTL-кэша свечей).

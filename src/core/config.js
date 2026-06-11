@@ -462,6 +462,9 @@ function loadConfig() {
   // Никогда не открывает позицию. Master-флаг default OFF.
   const candyGirlEnabled            = (process.env.CANDY_GIRL_ENABLED || 'false').toLowerCase() === 'true';
   const candyGirlAlertEnabled       = (process.env.CANDY_GIRL_ALERT_ENABLED || 'true').toLowerCase() === 'true';
+  // Канал алертов: ntfy шлётся всегда (когда alertEnabled), TG-дубль опционален.
+  // default OFF — Candy Girl живёт в ntfy-ленте вместе со Swing-сканером.
+  const candyGirlTgEnabled          = (process.env.CANDY_GIRL_TG_ENABLED || 'false').toLowerCase() === 'true';
   const candyGirlFast1h             = parseInt(process.env.CANDY_GIRL_FAST_1H  || '20', 10);
   const candyGirlSlow1h             = parseInt(process.env.CANDY_GIRL_SLOW_1H  || '200', 10);
   const candyGirlSlopeLookback      = parseInt(process.env.CANDY_GIRL_SLOPE_LOOKBACK || '10', 10);
@@ -808,6 +811,7 @@ function loadConfig() {
       // ── Candy Girl радар (signal-only) ──
       candyGirlEnabled,
       candyGirlAlertEnabled,
+      candyGirlTgEnabled,
       candyGirlFast1h,
       candyGirlSlow1h,
       candyGirlSlopeLookback,

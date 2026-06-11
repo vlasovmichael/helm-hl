@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 const {
-  classifySwingTrend, scoreSwingSignal, classifyEntryZone,
+  classifySwingTrend, scoreSwingSignal, classifyEntryZone, findCandyConfirm,
 } = await import('../src/modules/setupScannerSwing.js');
 
 // ── Helpers ────────────────────────────────────
@@ -139,4 +139,33 @@ test('entryZone SHORT: зеркало (откат вверх = zone, растя�
 test('entryZone: WAIT или нет данных → null', () => {
   assert.equal(classifyEntryZone('WAIT', 1.0), null);
   assert.equal(classifyEntryZone('LONG', null), null);
+});
+
+// ── findCandyConfirm (связка 5m-тайминга Candy Girl) ───────────────────────────
+const NOW = 1_700_000_000_000;
+const candySig = (coin, direction, ageMin) => ({ coin, direction, ts: NOW - ageMin * 60_000 });
+
+test('findCandyConfirm: свежий сигнал в ту же сторону → confirmed', () => {
+  const r = findCandyConfirm('ETH', 'SHORT', [candySig('ETH', 'SHORT', 12)], NOW);
+  assert.deepEqual(r, { confirmed: true, ageMin: 12 });
+});
+
+test('findCandyConfirm: сигнал старше окна 90m → null', () => {
+  assert.equal(findCandyConfirm('ETH', 'SHORT', [candySig('ETH', 'SHORT', 120)], NOW), null);
+});
+
+test('findCandyConfirm: другое направление → null', () => {
+  assert.equal(findCandyConfirm('ETH', 'SHORT', [candySig('ETH', 'LONG', 5)], NOW), null);
+});
+
+test('findCandyConfirm: другая монета / WAIT / пусто → null', () => {
+  assert.equal(findCandyConfirm('ETH', 'SHORT', [candySig('BNB', 'SHORT', 5)], NOW), null);
+  assert.equal(findCandyConfirm('ETH', 'WAIT', [candySig('ETH', 'SHORT', 5)], NOW), null);
+  assert.equal(findCandyConfirm('ETH', 'SHORT', [], NOW), null);
+  assert.equal(findCandyConfirm('ETH', 'SHORT', null, NOW), null);
+});
+
+test('findCandyConfirm: берёт самый свежий матч (newest-first)', () => {
+  const sigs = [candySig('ETH', 'SHORT', 8), candySig('ETH', 'SHORT', 70)];
+  assert.deepEqual(findCandyConfirm('ETH', 'SHORT', sigs, NOW), { confirmed: true, ageMin: 8 });
 });

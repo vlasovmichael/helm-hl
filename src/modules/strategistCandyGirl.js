@@ -45,6 +45,7 @@ const SIGNAL_TIMEOUT_MS  = (config.trading.candyGirlSignalTimeoutMin ?? 240) * 6
 
 // Лента/алерты
 const ALERT_ENABLED      = config.trading.candyGirlAlertEnabled !== false;
+const TG_ENABLED         = config.trading.candyGirlTgEnabled === true;
 const ALERT_COOLDOWN_MS  = (config.trading.candyGirlAlertCooldownMin ?? 45) * 60_000;
 const MAX_SIGNALS_PER_TICK = config.trading.candyGirlMaxSignalsPerTick ?? 3;
 const MAX_RECENT_SIGNALS = 30;
@@ -257,13 +258,15 @@ function recordCandyGirlSignal(r, now) {
     const risk = Math.abs(signal.entry - signal.sl);
     const rrTxt = risk > 0 ? (Math.abs(signal.tp - signal.entry) / risk).toFixed(1) : '?';
     const htfTxt = HTF_CONFLUENCE ? ` · 4h ${(entry.trend4h || 'none').toUpperCase()}` : '';
-    fireCandyGirlAlert(
-      `🍬 <b>Candy Girl</b> — сетап по тренду\n` +
-        `${arrow} <b>#${item.coin}</b> @ $${item.price}\n` +
-        `1h-тренд ${direction === 'long' ? 'UP' : 'DOWN'}${htfTxt} · откат к 5m EMA20 + reclaim\n` +
-        `entry $${fmt(signal.entry)} · SL $${fmt(signal.sl)} · TP $${fmt(signal.tp)} (R:R ${rrTxt})\n` +
-        `👀 сигнал — это РАДАР, бот не входит. Вход и стоп — руками.`,
-    );
+    if (TG_ENABLED) {
+      fireCandyGirlAlert(
+        `🍬 <b>Candy Girl</b> — сетап по тренду\n` +
+          `${arrow} <b>#${item.coin}</b> @ $${item.price}\n` +
+          `1h-тренд ${direction === 'long' ? 'UP' : 'DOWN'}${htfTxt} · откат к 5m EMA20 + reclaim\n` +
+          `entry $${fmt(signal.entry)} · SL $${fmt(signal.sl)} · TP $${fmt(signal.tp)} (R:R ${rrTxt})\n` +
+          `👀 сигнал — это РАДАР, бот не входит. Вход и стоп — руками.`,
+      );
+    }
     fireNtfyAlert(item.coin, entry.direction, signal.entry, signal.sl, signal.tp, item.price);
   }
   return true;

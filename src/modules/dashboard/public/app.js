@@ -1645,6 +1645,15 @@ function renderSetupScanner(payload) {
   // Entry-зона: где цена относительно 1h EMA20. zone = откат к EMA, ищи вход;
   // extended = растянута по тренду, не гнаться; mid = между. Тайминг (5m) — сам.
   // По монете с открытой позицией колонка превращается в exit-контекст.
+  // Candy Girl = слой 5m-тайминга. ✓ = 5m reclaim по тренду подтверждён (вход
+  // созрел); «…» = свинг даёт направление+зону, но 5m-вход ещё не напечатался.
+  const candyChip = (s, showWait) => {
+    if (s.candy?.confirmed)
+      return ` <span class="swing-badge" style="background:rgba(236,72,153,.16);color:#ec4899;font-size:9px;padding:0 5px" title="Candy Girl: 5m reclaim по тренду подтверждён ${s.candy.ageMin}m назад — тайминг входа созрел">🍬✓${s.candy.ageMin != null ? ` ${s.candy.ageMin}m` : ""}</span>`;
+    if (showWait)
+      return ` <span class="num-inline-muted" style="font-size:9px" title="Свинг даёт направление и зону, но Candy Girl ещё не подтвердил 5m-вход (reclaim не напечатался или радар выключен)">🍬…</span>`;
+    return "";
+  };
   const entryCell = (s) => {
     if (s.pos) {
       const t = escapeHtml(s.exitReason || "");
@@ -1658,11 +1667,11 @@ function renderSetupScanner(payload) {
     const extStr =
       ext != null ? `${ext >= 0 ? "+" : ""}${ext.toFixed(1)}%` : "";
     if (s.entryZone === "zone")
-      return `<span style="color:var(--green);font-weight:600" title="Цена у 1h EMA20 (${extStr}) — зона отката, ищи вход по тренду">✓ zone</span>`;
+      return `<span style="color:var(--green);font-weight:600" title="Цена у 1h EMA20 (${extStr}) — зона отката, ищи вход по тренду">✓ zone</span>${candyChip(s, true)}`;
     if (s.entryZone === "extended")
       return `<span style="color:var(--orange, #f59e0b)" title="Цена растянута от 1h EMA20 (${extStr}) — гнаться поздно, жди отката">wait ${extStr}</span>`;
     if (s.entryZone === "mid")
-      return `<span class="num-inline-muted" title="Цена между EMA20 и растяжкой (${extStr})">mid</span>`;
+      return `<span class="num-inline-muted" title="Цена между EMA20 и растяжкой (${extStr})">mid</span>${candyChip(s, false)}`;
     return '<span class="num-inline-muted">—</span>';
   };
   const posPill = (s) =>
@@ -2012,6 +2021,10 @@ const HELP_CONTENT = {
           [
             '<span style="color:#f59e0b">wait −3.2%</span>',
             "Цена растянута от EMA20 по тренду — гнаться поздно (chase), жди отката",
+          ],
+          [
+            '<span style="color:#ec4899">🍬✓ 12m</span>',
+            "Candy Girl подтвердил 5m reclaim по тому же направлению (≤90m назад) — тайминг входа созрел. «🍬…» = ждём 5m-вход (или радар выключен)",
           ],
         ],
       },

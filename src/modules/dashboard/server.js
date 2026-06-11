@@ -49,7 +49,7 @@ import { getFaderHeartbeat, getFaderMfeMae } from "../strategistFader.js";
 import { getFaderVirtualSnapshot } from "../faderVirtualEquity.js";
 import { getVirtualEquitySnapshot } from "../chillBoyVirtualEquity.js";
 import { getNearMisses } from "../nearMisses.js";
-import { enrichSwingSignals } from "../setupScannerSwing.js";
+import { enrichSwingSignals, findCandyConfirm } from "../setupScannerSwing.js";
 import { evaluateExitContext, parseAccountPositions, analyzeSlTp } from "../setupScannerAlerts.js";
 
 const HOST = "0.0.0.0";
@@ -1810,6 +1810,17 @@ async function handleSetupScanner(_req, res) {
       r.swing.exitReason = ev.reason;
       r.swing.entryPx = p.entryPx;
       r.swing.slTp = analyzeSlTp(p, openOrders);
+    }
+
+    // Связка с Candy Girl (слой 5m-тайминга): для строк БЕЗ позиции отмечаем,
+    // подтвердил ли Candy Girl 5m-вход по тому же направлению. Тихо пусто, когда
+    // радар выключен (CANDY_GIRL_ENABLED=false) — getCandyGirlSignals() = [].
+    const candySignals = getCandyGirlSignals();
+    const candyNow = Date.now();
+    for (const r of rows) {
+      if (r.swing?.pos) continue; // у позиции колонка = exit-контекст, не вход
+      const c = findCandyConfirm(r.coin, r.swing?.signal, candySignals, candyNow);
+      if (c) r.swing.candy = c;
     }
     res.json({ ts: Date.now(), count: rows.length, rows });
   } catch (err) {
