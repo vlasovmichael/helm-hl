@@ -148,7 +148,7 @@ async function fireNtfy(title, message, tags) {
   try {
     const { default: https } = await import('node:https');
     const { default: http } = await import('node:http');
-    const priority = isQuietHour() ? 1 : 4;
+    const priority = isQuietHour() ? 1 : (config.ntfy.priority ?? 3);
     const body = JSON.stringify({ topic, title, message, priority, tags });
     const u = new URL(`${url}/`);
     const lib = u.protocol === 'https:' ? https : http;

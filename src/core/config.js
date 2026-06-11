@@ -917,6 +917,10 @@ function loadConfig() {
       url:   process.env.NTFY_URL   || 'http://ntfy:80',
       topic: process.env.NTFY_TOPIC || 'hl-signals',
       token: process.env.NTFY_TOKEN || '',
+      // Приоритет пуша (шкала ntfy 1..5, НЕ Gotify 0..8): 1=min, 2=low,
+      // 3=default (звук + одно вибро), 4=high (вибро+peek), 5=urgent (долгое
+      // вибро, обход DND). Дефолт 3 = звук без агрессивной тряски.
+      priority: Math.min(5, Math.max(1, parseInt(process.env.NTFY_PRIORITY || '3', 10) || 3)),
     },
 
     // ── Binance (read-only, для Tax Collector) ──

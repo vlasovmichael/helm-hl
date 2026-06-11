@@ -195,7 +195,7 @@ async function fireNtfyAlert(coin, direction, entry, sl, tp, price) {
       topic,
       title: `🍬 ${arrow} ${direction} #${coin}`,
       message: `@ $${price}\nentry $${entry} · SL $${sl} · TP $${tp} (R:R ${rr})`,
-      priority: 4,
+      priority: config.ntfy.priority ?? 3,
       tags: [direction === 'LONG' ? 'green_circle' : 'red_circle'],
     });
     const u = new URL(`${url}/`);
