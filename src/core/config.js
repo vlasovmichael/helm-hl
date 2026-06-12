@@ -434,6 +434,23 @@ function loadConfig() {
   // продолжает использовать CHILL_BOY_BALANCE_UTILIZATION.
   const chillBoyPaperVirtualUtil = parseFloat(process.env.CHILL_BOY_PAPER_VIRTUAL_UTILIZATION || '0.9');
 
+  // ── Adopt Mode — бот-нянька на ручные входы (plans/adopt-mode-plan.md) ──
+  // Юзер открывает позу руками → бот подхватывает её в свободный слот как
+  // strategy_id='adopt' и навешивает дисциплинированный выход. Iter 1 = SHADOW:
+  // детектим + пишем в БД + логируем план выхода, но ОРДЕРА НЕ СТАВИМ.
+  const adoptEnabled          = (process.env.ADOPT_ENABLED || 'false').toLowerCase() === 'true';
+  const adoptMaxAgeMin        = parseFloat(process.env.ADOPT_MAX_AGE_MIN        || '10');
+  const adoptStopPct          = parseFloat(process.env.ADOPT_STOP_PCT           || '1.5');
+  const adoptBeArmPct         = parseFloat(process.env.ADOPT_BE_ARM_PCT         || '1.5');
+  const adoptTrailArmPct      = parseFloat(process.env.ADOPT_TRAIL_ARM_PCT      || '2');
+  const adoptTrailGiveBackPct = parseFloat(process.env.ADOPT_TRAIL_GIVE_BACK_PCT || '30');
+  if (isNaN(adoptStopPct) || adoptStopPct <= 0 || adoptStopPct >= 10) {
+    throw new Error(`ADOPT_STOP_PCT must be in (0, 10). Got: "${process.env.ADOPT_STOP_PCT}"`);
+  }
+  if (isNaN(adoptMaxAgeMin) || adoptMaxAgeMin <= 0) {
+    throw new Error(`ADOPT_MAX_AGE_MIN must be > 0. Got: "${process.env.ADOPT_MAX_AGE_MIN}"`);
+  }
+
   // ── Risk-based position sizing (cross-strategy: Hunter / Hunter Long / ChillBoy) ──
   const riskBasedSizing  = (process.env.RISK_BASED_SIZING  || 'false').toLowerCase() === 'true';
   const riskSizingShadow = (process.env.RISK_SIZING_SHADOW || 'true').toLowerCase() === 'true';
@@ -811,6 +828,12 @@ function loadConfig() {
       hunterLongTrailArmPct,
       hunterLongTrailGiveBackPct,
       hunterCrossCooldownMin,
+      adoptEnabled,
+      adoptMaxAgeMin,
+      adoptStopPct,
+      adoptBeArmPct,
+      adoptTrailArmPct,
+      adoptTrailGiveBackPct,
       chillBoyEnabled,
       chillBoyProdEnabled,
       chillBoyAtrShort,

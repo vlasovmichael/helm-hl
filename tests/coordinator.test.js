@@ -165,3 +165,18 @@ test('Coordinator: fade position holding → HOLD (no strategy_id on hold)', asy
   const r = await coordinate(data, pos);
   assert.equal(r.action, 'HOLD');
 });
+
+// Adopt Mode Iter 1 (SHADOW): подхваченная ручная поза занимает слот, но бот ею
+// НЕ управляет — coordinator должен вернуть HOLD и НЕ провалиться в carry-fallback.
+test('Coordinator: adopt position → HOLD (no carry fallback, keeps strategy_id)', async () => {
+  resetAll();
+  const pos = makePosition('NIL', 0, 'adopt', {
+    entry_time: Date.now() - 5 * 60_000,
+  });
+  // Дать carry-кандидата на ту же монету: если бы coordinator провалился в carry,
+  // он бы попытался ею управлять. Adopt-ветка обязана перехватить раньше.
+  const data = [makeScoutItem('NIL', 80, { slowApy: 5 })];
+  const r = await coordinate(data, pos);
+  assert.equal(r.action, 'HOLD');
+  assert.equal(r.strategy_id, 'adopt');
+});

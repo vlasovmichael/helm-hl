@@ -12,6 +12,7 @@ import { getPositions, getAccountSummary } from '../modules/exchange.js';
 import { sendMessage } from '../modules/reporter.js';
 import { fetchExchangePositions } from '../modules/sync.js';
 import { fetchUserFills, classifyClose } from '../modules/userFills.js';
+import { maybeAdoptManualPosition } from './adoptReconcile.js';
 import {
   state,
   INTEGRITY_CHECK_INTERVAL_MS,
@@ -244,9 +245,35 @@ export async function orphanCheck() {
     return false;
   }
 
+  // ── Adopt Mode (plans/adopt-mode-plan.md, Iter 1 SHADOW) ─────
+  // Если слот бота свободен и ADOPT_ENABLED — подхватываем свежую ручную позу
+  // в слот как strategy_id='adopt' (Hunter после этого не входит — слот занят).
+  // Усыновлённая монета перестаёт быть "ручной orphan": убираем её из manual-
+  // списка и flag'ов, чтобы не словить ложное "ручные закрыты" следующим тиком.
+  let activeManual = manualPositions;
+  if (!dbPosition && config.trading.adoptEnabled) {
+    try {
+      const adoptedCoin = await maybeAdoptManualPosition(manualPositions);
+      if (adoptedCoin) {
+        activeManual = manualPositions.filter((p) => p.coin !== adoptedCoin);
+        state.manualPositionCoins.delete(adoptedCoin);
+        state.manualWarningThrottle.delete(adoptedCoin);
+      }
+    } catch (err) {
+      logger.debug(`[Manual] adopt attempt failed: ${err.message}`);
+    }
+  }
+
+  // Все ручные позы усыновлены (или была одна и её взяли) → слот занят adopt'ом,
+  // паузить тик не нужно: coordinator увидит adopt-позицию и вернёт HOLD.
+  if (activeManual.length === 0) {
+    state.manualPositionActive = false;
+    return false;
+  }
+
   // ── Ручные позиции есть → hands-off режим ─────
   state.manualPositionActive = true;
-  const currentCoins = new Set(manualPositions.map((p) => p.coin));
+  const currentCoins = new Set(activeManual.map((p) => p.coin));
   state.manualPositionCoins = currentCoins;
 
   // Уведомление шлём ОДИН РАЗ на коин — пока оператор не закроет позицию.
@@ -255,7 +282,7 @@ export async function orphanCheck() {
   // следующая открытая поза снова получит уведомление.
   // Прошлая версия слала каждые 30 мин — раздражало без причины, оператор и так
   // видит позицию на бирже / дашборде.
-  for (const exPos of manualPositions) {
+  for (const exPos of activeManual) {
     if (!state.manualWarningThrottle.has(exPos.coin)) {
       state.manualWarningThrottle.set(exPos.coin, now);
       const side = exPos.szi < 0 ? 'SHORT' : 'LONG';

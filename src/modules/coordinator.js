@@ -45,6 +45,14 @@ export async function coordinate(scoutData, activePosition, hunterData = scoutDa
       return analyzeFade(scoutData, activePosition);
     }
 
+    // Adopt Mode Iter 1 (SHADOW): подхваченная ручная поза занимает слот, но бот
+    // ею НЕ управляет — ни стопа, ни трейла (plans/adopt-mode-plan.md). HOLD,
+    // чтобы НЕ провалиться в carry-fallback ниже. Выход — ручной (integrityCheck).
+    // Iter 2+ заменит на analyzeAdopt (стоп → храповик → трейл).
+    if (sid === 'adopt') {
+      return { action: 'HOLD', strategy_id: 'adopt' };
+    }
+
     const signal = analyze(scoutData, activePosition);
     if (signal.action !== 'HOLD') {
       return { ...signal, strategy_id: 'carry' };
