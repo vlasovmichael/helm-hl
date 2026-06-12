@@ -45,10 +45,11 @@ export async function coordinate(scoutData, activePosition, hunterData = scoutDa
       return analyzeFade(scoutData, activePosition);
     }
 
-    // Adopt Mode Iter 1 (SHADOW): подхваченная ручная поза занимает слот, но бот
-    // ею НЕ управляет — ни стопа, ни трейла (plans/adopt-mode-plan.md). HOLD,
-    // чтобы НЕ провалиться в carry-fallback ниже. Выход — ручной (integrityCheck).
-    // Iter 2+ заменит на analyzeAdopt (стоп → храповик → трейл).
+    // Adopt Mode: подхваченная ручная поза. Жёсткий стоп УЖЕ стоит на бирже
+    // (reduce-only SL trigger выставлен при подхвате, plans/adopt-mode-plan.md) —
+    // его держит биржа, бот per-tick ничего не делает → HOLD (и НЕ проваливаемся
+    // в carry-fallback). Выход: стоп / ручное закрытие (ловит integrityCheck).
+    // Следующий шаг — храповик+трейл (потребует analyzeAdopt вместо HOLD).
     if (sid === 'adopt') {
       return { action: 'HOLD', strategy_id: 'adopt' };
     }

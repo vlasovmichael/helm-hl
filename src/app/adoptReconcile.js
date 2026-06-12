@@ -1,21 +1,19 @@
 // ─────────────────────────────────────────────────
-//  Adopt Mode — бот-нянька на ручные входы (Iter 1: SHADOW)
+//  Adopt Mode — бот-нянька на ручные входы
 // ─────────────────────────────────────────────────
 // План: plans/adopt-mode-plan.md
 //
 // Юзер открывает позицию руками → бот подхватывает её в СВОБОДНЫЙ слот как
-// strategy_id='adopt' и (в будущих итерациях) ведёт дисциплинированный выход
-// (стоп + BE-храповик + трейл). Главный леак ручной торговли — отсутствие
-// стопа (memory trading-coaching-payoff-leak): бот чинит ВЫХОД, не вход.
+// strategy_id='adopt' и СРАЗУ ставит реальный reduce-only стоп на бирже. Бот
+// чинит ВЫХОД (главный леак — держал лузеров до нуля, memory
+// trading-coaching-payoff-leak), не вход. Безубыток-храповик и трейл —
+// следующий шаг (переиспуск Hunter-логики). Сейчас: жёсткий стоп при подхвате.
 //
-// Iter 1 = SHADOW. Здесь мы ТОЛЬКО:
-//   • детектим свежую ручную позу (≤ ADOPT_MAX_AGE_MIN, не в Hunter-cooldown),
-//   • пишем её в positions как 'adopt' (занимает слот → Hunter не входит),
-//   • логируем план выхода («где был бы стоп, когда взвёлся бы храповик/трейл»),
-//   • шлём ntfy-пуш с пометкой SHADOW.
-// ОРДЕРА НЕ СТАВИМ. Coordinator на sid='adopt' возвращает HOLD. Реальный стоп —
-// Iter 2, храповик/трейл — Iter 3. Выход в Iter 1 = только ручное закрытие
-// оператором (его ловит integrityCheck и пишет фактический pnl в ledger как 'adopt').
+// Гарды: слот свободен, ADOPT_ENABLED, возраст позы ≤ ADOPT_MAX_AGE_MIN, не в
+// Hunter-cooldown, размер ≤ ADOPT_MAX_SIZE_USD (safety rail на обкатку).
+// Стоп reduce-only — может только ЗАКРЫТЬ позу, не нарастить/не развернуть.
+// Ставим стоп ДО записи в БД: если постановка не удалась — НЕ усыновляем
+// (остаёшься в обычном hands-off, без ложного «бот ведёт»).
 
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
@@ -26,6 +24,11 @@ import {
   getBotOidsSince,
 } from '../core/database.js';
 import { getAccountSummary } from '../modules/exchange.js';
+import {
+  placeHunterTrigger,
+  placeHunterLongTrigger,
+} from '../modules/executor/production.js';
+import { resolveAsset } from '../modules/executor/fill-parser.js';
 import { fetchUserFills, reconstructManualTrades } from '../modules/userFills.js';
 import { isHunterCrossCooldownActive } from '../modules/hunterCrossCooldown.js';
 import { isQuietHour } from '../modules/setupScannerAlerts.js';
@@ -90,11 +93,11 @@ async function fireAdoptNtfy(title, message, tags) {
 
 /**
  * Подхватывает ОДНУ свежую ручную позу в свободный слот (single-slot → берём
- * первую подходящую). Возвращает coin усыновлённой позы или null.
+ * первую подходящую) и ставит реальный reduce-only стоп. Возвращает coin
+ * усыновлённой позы или null.
  *
  * Вызывается из orphanCheck ТОЛЬКО когда слот свободен (нет позиции бота в БД)
- * и ADOPT_ENABLED. Гарды: возраст ≤ ADOPT_MAX_AGE_MIN, не в Hunter-cooldown,
- * возраст определяется (иначе пропуск).
+ * и ADOPT_ENABLED.
  *
  * @param {Array<{coin, szi, entryPx}>} manualPositions
  * @returns {Promise<string|null>} coin усыновлённой позы
@@ -105,15 +108,26 @@ export async function maybeAdoptManualPosition(manualPositions) {
   if (!Array.isArray(manualPositions) || manualPositions.length === 0) return null;
 
   const now = Date.now();
-  const maxAgeMs = config.trading.adoptMaxAgeMin * 60_000;
-  const stopPct  = config.trading.adoptStopPct;
+  const maxAgeMs  = config.trading.adoptMaxAgeMin * 60_000;
+  const stopPct   = config.trading.adoptStopPct;
+  const maxSizeUsd = config.trading.adoptMaxSizeUsd;
 
   for (const ex of manualPositions) {
-    const coin = ex.coin;
+    const coin    = ex.coin;
+    const side    = ex.szi < 0 ? 'short' : 'long';
+    const entry   = ex.entryPx;
+    const sz      = Math.abs(ex.szi);
+    const sizeUsd = sz * entry;
 
     // Гард: не подхватываем монету в Hunter cross-cooldown (после недавнего close).
     if (isHunterCrossCooldownActive(coin, now)) {
       logger.info(`[Adopt] skip #${coin} — Hunter cross-cooldown active`);
+      continue;
+    }
+
+    // Гард: safety rail на обкатку — только мелкие позы (0 = без лимита).
+    if (maxSizeUsd > 0 && sizeUsd > maxSizeUsd) {
+      logger.info(`[Adopt] skip #${coin} — size $${sizeUsd.toFixed(2)} > ADOPT_MAX_SIZE_USD $${maxSizeUsd}`);
       continue;
     }
 
@@ -129,14 +143,32 @@ export async function maybeAdoptManualPosition(manualPositions) {
       continue;
     }
 
-    // ── Усыновляем ──────────────────────────────
-    const side    = ex.szi < 0 ? 'short' : 'long';
-    const entry   = ex.entryPx;
-    const sizeUsd = Math.abs(ex.szi) * entry;
-    // Жёсткий стоп (Iter 1 — только план, ордер НЕ ставим).
+    // ── Жёсткий стоп (reduce-only) ──────────────
     const plannedSl = side === 'short'
       ? entry * (1 + stopPct / 100)
       : entry * (1 - stopPct / 100);
+
+    let szDecimals;
+    try {
+      ({ szDecimals } = resolveAsset(coin));
+    } catch (err) {
+      logger.warn(`[Adopt] skip #${coin} — resolveAsset failed: ${err.message}`);
+      continue;
+    }
+
+    // Ставим стоп ДО записи в БД: нет стопа → нет подхвата (без ложного «ведём»).
+    let slOid;
+    try {
+      slOid = side === 'short'
+        ? await placeHunterTrigger(coin, sz, plannedSl, 'sl', szDecimals)
+        : await placeHunterLongTrigger(coin, sz, plannedSl, 'sl', szDecimals);
+    } catch (err) {
+      logger.error(
+        `[Adopt] ❌ SL placement failed for #${coin} ${side} @ $${plannedSl.toPrecision(6)}: ${err.message}. ` +
+        `NOT adopting — позиция остаётся в обычном hands-off.`,
+      );
+      continue;
+    }
 
     // entry_equity для корректной оценки pnl при закрытии (integrityCheck Δequity).
     let entryEquity = null;
@@ -151,39 +183,35 @@ export async function maybeAdoptManualPosition(manualPositions) {
     try {
       id = savePosition({
         coin,
-        size_usd:     sizeUsd,
-        entry_price:  entry,
-        entry_apy:    0,             // adopt не carry — APY неприменим
-        entry_time:   openTime,      // фактическое время ручного входа
-        mode:         'PRODUCTION',
-        strategy_id:  'adopt',
+        size_usd:      sizeUsd,
+        entry_price:   entry,
+        entry_apy:     0,            // adopt не carry — APY неприменим
+        entry_time:    openTime,     // фактическое время ручного входа
+        mode:          'PRODUCTION',
+        strategy_id:   'adopt',
         side,
-        entry_equity: entryEquity,
-        // Iter 1: sl_price НЕ пишем — ордера нет, и чтобы никакой код не счёл
-        // стоп выставленным. План стопа только в логе/пуше ниже.
+        entry_equity:  entryEquity,
+        sl_price:      plannedSl,
+        hunter_sl_oid: slOid,        // → classifyClose пометит 'sl_trigger' при срабатывании
       });
     } catch (err) {
-      logger.error(`[Adopt] savePosition #${coin} failed: ${err.message}`);
+      // БД-запись не удалась, но стоп УЖЕ на бирже — это безопасно (поза защищена),
+      // просто бот не «владеет» ею в БД. Логируем громко, не падаем.
+      logger.error(`[Adopt] savePosition #${coin} failed ПОСЛЕ постановки стопа (oid=${slOid}): ${err.message}`);
       return null;
     }
 
     logger.info(
-      `[Adopt] 🤝 SHADOW-adopted #${coin} ${side.toUpperCase()} (id=${id}) | ` +
-      `entry=$${entry} size=$${sizeUsd.toFixed(2)} age=${ageMin.toFixed(1)}min`,
-    );
-    logger.info(
-      `[Adopt] План выхода (SHADOW, ордера НЕ ставятся): ` +
-      `стоп @ $${plannedSl.toPrecision(6)} (−${stopPct}% от входа) | ` +
-      `BE-храповик при peak ≥ +${config.trading.adoptBeArmPct}% | ` +
-      `трейл при peak ≥ +${config.trading.adoptTrailArmPct}%, ` +
-      `give-back ${config.trading.adoptTrailGiveBackPct}% от пика`,
+      `[Adopt] 🤝 adopted #${coin} ${side.toUpperCase()} (id=${id}) | ` +
+      `entry=$${entry} size=$${sizeUsd.toFixed(2)} age=${ageMin.toFixed(1)}min | ` +
+      `SL @ $${plannedSl.toPrecision(6)} (−${stopPct}%) oid=${slOid}`,
     );
 
     await fireAdoptNtfy(
-      `🤝 SHADOW adopt #${coin} ${side.toUpperCase()}`,
+      `🤝 Adopt #${coin} ${side.toUpperCase()} — стоп выставлен`,
       `Подхватил ручную позу $${sizeUsd.toFixed(0)} @ $${entry}\n` +
-      `План: стоп $${plannedSl.toPrecision(6)} (−${stopPct}%), храповик +${config.trading.adoptBeArmPct}%, трейл +${config.trading.adoptTrailArmPct}%\n` +
-      `⚠️ SHADOW — реальный стоп ещё НЕ выставлен (Iter 1). Выход держишь сам.`,
+      `Стоп на бирже: $${plannedSl.toPrecision(6)} (−${stopPct}%)\n` +
+      `Дальше веду сам. Храповик/трейл — на подходе.`,
       ['handshake'],
     );
 
