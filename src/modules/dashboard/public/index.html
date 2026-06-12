@@ -59,7 +59,7 @@
           <div class="meta-info">
             <span id="uptime-val">Uptime: —</span>
             <span id="available-val">Available: —</span>
-            <span id="wallet-total-val" style="display:none"></span>
+            <span id="wallet-total-val" style="display: none"></span>
           </div>
           <a
             href="/ledger.html"
@@ -108,28 +108,67 @@
       <!-- 01.5 / Hot Movers — live price spikes + OI delta -->
       <section class="card" id="sec-movers">
         <div class="card-header">
-          <div class="card-title" data-num="01.5" title="Монеты с наибольшими ценовыми движениями. Setup: режим выбирает OI — цена↑+OI↑ = TREND LONG (по движению), цена↑+OI↓ = FADE SHORT (выдох/short-covering), зеркально вниз. Без OI-подтверждения — приглушённый вердикт. Причина — в tooltip ячейки Setup.">Hot Movers</div>
-          <span id="hot-movers-meta" style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted)"></span>
+          <div
+            class="card-title"
+            data-num="01.5"
+            title="Монеты с наибольшими ценовыми движениями. Setup: режим выбирает OI — цена↑+OI↑ = TREND LONG (по движению), цена↑+OI↓ = FADE SHORT (выдох/short-covering), зеркально вниз. Без OI-подтверждения — приглушённый вердикт. Причина — в tooltip ячейки Setup."
+          >
+            Hot Movers
+          </div>
+          <span
+            id="hot-movers-meta"
+            style="
+              font-size: 11px;
+              font-family: var(--font-mono);
+              color: var(--text-muted);
+            "
+          ></span>
         </div>
-        <div style="overflow-x:auto">
+        <div style="overflow-x: auto">
           <table class="data-table signals-table">
             <thead>
               <tr>
-                <th style="width:24px">#</th>
+                <th style="width: 24px">#</th>
                 <th>Coin</th>
-                <th class="c" title="Fade setup: SHORT/LONG = готово к входу против движения; WAIT = ждём выдоха импульса">Setup</th>
-                <th class="c" title="Чейз-метр: насколько цена уже улетела от короткой средней (15m, fallback 5m). 🎯 у базы — вход рядом, чейза нет; ⏳ растянута — дай откатить; ⛔ улетела — поздно гнаться, жди отката. Точку входа (5m) ставишь сам.">Вход</th>
+                <th
+                  class="c"
+                  title="Fade setup: SHORT/LONG = готово к входу против движения; WAIT = ждём выдоха импульса"
+                >
+                  Setup
+                </th>
+                <th
+                  class="c"
+                  title="Чейз-метр: насколько цена уже улетела от короткой средней (15m, fallback 5m). 🎯 у базы — вход рядом, чейза нет; ⏳ растянута — дай откатить; ⛔ улетела — поздно гнаться, жди отката. Точку входа (5m) ставишь сам."
+                >
+                  Enter
+                </th>
                 <th class="r">Price</th>
                 <th class="r">2m%</th>
                 <th class="r">5m%</th>
                 <th class="r">15m%</th>
-                <th class="r" title="Ускорение: |2m| vs экстраполяция 5m. ▼=выдыхается (fade), ▲=ускоряется (avoid)">Acc</th>
-                <th class="r" title="OI change за 5 минут. Растёт = новые позиции; падает = закрытия/ликвидации">OI 5m</th>
-                <th class="r" title="Тренд за 15m (anti-trend gate Hunter'а)">Trend</th>
+                <th
+                  class="r"
+                  title="Ускорение: |2m| vs экстраполяция 5m. ▼=выдыхается (fade), ▲=ускоряется (avoid)"
+                >
+                  Acc
+                </th>
+                <th
+                  class="r"
+                  title="OI change за 5 минут. Растёт = новые позиции; падает = закрытия/ликвидации"
+                >
+                  OI 5m
+                </th>
+                <th class="r" title="Тренд за 15m (anti-trend gate Hunter'а)">
+                  Trend
+                </th>
               </tr>
             </thead>
             <tbody id="hot-movers-tbody">
-              <tr><td colspan="11" class="empty-state">Waiting for price history…</td></tr>
+              <tr>
+                <td colspan="11" class="empty-state">
+                  Waiting for price history…
+                </td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -138,30 +177,65 @@
       <!-- 02 / BTC Divergence -->
       <section class="card" id="sec-divergence">
         <div class="card-header">
-          <div class="card-title" data-num="02" title="Относительная сила/слабость монеты vs BTC. Монета слабее BTC = кандидат на шорт. Монета сильнее BTC на падении = кандидат на лонг.">BTC Divergence</div>
+          <div
+            class="card-title"
+            data-num="02"
+            title="Относительная сила/слабость монеты vs BTC. Монета слабее BTC = кандидат на шорт. Монета сильнее BTC на падении = кандидат на лонг."
+          >
+            BTC Divergence
+          </div>
           <div class="time-ranges" id="div-tabs">
             <button class="range-btn" data-window="5m">5m</button>
             <button class="range-btn active" data-window="15m">15m</button>
             <button class="range-btn" data-window="1h">1h</button>
             <button class="range-btn" data-window="all">All ↓</button>
           </div>
-          <span id="div-meta" style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted)"></span>
+          <span
+            id="div-meta"
+            style="
+              font-size: 11px;
+              font-family: var(--font-mono);
+              color: var(--text-muted);
+            "
+          ></span>
         </div>
-        <div id="div-watchlist-bar" style="display:flex;align-items:center;gap:6px;padding:6px 10px 0;flex-wrap:wrap"></div>
-        <div style="overflow-x:auto">
+        <div
+          id="div-watchlist-bar"
+          style="
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px 0;
+            flex-wrap: wrap;
+          "
+        ></div>
+        <div style="overflow-x: auto">
           <table class="data-table" id="div-table">
             <thead>
               <tr>
                 <th>Coin</th>
                 <th class="r">Price</th>
                 <th class="r" id="div-th-change">15m %</th>
-                <th class="r" title="Разница между изменением монеты и BTC. Красный = монета слабее BTC (шорт). Зелёный = монета сильнее BTC (лонг).">vs BTC</th>
+                <th
+                  class="r"
+                  title="Разница между изменением монеты и BTC. Красный = монета слабее BTC (шорт). Зелёный = монета сильнее BTC (лонг)."
+                >
+                  vs BTC
+                </th>
                 <th class="c">Signal</th>
-                <th class="r" id="div-th-whale" title="Позиция кита по этой монете">🐋</th>
+                <th
+                  class="r"
+                  id="div-th-whale"
+                  title="Позиция кита по этой монете"
+                >
+                  🐋
+                </th>
               </tr>
             </thead>
             <tbody id="div-tbody">
-              <tr><td colspan="6" class="empty-state">накапливаем историю…</td></tr>
+              <tr>
+                <td colspan="6" class="empty-state">накапливаем историю…</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -170,15 +244,43 @@
       <!-- 02.2 / Setup Scanner — Swing -->
       <section class="card" id="sec-setup-scanner">
         <div class="card-header">
-          <div class="card-title" data-num="02.2" title="Свинг-биас (1+ день): направление по тренду 4h+1h, OI подтверждает, funding — флаг осторожности. Контекст для ручного входа, не команда.">
+          <div
+            class="card-title"
+            data-num="02.2"
+            title="Свинг-биас (1+ день): направление по тренду 4h+1h, OI подтверждает, funding — флаг осторожности. Контекст для ручного входа, не команда."
+          >
             Setup Scanner · Swing
-            <button class="help-btn" data-help="setupScanner" title="Как это читать">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <button
+              class="help-btn"
+              data-help="setupScanner"
+              title="Как это читать"
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
             </button>
           </div>
-          <span id="setup-scanner-meta" style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted)"></span>
+          <span
+            id="setup-scanner-meta"
+            style="
+              font-size: 11px;
+              font-family: var(--font-mono);
+              color: var(--text-muted);
+            "
+          ></span>
         </div>
-        <div style="position:relative;min-height:180px">
+        <div style="position: relative; min-height: 180px">
           <div class="card-skeleton" id="setup-scanner-skeleton">
             <div class="skeleton-row" style="width: 60%"></div>
             <div class="skeleton-row"></div>
@@ -186,18 +288,48 @@
             <div class="skeleton-row"></div>
             <div class="skeleton-row" style="width: 80%"></div>
           </div>
-          <div style="overflow-x:auto">
+          <div style="overflow-x: auto">
             <table class="data-table" id="setup-scanner-table">
               <thead>
                 <tr>
                   <th>Coin</th>
                   <th class="c">Signal</th>
-                  <th class="c" title="Тренд по EMA: 4h (главный) и 1h (подтверждение)">4h / 1h</th>
-                  <th class="c" title="Где цена относительно 1h EMA20 (зона отката): zone = у EMA, ищи вход; extended = растянута, не гнаться; mid = между. Точку входа (5m) выбираешь сам.">Entry</th>
-                  <th class="c" title="Твои SL/TP-ордера с биржи по открытой позиции: дистанции от входа и R:R. Красное ⚠ NO SL = позиция без стопа. Оранжевый R:R < 2 — ниже правила 2:1.">SL / TP</th>
-                  <th class="r" title="Δ Open Interest / Δ цены за 7 дней. OI растёт с ценой = реальный спрос; OI растёт на падении = давят шорты. Подсвечено, когда подтверждает сигнал.">OI / Px 7d</th>
-                  <th class="r" title="Funding APY (annualized). ≈base = около HL-баземлайна ~11%. Экстрим (|APY|>30) = перекос позиций, флаг осторожности.">F%</th>
-                  <th class="r" title="Объём 24h vs средний за 30 дней. ≥1.5× = интерес растёт, ≤0.5× = монета остыла.">Vol×</th>
+                  <th
+                    class="c"
+                    title="Тренд по EMA: 4h (главный) и 1h (подтверждение)"
+                  >
+                    4h / 1h
+                  </th>
+                  <th
+                    class="c"
+                    title="Где цена относительно 1h EMA20 (зона отката): zone = у EMA, ищи вход; extended = растянута, не гнаться; mid = между. Точку входа (5m) выбираешь сам."
+                  >
+                    Entry
+                  </th>
+                  <th
+                    class="c"
+                    title="Твои SL/TP-ордера с биржи по открытой позиции: дистанции от входа и R:R. Красное ⚠ NO SL = позиция без стопа. Оранжевый R:R < 2 — ниже правила 2:1."
+                  >
+                    SL / TP
+                  </th>
+                  <th
+                    class="r"
+                    title="Δ Open Interest / Δ цены за 7 дней. OI растёт с ценой = реальный спрос; OI растёт на падении = давят шорты. Подсвечено, когда подтверждает сигнал."
+                  >
+                    OI / Px 7d
+                  </th>
+                  <th
+                    class="r"
+                    title="Funding APY (annualized). ≈base = около HL-баземлайна ~11%. Экстрим (|APY|>30) = перекос позиций, флаг осторожности."
+                  >
+                    F%
+                  </th>
+                  <th
+                    class="r"
+                    title="Объём 24h vs средний за 30 дней. ≥1.5× = интерес растёт, ≤0.5× = монета остыла."
+                  >
+                    Vol×
+                  </th>
                 </tr>
               </thead>
               <tbody id="setup-scanner-tbody"></tbody>
@@ -208,50 +340,228 @@
 
       <!-- 02.5 / Whale Watch -->
       <section class="card" id="sec-whale">
-        <div class="card-header" style="flex-wrap:wrap;gap:6px">
-          <div class="card-title" data-num="02.5" title="Perp-позиции отслеживаемых HL-адресов. Обновляется раз в 30 секунд.">Whale Watch</div>
-          <div id="ww-chips" style="display:flex;gap:4px;flex-wrap:wrap;align-items:center"></div>
-          <button id="ww-add-btn" title="Добавить адрес" style="background:none;border:1px solid var(--hairline);border-radius:4px;color:var(--text-muted);font-size:11px;font-family:var(--font-mono);padding:2px 8px;cursor:pointer;white-space:nowrap">+ Add</button>
-          <span id="ww-bias" style="font-size:12px;font-family:var(--font-mono);color:var(--text-muted);margin-left:auto"></span>
+        <div class="card-header" style="flex-wrap: wrap; gap: 6px">
+          <div
+            class="card-title"
+            data-num="02.5"
+            title="Perp-позиции отслеживаемых HL-адресов. Обновляется раз в 30 секунд."
+          >
+            Whale Watch
+          </div>
+          <div
+            id="ww-chips"
+            style="
+              display: flex;
+              gap: 4px;
+              flex-wrap: wrap;
+              align-items: center;
+            "
+          ></div>
+          <button
+            id="ww-add-btn"
+            title="Добавить адрес"
+            style="
+              background: none;
+              border: 1px solid var(--hairline);
+              border-radius: 4px;
+              color: var(--text-muted);
+              font-size: 11px;
+              font-family: var(--font-mono);
+              padding: 2px 8px;
+              cursor: pointer;
+              white-space: nowrap;
+            "
+          >
+            + Add
+          </button>
+          <span
+            id="ww-bias"
+            style="
+              font-size: 12px;
+              font-family: var(--font-mono);
+              color: var(--text-muted);
+              margin-left: auto;
+            "
+          ></span>
         </div>
-        <div id="ww-form" style="display:none;padding:6px 10px 4px;gap:6px;align-items:center;flex-wrap:wrap">
-          <input id="ww-form-label" type="text" placeholder="Имя (Василий)" style="width:120px;background:var(--bg-card);border:1px solid var(--hairline);border-radius:4px;color:var(--text-primary);font-family:var(--font-mono);font-size:13px;padding:5px 8px" />
-          <input id="ww-form-addr" type="text" placeholder="0x…" style="flex:1;min-width:200px;background:var(--bg-card);border:1px solid var(--hairline);border-radius:4px;color:var(--text-primary);font-family:var(--font-mono);font-size:12px;padding:5px 8px" />
-          <button id="ww-form-save" style="background:var(--accent,#6366f1);color:#fff;border:none;border-radius:4px;padding:5px 14px;font-size:13px;cursor:pointer">Save</button>
-          <button id="ww-form-cancel" style="background:none;border:1px solid var(--hairline);border-radius:4px;color:var(--text-muted);font-size:13px;padding:5px 10px;cursor:pointer">Cancel</button>
+        <div
+          id="ww-form"
+          style="
+            display: none;
+            padding: 6px 10px 4px;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+          "
+        >
+          <input
+            id="ww-form-label"
+            type="text"
+            placeholder="Имя (Василий)"
+            style="
+              width: 120px;
+              background: var(--bg-card);
+              border: 1px solid var(--hairline);
+              border-radius: 4px;
+              color: var(--text-primary);
+              font-family: var(--font-mono);
+              font-size: 13px;
+              padding: 5px 8px;
+            "
+          />
+          <input
+            id="ww-form-addr"
+            type="text"
+            placeholder="0x…"
+            style="
+              flex: 1;
+              min-width: 200px;
+              background: var(--bg-card);
+              border: 1px solid var(--hairline);
+              border-radius: 4px;
+              color: var(--text-primary);
+              font-family: var(--font-mono);
+              font-size: 12px;
+              padding: 5px 8px;
+            "
+          />
+          <button
+            id="ww-form-save"
+            style="
+              background: var(--accent, #6366f1);
+              color: #fff;
+              border: none;
+              border-radius: 4px;
+              padding: 5px 14px;
+              font-size: 13px;
+              cursor: pointer;
+            "
+          >
+            Save
+          </button>
+          <button
+            id="ww-form-cancel"
+            style="
+              background: none;
+              border: 1px solid var(--hairline);
+              border-radius: 4px;
+              color: var(--text-muted);
+              font-size: 13px;
+              padding: 5px 10px;
+              cursor: pointer;
+            "
+          >
+            Cancel
+          </button>
         </div>
-        <div style="overflow-x:auto;max-height:480px;overflow-y:auto">
+        <div style="overflow-x: auto; max-height: 480px; overflow-y: auto">
           <table class="data-table" id="ww-table">
             <thead>
               <tr>
                 <th>Whale</th>
                 <th data-ww-sort="coin" class="r ww-sortable">Coin</th>
                 <th class="r">Side</th>
-                <th data-ww-sort="sizeUsd" class="r ww-sortable ww-sort-active ww-sort-desc">Size</th>
+                <th
+                  data-ww-sort="sizeUsd"
+                  class="r ww-sortable ww-sort-active ww-sort-desc"
+                >
+                  Size
+                </th>
                 <th class="r">Lev</th>
-                <th data-ww-sort="unrealizedPnl" class="r ww-sortable" title="Unrealized P&L">uPnL</th>
+                <th
+                  data-ww-sort="unrealizedPnl"
+                  class="r ww-sortable"
+                  title="Unrealized P&L"
+                >
+                  uPnL
+                </th>
                 <th class="r">Entry</th>
-                <th data-ww-sort="firstSeenAt" class="r ww-sortable" title="Когда позиция впервые замечена">Since</th>
+                <th
+                  data-ww-sort="firstSeenAt"
+                  class="r ww-sortable"
+                  title="Когда позиция впервые замечена"
+                >
+                  Since
+                </th>
               </tr>
             </thead>
             <tbody id="ww-tbody">
-              <tr><td colspan="8" class="empty-state">загружаем…</td></tr>
+              <tr>
+                <td colspan="8" class="empty-state">загружаем…</td>
+              </tr>
             </tbody>
           </table>
         </div>
-        <div id="ww-footer" style="padding:4px 10px 6px;font-size:11px;font-family:var(--font-mono);color:var(--text-faint)"></div>
-        <div id="ww-leaderboard-section" style="border-top:1px solid var(--hairline);padding:8px 10px 4px">
-          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-            <span style="font-size:11px;font-family:var(--font-mono);color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em">HL Leaderboard</span>
-            <button id="ww-lb-load" style="background:none;border:1px solid var(--hairline);border-radius:4px;color:var(--text-muted);font-size:11px;font-family:var(--font-mono);padding:2px 8px;cursor:pointer;white-space:nowrap">Load top 30</button>
-            <span id="ww-lb-meta" style="font-size:10px;font-family:var(--font-mono);color:var(--text-faint)"></span>
+        <div
+          id="ww-footer"
+          style="
+            padding: 4px 10px 6px;
+            font-size: 11px;
+            font-family: var(--font-mono);
+            color: var(--text-faint);
+          "
+        ></div>
+        <div
+          id="ww-leaderboard-section"
+          style="border-top: 1px solid var(--hairline); padding: 8px 10px 4px"
+        >
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              margin-bottom: 6px;
+            "
+          >
+            <span
+              style="
+                font-size: 11px;
+                font-family: var(--font-mono);
+                color: var(--text-muted);
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+              "
+              >HL Leaderboard</span
+            >
+            <button
+              id="ww-lb-load"
+              style="
+                background: none;
+                border: 1px solid var(--hairline);
+                border-radius: 4px;
+                color: var(--text-muted);
+                font-size: 11px;
+                font-family: var(--font-mono);
+                padding: 2px 8px;
+                cursor: pointer;
+                white-space: nowrap;
+              "
+            >
+              Load top 30
+            </button>
+            <span
+              id="ww-lb-meta"
+              style="
+                font-size: 10px;
+                font-family: var(--font-mono);
+                color: var(--text-faint);
+              "
+            ></span>
           </div>
-          <div style="overflow-x:auto;display:none" id="ww-lb-table-wrap">
+          <div style="overflow-x: auto; display: none" id="ww-lb-table-wrap">
             <table class="data-table" id="ww-lb-table">
-              <thead><tr>
-                <th>#</th><th>Address / Name</th><th class="r">Account $</th>
-                <th class="r">30d PnL</th><th class="r">30d ROI</th><th class="r">30d Vol</th><th></th>
-              </tr></thead>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Address / Name</th>
+                  <th class="r">Account $</th>
+                  <th class="r">30d PnL</th>
+                  <th class="r">30d ROI</th>
+                  <th class="r">30d Vol</th>
+                  <th></th>
+                </tr>
+              </thead>
               <tbody id="ww-lb-tbody"></tbody>
             </table>
           </div>
@@ -379,15 +689,37 @@
           <div class="pnl-strategy" id="pnl-strategy">
             <div class="empty-state">No trades in this period</div>
           </div>
-          <div class="pnl-detector" id="chillboy-detector" style="display: none">
+          <div
+            class="pnl-detector"
+            id="chillboy-detector"
+            style="display: none"
+          >
             <div class="detector-label">
               Chill Boy detector
               <span id="chillboy-mode" class="status-pill">PAPER</span>
-              <span id="chillboy-vbalance" class="status-pill" style="display:none"></span>
+              <span
+                id="chillboy-vbalance"
+                class="status-pill"
+                style="display: none"
+              ></span>
             </div>
             <div class="detector-stats" id="chillboy-stats">—</div>
-            <div class="detector-stats" id="chillboy-paper-stats" style="display:none; margin-top:6px;">—</div>
-            <div id="chillboy-paper-trades" style="display:none; margin-top:6px; font-size:11px; opacity:.85;"></div>
+            <div
+              class="detector-stats"
+              id="chillboy-paper-stats"
+              style="display: none; margin-top: 6px"
+            >
+              —
+            </div>
+            <div
+              id="chillboy-paper-trades"
+              style="
+                display: none;
+                margin-top: 6px;
+                font-size: 11px;
+                opacity: 0.85;
+              "
+            ></div>
           </div>
         </div>
       </section>
@@ -397,21 +729,41 @@
       <!-- 06.5 / Candy Girl — SIGNAL-ONLY радар (1h EMA-тренд + 5m pullback-reclaim) -->
       <!-- ⚠️ НЕ стратегия: радар сетапов для РУЧНОЙ торговли. План: memory/candy_girl_idea.md.
            Никогда не торгует — только лента находок + TG-алерты. Скрыт когда CANDY_GIRL_ENABLED=false. -->
-      <section class="card" id="sec-candygirl" style="display:none">
+      <section class="card" id="sec-candygirl" style="display: none">
         <div class="card-header">
-          <div class="card-title" data-num="06.5" title="Candy Girl: радар сетапов «1h EMA-тренд + откат к 5m EMA20 + reclaim» (сигналы для РУЧНОЙ торговли) + PAPER shadow-слот (compound-песочница, бот тестирует те же сетапы виртуально).">
+          <div
+            class="card-title"
+            data-num="06.5"
+            title="Candy Girl: радар сетапов «1h EMA-тренд + откат к 5m EMA20 + reclaim» (сигналы для РУЧНОЙ торговли) + PAPER shadow-слот (compound-песочница, бот тестирует те же сетапы виртуально)."
+          >
             Candy Girl — Radar + Paper
           </div>
           <div class="time-ranges">
             <span class="status-pill">RADAR</span>
-            <span id="candygirl-card-equity" class="status-pill" style="display:none" title="Paper shadow-слот: виртуальный equity (compound). PROD-сделок нет."></span>
-            <span id="candygirl-acc" class="status-pill" style="display:none" title="Точность: TP раньше SL по 5m-свечам. Timeout не учитывается в %."></span>
-            <span id="candygirl-hb" class="status-pill" style="display:none"></span>
+            <span
+              id="candygirl-card-equity"
+              class="status-pill"
+              style="display: none"
+              title="Paper shadow-слот: виртуальный equity (compound). PROD-сделок нет."
+            ></span>
+            <span
+              id="candygirl-acc"
+              class="status-pill"
+              style="display: none"
+              title="Точность: TP раньше SL по 5m-свечам. Timeout не учитывается в %."
+            ></span>
+            <span
+              id="candygirl-hb"
+              class="status-pill"
+              style="display: none"
+            ></span>
           </div>
         </div>
         <div class="cb-grid">
           <div class="cb-section cb-section-full">
-            <div class="cb-section-title">Recent setups — 4h+1h тренд + 5m откат-reclaim</div>
+            <div class="cb-section-title">
+              Recent setups — 4h+1h тренд + 5m откат-reclaim
+            </div>
             <div class="signals-table-wrap">
               <table class="signals-table">
                 <thead>
@@ -428,13 +780,19 @@
                   </tr>
                 </thead>
                 <tbody id="cg-signals-tbody">
-                  <tr><td colspan="9" class="empty-state">no setups yet</td></tr>
+                  <tr>
+                    <td colspan="9" class="empty-state">no setups yet</td>
+                  </tr>
                 </tbody>
               </table>
             </div>
           </div>
           <!-- Активная paper позиция shadow-слота (если есть) -->
-          <div class="cb-section cb-section-full" id="cg-active-section" style="display:none">
+          <div
+            class="cb-section cb-section-full"
+            id="cg-active-section"
+            style="display: none"
+          >
             <div class="cb-section-title">Active paper position</div>
             <div id="cg-active-body"></div>
           </div>
@@ -442,13 +800,22 @@
           <div class="cb-section cb-section-full">
             <div class="cb-section-title">
               Paper trades history
-              <span id="cg-stats-inline" style="opacity:.75; font-weight:normal; margin-left:8px"></span>
+              <span
+                id="cg-stats-inline"
+                style="opacity: 0.75; font-weight: normal; margin-left: 8px"
+              ></span>
             </div>
-            <div id="cg-history-body"><div class="empty-state">no closed trades yet</div></div>
+            <div id="cg-history-body">
+              <div class="empty-state">no closed trades yet</div>
+            </div>
           </div>
           <div class="cb-section cb-section-full">
-            <div class="cb-section-title" style="opacity:.7">Detector status</div>
-            <div id="cg-heartbeat" style="font-size:11px; opacity:.85">—</div>
+            <div class="cb-section-title" style="opacity: 0.7">
+              Detector status
+            </div>
+            <div id="cg-heartbeat" style="font-size: 11px; opacity: 0.85">
+              —
+            </div>
           </div>
         </div>
       </section>
@@ -458,9 +825,17 @@
       <!-- 06.5 / Insights -->
       <section class="card" id="sec-insights">
         <div class="card-header">
-          <div class="card-title" data-num="06+" title="Lifetime per-coin breakdown + 90-day daily P&amp;L heatmap. Independent of P&amp;L period selector — always shows all-time / 90d.">Insights</div>
+          <div
+            class="card-title"
+            data-num="06+"
+            title="Lifetime per-coin breakdown + 90-day daily P&amp;L heatmap. Independent of P&amp;L period selector — always shows all-time / 90d."
+          >
+            Insights
+          </div>
           <div class="time-ranges" id="insights-tabs">
-            <button class="range-btn active" data-tab="per-coin">Per-coin</button>
+            <button class="range-btn active" data-tab="per-coin">
+              Per-coin
+            </button>
             <button class="range-btn" data-tab="heatmap">Heatmap</button>
           </div>
         </div>
@@ -472,14 +847,18 @@
             <div class="skeleton-row"></div>
           </div>
           <div class="insights-pane" id="insights-pane-per-coin">
-            <div class="per-coin-meta" id="per-coin-meta">— coins · all-time</div>
+            <div class="per-coin-meta" id="per-coin-meta">
+              — coins · all-time
+            </div>
             <div class="per-coin-table-wrap">
               <table class="per-coin-table">
                 <thead>
                   <tr>
                     <th data-sort="coin">Coin</th>
                     <th data-sort="trades" class="num">Trades</th>
-                    <th data-sort="pnl" class="num sort-active sort-desc">P&amp;L</th>
+                    <th data-sort="pnl" class="num sort-active sort-desc">
+                      P&amp;L
+                    </th>
                     <th data-sort="winRate" class="num">Win%</th>
                     <th data-sort="avg" class="num">Avg</th>
                     <th data-sort="lastClosedAt" class="num">Last</th>
@@ -489,8 +868,14 @@
               </table>
             </div>
           </div>
-          <div class="insights-pane" id="insights-pane-heatmap" style="display: none">
-            <div class="heatmap-meta" id="heatmap-meta">— days · 90d window</div>
+          <div
+            class="insights-pane"
+            id="insights-pane-heatmap"
+            style="display: none"
+          >
+            <div class="heatmap-meta" id="heatmap-meta">
+              — days · 90d window
+            </div>
             <div class="heatmap-grid" id="heatmap-grid"></div>
             <div class="heatmap-legend">
               <span>Loss</span>
@@ -607,7 +992,11 @@
         <span class="nav-icon" aria-hidden="true"></span>
         <span>Pos</span>
       </button>
-      <button class="bottom-nav-btn" data-target="sec-whale" aria-label="Whale Watch">
+      <button
+        class="bottom-nav-btn"
+        data-target="sec-whale"
+        aria-label="Whale Watch"
+      >
         <span class="nav-icon" aria-hidden="true"></span>
         <span>Whale</span>
       </button>
@@ -738,14 +1127,18 @@
     <div id="help-modal" class="trade-modal" hidden>
       <div class="trade-modal__backdrop" data-close="1"></div>
       <div class="trade-modal__panel" role="dialog" aria-modal="true">
-        <button class="trade-modal__close" data-close="1" aria-label="Close">×</button>
+        <button class="trade-modal__close" data-close="1" aria-label="Close">
+          ×
+        </button>
         <div id="help-modal-body"></div>
       </div>
     </div>
     <div id="trade-modal" class="trade-modal" hidden>
       <div class="trade-modal__backdrop" data-close="1"></div>
       <div class="trade-modal__panel" role="dialog" aria-modal="true">
-        <button class="trade-modal__close" data-close="1" aria-label="Close">×</button>
+        <button class="trade-modal__close" data-close="1" aria-label="Close">
+          ×
+        </button>
         <div id="trade-modal-body"></div>
       </div>
     </div>
