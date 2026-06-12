@@ -357,6 +357,21 @@ function loadConfig() {
     throw new Error(`HUNTER_TRAIL_GIVE_BACK_PCT must be in (0, 100). Got: "${process.env.HUNTER_TRAIL_GIVE_BACK_PCT}"`);
   }
 
+  // Iter D3: breakeven храповик. Как только peak unrealized% ≥ ARM, взводим —
+  // и больше не даём unrealized% уйти ≤ FLOOR (0 = безубыток). Ловит "ушёл в
+  // плюс → развернулся в минус" (кейс ZEC: peak +3% → полный SL −2%). Порог
+  // ARM ниже trail-arm, чтобы ловить и небольшие подарки. Проверяется ВЫШЕ SL.
+  const hunterBeRatchetEnabled = (process.env.HUNTER_BE_RATCHET_ENABLED || 'false').toLowerCase() === 'true';
+  const hunterBeArmPct   = parseFloat(process.env.HUNTER_BE_ARM_PCT   || '1');
+  const hunterBeFloorPct = parseFloat(process.env.HUNTER_BE_FLOOR_PCT || '0');
+
+  if (isNaN(hunterBeArmPct) || hunterBeArmPct <= 0 || hunterBeArmPct >= 3) {
+    throw new Error(`HUNTER_BE_ARM_PCT must be in (0, 3). Got: "${process.env.HUNTER_BE_ARM_PCT}"`);
+  }
+  if (isNaN(hunterBeFloorPct) || hunterBeFloorPct < 0 || hunterBeFloorPct >= hunterBeArmPct) {
+    throw new Error(`HUNTER_BE_FLOOR_PCT must be in [0, HUNTER_BE_ARM_PCT). Got: "${process.env.HUNTER_BE_FLOOR_PCT}"`);
+  }
+
   // ── Hunter Long (Iter E.1) — Long-after-dump, зеркало Hunter SHORT ──
   // Default false: PAPER-only включается отдельно. Заняла слот после Fade soft-kill.
   // Все параметры зеркальны HUNTER_* но с собственными дефолтами под dump-сторону:
@@ -774,6 +789,9 @@ function loadConfig() {
       hunterTrailShadowLog,
       hunterTrailArmPct,
       hunterTrailGiveBackPct,
+      hunterBeRatchetEnabled,
+      hunterBeArmPct,
+      hunterBeFloorPct,
       hunterLongEnabled,
       hunterLongProdEnabled,
       hunterLongDumpPct,

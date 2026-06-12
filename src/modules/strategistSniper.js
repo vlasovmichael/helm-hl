@@ -86,11 +86,16 @@ const hunterMfeMaeMap = new Map();
 const peakUnrealizedPct   = new Map();
 const hunterArmedMap      = new Map();
 const hunterArmRequestMap = new Map();
+// Iter D3: breakeven храповик. positionId → true, как только peak ≥ BE_ARM_PCT.
+const hunterBeArmedMap    = new Map();
 
 const HUNTER_TRAIL_ENABLED      = config.trading.hunterTrailEnabled;
 const HUNTER_TRAIL_SHADOW_LOG   = config.trading.hunterTrailShadowLog;
 const HUNTER_TRAIL_ARM_PCT      = config.trading.hunterTrailArmPct;
 const HUNTER_TRAIL_GIVE_BACK_PCT = config.trading.hunterTrailGiveBackPct;
+const HUNTER_BE_RATCHET_ENABLED = config.trading.hunterBeRatchetEnabled;
+const HUNTER_BE_ARM_PCT         = config.trading.hunterBeArmPct;
+const HUNTER_BE_FLOOR_PCT       = config.trading.hunterBeFloorPct;
 
 /** Чистит весь trail-state для позиции (вызывается из close-handler'ов). */
 export function clearHunterTrailState(positionId) {
@@ -98,6 +103,7 @@ export function clearHunterTrailState(positionId) {
   peakUnrealizedPct.delete(positionId);
   hunterArmedMap.delete(positionId);
   hunterArmRequestMap.delete(positionId);
+  hunterBeArmedMap.delete(positionId);
 }
 
 /** tick.js: проверить и забрать pending ARM request (one-shot). */
@@ -161,6 +167,7 @@ export function resetHunterCooldowns() {
   peakUnrealizedPct.clear();
   hunterArmedMap.clear();
   hunterArmRequestMap.clear();
+  hunterBeArmedMap.clear();
   lastHeartbeatAt = 0;
   resetCooldownStore();
   restoredFromDisk = false;
@@ -468,6 +475,32 @@ function checkHunterExit(position, scoutData) {
         );
       }
     }
+  }
+
+  // ── Iter D3: breakeven храповик ─────────────────────────────────────
+  // Как только peak ≥ BE_ARM_PCT, взводим. Дальше, если unrealized% упал
+  // ≤ FLOOR (0 = безубыток) — закрываем в ~0 ВМЕСТО того чтобы добивать
+  // полный SL. Ловит "ушёл в плюс → развернулся" (ZEC: peak +3% → SL −2%).
+  // Идёт ВЫШЕ SL-проверки, т.к. floor (price=entry) пробивается раньше,
+  // чем SL (price=entry+2%). Порог ARM ниже trail-arm — берёт и подарки,
+  // которые не дотянули до trail.
+  if (HUNTER_BE_RATCHET_ENABLED && peak >= HUNTER_BE_ARM_PCT) {
+    hunterBeArmedMap.set(position.id, true);
+  }
+  if (hunterBeArmedMap.get(position.id) === true && unrealizedPct <= HUNTER_BE_FLOOR_PCT) {
+    logger.warn(
+      `[Hunter] 🛡 BREAKEVEN RATCHET #${position.coin} (id=${position.id}): peak +${peak.toFixed(2)}% → ` +
+        `now ${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(2)}% ≤ floor ${HUNTER_BE_FLOOR_PCT}% — ` +
+        `закрываем в безубыток, не отдаём подарок в минус`,
+    );
+    setHunterCrossCooldown(position.coin);
+    return {
+      action:  'CLOSE',
+      coin:    position.coin,
+      price:   item.price,
+      reason:  'hunter_breakeven_ratchet',
+      peakPct: peak,
+    };
   }
 
   if (position.sl_price != null && item.price >= position.sl_price) {
