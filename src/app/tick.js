@@ -13,6 +13,7 @@ import { execute } from '../modules/executor/index.js';
 import { tickSniper } from '../modules/executor/sniper.js';
 import { runSmartAlerts } from './alerts.js';
 import { integrityCheck, orphanCheck } from './integrity.js';
+import { superviseAdoptPositions } from './adoptSupervise.js';
 import { hunterReconcile } from './hunterReconcile.js';
 import { hunterLongReconcile } from './hunterLongReconcile.js';
 import { processHunterTrailArm } from './hunterTrailArm.js';
@@ -53,7 +54,15 @@ export async function tick() {
     }
 
     // ── Manual Position Check: hands-off режим если оператор торгует вручную ──
+    // (внутри orphanCheck при ADOPT_ENABLED подхватываются свежие ручные позы.)
     const manualState = await orphanCheck();
+
+    // ── Adopt сопровождение (multi-slot) ──
+    // Ведём ВСЕ подхваченные ручные позы (BE-храповик + трейл) каждый тик,
+    // независимо от hands-off: даже если рядом висит неусыновлённая ручная поза
+    // (→ manualState='paused'), уже усыновлённые должны продолжать вестись.
+    await superviseAdoptPositions();
+
     if (manualState === 'paused') {
       logger.debug('[Tick] HANDS-OFF: manual position active, scan-only refresh');
       // Дашборд (Hot Movers / Hunter signals) должен продолжать обновляться,

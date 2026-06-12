@@ -126,23 +126,24 @@ async function fireAdoptNtfy(title, message, tags) {
 }
 
 /**
- * Подхватывает ОДНУ свежую ручную позу в свободный слот (single-slot → берём
- * первую подходящую) и ставит реальный reduce-only стоп. Возвращает coin
- * усыновлённой позы или null.
+ * Подхватывает ВСЕ свежие ручные позы (multi-slot) и ставит на каждую реальный
+ * reduce-only стоп. Возвращает массив coin'ов усыновлённых поз (может быть пуст).
  *
- * Вызывается из orphanCheck ТОЛЬКО когда слот свободен (нет позиции бота в БД)
- * и ADOPT_ENABLED.
+ * manualPositions УЖЕ очищен от монет, которыми бот владеет (слот + ранее
+ * усыновлённые adopt-позы), поэтому повторного подхвата той же монеты не будет.
+ * Вызывается из orphanCheck при ADOPT_ENABLED, когда слот не держит бот-стратегия.
  *
  * @param {Array<{coin, szi, entryPx}>} manualPositions
- * @returns {Promise<string|null>} coin усыновлённой позы
+ * @returns {Promise<string[]>} coin'ы усыновлённых поз
  */
 export async function maybeAdoptManualPosition(manualPositions) {
-  if (!config.trading.adoptEnabled) return null;
-  if (!config.isProduction) return null;
-  if (!Array.isArray(manualPositions) || manualPositions.length === 0) return null;
+  if (!config.trading.adoptEnabled) return [];
+  if (!config.isProduction) return [];
+  if (!Array.isArray(manualPositions) || manualPositions.length === 0) return [];
 
   const now = Date.now();
   const maxAgeMs = config.trading.adoptMaxAgeMin * 60_000;
+  const adopted = [];
 
   for (const ex of manualPositions) {
     const coin    = ex.coin;
@@ -224,9 +225,11 @@ export async function maybeAdoptManualPosition(manualPositions) {
       });
     } catch (err) {
       // БД-запись не удалась, но стоп УЖЕ на бирже — это безопасно (поза защищена),
-      // просто бот не «владеет» ею в БД. Логируем громко, не падаем.
+      // просто бот не «владеет» ею в БД. Логируем громко и ПРЕРЫВАЕМ проход: иначе
+      // следующий тик увидит эту монету как «ручную» (нет DB-row) и попробует
+      // усыновить снова → второй стоп. Уже усыновлённые в этом проходе — возвращаем.
       logger.error(`[Adopt] savePosition #${coin} failed ПОСЛЕ постановки стопа (oid=${slOid}): ${err.message}`);
-      return null;
+      break;
     }
 
     const distLabel = `−${distPct.toFixed(2)}% ${basis === 'atr' ? 'ATR' : 'фикс'}`;
@@ -244,8 +247,8 @@ export async function maybeAdoptManualPosition(manualPositions) {
       ['handshake'],
     );
 
-    return coin; // single-slot — усыновляем только одну за проход
+    adopted.push(coin); // multi-slot — продолжаем подхватывать остальные
   }
 
-  return null;
+  return adopted;
 }

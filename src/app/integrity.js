@@ -7,7 +7,7 @@
 
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
-import { getActivePosition, closePosition as dbClosePosition } from '../core/database.js';
+import { getActivePosition, getActiveAdoptPositions, closePosition as dbClosePosition } from '../core/database.js';
 import { getPositions, getAccountSummary } from '../modules/exchange.js';
 import { sendMessage } from '../modules/reporter.js';
 import { fetchExchangePositions } from '../modules/sync.js';
@@ -32,7 +32,111 @@ function isSameCoin(apiCoin, targetCoin) {
 }
 
 /**
+ * Проверяет ОДНУ позицию: если её нет на бирже — закрывает в БД с классификацией
+ * причины и шлёт уведомление. exchangePositions/equity/withdrawable передаются
+ * сверху (один fetch на весь проход, multi-position).
  * @returns {Promise<boolean>} true если позиция была закрыта внешне
+ */
+async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawable) {
+  const now = Date.now();
+
+  // Grace period после ОТКРЫТИЯ позиции (даём 10с на индексацию API)
+  if (now - dbPosition.entry_time < 10_000) return false;
+
+  const found = exchangePositions.find((ap) => {
+    const pos = ap?.position ?? ap;
+    return isSameCoin(pos?.coin, dbPosition.coin) && parseFloat(pos?.szi ?? '0') !== 0;
+  });
+  if (found) return false; // позиция на месте
+
+  // ── Позиция исчезла ──────────────
+  // PnL = equity_now − equity_at_open (приблизительно при нескольких открытых
+  // позах — точное число даёт classifyClose по fills ниже и перетирает это).
+  let estimatedPnl = 0;
+  let pnlAccurate = false;
+  if (Number.isFinite(dbPosition.entry_equity) && dbPosition.entry_equity > 0) {
+    estimatedPnl = equity - dbPosition.entry_equity;
+    pnlAccurate = true;
+  }
+
+  logger.error(
+    `[Integrity] ⚠️ EXTERNAL CLOSE detected: #${dbPosition.coin} is OPEN in DB ` +
+      `but ABSENT on exchange! withdrawable=$${withdrawable.toFixed(2)}, equity=$${equity.toFixed(2)} ` +
+      `(margin freed → position is genuinely gone)`,
+  );
+
+  const holdHours = (Date.now() - dbPosition.entry_time) / 3_600_000;
+
+  // Classify cause через userFills (TP-trigger / SL-trigger / liquidation /
+  // manual_close). Дефолт 'external_close' если fills не дали ответа.
+  let closeReason = 'external_close';
+  let closePx = 0;
+  try {
+    const fills = await fetchUserFills(dbPosition.entry_time - 60_000);
+    const coinFills = fills.filter(
+      (f) => f.coin.toUpperCase() === dbPosition.coin.toUpperCase(),
+    );
+    const c = classifyClose(dbPosition, coinFills);
+    if (c.reason !== 'external_unknown') closeReason = c.reason;
+    if (Number.isFinite(c.pnl)) {
+      estimatedPnl = c.pnl;
+      pnlAccurate  = true;  // fills дают точное число
+    }
+    if (Number.isFinite(c.closePx)) closePx = c.closePx;
+    logger.info(
+      `[Integrity] #${dbPosition.coin} classified as '${closeReason}' | ` +
+        `pnl(fills)=${Number.isFinite(c.pnl) ? '$' + c.pnl.toFixed(4) : 'n/a'} | ` +
+        `closePx=${closePx ? '$' + closePx : 'n/a'}`,
+    );
+  } catch (clsErr) {
+    logger.debug(`[Integrity] classifyClose failed: ${clsErr.message}`);
+  }
+
+  dbClosePosition(dbPosition.id, {
+    close_price:  closePx,
+    realized_pnl: estimatedPnl,
+    fee_paid:     0,
+    reason:       closeReason,
+  });
+
+  // Adopt: внешнее/ручное закрытие — частый путь выхода для adopted-позы.
+  // Чистим per-position trail-state, иначе peak-Map копит мусор.
+  if (dbPosition.strategy_id === 'adopt') clearAdoptState(dbPosition.id);
+
+  logger.info(
+    `[Integrity] DB position #${dbPosition.coin} (id=${dbPosition.id}) closed | ` +
+      `held: ${holdHours.toFixed(1)}h | estimated PnL: $${estimatedPnl.toFixed(4)}`,
+  );
+
+  const pnlSign  = estimatedPnl >= 0 ? '+' : '';
+  const pnlEmoji = estimatedPnl >= 0 ? '📈' : '📉';
+  const pnlLine = pnlAccurate
+    ? `${pnlEmoji} PnL: <b>${pnlSign}$${estimatedPnl.toFixed(4)}</b>\n`
+    : `📊 PnL: <i>точная оценка недоступна (нет entry_equity для этой позиции)</i>\n` +
+      `   Смотри Hyperliquid UI или сравни с предыдущим equity вручную.\n`;
+
+  await sendMessage(
+    `⚠️ <b>ВНЕШНЕЕ ЗАКРЫТИЕ ПОЗИЦИИ</b>\n` +
+      `<code>═════════════════════</code>\n` +
+      `🔍 Обнаружено расхождение:\n` +
+      `<b>#${dbPosition.coin}</b> закрыт на стороне биржи\n` +
+      `<i>(ADL, ликвидация или ручное действие)</i>\n` +
+      `<code>─────────────────────</code>\n` +
+      `💰 Размер: <b>$${dbPosition.size_usd.toFixed(2)}</b>\n` +
+      `💵 Entry: <b>$${dbPosition.entry_price}</b>\n` +
+      `⏳ Удержание: <b>${holdHours.toFixed(1)}ч</b>\n` +
+      pnlLine +
+      `💰 Equity: <b>$${equity.toFixed(2)}</b> | Withdrawable: <b>$${withdrawable.toFixed(2)}</b>\n` +
+      `<code>═════════════════════</code>\n` +
+      `🤖 Слот освобождён.`,
+    true,
+  );
+
+  return true;
+}
+
+/**
+ * @returns {Promise<boolean>} true если хотя бы одна позиция была закрыта внешне
  */
 export async function integrityCheck() {
   if (!config.isProduction) return false;
@@ -47,139 +151,51 @@ export async function integrityCheck() {
   if (now - state.lastIntegrityCheck < INTEGRITY_CHECK_INTERVAL_MS) return false;
   state.lastIntegrityCheck = now;
 
-  const dbPosition = getActivePosition();
-  if (!dbPosition) return false;
-
-  // 2. Grace period после ОТКРЫТИЯ позиции (даем 10с на индексацию API)
-  // Это уберет ложные алерты сразу после покупки
-  if (now - dbPosition.entry_time < 10_000) {
-    return false;
-  }
+  // Слот-позиция (Hunter/carry/...) + ВСЕ adopt-позы (multi-slot). Дедуп по id.
+  const slotPos = getActivePosition();
+  const adoptPositions = getActiveAdoptPositions();
+  const byId = new Map();
+  if (slotPos) byId.set(slotPos.id, slotPos);
+  for (const p of adoptPositions) byId.set(p.id, p);
+  const positionsToCheck = [...byId.values()];
+  if (positionsToCheck.length === 0) return false;
 
   try {
     const exchangePositions = await getPositions();
 
-    const found = exchangePositions.find((ap) => {
-      const pos = ap?.position ?? ap;
-      const apiCoin = pos?.coin;
-      const szi  = parseFloat(pos?.szi ?? '0');
-      return isSameCoin(apiCoin, dbPosition.coin) && szi !== 0;
-    });
-
-
-    if (found) return false; // позиция на месте
-
-    // ── Позиция исчезла — проверяем margin guard ──
+    // Account summary один раз на проход (margin-guard + PnL fallback).
     let equity = 0;
     let withdrawable = 0;
-    let estimatedPnl = 0;
-    let pnlAccurate = false;
     try {
       const summary = await getAccountSummary();
       equity       = summary.equity;
       withdrawable = summary.available;
-      // Корректная оценка PnL = equity_now − equity_at_open. Старая формула
-      // (equity − size_usd) сравнивала несравнимое и врала на десятки центов.
-      if (Number.isFinite(dbPosition.entry_equity) && dbPosition.entry_equity > 0) {
-        estimatedPnl = equity - dbPosition.entry_equity;
-        pnlAccurate = true;
-      } else {
-        // Fallback для старых позиций (до миграции entry_equity): не показываем число
-        estimatedPnl = 0;
-        pnlAccurate = false;
-      }
     } catch {
-      // PnL неизвестен
+      // деградируем — PnL уйдёт на fills/неизвестно, margin-guard пропустит
     }
 
-    // Margin Guard: если маржа заблокирована → скорее всего лаг API
+    // Margin Guard (глобально): маржа заблокирована → вероятен лаг API. Отдаём
+    // позиции «вернутся» следующим тиком, чем словить ложное внешнее закрытие.
     if (equity > 10 && withdrawable < equity * 0.5) {
       logger.warn(
-        `[Integrity] ⚡ #${dbPosition.coin} not found in getPositions() but ` +
-          `margin is locked: withdrawable=$${withdrawable.toFixed(2)} vs equity=$${equity.toFixed(2)} ` +
-          `(${((withdrawable / equity) * 100).toFixed(1)}%). ` +
-          `Likely API lag — skipping external close detection.`,
+        `[Integrity] ⚡ position(s) not found in getPositions() but margin is locked: ` +
+          `withdrawable=$${withdrawable.toFixed(2)} vs equity=$${equity.toFixed(2)} ` +
+          `(${((withdrawable / equity) * 100).toFixed(1)}%). Likely API lag — skipping.`,
       );
       return false;
     }
 
-    // ── Позиция действительно закрыта ──────────────
-    logger.error(
-      `[Integrity] ⚠️ EXTERNAL CLOSE detected: #${dbPosition.coin} is OPEN in DB ` +
-        `but ABSENT on exchange! withdrawable=$${withdrawable.toFixed(2)}, equity=$${equity.toFixed(2)} ` +
-        `(margin freed → position is genuinely gone)`,
-    );
-
-    const holdMs    = Date.now() - dbPosition.entry_time;
-    const holdHours = holdMs / 3_600_000;
-
-    // Classify cause через userFills (TP-trigger / SL-trigger / liquidation /
-    // manual_close). Дефолт 'external_close' если fills не дали ответа.
-    let closeReason = 'external_close';
-    let closePx = 0;
-    try {
-      const fills = await fetchUserFills(dbPosition.entry_time - 60_000);
-      const coinFills = fills.filter(
-        (f) => f.coin.toUpperCase() === dbPosition.coin.toUpperCase(),
-      );
-      const c = classifyClose(dbPosition, coinFills);
-      if (c.reason !== 'external_unknown') closeReason = c.reason;
-      if (Number.isFinite(c.pnl)) {
-        estimatedPnl = c.pnl;
-        pnlAccurate  = true;  // fills дают точное число
+    let anyClosed = false;
+    for (const dbPosition of positionsToCheck) {
+      try {
+        if (await closeIfVanished(dbPosition, exchangePositions, equity, withdrawable)) {
+          anyClosed = true;
+        }
+      } catch (err) {
+        logger.debug(`[Integrity] check #${dbPosition.coin} failed: ${err.message}`);
       }
-      if (Number.isFinite(c.closePx)) closePx = c.closePx;
-      logger.info(
-        `[Integrity] #${dbPosition.coin} classified as '${closeReason}' | ` +
-          `pnl(fills)=${Number.isFinite(c.pnl) ? '$' + c.pnl.toFixed(4) : 'n/a'} | ` +
-          `closePx=${closePx ? '$' + closePx : 'n/a'}`,
-      );
-    } catch (clsErr) {
-      logger.debug(`[Integrity] classifyClose failed: ${clsErr.message}`);
     }
-
-    dbClosePosition(dbPosition.id, {
-      close_price:  closePx,
-      realized_pnl: estimatedPnl,
-      fee_paid:     0,
-      reason:       closeReason,
-    });
-
-    // Adopt: внешнее/ручное закрытие — частый путь выхода для adopted-позы.
-    // Чистим per-position trail-state, иначе peak-Map копит мусор.
-    if (dbPosition.strategy_id === 'adopt') clearAdoptState(dbPosition.id);
-
-    logger.info(
-      `[Integrity] DB position #${dbPosition.coin} (id=${dbPosition.id}) closed | ` +
-        `held: ${holdHours.toFixed(1)}h | estimated PnL: $${estimatedPnl.toFixed(4)}`,
-    );
-
-    const pnlSign  = estimatedPnl >= 0 ? '+' : '';
-    const pnlEmoji = estimatedPnl >= 0 ? '📈' : '📉';
-    const pnlLine = pnlAccurate
-      ? `${pnlEmoji} PnL (equity Δ): <b>${pnlSign}$${estimatedPnl.toFixed(4)}</b> ($${dbPosition.entry_equity.toFixed(2)} → $${equity.toFixed(2)})\n`
-      : `📊 PnL: <i>точная оценка недоступна (нет entry_equity для этой позиции)</i>\n` +
-        `   Смотри Hyperliquid UI или сравни с предыдущим equity вручную.\n`;
-
-    await sendMessage(
-      `⚠️ <b>ВНЕШНЕЕ ЗАКРЫТИЕ ПОЗИЦИИ</b>\n` +
-        `<code>═════════════════════</code>\n` +
-        `🔍 Обнаружено расхождение:\n` +
-        `<b>#${dbPosition.coin}</b> закрыт на стороне биржи\n` +
-        `<i>(ADL, ликвидация или ручное действие)</i>\n` +
-        `<code>─────────────────────</code>\n` +
-        `💰 Размер: <b>$${dbPosition.size_usd.toFixed(2)}</b>\n` +
-        `💵 Entry: <b>$${dbPosition.entry_price}</b>\n` +
-        `⏳ Удержание: <b>${holdHours.toFixed(1)}ч</b>\n` +
-        pnlLine +
-        `💰 Equity: <b>$${equity.toFixed(2)}</b> | Withdrawable: <b>$${withdrawable.toFixed(2)}</b>\n` +
-        `<code>═════════════════════</code>\n` +
-        `🤖 Бот переведён в режим <b>IDLE</b>.\n` +
-        `Следующий вход — в ближайшем тике.`,
-      true,
-    );
-
-    return true;
+    return anyClosed;
   } catch (err) {
     logger.debug(`[Integrity] Check failed (non-critical): ${err.message}`);
     return false;
@@ -216,11 +232,14 @@ export async function orphanCheck() {
   }
   lastOrphanCheck = now;
 
-  // Если в БД есть OPEN — это позиция бота, manualCheck не нужен
-  // (integrityCheck уже отработал; если бы оператор открыл вторую позу на другой
-  // монете — она попала бы в getPositions(), но текущая single-slot архитектура
-  // запрещает второй параллельный ордер от бота, см. coordinator).
-  const dbPosition = getActivePosition();
+  // Монеты, которыми бот ВЛАДЕЕТ в БД: single-slot позиция (Hunter/carry/...) +
+  // ВСЕ adopt-позы (multi-slot). Их исключаем из «ручного» списка, иначе уже
+  // усыновлённые adopt-монеты выглядели бы как новые ручные orphan'ы.
+  const slotPos = getActivePosition();
+  const adoptPositions = getActiveAdoptPositions();
+  const ownedCoins = new Set();
+  if (slotPos) ownedCoins.add(slotPos.coin);
+  for (const p of adoptPositions) ownedCoins.add(p.coin);
 
   let exchangePositions;
   try {
@@ -230,10 +249,8 @@ export async function orphanCheck() {
     return state.manualPositionActive ? 'paused' : false;
   }
 
-  // Отфильтровываем позицию бота (если есть) — остаётся только "ручное"
-  const manualPositions = dbPosition
-    ? exchangePositions.filter((p) => p.coin !== dbPosition.coin)
-    : exchangePositions;
+  // Остаётся только «ручное» — позы на бирже, которых нет в БД бота
+  const manualPositions = exchangePositions.filter((p) => !ownedCoins.has(p.coin));
 
   // ── Ручных позиций нет ─────────────────────────
   if (manualPositions.length === 0) {
@@ -254,27 +271,32 @@ export async function orphanCheck() {
     return false;
   }
 
-  // ── Adopt Mode (plans/adopt-mode-plan.md, Iter 1 SHADOW) ─────
-  // Если слот бота свободен и ADOPT_ENABLED — подхватываем свежую ручную позу
-  // в слот как strategy_id='adopt' (Hunter после этого не входит — слот занят).
-  // Усыновлённая монета перестаёт быть "ручной orphan": убираем её из manual-
-  // списка и flag'ов, чтобы не словить ложное "ручные закрыты" следующим тиком.
+  // ── Adopt Mode (multi-slot, plans/adopt-mode-plan.md) ─────
+  // Подхватываем ВСЕ свежие ручные позы в adopt-слоты (reduce-only стоп + ведение).
+  // Условие: слот не держит БОТ-стратегия (Hunter/carry/...). Если слот свободен
+  // ИЛИ держится только adopt-позами — продолжаем подхватывать новые ручные входы.
+  // Усыновлённые монеты перестают быть «ручными»: убираем из manual-списка и
+  // flag'ов, чтобы не словить ложное «ручные закрыты» следующим тиком.
+  const botStrategyHoldsSlot = slotPos && (slotPos.strategy_id || 'carry') !== 'adopt';
   let activeManual = manualPositions;
-  if (!dbPosition && config.trading.adoptEnabled) {
+  if (!botStrategyHoldsSlot && config.trading.adoptEnabled) {
     try {
-      const adoptedCoin = await maybeAdoptManualPosition(manualPositions);
-      if (adoptedCoin) {
-        activeManual = manualPositions.filter((p) => p.coin !== adoptedCoin);
-        state.manualPositionCoins.delete(adoptedCoin);
-        state.manualWarningThrottle.delete(adoptedCoin);
+      const adoptedCoins = await maybeAdoptManualPosition(manualPositions);
+      if (adoptedCoins.length > 0) {
+        const adoptedSet = new Set(adoptedCoins);
+        activeManual = manualPositions.filter((p) => !adoptedSet.has(p.coin));
+        for (const c of adoptedCoins) {
+          state.manualPositionCoins.delete(c);
+          state.manualWarningThrottle.delete(c);
+        }
       }
     } catch (err) {
       logger.debug(`[Manual] adopt attempt failed: ${err.message}`);
     }
   }
 
-  // Все ручные позы усыновлены (или была одна и её взяли) → слот занят adopt'ом,
-  // паузить тик не нужно: coordinator увидит adopt-позицию и вернёт HOLD.
+  // Все ручные позы усыновлены → паузить тик не нужно: adopt-позы ведёт
+  // superviseAdoptPositions(), а coordinator для adopt вернёт HOLD.
   if (activeManual.length === 0) {
     state.manualPositionActive = false;
     return false;

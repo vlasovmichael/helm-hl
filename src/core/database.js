@@ -524,6 +524,18 @@ export function getActivePosition() {
 }
 
 /**
+ * Все активные (OPEN) adopt-позиции (strategy_id='adopt', mode='PRODUCTION').
+ * Adopt — multi-slot: оператор может держать несколько ручных входов одновременно,
+ * бот вешает стоп+сопровождение на каждую (см. app/adoptSupervise.js). В отличие
+ * от getActivePosition() (single-slot, LIMIT 1 для бот-стратегий), здесь массив.
+ */
+export function getActiveAdoptPositions() {
+  return getDb()
+    .prepare("SELECT * FROM positions WHERE status = 'OPEN' AND mode = 'PRODUCTION' AND strategy_id = 'adopt' ORDER BY id ASC")
+    .all();
+}
+
+/**
  * Возвращает активную (OPEN) shadow-позицию (mode='PAPER') или undefined.
  * Отдельный slot для paper-стратегий в PROD-боте — не конкурирует с реальным
  * и не виден integrity/reconcile.
