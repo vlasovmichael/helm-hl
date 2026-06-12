@@ -1355,15 +1355,16 @@ const _hmPrevPrices = new Map();
 // (15m окно, fallback 5m). Отвечает «не поздно ли» — гасит зуд на вертикальной
 // свече. Знак считается по side сетапа (он уже кодирует trend/fade): + = цена
 // ушла в твою сторону, опоздал; ≤0 = у базы / ещё не пошло, вход рядом.
-// Без направленного сетапа (WAIT) таймить нечего → нейтральная точка.
-// Пороги те же, что classifyEntryZone свинга (0.5% зона / 2.5% chase).
+// Горит ТОЛЬКО при подтверждённом сетапе (рамка: score≥3 + режим trend/fade) —
+// синхронно с рамкой Setup и порогом ntfy-пуша. Иначе нейтральная точка.
+// Пороги растяжки те же, что classifyEntryZone свинга (0.5% зона / 2.5% chase).
 // Тайминг входа (5m reclaim) оператор ставит сам.
 const HM_ENTRY_ZONE_PCT = 0.5;
 const HM_ENTRY_EXT_PCT = 2.5;
-const HM_ENTRY_MIN_SCORE = 1.5; // ниже = WAIT
-function hmEntryBadge(windows, side, score) {
-  if (!side || !(score >= HM_ENTRY_MIN_SCORE))
-    return { icon: "·", state: "none", title: "нет сетапа — таймить нечего" };
+const HM_ENTRY_MIN_SCORE = 3; // = порог рамки Setup (score≥3 + mode)
+function hmEntryBadge(windows, side, score, mode) {
+  if (!side || !mode || !(score >= HM_ENTRY_MIN_SCORE))
+    return { icon: "·", state: "none", title: "нет подтверждённого сетапа — таймить нечего" };
   const pick = (mins, lbl) =>
     windows.find((w) => w.mins === mins) || windows.find((w) => w.label === lbl);
   const w15 = pick(15, "15m");
@@ -1598,7 +1599,7 @@ function renderHotMovers(payload) {
       // Setup: ОДИН сетап + причина. Режим выбирает OI (trend/fade), сила по
       // взвешенному ходу окон с подтверждением accel/vol.
       const setup = computeMomentum(x.windows, accelKind, volKind, x.s);
-      const entry = hmEntryBadge(x.windows, setup.side, setup.score);
+      const entry = hmEntryBadge(x.windows, setup.side, setup.score, setup.mode);
 
       // OI delta 5m — нейтральная раскраска: OI сам по себе не хорош/плох,
       // его смысл зависит от направления цены (режим выбирает Setup-вердикт).

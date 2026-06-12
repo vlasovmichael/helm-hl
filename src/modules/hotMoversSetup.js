@@ -69,7 +69,7 @@ export function evaluateSetup(windows, oi) {
 // сторону (опоздал), ≤0 = у базы / ещё не пошло (вход рядом).
 export const ENTRY_ZONE_PCT = 0.5;
 export const ENTRY_EXT_PCT = 2.5;
-export const ENTRY_MIN_SCORE = 1.5; // ниже = WAIT, таймить нечего
+export const ENTRY_MIN_SCORE = 3; // = порог рамки Setup (score≥3 + mode); зеркало app.js
 
 /**
  * @returns {{state:'zone'|'mid'|'extended'|'none', extDir:number|null, win:number|null}}
