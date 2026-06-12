@@ -136,6 +136,12 @@ function initWebSocket() {
         renderChillBoyCard(msg.data.chillBoy);
         renderCandyGirl(msg.data.candyGirl);
         renderFaderCard(msg.data.fader);
+        // Hot Movers — из WS (≤2с) вместо 10с-поллинга; HTTP /api/signals
+        // в tick() остаётся фолбэком, если WS отвалится.
+        if (msg.data.hotMovers?.signals) {
+          _hmSignalsCache = msg.data.hotMovers.signals;
+          renderHotMovers(msg.data.hotMovers);
+        }
         handlePriceChartUpdate(
           msg.data.activePosition,
           msg.data.manualPositions,

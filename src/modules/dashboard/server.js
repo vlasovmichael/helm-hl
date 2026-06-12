@@ -650,8 +650,13 @@ async function getStatusData() {
     }
   }
 
+  // Hot Movers едут в WS-статусе (≤2с свежесть вместо 10с-поллинга). Кэш TTL
+  // дедупит compute между броадкастом и HTTP /api/signals.
+  const hotMovers = await getMoversPayloadCached(30);
+
   return {
     mode: config.mode,
+    hotMovers,
     equity,
     available,
     sessionStartEquity: state.sessionStartEquity,
@@ -997,11 +1002,8 @@ async function enrichVolMult(items) {
   return items;
 }
 
-async function handleSignals(req, res) {
+async function buildMoversPayload(limit = 12) {
   try {
-    const limit = req.query.limit
-      ? Math.max(1, Math.min(300, parseInt(req.query.limit, 10)))
-      : 12;
     const data = Array.isArray(state.latestHunter) ? state.latestHunter : [];
     const now = state.latestHunterAt || Date.now();
     const faderTiers = state.latestFader instanceof Map ? state.latestFader : null;
@@ -1160,7 +1162,7 @@ async function handleSignals(req, res) {
     // Обогащаем top vol-мультипликатором (≤20 монет; кеш 30с поглощает повторы).
     await enrichVolMult(top.slice(0, 20));
 
-    res.json({
+    return {
       ts: state.latestHunterAt || 0,
       thresholds: {
         spikePct: HUNTER_SPIKE_PCT,
@@ -1180,7 +1182,45 @@ async function handleSignals(req, res) {
       count: top.length,
       signals: top,
       faderEnabled: config.trading.faderEnabled,
-    });
+    };
+  } catch (err) {
+    logger.warn(`[Movers] build failed: ${err.message}`);
+    return null;
+  }
+}
+
+// Кэш Hot Movers: WS-броадкаст зовёт каждые 2с — считаем не чаще TTL, чтобы
+// тяжёлую сборку (окна по вселенной + enrichVolMult) не гонять на каждый кадр.
+// Тот же кэш обслуживает HTTP /api/signals (дедуп compute).
+const _moversCache = { ts: 0, limit: null, payload: null };
+const MOVERS_CACHE_TTL_MS = 3000;
+
+async function getMoversPayloadCached(limit = 12) {
+  const now = Date.now();
+  if (
+    _moversCache.payload &&
+    _moversCache.limit === limit &&
+    now - _moversCache.ts < MOVERS_CACHE_TTL_MS
+  ) {
+    return _moversCache.payload;
+  }
+  const payload = await buildMoversPayload(limit);
+  if (payload) {
+    _moversCache.ts = now;
+    _moversCache.limit = limit;
+    _moversCache.payload = payload;
+  }
+  return payload;
+}
+
+async function handleSignals(req, res) {
+  try {
+    const limit = req.query.limit
+      ? Math.max(1, Math.min(300, parseInt(req.query.limit, 10)))
+      : 12;
+    const payload = await getMoversPayloadCached(limit);
+    if (!payload) return res.status(500).json({ error: 'movers build failed' });
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
