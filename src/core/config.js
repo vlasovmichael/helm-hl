@@ -441,13 +441,30 @@ function loadConfig() {
   const adoptEnabled          = (process.env.ADOPT_ENABLED || 'false').toLowerCase() === 'true';
   const adoptMaxAgeMin        = parseFloat(process.env.ADOPT_MAX_AGE_MIN        || '10');
   const adoptStopPct          = parseFloat(process.env.ADOPT_STOP_PCT           || '1.5');
-  // BE-храповик / трейл (ADOPT_BE_ARM_PCT, ADOPT_TRAIL_*) — добавятся тем же
-  // коммитом, что и сама логика сопровождения. Пока не парсим: конфиг без кода = ложь.
+  // Сопровождение (per-tick, мягче жёсткого стопа на бирже): BE-храповик + трейл,
+  // переиспуск механики Hunter D3/трейла. ARM ≤ STOP_PCT логически (берём подарки
+  // меньше стоп-дистанции). FLOOR 0 = безубыток.
+  const adoptBeArmPct         = parseFloat(process.env.ADOPT_BE_ARM_PCT         || '1.5');
+  const adoptBeFloorPct       = parseFloat(process.env.ADOPT_BE_FLOOR_PCT       || '0');
+  const adoptTrailArmPct      = parseFloat(process.env.ADOPT_TRAIL_ARM_PCT      || '2');
+  const adoptTrailGiveBackPct = parseFloat(process.env.ADOPT_TRAIL_GIVE_BACK_PCT || '30');
   if (isNaN(adoptStopPct) || adoptStopPct <= 0 || adoptStopPct >= 10) {
     throw new Error(`ADOPT_STOP_PCT must be in (0, 10). Got: "${process.env.ADOPT_STOP_PCT}"`);
   }
   if (isNaN(adoptMaxAgeMin) || adoptMaxAgeMin <= 0) {
     throw new Error(`ADOPT_MAX_AGE_MIN must be > 0. Got: "${process.env.ADOPT_MAX_AGE_MIN}"`);
+  }
+  if (isNaN(adoptBeArmPct) || adoptBeArmPct <= 0) {
+    throw new Error(`ADOPT_BE_ARM_PCT must be > 0. Got: "${process.env.ADOPT_BE_ARM_PCT}"`);
+  }
+  if (isNaN(adoptBeFloorPct) || adoptBeFloorPct < 0 || adoptBeFloorPct >= adoptBeArmPct) {
+    throw new Error(`ADOPT_BE_FLOOR_PCT must be in [0, ADOPT_BE_ARM_PCT). Got: "${process.env.ADOPT_BE_FLOOR_PCT}"`);
+  }
+  if (isNaN(adoptTrailArmPct) || adoptTrailArmPct <= 0) {
+    throw new Error(`ADOPT_TRAIL_ARM_PCT must be > 0. Got: "${process.env.ADOPT_TRAIL_ARM_PCT}"`);
+  }
+  if (isNaN(adoptTrailGiveBackPct) || adoptTrailGiveBackPct <= 0 || adoptTrailGiveBackPct >= 100) {
+    throw new Error(`ADOPT_TRAIL_GIVE_BACK_PCT must be in (0, 100). Got: "${process.env.ADOPT_TRAIL_GIVE_BACK_PCT}"`);
   }
 
   // ── Risk-based position sizing (cross-strategy: Hunter / Hunter Long / ChillBoy) ──
@@ -830,6 +847,10 @@ function loadConfig() {
       adoptEnabled,
       adoptMaxAgeMin,
       adoptStopPct,
+      adoptBeArmPct,
+      adoptBeFloorPct,
+      adoptTrailArmPct,
+      adoptTrailGiveBackPct,
       chillBoyEnabled,
       chillBoyProdEnabled,
       chillBoyAtrShort,

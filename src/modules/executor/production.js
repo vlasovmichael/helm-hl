@@ -42,6 +42,7 @@ import {
   consumeHunterLongMfeMae, clearHunterLongTrailState, getHunterLongPeakPct,
 } from '../strategistHunterLong.js';
 import { setHunterCrossCooldown } from '../hunterCrossCooldown.js';
+import { clearAdoptState, getAdoptPeakPct } from '../strategistAdopt.js';
 import { recordHunterLongLossEvent } from '../strategistHunterLong.js';
 import {
   notifyProductionOpen, notifyOpenFailed, notifyOpenRejected,
@@ -1436,6 +1437,13 @@ export async function productionClose(signal, position, silent = false) {
       exitFeatures.trail_give_back_pct = signal.giveBackPct ?? null;
     }
     clearHunterLongTrailState(position.id);
+  } else if (position.strategy_id === 'adopt') {
+    exitFeatures = { hold_seconds: Math.round(holdMs / 1000) };
+    if (signal.reason === 'adopt_trail_tp' || signal.reason === 'adopt_breakeven_ratchet') {
+      exitFeatures.trail_peak_pct      = signal.peakPct ?? getAdoptPeakPct(position.id);
+      exitFeatures.trail_give_back_pct = signal.giveBackPct ?? null;
+    }
+    clearAdoptState(position.id);
   }
 
   dbClosePosition(position.id, {

@@ -13,6 +13,7 @@ import { sendMessage } from '../modules/reporter.js';
 import { fetchExchangePositions } from '../modules/sync.js';
 import { fetchUserFills, classifyClose } from '../modules/userFills.js';
 import { maybeAdoptManualPosition } from './adoptReconcile.js';
+import { clearAdoptState } from '../modules/strategistAdopt.js';
 import {
   state,
   INTEGRITY_CHECK_INTERVAL_MS,
@@ -144,6 +145,10 @@ export async function integrityCheck() {
       reason:       closeReason,
     });
 
+    // Adopt: внешнее/ручное закрытие — частый путь выхода для adopted-позы.
+    // Чистим per-position trail-state, иначе peak-Map копит мусор.
+    if (dbPosition.strategy_id === 'adopt') clearAdoptState(dbPosition.id);
+
     logger.info(
       `[Integrity] DB position #${dbPosition.coin} (id=${dbPosition.id}) closed | ` +
         `held: ${holdHours.toFixed(1)}h | estimated PnL: $${estimatedPnl.toFixed(4)}`,
@@ -201,7 +206,11 @@ export async function orphanCheck() {
   if (!config.isProduction) return false;
 
   const now = Date.now();
-  if (now - lastOrphanCheck < ORPHAN_CHECK_INTERVAL_MS) {
+  // Adopt включён → проверяем каждый тик (~15с), чтобы стоп вешался на свежий
+  // ручной вход почти сразу, а не через минуту незащищённого окна. Без adopt —
+  // прежние 60с (детект нужен только для hands-off паузы, спешить некуда).
+  const interval = config.trading.adoptEnabled ? 0 : ORPHAN_CHECK_INTERVAL_MS;
+  if (now - lastOrphanCheck < interval) {
     // throttle активен, но если флаг уже стоит — продолжаем паузить тик
     return state.manualPositionActive ? 'paused' : false;
   }

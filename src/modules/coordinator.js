@@ -6,6 +6,8 @@ import { analyzeFade } from './strategistFade.js';
 import { analyzeHunter } from './strategistSniper.js';
 import { analyzeHunterLong } from './strategistHunterLong.js';
 import { analyzeTrendFollow } from './strategistTrendFollow.js';
+import { analyzeAdopt } from './strategistAdopt.js';
+import { getLivePrice } from './exchange.js';
 
 /**
  * Coordinator: единая точка входа для стратегий.
@@ -45,13 +47,22 @@ export async function coordinate(scoutData, activePosition, hunterData = scoutDa
       return analyzeFade(scoutData, activePosition);
     }
 
-    // Adopt Mode: подхваченная ручная поза. Жёсткий стоп УЖЕ стоит на бирже
-    // (reduce-only SL trigger выставлен при подхвате, plans/adopt-mode-plan.md) —
-    // его держит биржа, бот per-tick ничего не делает → HOLD (и НЕ проваливаемся
-    // в carry-fallback). Выход: стоп / ручное закрытие (ловит integrityCheck).
-    // Следующий шаг — храповик+трейл (потребует analyzeAdopt вместо HOLD).
+    // Adopt Mode: подхваченная ручная поза. Жёсткий стоп держит биржа (resting
+    // SL trigger, выставлен при подхвате). Per-tick ведём мягкий выход (BE-
+    // храповик + трейл) через analyzeAdopt по живой цене (WS-first, HTTP fallback).
+    // Нет цены → HOLD (ждём тик). plans/adopt-mode-plan.md.
     if (sid === 'adopt') {
-      return { action: 'HOLD', strategy_id: 'adopt' };
+      let price = null;
+      try {
+        price = await getLivePrice(activePosition.coin);
+      } catch (err) {
+        logger.debug(`[Coordinator] adopt getLivePrice failed: ${err.message}`);
+      }
+      if (!Number.isFinite(price) || price <= 0) {
+        return { action: 'HOLD', strategy_id: 'adopt' };
+      }
+      const sig = analyzeAdopt(activePosition, price);
+      return { ...sig, strategy_id: 'adopt' };
     }
 
     const signal = analyze(scoutData, activePosition);

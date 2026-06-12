@@ -380,7 +380,7 @@ async function handleClose(signal, position) {
   // равно мусор и потенциальный риск на следующей позиции).
   if (
     config.isProduction &&
-    (position.strategy_id === 'hunter' || position.strategy_id === 'hunter_long') &&
+    (position.strategy_id === 'hunter' || position.strategy_id === 'hunter_long' || position.strategy_id === 'adopt') &&
     position.mode === 'PRODUCTION' &&
     (position.hunter_sl_oid || position.hunter_tp_oid)
   ) {
