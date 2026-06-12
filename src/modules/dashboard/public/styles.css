@@ -3076,3 +3076,85 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
 }
 #setup-scanner-table tr.sw-long  .signals-price { color: var(--green); }
 #setup-scanner-table tr.sw-short .signals-price { color: var(--red); }
+
+/* ════════════════════════════════════════════════════════════════════
+   Motion layer (2026-06-12) — tasteful, GPU-only (transform/opacity).
+   Cards rise in on scroll, lift on hover, titles draw an accent line.
+   Все эффекты композитные → стабильные 60fps. Глушится глобальным
+   prefers-reduced-motion блоком выше (ничего отдельно отключать не надо).
+   ════════════════════════════════════════════════════════════════════ */
+
+/* — Reveal-on-scroll: стартовое состояние выставляет JS (data-reveal),
+     чтобы при выключенном JS контент оставался видимым (no FOUC-ловушек). */
+[data-reveal] {
+  opacity: 0;
+  transform: translate3d(0, 16px, 0);
+  transition:
+    opacity 0.55s var(--ease),
+    transform 0.55s var(--ease);
+  transition-delay: calc(var(--reveal-i, 0) * 55ms);
+}
+[data-reveal].is-revealed {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+/* — Card hover: лёгкий подъём + усиленная тень + акцентная кромка.
+     transform/box-shadow/border-color — без reflow. */
+.card {
+  transition:
+    transform 0.32s var(--ease),
+    box-shadow 0.32s var(--ease),
+    border-color 0.32s var(--ease);
+}
+@media (hover: hover) {
+  .card:hover {
+    transform: translate3d(0, -3px, 0);
+    box-shadow: var(--shadow);
+    border-color: var(--border-strong);
+  }
+}
+
+/* — Card title: акцент-линия, «прорисовывается» при reveal и на hover.
+     scaleX по left-origin = композитно. */
+.card-title {
+  position: relative;
+}
+.card-title::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -6px;
+  width: 28px;
+  height: 2px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.5s var(--ease);
+  transition-delay: calc(var(--reveal-i, 0) * 55ms + 0.18s);
+}
+.card.is-revealed .card-title::after,
+[data-reveal].is-revealed > .card-header .card-title::after {
+  transform: scaleX(1);
+}
+@media (hover: hover) {
+  .card:hover .card-title::after {
+    width: 44px;
+  }
+}
+
+/* — Интерактивная мелочёвка: pill'ы и кнопки слегка «отжимаются». */
+.status-pill,
+.theme-btn {
+  transition:
+    transform 0.18s var(--ease),
+    background 0.18s var(--ease),
+    color 0.18s var(--ease),
+    border-color 0.18s var(--ease);
+}
+@media (hover: hover) {
+  .theme-btn:hover { transform: translate3d(0, -1px, 0); }
+}
+.theme-btn:active,
+.status-pill:active { transform: scale(0.94); }

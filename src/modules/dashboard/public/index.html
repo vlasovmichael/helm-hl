@@ -1203,6 +1203,51 @@
         refresh();
       })();
     </script>
+
+    <!-- Motion layer: reveal-on-scroll со стаггером. Только transform/opacity,
+         IntersectionObserver (не на каждый кадр) → дёшево и стабильно 60fps.
+         JS сам ставит data-reveal, поэтому без JS контент остаётся видимым. -->
+    <script>
+      (function () {
+        var reduce =
+          window.matchMedia &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        var targets = [].slice.call(
+          document.querySelectorAll("section.card, #market-context")
+        );
+        if (reduce || !("IntersectionObserver" in window) || !targets.length)
+          return;
+
+        targets.forEach(function (el) {
+          el.setAttribute("data-reveal", "");
+        });
+
+        var vh = window.innerHeight || 800;
+        var firstScreen = 0;
+        var io = new IntersectionObserver(
+          function (entries, obs) {
+            entries.forEach(function (entry) {
+              if (!entry.isIntersecting) return;
+              var el = entry.target;
+              // Стаггерим только то, что уже в первом экране на старте;
+              // карточки ниже всплывают по одной по мере доскролла.
+              var rect = el.getBoundingClientRect();
+              if (rect.top < vh) {
+                el.style.setProperty("--reveal-i", firstScreen++);
+              }
+              el.classList.add("is-revealed");
+              obs.unobserve(el);
+            });
+          },
+          { threshold: 0.08, rootMargin: "0px 0px -8% 0px" }
+        );
+
+        targets.forEach(function (el) {
+          io.observe(el);
+        });
+      })();
+    </script>
+
     <script src="app.js"></script>
   </body>
 </html>
