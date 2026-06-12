@@ -195,7 +195,7 @@ function takeOiSnapshot() {
   }
 }
 
-function getOiNMinAgo(coin, mins, now) {
+export function getOiNMinAgo(coin, mins, now) {
   const arr = _oiHistory.get(coin);
   if (!arr || arr.length < 2) return null;
   const target = now - mins * 60_000;

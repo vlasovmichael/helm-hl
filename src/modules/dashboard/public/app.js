@@ -1351,14 +1351,19 @@ function computeMomentum(windows, accelKind, volKind, signal) {
 // Предыдущая цена по монете — для биржевых flash-вспышек при изменении цены.
 const _hmPrevPrices = new Map();
 
-// Чейз-метр: насколько цена уже растянута от короткой средней (15m окно,
-// fallback 5m). Отвечает «не поздно ли входить» — гасит зуд на вертикальной
-// свече. Пороги те же, что classifyEntryZone свинга (0.5% зона / 2.5% chase),
-// но на коротком окне. Это НЕ сигнал направления (его даёт Setup) — только
-// «рано/поздно». Тайминг входа (5m reclaim) оператор ставит сам.
+// Чейз-метр: насколько цена уже ушла В СТОРОНУ СДЕЛКИ от короткой средней
+// (15m окно, fallback 5m). Отвечает «не поздно ли» — гасит зуд на вертикальной
+// свече. Знак считается по side сетапа (он уже кодирует trend/fade): + = цена
+// ушла в твою сторону, опоздал; ≤0 = у базы / ещё не пошло, вход рядом.
+// Без направленного сетапа (WAIT) таймить нечего → нейтральная точка.
+// Пороги те же, что classifyEntryZone свинга (0.5% зона / 2.5% chase).
+// Тайминг входа (5m reclaim) оператор ставит сам.
 const HM_ENTRY_ZONE_PCT = 0.5;
 const HM_ENTRY_EXT_PCT = 2.5;
-function hmEntryBadge(windows) {
+const HM_ENTRY_MIN_SCORE = 1.5; // ниже = WAIT
+function hmEntryBadge(windows, side, score) {
+  if (!side || !(score >= HM_ENTRY_MIN_SCORE))
+    return { icon: "·", state: "none", title: "нет сетапа — таймить нечего" };
   const pick = (mins, lbl) =>
     windows.find((w) => w.mins === mins) || windows.find((w) => w.label === lbl);
   const w15 = pick(15, "15m");
@@ -1367,24 +1372,24 @@ function hmEntryBadge(windows) {
     w15 && w15.spikePct != null ? w15 : w5 && w5.spikePct != null ? w5 : null;
   if (!ref) return { icon: "·", state: "none", title: "недостаточно истории" };
   const win = ref.label || `${ref.mins}m`;
-  const stretch = Math.abs(ref.spikePct);
-  const dir = ref.spikePct >= 0 ? "вверх" : "вниз";
-  if (stretch <= HM_ENTRY_ZONE_PCT)
+  const extDir = side === "LONG" ? ref.spikePct : -ref.spikePct;
+  const m = Math.abs(extDir).toFixed(1);
+  if (extDir <= HM_ENTRY_ZONE_PCT)
     return {
       icon: "🎯",
       state: "zone",
-      title: `у базы (${ref.spikePct.toFixed(1)}% за ${win}) — вход рядом, чейза нет`,
+      title: `${side}: у базы (${extDir >= 0 ? "+" : ""}${extDir.toFixed(1)}% в сторону сделки за ${win}) — вход рядом, чейза нет`,
     };
-  if (stretch >= HM_ENTRY_EXT_PCT)
+  if (extDir >= HM_ENTRY_EXT_PCT)
     return {
       icon: "⛔",
       state: "extended",
-      title: `улетела ${dir} ${stretch.toFixed(1)}% за ${win} — поздно гнаться, жди отката`,
+      title: `${side}: уже ушла +${m}% в твою сторону за ${win} — поздно, жди отката`,
     };
   return {
     icon: "⏳",
     state: "mid",
-    title: `растянута ${stretch.toFixed(1)}% за ${win} — дай откатить`,
+    title: `${side}: растянута +${m}% в сторону сделки за ${win} — дай откатить`,
   };
 }
 
@@ -1593,7 +1598,7 @@ function renderHotMovers(payload) {
       // Setup: ОДИН сетап + причина. Режим выбирает OI (trend/fade), сила по
       // взвешенному ходу окон с подтверждением accel/vol.
       const setup = computeMomentum(x.windows, accelKind, volKind, x.s);
-      const entry = hmEntryBadge(x.windows);
+      const entry = hmEntryBadge(x.windows, setup.side, setup.score);
 
       // OI delta 5m — нейтральная раскраска: OI сам по себе не хорош/плох,
       // его смысл зависит от направления цены (режим выбирает Setup-вердикт).

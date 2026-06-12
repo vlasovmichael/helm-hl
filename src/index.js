@@ -20,6 +20,7 @@ import { startPriceFeed } from './core/priceFeed.js';
 import { startWsExitLoop } from './app/wsExitTick.js';
 import { startWsEntryLoop } from './app/wsEntryTick.js';
 import { startSetupSwingAlerts } from './modules/setupScannerAlerts.js';
+import { startHotMoversAlerts } from './modules/hotMoversAlerts.js';
 import { shutdown } from './app/lifecycle.js';
 import { createStatusCollector } from './app/status.js';
 
@@ -83,6 +84,10 @@ async function main() {
   // Контекст-пуши для ручной торговли (вход в зону / контекст против позиции).
   // Не торгует. Gated на SETUP_SWING_ALERT_ENABLED (default on). Fail-soft.
   startSetupSwingAlerts();
+
+  // Пуш «мувер стал enterable»: направленный Setup перешёл в чейз-зону 🎯
+  // (улетел → откатился). Не торгует. Gated на HOT_MOVERS_ALERT_ENABLED. Fail-soft.
+  startHotMoversAlerts();
 
   // ── Tax Collector — ежедневный сбор PIT-38 в 03:00 (Europe/Warsaw) ──
   // Fail-soft: модуль сам отключается, если BINANCE_API_KEY не задан.
