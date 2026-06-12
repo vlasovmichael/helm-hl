@@ -1084,6 +1084,8 @@ function fmtTime(ts) {
 // ── Renderers ───────────────────────────────────
 
 function renderHeader(status) {
+  // Секция-хост только на дашборде; на /strategies.html её нет → no-op.
+  if (!document.getElementById("uptime-val")) return;
   // HL 2026-05-23 unified mode: equity = spot.total + perp.uPnL,
   // available = spot.total - spot.hold. Раньше показывали отдельный
   // wallet-total / perp/spot breakdown — после миграции это один и
@@ -1108,6 +1110,7 @@ function renderHeader(status) {
 
 function renderPosition(pos) {
   const container = document.getElementById("position-container");
+  if (!container) return; // нет секции (напр. /strategies.html)
   if (!pos) {
     container.innerHTML =
       '<div class="empty-state">No active positions — bot is IDLE</div>';
@@ -1997,6 +2000,7 @@ let lastActivityEvents = [];
 
 function renderActivity(activity) {
   const container = document.getElementById("activity-container");
+  if (!container) return; // нет секции (напр. /strategies.html)
   const events = (activity?.events || []).filter((e) => e && e.coin);
   lastActivityEvents = events;
   if (!events.length) {
@@ -2460,6 +2464,7 @@ function strategyDisplayName(sid) {
 }
 
 function renderPnlSummary() {
+  if (!document.getElementById("pnl-total")) return; // секция живёт на /strategies.html
   if (!lastPnlSummary || !lastPnlSummary.periods) return;
   const p = lastPnlSummary.periods[currentPnlPeriod];
   if (!p) return;
@@ -2732,6 +2737,7 @@ function renderHeatmap() {
 
 function renderTax(tax) {
   if (!tax) return;
+  if (!document.getElementById("tax-costs")) return; // нет секции (/strategies.html)
   document.getElementById("tax-costs").textContent =
     `${(tax.totalCostsPLN || 0).toLocaleString()} PLN`;
   document.getElementById("tax-revenue").textContent =
@@ -3509,7 +3515,9 @@ function renderFaderHeartbeatRaw(hb) {
 }
 
 function renderFooter() {
-  const footer = document.getElementById("footer-status").querySelector("span");
+  const footerEl = document.getElementById("footer-status");
+  if (!footerEl) return; // нет футера (напр. /strategies.html)
+  const footer = footerEl.querySelector("span");
   if (footer) {
     const age = Math.floor((Date.now() - lastSuccessAt) / 1000);
     footer.textContent =

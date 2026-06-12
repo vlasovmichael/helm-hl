@@ -255,6 +255,73 @@
       </div>
 
       <div class="footnote" id="footnote"></div>
+
+      <!-- Recent Activity (перенесено с дашборды; рендерит app.js через /api/activity) -->
+      <section class="card" id="sec-activity" style="margin-top: 26px">
+        <div class="card-header">
+          <div class="card-title" data-num="">Recent Activity</div>
+        </div>
+        <div id="bans-strip"></div>
+        <div id="activity-container">
+          <div class="activity-skeleton">
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tax Summary (перенесено с дашборды; рендерит app.js через /api/tax-summary) -->
+      <section class="card">
+        <div class="card-header">
+          <div class="card-title" data-num="">
+            Tax Summary
+            <span
+              style="
+                font-size: 14px;
+                color: var(--text-muted);
+                font-family: var(--font-mono);
+                font-style: normal;
+                letter-spacing: 0.08em;
+              "
+              >PIT-38</span
+            >
+          </div>
+          <div id="tax-year" class="tax-year-label">2026</div>
+        </div>
+        <div class="data-grid">
+          <div class="grid-item">
+            <div class="item-label">Koszty (Costs)</div>
+            <div class="item-value" id="tax-costs">0.00 PLN</div>
+          </div>
+          <div class="grid-item">
+            <div class="item-label">Przychody (Revenue)</div>
+            <div class="item-value" id="tax-revenue">0.00 PLN</div>
+          </div>
+          <div class="grid-item">
+            <div class="item-label">Profit / Loss</div>
+            <div class="item-value" id="tax-profit">0.00 PLN</div>
+          </div>
+          <div class="grid-item">
+            <div class="item-label">Est. Tax (19%)</div>
+            <div class="item-value" id="tax-est" style="color: var(--green)">
+              0.00 PLN
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Trade detail modal (для кликов по Recent Activity) -->
+    <div id="trade-modal" class="trade-modal" hidden>
+      <div class="trade-modal__backdrop" data-close="1"></div>
+      <div class="trade-modal__panel" role="dialog" aria-modal="true">
+        <button class="trade-modal__close" data-close="1" aria-label="Close">
+          ×
+        </button>
+        <div id="trade-modal-body"></div>
+      </div>
     </div>
 
     <script>
@@ -373,5 +440,9 @@
       }
       load();
     </script>
+
+    <!-- app.js: рендерит Recent Activity + Tax Summary через tick().
+         Остальные секции дашборды отсутствуют → их рендеры делают no-op (guarded). -->
+    <script src="app.js"></script>
   </body>
 </html>
