@@ -1529,7 +1529,7 @@ function renderHotMovers(payload) {
       const cells = winDefs
         .map(([w, lbl]) => {
           const [inner, cls] = pctCellTiered(w);
-          const klass = ["hm-window", cls].filter(Boolean).join(" ");
+          const klass = ["hm-window", "r", cls].filter(Boolean).join(" ");
           return `<td class="${klass}" data-w="${lbl}">${inner}</td>`;
         })
         .join("");
@@ -1619,13 +1619,13 @@ function renderHotMovers(payload) {
       return `<tr class="${rowCls}">
         <td>${idx + 1}</td>
         <td><span class="signals-price">#${escapeHtml(s.coin)}</span></td>
-        <td class="hm-setup ${setup.cls}" data-w="Setup" title="${setup.title}">${setup.label}</td>
+        <td class="hm-setup c ${setup.cls}" data-w="Setup" title="${setup.title}">${setup.label}</td>
         <td class="hm-entry hm-entry-${entry.state}" data-w="Вход" title="${entry.title}"><span class="hm-entry-icon">${entry.icon}</span></td>
-        <td class="hm-price-cell ${flashCls}"><span class="signals-price">${fmtPrice(s.price)}</span></td>
+        <td class="hm-price-cell r ${flashCls}"><span class="signals-price">${fmtPrice(s.price)}</span></td>
         ${cells}
-        <td class="${accelCellCls}" data-w="Acc">${accelInner}</td>
-        <td class="${oiCellCls}" data-w="OI">${oiInner}</td>
-        <td data-w="Trend">${trendInner}</td>
+        <td class="r ${accelCellCls}" data-w="Acc">${accelInner}</td>
+        <td class="r ${oiCellCls}" data-w="OI">${oiInner}</td>
+        <td class="r" data-w="Trend">${trendInner}</td>
       </tr>`;
     })
     .join("");
