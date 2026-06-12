@@ -252,7 +252,7 @@ export async function scan() {
     data = await fetchMarkets();
   } catch (err) {
     logger.error(`[Scout] API error: ${err.message}`);
-    return [];
+    return { scoutData: [], hunterData: [] };
   }
 
   const [meta, assetCtxs] = data;
@@ -260,7 +260,7 @@ export async function scan() {
 
   if (!Array.isArray(universe) || !Array.isArray(assetCtxs)) {
     logger.error('[Scout] Invalid universe or assetCtxs in response');
-    return [];
+    return { scoutData: [], hunterData: [] };
   }
 
   // Обновляем ОБЩИЙ кеш universe — Executor будет читать отсюда же
