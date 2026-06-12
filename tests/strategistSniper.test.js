@@ -10,7 +10,7 @@ process.env.TELEGRAM_BOT_TOKEN    = '';
 const { push, clearAll } =
   await import('../src/core/priceHistory.js');
 const {
-  analyzeHunter, resetHunterCooldowns,
+  analyzeHunter, resetHunterCooldowns, recordHunterSlExternal,
   HUNTER_SPIKE_PCT, HUNTER_SL_PCT, HUNTER_TP_PCT, HUNTER_COOLDOWN_MS,
 } = await import('../src/modules/strategistSniper.js');
 const { resetHunterCrossCooldowns } = await import('../src/modules/hunterCrossCooldown.js');
@@ -281,6 +281,20 @@ test('post-SL cooldown: после SL Hunter не возвращается к э
   push('BTC', 50000, now - 2 * MIN);
   const entry = analyzeHunter([{ coin: 'BTC', price: 53000 }], null, now);
   assert.equal(entry.action, 'HOLD', 'должен быть в post-SL cooldown');
+});
+
+test('external-close (recordHunterSlExternal) ставит post-SL cooldown — нет ре-шорта', () => {
+  reset();
+  const now = Date.now();
+  // Симулируем external_close_detected_on_exit на hunter SHORT (кейс HMSTR #142):
+  // production.js теперь вызывает recordHunterSlExternal на убыточном внешнем закрытии.
+  recordHunterSlExternal('HMSTR', now);
+
+  // Через мгновение приходит новый памп по той же монете — раньше бот заходил снова.
+  push('HMSTR', 0.000266, now - 3 * MIN);
+  push('HMSTR', 0.000266, now - 2 * MIN);
+  const entry = analyzeHunter([{ coin: 'HMSTR', price: 0.000293 }], null, now);
+  assert.equal(entry.action, 'HOLD', 'external-close должен взвести post-SL cooldown');
 });
 
 // ═══════════════════════════════════════════════

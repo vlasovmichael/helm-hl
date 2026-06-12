@@ -37,7 +37,7 @@ import {
 import { reconcile } from './reconciler.js';
 import { sleep } from './reconciler.js';
 import { gate, notify } from './hooks.js';
-import { consumeHunterMfeMae, clearHunterTrailState, getHunterPeakPct } from '../strategistSniper.js';
+import { consumeHunterMfeMae, clearHunterTrailState, getHunterPeakPct, recordHunterSlExternal } from '../strategistSniper.js';
 import {
   consumeHunterLongMfeMae, clearHunterLongTrailState, getHunterLongPeakPct,
 } from '../strategistHunterLong.js';
@@ -1329,6 +1329,17 @@ export async function productionClose(signal, position, silent = false) {
           !['tp_trigger', 'hunter_long_tp', 'hunter_long_trail_tp'].includes(classified.reason)
         ) {
           recordHunterLongLossEvent(position.coin);
+        }
+        // Симметрия Fix C для SHORT (2026-06-12): external close на hunter SHORT —
+        // тоже почти всегда убыток (ликвидация / ручное закрытие оператором). Раньше
+        // шорт получал только cross-cooldown (60мин), без post-SL cooldown, поэтому
+        // бот мог перезашортить ту же монету через ~час (кейс HMSTR #142→#147).
+        // Ставим post-SL cooldown, кроме явного TP.
+        if (
+          position.strategy_id === 'hunter' &&
+          !['tp_trigger', 'hunter_tp'].includes(classified.reason)
+        ) {
+          recordHunterSlExternal(position.coin);
         }
       } catch (dbErr) {
         logger.error(`[Executor] DB close failed: ${dbErr.message}`);
