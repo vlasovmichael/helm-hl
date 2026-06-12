@@ -1097,7 +1097,6 @@ function renderHeader(status) {
     deltaEl.textContent = `${profit >= 0 ? "+" : "-"}${fmtUsd(Math.abs(profit))} (${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%) session`;
     deltaEl.className = `delta ${profit >= 0 ? "positive" : "negative"}`;
   }
-  document.getElementById("mode-pill").textContent = status.mode;
   document.getElementById("uptime-val").textContent =
     `Uptime: ${formatUptime(status.uptimeMin)}`;
   document.getElementById("available-val").textContent =

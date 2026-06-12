@@ -363,9 +363,10 @@ header {
   padding: 10px 0;
   margin-bottom: 24px;
   border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
-  backdrop-filter: saturate(140%) blur(8px);
-  -webkit-backdrop-filter: saturate(140%) blur(8px);
+  /* Непрозрачный фон намеренно: backdrop-filter на sticky-элементе даёт
+     однократный флик при первой отрисовке (поднятие backdrop-слоя в
+     композитор). Сплошной фон = чисто, без мигания. */
+  background: var(--bg);
 }
 .topnav-brand {
   font-family: var(--font-mono);
@@ -391,6 +392,7 @@ header {
   position: relative;
   display: inline-flex;
   align-items: center;
+  gap: 7px;
   padding: 6px 12px;
   border-radius: var(--radius);
   font-family: var(--font-sans);
@@ -401,6 +403,21 @@ header {
   transition:
     color 0.15s var(--ease),
     background 0.15s var(--ease);
+}
+.nav-ico {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
+.nav-link.active .nav-ico {
+  opacity: 1;
+  stroke: var(--accent);
 }
 .nav-link:hover {
   color: var(--text-primary);
