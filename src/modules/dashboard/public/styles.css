@@ -292,9 +292,6 @@ header {
   background: var(--green-soft);
   border-color: var(--green-line);
 }
-.status-pill.live::before {
-  animation: pulse-dot 2s ease-in-out infinite;
-}
 .status-pill.stale {
   color: #b45309;
   background: rgba(245, 158, 11, 0.15);
@@ -353,6 +350,85 @@ header {
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border);
   margin: -1px;
+}
+
+/* ──────────────────────── Top navigation */
+.topnav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 0;
+  margin-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: saturate(140%) blur(8px);
+  -webkit-backdrop-filter: saturate(140%) blur(8px);
+}
+.topnav-brand {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.topnav-links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.topnav-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+.nav-link {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition:
+    color 0.15s var(--ease),
+    background 0.15s var(--ease);
+}
+.nav-link:hover {
+  color: var(--text-primary);
+  background: var(--card-bg-hover);
+}
+.nav-link.active {
+  color: var(--text-primary);
+}
+.nav-link.active::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -11px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+@media (max-width: 640px) {
+  .topnav {
+    flex-wrap: wrap;
+    gap: 10px 14px;
+  }
+  .topnav-right {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
 }
 
 
@@ -1521,7 +1597,6 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   background: var(--green);
   margin-right: 6px;
   vertical-align: middle;
-  animation: pulse-dot 1.6s ease-in-out infinite;
 }
 @keyframes pulse-dot {
   0%,
@@ -3099,23 +3174,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   transform: translate3d(0, 0, 0);
 }
 
-/* — Card hover: лёгкий подъём + усиленная тень + акцентная кромка.
-     transform/box-shadow/border-color — без reflow. */
-.card {
-  transition:
-    transform 0.32s var(--ease),
-    box-shadow 0.32s var(--ease),
-    border-color 0.32s var(--ease);
-}
-@media (hover: hover) {
-  .card:hover {
-    transform: translate3d(0, -3px, 0);
-    box-shadow: var(--shadow);
-    border-color: var(--border-strong);
-  }
-}
-
-/* — Card title: акцент-линия, «прорисовывается» при reveal и на hover.
+/* — Card title: акцент-линия, «прорисовывается» при reveal.
      scaleX по left-origin = композитно. */
 .card-title {
   position: relative;
@@ -3138,23 +3197,3 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
 [data-reveal].is-revealed > .card-header .card-title::after {
   transform: scaleX(1);
 }
-@media (hover: hover) {
-  .card:hover .card-title::after {
-    width: 44px;
-  }
-}
-
-/* — Интерактивная мелочёвка: pill'ы и кнопки слегка «отжимаются». */
-.status-pill,
-.theme-btn {
-  transition:
-    transform 0.18s var(--ease),
-    background 0.18s var(--ease),
-    color 0.18s var(--ease),
-    border-color 0.18s var(--ease);
-}
-@media (hover: hover) {
-  .theme-btn:hover { transform: translate3d(0, -1px, 0); }
-}
-.theme-btn:active,
-.status-pill:active { transform: scale(0.94); }

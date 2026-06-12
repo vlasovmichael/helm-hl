@@ -47,6 +47,34 @@
   </head>
   <body>
     <div class="container">
+      <nav class="topnav" aria-label="Primary">
+        <a class="topnav-brand" href="/">HL&nbsp;Scanner</a>
+        <div class="topnav-links">
+          <a class="nav-link active" href="/" aria-current="page">Dashboard</a>
+          <a class="nav-link" href="/strategies.html">Strategies</a>
+        </div>
+        <div class="topnav-right">
+          <a
+            href="/ledger.html"
+            class="nav-link"
+            id="ledger-link"
+            title="Monthly P&L ledger"
+            >📒 Ledger</a
+          >
+          <div class="theme-switcher" role="group" aria-label="Theme">
+            <button class="theme-btn" data-theme="auto" title="Auto (system)">
+              Auto
+            </button>
+            <button class="theme-btn" data-theme="light" title="Light">
+              Light
+            </button>
+            <button class="theme-btn" data-theme="dark" title="Dark">
+              Dark
+            </button>
+          </div>
+        </div>
+      </nav>
+
       <header data-edition="">
         <div class="equity-group">
           <div class="label">Total Equity</div>
@@ -60,25 +88,6 @@
             <span id="uptime-val">Uptime: —</span>
             <span id="available-val">Available: —</span>
             <span id="wallet-total-val" style="display: none"></span>
-          </div>
-          <a
-            href="/ledger.html"
-            class="status-pill"
-            id="ledger-link"
-            title="Monthly P&L ledger"
-            style="text-decoration: none"
-            >📒 Ledger</a
-          >
-          <div class="theme-switcher" role="group" aria-label="Theme">
-            <button class="theme-btn" data-theme="auto" title="Auto (system)">
-              Auto
-            </button>
-            <button class="theme-btn" data-theme="light" title="Light">
-              Light
-            </button>
-            <button class="theme-btn" data-theme="dark" title="Dark">
-              Dark
-            </button>
           </div>
         </div>
       </header>

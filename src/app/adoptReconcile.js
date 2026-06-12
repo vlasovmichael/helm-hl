@@ -237,7 +237,7 @@ export async function maybeAdoptManualPosition(manualPositions) {
     );
 
     await fireAdoptNtfy(
-      `🤝 Adopt #${coin} ${side.toUpperCase()} — стоп выставлен`,
+      `Adopt #${coin} ${side.toUpperCase()} — стоп выставлен`,
       `Подхватил ручную позу $${sizeUsd.toFixed(0)} @ $${entry}\n` +
       `Стоп на бирже: $${plannedSl.toPrecision(6)} (${distLabel})\n` +
       `Дальше веду сам: храповик + трейл.`,
