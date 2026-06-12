@@ -32,6 +32,40 @@ import { resolveAsset } from '../modules/executor/fill-parser.js';
 import { fetchUserFills, reconstructManualTrades } from '../modules/userFills.js';
 import { isHunterCrossCooldownActive } from '../modules/hunterCrossCooldown.js';
 import { isQuietHour } from '../modules/setupScannerAlerts.js';
+import { atr } from '../modules/trendFollowAtr.js';
+import { getHourlyCandles } from '../modules/candleCache.js';
+
+const ATR_PERIOD = 14;            // стандартный период ATR
+const ATR_LOOKBACK_HOURS = 48;    // с запасом ≥ ATR_PERIOD+1 свечей
+
+/**
+ * Дистанция жёсткого стопа в % от входа.
+ * ATR-режим: ATR(1h, 14) × MULT / цена, зажат в [MIN_PCT, MAX_PCT] — подстраивает
+ * стоп под волатильность монеты (фейдеру нужен воздух). Фолбэк на фикс-% если
+ * режим 'pct' или свечей/ATR нет.
+ * @returns {Promise<{ distPct:number, basis:'atr'|'pct' }>}
+ */
+export async function computeStopDistPct(coin) {
+  const t = config.trading;
+  if (t.adoptStopMode === 'atr') {
+    try {
+      const candles = await getHourlyCandles(coin, ATR_LOOKBACK_HOURS);
+      if (Array.isArray(candles) && candles.length >= ATR_PERIOD + 1) {
+        const a = atr(candles, ATR_PERIOD);
+        const lastClose = candles[candles.length - 1]?.close;
+        if (Number.isFinite(a) && a > 0 && Number.isFinite(lastClose) && lastClose > 0) {
+          const rawPct = (a * t.adoptAtrMult / lastClose) * 100;
+          const pct = Math.min(t.adoptStopMaxPct, Math.max(t.adoptStopMinPct, rawPct));
+          return { distPct: pct, basis: 'atr' };
+        }
+      }
+      logger.info(`[Adopt] ATR недоступен для #${coin} — фолбэк на фикс ${t.adoptStopPct}%`);
+    } catch (err) {
+      logger.debug(`[Adopt] ATR calc failed #${coin}: ${err.message} — фолбэк на фикс-%`);
+    }
+  }
+  return { distPct: t.adoptStopPct, basis: 'pct' };
+}
 
 /**
  * Время открытия текущей ОТКРЫТОЙ ручной позиции по монете (unix ms) или null.
@@ -109,7 +143,6 @@ export async function maybeAdoptManualPosition(manualPositions) {
 
   const now = Date.now();
   const maxAgeMs = config.trading.adoptMaxAgeMin * 60_000;
-  const stopPct  = config.trading.adoptStopPct;
 
   for (const ex of manualPositions) {
     const coin    = ex.coin;
@@ -137,9 +170,11 @@ export async function maybeAdoptManualPosition(manualPositions) {
     }
 
     // ── Жёсткий стоп (reduce-only) ──────────────
+    // Дистанция: ATR(1h)×MULT (подстройка под волатильность) либо фикс-% фолбэк.
+    const { distPct, basis } = await computeStopDistPct(coin);
     const plannedSl = side === 'short'
-      ? entry * (1 + stopPct / 100)
-      : entry * (1 - stopPct / 100);
+      ? entry * (1 + distPct / 100)
+      : entry * (1 - distPct / 100);
 
     let szDecimals;
     try {
@@ -194,17 +229,18 @@ export async function maybeAdoptManualPosition(manualPositions) {
       return null;
     }
 
+    const distLabel = `−${distPct.toFixed(2)}% ${basis === 'atr' ? 'ATR' : 'фикс'}`;
     logger.info(
       `[Adopt] 🤝 adopted #${coin} ${side.toUpperCase()} (id=${id}) | ` +
       `entry=$${entry} size=$${sizeUsd.toFixed(2)} age=${ageMin.toFixed(1)}min | ` +
-      `SL @ $${plannedSl.toPrecision(6)} (−${stopPct}%) oid=${slOid}`,
+      `SL @ $${plannedSl.toPrecision(6)} (${distLabel}) oid=${slOid}`,
     );
 
     await fireAdoptNtfy(
       `🤝 Adopt #${coin} ${side.toUpperCase()} — стоп выставлен`,
       `Подхватил ручную позу $${sizeUsd.toFixed(0)} @ $${entry}\n` +
-      `Стоп на бирже: $${plannedSl.toPrecision(6)} (−${stopPct}%)\n` +
-      `Дальше веду сам. Храповик/трейл — на подходе.`,
+      `Стоп на бирже: $${plannedSl.toPrecision(6)} (${distLabel})\n` +
+      `Дальше веду сам: храповик + трейл.`,
       ['handshake'],
     );
 

@@ -440,7 +440,14 @@ function loadConfig() {
   // (чинит главный леак: держал лузеров до нуля). Храповик/трейл — следующим шагом.
   const adoptEnabled          = (process.env.ADOPT_ENABLED || 'false').toLowerCase() === 'true';
   const adoptMaxAgeMin        = parseFloat(process.env.ADOPT_MAX_AGE_MIN        || '10');
-  const adoptStopPct          = parseFloat(process.env.ADOPT_STOP_PCT           || '1.5');
+  // Жёсткий стоп: ATR-режим подстраивает дистанцию под волатильность монеты
+  // (фейдеру нужен воздух — фикс-% либо душит, либо болтается). dist = ATR(1h,14)
+  // × MULT, зажат в [MIN_PCT, MAX_PCT]. Фолбэк на фикс-% если свечей/ATR нет.
+  const adoptStopMode         = (process.env.ADOPT_STOP_MODE || 'atr').toLowerCase(); // 'atr' | 'pct'
+  const adoptStopPct          = parseFloat(process.env.ADOPT_STOP_PCT           || '5');
+  const adoptAtrMult          = parseFloat(process.env.ADOPT_ATR_MULT           || '1.5');
+  const adoptStopMinPct       = parseFloat(process.env.ADOPT_STOP_MIN_PCT       || '2');
+  const adoptStopMaxPct       = parseFloat(process.env.ADOPT_STOP_MAX_PCT       || '8');
   // Сопровождение (per-tick, мягче жёсткого стопа на бирже): BE-храповик + трейл,
   // переиспуск механики Hunter D3/трейла. ARM ≤ STOP_PCT логически (берём подарки
   // меньше стоп-дистанции). FLOOR 0 = безубыток.
@@ -448,8 +455,20 @@ function loadConfig() {
   const adoptBeFloorPct       = parseFloat(process.env.ADOPT_BE_FLOOR_PCT       || '0');
   const adoptTrailArmPct      = parseFloat(process.env.ADOPT_TRAIL_ARM_PCT      || '2');
   const adoptTrailGiveBackPct = parseFloat(process.env.ADOPT_TRAIL_GIVE_BACK_PCT || '30');
-  if (isNaN(adoptStopPct) || adoptStopPct <= 0 || adoptStopPct >= 10) {
-    throw new Error(`ADOPT_STOP_PCT must be in (0, 10). Got: "${process.env.ADOPT_STOP_PCT}"`);
+  if (isNaN(adoptStopPct) || adoptStopPct <= 0 || adoptStopPct >= 20) {
+    throw new Error(`ADOPT_STOP_PCT must be in (0, 20). Got: "${process.env.ADOPT_STOP_PCT}"`);
+  }
+  if (adoptStopMode !== 'atr' && adoptStopMode !== 'pct') {
+    throw new Error(`ADOPT_STOP_MODE must be 'atr' or 'pct'. Got: "${process.env.ADOPT_STOP_MODE}"`);
+  }
+  if (isNaN(adoptAtrMult) || adoptAtrMult <= 0) {
+    throw new Error(`ADOPT_ATR_MULT must be > 0. Got: "${process.env.ADOPT_ATR_MULT}"`);
+  }
+  if (isNaN(adoptStopMinPct) || adoptStopMinPct <= 0 || adoptStopMinPct >= adoptStopMaxPct) {
+    throw new Error(`ADOPT_STOP_MIN_PCT must be in (0, ADOPT_STOP_MAX_PCT). Got: "${process.env.ADOPT_STOP_MIN_PCT}"`);
+  }
+  if (isNaN(adoptStopMaxPct) || adoptStopMaxPct >= 20) {
+    throw new Error(`ADOPT_STOP_MAX_PCT must be < 20. Got: "${process.env.ADOPT_STOP_MAX_PCT}"`);
   }
   if (isNaN(adoptMaxAgeMin) || adoptMaxAgeMin <= 0) {
     throw new Error(`ADOPT_MAX_AGE_MIN must be > 0. Got: "${process.env.ADOPT_MAX_AGE_MIN}"`);
@@ -846,7 +865,11 @@ function loadConfig() {
       hunterCrossCooldownMin,
       adoptEnabled,
       adoptMaxAgeMin,
+      adoptStopMode,
       adoptStopPct,
+      adoptAtrMult,
+      adoptStopMinPct,
+      adoptStopMaxPct,
       adoptBeArmPct,
       adoptBeFloorPct,
       adoptTrailArmPct,
