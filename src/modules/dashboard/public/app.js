@@ -1905,7 +1905,10 @@ function renderMarketContext(d) {
       : d.verdict === "MIXED"
         ? "wait"
         : "unknown";
-  el.className = `market-context ${cls}`;
+  // classList, не className — иначе затираем класс is-revealed от reveal-on-scroll
+  // (элемент остаётся с [data-reveal] → opacity:0 и пропадает после первого тика).
+  el.classList.remove("go", "wait", "unknown");
+  el.classList.add(cls);
   const verdictEl = document.getElementById("mc-verdict");
   const btcEl = document.getElementById("mc-btc");
   const fngEl = document.getElementById("mc-fng");
