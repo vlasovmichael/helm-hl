@@ -441,9 +441,8 @@ function loadConfig() {
   const adoptEnabled          = (process.env.ADOPT_ENABLED || 'false').toLowerCase() === 'true';
   const adoptMaxAgeMin        = parseFloat(process.env.ADOPT_MAX_AGE_MIN        || '10');
   const adoptStopPct          = parseFloat(process.env.ADOPT_STOP_PCT           || '1.5');
-  const adoptBeArmPct         = parseFloat(process.env.ADOPT_BE_ARM_PCT         || '1.5');
-  const adoptTrailArmPct      = parseFloat(process.env.ADOPT_TRAIL_ARM_PCT      || '2');
-  const adoptTrailGiveBackPct = parseFloat(process.env.ADOPT_TRAIL_GIVE_BACK_PCT || '30');
+  // BE-храповик / трейл (ADOPT_BE_ARM_PCT, ADOPT_TRAIL_*) — добавятся тем же
+  // коммитом, что и сама логика сопровождения. Пока не парсим: конфиг без кода = ложь.
   if (isNaN(adoptStopPct) || adoptStopPct <= 0 || adoptStopPct >= 10) {
     throw new Error(`ADOPT_STOP_PCT must be in (0, 10). Got: "${process.env.ADOPT_STOP_PCT}"`);
   }
@@ -831,9 +830,6 @@ function loadConfig() {
       adoptEnabled,
       adoptMaxAgeMin,
       adoptStopPct,
-      adoptBeArmPct,
-      adoptTrailArmPct,
-      adoptTrailGiveBackPct,
       chillBoyEnabled,
       chillBoyProdEnabled,
       chillBoyAtrShort,
