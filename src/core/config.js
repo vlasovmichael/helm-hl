@@ -444,17 +444,11 @@ function loadConfig() {
   const adoptBeArmPct         = parseFloat(process.env.ADOPT_BE_ARM_PCT         || '1.5');
   const adoptTrailArmPct      = parseFloat(process.env.ADOPT_TRAIL_ARM_PCT      || '2');
   const adoptTrailGiveBackPct = parseFloat(process.env.ADOPT_TRAIL_GIVE_BACK_PCT || '30');
-  // Safety rail на период обкатки: подхватываем только мелкие позы (тест «на мелочи»).
-  // 0 = без лимита. Поднять, когда стоп докажет корректность.
-  const adoptMaxSizeUsd       = parseFloat(process.env.ADOPT_MAX_SIZE_USD       || '30');
   if (isNaN(adoptStopPct) || adoptStopPct <= 0 || adoptStopPct >= 10) {
     throw new Error(`ADOPT_STOP_PCT must be in (0, 10). Got: "${process.env.ADOPT_STOP_PCT}"`);
   }
   if (isNaN(adoptMaxAgeMin) || adoptMaxAgeMin <= 0) {
     throw new Error(`ADOPT_MAX_AGE_MIN must be > 0. Got: "${process.env.ADOPT_MAX_AGE_MIN}"`);
-  }
-  if (isNaN(adoptMaxSizeUsd) || adoptMaxSizeUsd < 0) {
-    throw new Error(`ADOPT_MAX_SIZE_USD must be ≥ 0. Got: "${process.env.ADOPT_MAX_SIZE_USD}"`);
   }
 
   // ── Risk-based position sizing (cross-strategy: Hunter / Hunter Long / ChillBoy) ──
@@ -840,7 +834,6 @@ function loadConfig() {
       adoptBeArmPct,
       adoptTrailArmPct,
       adoptTrailGiveBackPct,
-      adoptMaxSizeUsd,
       chillBoyEnabled,
       chillBoyProdEnabled,
       chillBoyAtrShort,

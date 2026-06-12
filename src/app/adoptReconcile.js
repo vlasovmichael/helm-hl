@@ -10,8 +10,8 @@
 // следующий шаг (переиспуск Hunter-логики). Сейчас: жёсткий стоп при подхвате.
 //
 // Гарды: слот свободен, ADOPT_ENABLED, возраст позы ≤ ADOPT_MAX_AGE_MIN, не в
-// Hunter-cooldown, размер ≤ ADOPT_MAX_SIZE_USD (safety rail на обкатку).
-// Стоп reduce-only — может только ЗАКРЫТЬ позу, не нарастить/не развернуть.
+// Hunter-cooldown. Стоп reduce-only — может только ЗАКРЫТЬ позу, не нарастить/
+// не развернуть, поэтому безопасен при любом размере.
 // Ставим стоп ДО записи в БД: если постановка не удалась — НЕ усыновляем
 // (остаёшься в обычном hands-off, без ложного «бот ведёт»).
 
@@ -108,9 +108,8 @@ export async function maybeAdoptManualPosition(manualPositions) {
   if (!Array.isArray(manualPositions) || manualPositions.length === 0) return null;
 
   const now = Date.now();
-  const maxAgeMs  = config.trading.adoptMaxAgeMin * 60_000;
-  const stopPct   = config.trading.adoptStopPct;
-  const maxSizeUsd = config.trading.adoptMaxSizeUsd;
+  const maxAgeMs = config.trading.adoptMaxAgeMin * 60_000;
+  const stopPct  = config.trading.adoptStopPct;
 
   for (const ex of manualPositions) {
     const coin    = ex.coin;
@@ -122,12 +121,6 @@ export async function maybeAdoptManualPosition(manualPositions) {
     // Гард: не подхватываем монету в Hunter cross-cooldown (после недавнего close).
     if (isHunterCrossCooldownActive(coin, now)) {
       logger.info(`[Adopt] skip #${coin} — Hunter cross-cooldown active`);
-      continue;
-    }
-
-    // Гард: safety rail на обкатку — только мелкие позы (0 = без лимита).
-    if (maxSizeUsd > 0 && sizeUsd > maxSizeUsd) {
-      logger.info(`[Adopt] skip #${coin} — size $${sizeUsd.toFixed(2)} > ADOPT_MAX_SIZE_USD $${maxSizeUsd}`);
       continue;
     }
 
