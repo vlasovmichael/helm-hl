@@ -1351,6 +1351,43 @@ function computeMomentum(windows, accelKind, volKind, signal) {
 // Предыдущая цена по монете — для биржевых flash-вспышек при изменении цены.
 const _hmPrevPrices = new Map();
 
+// Чейз-метр: насколько цена уже растянута от короткой средней (15m окно,
+// fallback 5m). Отвечает «не поздно ли входить» — гасит зуд на вертикальной
+// свече. Пороги те же, что classifyEntryZone свинга (0.5% зона / 2.5% chase),
+// но на коротком окне. Это НЕ сигнал направления (его даёт Setup) — только
+// «рано/поздно». Тайминг входа (5m reclaim) оператор ставит сам.
+const HM_ENTRY_ZONE_PCT = 0.5;
+const HM_ENTRY_EXT_PCT = 2.5;
+function hmEntryBadge(windows) {
+  const pick = (mins, lbl) =>
+    windows.find((w) => w.mins === mins) || windows.find((w) => w.label === lbl);
+  const w15 = pick(15, "15m");
+  const w5 = pick(5, "5m");
+  const ref =
+    w15 && w15.spikePct != null ? w15 : w5 && w5.spikePct != null ? w5 : null;
+  if (!ref) return { icon: "·", state: "none", title: "недостаточно истории" };
+  const win = ref.label || `${ref.mins}m`;
+  const stretch = Math.abs(ref.spikePct);
+  const dir = ref.spikePct >= 0 ? "вверх" : "вниз";
+  if (stretch <= HM_ENTRY_ZONE_PCT)
+    return {
+      icon: "🎯",
+      state: "zone",
+      title: `у базы (${ref.spikePct.toFixed(1)}% за ${win}) — вход рядом, чейза нет`,
+    };
+  if (stretch >= HM_ENTRY_EXT_PCT)
+    return {
+      icon: "⛔",
+      state: "extended",
+      title: `улетела ${dir} ${stretch.toFixed(1)}% за ${win} — поздно гнаться, жди отката`,
+    };
+  return {
+    icon: "⏳",
+    state: "mid",
+    title: `растянута ${stretch.toFixed(1)}% за ${win} — дай откатить`,
+  };
+}
+
 function renderHotMovers(payload) {
   const tbody = document.getElementById("hot-movers-tbody");
   const meta = document.getElementById("hot-movers-meta");
@@ -1389,7 +1426,7 @@ function renderHotMovers(payload) {
 
   if (!enriched.length) {
     tbody.innerHTML =
-      '<tr><td colspan="10" class="empty-state">Waiting for price history…</td></tr>';
+      '<tr><td colspan="11" class="empty-state">Waiting for price history…</td></tr>';
     return;
   }
 
@@ -1556,6 +1593,7 @@ function renderHotMovers(payload) {
       // Setup: ОДИН сетап + причина. Режим выбирает OI (trend/fade), сила по
       // взвешенному ходу окон с подтверждением accel/vol.
       const setup = computeMomentum(x.windows, accelKind, volKind, x.s);
+      const entry = hmEntryBadge(x.windows);
 
       // OI delta 5m — нейтральная раскраска: OI сам по себе не хорош/плох,
       // его смысл зависит от направления цены (режим выбирает Setup-вердикт).
@@ -1577,6 +1615,7 @@ function renderHotMovers(payload) {
         <td>${idx + 1}</td>
         <td><span class="signals-price">#${escapeHtml(s.coin)}</span></td>
         <td class="hm-setup ${setup.cls}" data-w="Setup" title="${setup.title}">${setup.label}</td>
+        <td class="hm-entry hm-entry-${entry.state}" data-w="Вход" title="${entry.title}"><span class="hm-entry-icon">${entry.icon}</span></td>
         <td class="hm-price-cell ${flashCls}"><span class="signals-price">${fmtPrice(s.price)}</span></td>
         ${cells}
         <td class="${accelCellCls}" data-w="Acc">${accelInner}</td>

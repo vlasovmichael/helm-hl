@@ -1122,6 +1122,47 @@ footer {
 .signals-table tr.is-active {
   background: var(--accent-soft);
 }
+/* Hot Movers — чейз-метр (🎯 можно / ⏳ жди / ⛔ нельзя). Эмодзи крупнее,
+   чип берёт *-soft/*-line из активной темы → корректно в любой палитре. */
+.signals-table td.hm-entry {
+  text-align: center;
+  padding: 4px 6px;
+  white-space: nowrap;
+}
+.hm-entry-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  font-size: 19px;
+  line-height: 1;
+  border-radius: 7px;
+  border: 1px solid transparent;
+}
+.hm-entry-zone .hm-entry-icon {
+  background: var(--green-soft);
+  border-color: var(--green-line);
+}
+.hm-entry-mid .hm-entry-icon {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+}
+.hm-entry-extended .hm-entry-icon {
+  background: var(--red-soft);
+  border-color: var(--red-line);
+}
+.hm-entry-none .hm-entry-icon {
+  opacity: 0.4;
+  font-size: 15px;
+}
+@media (max-width: 720px) {
+  .hm-entry-icon {
+    width: 26px;
+    height: 24px;
+    font-size: 17px;
+  }
+}
 /* Candy Girl signal rows — лёгкий tint по направлению. */
 .signals-table tr.cg-sig-row.dir-long {
   background: rgba(61, 220, 132, 0.07);
