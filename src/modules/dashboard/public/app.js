@@ -1612,7 +1612,13 @@ function renderSetupScanner(payload) {
     const z = r.swing?.entryZone;
     return z === "zone" ? 2 : z === "mid" ? 1 : 0;
   };
+  // Прячем строки без направления: WAIT/pending — это шум (90% таблицы).
+  // Оставляем только actionable: открытая позиция (exit-контекст) или LONG/SHORT.
   const sorted = [...rows]
+    .filter((r) => {
+      const s = r.swing || {};
+      return s.pos || s.signal === "LONG" || s.signal === "SHORT";
+    })
     .sort((a, b) => {
       const d = rank(b) - rank(a);
       if (d) return d;
@@ -1627,9 +1633,15 @@ function renderSetupScanner(payload) {
 
   const pending = rows.filter((r) => r.swing?.pending).length;
   meta.textContent =
-    `${rows.length} coins` +
+    `${sorted.length}/${rows.length} setups` +
     (pending ? ` · trends ${rows.length - pending}/${rows.length}` : "") +
     (payload?.ts ? ` · updated ${fmtTime(payload.ts)}` : "");
+
+  if (!sorted.length) {
+    tbody.innerHTML =
+      '<tr><td colspan="8" class="empty-state">нет направленных сетапов — все монеты в WAIT</td></tr>';
+    return;
+  }
 
   const arrowCell = (t) => {
     if (t === "up") return '<span style="color:var(--green)">↑</span>';
