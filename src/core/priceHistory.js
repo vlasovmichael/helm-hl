@@ -15,7 +15,7 @@ const HISTORY_WINDOW_MS = 4 * 60 * 60_000;
 const buffers = new Map();
 
 /**
- * Добавляет сэмпл цены. Автоматически подрезает старые (>10мин) сэмплы.
+ * Добавляет сэмпл цены. Автоматически подрезает сэмплы старше окна (4ч).
  * Невалидные цены (NaN, <=0) silent-ignore.
  */
 export function push(coin, price, ts = Date.now()) {
