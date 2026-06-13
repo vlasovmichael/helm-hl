@@ -4,6 +4,9 @@
 # Зависимости
 node_modules/
 
+# Vite-сборка дашборды (генерится npm run build:dash / в Docker build-stage)
+src/modules/dashboard/dist/
+
 # Логи
 logs/*.log
 npm-debug.log*

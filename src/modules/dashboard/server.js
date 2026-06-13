@@ -87,22 +87,21 @@ const PORT = 3010;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const PUBLIC_DIR = join(__dirname, "public");
-
-// Cache-bust: меняется на каждый рестарт/деплой контейнера. Index.html отдаётся
-// со штампом ?v=ASSET_VERSION на app.js/styles.css → браузер и Cloudflare
-// гарантированно тянут свежие ассеты после деплоя, без ручного сброса кэша.
-const ASSET_VERSION = Date.now().toString(36);
+// Прод раздаёт собранную Vite-сборку (npm run build:dash → dist/). Имена ассетов
+// хэшируются Vite'ом, поэтому ручной cache-bust больше не нужен: index.html отдаём
+// no-cache, а хэшированные app/styles браузер кэширует навсегда (immutable).
+// Дев фронта живёт на отдельном vite-сервере (npm run dev:dash), сюда не заходит.
+const PUBLIC_DIR = join(__dirname, "dist");
 function handleIndex(_req, res) {
   try {
-    const html = readFileSync(join(PUBLIC_DIR, "index.html"), "utf8")
-      .replace('src="app.js"', `src="app.js?v=${ASSET_VERSION}"`)
-      .replace('href="/styles.css"', `href="/styles.css?v=${ASSET_VERSION}"`);
+    const html = readFileSync(join(PUBLIC_DIR, "index.html"), "utf8");
     res.set("Cache-Control", "no-cache");
     res.type("html").send(html);
   } catch (err) {
-    logger.warn(`[Dashboard] index render failed: ${err.message}`);
-    res.status(500).send("index load error");
+    logger.warn(
+      `[Dashboard] index render failed: ${err.message} — собрана ли дашборда? (npm run build:dash)`,
+    );
+    res.status(500).send("dashboard build missing — run: npm run build:dash");
   }
 }
 
@@ -1108,7 +1107,19 @@ export function startDashboard() {
     }
   });
 
-  app.use(express.static(PUBLIC_DIR));
+  app.use(
+    express.static(PUBLIC_DIR, {
+      setHeaders: (res, filePath) => {
+        // Хэшированные ассеты Vite (/assets/*.[hash].js|css) иммутабельны → кэшим навсегда.
+        // HTML отдаём no-cache, чтобы новые хэши подхватывались сразу после деплоя.
+        if (filePath.includes("/assets/")) {
+          res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+        } else if (filePath.endsWith(".html")) {
+          res.setHeader("Cache-Control", "no-cache");
+        }
+      },
+    }),
+  );
 
   server = app.listen(PORT, HOST, () => {
     logger.info(`[Dashboard] ✅ Listening on http://${HOST}:${PORT}`);

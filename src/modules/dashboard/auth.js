@@ -22,7 +22,8 @@ const SESSION_MAX_AGE_SEC = 7 * 24 * 60 * 60;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const PUBLIC_DIR = join(__dirname, "public");
+// Vite-сборка фронта (npm run build:dash). login.html попадает сюда как отдельный entry.
+const PUBLIC_DIR = join(__dirname, "dist");
 
 function signSession(user, expiresAt) {
   const payload = `${user}:${expiresAt}`;

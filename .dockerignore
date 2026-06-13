@@ -1,0 +1,12 @@
+# Зависимости ставятся внутри образа (npm ci) — host-node_modules могут быть
+# под другую архитектуру (darwin) и сломать native-биндинги (better-sqlite3).
+node_modules
+
+# Vite-сборка генерится в build-stage, не тащим хостовую
+src/modules/dashboard/dist
+
+# Секреты и мусор
+.env
+.git
+*.log
+logs/*.log

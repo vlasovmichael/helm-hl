@@ -1,3 +1,17 @@
+# ───────────────────────────────────────────────────────────────
+#  build-stage: собираем дашборду (Vite). node:22 — Vite 8 требует
+#  Node ≥20.19/≥22.12. Тут нужны devDeps (vite), в рантайм они не едут.
+# ───────────────────────────────────────────────────────────────
+FROM node:22-alpine AS dashboard-build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build:dash
+
+# ───────────────────────────────────────────────────────────────
+#  runtime-stage
+# ───────────────────────────────────────────────────────────────
 FROM node:20-alpine
 
 # tzdata нужен чтобы переменная TZ (Europe/Warsaw и т.п.) реально применялась.
@@ -13,6 +27,9 @@ COPY package*.json ./
 RUN if [ "$INCLUDE_DEV" = "true" ]; then npm ci; else npm ci --omit=dev; fi
 
 COPY . .
+
+# Собранная дашборда из build-stage (web/ остаётся как исходники, но в проде раздаётся dist/).
+COPY --from=dashboard-build /app/src/modules/dashboard/dist ./src/modules/dashboard/dist
 
 RUN mkdir -p data logs && chown -R node:node /app && chmod +x /app/docker-entrypoint.sh
 
