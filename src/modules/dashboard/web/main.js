@@ -2,7 +2,6 @@
 //  HL Scanner Dashboard — Frontend
 // ─────────────────────────────────────────────────
 
-import { createChart } from "lightweight-charts";
 import {
   formatUptime,
   hexToRgba,

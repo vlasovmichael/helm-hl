@@ -5,7 +5,6 @@
 //  applyTheme, initPriceChartUi (биндинг кнопок ТФ) — bootstrap.
 // ─────────────────────────────────────────────────
 
-import { createChart } from "lightweight-charts";
 import { cssVar } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 import { subscribeOrderBook } from "../net/orderbook.js";
@@ -299,7 +298,7 @@ async function fetchAndRenderIdleCandles(coin) {
       .filter((d) => Number.isFinite(d.open) && Number.isFinite(d.close))
       .sort((a, b) => a.time - b.time);
 
-    initPriceChart();
+    await initPriceChart();
     priceSeries.setData(data);
     if (volumeSeries) volumeSeries.setData(buildVolumeData(candles));
     const last = data[data.length - 1];
@@ -355,7 +354,7 @@ async function fetchAndRenderCandles(pos, currentPrice) {
       .filter((d) => Number.isFinite(d.open) && Number.isFinite(d.close))
       .sort((a, b) => a.time - b.time);
 
-    initPriceChart();
+    await initPriceChart();
     priceSeries.setData(data);
     if (volumeSeries) volumeSeries.setData(buildVolumeData(candles));
     const last = data[data.length - 1];
@@ -380,10 +379,13 @@ async function fetchAndRenderCandles(pos, currentPrice) {
   }
 }
 
-function initPriceChart() {
+async function initPriceChart() {
   const container = document.getElementById("price-chart");
   if (!container) return;
   if (priceChart) return; // не пересоздаём, иначе теряется зум/пан
+
+  // lightweight-charts грузим лениво (отдельный чанк) — нужен только здесь, на index.
+  const { createChart } = await import("lightweight-charts");
 
   const css = (n) =>
     getComputedStyle(document.documentElement).getPropertyValue(n).trim();

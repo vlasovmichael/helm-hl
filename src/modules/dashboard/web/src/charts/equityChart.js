@@ -3,7 +3,6 @@
 //  Приватное состояние графика; данные истории пушит main.js через setEquityData().
 // ─────────────────────────────────────────────────
 
-import { createChart } from "lightweight-charts";
 import { cssVar, hexToRgba, fmtUsd } from "../utils/format.js";
 
 let equityChart = null;
@@ -47,10 +46,13 @@ export function applyChartTheme() {
   }
 }
 
-export function initEquityChart() {
+export async function initEquityChart() {
   const container = document.getElementById("equity-chart");
   if (!container) return;
   if (equityChart) return;
+
+  // lightweight-charts грузим лениво (отдельный чанк) — нужен только здесь, на index.
+  const { createChart } = await import("lightweight-charts");
 
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
   const accent = cssVar("--accent") || "#635BFF";
@@ -110,6 +112,10 @@ export function initEquityChart() {
     lastValueVisible: false,
     priceFormat: { type: "price", precision: 2, minMove: 0.01 },
   });
+
+  // Данные могли прийти из tick() ДО резолва async-импорта (setEquityData
+  // сохранил их в equityData, но серии ещё не было) — переигрываем.
+  if (equityData.length) equitySeries.setData(equityData);
 
   if (!window.__equityChartResizeBound) {
     window.__equityChartResizeBound = true;
