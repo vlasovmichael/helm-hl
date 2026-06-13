@@ -85,21 +85,15 @@ function isActiveCoin(coin) {
 function hmPosHintRow(coin) {
   const p = activePosByCoin.get(coin);
   if (!p) return "";
-  const { entry, now, side, liq, pnl, source, bot, adopted } = p;
-  const isLong = side === "LONG";
-  // % хода в сторону сделки от входа (+ = в плюс, − = против).
-  const dist =
-    entry && now ? (isLong ? (now - entry) / entry : (entry - now) / entry) * 100 : null;
+  const { now, liq, source, bot, adopted } = p;
 
   const fmtPx = (px) =>
     px == null ? "—" : px >= 100 ? px.toFixed(2) : px >= 1 ? px.toFixed(4) : px.toPrecision(4);
 
+  // % от входа и P&L НЕ дублируем — они уже в панели Active Position. Здесь
+  // только то, чего там нет: что бот УЖЕ сделал со стопом + близость ликв.
+  // «Жив ли движ» читается по momentum-ячейкам самой строки (2026-06-13).
   const chips = [];
-  // % от входа.
-  if (dist != null) {
-    const cls = dist >= 0 ? "good" : dist <= -1 ? "bad" : "warn";
-    chips.push([cls, `${dist >= 0 ? "+" : "−"}${Math.abs(dist).toFixed(2)}% от входа`]);
-  }
   // Что делает бот: стоп / BE / трейл / пик.
   if (bot) {
     if (bot.stopPrice != null) {
@@ -116,18 +110,16 @@ function hmPosHintRow(coin) {
     const liqDist = (Math.abs(now - liq) / now) * 100;
     if (liqDist < 8) chips.push(["danger", `⚠️ ликв. в ${liqDist.toFixed(1)}%`]);
   }
+  // Нет действий бота и ликв не близко → под-строка не нужна: метка активной
+  // монеты остаётся на самой строке (📍 + бейдж), P&L смотри в Active Position.
   if (!chips.length) return "";
 
-  const pnlStr =
-    pnl == null
-      ? ""
-      : ` <span class="hm-hint-pnl ${pnl >= 0 ? "strat-pos" : "strat-neg"}">${pnl >= 0 ? "+" : "−"}$${Math.abs(pnl).toFixed(2)}</span>`;
   const tag = source === "manual" ? (adopted ? "ТЫ + бот" : "ТЫ") : "BOT";
   const chipsHtml = chips
     .map(([k, t]) => `<span class="hm-hint hm-hint-${k}">${escapeHtml(t)}</span>`)
     .join(" ");
   return `<tr class="hm-pos-row"><td colspan="11">
-    <span class="hm-pos-tag hm-pos-${source}">${tag}</span>${chipsHtml}${pnlStr}
+    <span class="hm-pos-tag hm-pos-${source}">${tag}</span>${chipsHtml}
   </td></tr>`;
 }
 
@@ -1656,11 +1648,10 @@ function renderHotMovers(payload) {
       ];
       const cells = winDefs
         .map(([w, lbl]) => {
-          // У открытой монеты 2m/5m гасим — для позиции это шум, действие в
-          // подсказке ниже. 15m оставляем (контекст тренда).
-          if (isOpen && (lbl === "2m" || lbl === "5m")) {
-            return `<td class="hm-window r" data-w="${lbl}"><span class="num-inline-muted">·</span></td>`;
-          }
+          // У открытой монеты momentum-ячейки НЕ гасим — для позиции это и есть
+          // exit-сигнал «движ ещё жив или выдыхается», единственное чего нет в
+          // панели Active Position. Раньше гасили 2m/5m, но без него строка
+          // активной монеты теряла весь смысл (2026-06-13).
           const [inner, cls] = pctCellTiered(w);
           const klass = ["hm-window", "r", cls].filter(Boolean).join(" ");
           return `<td class="${klass}" data-w="${lbl}">${inner}</td>`;
@@ -1755,7 +1746,7 @@ function renderHotMovers(payload) {
         : `<td class="hm-setup c ${setup.cls}" data-w="Setup" title="${setup.title}">${setup.label}</td>`;
       const mainRow = `<tr class="${rowCls}">
         <td>${isOpen ? "📍" : idx + 1}</td>
-        <td><span class="signals-price">#${escapeHtml(s.coin)}</span></td>
+        <td><span class="signals-price">#${escapeHtml(s.coin)}</span>${isOpen ? '<span class="hm-active-badge">поз.</span>' : ""}</td>
         ${setupCell}
         <td class="hm-entry hm-entry-${entry.state}" data-w="Вход" title="${entry.title}"><span class="hm-entry-icon">${entry.icon}</span></td>
         <td class="hm-price-cell r ${flashCls}"><span class="signals-price">${fmtPrice(s.price)}</span></td>
@@ -1764,8 +1755,9 @@ function renderHotMovers(payload) {
         <td class="r ${oiCellCls}" data-w="OI">${oiInner}</td>
         <td class="r" data-w="Trend">${trendInner}</td>
       </tr>`;
-      // У открытой монеты под основной строкой — статус-строка (стоп/BE/трейл
-      // бота, % от входа, P&L), а не советы: позицией рулит бот.
+      // У открытой монеты под основной строкой — статус-строка с действиями
+      // бота (стоп/BE/трейл/пик/ликв), без дубля % и P&L (см. Active Position).
+      // Если бот ничего не делает — под-строки нет, метка живёт на самой строке.
       return isOpen ? mainRow + hmPosHintRow(s.coin) : mainRow;
     })
     .join("");

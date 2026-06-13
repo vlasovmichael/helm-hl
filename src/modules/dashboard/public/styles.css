@@ -1278,6 +1278,20 @@ footer {
 .signals-table tr.is-active {
   background: var(--accent-soft);
 }
+/* Метка активной монеты рядом с тикером — заменяет дубль P&L в строке. */
+.hm-active-badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0 5px;
+  border-radius: 4px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  vertical-align: middle;
+}
 /* Hot Movers — под-строка с данными открытой позиции (пиннутая монета). */
 .hm-pos-row td {
   padding: 3px 10px 7px 30px !important;
