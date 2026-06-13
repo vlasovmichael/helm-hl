@@ -85,7 +85,9 @@ const REGISTRY = [
   {
     id: 'candy_girl',
     label: 'Candy Girl',
-    kind: 'radar · pullback-reclaim',
+    kind: config.trading.candyGirlLongOnly !== false
+      ? 'radar · pullback-reclaim · long-only'
+      : 'radar · pullback-reclaim',
     radar: true,
     virtual: () => safe(getCandyGirlVirtualEquitySnapshot),
     signals: () => safe(getCandyGirlSignals) || [],

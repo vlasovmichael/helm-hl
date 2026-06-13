@@ -32,6 +32,7 @@ const SLOPE_LOOKBACK = config.trading.candyGirlSlopeLookback;
 const EMA_5M         = config.trading.candyGirlEma5m;
 const PULLBACK_LB    = config.trading.candyGirlPullbackLookback;
 const RR             = config.trading.candyGirlRr;
+const LONG_ONLY      = config.trading.candyGirlLongOnly !== false;
 
 // 4h HTF-confluence
 const HTF_CONFLUENCE = config.trading.candyGirlHtfConfluence !== false;
@@ -434,6 +435,9 @@ export function analyzeCandyGirl(scoutData, activePosition, now = Date.now()) {
   for (const hit of ranked.hits) {
     const { item, signal } = hit;
     if (!signal?.signal || signal.entry == null || signal.sl == null || signal.tp == null) continue;
+    // long-only: short-сторона убыточна (см. config.candyGirlLongOnly). Радар её всё
+    // равно записал/проалертил выше — здесь лишь не открываем paper-позицию.
+    if (LONG_ONLY && signal.signal !== 'long') continue;
     const cd = paperReentryCooldown.get(item.coin) ?? 0;
     if (now - cd < PAPER_REENTRY_COOLDOWN_MS) continue;   // анти-churn в ту же монету
     return {

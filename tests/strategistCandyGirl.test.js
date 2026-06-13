@@ -170,6 +170,30 @@ test('analyze: слот свободен + свежий хит → OPEN лучш
   assert.ok(sig.sl < sig.price && sig.tp > sig.price);
 });
 
+// 1h down-тренд + 5m bounce-reclaim вниз → SHORT-сигнал.
+function shortSetup1h() { return fromCloses(rising(230, 420, -1)); }   // down-тренд, заканчивается ~191
+function shortSetup5m() {
+  const base = rising(23, 200, -0.4);                                   // 200 → ~191
+  return fromCloses([...base, 194, 196, 197, 198, 188]);               // bounce вверх → reclaim вниз
+}
+
+test('long-only: радар пишет SHORT, но paper-слот его НЕ открывает (HOLD)', async () => {
+  resetCandyGirlState();
+  const now = Date.now();
+  await scanCandyGirlRadar(
+    [{ coin: 'SSS', price: 188 }], now,
+    async () => shortSetup1h(),
+    async () => shortSetup5m(),
+  );
+  // Радар обязан зафиксировать SHORT (accuracy-логгер мерит обе стороны).
+  const sigs = getCandyGirlSignals();
+  assert.equal(sigs.length, 1, 'радар должен записать сигнал');
+  assert.equal(sigs[0].direction, 'SHORT');
+  // …но paper-слот при long-only короткую сторону пропускает.
+  const sig = analyzeCandyGirl([{ coin: 'SSS', price: 188 }], null, now);
+  assert.equal(sig.action, 'HOLD', 'long-only: short не открывается в paper-слот');
+});
+
 test('analyze: протухшие ранжированные хиты → HOLD', async () => {
   resetCandyGirlState();
   const now = await seedLongHit('AAA');

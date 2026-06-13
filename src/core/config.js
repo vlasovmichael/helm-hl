@@ -532,6 +532,10 @@ function loadConfig() {
   // ⚠️ НЕ стратегия: радар алертов для ручной торговли. План: memory/candy_girl_idea.md.
   // Никогда не открывает позицию. Master-флаг default OFF.
   const candyGirlEnabled            = (process.env.CANDY_GIRL_ENABLED || 'false').toLowerCase() === 'true';
+  // long-only: paper-слот торгует только LONG. Диагностика 2026-06-14 — short-сторона
+  // сливала (−$11/31, wr 35%, payoff 0.96, 16 стоп-аутов), long в плюсе (+$6.6/22,
+  // payoff 1.48). Радар/accuracy-логгер продолжают мерить и short (см. strategistCandyGirl).
+  const candyGirlLongOnly           = (process.env.CANDY_GIRL_LONG_ONLY || 'true').toLowerCase() === 'true';
   const candyGirlAlertEnabled       = (process.env.CANDY_GIRL_ALERT_ENABLED || 'true').toLowerCase() === 'true';
   // Канал алертов: ntfy шлётся всегда (когда alertEnabled), TG-дубль опционален.
   // default OFF — Candy Girl живёт в ntfy-ленте вместе со Swing-сканером.
@@ -896,6 +900,7 @@ function loadConfig() {
       chillBoyPaperVirtualUtil,
       // ── Candy Girl радар (signal-only) ──
       candyGirlEnabled,
+      candyGirlLongOnly,
       candyGirlAlertEnabled,
       candyGirlTgEnabled,
       candyGirlFast1h,
