@@ -43,6 +43,11 @@ import {
   markTickReady,
 } from "./src/features/setupScanner.js";
 
+// WS шлёт hotMovers каждые ~2с. Пока поток живой — HTTP-фолбэк /api/signals
+// в tick() не дёргаем (был бы дубликат тех же данных).
+const WS_HOTMOVERS_FRESH_MS = 8000;
+let lastWsHotMoversAt = 0;
+
 function onStatus(data) {
   if (Number.isFinite(data.equity)) setSwingEquity(data.equity);
   renderHeader(data);
@@ -54,12 +59,15 @@ function onStatus(data) {
   if (data.hotMovers?.signals) {
     setHmSignals(data.hotMovers.signals);
     renderHotMovers(data.hotMovers, fmtTime);
+    lastWsHotMoversAt = Date.now();
   }
 }
 
 async function tick() {
+  // Фолбэк /api/signals только если WS не присылал hotMovers недавно.
+  const wsHotFresh = Date.now() - lastWsHotMoversAt < WS_HOTMOVERS_FRESH_MS;
   const [hmR, btcR, mcR] = await Promise.allSettled([
-    fetchJson("/api/signals?limit=30"),
+    wsHotFresh ? Promise.resolve(null) : fetchJson("/api/signals?limit=30"),
     fetchJson("/api/candles?coin=BTC&interval=1m"),
     fetchJson("/api/market-context"),
   ]);
