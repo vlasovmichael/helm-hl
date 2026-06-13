@@ -437,14 +437,54 @@ header {
   background: var(--accent);
 }
 @media (max-width: 640px) {
+  /* Одна строка: бренд · иконки-ссылки · переключатель темы справа.
+     Текст ссылок и тем прячем (font-size:0), оставляем иконки/глифы. */
   .topnav {
-    flex-wrap: wrap;
-    gap: 10px 14px;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 8px 0;
+  }
+  .topnav-brand {
+    font-size: 13px;
+  }
+  .topnav-links {
+    gap: 2px;
+  }
+  .nav-link {
+    gap: 0;
+    padding: 7px 9px;
+    font-size: 0;
+  }
+  .nav-link .nav-ico {
+    width: 18px;
+    height: 18px;
+  }
+  .nav-link.active::after {
+    left: 8px;
+    right: 8px;
   }
   .topnav-right {
-    width: 100%;
-    margin-left: 0;
-    justify-content: space-between;
+    width: auto;
+    margin-left: auto;
+    gap: 6px;
+  }
+  /* Тема — компактные глифы вместо слов Auto/Light/Dark. */
+  .theme-btn {
+    font-size: 0;
+    padding: 5px 8px;
+  }
+  .theme-btn::before {
+    font-size: 13px;
+    line-height: 1;
+  }
+  .theme-btn[data-theme="auto"]::before {
+    content: "◐";
+  }
+  .theme-btn[data-theme="light"]::before {
+    content: "☀";
+  }
+  .theme-btn[data-theme="dark"]::before {
+    content: "☾";
   }
 }
 
@@ -1848,25 +1888,125 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   }
 }
 
-/* Mobile: показываем label окна перед значением, чтобы не теряться в скролле */
+/* ── Hot Movers — мобильная card-вёрстка (≤720px) ──
+   11 колонок не влезают в телефон → каждая монета становится карточкой:
+   строка 1 = ранг · тикер(+чип) · цена(справа) · тайминг входа;
+   строка 2 = Setup-вердикт во всю ширину;
+   строка 3 = окна 2m/5m/15m; строка 4 = Acc / OI / Trend.
+   Лейблы (2M, ACC…) — через td[data-w]::before только на метрик-ячейках.
+   Хот-муверс — единственная таблица с .signals-table+data-w. */
 @media (max-width: 720px) {
-  .signals-table th {
-    padding: 6px 6px;
-    font-size: 10px;
+  .hm-table,
+  .hm-table tbody {
+    display: block;
   }
-  .signals-table td {
-    padding: 6px 6px;
+  .hm-table thead {
+    display: none;
+  }
+  .hm-table tbody tr.hm-main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px 10px;
+    padding: 11px 12px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .hm-table tbody tr.hm-main td {
+    display: block;
+    padding: 0;
+    border: none;
+    white-space: nowrap;
+  }
+  /* строка 1 */
+  .hm-table tr.hm-main td:nth-child(1) {
+    order: 1;
+    flex: 0 0 auto;
+    width: auto;
     font-size: 12px;
+    color: var(--text-muted);
   }
-  .signals-table td[data-w]::before {
+  .hm-table tr.hm-main td:nth-child(2) {
+    order: 2;
+    flex: 1 1 auto;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .hm-table tr.hm-main td.hm-price-cell {
+    order: 3;
+    flex: 0 0 auto;
+    margin-left: auto;
+    font-size: 13.5px;
+    text-align: right;
+  }
+  .hm-table tr.hm-main td.hm-entry {
+    order: 4;
+    flex: 0 0 auto;
+    padding: 0;
+  }
+  /* строка 2: Setup во всю ширину */
+  .hm-table tr.hm-main td.hm-setup {
+    order: 5;
+    flex: 0 0 100%;
+    text-align: left;
+    padding: 0;
+  }
+  /* строка 3: окна; строка 4: Acc/OI/Trend (по трети) */
+  .hm-table tr.hm-main td.hm-window {
+    order: 6;
+    flex: 1 1 26%;
+    text-align: left;
+  }
+  .hm-table tr.hm-main td[data-w="Acc"] {
+    order: 7;
+  }
+  .hm-table tr.hm-main td[data-w="OI"] {
+    order: 8;
+  }
+  .hm-table tr.hm-main td[data-w="Trend"] {
+    order: 9;
+  }
+  .hm-table tr.hm-main td[data-w="Acc"],
+  .hm-table tr.hm-main td[data-w="OI"],
+  .hm-table tr.hm-main td[data-w="Trend"] {
+    flex: 1 1 26%;
+    text-align: left;
+  }
+  /* лейблы только на метрик-ячейках (окна + Acc/OI/Trend) */
+  .hm-table tr.hm-main td[data-w]::before {
     content: attr(data-w);
     display: block;
-    font-size: 9px;
+    font-size: 8.5px;
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    margin-bottom: 2px;
+    margin-bottom: 1px;
     opacity: 0.7;
+  }
+  .hm-table tr.hm-main td.hm-setup::before,
+  .hm-table tr.hm-main td.hm-entry::before {
+    content: none;
+  }
+  /* живая кромка по направлению/позиции — слева на всей карточке
+     (на мобиле box-shadow td:first-child не даёт высоту) */
+  .hm-table tr.hm-main.row-up.row-heat-mid,
+  .hm-table tr.hm-main.row-up.row-heat-strong {
+    box-shadow: inset 3px 0 0 var(--green);
+  }
+  .hm-table tr.hm-main.row-down.row-heat-mid,
+  .hm-table tr.hm-main.row-down.row-heat-strong {
+    box-shadow: inset 3px 0 0 var(--red);
+  }
+  .hm-table tr.hm-main.is-active {
+    box-shadow: inset 4px 0 0 var(--accent) !important;
+  }
+  /* плейсхолдер (empty-state / waiting) обычным блоком */
+  .hm-table tbody tr:not(.hm-main):not(.hm-pos-row) {
+    display: block;
+  }
+  .hm-table tbody tr .empty-state {
+    display: block;
+    padding: 18px 12px;
+    text-align: center;
   }
 }
 
@@ -1900,7 +2040,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
 @media (max-width: 880px) {
   .bottom-nav {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     position: fixed;
     bottom: 0;
     left: 0;
@@ -1946,17 +2086,20 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
     -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M8 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM2 8a6 6 0 1 1 12 0A6 6 0 0 1 2 8zm6-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4z'/></svg>");
     mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M8 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM2 8a6 6 0 1 1 12 0A6 6 0 0 1 2 8zm6-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4z'/></svg>");
   }
-  .bottom-nav-btn[data-target="sec-charts"] .nav-icon {
-    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M1.5 1.75v11.5c0 .138.112.25.25.25h12.5a.75.75 0 0 1 0 1.5H1.75A1.75 1.75 0 0 1 0 13.25V1.75a.75.75 0 0 1 1.5 0zm14.28 2.53-5.25 5.25a.75.75 0 0 1-1.06 0L7 7.06 4.28 9.78a.75.75 0 0 1-1.06-1.06l3.25-3.25a.75.75 0 0 1 1.06 0L10 7.94l4.72-4.72a.75.75 0 1 1 1.06 1.06z'/></svg>");
-    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M1.5 1.75v11.5c0 .138.112.25.25.25h12.5a.75.75 0 0 1 0 1.5H1.75A1.75 1.75 0 0 1 0 13.25V1.75a.75.75 0 0 1 1.5 0zm14.28 2.53-5.25 5.25a.75.75 0 0 1-1.06 0L7 7.06 4.28 9.78a.75.75 0 0 1-1.06-1.06l3.25-3.25a.75.75 0 0 1 1.06 0L10 7.94l4.72-4.72a.75.75 0 1 1 1.06 1.06z'/></svg>");
+  /* Hot Movers — пламя (горячие монеты). */
+  .bottom-nav-btn[data-target="sec-movers"] .nav-icon {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M9.53.75c.22 2.39 1.47 3.63 2.66 4.81C13.2 6.5 14 7.5 14 9A6 6 0 1 1 2.76 6.23c.1.28.27.49.5.63.55.35 1.27.22 1.48-.46.3-1.01.38-2.4-.04-4.08a.75.75 0 0 1 .99-.88c.62.23 1.23.63 1.68 1.15.4-.55.85-1.04 1.32-1.53.32-.33.61-.66.86-1.03zM8 14a4 4 0 0 0 1.5-7.71c.14 1.16-.04 2.4-.86 3.16-.5.46-1.18.55-1.7.18a1.6 1.6 0 0 1-.62-1.3A4 4 0 0 0 8 14z'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M9.53.75c.22 2.39 1.47 3.63 2.66 4.81C13.2 6.5 14 7.5 14 9A6 6 0 1 1 2.76 6.23c.1.28.27.49.5.63.55.35 1.27.22 1.48-.46.3-1.01.38-2.4-.04-4.08a.75.75 0 0 1 .99-.88c.62.23 1.23.63 1.68 1.15.4-.55.85-1.04 1.32-1.53.32-.33.61-.66.86-1.03zM8 14a4 4 0 0 0 1.5-7.71c.14 1.16-.04 2.4-.86 3.16-.5.46-1.18.55-1.7.18a1.6 1.6 0 0 1-.62-1.3A4 4 0 0 0 8 14z'/></svg>");
   }
-  .bottom-nav-btn[data-target="sec-logs"] .nav-icon {
-    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M2.75 2.5a.75.75 0 0 0 0 1.5h10.5a.75.75 0 0 0 0-1.5H2.75zm0 4.5a.75.75 0 0 0 0 1.5h10.5a.75.75 0 0 0 0-1.5H2.75zm0 4.5a.75.75 0 0 0 0 1.5h7a.75.75 0 0 0 0-1.5h-7z'/></svg>");
-    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M2.75 2.5a.75.75 0 0 0 0 1.5h10.5a.75.75 0 0 0 0-1.5H2.75zm0 4.5a.75.75 0 0 0 0 1.5h10.5a.75.75 0 0 0 0-1.5H2.75zm0 4.5a.75.75 0 0 0 0 1.5h7a.75.75 0 0 0 0-1.5h-7z'/></svg>");
+  /* Setup Scanner — лупа (скан сетапов). */
+  .bottom-nav-btn[data-target="sec-setup-scanner"] .nav-icon {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M10.68 11.74a6 6 0 1 1 1.06-1.06l3.04 3.04a.75.75 0 0 1-1.06 1.06zM12 7a5 5 0 1 0-10 0 5 5 0 0 0 10 0z'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M10.68 11.74a6 6 0 1 1 1.06-1.06l3.04 3.04a.75.75 0 0 1-1.06 1.06zM12 7a5 5 0 1 0-10 0 5 5 0 0 0 10 0z'/></svg>");
   }
-  .bottom-nav-btn[data-target="sec-activity"] .nav-icon {
-    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zm.5 4a.5.5 0 0 0-1 0v4.25c0 .133.053.26.146.354l2.5 2.5a.5.5 0 0 0 .708-.708L8.5 8.043V4z'/></svg>");
-    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zm.5 4a.5.5 0 0 0-1 0v4.25c0 .133.053.26.146.354l2.5 2.5a.5.5 0 0 0 .708-.708L8.5 8.043V4z'/></svg>");
+  /* BTC Divergence — две встречные стрелки (расхождение vs BTC). */
+  .bottom-nav-btn[data-target="sec-divergence"] .nav-icon {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M4.5 1 1 5h2.25v10h2.5V5H8L4.5 1zm7 14L15 11h-2.25V1h-2.5v10H8l3.5 4z'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M4.5 1 1 5h2.25v10h2.5V5H8L4.5 1zm7 14L15 11h-2.25V1h-2.5v10H8l3.5 4z'/></svg>");
   }
   .bottom-nav-btn[data-target="sec-whale"] .nav-icon {
     -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M2 10c0-2.76 2.24-5 5-5 1.7 0 3.18.85 4.1 2.14C12.28 6.43 13.58 6 15 6v1.5c-1.1 0-2.1.47-2.82 1.22A4.99 4.99 0 0 1 7 10H2zm0 2h5a4 4 0 0 0 3.46-2H2v2z'/></svg>");

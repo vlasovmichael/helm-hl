@@ -79,11 +79,19 @@ export function renderHotMovers(payload, fmtTime) {
       momScore: 0,
     });
   }
-  // Остальные строки: прячем WAIT (хода нет) и режем до лимита. Так таблица
-  // показывает только то, что реально движется (5–10 монет, а не 20 с шумом).
-  const restRows = sorted
-    .filter((x) => !isActiveCoin(x.s.coin) && x.momScore >= HM_WAIT_SCORE)
-    .slice(0, Math.max(1, HM_MAX_ROWS - activeRows.length));
+  // Остальные строки: режем до лимита и ПРЯЧЕМ WAIT — но только пока есть что
+  // показывать. WAIT-порог по momScore высокий (нужен ~1%+ ход), поэтому в
+  // тихом рынке под него не проходит почти никто. Чтобы карточка не пустела
+  // (оставались одни активные), при нехватке не-WAIT добиваем сильнейшими
+  // движущимися монетами. dead-flat (|ход|<0.2% по всем окнам) прячем всегда.
+  const slots = Math.max(0, HM_MAX_ROWS - activeRows.length);
+  const movingRest = sorted.filter(
+    (x) => !isActiveCoin(x.s.coin) && x.maxAbs >= 0.2,
+  );
+  const nonWait = movingRest.filter((x) => x.momScore >= HM_WAIT_SCORE);
+  const restRows = (
+    nonWait.length >= Math.min(4, slots) ? nonWait : movingRest
+  ).slice(0, slots);
   const enriched = [...activeRows, ...restRows];
 
   const activeShown = activeRows.length;
