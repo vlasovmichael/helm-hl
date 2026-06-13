@@ -29,7 +29,7 @@ import {
   getBotOidsSince,
   getSetupScannerRows,
 } from "../../core/database.js";
-import { getAccountSummary, getPositions, getLivePrice, getFrontendOpenOrders } from "../exchange.js";
+import { getAccountSummary, getPositionsCached, getLivePrice, getFrontendOpenOrders } from "../exchange.js";
 import { fetchUserFills, reconstructManualTrades } from "../userFills.js";
 import { getMonthlyLedger } from "../ledger.js";
 import { FEE_RATE, MAKER_FEE_RATE } from "../executor/math.js";
@@ -647,7 +647,7 @@ async function getStatusData() {
   let manualPositions = [];
   if (config.isProduction) {
     try {
-      const exPositions = await getPositions();
+      const exPositions = await getPositionsCached();
       const botCoin = position?.coin?.toLowerCase() ?? null;
       const matchesBot = (c) => {
         if (!botCoin) return false;
@@ -1607,7 +1607,7 @@ async function handlePnlSummary(_req, res) {
     let unrealized = 0;
     try {
       if (openPos && config.isProduction) {
-        const positions = await getPositions();
+        const positions = await getPositionsCached();
         const livePos = positions.find((p) => p.coin === openPos.coin);
         if (livePos) unrealized = parseFloat(livePos.unrealizedPnl ?? "0");
       }
@@ -1892,7 +1892,7 @@ async function handleSetupScanner(_req, res) {
     // даже если collector их не трекает, + exit-контекст в строке.
     let positions = [];
     try {
-      positions = parseAccountPositions(await getPositions());
+      positions = parseAccountPositions(await getPositionsCached());
     } catch {
       /* fail-soft: карточка живёт без позиций */
     }

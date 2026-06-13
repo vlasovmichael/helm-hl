@@ -3,9 +3,8 @@ import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getActivePosition, closePosition as dbClosePosition } from '../core/database.js';
 import { sendMessage } from './reporter.js';
-import { checkAccountLeverage } from './exchange.js';
+import { checkAccountLeverage, getPositionsCached } from './exchange.js';
 import { restoreCircuitBreaker, restoreSniper, restoreOiCapBans } from './executor/state.js';
-import { hlInfo } from '../core/hlClient.js';
 
 import { state as appState } from '../app/state.js';
 
@@ -120,28 +119,14 @@ async function loadBotState() {
  * @returns {Promise<Array<{ coin, szi, entryPx, positionValue, unrealizedPnl }>>}
  */
 export async function fetchExchangePositions() {
-  const wallet = config.wallet.address;
-  logger.info(`[Sync] Querying clearinghouseState for ${wallet.slice(0, 8)}…`);
-
-  const t0 = Date.now();
+  // Сырые assetPositions через коалесцирующий слой — orphanCheck зовётся каждый
+  // тик (при ADOPT_ENABLED), и раньше это был отдельный clearinghouseState +
+  // шумный лог на каждый тик. Теперь делит срез с integrity/dashboard в окне TTL.
   try {
-    const data = await hlInfo(
-      { type: 'clearinghouseState', user: wallet },
-      { label: 'sync/clearinghouse' },
-    );
-    const rtt = Date.now() - t0;
+    const assetPositions = await getPositionsCached();
+    if (!Array.isArray(assetPositions)) return [];
 
-    const assetPositions = data?.assetPositions;
-
-    if (!Array.isArray(assetPositions)) {
-      logger.warn(
-        `[Sync] ❌ Unexpected clearinghouseState shape (RTT: ${rtt}ms): ` +
-        JSON.stringify(data).slice(0, 200),
-      );
-      return [];
-    }
-
-    // Фильтруем позиции с ненулевым размером
+    // Фильтруем позиции с ненулевым размером, нормализуем в плоский shape.
     const positions = [];
     for (const ap of assetPositions) {
       const pos = ap?.position;
@@ -159,20 +144,9 @@ export async function fetchExchangePositions() {
         liquidationPx: pos.liquidationPx ? parseFloat(pos.liquidationPx) : null,
       });
     }
-
-    const total = assetPositions.filter((ap) => ap?.position).length;
-    logger.info(
-      `[Sync] ✅ Exchange response in ${rtt}ms — ` +
-      `${total} total slots, ${positions.length} open` +
-      (positions.length > 0
-        ? `: [${positions.map((p) => `${p.coin}(${p.szi > 0 ? '+' : ''}${p.szi})`).join(', ')}]`
-        : ''),
-    );
-
     return positions;
   } catch (err) {
-    const rtt = Date.now() - t0;
-    logger.error(`[Sync] ❌ Exchange fetch failed (RTT: ${rtt}ms): ${err.message}`);
+    logger.error(`[Sync] ❌ Exchange fetch failed: ${err.message}`);
     return [];
   }
 }

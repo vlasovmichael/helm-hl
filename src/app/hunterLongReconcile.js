@@ -10,7 +10,7 @@ import {
   getActivePosition,
   closePosition as dbClosePosition,
 } from '../core/database.js';
-import { getExchange, getPositions } from '../modules/exchange.js';
+import { getExchange, getPositionsCached } from '../modules/exchange.js';
 import { ONE_LEG } from '../modules/executor/math.js';
 import { setCooldown } from '../modules/executor/state.js';
 import { consumeHunterLongMfeMae } from '../modules/strategistHunterLong.js';
@@ -130,7 +130,7 @@ export async function hunterLongReconcile() {
   try {
     [openOrders, positions] = await Promise.all([
       fetchOpenOrders(),
-      getPositions(),
+      getPositionsCached(),
     ]);
   } catch (err) {
     logger.debug(`[HunterLongRecon] fetch failed: ${err.message}`);

@@ -8,7 +8,7 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getActivePosition, getActiveAdoptPositions, closePosition as dbClosePosition } from '../core/database.js';
-import { getPositions, getAccountSummary } from '../modules/exchange.js';
+import { getPositionsCached, getAccountSummary } from '../modules/exchange.js';
 import { sendMessage } from '../modules/reporter.js';
 import { fetchExchangePositions } from '../modules/sync.js';
 import { fetchUserFills, classifyClose } from '../modules/userFills.js';
@@ -161,7 +161,7 @@ export async function integrityCheck() {
   if (positionsToCheck.length === 0) return false;
 
   try {
-    const exchangePositions = await getPositions();
+    const exchangePositions = await getPositionsCached();
 
     // Account summary один раз на проход (margin-guard + PnL fallback).
     let equity = 0;
@@ -174,19 +174,41 @@ export async function integrityCheck() {
       // деградируем — PnL уйдёт на fills/неизвестно, margin-guard пропустит
     }
 
-    // Margin Guard (глобально): маржа заблокирована → вероятен лаг API. Отдаём
-    // позиции «вернутся» следующим тиком, чем словить ложное внешнее закрытие.
-    if (equity > 10 && withdrawable < equity * 0.5) {
+    // Какие из проверяемых позиций реально отсутствуют в ответе биржи?
+    const liveOnExchange = exchangePositions.filter(
+      (ap) => parseFloat((ap?.position ?? ap)?.szi ?? '0') !== 0,
+    );
+    const vanished = positionsToCheck.filter(
+      (db) =>
+        !liveOnExchange.some((ap) =>
+          isSameCoin((ap?.position ?? ap)?.coin, db.coin),
+        ),
+    );
+
+    // Всё на месте → расхождения нет. Это НОРМА, пока открыты позиции — раньше
+    // здесь срабатывал margin-guard и спамил варнингом каждые 60с (393×/9ч),
+    // потому что withdrawable < 50% equity истинно всегда, когда деньги в позах.
+    if (vanished.length === 0) return false;
+
+    // Лаг-сигнатура индексатора: биржа вернула ПУСТО (ни одной живой позы), а
+    // маржа заблокирована → позиции есть, просто API отстал. Гасим, чтобы не
+    // закрыть всё ложно. Если хотя бы одна поза в ответе есть — это не общий лаг,
+    // а реальное исчезновение конкретной монеты → обрабатываем ниже.
+    if (
+      liveOnExchange.length === 0 &&
+      equity > 10 &&
+      withdrawable < equity * 0.5
+    ) {
       logger.warn(
-        `[Integrity] ⚡ position(s) not found in getPositions() but margin is locked: ` +
+        `[Integrity] ⚡ getPositions() пуст, но маржа заблокирована: ` +
           `withdrawable=$${withdrawable.toFixed(2)} vs equity=$${equity.toFixed(2)} ` +
-          `(${((withdrawable / equity) * 100).toFixed(1)}%). Likely API lag — skipping.`,
+          `(${((withdrawable / equity) * 100).toFixed(1)}%). Похоже на лаг API — skipping.`,
       );
       return false;
     }
 
     let anyClosed = false;
-    for (const dbPosition of positionsToCheck) {
+    for (const dbPosition of vanished) {
       try {
         if (await closeIfVanished(dbPosition, exchangePositions, equity, withdrawable)) {
           anyClosed = true;

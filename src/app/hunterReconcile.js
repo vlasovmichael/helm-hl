@@ -17,7 +17,7 @@ import {
   getActivePosition,
   closePosition as dbClosePosition,
 } from '../core/database.js';
-import { getExchange, getPositions } from '../modules/exchange.js';
+import { getExchange, getPositionsCached } from '../modules/exchange.js';
 import { ONE_LEG } from '../modules/executor/math.js';
 import { setCooldown } from '../modules/executor/state.js';
 import { recordHunterSlExternal, consumeHunterMfeMae, isHunterArmed } from '../modules/strategistSniper.js';
@@ -146,7 +146,7 @@ export async function hunterReconcile() {
   try {
     [openOrders, positions] = await Promise.all([
       fetchOpenOrders(),
-      getPositions(),
+      getPositionsCached(),
     ]);
   } catch (err) {
     logger.debug(`[HunterRecon] fetch failed: ${err.message}`);

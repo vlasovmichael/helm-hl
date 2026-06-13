@@ -11,7 +11,7 @@
 
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
-import { getExchange, getPositions } from '../modules/exchange.js';
+import { getExchange, getPositionsCached } from '../modules/exchange.js';
 import { getActivePosition, updateHunterTriggerOids } from '../core/database.js';
 import { placeHunterTrigger } from '../modules/executor/production.js';
 import { resolveAsset } from '../modules/executor/fill-parser.js';
@@ -80,7 +80,7 @@ export async function restoreHunterTrailIfNeeded() {
     const sdk = getExchange();
     [openOrders, positions] = await Promise.all([
       sdk.info.getUserOpenOrders(config.wallet.address),
-      getPositions(),
+      getPositionsCached(),
     ]);
   } catch (err) {
     logger.warn(`[HunterTrail] restore: fetch failed (${err.message}). Skipping.`);

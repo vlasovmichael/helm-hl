@@ -17,11 +17,19 @@ import { config } from "../core/config.js";
 import { logger } from "../core/logger.js";
 import { retryWithBackoff } from "../core/retry.js";
 import { getCachedBalance } from "../core/balanceCache.js";
+import { coalesce } from "../core/accountState.js";
 import { hlInfo } from "../core/hlClient.js";
 import {
   getLivePrice as feedGetLivePrice,
   isFeedFresh,
 } from "../core/priceFeed.js";
+
+// TTL коалесцирования срезов аккаунта. Balance/positions зовутся 6–12×/тик
+// разными потребителями; в этом окне они делят один сетевой фетч. Короткое —
+// чтобы cold-читатели (дашборд/integrity) не висели на устаревшем срезе. Hot-
+// путь реконсайла кэш не трогает (зовёт getPositions() напрямую).
+const ACCT_BALANCE_TTL_MS = parseInt(process.env.HL_BALANCE_TTL_MS || "2500", 10);
+const ACCT_POSITIONS_TTL_MS = parseInt(process.env.HL_POSITIONS_TTL_MS || "2500", 10);
 
 let sdk = null;
 
@@ -261,6 +269,19 @@ export async function getPositions() {
 }
 
 /**
+ * Коалесцированные позиции для cold-читателей (per-tick reconcile, integrity,
+ * orphan, dashboard, setup-scanner). В окне TTL все делят один clearinghouseState
+ * вместо ~6 независимых фетчей за тик. НЕ использовать в polling-цикле после
+ * ордера — там нужна свежесть, зови getPositions() напрямую.
+ *
+ * @param {number} [maxAgeMs]
+ * @returns {Promise<Array>}
+ */
+export async function getPositionsCached(maxAgeMs = ACCT_POSITIONS_TTL_MS) {
+  return coalesce("positions", getPositions, maxAgeMs);
+}
+
+/**
  * Открытые ордера (включая trigger SL/TP) в формате фронтенда HL:
  * orderType 'Stop Market' / 'Take Profit Market', triggerPx, reduceOnly.
  * Используется Setup Scanner'ом для отображения SL/TP операторских позиций.
@@ -349,8 +370,15 @@ async function fetchBalanceFromSdk() {
  * @returns {Promise<number>}
  */
 export async function getBalance() {
-  const snap = await getCachedBalance(fetchBalanceFromSdk);
+  const snap = await getCachedBalance(fetchBalanceCoalesced);
   return snap.withdrawable;
+}
+
+// fetchBalanceFromSdk через coalesce: 6+ вызовов getBalance/getAccountSummary
+// за тик делят один сетевой срез (perp+spot). balanceCache по-прежнему сверху —
+// решает, доверять свежему ответу или жить на кэше при $0-глитче индексатора.
+function fetchBalanceCoalesced() {
+  return coalesce("balance", fetchBalanceFromSdk, ACCT_BALANCE_TTL_MS);
 }
 
 /**
@@ -360,7 +388,7 @@ export async function getBalance() {
  * @returns {Promise<{ equity: number, available: number, unrealizedPnl: number }>}
  */
 export async function getAccountSummary() {
-  const snap = await getCachedBalance(fetchBalanceFromSdk);
+  const snap = await getCachedBalance(fetchBalanceCoalesced);
   return {
     equity:        snap.accountValue,
     available:     snap.withdrawable,

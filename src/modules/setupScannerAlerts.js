@@ -20,7 +20,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
 import { getSetupScannerRows } from '../core/database.js';
-import { getPositions, getFrontendOpenOrders } from './exchange.js';
+import { getPositionsCached, getFrontendOpenOrders } from './exchange.js';
 import { enrichSwingSignals, requestSwingTrendRefresh } from './setupScannerSwing.js';
 
 const ENABLED =
@@ -212,7 +212,7 @@ async function runOnce(now = Date.now()) {
 
   let positions = [];
   try {
-    positions = parseAccountPositions(await getPositions());
+    positions = parseAccountPositions(await getPositionsCached());
   } catch (err) {
     logger.debug(`[SwingAlerts] getPositions failed: ${err.message}`);
   }

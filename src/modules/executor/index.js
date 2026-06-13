@@ -7,6 +7,7 @@ import { config } from '../../core/config.js';
 import { logger } from '../../core/logger.js';
 import { state as appState } from '../../app/state.js';
 import { getAccountSummary } from '../exchange.js';
+import { invalidateAccountState } from '../../core/accountState.js';
 import { getAccountEquity } from '../wallet.js';
 import { checkVolatility } from '../volatility.js';
 import {
@@ -49,16 +50,28 @@ let drawdownAlertSent = false;
 export async function execute(signal, activePosition) {
   switch (signal.action) {
     case "OPEN":
-      return handleOpen(signal);
+      return afterMutation(handleOpen(signal));
     case "CLOSE":
-      return handleClose(signal, activePosition);
+      return afterMutation(handleClose(signal, activePosition));
     case "ROTATE":
-      return handleRotate(signal, activePosition);
+      return afterMutation(handleRotate(signal, activePosition));
     case "HOLD":
       return { ok: true };
     default:
       logger.warn(`[Executor] Unknown action: ${signal.action}`);
       return { ok: false };
+  }
+}
+
+// После любой сделки бота сбрасываем коалесцированный срез аккаунта: cold-
+// читатели (дашборд/integrity) тут же видят новые позиции/equity, а не висят
+// на дотрейдовом снапшоте до истечения TTL. Сбрасываем независимо от исхода —
+// частичный успех/ошибка тоже могли изменить состояние на бирже.
+async function afterMutation(resultPromise) {
+  try {
+    return await resultPromise;
+  } finally {
+    invalidateAccountState("positions", "balance");
   }
 }
 
