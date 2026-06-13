@@ -26,6 +26,13 @@ import {
 } from "./src/hotMovers/momentum.js";
 import { fetchJson } from "./src/net/api.js";
 import { subscribeOrderBook } from "./src/net/orderbook.js";
+import {
+  updateActiveCoinSet,
+  isActiveCoin,
+  hmPosHintRow,
+  getActiveCoins,
+  getActivePos,
+} from "./src/state/activeCoins.js";
 
 const REFRESH_MS = 10_000;
 let _cgSignalsCache = [];
@@ -37,99 +44,6 @@ let _btcMomentum1m = null;
 let _lastEquity = null; // последний известный equity (для размера позиции в Swing-плане)
 const SWING_RISK_PCT = 0.02; // риск на сделку = 2% equity (свинг-план размера)
 let _tickReady = false; // true after first tick() completes — prevents half-baked SmartSignals renders
-
-// Активные монеты (позиция бота + все ручные/HANDS-OFF). Подсвечиваем их во
-// всех лентах монет (Hot Movers / Divergence / Candy Girl), чтобы оператор видел
-// свою монету выделенной, пока торгует руками (2026-06-09).
-let activeCoinSet = new Set();
-// coin → краткая сводка открытой позиции (для пин-строки в Hot Movers).
-let activePosByCoin = new Map();
-function updateActiveCoinSet(activePosition, manualPositions) {
-  const next = new Set();
-  const posMap = new Map();
-  if (activePosition?.coin) {
-    next.add(activePosition.coin);
-    posMap.set(activePosition.coin, {
-      side: (activePosition.side || "SHORT").toUpperCase(),
-      entry: activePosition.entryPrice ?? null,
-      now: activePosition.currentPrice ?? null,
-      pnl: activePosition.currentPnl?.netMarket ?? null,
-      heldHours: activePosition.heldHours ?? null,
-      sizeUsd: activePosition.sizeUsd ?? null,
-      liq: null,
-      bot: activePosition.bot ?? null,
-      source: "bot",
-    });
-  }
-  if (Array.isArray(manualPositions))
-    for (const p of manualPositions)
-      if (p?.coin) {
-        next.add(p.coin);
-        posMap.set(p.coin, {
-          side: (p.side || "").toUpperCase(),
-          entry: p.entryPrice ?? null,
-          now: p.currentPrice ?? null,
-          pnl: p.unrealizedPnl ?? null,
-          heldHours: null, // у ручной позы нет entry_time в payload
-          sizeUsd: p.sizeUsd ?? null,
-          liq: p.liquidationPrice ?? null,
-          bot: null, // ручную позу ведёт adopt-нянька (стоп на бирже), не отдаём детали
-          adopted: !!p.adopted,
-          source: "manual",
-        });
-      }
-  activeCoinSet = next;
-  activePosByCoin = posMap;
-}
-function isActiveCoin(coin) {
-  return coin != null && activeCoinSet.has(coin);
-}
-
-// Под-строка Hot Movers для ОТКРЫТОЙ монеты: СТАТУС позиции, а не советы.
-// Позицию ведёт бот (Hunter SHORT / adopt-нянька на ручных входах) — он сам
-// двигает стоп в безубыток, трейлит и режет. Поэтому показываем что бот УЖЕ
-// сделал (стоп / BE-храповик / трейл / пик), а не «двигай стоп», чтобы не
-// провоцировать оператора лезть руками в сделку, от которой он ушёл (2026-06-13).
-function hmPosHintRow(coin) {
-  const p = activePosByCoin.get(coin);
-  if (!p) return "";
-  const { now, liq, source, bot, adopted } = p;
-
-  const fmtPx = (px) =>
-    px == null ? "—" : px >= 100 ? px.toFixed(2) : px >= 1 ? px.toFixed(4) : px.toPrecision(4);
-
-  // % от входа и P&L НЕ дублируем — они уже в панели Active Position. Здесь
-  // только то, чего там нет: что бот УЖЕ сделал со стопом + близость ликв.
-  // «Жив ли движ» читается по momentum-ячейкам самой строки (2026-06-13).
-  const chips = [];
-  // Что делает бот: стоп / BE / трейл / пик.
-  if (bot) {
-    if (bot.stopPrice != null) {
-      const sp = bot.stopPct != null ? ` (−${bot.stopPct.toFixed(1)}%)` : "";
-      chips.push(["neutral", `стоп @${fmtPx(bot.stopPrice)}${sp}`]);
-    }
-    if (bot.beArmed) chips.push(["good", "BE взведён"]);
-    if (bot.trailArmed) chips.push(["good", "трейл активен"]);
-    if (bot.peakPct != null && bot.peakPct > 0.1)
-      chips.push(["neutral", `пик +${bot.peakPct.toFixed(2)}%`]);
-  }
-  // Близость ликвидации — единственный «алерт», и тот информативный.
-  if (liq && now) {
-    const liqDist = (Math.abs(now - liq) / now) * 100;
-    if (liqDist < 8) chips.push(["danger", `⚠️ ликв. в ${liqDist.toFixed(1)}%`]);
-  }
-  // Нет действий бота и ликв не близко → под-строка не нужна: метка активной
-  // монеты остаётся на самой строке (📍 + бейдж), P&L смотри в Active Position.
-  if (!chips.length) return "";
-
-  const tag = source === "manual" ? (adopted ? "ТЫ + бот" : "ТЫ") : "BOT";
-  const chipsHtml = chips
-    .map(([k, t]) => `<span class="hm-hint hm-hint-${k}">${escapeHtml(t)}</span>`)
-    .join(" ");
-  return `<tr class="hm-pos-row"><td colspan="11">
-    <span class="hm-pos-tag hm-pos-${source}">${tag}</span>${chipsHtml}
-  </td></tr>`;
-}
 
 let equityChart = null;
 let priceChart = null;
@@ -1170,9 +1084,9 @@ function renderHotMovers(payload) {
   // вместе с импульсом. Синтезируем минимальную строку из данных позиции —
   // momentum-ячейки будут «—», но позиция остаётся видимой (2026-06-13).
   const inSorted = new Set(activeRows.map((x) => x.s.coin));
-  for (const coin of activeCoinSet) {
+  for (const coin of getActiveCoins()) {
     if (inSorted.has(coin)) continue;
-    const p = activePosByCoin.get(coin);
+    const p = getActivePos(coin);
     activeRows.push({
       s: { coin, price: p?.now ?? null, windows: [], volMult: null, isActive: true },
       windows: [],
