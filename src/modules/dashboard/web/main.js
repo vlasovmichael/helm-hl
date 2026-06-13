@@ -48,6 +48,12 @@ import {
   bindLogsUi,
   fetchInitialLogs,
 } from "./src/features/logs.js";
+import {
+  initEquityChart,
+  applyChartTheme,
+  renderEquityPill,
+  setEquityData,
+} from "./src/charts/equityChart.js";
 
 const REFRESH_MS = 10_000;
 let _cgSignalsCache = [];
@@ -60,7 +66,6 @@ let _lastEquity = null; // последний известный equity (для 
 const SWING_RISK_PCT = 0.02; // риск на сделку = 2% equity (свинг-план размера)
 let _tickReady = false; // true after first tick() completes — prevents half-baked SmartSignals renders
 
-let equityChart = null;
 let priceChart = null;
 let priceSeries = null;
 let volumeSeries = null;
@@ -755,134 +760,6 @@ function tickLiveCandle(price, pos) {
   priceSeries.update(liveCandle);
 }
 
-// ── Performance Chart (EQUITY) — Lightweight Charts area-series ──
-
-let equitySeries = null;
-let equityData = []; // [{time, value}]
-
-function applyChartTheme() {
-  if (!equityChart) return;
-  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  const accent = cssVar("--accent") || "#635BFF";
-  const textMuted = cssVar("--text-muted") || (isDark ? "#71717A" : "#52525B");
-  const grid = cssVar("--grid-line") || (isDark ? "#1F1F23" : "#E4E4E7");
-  const bgColor = cssVar("--card-bg") || (isDark ? "#131316" : "#FFFFFF");
-
-  equityChart.applyOptions({
-    layout: {
-      background: { type: "solid", color: bgColor },
-      textColor: textMuted,
-      fontFamily: "JetBrains Mono, monospace",
-    },
-    grid: {
-      vertLines: { color: "transparent" },
-      horzLines: { color: grid },
-    },
-    rightPriceScale: { borderColor: grid },
-    timeScale: { borderColor: grid },
-  });
-
-  if (equitySeries) {
-    equitySeries.applyOptions({
-      lineColor: accent,
-      topColor: hexToRgba(accent, 0.28),
-      bottomColor: hexToRgba(accent, 0),
-    });
-  }
-}
-
-function initEquityChart() {
-  const container = document.getElementById("equity-chart");
-  if (!container) return;
-  if (equityChart) return;
-
-  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  const accent = cssVar("--accent") || "#635BFF";
-  const textMuted = cssVar("--text-muted") || (isDark ? "#71717A" : "#52525B");
-  const grid = cssVar("--grid-line") || (isDark ? "#1F1F23" : "#E4E4E7");
-  const bgColor = cssVar("--card-bg") || (isDark ? "#131316" : "#FFFFFF");
-
-  equityChart = createChart(container, {
-    width: container.clientWidth,
-    height: container.clientHeight,
-    layout: {
-      background: { type: "solid", color: bgColor },
-      textColor: textMuted,
-      fontFamily: "JetBrains Mono, monospace",
-    },
-    grid: {
-      vertLines: { color: "transparent" },
-      horzLines: { color: grid },
-    },
-    rightPriceScale: {
-      borderColor: grid,
-      scaleMargins: { top: 0.15, bottom: 0.05 },
-    },
-    timeScale: {
-      borderColor: grid,
-      timeVisible: true,
-      secondsVisible: false,
-      tickMarkFormatter: (time) => {
-        const d = new Date(time * 1000);
-        const hh = String(d.getHours()).padStart(2, "0");
-        const mm = String(d.getMinutes()).padStart(2, "0");
-        return `${hh}:${mm}`;
-      },
-    },
-    crosshair: { mode: 0 },
-    handleScroll: true,
-    handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
-    localization: {
-      priceFormatter: (v) => `$${Number(v).toFixed(2)}`,
-      timeFormatter: (time) => {
-        const d = new Date(time * 1000);
-        const dd = String(d.getDate()).padStart(2, "0");
-        const mo = String(d.getMonth() + 1).padStart(2, "0");
-        const hh = String(d.getHours()).padStart(2, "0");
-        const mi = String(d.getMinutes()).padStart(2, "0");
-        return `${dd}.${mo} ${hh}:${mi}`;
-      },
-    },
-  });
-
-  equitySeries = equityChart.addAreaSeries({
-    lineColor: accent,
-    topColor: hexToRgba(accent, 0.28),
-    bottomColor: hexToRgba(accent, 0),
-    lineWidth: 2,
-    priceLineVisible: false,
-    lastValueVisible: false,
-    priceFormat: { type: "price", precision: 2, minMove: 0.01 },
-  });
-
-  if (!window.__equityChartResizeBound) {
-    window.__equityChartResizeBound = true;
-    window.addEventListener("resize", () => {
-      if (equityChart && container)
-        equityChart.resize(container.clientWidth, container.clientHeight);
-    });
-  }
-}
-
-function renderEquityPill() {
-  const pill = document.getElementById("equity-pill");
-  if (!pill || !equityData.length) return;
-  const first = equityData[0].value;
-  const last = equityData[equityData.length - 1].value;
-  const delta = last - first;
-  const pct = first > 0 ? (delta / first) * 100 : 0;
-  const valEl = document.getElementById("equity-pill-value");
-  const dEl = document.getElementById("equity-pill-delta");
-  if (valEl) valEl.textContent = fmtUsd(last);
-  if (dEl) {
-    const sign = delta >= 0 ? "+" : "-";
-    dEl.textContent = `${sign}${fmtUsd(Math.abs(delta))} (${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%)`;
-  }
-  pill.classList.toggle("positive", delta >= 0);
-  pill.classList.toggle("negative", delta < 0);
-  pill.hidden = false;
-}
-
 // ── Theme & Helpers ──────────────────────────────
 
 const THEME_KEY = "hl-scanner-theme";
@@ -901,9 +778,7 @@ function applyTheme(mode) {
   document
     .querySelectorAll(".theme-btn")
     .forEach((b) => b.classList.toggle("active", b.dataset.theme === mode));
-  if (equityChart) {
-    applyChartTheme();
-  }
+  applyChartTheme(); // само-гардится если equity-график ещё не создан
   if (priceChart) {
     applyPriceChartTheme();
   }
@@ -1701,8 +1576,7 @@ async function tick() {
       data.push({ time: t, value: Number(p.equity) });
     }
     data.sort((a, b) => a.time - b.time);
-    equityData = data;
-    if (equitySeries) equitySeries.setData(data);
+    setEquityData(data);
     renderEquityPill();
     hideChartLoader();
   }
