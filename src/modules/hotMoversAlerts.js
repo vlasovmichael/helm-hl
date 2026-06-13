@@ -104,8 +104,8 @@ async function runOnce(now = Date.now()) {
   const snap = state.latestHunter;
   if (!Array.isArray(snap) || snap.length === 0) return;
   const ts = state.latestHunterAt || now;
-  // Ленивый импорт: server.js тяжёлый (env/exchange) — не тянем на старте/в тестах.
-  const { getOiNMinAgo } = await import('./dashboard/server.js');
+  // Ленивый импорт: модуль тянет config/exchange — не грузим на старте/в тестах.
+  const { getOiNMinAgo } = await import('./dashboard/routes/movers.js');
   const deps = { priceNMinAgo: getPriceNMinAgo, oiNMinAgo: getOiNMinAgo };
 
   for (const item of snap) {

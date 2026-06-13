@@ -1,0 +1,411 @@
+// ─────────────────────────────────────────────────
+//  P&L Summary + Insights — realized PnL breakdown
+// ─────────────────────────────────────────────────
+//
+// Возвращает агрегаты realized PnL + per-strategy + utilization + funding по
+// 5 периодам (today/yesterday/7d/30d/all). Today/yesterday — server local TZ
+// (как воспринимает пользователь), 7d/30d — rolling N*24h, all — без границы.
+//
+// Funding: query Hyperliquid userFunding API раз в N минут (cache), суммируем
+// по period boundaries. Старые DB-записи funding_collected = NULL — игнорим.
+
+import { config } from "../../../core/config.js";
+import { logger } from "../../../core/logger.js";
+import { hlInfo } from "../../../core/hlClient.js";
+import { getAccountSummary, getPositionsCached } from "../../exchange.js";
+import { getAccountEquity } from "../../wallet.js";
+import {
+  getHistorySince,
+  getArchivedHistorySince,
+  realTradesForDisplay,
+  getActivePosition,
+} from "../../../core/database.js";
+import { getManualTrades } from "./manualTrades.js";
+
+const PERIODS = [
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "d7", label: "7d" },
+  { key: "d30", label: "30d" },
+  { key: "all", label: "All" },
+];
+
+function periodBoundaries(now = Date.now()) {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  const todayStart = d.getTime();
+  return {
+    today: { start: todayStart, end: now },
+    yesterday: { start: todayStart - 24 * 3600_000, end: todayStart },
+    d7: { start: now - 7 * 24 * 3600_000, end: now },
+    d30: { start: now - 30 * 24 * 3600_000, end: now },
+    all: { start: 0, end: now },
+  };
+}
+
+const FUNDING_CACHE_TTL_MS = 5 * 60_000;
+let fundingCache = { ts: 0, deltas: [] }; // deltas: [{ts, usdc}]
+
+async function getFundingHistory() {
+  if (
+    Date.now() - fundingCache.ts < FUNDING_CACHE_TTL_MS &&
+    fundingCache.deltas.length > 0
+  ) {
+    return fundingCache.deltas;
+  }
+  // userFunding возвращает все funding-payments (uPnL делится на ts + usdc).
+  // Берём за 60 дней — покрывает 30d period с запасом.
+  try {
+    const startTime = Date.now() - 60 * 24 * 3600_000;
+    const data = await hlInfo(
+      {
+        type: "userFunding",
+        user: config.wallet.address,
+        startTime,
+      },
+      { label: "dash/userFunding", timeoutMs: 8000 },
+    );
+    if (!Array.isArray(data)) return fundingCache.deltas;
+    // Каждый элемент: { time, hash, delta: { coin, usdc, szi, fundingRate, nSamples } }
+    const deltas = data
+      .map((it) => ({
+        ts: it.time,
+        usdc: parseFloat(it.delta?.usdc ?? "0"),
+      }))
+      .filter((x) => Number.isFinite(x.usdc));
+    fundingCache = { ts: Date.now(), deltas };
+    return deltas;
+  } catch (err) {
+    logger.debug(`[Dashboard] userFunding fetch failed: ${err.message}`);
+    return fundingCache.deltas; // stale-OK
+  }
+}
+
+function sumFundingInRange(deltas, start, end) {
+  let sum = 0;
+  for (const d of deltas) {
+    if (d.ts >= start && d.ts < end) sum += d.usdc;
+  }
+  return sum;
+}
+
+function computeStats(trades, equityRef = 0) {
+  if (trades.length === 0) {
+    return {
+      totalPnl: 0,
+      count: 0,
+      wins: 0,
+      losses: 0,
+      winRate: 0,
+      avgPnl: 0,
+      avgWin: 0,
+      avgLoss: 0,
+      payoffRatio: 0,
+      expectancy: 0,
+      bestPnl: 0,
+      worstPnl: 0,
+      byStrategy: {},
+      totalHoldMs: 0,
+      totalFees: 0,
+      grossPnl: 0,
+      feesPctOfGross: 0,
+      maxDrawdown: 0,
+      maxDrawdownPct: 0,
+    };
+  }
+  let totalPnl = 0,
+    wins = 0,
+    losses = 0;
+  let winsSum = 0,
+    lossesSum = 0;
+  let bestPnl = -Infinity,
+    worstPnl = Infinity;
+  let totalFees = 0;
+  const byStrategy = {};
+  let totalHoldMs = 0;
+  for (const t of trades) {
+    const pnl = t.realized_pnl || 0;
+    const fee = t.fee_paid || 0;
+    totalPnl += pnl;
+    totalFees += fee;
+    if (pnl > 0) {
+      wins++;
+      winsSum += pnl;
+    } else if (pnl < 0) {
+      losses++;
+      lossesSum += pnl;
+    }
+    if (pnl > bestPnl) bestPnl = pnl;
+    if (pnl < worstPnl) worstPnl = pnl;
+    const sid = t.strategy_id || "carry";
+    if (!byStrategy[sid]) byStrategy[sid] = { pnl: 0, count: 0, wins: 0 };
+    byStrategy[sid].pnl += pnl;
+    byStrategy[sid].count += 1;
+    if (pnl > 0) byStrategy[sid].wins += 1;
+    if (t.entry_time && t.closed_at) {
+      totalHoldMs += Math.max(0, t.closed_at - t.entry_time);
+    } else if (t.hold_seconds) {
+      totalHoldMs += t.hold_seconds * 1000;
+    }
+  }
+  const count = trades.length;
+  const winRate = count > 0 ? (wins / count) * 100 : 0;
+  const avgPnl = totalPnl / count;
+  const avgWin = wins > 0 ? winsSum / wins : 0;
+  const avgLoss = losses > 0 ? lossesSum / losses : 0; // negative
+  const payoffRatio = losses > 0 && avgLoss !== 0 ? avgWin / Math.abs(avgLoss) : (wins > 0 ? Infinity : 0);
+  // expectancy = WR·avgWin + LR·avgLoss; математически = avgPnl.
+  // Дублируем explicit как самостоятельную метрику для UI.
+  const expectancy = avgPnl;
+  const grossPnl = totalPnl + totalFees;
+  const feesPctOfGross = grossPnl !== 0 ? (totalFees / Math.abs(grossPnl)) * 100 : 0;
+
+  // Max drawdown по equity-кривой: сортируем по closed_at, считаем cumPnL,
+  // отслеживаем пик и максимальную просадку от пика.
+  const sorted = [...trades].sort((a, b) => (a.closed_at || 0) - (b.closed_at || 0));
+  let cum = 0, peak = 0, maxDD = 0;
+  for (const t of sorted) {
+    cum += t.realized_pnl || 0;
+    if (cum > peak) peak = cum;
+    const dd = peak - cum;
+    if (dd > maxDD) maxDD = dd;
+  }
+  // % просадки считаем от equity счёта — это осмысленный знаменатель.
+  // Старый вариант (пик кумулятивного P&L) взрывался до сотен %, когда пик
+  // был копеечный: $2.41 просадки / $0.88 пик = 273%. equityRef=0 (API
+  // недоступен) → null, и UI просто не показывает процент.
+  const maxDrawdownPct = equityRef > 0 ? (maxDD / equityRef) * 100 : null;
+
+  return {
+    totalPnl,
+    count,
+    wins,
+    losses,
+    winRate,
+    avgPnl,
+    avgWin,
+    avgLoss,
+    payoffRatio: Number.isFinite(payoffRatio) ? payoffRatio : null,
+    expectancy,
+    bestPnl: bestPnl === -Infinity ? 0 : bestPnl,
+    worstPnl: worstPnl === Infinity ? 0 : worstPnl,
+    byStrategy,
+    totalHoldMs,
+    totalFees,
+    grossPnl,
+    feesPctOfGross,
+    maxDrawdown: maxDD,
+    maxDrawdownPct,
+  };
+}
+
+export async function handlePnlSummary(_req, res) {
+  try {
+    const now = Date.now();
+    const bounds = periodBoundaries(now);
+    const fundingDeltas = await getFundingHistory();
+
+    // Equity счёта — знаменатель для maxDrawdown %. Падение API не критично:
+    // equityNow=0 → computeStats вернёт maxDrawdownPct=null и UI скроет процент.
+    let equityNow = 0;
+    try {
+      equityNow = config.isProduction
+        ? (await getAccountSummary()).equity
+        : await getAccountEquity();
+    } catch {
+      /* equityNow=0 → процент просадки не показываем */
+    }
+
+    // Один проход — наибольший period (all). Дальше фильтруем in-memory.
+    const allDb = getHistorySince(0);
+    const allArch = getArchivedHistorySince(0);
+    const allTrades = realTradesForDisplay([...allDb, ...allArch]);
+
+    // Manual trades (reconstructed from userFills, deduped against bot trades).
+    const manualTrades = await getManualTrades();
+
+    const openPos = getActivePosition();
+    let unrealized = 0;
+    try {
+      if (openPos && config.isProduction) {
+        const positions = await getPositionsCached();
+        const livePos = positions.find((p) => p.coin === openPos.coin);
+        if (livePos) unrealized = parseFloat(livePos.unrealizedPnl ?? "0");
+      }
+    } catch {
+      /* leave unrealized=0 */
+    }
+
+    const result = {};
+    for (const { key } of PERIODS) {
+      const { start, end } = bounds[key];
+      const inRange = allTrades.filter(
+        (t) => t.closed_at >= start && t.closed_at < end,
+      );
+
+      // Manual split: trades закрытые в этом окне.
+      const manualInRange = manualTrades.filter(
+        (m) =>
+          m.status === "closed" && m.closeTime >= start && m.closeTime < end,
+      );
+
+      // Normalize manual trades to the shape computeStats() expects so они
+      // попадают во все метрики (avg, expectancy, best/worst, wins/losses,
+      // payoff, maxDD, fees) единым набором с bot trades.
+      const manualAsBotShape = manualInRange.map((m) => ({
+        realized_pnl: m.pnl || 0,
+        fee_paid: m.fee || 0,
+        strategy_id: "manual",
+        entry_time: m.entryTime,
+        closed_at: m.closeTime,
+      }));
+      const combined = [...inRange, ...manualAsBotShape];
+      const stats = computeStats(combined, equityNow);
+      const botStats = computeStats(inRange, equityNow);
+
+      const periodMs =
+        key === "all"
+          ? combined.length > 0
+            ? now - Math.min(...combined.map((t) => t.closed_at))
+            : 1
+          : end - start;
+      const utilizationPct =
+        periodMs > 0 ? Math.min(100, (stats.totalHoldMs / periodMs) * 100) : 0;
+      const funding = sumFundingInRange(fundingDeltas, start, end);
+
+      const manualPnl = manualInRange.reduce((s, m) => s + (m.pnl || 0), 0);
+      const manualCount = manualInRange.length;
+      const manualWins = manualInRange.filter((m) => (m.pnl || 0) > 0).length;
+
+      result[key] = {
+        ...stats,
+        utilizationPct,
+        funding,
+        // Price-only PnL = realized_pnl − funding_collected. Если funding_collected NULL
+        // (старые записи) — fallback: показываем total как есть, отдельно period funding.
+        pricePnl: stats.totalPnl,
+        // Bot vs manual split (2026-05-13): bot = bot-only stats, manual = reconstructed.
+        bot: {
+          pnl: botStats.totalPnl,
+          count: botStats.count,
+          wins: botStats.wins,
+        },
+        manual: {
+          pnl: manualPnl,
+          count: manualCount,
+          wins: manualWins,
+        },
+      };
+    }
+
+    res.json({
+      now,
+      bounds,
+      periods: result,
+      unrealized,
+      activeCoin: openPos?.coin || null,
+      activeStrategy: openPos?.strategy_id || null,
+    });
+  } catch (err) {
+    logger.warn(`[Dashboard] /api/pnl-summary error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// ─────────────────────────────────────────────────
+//  Insights — per-coin lifetime + daily P&L heatmap (90d)
+// ─────────────────────────────────────────────────
+export async function handleInsights(_req, res) {
+  try {
+    const now = Date.now();
+
+    // Combined dataset (bot DB + archive + reconstructed manual).
+    const allDb = getHistorySince(0);
+    const allArch = getArchivedHistorySince(0);
+    const botTrades = realTradesForDisplay([...allDb, ...allArch]);
+    const manualTrades = await getManualTrades();
+    const manualClosed = manualTrades.filter((m) => m.status === "closed");
+    const manualAsTrades = manualClosed.map((m) => ({
+      coin: m.coin,
+      realized_pnl: m.pnl || 0,
+      fee_paid: m.fee || 0,
+      strategy_id: "manual",
+      entry_time: m.entryTime,
+      closed_at: m.closeTime,
+    }));
+    const combined = [...botTrades, ...manualAsTrades];
+
+    // ── Per-coin aggregation (lifetime, all periods) ──
+    const byCoin = new Map();
+    for (const t of combined) {
+      const c = (t.coin || "?").toUpperCase();
+      if (!byCoin.has(c)) {
+        byCoin.set(c, {
+          coin: c,
+          trades: 0,
+          pnl: 0,
+          wins: 0,
+          losses: 0,
+          fees: 0,
+          lastClosedAt: 0,
+        });
+      }
+      const row = byCoin.get(c);
+      row.trades += 1;
+      const pnl = t.realized_pnl || 0;
+      row.pnl += pnl;
+      row.fees += t.fee_paid || 0;
+      if (pnl > 0) row.wins += 1;
+      else if (pnl < 0) row.losses += 1;
+      if ((t.closed_at || 0) > row.lastClosedAt) row.lastClosedAt = t.closed_at;
+    }
+    const perCoin = [...byCoin.values()]
+      .map((r) => ({
+        ...r,
+        avg: r.trades > 0 ? r.pnl / r.trades : 0,
+        winRate: r.trades > 0 ? (r.wins / r.trades) * 100 : 0,
+      }))
+      .sort((a, b) => b.pnl - a.pnl);
+
+    // ── Daily P&L for last 90 days (heatmap) ──
+    const DAY_MS = 86_400_000;
+    const HEATMAP_DAYS = 90;
+    // День в локальной зоне сервера: YYYY-MM-DD.
+    const localDayKey = (ts) => {
+      const d = new Date(ts);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${dd}`;
+    };
+    const cutoff = now - HEATMAP_DAYS * DAY_MS;
+    const dailyMap = new Map();
+    for (const t of combined) {
+      if (!t.closed_at || t.closed_at < cutoff) continue;
+      const key = localDayKey(t.closed_at);
+      if (!dailyMap.has(key)) dailyMap.set(key, { date: key, pnl: 0, trades: 0 });
+      const row = dailyMap.get(key);
+      row.pnl += t.realized_pnl || 0;
+      row.trades += 1;
+    }
+    // Заполняем все дни в окне (включая пустые) для непрерывной сетки.
+    const daily = [];
+    const todayKey = localDayKey(now);
+    for (let i = HEATMAP_DAYS - 1; i >= 0; i--) {
+      const ts = now - i * DAY_MS;
+      const key = localDayKey(ts);
+      const row = dailyMap.get(key) || { date: key, pnl: 0, trades: 0 };
+      daily.push({
+        date: row.date,
+        pnl: row.pnl,
+        trades: row.trades,
+        isToday: row.date === todayKey,
+      });
+    }
+
+    res.json({ now, perCoin, daily });
+  } catch (err) {
+    logger.warn(`[Dashboard] /api/insights error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+}
