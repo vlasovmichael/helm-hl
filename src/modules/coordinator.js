@@ -94,7 +94,9 @@ export async function coordinate(scoutData, activePosition, hunterData = scoutDa
     }
   }
 
-  if (isEnabled('carry', config.trading.carryEnabled !== false)) {
+  // Carry prod-gate (как у Hunter/ChillBoy): в PROD-боте при CARRY_PROD_ENABLED=false
+  // реальных carry-входов нет — carry уходит в paper-накопление (tickCarryPaper).
+  if (isEnabled('carry', config.trading.carryEnabled !== false) && (!config.isProduction || config.trading.carryProdEnabled)) {
     const carrySignal = analyze(scoutData, undefined);
     if (carrySignal.action !== 'HOLD') {
       logger.debug(`[Coordinator] carry → ${carrySignal.action} ${carrySignal.coin}`);

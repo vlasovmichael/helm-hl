@@ -20,6 +20,9 @@ import { processHunterTrailArm } from './hunterTrailArm.js';
 import { tickTrendFollowPaper } from './trendFollowPaperTick.js';
 import { tickCandyGirlPaper } from './candyGirlPaperTick.js';
 import { tickFaderPaper } from './faderPaperTick.js';
+import { tickHunterPaper } from './hunterPaperTick.js';
+import { tickHunterLongPaper } from './hunterLongPaperTick.js';
+import { tickCarryPaper } from './carryPaperTick.js';
 import { runBalanceDiag } from './balanceDiag.js';
 import { flushBotStatePeriodic } from './lifecycle.js';
 import { state } from './state.js';
@@ -68,7 +71,7 @@ export async function tick() {
       // Дашборд (Hot Movers / Hunter signals) должен продолжать обновляться,
       // даже когда бот в HANDS-OFF. Делаем чистый scan без coordinate/execute.
       try {
-        const { hunterData: handsOffHunter } = await scan();
+        const { scoutData: handsOffScout, hunterData: handsOffHunter } = await scan();
         state.latestHunter   = handsOffHunter;
         state.latestHunterAt = Date.now();
         // Радар Chill Boy расцеплен от торгового слота: при ручной позе (HANDS-OFF)
@@ -90,6 +93,11 @@ export async function tick() {
         // позицию навсегда (инцидент BTC id=90 + PURR HANDS-OFF, 2026-05-22/23).
         await tickTrendFollowPaper(handsOffHunter);
         await tickFaderPaper(handsOffHunter);
+        // Hunter SHORT/Long + Carry shadow paper-слоты (Этап 2): независимы от
+        // реального слота, копят статистику даже в HANDS-OFF (как ChillBoy/Fader).
+        await tickHunterPaper(handsOffHunter);
+        await tickHunterLongPaper(handsOffHunter);
+        await tickCarryPaper(handsOffScout);
         // Equity-снапшот для Performance-графика. Ручная торговля — основной
         // режим оператора (часами держит монету руками), и тик тут делает return
         // ДО runBalanceDiag() в конце. Без этого Performance молчит весь
@@ -154,6 +162,13 @@ export async function tick() {
 
     // Fader (Strategy #5) бумажный слот — share общий paper slot с ChillBoy.
     await tickFaderPaper(hunterData);
+
+    // Hunter SHORT/Long + Carry shadow paper-слоты (Этап 2): каждая копит
+    // статистику в своём независимом paper-слоте, пока её PROD-гейт выключен.
+    // Hunter SHORT live (HUNTER_PROD_ENABLED=true) → tickHunterPaper сам no-op.
+    await tickHunterPaper(hunterData);
+    await tickHunterLongPaper(hunterData);
+    await tickCarryPaper(scoutData);
 
     await runSmartAlerts(scoutData, signal, activePosition);
 

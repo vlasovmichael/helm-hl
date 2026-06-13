@@ -273,8 +273,19 @@ async function handleOpen(signal) {
   const side = signal.side || 'short';
   const volIdx = pre.volIdx ?? 0;
 
-  if (config.isProduction) {
+  // Carry PROD-gate (Этап 2): при CARRY_PROD_ENABLED=false carry в PROD-боте идёт
+  // в PAPER (shadow-накопление через tickCarryPaper), а не в реальный ордер. Без
+  // этого carry — единственная стратегия без paper-ветки — слала бы реальные
+  // ордера из paper-тика. Остальные strategy_id здесь — как раньше.
+  const carryPaperOnly = strategyId === 'carry' && !config.trading.carryProdEnabled;
+
+  if (config.isProduction && !carryPaperOnly) {
     return productionOpen(signal.coin, signal.price, signal.apy, false, strategyId, side, volIdx);
+  }
+  if (config.isProduction) {
+    logger.info(
+      `[Executor] Carry PROD-путь выключен (CARRY_PROD_ENABLED=false) — сигнал #${signal.coin} идёт в PAPER.`,
+    );
   }
   return paperOpen(signal.coin, signal.price, signal.apy, false, strategyId, side, volIdx);
 }

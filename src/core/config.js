@@ -42,6 +42,10 @@ function loadConfig() {
   // AGGRESSIVE_MODE=true uses AGG_* defaults. Individual env vars override if set.
   const aggressive = (process.env.AGGRESSIVE_MODE || 'false').toLowerCase() === 'true';
   const carryEnabled = (process.env.CARRY_ENABLED || 'true').toLowerCase() === 'true';
+  // PROD-gate carry (как у Hunter/ChillBoy). false (дефолт) → в PROD-боте carry
+  // уходит в paper-накопление (tickCarryPaper), не занимая реальный слот. true →
+  // реальные carry-входы через coordinator. Согласовано с cull (carry на паузе).
+  const carryProdEnabled = (process.env.CARRY_PROD_ENABLED || 'false').toLowerCase() === 'true';
 
   const aggMinApy    = parseFloat(process.env.AGG_MIN_APY            || '15');
   const aggEntryApy  = parseFloat(process.env.AGG_ENTRY_APY         || '25');
@@ -823,6 +827,7 @@ function loadConfig() {
       liquidCacheMs: liquidCacheHours * 3_600_000,
       setupSnapshotIntervalMin,
       carryEnabled,
+      carryProdEnabled,
       fadeEnabled,
       fadeMaxHoldMinutes,
       fadeMinCurrentApy,

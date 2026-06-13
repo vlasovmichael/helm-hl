@@ -67,8 +67,8 @@ const REGISTRY = [
     kind: 'mean-reversion · funding',
     resolve: () => {
       const enabled = config.trading.carryEnabled !== false;
-      // Carry без prod-гейта: включён → торгует в реальном слоте.
-      return { enabled, status: enabled ? 'live' : 'off' };
+      const live = config.isProduction && config.trading.carryProdEnabled;
+      return { enabled, status: !enabled ? 'off' : live ? 'live' : 'paper' };
     },
   },
   {
