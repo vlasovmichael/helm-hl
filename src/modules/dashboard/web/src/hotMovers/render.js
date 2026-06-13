@@ -348,11 +348,17 @@ function reconcileRows(tbody, items) {
     window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // Живые (не уходящие) строки по ключу.
+  // Живые (не уходящие) строки по ключу. Узлы без data-hmkey — это плейсхолдеры
+  // (стартовый «Waiting for price history…» из HTML или empty-state) — выкидываем
+  // сразу, иначе реконсилер их не трогает и они висят под монетами.
   const live = new Map();
   for (const el of Array.from(tbody.children)) {
     const k = el.dataset.hmkey;
-    if (k && !el.classList.contains("hm-leaving")) live.set(k, el);
+    if (!k) {
+      el.remove();
+      continue;
+    }
+    if (!el.classList.contains("hm-leaving")) live.set(k, el);
   }
   const desired = new Set(items.map((i) => i.key));
 
