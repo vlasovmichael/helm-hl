@@ -15,6 +15,7 @@ import { logger, getLogBuffer, subscribeLogs } from "../../core/logger.js";
 import { hlInfo } from "../../core/hlClient.js";
 import {
   getActivePosition,
+  getActiveAdoptPositions,
   getActivePaperPosition,
   getActivePaperPositionByStrategy,
   getHistorySince,
@@ -42,6 +43,8 @@ import {
   HUNTER_SPIKE_WINDOW_MIN,
   HUNTER_SL_PCT,
   HUNTER_TP_PCT,
+  getHunterPeakPct,
+  isHunterArmed,
 } from "../strategistSniper.js";
 import { getChillBoyHeartbeat, getChillBoySignals, getTrendFollowMfeMae } from "../strategistTrendFollow.js";
 import { getCandyGirlHeartbeat, getCandyGirlSignals, getCandyGirlStats } from "../strategistCandyGirl.js";
@@ -546,6 +549,49 @@ async function buildCandyGirlPaperPosition() {
   };
 }
 
+// Сводка того, как БОТ ведёт активную позицию прямо сейчас: где стоп, взведён
+// ли breakeven-храповик / трейл, какой пик. Дашборд показывает это как статус
+// (а не советы оператору) — позицией рулит бот, человек только наблюдает.
+function buildBotManagement(position) {
+  if (!position) return null;
+  const entry = position.entry_price;
+  if (!entry) return null;
+  const isShort = (position.side || "short").toLowerCase() === "short";
+  const sid = position.strategy_id || "carry";
+
+  // Hunter SHORT — стоп/тейк фиксированы от входа, трейл/BE в in-memory мапах.
+  if (sid === "hunter") {
+    const peakPct = getHunterPeakPct(position.id) ?? 0;
+    return {
+      strategy: sid,
+      stopPrice: entry * (1 + (isShort ? 1 : -1) * (HUNTER_SL_PCT / 100)),
+      tpPrice: entry * (1 - (isShort ? 1 : -1) * (HUNTER_TP_PCT / 100)),
+      stopPct: HUNTER_SL_PCT,
+      peakPct,
+      beArmed:
+        config.trading.hunterBeRatchetEnabled &&
+        peakPct >= config.trading.hunterBeArmPct,
+      trailArmed:
+        isHunterArmed(position.id) ||
+        peakPct >= config.trading.hunterTrailArmPct,
+    };
+  }
+
+  // Прочие стратегии: показываем сохранённый стоп/тейк, если есть.
+  if (position.sl_price || position.tp_price) {
+    return {
+      strategy: sid,
+      stopPrice: position.sl_price ?? null,
+      tpPrice: position.tp_price ?? null,
+      stopPct: null,
+      peakPct: null,
+      beArmed: false,
+      trailArmed: false,
+    };
+  }
+  return { strategy: sid, stopPrice: null, tpPrice: null, peakPct: null, beArmed: false, trailArmed: false };
+}
+
 // HL 2026-05-23: unified-by-default. Раньше дашборд отдельно дёргал
 // spotClearinghouseState чтобы показать "Wallet Total", потому что perp
 // accountValue не включал spot. Теперь getAccountSummary() / wallet.js
@@ -553,7 +599,25 @@ async function buildCandyGirlPaperPosition() {
 // отдельный snapshot не нужен.
 
 async function getStatusData() {
-  const position = getActivePosition();
+  // adopt — это ручной вход под няней (multi-slot), а не бот-сделка. Его место
+  // в manual-секции с пометкой ADOPTED, а не в главной карточке. Главную карточку
+  // оставляем только настоящей бот-стратегии (hunter/carry/...). getActivePosition()
+  // отдаёт самый свежий OPEN-слот, и им запросто оказывается adopt — отсюда раньше
+  // «как будто бот сам открыл». (2026-06-13)
+  const slotPos = getActivePosition();
+  const isAdoptSlot = !!slotPos && (slotPos.strategy_id || "carry") === "adopt";
+  const position = isAdoptSlot ? null : slotPos;
+  // Координаты усыновлённых монет (нормализованные) — для пометки manual-карточек.
+  const normCoin = (c) =>
+    (c ?? "").toLowerCase().replace(/^@/, "").replace(/-perp$/, "");
+  const adoptedCoins = new Set();
+  if (config.isProduction) {
+    try {
+      for (const ap of getActiveAdoptPositions()) adoptedCoins.add(normCoin(ap.coin));
+    } catch {
+      /* ignore */
+    }
+  }
 
   let equity = 0;
   let available = 0;
@@ -645,6 +709,8 @@ async function getStatusData() {
           liquidationPrice: Number.isFinite(liqPx) ? liqPx : null,
           leverage: Number.isFinite(lev) ? lev : null,
           currentPrice: livePrice,
+          // Бот уже подхватил этот ручной вход (adopt-нянька повесила стоп+трейл)?
+          adopted: adoptedCoins.has(normCoin(p.coin)),
         });
       }
     } catch (err) {
@@ -671,6 +737,7 @@ async function getStatusData() {
       ? {
           coin: position.coin,
           side: (position.side || "short").toUpperCase(),
+          strategyId: position.strategy_id || "carry",
           sizeUsd: position.size_usd,
           entryPrice: position.entry_price,
           entryApy: position.entry_apy,
@@ -678,6 +745,7 @@ async function getStatusData() {
           heldHours: (Date.now() - position.entry_time) / 3_600_000,
           currentPnl,
           currentPrice,
+          bot: buildBotManagement(position),
         }
       : null,
     manualPositions,

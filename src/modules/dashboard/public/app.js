@@ -49,6 +49,7 @@ function updateActiveCoinSet(activePosition, manualPositions) {
       heldHours: activePosition.heldHours ?? null,
       sizeUsd: activePosition.sizeUsd ?? null,
       liq: null,
+      bot: activePosition.bot ?? null,
       source: "bot",
     });
   }
@@ -64,6 +65,8 @@ function updateActiveCoinSet(activePosition, manualPositions) {
           heldHours: null, // у ручной позы нет entry_time в payload
           sizeUsd: p.sizeUsd ?? null,
           liq: p.liquidationPrice ?? null,
+          bot: null, // ручную позу ведёт adopt-нянька (стоп на бирже), не отдаём детали
+          adopted: !!p.adopted,
           source: "manual",
         });
       }
@@ -74,62 +77,57 @@ function isActiveCoin(coin) {
   return coin != null && activeCoinSet.has(coin);
 }
 
-// Под-строка Hot Movers для ОТКРЫТОЙ монеты: подсказки в реальном времени —
-// что делать с позицией ПРЯМО СЕЙЧАС (держать / двигать стоп в безубыток /
-// фиксировать / резать), а не сухие stats. Дисциплина выхода — главный леак
-// (memory trading-coaching-payoff-leak). Логика по % хода от входа + краткий
-// импульс (2m/5m). Это подсказка, не сигнал — финальное решение за оператором.
-function hmPosHintRow(coin, w2, w5) {
+// Под-строка Hot Movers для ОТКРЫТОЙ монеты: СТАТУС позиции, а не советы.
+// Позицию ведёт бот (Hunter SHORT / adopt-нянька на ручных входах) — он сам
+// двигает стоп в безубыток, трейлит и режет. Поэтому показываем что бот УЖЕ
+// сделал (стоп / BE-храповик / трейл / пик), а не «двигай стоп», чтобы не
+// провоцировать оператора лезть руками в сделку, от которой он ушёл (2026-06-13).
+function hmPosHintRow(coin) {
   const p = activePosByCoin.get(coin);
   if (!p) return "";
-  const { entry, now, side, liq, pnl, source } = p;
+  const { entry, now, side, liq, pnl, source, bot, adopted } = p;
   const isLong = side === "LONG";
   // % хода в сторону сделки от входа (+ = в плюс, − = против).
   const dist =
     entry && now ? (isLong ? (now - entry) / entry : (entry - now) / entry) * 100 : null;
-  const m2 = w2?.spikePct ?? null; // 2m move
-  const m5 = w5?.spikePct ?? null; // 5m move
-  // Импульс в сторону сделки? (LONG: рост хорош; SHORT: падение хорошо.)
-  const momFavor = m2 == null ? 0 : isLong ? m2 : -m2;
-  // Импульс выдыхается (2m слабее экстраполяции 5m) → разворот/откат возможен.
-  const fading = m2 != null && m5 != null && Math.abs(m2) < Math.abs(m5 * 0.4);
 
-  const hints = [];
-  // Приоритет: близость ликвидации.
+  const fmtPx = (px) =>
+    px == null ? "—" : px >= 100 ? px.toFixed(2) : px >= 1 ? px.toFixed(4) : px.toPrecision(4);
+
+  const chips = [];
+  // % от входа.
+  if (dist != null) {
+    const cls = dist >= 0 ? "good" : dist <= -1 ? "bad" : "warn";
+    chips.push([cls, `${dist >= 0 ? "+" : "−"}${Math.abs(dist).toFixed(2)}% от входа`]);
+  }
+  // Что делает бот: стоп / BE / трейл / пик.
+  if (bot) {
+    if (bot.stopPrice != null) {
+      const sp = bot.stopPct != null ? ` (−${bot.stopPct.toFixed(1)}%)` : "";
+      chips.push(["neutral", `стоп @${fmtPx(bot.stopPrice)}${sp}`]);
+    }
+    if (bot.beArmed) chips.push(["good", "BE взведён"]);
+    if (bot.trailArmed) chips.push(["good", "трейл активен"]);
+    if (bot.peakPct != null && bot.peakPct > 0.1)
+      chips.push(["neutral", `пик +${bot.peakPct.toFixed(2)}%`]);
+  }
+  // Близость ликвидации — единственный «алерт», и тот информативный.
   if (liq && now) {
     const liqDist = (Math.abs(now - liq) / now) * 100;
-    if (liqDist < 6) hints.push(["danger", `⚠️ ликвидация в ${liqDist.toFixed(1)}% — режь риск`]);
+    if (liqDist < 8) chips.push(["danger", `⚠️ ликв. в ${liqDist.toFixed(1)}%`]);
   }
-  if (dist != null) {
-    if (dist <= -1.0) {
-      hints.push(
-        momFavor < -0.15 && !fading
-          ? ["bad", `🔴 −${(-dist).toFixed(2)}% против, импульс давит — где стоп? не усредняй`]
-          : ["warn", `⏳ −${(-dist).toFixed(2)}%, движение выдыхается — держи стоп, не добавляй`],
-      );
-    } else if (dist >= 1.5) {
-      hints.push(
-        momFavor < -0.15
-          ? ["good", `🟡 +${dist.toFixed(2)}%, импульс развернулся — подтяни стоп, фиксируй часть`]
-          : ["good", `🎯 +${dist.toFixed(2)}% — трейль-стоп, не отдавай прибыль`],
-      );
-    } else if (dist >= 0.4) {
-      hints.push(["good", `🟢 +${dist.toFixed(2)}% — двигай стоп к безубытку`]);
-    } else {
-      hints.push(["neutral", `→ ${dist >= 0 ? "+" : ""}${dist.toFixed(2)}% у входа — план и стоп есть?`]);
-    }
-  }
-  if (!hints.length) return "";
+  if (!chips.length) return "";
 
   const pnlStr =
     pnl == null
       ? ""
       : ` <span class="hm-hint-pnl ${pnl >= 0 ? "strat-pos" : "strat-neg"}">${pnl >= 0 ? "+" : "−"}$${Math.abs(pnl).toFixed(2)}</span>`;
-  const chips = hints
+  const tag = source === "manual" ? (adopted ? "ТЫ + бот" : "ТЫ") : "BOT";
+  const chipsHtml = chips
     .map(([k, t]) => `<span class="hm-hint hm-hint-${k}">${escapeHtml(t)}</span>`)
     .join(" ");
   return `<tr class="hm-pos-row"><td colspan="11">
-    <span class="hm-pos-tag hm-pos-${source}">${source === "manual" ? "ТЫ" : "BOT"}</span>${chips}${pnlStr}
+    <span class="hm-pos-tag hm-pos-${source}">${tag}</span>${chipsHtml}${pnlStr}
   </td></tr>`;
 }
 
@@ -1248,10 +1246,15 @@ function renderManualPositions(list) {
         p.liquidationPrice != null ? fmtPrice(p.liquidationPrice) : "—";
       const lev = p.leverage != null ? `${p.leverage}x` : "—";
       const cur = p.currentPrice != null ? fmtPrice(p.currentPrice) : "—";
+      // Бот подхватил вход (adopt) → дописываем ADOPTED, чтобы было видно, что
+      // на нём уже висит стоп+трейл няньки. Не подхватил → чистый HANDS-OFF.
+      const manualBadge = p.adopted
+        ? `HANDS-OFF · MANUAL · <span style="color:var(--green,#22c55e)">ADOPTED</span>`
+        : "HANDS-OFF · MANUAL";
       return `
       <div style="margin-top:0.75rem; padding:0.75rem; border:1px dashed var(--border); border-radius:8px;">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:0.5rem;">
-          <span style="background:rgba(234,179,8,0.12); color:var(--yellow,#eab308); border:1px solid rgba(234,179,8,0.3); padding:2px 8px; border-radius:6px; font-size:11px; font-family:var(--font-mono); font-weight:700;">HANDS-OFF · MANUAL</span>
+          <span style="background:rgba(234,179,8,0.12); color:var(--yellow,#eab308); border:1px solid rgba(234,179,8,0.3); padding:2px 8px; border-radius:6px; font-size:11px; font-family:var(--font-mono); font-weight:700;">${manualBadge}</span>
           <span class="item-value highlight">#${p.coin}</span>
           <span class="item-value ${sideCls}">${p.side}</span>
         </div>
@@ -1528,6 +1531,21 @@ function renderHotMovers(payload) {
   // Открытую монету (позиция бота / ручная) всегда пиним наверх, даже если её
   // momentum не в топ-20 — оператор хочет видеть свою позицию первой (2026-06-13).
   const activeRows = sorted.filter((x) => isActiveCoin(x.s.coin));
+  // …и даже если монеты ВООБЩЕ нет в сигналах сканера (затихла → выпала из
+  // signals). Без этого пин-строка мигала: позиция то пропадала, то возвращалась
+  // вместе с импульсом. Синтезируем минимальную строку из данных позиции —
+  // momentum-ячейки будут «—», но позиция остаётся видимой (2026-06-13).
+  const inSorted = new Set(activeRows.map((x) => x.s.coin));
+  for (const coin of activeCoinSet) {
+    if (inSorted.has(coin)) continue;
+    const p = activePosByCoin.get(coin);
+    activeRows.push({
+      s: { coin, price: p?.now ?? null, windows: [], volMult: null, isActive: true },
+      windows: [],
+      maxAbs: 0,
+      momScore: 0,
+    });
+  }
   const restRows = sorted
     .filter((x) => !isActiveCoin(x.s.coin))
     .slice(0, Math.max(1, 20 - activeRows.length));
@@ -1746,9 +1764,9 @@ function renderHotMovers(payload) {
         <td class="r ${oiCellCls}" data-w="OI">${oiInner}</td>
         <td class="r" data-w="Trend">${trendInner}</td>
       </tr>`;
-      // У открытой монеты под основной строкой — подсказки в реальном времени
-      // (держать / стоп в безубыток / фиксировать / резать), а не stats-дамп.
-      return isOpen ? mainRow + hmPosHintRow(s.coin, w2, w5) : mainRow;
+      // У открытой монеты под основной строкой — статус-строка (стоп/BE/трейл
+      // бота, % от входа, P&L), а не советы: позицией рулит бот.
+      return isOpen ? mainRow + hmPosHintRow(s.coin) : mainRow;
     })
     .join("");
 }
