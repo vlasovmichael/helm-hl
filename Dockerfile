@@ -4,6 +4,10 @@
 # ───────────────────────────────────────────────────────────────
 FROM node:22-alpine AS dashboard-build
 WORKDIR /app
+# better-sqlite3 (prod-dep) на node:22-musl не имеет prebuilt-бинаря → npm ci
+# компилит его через node-gyp, которому нужны python3/make/g++. Стейдж выбрасывается
+# (в рантайм едет только dist/), так что тулчейн на финальный образ не влияет.
+RUN apk add --no-cache python3 make g++
 COPY package*.json ./
 RUN npm ci
 COPY . .
