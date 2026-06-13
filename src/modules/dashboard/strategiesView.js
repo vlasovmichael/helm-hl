@@ -63,7 +63,7 @@ const REGISTRY = [
   },
   {
     id: 'carry',
-    label: 'Carry (дед)',
+    label: 'Carry',
     kind: 'mean-reversion · funding',
     resolve: () => {
       const enabled = config.trading.carryEnabled !== false;
@@ -108,8 +108,8 @@ const REGISTRY = [
   },
   {
     id: 'adopt',
-    label: 'Adopt (нянька)',
-    kind: 'ручной вход · сопровождение',
+    label: 'Adopt',
+    kind: 'manual-entry · babysit',
     resolve: () => {
       const enabled = config.trading.adoptEnabled;
       // Подхватывает РУЧНЫЕ позы и ведёт их вживую → live, своих сделок не открывает.
@@ -121,7 +121,7 @@ const REGISTRY = [
 // Зарезервированное место под будущие стратегии (кода ещё нет).
 const PLANNED = [
   { id: 'vulture',       label: 'Vulture',       kind: 'liquidation sniper' },
-  { id: 'setup_swing',   label: 'Setup Swing',   kind: 'HL-структура · свинг' },
+  { id: 'setup_swing',   label: 'Setup Swing',   kind: 'HL-structure · swing' },
 ];
 
 /** Безопасный вызов опционального источника (модуль может быть не инициализирован). */

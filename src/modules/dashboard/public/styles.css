@@ -3580,6 +3580,34 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   padding: 10px !important;
   border-bottom: 1px solid var(--border-muted);
 }
+/* Detail: Recent trades / signals — выровненная таблица. */
+.strat-detail-table {
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  width: auto;
+}
+.strat-detail-table td {
+  padding: 2px 12px 2px 0;
+  white-space: nowrap;
+}
+.strat-detail-table td.num {
+  text-align: right;
+}
+.strat-dt-coin {
+  font-weight: 600;
+}
+.strat-dt-side {
+  color: var(--text-muted);
+}
+.strat-dt-reason {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.strat-dt-age {
+  color: var(--text-muted);
+}
 
 /* Hot Movers под-строка подсказок (colspan) на мобильной card-вёрстке (≤720px):
    рендерим обычным блоком на всю ширину, без per-cell ::before лейблов. */
