@@ -220,6 +220,30 @@ export function requestSwingTrendRefresh(coins, now = Date.now()) {
   return refreshInflight;
 }
 
+const SWING_SL_MIN_PCT = 1.2;  // тесный стоп душит свинг
+const SWING_SL_MAX_PCT = 8;    // глубже — сетап слишком растянут
+const SWING_RR = 2;            // таргет 2R (правило R:R ≥ 2:1)
+
+/**
+ * План входа для свинг-сигнала: стоп за 1h slow-EMA (инвалидация тренда),
+ * таргет 2R. Зажат в [MIN, MAX]%. Размер позиции НЕ считаем — фронт берёт от
+ * живого equity × риск%. null, если сигнал не направленный или нет данных.
+ * @returns {{ sl:number, slPct:number, tp:number, tpPct:number, rr:number }|null}
+ */
+function buildSwingPlan(signal, price, emaSlow) {
+  if (signal !== 'LONG' && signal !== 'SHORT') return null;
+  if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(emaSlow)) return null;
+  const isLong = signal === 'LONG';
+  let slPct = isLong ? ((price - emaSlow) / price) * 100 : ((emaSlow - price) / price) * 100;
+  // EMA не с той стороны / вплотную → фолбэк на минимальный стоп.
+  if (!(slPct > 0) || slPct < SWING_SL_MIN_PCT) slPct = SWING_SL_MIN_PCT;
+  if (slPct > SWING_SL_MAX_PCT) slPct = SWING_SL_MAX_PCT;
+  const sl = isLong ? price * (1 - slPct / 100) : price * (1 + slPct / 100);
+  const tpPct = slPct * SWING_RR;
+  const tp = isLong ? price * (1 + tpPct / 100) : price * (1 - tpPct / 100);
+  return { sl, slPct, tp, tpPct, rr: SWING_RR };
+}
+
 /**
  * Обогащает строки getSetupScannerRows() свинг-сигналом. Синхронно: тренды из
  * кэша (null пока не посчитаны), refresh уходит в фон.
@@ -237,7 +261,11 @@ export function enrichSwingSignals(rows, now = Date.now()) {
     const ema20 = t?.t1h?.emaFast;
     const ext1h = t?.px != null && ema20 ? ((t.px - ema20) / ema20) * 100 : null;
     const entryZone = classifyEntryZone(scored.signal, ext1h);
-    return { ...r, swing: { ...scored, trend4h, trend1h, ext1h, entryZone, pending: !t } };
+    // План входа (стоп/таргет) для сигнала ДО входа: стоп за 1h slow-EMA
+    // (инвалидация тренда), таргет 2R. Зажат в [1.2%, 8%]; size считает фронт
+    // от equity × риск%. Размер позиции тут НЕ считаем — нужен живой баланс.
+    const plan = buildSwingPlan(scored.signal, t?.px, t?.t1h?.emaSlow);
+    return { ...r, swing: { ...scored, trend4h, trend1h, ext1h, entryZone, plan, pending: !t } };
   });
 }
 

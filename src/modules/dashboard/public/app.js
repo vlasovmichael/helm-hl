@@ -26,6 +26,8 @@ let _lastSetupRowsCache = [];
 let _macroPct = null;
 let _macroFetchedAt = 0;
 let _btcMomentum1m = null;
+let _lastEquity = null; // последний известный equity (для размера позиции в Swing-плане)
+const SWING_RISK_PCT = 0.02; // риск на сделку = 2% equity (свинг-план размера)
 let _tickReady = false; // true after first tick() completes — prevents half-baked SmartSignals renders
 
 // Активные монеты (позиция бота + все ручные/HANDS-OFF). Подсвечиваем их во
@@ -215,6 +217,7 @@ function initWebSocket() {
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === "status") {
+        if (Number.isFinite(msg.data.equity)) _lastEquity = msg.data.equity;
         renderHeader(msg.data);
         updateActiveCoinSet(msg.data.activePosition, msg.data.manualPositions);
         renderPosition(msg.data.activePosition);
@@ -1635,6 +1638,11 @@ function renderHotMovers(payload) {
       ];
       const cells = winDefs
         .map(([w, lbl]) => {
+          // У открытой монеты 2m/5m гасим — для позиции это шум, действие в
+          // подсказке ниже. 15m оставляем (контекст тренда).
+          if (isOpen && (lbl === "2m" || lbl === "5m")) {
+            return `<td class="hm-window r" data-w="${lbl}"><span class="num-inline-muted">·</span></td>`;
+          }
           const [inner, cls] = pctCellTiered(w);
           const klass = ["hm-window", "r", cls].filter(Boolean).join(" ");
           return `<td class="${klass}" data-w="${lbl}">${inner}</td>`;
@@ -1723,10 +1731,14 @@ function renderHotMovers(payload) {
         }
       }
 
+      // У открытой монеты Setup-вердикт гасим — вход уже сделан, действие в подсказке.
+      const setupCell = isOpen
+        ? `<td class="hm-setup c" data-w="Setup"><span class="num-inline-muted">·</span></td>`
+        : `<td class="hm-setup c ${setup.cls}" data-w="Setup" title="${setup.title}">${setup.label}</td>`;
       const mainRow = `<tr class="${rowCls}">
         <td>${isOpen ? "📍" : idx + 1}</td>
         <td><span class="signals-price">#${escapeHtml(s.coin)}</span></td>
-        <td class="hm-setup c ${setup.cls}" data-w="Setup" title="${setup.title}">${setup.label}</td>
+        ${setupCell}
         <td class="hm-entry hm-entry-${entry.state}" data-w="Вход" title="${entry.title}"><span class="hm-entry-icon">${entry.icon}</span></td>
         <td class="hm-price-cell r ${flashCls}"><span class="signals-price">${fmtPrice(s.price)}</span></td>
         ${cells}
@@ -1846,7 +1858,23 @@ function renderSetupScanner(payload) {
       : "";
   // SL/TP-колонка (только POS-строки): дистанции от entry + R:R, читаемым размером.
   // Красным — нет стопа / стоп не с той стороны; оранжевым — R:R < 2 (правило 2:1).
+  // Размер позиции для свинг-плана: риск = equity × 2%, size = риск / стоп-дист.
+  const swingSizeUsd = (slPct) => {
+    if (_lastEquity == null || !(slPct > 0)) return null;
+    const riskUsd = Math.max(0.5, _lastEquity * SWING_RISK_PCT);
+    return { size: riskUsd / (slPct / 100), riskUsd };
+  };
   const slTpCell = (s) => {
+    // Сигнал ДО входа (нет позиции): показываем план — стоп/таргет/2R + размер.
+    if (!s.pos && (s.signal === "LONG" || s.signal === "SHORT") && s.plan) {
+      const p = s.plan;
+      const sz = swingSizeUsd(p.slPct);
+      const sizeStr = sz ? ` · <span style="color:var(--text-secondary)">${fmtUsd(sz.size)}</span>` : "";
+      const tip =
+        `Стоп ${fmtPrice(p.sl)} (−${p.slPct.toFixed(1)}%) · TP ${fmtPrice(p.tp)} (+${p.tpPct.toFixed(1)}%) · ${p.rr}R` +
+        (sz ? ` · размер ${fmtUsd(sz.size)} при риске ${fmtUsd(sz.riskUsd)} (2% депо)` : "");
+      return `<span style="font-family:var(--font-mono);white-space:nowrap" title="${tip}"><span style="color:var(--red)">−${p.slPct.toFixed(1)}%</span> / <span style="color:var(--green)">+${p.tpPct.toFixed(1)}%</span> <span style="color:var(--green);font-weight:700">${p.rr}R</span>${sizeStr}</span>`;
+    }
     if (!s.pos || !s.slTp) return '<span class="num-inline-muted">—</span>';
     const x = s.slTp;
     if (x.noSl)
@@ -2037,7 +2065,7 @@ function renderMarketContext(d) {
 }
 
 async function tick() {
-  const [historyR, activityR, taxR, pnlR, insightsR, hmR, btcR, mcR] =
+  const [historyR, activityR, taxR, pnlR, insightsR, hmR, btcR, mcR, stratR] =
     await Promise.allSettled([
       fetchJson(`/api/history?hours=${currentRangeHours}`),
       fetchJson(`/api/activity?hours=${currentRangeHours}&limit=10`),
@@ -2047,7 +2075,15 @@ async function tick() {
       fetchJson("/api/signals?limit=30"),
       fetchJson("/api/candles?coin=BTC&interval=1m"),
       fetchJson("/api/market-context"),
+      // Strategies таблица: REST-источник на загрузку/поллинг (WS обновляет live).
+      // Грузим из REST, чтобы не зависеть от первого WS-тика. Только на /strategies.
+      document.getElementById("strategies-tbody")
+        ? fetchJson("/api/strategies")
+        : Promise.resolve(null),
     ]);
+  if (stratR.status === "fulfilled" && stratR.value) {
+    renderStrategies(stratR.value);
+  }
   if (mcR.status === "fulfilled") renderMarketContext(mcR.value);
   if (hmR.status === "fulfilled" && hmR.value?.signals) {
     _hmSignalsCache = hmR.value.signals;

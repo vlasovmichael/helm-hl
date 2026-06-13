@@ -197,7 +197,7 @@ body {
 }
 
 .container {
-  max-width: 1280px;
+  max-width: 1460px;
   margin: 0 auto;
   padding: 32px 24px 96px;
 }
@@ -447,7 +447,6 @@ header {
     justify-content: space-between;
   }
 }
-
 
 /* ──────────────────────── Cards */
 .card {
@@ -1219,23 +1218,55 @@ footer {
    моноширинный (tabular). Только desktop: на ≤720px ниже включается card-вёрстка
    (@media), где фикс-ширины и nowrap не нужны и обрезали бы карточки. */
 @media (min-width: 721px) {
-  .hm-table { table-layout: fixed; }
-  .hm-table th, .hm-table td {
+  .hm-table {
+    table-layout: fixed;
+  }
+  .hm-table th,
+  .hm-table td {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .hm-table th:nth-child(1),  .hm-table td:nth-child(1)  { width: 26px; }  /* # */
-  .hm-table th:nth-child(2),  .hm-table td:nth-child(2)  { width: 64px; }  /* Coin */
-  .hm-table th:nth-child(3),  .hm-table td:nth-child(3)  { width: 80px; }  /* Setup */
-  .hm-table th:nth-child(4),  .hm-table td:nth-child(4)  { width: 52px; }  /* Enter */
-  .hm-table th:nth-child(5),  .hm-table td:nth-child(5)  { width: 96px; }  /* Price */
-  .hm-table th:nth-child(6),  .hm-table td:nth-child(6),
-  .hm-table th:nth-child(7),  .hm-table td:nth-child(7),
-  .hm-table th:nth-child(8),  .hm-table td:nth-child(8)  { width: 58px; }  /* 2m/5m/15m % */
-  .hm-table th:nth-child(9),  .hm-table td:nth-child(9)  { width: 48px; }  /* Acc */
-  .hm-table th:nth-child(10), .hm-table td:nth-child(10) { width: 64px; }  /* OI 5m */
-  .hm-table th:nth-child(11), .hm-table td:nth-child(11) { width: 52px; }  /* Trend */
+  .hm-table th:nth-child(1),
+  .hm-table td:nth-child(1) {
+    width: 26px;
+  } /* # */
+  .hm-table th:nth-child(2),
+  .hm-table td:nth-child(2) {
+    width: 64px;
+  } /* Coin */
+  .hm-table th:nth-child(3),
+  .hm-table td:nth-child(3) {
+    width: 80px;
+  } /* Setup */
+  .hm-table th:nth-child(4),
+  .hm-table td:nth-child(4) {
+    width: 52px;
+  } /* Enter */
+  .hm-table th:nth-child(5),
+  .hm-table td:nth-child(5) {
+    width: 96px;
+  } /* Price */
+  .hm-table th:nth-child(6),
+  .hm-table td:nth-child(6),
+  .hm-table th:nth-child(7),
+  .hm-table td:nth-child(7),
+  .hm-table th:nth-child(8),
+  .hm-table td:nth-child(8) {
+    width: 58px;
+  } /* 2m/5m/15m % */
+  .hm-table th:nth-child(9),
+  .hm-table td:nth-child(9) {
+    width: 48px;
+  } /* Acc */
+  .hm-table th:nth-child(10),
+  .hm-table td:nth-child(10) {
+    width: 64px;
+  } /* OI 5m */
+  .hm-table th:nth-child(11),
+  .hm-table td:nth-child(11) {
+    width: 52px;
+  } /* Trend */
   /* Под-строка позиции (colspan=11) — не зажимать в 26px nth-child(1), дать всю ширину. */
   .hm-table .hm-pos-row td {
     width: auto;
@@ -1279,11 +1310,22 @@ footer {
 .hm-hint {
   font-weight: 600;
 }
-.hm-hint-bad     { color: var(--red); }
-.hm-hint-danger  { color: var(--red); font-weight: 700; }
-.hm-hint-warn    { color: var(--orange, #f59e0b); }
-.hm-hint-good    { color: var(--green); }
-.hm-hint-neutral { color: var(--text-secondary); }
+.hm-hint-bad {
+  color: var(--red);
+}
+.hm-hint-danger {
+  color: var(--red);
+  font-weight: 700;
+}
+.hm-hint-warn {
+  color: var(--orange, #f59e0b);
+}
+.hm-hint-good {
+  color: var(--green);
+}
+.hm-hint-neutral {
+  color: var(--text-secondary);
+}
 .hm-hint-pnl {
   font-weight: 700;
   margin-left: 4px;
@@ -1361,7 +1403,7 @@ footer {
 .data-table th {
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: .07em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--text-faint);
   padding: 7px 10px;
@@ -1369,26 +1411,50 @@ footer {
   text-align: left;
   white-space: nowrap;
 }
-.data-table th.r { text-align: right; }
-.data-table th.c { text-align: center; }
+.data-table th.r {
+  text-align: right;
+}
+.data-table th.c {
+  text-align: center;
+}
 .data-table td {
   padding: 8px 10px;
   border-bottom: 1px solid var(--hairline);
   vertical-align: middle;
   white-space: nowrap;
 }
-.data-table td.r { text-align: right; }
-.data-table td.c { text-align: center; }
-.data-table tbody tr:hover { background: var(--card-bg-hover, rgba(255,255,255,.03)); }
+.data-table td.r {
+  text-align: right;
+}
+.data-table td.c {
+  text-align: center;
+}
+.data-table tbody tr:hover {
+  background: var(--card-bg-hover, rgba(255, 255, 255, 0.03));
+}
 
 .ww-sortable {
   cursor: pointer;
   user-select: none;
 }
-.ww-sortable:hover { color: var(--text-primary); }
-.ww-sortable::after { content: " ⇅"; opacity: .3; font-size: 9px; }
-.ww-sort-active::after { content: " ↓"; opacity: .9; color: var(--accent); }
-.ww-sort-active.ww-sort-asc::after { content: " ↑"; opacity: .9; color: var(--accent); }
+.ww-sortable:hover {
+  color: var(--text-primary);
+}
+.ww-sortable::after {
+  content: " ⇅";
+  opacity: 0.3;
+  font-size: 9px;
+}
+.ww-sort-active::after {
+  content: " ↓";
+  opacity: 0.9;
+  color: var(--accent);
+}
+.ww-sort-active.ww-sort-asc::after {
+  content: " ↑";
+  opacity: 0.9;
+  color: var(--accent);
+}
 
 .signals-status {
   display: inline-block;
@@ -1581,11 +1647,11 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   color: var(--red);
 }
 .signals-table td.hm-setup.fader-wait-short {
-  background: rgba(34, 197, 94, 0.10);
+  background: rgba(34, 197, 94, 0.1);
   color: var(--green);
 }
 .signals-table td.hm-setup.fader-wait-long {
-  background: rgba(239, 68, 68, 0.10);
+  background: rgba(239, 68, 68, 0.1);
   color: var(--red);
 }
 .signals-table td.hm-setup.fader-wait-neutral {
@@ -1620,19 +1686,33 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
    цвет цены + цвет процентов + тонкая левая кромка ТОЛЬКО на заметном
    движении (mid ≥0.6% / strong ≥1.5%) + flash при изменении цены.
    Слабые движения (<0.6%) — строка чистая, ничего не отвлекает. */
-.signals-table tr.row-up.row-heat-mid    td:first-child { box-shadow: inset 2px 0 0 rgba(34, 197, 94, 0.5); }
-.signals-table tr.row-down.row-heat-mid  td:first-child { box-shadow: inset 2px 0 0 rgba(239, 68, 68, 0.5); }
-.signals-table tr.row-up.row-heat-strong td:first-child { box-shadow: inset 3px 0 0 var(--green); }
-.signals-table tr.row-down.row-heat-strong td:first-child { box-shadow: inset 3px 0 0 var(--red); }
+.signals-table tr.row-up.row-heat-mid td:first-child {
+  box-shadow: inset 2px 0 0 rgba(34, 197, 94, 0.5);
+}
+.signals-table tr.row-down.row-heat-mid td:first-child {
+  box-shadow: inset 2px 0 0 rgba(239, 68, 68, 0.5);
+}
+.signals-table tr.row-up.row-heat-strong td:first-child {
+  box-shadow: inset 3px 0 0 var(--green);
+}
+.signals-table tr.row-down.row-heat-strong td:first-child {
+  box-shadow: inset 3px 0 0 var(--red);
+}
 /* цена — цвет по направлению движения (theme-aware, в тон процентам) */
-.signals-table tr.row-up   .signals-price { color: var(--green); }
-.signals-table tr.row-down .signals-price { color: var(--red); }
+.signals-table tr.row-up .signals-price {
+  color: var(--green);
+}
+.signals-table tr.row-down .signals-price {
+  color: var(--red);
+}
 
 /* Активная монета (позиция бота ИЛИ ручная) — всегда поверх heat-раскраски:
    фон-акцент + жирная левая кромка. !important, т.к. heat-классы выше по
    специфичности и иначе перебивают кромку, когда монета ещё и двигается. */
 .signals-table tr.is-active,
-.data-table tr.is-active { background: var(--accent-soft) !important; }
+.data-table tr.is-active {
+  background: var(--accent-soft) !important;
+}
 .signals-table tr.is-active td:first-child,
 .data-table tr.is-active td:first-child {
   box-shadow: inset 4px 0 0 var(--accent) !important;
@@ -1641,19 +1721,35 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
 
 /* Биржевые flash-вспышки на ячейке цены при изменении (зелёный вверх / красный вниз). */
 @keyframes hmFlashUp {
-  0%   { background: rgba(34, 197, 94, 0.55); }
-  100% { background: transparent; }
+  0% {
+    background: rgba(34, 197, 94, 0.55);
+  }
+  100% {
+    background: transparent;
+  }
 }
 @keyframes hmFlashDown {
-  0%   { background: rgba(239, 68, 68, 0.55); }
-  100% { background: transparent; }
+  0% {
+    background: rgba(239, 68, 68, 0.55);
+  }
+  100% {
+    background: transparent;
+  }
 }
-.signals-table td.hm-price-cell { border-radius: 4px; }
-.signals-table td.hm-price-cell.hm-flash-up   { animation: hmFlashUp 0.75s ease-out; }
-.signals-table td.hm-price-cell.hm-flash-down { animation: hmFlashDown 0.75s ease-out; }
+.signals-table td.hm-price-cell {
+  border-radius: 4px;
+}
+.signals-table td.hm-price-cell.hm-flash-up {
+  animation: hmFlashUp 0.75s ease-out;
+}
+.signals-table td.hm-price-cell.hm-flash-down {
+  animation: hmFlashDown 0.75s ease-out;
+}
 @media (prefers-reduced-motion: reduce) {
   .signals-table td.hm-price-cell.hm-flash-up,
-  .signals-table td.hm-price-cell.hm-flash-down { animation: none; }
+  .signals-table td.hm-price-cell.hm-flash-down {
+    animation: none;
+  }
 }
 
 /* Mobile: показываем label окна перед значением, чтобы не теряться в скролле */
@@ -2978,12 +3074,14 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   padding: 8px 0 4px;
 }
 @media (max-width: 720px) {
-  .toolkit-grid { grid-template-columns: 1fr; }
+  .toolkit-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .toolkit-tile {
   display: block;
   padding: 14px 16px;
-  background: var(--card-bg, rgba(255,255,255,0.02));
+  background: var(--card-bg, rgba(255, 255, 255, 0.02));
   border: 1px solid var(--hairline);
   border-radius: 10px;
   text-decoration: none;
@@ -3037,8 +3135,12 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
 @media (max-width: 720px) {
   /* Collapse table structure into block elements */
   #div-table,
-  #div-table tbody { display: block; }
-  #div-table thead { display: none; }
+  #div-table tbody {
+    display: block;
+  }
+  #div-table thead {
+    display: none;
+  }
 
   #div-table tr {
     display: grid;
@@ -3060,15 +3162,32 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
     display: block;
   }
   /* Coin — bold, top-left */
-  #div-table td:nth-child(1) { grid-area: coin; font-size: 13px; font-weight: 700; }
+  #div-table td:nth-child(1) {
+    grid-area: coin;
+    font-size: 13px;
+    font-weight: 700;
+  }
   /* Price — hidden */
-  #div-table td:nth-child(2) { display: none; }
+  #div-table td:nth-child(2) {
+    display: none;
+  }
   /* Change% — middle-left */
-  #div-table td:nth-child(3) { grid-area: chg; font-size: 11px; }
+  #div-table td:nth-child(3) {
+    grid-area: chg;
+    font-size: 11px;
+  }
   /* vs BTC — bottom-left */
-  #div-table td:nth-child(4) { grid-area: rel; font-size: 11px; text-align: left; }
+  #div-table td:nth-child(4) {
+    grid-area: rel;
+    font-size: 11px;
+    text-align: left;
+  }
   /* Signal — top-right, badge-style */
-  #div-table td:nth-child(5) { grid-area: signal; text-align: right; font-weight: 700; }
+  #div-table td:nth-child(5) {
+    grid-area: signal;
+    text-align: right;
+    font-weight: 700;
+  }
   /* Whale — right column, spans 2 rows, vertically centered */
   #div-table td:nth-child(6) {
     grid-area: whale;
@@ -3101,7 +3220,6 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
     font-size: 10px;
   }
 }
-
 
 /* ───────────────────────────────────────────────
    Market Context bar — вердикт по фону (risk-on/off)
@@ -3225,8 +3343,12 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
 /* ── Setup Scanner (Swing) — row tint по сигналу ──────────
    Вся строка дышит направлением: LONG зелёным, SHORT красным.
    .sw-hot (цена в entry-зоне или открыта позиция) = ярче + кромка слева. */
-#setup-scanner-table tr.sw-long  { background: rgba(14, 203, 129, 0.05); }
-#setup-scanner-table tr.sw-short { background: rgba(246, 70, 92, 0.05); }
+#setup-scanner-table tr.sw-long {
+  background: rgba(14, 203, 129, 0.05);
+}
+#setup-scanner-table tr.sw-short {
+  background: rgba(246, 70, 92, 0.05);
+}
 #setup-scanner-table tr.sw-long.sw-hot {
   background: rgba(14, 203, 129, 0.12);
 }
@@ -3239,8 +3361,12 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
 #setup-scanner-table tr.sw-short.sw-hot td:first-child {
   box-shadow: inset 3px 0 0 var(--red);
 }
-#setup-scanner-table tr.sw-long  .signals-price { color: var(--green); }
-#setup-scanner-table tr.sw-short .signals-price { color: var(--red); }
+#setup-scanner-table tr.sw-long .signals-price {
+  color: var(--green);
+}
+#setup-scanner-table tr.sw-short .signals-price {
+  color: var(--red);
+}
 
 /* ════════════════════════════════════════════════════════════════════
    Motion layer (2026-06-12) — tasteful, GPU-only (transform/opacity).
@@ -3363,19 +3489,58 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   border-radius: 999px;
   border: 1px solid transparent;
 }
-.strat-live    { background: var(--green-soft); color: var(--green); border-color: var(--green-line); }
-.strat-paper   { background: var(--accent-soft); color: var(--accent-strong); border-color: var(--accent-line); }
-.strat-radar   { background: color-mix(in srgb, #a855f7 16%, transparent); color: #a855f7; border-color: color-mix(in srgb, #a855f7 40%, transparent); }
-.strat-off     { background: var(--card-bg-elev); color: var(--text-muted); border-color: var(--border); }
-.strat-planned { background: transparent; color: var(--text-muted); border: 1px dashed var(--border-strong); }
-.strat-summary-spacer { flex: 1; }
-.strat-pos { color: var(--green); }
-.strat-neg { color: var(--red); }
-.strat-dim { color: var(--text-muted); }
-.strat-pos-coin { font-weight: 600; font-family: var(--font-mono); }
-.strat-eq-pct { font-size: 10.5px; }
-.strat-col-spark { width: 90px; }
-.strat-spark { width: 84px; height: 22px; display: block; }
+.strat-live {
+  background: var(--green-soft);
+  color: var(--green);
+  border-color: var(--green-line);
+}
+.strat-paper {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border-color: var(--accent-line);
+}
+.strat-radar {
+  background: color-mix(in srgb, #a855f7 16%, transparent);
+  color: #a855f7;
+  border-color: color-mix(in srgb, #a855f7 40%, transparent);
+}
+.strat-off {
+  background: var(--card-bg-elev);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+.strat-planned {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-strong);
+}
+.strat-summary-spacer {
+  flex: 1;
+}
+.strat-pos {
+  color: var(--green);
+}
+.strat-neg {
+  color: var(--red);
+}
+.strat-dim {
+  color: var(--text-muted);
+}
+.strat-pos-coin {
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+.strat-eq-pct {
+  font-size: 10.5px;
+}
+.strat-col-spark {
+  width: 90px;
+}
+.strat-spark {
+  width: 84px;
+  height: 22px;
+  display: block;
+}
 /* Detail drawer */
 .strat-detail-row > td {
   background: var(--card-bg-elev);
@@ -3405,8 +3570,16 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   white-space: nowrap;
   font-family: var(--font-mono);
 }
-.strat-trade-coin { font-weight: 600; }
-.strat-trade-side { color: var(--text-muted); }
+.strat-trade-coin {
+  font-weight: 600;
+}
+.strat-trade-side {
+  color: var(--text-muted);
+}
+.strat-skel-row td {
+  padding: 10px !important;
+  border-bottom: 1px solid var(--border-muted);
+}
 
 /* Hot Movers под-строка подсказок (colspan) на мобильной card-вёрстке (≤720px):
    рендерим обычным блоком на всю ширину, без per-cell ::before лейблов. */
@@ -3418,5 +3591,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
     white-space: normal;
     box-shadow: none;
   }
-  .signals-table tr.hm-pos-row td::before { content: none !important; }
+  .signals-table tr.hm-pos-row td::before {
+    content: none !important;
+  }
 }

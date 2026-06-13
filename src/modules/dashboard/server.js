@@ -2292,6 +2292,14 @@ export function startDashboard() {
   app.get("/api/tax-summary", handleTaxSummary);
   app.get("/api/ledger", handleLedger);
   app.get("/api/pnl-summary", handlePnlSummary);
+  app.get("/api/strategies", (_req, res) => {
+    try {
+      res.json(buildStrategiesPayload());
+    } catch (err) {
+      logger.warn(`[Dashboard] /api/strategies failed: ${err.message}`);
+      res.status(500).json({ rows: [], planned: [], error: true });
+    }
+  });
   app.get("/api/insights", handleInsights);
   app.get("/api/setup-scanner", handleSetupScanner);
   app.get("/api/trade-markers", handleTradeMarkers);
