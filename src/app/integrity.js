@@ -255,15 +255,10 @@ export async function orphanCheck() {
   // ── Ручных позиций нет ─────────────────────────
   if (manualPositions.length === 0) {
     if (state.manualPositionActive) {
-      // Юзер закрыл всё руками → возврат в работу
+      // Юзер закрыл всё руками → возврат в работу. TG-уведомление убрано
+      // (2026-06-13, запрос оператора): спам про ручные позиции не нужен, лог достаточно.
       const coins = [...state.manualPositionCoins].join(', ');
       logger.info(`[Manual] ✅ Manual position(s) gone (${coins}) — resuming normal trading`);
-      await sendMessage(
-        `✅ <b>Ручные позиции закрыты</b>\n` +
-          `<code>─────────────────────</code>\n` +
-          `Бот возвращается к автоматической торговле.`,
-        true,
-      ).catch(() => {});
       state.manualPositionActive = false;
       state.manualPositionCoins.clear();
       state.manualWarningThrottle.clear();

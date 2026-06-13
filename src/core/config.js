@@ -997,6 +997,13 @@ function loadConfig() {
       // DRAWDOWN/внешнее закрытие) НЕ зависят от флага — они приходят всегда.
       // TG_NOTIFICATIONS=true чтобы вернуть весь шум.
       notifications: process.env.TG_NOTIFICATIONS === 'true',
+
+      // ── Уведомления о жизненном цикле сделок (open/close/SL/TP) ──
+      // По умолчанию ВЫКЛ: оператор не хочет спама об открытии/закрытии позиций
+      // (особенно после paper-накопления 5-6 стратегий — это лавина). Ошибки,
+      // circuit-breaker, drawdown и ВНЕШНЕЕ закрытие НЕ зависят от флага.
+      // TG_TRADE_NOTIFICATIONS=true чтобы вернуть уведомления о сделках.
+      tradeNotifications: process.env.TG_TRADE_NOTIFICATIONS === 'true',
     },
 
     ntfy: {

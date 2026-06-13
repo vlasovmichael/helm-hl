@@ -1212,6 +1212,31 @@ footer {
 .signals-table tbody tr:hover {
   background: var(--card-bg-hover);
 }
+
+/* Hot Movers: фиксируем ширины колонок, чтобы таблица не «прыгала» при смене
+   цены (у разных монет разное число знаков: $0.00001 vs $104k, % меняет знак/
+   разряд). table-layout:fixed → ширина колонки не зависит от контента. Шрифт уже
+   моноширинный (tabular). Только desktop: на ≤720px ниже включается card-вёрстка
+   (@media), где фикс-ширины и nowrap не нужны и обрезали бы карточки. */
+@media (min-width: 721px) {
+  .hm-table { table-layout: fixed; }
+  .hm-table th, .hm-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .hm-table th:nth-child(1),  .hm-table td:nth-child(1)  { width: 26px; }  /* # */
+  .hm-table th:nth-child(2),  .hm-table td:nth-child(2)  { width: 64px; }  /* Coin */
+  .hm-table th:nth-child(3),  .hm-table td:nth-child(3)  { width: 80px; }  /* Setup */
+  .hm-table th:nth-child(4),  .hm-table td:nth-child(4)  { width: 52px; }  /* Enter */
+  .hm-table th:nth-child(5),  .hm-table td:nth-child(5)  { width: 96px; }  /* Price */
+  .hm-table th:nth-child(6),  .hm-table td:nth-child(6),
+  .hm-table th:nth-child(7),  .hm-table td:nth-child(7),
+  .hm-table th:nth-child(8),  .hm-table td:nth-child(8)  { width: 58px; }  /* 2m/5m/15m % */
+  .hm-table th:nth-child(9),  .hm-table td:nth-child(9)  { width: 48px; }  /* Acc */
+  .hm-table th:nth-child(10), .hm-table td:nth-child(10) { width: 64px; }  /* OI 5m */
+  .hm-table th:nth-child(11), .hm-table td:nth-child(11) { width: 52px; }  /* Trend */
+}
 .signals-table tr.is-active {
   background: var(--accent-soft);
 }

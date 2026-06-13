@@ -37,9 +37,16 @@ function shouldThrottle(key) {
   return false;
 }
 
+// Гейт уведомлений о жизненном цикле сделок (open/close/SL/TP). По умолчанию OFF
+// (TG_TRADE_NOTIFICATIONS). Не влияет на ошибки/CB/drawdown/внешнее закрытие.
+function tradeAlertsOff() {
+  return !config.telegram.tradeNotifications;
+}
+
 // ── OPEN ───────────────────────────────────────
 
 export async function notifyPaperOpen({ coin, sizeUsd, balance, price, apy, fee, side = 'short' }) {
+  if (tradeAlertsOff()) return;
   const fire = apy > 100 ? "🔥🔥🔥 " : "";
   const sideTag = side.toUpperCase();
   await sendMessage(
@@ -54,6 +61,7 @@ export async function notifyPaperOpen({ coin, sizeUsd, balance, price, apy, fee,
 }
 
 export async function notifyProductionOpen({ coin, fillUsd, totalSz, avgPx, markPrice, apy, slip, effectiveLeverage, oid, dbId, side = 'short' }) {
+  if (tradeAlertsOff()) return;
   const slipWarn = slip.warn ? "⚠️ " : "";
   const fire = apy > 100 ? "🔥🔥🔥 " : "";
   const sideTag = side.toUpperCase();
@@ -74,6 +82,7 @@ export async function notifyProductionOpen({ coin, fillUsd, totalSz, avgPx, mark
 // ── CLOSE ──────────────────────────────────────
 
 export async function notifyPaperClose({ coin, holdHours, reason, pnl, fee, side = 'short' }) {
+  if (tradeAlertsOff()) return;
   const sign = pnl >= 0 ? "+" : "";
   const sideTag = side.toUpperCase();
   await sendMessage(
@@ -88,6 +97,7 @@ export async function notifyPaperClose({ coin, holdHours, reason, pnl, fee, side
 }
 
 export async function notifyProductionClose({ coin, holdHours, entryPrice, avgPx, slip, pricePnl, fundingPnl, totalFee, realizedPnl, reason, oid, side = 'short' }) {
+  if (tradeAlertsOff()) return;
   const slipWarn = slip.warn ? "⚠️ " : "";
   const sign = realizedPnl >= 0 ? "+" : "";
   const sideTag = side.toUpperCase();
@@ -113,6 +123,7 @@ export async function notifyProductionClose({ coin, holdHours, entryPrice, avgPx
 // ── SNIPER (maker-only exits, PAPER) ──────────
 
 export async function notifySniperArmed({ coin, armPrice, reason, windowMinutes }) {
+  if (tradeAlertsOff()) return;
   await sendMessage(
     `🎯 <b>[SNIPER ARMED] #${coin}</b>\n` +
       `<code>─────────────────────</code>\n` +
@@ -126,6 +137,7 @@ export async function notifySniperArmed({ coin, armPrice, reason, windowMinutes 
 }
 
 export async function notifySniperFilled({ coin, armPrice, waitMinutes, reason, pnl, fee, feeSavedVsMarket }) {
+  if (tradeAlertsOff()) return;
   const sign = pnl >= 0 ? "+" : "";
   const savedSign = feeSavedVsMarket >= 0 ? "+" : "";
   await sendMessage(
@@ -142,6 +154,7 @@ export async function notifySniperFilled({ coin, armPrice, waitMinutes, reason, 
 }
 
 export async function notifySniperTimeout({ coin, armPrice, fallbackPrice, reason, pnl, fee }) {
+  if (tradeAlertsOff()) return;
   const sign = pnl >= 0 ? "+" : "";
   await sendMessage(
     `🎯⏰ <b>[SNIPER TIMEOUT → MARKET] #${coin}</b>\n` +
@@ -159,6 +172,7 @@ export async function notifySniperTimeout({ coin, armPrice, fallbackPrice, reaso
 // ── SNIPER (PROD — реальный Alo на бирже, Iter 3) ──
 
 export async function notifySniperArmedProd({ coin, armPrice, orderId, sz, reason, windowMinutes }) {
+  if (tradeAlertsOff()) return;
   await sendMessage(
     `🎯 <b>[PROD SNIPER ARMED] #${coin}</b>\n` +
       `<code>═════════════════════</code>\n` +
@@ -179,6 +193,7 @@ export async function notifySniperFilledProd({
   coin, armPrice, fillPx, waitMinutes, reason, holdHours,
   pricePnl, fundingPnl, fee, pnl, fundingSource, feeSavedVsMarket,
 }) {
+  if (tradeAlertsOff()) return;
   const sign = pnl >= 0 ? '+' : '';
   const fSign = fundingPnl >= 0 ? '+' : '';
   const pSign = pricePnl >= 0 ? '+' : '';
@@ -201,6 +216,7 @@ export async function notifySniperFilledProd({
 }
 
 export async function notifySniperTimeoutProd({ coin, armPrice, fallbackPrice, reason, pnl, holdHours }) {
+  if (tradeAlertsOff()) return;
   const sign = pnl >= 0 ? '+' : '';
   await sendMessage(
     `🎯⏰ <b>[PROD SNIPER TIMEOUT → MARKET] #${coin}</b>\n` +
@@ -217,6 +233,7 @@ export async function notifySniperTimeoutProd({ coin, armPrice, fallbackPrice, r
 export async function notifySniperAdverseAbort({
   coin, armPrice, currentPrice, driftBps, reason, waitMinutes, pnl, isProd,
 }) {
+  if (tradeAlertsOff()) return;
   const sign = pnl >= 0 ? '+' : '';
   const tag = isProd ? 'PROD SNIPER ADVERSE' : 'SNIPER ADVERSE';
   await sendMessage(
@@ -245,6 +262,7 @@ export async function notifySniperArmFailed({ coin, reason }) {
 // ── SNIPER-HUNTER (Strategy #3: Volatility Spike Mean-Reversion) ──
 
 export async function notifyHunterOpen({ coin, sizeUsd, balance, price, spikePct, sl, tp, fee }) {
+  if (tradeAlertsOff()) return;
   await sendMessage(
     `🎯 <b>[HUNTER OPEN SHORT] #${coin}</b>\n` +
       `<code>─────────────────────</code>\n` +
@@ -260,6 +278,7 @@ export async function notifyHunterOpen({ coin, sizeUsd, balance, price, spikePct
 }
 
 export async function notifyHunterOpenProd({ coin, sizeUsd, balance, leverage, fillPx, markPrice, spikePct, sl, tp, slOid, tpOid, slipLabel, fee }) {
+  if (tradeAlertsOff()) return;
   const levSuffix = leverage > 1 ? ` × <b>${leverage}x</b>` : '';
   await sendMessage(
     `🎯🔫 <b>[HUNTER PROD OPEN SHORT] #${coin}</b>\n` +
@@ -299,6 +318,7 @@ export async function notifyHunterOpenFailed({ coin, stage, reason, rolledBack, 
 }
 
 export async function notifyHunterSL({ coin, entryPrice, slPrice, pnl, fee, holdMinutes }) {
+  if (tradeAlertsOff()) return;
   const sign = pnl >= 0 ? "+" : "";
   await sendMessage(
     `🎯🛑 <b>[HUNTER SL] #${coin}</b>\n` +
@@ -314,6 +334,7 @@ export async function notifyHunterSL({ coin, entryPrice, slPrice, pnl, fee, hold
 }
 
 export async function notifyHunterTP({ coin, entryPrice, tpPrice, pnl, fee, holdMinutes }) {
+  if (tradeAlertsOff()) return;
   const sign = pnl >= 0 ? "+" : "";
   await sendMessage(
     `🎯✅ <b>[HUNTER TP] #${coin}</b>\n` +
@@ -329,6 +350,7 @@ export async function notifyHunterTP({ coin, entryPrice, tpPrice, pnl, fee, hold
 }
 
 export async function notifyHunterTrailTp({ coin, entryPrice, closePrice, peakPct, giveBackPct, pnl, fee, holdMinutes, fixedTpPrice }) {
+  if (tradeAlertsOff()) return;
   const sign = pnl >= 0 ? "+" : "";
   const realPct = entryPrice ? ((entryPrice - closePrice) / entryPrice) * 100 : 0;
   const fixedTpPct = (fixedTpPrice && entryPrice) ? ((entryPrice - fixedTpPrice) / entryPrice) * 100 : null;
@@ -352,6 +374,7 @@ export async function notifyHunterTrailTp({ coin, entryPrice, closePrice, peakPc
 // ── HUNTER LONG (Strategy #3 mirror: Long-after-dump, Iter E) ──
 
 export async function notifyHunterLongOpen({ coin, sizeUsd, balance, price, dumpPct, sl, tp, fee }) {
+  if (tradeAlertsOff()) return;
   await sendMessage(
     `🎯 <b>[HUNTER OPEN LONG] #${coin}</b>\n` +
       `<code>─────────────────────</code>\n` +
@@ -367,6 +390,7 @@ export async function notifyHunterLongOpen({ coin, sizeUsd, balance, price, dump
 }
 
 export async function notifyHunterLongOpenProd({ coin, sizeUsd, balance, leverage, fillPx, markPrice, dumpPct, sl, tp, slOid, tpOid, slipLabel, fee }) {
+  if (tradeAlertsOff()) return;
   const levSuffix = leverage > 1 ? ` × <b>${leverage}x</b>` : '';
   await sendMessage(
     `🎯🔫 <b>[HUNTER PROD OPEN LONG] #${coin}</b>\n` +
@@ -407,6 +431,7 @@ export async function notifyTrendFollowOpenProd({
   coin, direction, sizeUsd, balance, leverage, utilization,
   fillPx, markPrice, sl, tp, slOid, tpOid, slipLabel, fee,
 }) {
+  if (tradeAlertsOff()) return;
   const levSuffix = leverage > 1 ? ` × <b>${leverage}x</b>` : '';
   const utilPct   = (utilization * 100).toFixed(0);
   const arrow     = direction === 'LONG' ? '📈' : '📉';
@@ -447,6 +472,7 @@ export async function notifyTrendFollowOpenFailed({
 }
 
 export async function notifyHunterLongSL({ coin, entryPrice, slPrice, pnl, fee, holdMinutes }) {
+  if (tradeAlertsOff()) return;
   const sign = pnl >= 0 ? "+" : "";
   await sendMessage(
     `🎯🛑 <b>[HUNTER LONG SL] #${coin}</b>\n` +
@@ -462,6 +488,7 @@ export async function notifyHunterLongSL({ coin, entryPrice, slPrice, pnl, fee, 
 }
 
 export async function notifyHunterLongTP({ coin, entryPrice, tpPrice, pnl, fee, holdMinutes }) {
+  if (tradeAlertsOff()) return;
   const sign = pnl >= 0 ? "+" : "";
   await sendMessage(
     `🎯✅ <b>[HUNTER LONG TP] #${coin}</b>\n` +
@@ -477,6 +504,7 @@ export async function notifyHunterLongTP({ coin, entryPrice, tpPrice, pnl, fee, 
 }
 
 export async function notifyHunterLongTrailTp({ coin, entryPrice, closePrice, peakPct, giveBackPct, pnl, fee, holdMinutes, fixedTpPrice }) {
+  if (tradeAlertsOff()) return;
   const sign = pnl >= 0 ? "+" : "";
   const realPct = entryPrice ? ((closePrice - entryPrice) / entryPrice) * 100 : 0;
   const fixedTpPct = (fixedTpPrice && entryPrice) ? ((fixedTpPrice - entryPrice) / entryPrice) * 100 : null;
@@ -500,6 +528,7 @@ export async function notifyHunterLongTrailTp({ coin, entryPrice, closePrice, pe
 // ── ROTATE ─────────────────────────────────────
 
 export async function notifyRotate({ closeCoin, openCoin, holdHours, closePnl, openSizeUsd, openApy, paybackHours, isProd }) {
+  if (tradeAlertsOff()) return;
   const prefix = isProd ? "PROD ROTATE" : "ROTATE";
   const sep = isProd ? "═" : "─";
   const closePnlSign = closePnl >= 0 ? "+" : "";
