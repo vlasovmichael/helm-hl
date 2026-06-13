@@ -1236,9 +1236,57 @@ footer {
   .hm-table th:nth-child(9),  .hm-table td:nth-child(9)  { width: 48px; }  /* Acc */
   .hm-table th:nth-child(10), .hm-table td:nth-child(10) { width: 64px; }  /* OI 5m */
   .hm-table th:nth-child(11), .hm-table td:nth-child(11) { width: 52px; }  /* Trend */
+  /* Под-строка позиции (colspan=11) — не зажимать в 26px nth-child(1), дать всю ширину. */
+  .hm-table .hm-pos-row td {
+    width: auto;
+    overflow: visible;
+    white-space: nowrap;
+    text-overflow: clip;
+  }
 }
 .signals-table tr.is-active {
   background: var(--accent-soft);
+}
+/* Hot Movers — под-строка с данными открытой позиции (пиннутая монета). */
+.hm-pos-row td {
+  padding: 3px 10px 7px 30px !important;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--border);
+}
+.hm-pos-tag {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-right: 6px;
+  border: 1px solid var(--border);
+}
+.hm-pos-bot {
+  color: var(--accent-strong);
+  border-color: var(--accent-line);
+}
+.hm-pos-manual {
+  color: var(--yellow, #eab308);
+  background: rgba(234, 179, 8, 0.12);
+  border-color: rgba(234, 179, 8, 0.3);
+}
+/* Подсказки реального времени по открытой позиции. */
+.hm-hint {
+  font-weight: 600;
+}
+.hm-hint-bad     { color: var(--red); }
+.hm-hint-danger  { color: var(--red); font-weight: 700; }
+.hm-hint-warn    { color: var(--orange, #f59e0b); }
+.hm-hint-good    { color: var(--green); }
+.hm-hint-neutral { color: var(--text-secondary); }
+.hm-hint-pnl {
+  font-weight: 700;
+  margin-left: 4px;
 }
 /* Hot Movers — чейз-метр (🎯 можно / ⏳ жди / ⛔ нельзя). Эмодзи крупнее,
    чип берёт *-soft/*-line из активной темы → корректно в любой палитре. */
@@ -3359,3 +3407,16 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
 }
 .strat-trade-coin { font-weight: 600; }
 .strat-trade-side { color: var(--text-muted); }
+
+/* Hot Movers под-строка подсказок (colspan) на мобильной card-вёрстке (≤720px):
+   рендерим обычным блоком на всю ширину, без per-cell ::before лейблов. */
+@media (max-width: 720px) {
+  .signals-table tr.hm-pos-row td {
+    display: block;
+    width: 100%;
+    padding: 6px 12px !important;
+    white-space: normal;
+    box-shadow: none;
+  }
+  .signals-table tr.hm-pos-row td::before { content: none !important; }
+}
