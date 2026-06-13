@@ -66,7 +66,10 @@ export function getActivePos(coin) {
 // двигает стоп в безубыток, трейлит и режет. Поэтому показываем что бот УЖЕ
 // сделал (стоп / BE-храповик / трейл / пик), а не «двигай стоп», чтобы не
 // провоцировать оператора лезть руками в сделку, от которой он ушёл (2026-06-13).
-export function hmPosHintRow(coin) {
+// Возвращает ВНУТРЕННОСТЬ под-строки (один <td colspan>), без обёртки <tr> —
+// обёртку и data-key ставит keyed-реконсилер Hot Movers (для FLIP-анимаций).
+// Пустая строка → под-строки нет.
+export function hmPosHintInner(coin) {
   const p = activePosByCoin.get(coin);
   if (!p) return "";
   const { now, liq, source, bot, adopted } = p;
@@ -102,7 +105,7 @@ export function hmPosHintRow(coin) {
   const chipsHtml = chips
     .map(([k, t]) => `<span class="hm-hint hm-hint-${k}">${escapeHtml(t)}</span>`)
     .join(" ");
-  return `<tr class="hm-pos-row"><td colspan="11">
+  return `<td colspan="11">
     <span class="hm-pos-tag hm-pos-${source}">${tag}</span>${chipsHtml}
-  </td></tr>`;
+  </td>`;
 }

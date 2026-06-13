@@ -205,73 +205,6 @@
         </div>
       </section>
 
-      <!-- 02 / BTC Divergence -->
-      <section class="card" id="sec-divergence">
-        <div class="card-header">
-          <div
-            class="card-title"
-            data-num="02"
-            title="Относительная сила/слабость монеты vs BTC. Монета слабее BTC = кандидат на шорт. Монета сильнее BTC на падении = кандидат на лонг."
-          >
-            BTC Divergence
-          </div>
-          <div class="time-ranges" id="div-tabs">
-            <button class="range-btn" data-window="5m">5m</button>
-            <button class="range-btn active" data-window="15m">15m</button>
-            <button class="range-btn" data-window="1h">1h</button>
-            <button class="range-btn" data-window="all">All ↓</button>
-          </div>
-          <span
-            id="div-meta"
-            style="
-              font-size: 11px;
-              font-family: var(--font-mono);
-              color: var(--text-muted);
-            "
-          ></span>
-        </div>
-        <div
-          id="div-watchlist-bar"
-          style="
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 10px 0;
-            flex-wrap: wrap;
-          "
-        ></div>
-        <div style="overflow-x: auto">
-          <table class="data-table" id="div-table">
-            <thead>
-              <tr>
-                <th>Coin</th>
-                <th class="r">Price</th>
-                <th class="r" id="div-th-change">15m %</th>
-                <th
-                  class="r"
-                  title="Разница между изменением монеты и BTC. Красный = монета слабее BTC (шорт). Зелёный = монета сильнее BTC (лонг)."
-                >
-                  vs BTC
-                </th>
-                <th class="c">Signal</th>
-                <th
-                  class="r"
-                  id="div-th-whale"
-                  title="Позиция кита по этой монете"
-                >
-                  🐋
-                </th>
-              </tr>
-            </thead>
-            <tbody id="div-tbody">
-              <tr>
-                <td colspan="6" class="empty-state">накапливаем историю…</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
       <!-- 02.2 / Setup Scanner — Swing -->
       <section class="card" id="sec-setup-scanner">
         <div class="card-header">
@@ -366,6 +299,73 @@
               <tbody id="setup-scanner-tbody"></tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      <!-- 02 / BTC Divergence -->
+      <section class="card" id="sec-divergence">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-num="02"
+            title="Относительная сила/слабость монеты vs BTC. Монета слабее BTC = кандидат на шорт. Монета сильнее BTC на падении = кандидат на лонг."
+          >
+            BTC Divergence
+          </div>
+          <div class="time-ranges" id="div-tabs">
+            <button class="range-btn" data-window="5m">5m</button>
+            <button class="range-btn active" data-window="15m">15m</button>
+            <button class="range-btn" data-window="1h">1h</button>
+            <button class="range-btn" data-window="all">All ↓</button>
+          </div>
+          <span
+            id="div-meta"
+            style="
+              font-size: 11px;
+              font-family: var(--font-mono);
+              color: var(--text-muted);
+            "
+          ></span>
+        </div>
+        <div
+          id="div-watchlist-bar"
+          style="
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px 0;
+            flex-wrap: wrap;
+          "
+        ></div>
+        <div style="overflow-x: auto">
+          <table class="data-table" id="div-table">
+            <thead>
+              <tr>
+                <th>Coin</th>
+                <th class="r">Price</th>
+                <th class="r" id="div-th-change">15m %</th>
+                <th
+                  class="r"
+                  title="Разница между изменением монеты и BTC. Красный = монета слабее BTC (шорт). Зелёный = монета сильнее BTC (лонг)."
+                >
+                  vs BTC
+                </th>
+                <th class="c">Signal</th>
+                <th
+                  class="r"
+                  id="div-th-whale"
+                  title="Позиция кита по этой монете"
+                >
+                  🐋
+                </th>
+              </tr>
+            </thead>
+            <tbody id="div-tbody">
+              <tr>
+                <td colspan="6" class="empty-state">накапливаем историю…</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </section>
 

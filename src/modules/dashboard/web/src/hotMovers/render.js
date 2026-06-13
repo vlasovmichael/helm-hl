@@ -2,6 +2,11 @@
 //  Hot Movers — DOM-рендер таблицы (momentum + OI-режим + Setup-вердикт).
 //  Чистая логика (computeMomentum/hmEntryBadge/derive*) живёт в ./momentum.js.
 //  fmtTime передаётся параметром — он зависит от currentRangeHours в main.js.
+//
+//  Рендер идёт через keyed-реконсилер (reconcileRows): строки переживают тики,
+//  поэтому при смене ранга монета ГЛАЙДИТ на новое место (FLIP), новая —
+//  въезжает, ушедшая — гаснет. Раньше innerHTML пересобирался целиком и строки
+//  прыгали без анимации (2026-06-13).
 // ─────────────────────────────────────────────────
 
 import { escapeHtml } from "../utils/format.js";
@@ -13,12 +18,17 @@ import {
 } from "./momentum.js";
 import {
   isActiveCoin,
-  hmPosHintRow,
+  hmPosHintInner,
   getActiveCoins,
   getActivePos,
 } from "../state/activeCoins.js";
 
 const _hmPrevPrices = new Map();
+
+// Сколько монет максимум в таблице (открытые позиции — сверх лимита, всегда).
+const HM_MAX_ROWS = 8;
+// momScore ниже порога = WAIT (хода нет) — такие строки прячем, кроме открытых.
+const HM_WAIT_SCORE = 1.5;
 
 export function renderHotMovers(payload, fmtTime) {
   const tbody = document.getElementById("hot-movers-tbody");
@@ -52,7 +62,7 @@ export function renderHotMovers(payload, fmtTime) {
     .sort((a, b) => b.momScore - a.momScore || b.maxAbs - a.maxAbs);
 
   // Открытую монету (позиция бота / ручная) всегда пиним наверх, даже если её
-  // momentum не в топ-20 — оператор хочет видеть свою позицию первой (2026-06-13).
+  // momentum не в топе — оператор хочет видеть свою позицию первой (2026-06-13).
   const activeRows = sorted.filter((x) => isActiveCoin(x.s.coin));
   // …и даже если монеты ВООБЩЕ нет в сигналах сканера (затихла → выпала из
   // signals). Без этого пин-строка мигала: позиция то пропадала, то возвращалась
@@ -69,9 +79,11 @@ export function renderHotMovers(payload, fmtTime) {
       momScore: 0,
     });
   }
+  // Остальные строки: прячем WAIT (хода нет) и режем до лимита. Так таблица
+  // показывает только то, что реально движется (5–10 монет, а не 20 с шумом).
   const restRows = sorted
-    .filter((x) => !isActiveCoin(x.s.coin))
-    .slice(0, Math.max(1, 20 - activeRows.length));
+    .filter((x) => !isActiveCoin(x.s.coin) && x.momScore >= HM_WAIT_SCORE)
+    .slice(0, Math.max(1, HM_MAX_ROWS - activeRows.length));
   const enriched = [...activeRows, ...restRows];
 
   const activeShown = activeRows.length;
@@ -81,7 +93,7 @@ export function renderHotMovers(payload, fmtTime) {
 
   if (!enriched.length) {
     tbody.innerHTML =
-      '<tr><td colspan="11" class="empty-state">Waiting for price history…</td></tr>';
+      '<tr><td colspan="11" class="empty-state">Тихо — нет монет с движением</td></tr>';
     return;
   }
 
@@ -123,172 +135,297 @@ export function renderHotMovers(payload, fmtTime) {
   const findWin = (windows, mins) => windows.find((w) => w.mins === mins);
   const winByLabel = (windows, label) => windows.find((w) => w.label === label);
 
-  tbody.innerHTML = enriched
-    .map((x, idx) => {
-      const s = x.s;
-      const w2 = findWin(x.windows, 2) || winByLabel(x.windows, "2m");
-      const w5 = findWin(x.windows, 5) || winByLabel(x.windows, "5m");
-      const w15 = findWin(x.windows, 15) || winByLabel(x.windows, "15m");
-      const trendLbl = th.trendLookbackMin ? `${th.trendLookbackMin}m` : "";
-      const trendPct = s.trendPct;
-      const trendInner =
-        trendPct == null
-          ? '<span class="num-inline-muted">—</span>'
-          : `<span class="${trendPct > 0 ? "num-inline-pos" : "num-inline-neg"}">${trendPct > 0 ? "▲" : "▼"} ${fmtPct(trendPct)}</span> <span class="num-inline-muted">/ ${trendLbl}</span>`;
+  // Собираем плоский упорядоченный список строк для реконсилера. Каждая запись —
+  // {key, cls, html}: одна <tr>. У открытой монеты следом идёт под-строка статуса
+  // (ключ "pos:COIN"), чтобы она тоже участвовала в FLIP, а не моргала.
+  const items = [];
 
-      // Living heatmap: тинт строки по доминирующему движению цены (как на бирже —
-      // вверх зелёный, вниз красный), интенсивность по |move|. Не зависит от
-      // fade-тиров, поэтому карточка «дышит» даже когда сигналов нет.
-      let domMove = 0;
-      for (const w of x.windows) {
-        if (w.spikePct != null && Math.abs(w.spikePct) > Math.abs(domMove))
-          domMove = w.spikePct;
+  enriched.forEach((x, idx) => {
+    const s = x.s;
+    const w2 = findWin(x.windows, 2) || winByLabel(x.windows, "2m");
+    const w5 = findWin(x.windows, 5) || winByLabel(x.windows, "5m");
+    const w15 = findWin(x.windows, 15) || winByLabel(x.windows, "15m");
+    const trendLbl = th.trendLookbackMin ? `${th.trendLookbackMin}m` : "";
+    const trendPct = s.trendPct;
+    const trendInner =
+      trendPct == null
+        ? '<span class="num-inline-muted">—</span>'
+        : `<span class="${trendPct > 0 ? "num-inline-pos" : "num-inline-neg"}">${trendPct > 0 ? "▲" : "▼"} ${fmtPct(trendPct)}</span> <span class="num-inline-muted">/ ${trendLbl}</span>`;
+
+    // Living heatmap: тинт строки по доминирующему движению цены (как на бирже —
+    // вверх зелёный, вниз красный), интенсивность по |move|. Не зависит от
+    // fade-тиров, поэтому карточка «дышит» даже когда сигналов нет.
+    let domMove = 0;
+    for (const w of x.windows) {
+      if (w.spikePct != null && Math.abs(w.spikePct) > Math.abs(domMove))
+        domMove = w.spikePct;
+    }
+    const moveAbs = Math.abs(domMove);
+    const heatLvl =
+      moveAbs >= 1.5
+        ? "strong"
+        : moveAbs >= 0.6
+          ? "mid"
+          : moveAbs >= 0.1
+            ? "weak"
+            : "";
+    const heatCls = heatLvl
+      ? `${domMove > 0 ? "row-up" : "row-down"} row-heat-${heatLvl}`
+      : "";
+
+    const isOpen = s.isActive || isActiveCoin(s.coin);
+    const rowCls = ["hm-main", isOpen ? "is-active" : "", heatCls]
+      .filter(Boolean)
+      .join(" ");
+
+    // Активная монета: вместо бесполезного «поз.» — согласие движа со стороной
+    // позиции. Это единственный exit-сигнал, которого нет в Active Position:
+    // «движ ещё за меня (✓)» vs «развернулся против (✗)». P&L/стоп — там и в
+    // под-строке (2026-06-13).
+    let alignChip = "";
+    if (isOpen) {
+      const pos = getActivePos(s.coin);
+      const side = (pos?.side || "").toUpperCase();
+      const letter = side === "LONG" ? "L" : side === "SHORT" ? "S" : "?";
+      let mark, kind, tip;
+      if (!side || moveAbs < 0.05) {
+        mark = "·";
+        kind = "flat";
+        tip = "движения почти нет — нейтрально";
+      } else {
+        const aligned = side === "SHORT" ? domMove < 0 : domMove > 0;
+        mark = aligned ? "✓" : "✗";
+        kind = aligned ? "ok" : "bad";
+        tip = aligned
+          ? `${side}: движ идёт в твою сторону — позиция в работе`
+          : `${side}: движ развернулся ПРОТИВ — следи за выходом`;
       }
-      const moveAbs = Math.abs(domMove);
-      const heatLvl =
-        moveAbs >= 1.5
-          ? "strong"
-          : moveAbs >= 0.6
-            ? "mid"
-            : moveAbs >= 0.1
-              ? "weak"
-              : "";
-      const heatCls = heatLvl
-        ? `${domMove > 0 ? "row-up" : "row-down"} row-heat-${heatLvl}`
-        : "";
+      alignChip = `<span class="hm-align hm-align-${kind}" title="${tip}">${letter}&nbsp;${mark}</span>`;
+    }
 
-      const isOpen = s.isActive || isActiveCoin(s.coin);
-      const rowCls = [isOpen ? "is-active" : "", heatCls]
-        .filter(Boolean)
-        .join(" ");
+    // Биржевая flash-вспышка: цена выросла с прошлого рендера → зелёный,
+    // упала → красный. Цена-ячейка пересоздаётся при смене html → анимация
+    // играет заново на новом DOM-узле.
+    const prevPx = _hmPrevPrices.get(s.coin);
+    let flashCls = "";
+    if (prevPx != null && s.price != null && s.price !== prevPx) {
+      flashCls = s.price > prevPx ? "hm-flash-up" : "hm-flash-down";
+    }
+    if (s.price != null) _hmPrevPrices.set(s.coin, s.price);
 
-      // Биржевая flash-вспышка: цена выросла с прошлого рендера → зелёный,
-      // упала → красный. Анимация играет один раз на новом DOM-узле.
-      const prevPx = _hmPrevPrices.get(s.coin);
-      let flashCls = "";
-      if (prevPx != null && s.price != null && s.price !== prevPx) {
-        flashCls = s.price > prevPx ? "hm-flash-up" : "hm-flash-down";
-      }
-      if (s.price != null) _hmPrevPrices.set(s.coin, s.price);
+    const winDefs = [
+      [w2, "2m"],
+      [w5, "5m"],
+      [w15, "15m"],
+    ];
+    const cells = winDefs
+      .map(([w, lbl]) => {
+        // У открытой монеты momentum-ячейки НЕ гасим — для позиции это и есть
+        // exit-сигнал «движ ещё жив или выдыхается».
+        const [inner, cls] = pctCellTiered(w);
+        const klass = ["hm-window", "r", cls].filter(Boolean).join(" ");
+        return `<td class="${klass}" data-w="${lbl}">${inner}</td>`;
+      })
+      .join("");
 
-      const winDefs = [
-        [w2, "2m"],
-        [w5, "5m"],
-        [w15, "15m"],
-      ];
-      const cells = winDefs
-        .map(([w, lbl]) => {
-          // У открытой монеты momentum-ячейки НЕ гасим — для позиции это и есть
-          // exit-сигнал «движ ещё жив или выдыхается», единственное чего нет в
-          // панели Active Position. Раньше гасили 2m/5m, но без него строка
-          // активной монеты теряла весь смысл (2026-06-13).
-          const [inner, cls] = pctCellTiered(w);
-          const klass = ["hm-window", "r", cls].filter(Boolean).join(" ");
-          return `<td class="${klass}" data-w="${lbl}">${inner}</td>`;
-        })
-        .join("");
-
-      // Accel: |w2| vs линейная экстраполяция w5 (×0.4). Ratio ≥1.2 = ускорение
-      // (не фейди), ≤0.6 = выдыхается (хороший момент), знаки разные = разворот.
-      // accelKind/accelRatio выносим наружу — нужны для Setup-вердикта ниже.
-      let accelInner = '<span class="num-inline-muted">—</span>';
-      let accelCellCls = "";
-      let accelKind = null; // 'up' | 'down' | 'flat' | 'rev' | null
-      let accelRatio = null;
-      if (w2 && w5 && w2.spikePct != null && w5.spikePct != null) {
-        const a = w2.spikePct,
-          b = w5.spikePct;
-        if (Math.abs(b) < 0.05) {
-          accelInner = '<span class="num-inline-muted">→</span>';
+    // Accel: |w2| vs линейная экстраполяция w5 (×0.4). Ratio ≥1.2 = ускорение
+    // (не фейди), ≤0.6 = выдыхается (хороший момент), знаки разные = разворот.
+    let accelInner = '<span class="num-inline-muted">—</span>';
+    let accelCellCls = "";
+    let accelKind = null; // 'up' | 'down' | 'flat' | 'rev' | null
+    if (w2 && w5 && w2.spikePct != null && w5.spikePct != null) {
+      const a = w2.spikePct,
+        b = w5.spikePct;
+      if (Math.abs(b) < 0.05) {
+        accelInner = '<span class="num-inline-muted">→</span>';
+        accelKind = "flat";
+      } else if (a > 0 !== b > 0 && Math.abs(a) > 0.2) {
+        accelInner = '<span style="color:var(--accent)">↻ rev</span>';
+        accelKind = "rev";
+      } else {
+        const expected = b * 0.4;
+        const ratio = expected !== 0 ? Math.abs(a) / Math.abs(expected) : 0;
+        if (ratio >= 1.2) {
+          accelInner = `<span style="color:var(--red)">▲ ${ratio.toFixed(1)}×</span>`;
+          accelCellCls = "num-neg-weak";
+          accelKind = "up";
+        } else if (ratio <= 0.6) {
+          accelInner = `<span style="color:var(--green)">▼ ${ratio.toFixed(1)}×</span>`;
+          accelCellCls = "num-pos-weak";
+          accelKind = "down";
+        } else {
+          accelInner = `<span class="num-inline-muted">→ ${ratio.toFixed(1)}×</span>`;
           accelKind = "flat";
-        } else if (a > 0 !== b > 0 && Math.abs(a) > 0.2) {
-          accelInner = '<span style="color:var(--accent)">↻ rev</span>';
-          accelKind = "rev";
-        } else {
-          const expected = b * 0.4;
-          const ratio = expected !== 0 ? Math.abs(a) / Math.abs(expected) : 0;
-          accelRatio = ratio;
-          if (ratio >= 1.2) {
-            accelInner = `<span style="color:var(--red)">▲ ${ratio.toFixed(1)}×</span>`;
-            accelCellCls = "num-neg-weak";
-            accelKind = "up";
-          } else if (ratio <= 0.6) {
-            accelInner = `<span style="color:var(--green)">▼ ${ratio.toFixed(1)}×</span>`;
-            accelCellCls = "num-pos-weak";
-            accelKind = "down";
-          } else {
-            accelInner = `<span class="num-inline-muted">→ ${ratio.toFixed(1)}×</span>`;
-            accelKind = "flat";
-          }
         }
       }
+    }
 
-      // Vol×: серверный multiplier (5min recent / avg 5min over hour).
-      let volInner = '<span class="num-inline-muted">…</span>';
-      let volCellCls = "";
-      let volKind = null; // 'high' | 'mid' | 'normal' | 'thin' | null
-      if (typeof s.volMult === "number" && isFinite(s.volMult)) {
-        const v = s.volMult;
-        let color = "var(--text-muted)";
-        if (v >= 2) {
-          color = "var(--red)";
-          volCellCls = "num-neg-weak";
-          volKind = "high";
-        } else if (v >= 1.3) {
-          color = "var(--orange, #f59e0b)";
-          volKind = "mid";
-        } else if (v <= 0.5) {
-          color = "var(--green)";
-          volCellCls = "num-pos-weak";
-          volKind = "thin";
-        } else {
-          volKind = "normal";
-        }
-        volInner = `<span style="color:${color}">${v.toFixed(1)}×</span>`;
-      } else if (s.volMult === null) {
-        volInner = '<span class="num-inline-muted">—</span>';
+    // Vol×: серверный multiplier (5min recent / avg 5min over hour).
+    let volInner = '<span class="num-inline-muted">…</span>';
+    let volKind = null; // 'high' | 'mid' | 'normal' | 'thin' | null
+    if (typeof s.volMult === "number" && isFinite(s.volMult)) {
+      const v = s.volMult;
+      let color = "var(--text-muted)";
+      if (v >= 2) {
+        color = "var(--red)";
+        volKind = "high";
+      } else if (v >= 1.3) {
+        color = "var(--orange, #f59e0b)";
+        volKind = "mid";
+      } else if (v <= 0.5) {
+        color = "var(--green)";
+        volKind = "thin";
+      } else {
+        volKind = "normal";
       }
+      volInner = `<span style="color:${color}">${v.toFixed(1)}×</span>`;
+    } else if (s.volMult === null) {
+      volInner = '<span class="num-inline-muted">—</span>';
+    }
 
-      // Setup: ОДИН сетап + причина. Режим выбирает OI (trend/fade), сила по
-      // взвешенному ходу окон с подтверждением accel/vol.
-      const setup = computeMomentum(x.windows, accelKind, volKind, x.s);
-      const entry = hmEntryBadge(x.windows, setup.side, setup.score, setup.mode);
+    // Setup: ОДИН сетап + причина. Режим выбирает OI (trend/fade), сила по
+    // взвешенному ходу окон с подтверждением accel/vol.
+    const setup = computeMomentum(x.windows, accelKind, volKind, x.s);
+    const entry = hmEntryBadge(x.windows, setup.side, setup.score, setup.mode);
 
-      // OI delta 5m — нейтральная раскраска: OI сам по себе не хорош/плох,
-      // его смысл зависит от направления цены (режим выбирает Setup-вердикт).
-      let oiInner = '<span class="num-inline-muted">—</span>';
-      const oiCellCls = "";
-      if (typeof s.oiDelta5m === "number" && isFinite(s.oiDelta5m)) {
-        const v = s.oiDelta5m;
-        const arrow = v > 0 ? "▲" : "▼";
-        if (Math.abs(v) >= 3) {
-          oiInner = `<span style="color:var(--accent);font-weight:600">${arrow} ${fmtPct(v)}</span>`;
-        } else if (Math.abs(v) >= 1) {
-          oiInner = `<span style="color:var(--text-muted)">${arrow} ${fmtPct(v)}</span>`;
-        } else {
-          oiInner = `<span class="num-inline-muted">${fmtPct(v)}</span>`;
-        }
+    // OI delta 5m — нейтральная раскраска: OI сам по себе не хорош/плох.
+    let oiInner = '<span class="num-inline-muted">—</span>';
+    if (typeof s.oiDelta5m === "number" && isFinite(s.oiDelta5m)) {
+      const v = s.oiDelta5m;
+      const arrow = v > 0 ? "▲" : "▼";
+      if (Math.abs(v) >= 3) {
+        oiInner = `<span style="color:var(--accent);font-weight:600">${arrow} ${fmtPct(v)}</span>`;
+      } else if (Math.abs(v) >= 1) {
+        oiInner = `<span style="color:var(--text-muted)">${arrow} ${fmtPct(v)}</span>`;
+      } else {
+        oiInner = `<span class="num-inline-muted">${fmtPct(v)}</span>`;
       }
+    }
 
-      // У открытой монеты Setup-вердикт гасим — вход уже сделан, действие в подсказке.
-      const setupCell = isOpen
-        ? `<td class="hm-setup c" data-w="Setup"><span class="num-inline-muted">·</span></td>`
-        : `<td class="hm-setup c ${setup.cls}" data-w="Setup" title="${setup.title}">${setup.label}</td>`;
-      const mainRow = `<tr class="${rowCls}">
-        <td>${isOpen ? "📍" : idx + 1}</td>
-        <td><span class="signals-price">#${escapeHtml(s.coin)}</span>${isOpen ? '<span class="hm-active-badge">поз.</span>' : ""}</td>
-        ${setupCell}
-        <td class="hm-entry hm-entry-${entry.state}" data-w="Вход" title="${entry.title}"><span class="hm-entry-icon">${entry.icon}</span></td>
-        <td class="hm-price-cell r ${flashCls}"><span class="signals-price">${fmtPrice(s.price)}</span></td>
-        ${cells}
-        <td class="r ${accelCellCls}" data-w="Acc">${accelInner}</td>
-        <td class="r ${oiCellCls}" data-w="OI">${oiInner}</td>
-        <td class="r" data-w="Trend">${trendInner}</td>
-      </tr>`;
-      // У открытой монеты под основной строкой — статус-строка с действиями
-      // бота (стоп/BE/трейл/пик/ликв), без дубля % и P&L (см. Active Position).
-      // Если бот ничего не делает — под-строки нет, метка живёт на самой строке.
-      return isOpen ? mainRow + hmPosHintRow(s.coin) : mainRow;
-    })
-    .join("");
+    // У открытой монеты Setup-вердикт гасим — вход уже сделан, действие в подсказке.
+    const setupCell = isOpen
+      ? `<td class="hm-setup c" data-w="Setup"><span class="num-inline-muted">·</span></td>`
+      : `<td class="hm-setup c ${setup.cls}" data-w="Setup" title="${setup.title}">${setup.label}</td>`;
+
+    const rowHtml = `
+      <td>${isOpen ? "📍" : idx + 1}</td>
+      <td><span class="signals-price">#${escapeHtml(s.coin)}</span>${alignChip}</td>
+      ${setupCell}
+      <td class="hm-entry hm-entry-${entry.state}" data-w="Вход" title="${entry.title}"><span class="hm-entry-icon">${entry.icon}</span></td>
+      <td class="hm-price-cell r ${flashCls}"><span class="signals-price">${fmtPrice(s.price)}</span></td>
+      ${cells}
+      <td class="r ${accelCellCls}" data-w="Acc">${accelInner}</td>
+      <td class="r" data-w="OI">${oiInner}</td>
+      <td class="r" data-w="Trend">${trendInner}</td>`;
+
+    items.push({ key: `m:${s.coin}`, cls: rowCls, html: rowHtml });
+
+    // Под-строка статуса открытой позиции (стоп/BE/трейл/пик/ликв). Если бот
+    // ничего не делает — hmPosHintInner вернёт "" и под-строки не будет.
+    if (isOpen) {
+      const posInner = hmPosHintInner(s.coin);
+      if (posInner)
+        items.push({ key: `pos:${s.coin}`, cls: "hm-pos-row", html: posInner });
+    }
+  });
+
+  reconcileRows(tbody, items);
+}
+
+// ── keyed-реконсилер с FLIP-анимациями ──
+// items: [{key, cls, html}] в желаемом порядке. Узлы <tr> переживают тики
+// (по data-hmkey), поэтому смену порядка можно проиграть как плавный сдвиг.
+function reconcileRows(tbody, items) {
+  const reduceMotion =
+    window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Живые (не уходящие) строки по ключу.
+  const live = new Map();
+  for (const el of Array.from(tbody.children)) {
+    const k = el.dataset.hmkey;
+    if (k && !el.classList.contains("hm-leaving")) live.set(k, el);
+  }
+  const desired = new Set(items.map((i) => i.key));
+
+  // FIRST: позиции выживших строк ДО перестановки (для инверсии FLIP).
+  const firstTop = new Map();
+  if (!reduceMotion)
+    for (const [k, el] of live)
+      firstTop.set(k, el.getBoundingClientRect().top);
+
+  // EXIT: строки, которых больше нет в желаемом наборе — гасим и удаляем.
+  for (const [k, el] of live) {
+    if (desired.has(k)) continue;
+    if (reduceMotion) {
+      el.remove();
+      continue;
+    }
+    el.classList.add("hm-leaving");
+    el.dataset.hmkey = ""; // снять с учёта, чтобы не матчился новой строкой
+    const done = () => el.remove();
+    el.addEventListener("animationend", done, { once: true });
+    setTimeout(done, 600); // подстраховка, если animationend не придёт
+  }
+
+  // BUILD/UPDATE + расстановка в нужном порядке.
+  const ordered = [];
+  let anchor = null;
+  for (const item of items) {
+    let el = live.get(item.key);
+    let entering = false;
+    if (!el) {
+      el = document.createElement("tr");
+      el.dataset.hmkey = item.key;
+      entering = true;
+    }
+    if (el.__hmHtml !== item.html) {
+      el.innerHTML = item.html;
+      el.__hmHtml = item.html;
+    }
+    const cls = entering ? item.cls : `${item.cls}`;
+    if (el.className !== cls) el.className = cls;
+    // Вставляем на нужное место (не трогаем DOM, если уже там — без лишних reflow).
+    if (anchor == null) {
+      if (tbody.firstElementChild !== el) tbody.insertBefore(el, tbody.firstChild);
+    } else if (anchor.nextElementSibling !== el) {
+      anchor.after(el);
+    }
+    anchor = el;
+    ordered.push({ el, key: item.key, entering });
+  }
+
+  if (reduceMotion) return;
+
+  // LAST + INVERT + PLAY.
+  for (const { el, key, entering } of ordered) {
+    if (entering) {
+      el.classList.add("hm-enter");
+      el.addEventListener(
+        "animationend",
+        () => el.classList.remove("hm-enter"),
+        { once: true },
+      );
+      continue;
+    }
+    const prev = firstTop.get(key);
+    if (prev == null) continue;
+    const now = el.getBoundingClientRect().top;
+    const dy = prev - now;
+    if (Math.abs(dy) < 1) continue;
+    el.style.transition = "none";
+    el.style.transform = `translateY(${dy}px)`;
+    requestAnimationFrame(() => {
+      el.style.transition = "transform .42s cubic-bezier(.22,.61,.36,1)";
+      el.style.transform = "";
+    });
+    el.addEventListener(
+      "transitionend",
+      () => {
+        el.style.transition = "";
+        el.style.transform = "";
+      },
+      { once: true },
+    );
+  }
 }
