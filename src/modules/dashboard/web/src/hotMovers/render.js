@@ -93,7 +93,7 @@ export function renderHotMovers(payload, fmtTime) {
 
   if (!enriched.length) {
     tbody.innerHTML =
-      '<tr><td colspan="11" class="empty-state">Тихо — нет монет с движением</td></tr>';
+      '<tr><td colspan="11" class="empty-state">Quiet — no coins moving right now</td></tr>';
     return;
   }
 
