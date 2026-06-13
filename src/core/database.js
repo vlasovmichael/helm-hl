@@ -624,7 +624,8 @@ export function getHistorySince(sinceMs) {
 
 /**
  * Stats для конкретной стратегии/режима — для dashboard карточки.
- * Возвращает n, sumNet, avgNet, worstNet, bestNet, winRate, lastClosedAt.
+ * Возвращает n, sumNet, avgNet, worstNet, bestNet, winRate, lastClosedAt,
+ * а также wins/losses/avgWin/avgLoss (для payoff = avgWin/|avgLoss|).
  */
 export function getStrategyStats(strategyId, mode) {
   const row = getDb()
@@ -636,6 +637,9 @@ export function getStrategyStats(strategyId, mode) {
         COALESCE(MIN(realized_pnl - fee_paid), 0)  AS worst_net,
         COALESCE(MAX(realized_pnl - fee_paid), 0)  AS best_net,
         SUM(CASE WHEN (realized_pnl - fee_paid) > 0 THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN (realized_pnl - fee_paid) <= 0 THEN 1 ELSE 0 END) AS losses,
+        COALESCE(AVG(CASE WHEN (realized_pnl - fee_paid) > 0  THEN (realized_pnl - fee_paid) END), 0) AS avg_win,
+        COALESCE(AVG(CASE WHEN (realized_pnl - fee_paid) <= 0 THEN (realized_pnl - fee_paid) END), 0) AS avg_loss,
         MAX(closed_at)                             AS last_closed_at
       FROM history
       WHERE strategy_id = ? AND mode = ?
@@ -647,9 +651,32 @@ export function getStrategyStats(strategyId, mode) {
     avgNet:       row.avg_net,
     worstNet:     row.worst_net,
     bestNet:      row.best_net,
+    wins:         row.wins,
+    losses:       row.losses,
+    avgWin:       row.avg_win,
+    avgLoss:      row.avg_loss,
     winRate:      row.n > 0 ? row.wins / row.n : 0,
     lastClosedAt: row.last_closed_at,
   };
+}
+
+/**
+ * Упорядоченная по времени серия net-P&L закрытых сделок стратегии/режима.
+ * Для спарклайна equity и расчёта max drawdown в обзорной таблице стратегий.
+ * @returns {number[]} net P&L каждой сделки, старые → новые
+ */
+export function getStrategyNetSeries(strategyId, mode, limit = 100) {
+  const rows = getDb()
+    .prepare(`
+      SELECT (realized_pnl - fee_paid) AS net
+      FROM history
+      WHERE strategy_id = ? AND mode = ?
+      ORDER BY closed_at DESC
+      LIMIT ?
+    `)
+    .all(strategyId, mode, limit);
+  // вернули DESC (новые первыми) → разворачиваем в хронологический порядок
+  return rows.reverse().map((r) => r.net);
 }
 
 /**

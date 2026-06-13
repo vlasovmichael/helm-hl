@@ -299,97 +299,44 @@
         </div>
       </section>
 
-      <!-- 06.5 / Candy Girl — SIGNAL-ONLY радар (1h EMA-тренд + 5m pullback-reclaim) -->
-      <!-- ⚠️ НЕ стратегия: радар сетапов для РУЧНОЙ торговли. План: memory/candy_girl_idea.md.
-           Никогда не торгует — только лента находок + TG-алерты. Скрыт когда CANDY_GIRL_ENABLED=false. -->
-      <section class="card" id="sec-candygirl" style="display: none">
+      <!-- 06.5 / Strategies — единый обзор всех стратегий (реестр-driven) -->
+      <!-- Одна большая таблица: строка = стратегия. Live (prod-сделки) / Paper
+           (накопление в shadow-слоте) / Radar / Off / Planned (место под будущие).
+           Данные — из WS status-payload (msg.data.strategies). renderStrategies(). -->
+      <section class="card" id="sec-strategies">
         <div class="card-header">
           <div
             class="card-title"
             data-num="06.5"
-            title="Candy Girl: радар сетапов «1h EMA-тренд + откат к 5m EMA20 + reclaim» (сигналы для РУЧНОЙ торговли) + PAPER shadow-слот (compound-песочница, бот тестирует те же сетапы виртуально)."
+            title="Все стратегии в одном месте. Live торгует реальными деньгами, Paper копит статистику в shadow-слоте (отдельно от прода), Radar только сигналит, Planned — зарезервированное место под будущие стратегии."
           >
-            Candy Girl — Radar + Paper
+            Strategies
           </div>
-          <div class="time-ranges">
-            <span class="status-pill">RADAR</span>
-            <span
-              id="candygirl-card-equity"
-              class="status-pill"
-              style="display: none"
-              title="Paper shadow-слот: виртуальный equity (compound). PROD-сделок нет."
-            ></span>
-            <span
-              id="candygirl-acc"
-              class="status-pill"
-              style="display: none"
-              title="Точность: TP раньше SL по 5m-свечам. Timeout не учитывается в %."
-            ></span>
-            <span
-              id="candygirl-hb"
-              class="status-pill"
-              style="display: none"
-            ></span>
-          </div>
+          <div class="time-ranges" id="strategies-summary"></div>
         </div>
-        <div class="cb-grid">
-          <div class="cb-section cb-section-full">
-            <div class="cb-section-title">
-              Recent setups — 4h+1h тренд + 5m откат-reclaim
-            </div>
-            <div class="signals-table-wrap">
-              <table class="signals-table">
-                <thead>
-                  <tr>
-                    <th title="Направление сделки">Dir</th>
-                    <th>Coin</th>
-                    <th title="Цена в момент сигнала">Price</th>
-                    <th title="Точка входа (5m reclaim close)">Entry</th>
-                    <th title="Стоп-лосс — под/над свингом отката">SL</th>
-                    <th title="Тейк-профит — R:R к стопу">TP</th>
-                    <th title="Reward:Risk">R:R</th>
-                    <th title="Старший тренд 4h (confluence-фильтр)">4h</th>
-                    <th title="Возраст сигнала">Age</th>
-                  </tr>
-                </thead>
-                <tbody id="cg-signals-tbody">
-                  <tr>
-                    <td colspan="9" class="empty-state">no setups yet</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <!-- Активная paper позиция shadow-слота (если есть) -->
-          <div
-            class="cb-section cb-section-full"
-            id="cg-active-section"
-            style="display: none"
-          >
-            <div class="cb-section-title">Active paper position</div>
-            <div id="cg-active-body"></div>
-          </div>
-          <!-- Paper trades history -->
-          <div class="cb-section cb-section-full">
-            <div class="cb-section-title">
-              Paper trades history
-              <span
-                id="cg-stats-inline"
-                style="opacity: 0.75; font-weight: normal; margin-left: 8px"
-              ></span>
-            </div>
-            <div id="cg-history-body">
-              <div class="empty-state">no closed trades yet</div>
-            </div>
-          </div>
-          <div class="cb-section cb-section-full">
-            <div class="cb-section-title" style="opacity: 0.7">
-              Detector status
-            </div>
-            <div id="cg-heartbeat" style="font-size: 11px; opacity: 0.85">
-              —
-            </div>
-          </div>
+        <div class="strat-table-wrap">
+          <table class="strat-table" id="strategies-table">
+            <thead>
+              <tr>
+                <th class="strat-col-name">Strategy</th>
+                <th title="Режим работы">Status</th>
+                <th title="Открытая позиция (slot / paper-slot)">Position</th>
+                <th class="num" title="Виртуальный equity compound-песочницы (paper)">Equity</th>
+                <th class="num" title="Число закрытых сделок">Trades</th>
+                <th class="num" title="Доля прибыльных">Win%</th>
+                <th class="num" title="Ожидание на сделку (avg net)">Exp</th>
+                <th class="num" title="Payoff = avgWin / |avgLoss|. ≥2 = здоровый профиль">Payoff</th>
+                <th class="num" title="Макс. просадка по кривой net-P&L">Max DD</th>
+                <th class="num" title="Net P&L сегодня">Today</th>
+                <th class="num" title="Net P&L за 7 дней">7d</th>
+                <th class="num" title="Net P&L за всё время">All</th>
+                <th class="strat-col-spark" title="Кривая накопленного P&L">Trend</th>
+              </tr>
+            </thead>
+            <tbody id="strategies-tbody">
+              <tr><td colspan="13" class="empty-state">loading…</td></tr>
+            </tbody>
+          </table>
         </div>
       </section>
 

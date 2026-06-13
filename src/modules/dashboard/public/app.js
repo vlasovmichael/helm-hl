@@ -136,6 +136,7 @@ function initWebSocket() {
         renderChillBoyCard(msg.data.chillBoy);
         renderCandyGirl(msg.data.candyGirl);
         renderFaderCard(msg.data.fader);
+        renderStrategies(msg.data.strategies);
         // Hot Movers — из WS (≤2с) вместо 10с-поллинга; HTTP /api/signals
         // в tick() остаётся фолбэком, если WS отвалится.
         if (msg.data.hotMovers?.signals) {
@@ -2923,6 +2924,214 @@ function renderChillBoySignals(signals) {
     acc.setAttribute("data-badge-text", `${d} ${top.coin} · ${fmtAge(top.ts)}`);
   }
 }
+
+// ── Strategies — единый обзор всех стратегий (реестр-driven таблица) ─────────
+const _stratExpanded = new Set(); // id'шники развёрнутых строк (переживают re-render)
+
+const STRAT_STATUS = {
+  live:    { label: "LIVE",    cls: "strat-live"    },
+  paper:   { label: "PAPER",   cls: "strat-paper"   },
+  radar:   { label: "RADAR",   cls: "strat-radar"   },
+  off:     { label: "OFF",     cls: "strat-off"     },
+  planned: { label: "PLANNED", cls: "strat-planned" },
+};
+
+function stratAge(ts) {
+  if (!Number.isFinite(ts)) return "—";
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 48) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+
+// Мини-спарклайн кумулятивного P&L из серии net-сделок → inline SVG.
+function stratSparkline(series) {
+  if (!Array.isArray(series) || series.length < 2) return "";
+  let cum = 0;
+  const pts = series.map((n) => (cum += n));
+  const min = Math.min(0, ...pts);
+  const max = Math.max(0, ...pts);
+  const range = max - min || 1;
+  const w = 84, h = 22;
+  const step = w / (pts.length - 1);
+  const coords = pts.map((p, i) => {
+    const x = (i * step).toFixed(1);
+    const y = (h - ((p - min) / range) * h).toFixed(1);
+    return `${x},${y}`;
+  });
+  const up = pts[pts.length - 1] >= 0;
+  const color = up ? "var(--green, #3fb950)" : "var(--red, #f85149)";
+  return (
+    `<svg class="strat-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">` +
+    `<polyline points="${coords.join(" ")}" fill="none" stroke="${color}" stroke-width="1.5"/>` +
+    `</svg>`
+  );
+}
+
+function stratPnlCell(v) {
+  if (!Number.isFinite(v) || v === 0) return `<td class="num strat-dim">${v === 0 ? "$0" : "—"}</td>`;
+  const cls = v > 0 ? "strat-pos" : "strat-neg";
+  return `<td class="num ${cls}">${fmtMoney(v)}</td>`;
+}
+
+function stratDetail(s) {
+  const parts = [];
+  // Последние paper/real-сделки
+  const trades = Array.isArray(s.recentTrades) ? s.recentTrades : [];
+  if (trades.length) {
+    const rows = trades
+      .map((t) => {
+        const net = (t.realized_pnl || 0) - (t.fee_paid || 0);
+        const cls = net > 0 ? "strat-pos" : net < 0 ? "strat-neg" : "strat-dim";
+        const side = (t.side || "").toUpperCase();
+        return (
+          `<div class="strat-trade"><span class="strat-trade-coin">${escapeHtml(t.coin)}</span>` +
+          `<span class="strat-trade-side">${side}</span>` +
+          `<span class="${cls}">${fmtMoney(net)}</span>` +
+          `<span class="strat-dim">${escapeHtml(t.reason || "")}</span>` +
+          `<span class="strat-dim">${stratAge(t.closed_at)} ago</span></div>`
+        );
+      })
+      .join("");
+    parts.push(`<div class="strat-detail-block"><div class="strat-detail-h">Recent trades</div>${rows}</div>`);
+  }
+  // Сигналы радара (Candy Girl / Chill Boy)
+  const sigs = Array.isArray(s.signals) ? s.signals : [];
+  if (sigs.length) {
+    const rows = sigs
+      .map((sig) => {
+        const dir = (sig.direction || "").toUpperCase();
+        const arrow = dir === "LONG" ? "▲" : dir === "SHORT" ? "▼" : "•";
+        return (
+          `<div class="strat-trade"><span class="strat-trade-coin">${escapeHtml(sig.coin || "")}</span>` +
+          `<span class="strat-trade-side">${arrow} ${dir}</span>` +
+          `<span class="strat-dim">${fmtPrice(sig.price)}</span>` +
+          `<span class="strat-dim">${stratAge(sig.ts || sig.at || sig.time)} ago</span></div>`
+        );
+      })
+      .join("");
+    parts.push(`<div class="strat-detail-block"><div class="strat-detail-h">Recent signals</div>${rows}</div>`);
+  }
+  if (!parts.length) parts.push(`<div class="empty-state">no trades or signals yet</div>`);
+  return `<div class="strat-detail">${parts.join("")}</div>`;
+}
+
+function stratRowHtml(s, planned) {
+  const st = STRAT_STATUS[s.status] || STRAT_STATUS.off;
+  const dim = planned || s.status === "off" ? " strat-row-dim" : "";
+
+  if (planned) {
+    return (
+      `<tr class="strat-row strat-row-planned${dim}" data-id="${s.id}">` +
+      `<td class="strat-col-name"><div class="strat-name">${escapeHtml(s.label)}</div>` +
+      `<div class="strat-kind">${escapeHtml(s.kind || "")}</div></td>` +
+      `<td><span class="strat-pill ${st.cls}">${st.label}</span></td>` +
+      `<td colspan="11" class="strat-dim">— зарезервировано под будущую стратегию —</td></tr>`
+    );
+  }
+
+  const e = s.edge || {};
+  const pos = s.active
+    ? `<span class="strat-pos-coin">${escapeHtml(s.active.coin)}</span> ` +
+      `<span class="strat-${s.active.side === "LONG" ? "pos" : "neg"}">${s.active.side}</span>` +
+      ` <span class="strat-dim">${s.active.heldHours.toFixed(1)}h</span>`
+    : '<span class="strat-dim">—</span>';
+
+  const equity = s.virtual
+    ? `${fmtUsd(s.virtual.equity)} <span class="${s.virtual.pnlTotal >= 0 ? "strat-pos" : "strat-neg"} strat-eq-pct">${(s.virtual.pnlPct * 100).toFixed(1)}%</span>`
+    : '<span class="strat-dim">—</span>';
+
+  const trades = e.trades ?? 0;
+  const winPct = trades > 0 ? `${(e.winRate * 100).toFixed(0)}%` : "—";
+  const exp = Number.isFinite(e.expectancy)
+    ? `<span class="${e.expectancy >= 0 ? "strat-pos" : "strat-neg"}">${fmtMoney(e.expectancy)}</span>`
+    : "—";
+  const payoff = Number.isFinite(e.payoff)
+    ? `<span class="${e.payoff >= 2 ? "strat-pos" : e.payoff < 1 ? "strat-neg" : ""}">${e.payoff.toFixed(2)}</span>`
+    : "—";
+  const maxdd = Number.isFinite(e.maxDd) && e.maxDd < 0
+    ? `<span class="strat-neg">${fmtMoney(e.maxDd)}</span>`
+    : '<span class="strat-dim">—</span>';
+
+  const expanded = _stratExpanded.has(s.id);
+  const main =
+    `<tr class="strat-row${dim}${expanded ? " is-expanded" : ""}" data-id="${s.id}" tabindex="0">` +
+    `<td class="strat-col-name"><div class="strat-name">${escapeHtml(s.label)} ` +
+    `<span class="strat-caret">${expanded ? "▾" : "▸"}</span></div>` +
+    `<div class="strat-kind">${escapeHtml(s.kind || "")}</div></td>` +
+    `<td><span class="strat-pill ${st.cls}">${st.label}</span></td>` +
+    `<td>${pos}</td>` +
+    `<td class="num">${equity}</td>` +
+    `<td class="num">${trades}</td>` +
+    `<td class="num">${winPct}</td>` +
+    `<td class="num">${exp}</td>` +
+    `<td class="num">${payoff}</td>` +
+    `<td class="num">${maxdd}</td>` +
+    stratPnlCell(s.pnl?.day) +
+    stratPnlCell(s.pnl?.week) +
+    stratPnlCell(s.pnl?.all) +
+    `<td class="strat-col-spark">${stratSparkline(s.spark)}</td></tr>`;
+
+  const detail = expanded
+    ? `<tr class="strat-detail-row" data-detail="${s.id}"><td colspan="13">${stratDetail(s)}</td></tr>`
+    : "";
+  return main + detail;
+}
+
+function renderStrategies(payload) {
+  const tbody = document.getElementById("strategies-tbody");
+  if (!tbody || !payload) return;
+
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
+  const planned = Array.isArray(payload.planned) ? payload.planned : [];
+
+  // Сортировка: live → paper → radar → off; внутри по |all P&L|.
+  const order = { live: 0, paper: 1, radar: 2, off: 3 };
+  const sorted = [...rows].sort((a, b) => {
+    const so = (order[a.status] ?? 9) - (order[b.status] ?? 9);
+    if (so !== 0) return so;
+    return Math.abs(b.pnl?.all || 0) - Math.abs(a.pnl?.all || 0);
+  });
+
+  tbody.innerHTML =
+    sorted.map((s) => stratRowHtml(s, false)).join("") +
+    planned.map((s) => stratRowHtml(s, true)).join("");
+
+  // Сводка в шапке: сколько live / paper / radar.
+  const summary = document.getElementById("strategies-summary");
+  if (summary) {
+    const count = (st) => rows.filter((r) => r.status === st).length;
+    summary.innerHTML =
+      `<span class="strat-pill strat-live">${count("live")} live</span>` +
+      `<span class="strat-pill strat-paper">${count("paper")} paper</span>` +
+      `<span class="strat-pill strat-radar">${count("radar")} radar</span>`;
+  }
+
+  // Клик по строке → разворот detail (делегирование навешиваем один раз).
+  if (!tbody._stratBound) {
+    tbody._stratBound = true;
+    const toggle = (id) => {
+      if (!id) return;
+      if (_stratExpanded.has(id)) _stratExpanded.delete(id);
+      else _stratExpanded.add(id);
+      renderStrategies(_lastStrategies);
+    };
+    tbody.addEventListener("click", (ev) => {
+      const row = ev.target.closest(".strat-row:not(.strat-row-planned)");
+      if (row) toggle(row.getAttribute("data-id"));
+    });
+    tbody.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Enter" && ev.key !== " ") return;
+      const row = ev.target.closest(".strat-row:not(.strat-row-planned)");
+      if (row) { ev.preventDefault(); toggle(row.getAttribute("data-id")); }
+    });
+  }
+  _lastStrategies = payload;
+}
+let _lastStrategies = null;
 
 // ── Candy Girl — signal-only радар (1h EMA-тренд + 5m pullback-reclaim) ──────
 function renderCandyGirl(cg) {

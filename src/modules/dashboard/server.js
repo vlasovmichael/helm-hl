@@ -48,6 +48,7 @@ import { getCandyGirlVirtualEquitySnapshot } from "../candyGirlVirtualEquity.js"
 import { getFaderHeartbeat, getFaderMfeMae } from "../strategistFader.js";
 import { getFaderVirtualSnapshot } from "../faderVirtualEquity.js";
 import { getVirtualEquitySnapshot } from "../chillBoyVirtualEquity.js";
+import { buildStrategiesPayload } from "./strategiesView.js";
 import { getNearMisses } from "../nearMisses.js";
 import { enrichSwingSignals, findCandyConfirm } from "../setupScannerSwing.js";
 import { evaluateExitContext, parseAccountPositions, analyzeSlTp } from "../setupScannerAlerts.js";
@@ -679,6 +680,8 @@ async function getStatusData() {
         }
       : null,
     manualPositions,
+    // Единый обзор всех стратегий (реестр-driven) для таблицы на /strategies.
+    strategies: buildStrategiesPayload(),
     // Chill Boy — только отображение состояния детектора. На реальные prod-сделки
     // не влияет: показываем когда стратегия включена (paper или prod).
     chillBoy: config.trading.chillBoyEnabled
