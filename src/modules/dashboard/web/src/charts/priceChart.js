@@ -269,16 +269,6 @@ function hidePriceChartLoader() {
   const el = document.getElementById("price-chart-loader");
   if (el) el.classList.add("hidden");
 }
-// Performance (equity chart) — оверлей #chart-loader.
-function showChartLoader() {
-  const el = document.getElementById("chart-loader");
-  if (el) el.classList.remove("hidden");
-}
-function hideChartLoader() {
-  const el = document.getElementById("chart-loader");
-  if (el) el.classList.add("hidden");
-}
-
 async function fetchAndRenderIdleCandles(coin) {
   if (!coin) return;
   try {

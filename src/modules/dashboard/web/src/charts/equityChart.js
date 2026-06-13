@@ -9,7 +9,17 @@ let equityChart = null;
 let equitySeries = null;
 let equityData = []; // [{time, value}]
 
-// Данные истории equity приходят из main.js (загрузка /api/history).
+// Оверлей-лоадер графика Performance (#chart-loader).
+export function showChartLoader() {
+  const el = document.getElementById("chart-loader");
+  if (el) el.classList.remove("hidden");
+}
+export function hideChartLoader() {
+  const el = document.getElementById("chart-loader");
+  if (el) el.classList.add("hidden");
+}
+
+// Данные истории equity приходят из tick() страницы (загрузка /api/history).
 export function setEquityData(data) {
   equityData = data;
   if (equitySeries) equitySeries.setData(data);
