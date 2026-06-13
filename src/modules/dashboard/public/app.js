@@ -3113,31 +3113,73 @@ function stratPnlCell(v) {
   return `<td class="num ${cls}">${fmtMoney(v)}</td>`;
 }
 
+const STRAT_TRADES_PER_PAGE = 10;
+const _stratTrades = new Map(); // id → { mode, page, total, trades, loading, error }
+
+// Ленивая подгрузка страницы сделок стратегии (REST, не WS). Двойной рендер:
+// сразу показываем loading, после ответа — данные.
+async function loadStratTrades(id, mode, page) {
+  _stratTrades.set(id, { ...(_stratTrades.get(id) || {}), mode, page, loading: true });
+  renderStrategies(_lastStrategies, true);
+  try {
+    const r = await fetchJson(
+      `/api/strategy-trades?strategy=${encodeURIComponent(id)}&mode=${mode}` +
+        `&limit=${STRAT_TRADES_PER_PAGE}&offset=${page * STRAT_TRADES_PER_PAGE}`,
+    );
+    _stratTrades.set(id, { mode, page, total: r.total ?? 0, trades: r.trades ?? [], loading: false });
+  } catch {
+    _stratTrades.set(id, { mode, page, total: 0, trades: [], loading: false, error: true });
+  }
+  renderStrategies(_lastStrategies, true);
+}
+
+function stratTradesBlock(s) {
+  const tc = _stratTrades.get(s.id);
+  if (!tc || tc.loading) {
+    return `<div class="strat-detail-block strat-detail-full"><div class="strat-detail-h">Recent trades</div><div class="strat-dim">loading…</div></div>`;
+  }
+  if (tc.error) {
+    return `<div class="strat-detail-block strat-detail-full"><div class="strat-detail-h">Recent trades</div><div class="strat-neg">не удалось загрузить</div></div>`;
+  }
+  const trades = tc.trades || [];
+  if (!trades.length) {
+    return `<div class="strat-detail-block strat-detail-full"><div class="strat-detail-h">Recent trades</div><div class="empty-state">no closed trades yet</div></div>`;
+  }
+  const rows = trades
+    .map((t) => {
+      const net = (t.realized_pnl || 0) - (t.fee_paid || 0);
+      const cls = net > 0 ? "strat-pos" : net < 0 ? "strat-neg" : "strat-dim";
+      const side = (t.side || "").toUpperCase();
+      const held = t.hold_seconds ? stratHold(t.hold_seconds) : "";
+      return (
+        `<tr><td class="strat-dt-coin">${escapeHtml(t.coin)}</td>` +
+        `<td class="strat-dt-side">${side}</td>` +
+        `<td class="num ${cls}">${fmtMoney(net)}</td>` +
+        `<td class="strat-dt-reason strat-dim">${escapeHtml(t.reason || "")}</td>` +
+        `<td class="num strat-dim">${held}</td>` +
+        `<td class="num strat-dim strat-dt-age">${stratAge(t.closed_at)} ago</td></tr>`
+      );
+    })
+    .join("");
+  const pages = Math.max(1, Math.ceil(tc.total / STRAT_TRADES_PER_PAGE));
+  const pager =
+    pages > 1
+      ? `<div class="strat-pager">` +
+        `<button class="strat-pg-btn" data-id="${s.id}" data-mode="${tc.mode}" data-page="${tc.page - 1}" ${tc.page <= 0 ? "disabled" : ""}>‹</button>` +
+        `<span class="strat-pg-info">${tc.page + 1}/${pages} · ${tc.total} trades</span>` +
+        `<button class="strat-pg-btn" data-id="${s.id}" data-mode="${tc.mode}" data-page="${tc.page + 1}" ${tc.page >= pages - 1 ? "disabled" : ""}>›</button>` +
+        `</div>`
+      : `<div class="strat-pg-info">${tc.total} trade${tc.total === 1 ? "" : "s"}</div>`;
+  return (
+    `<div class="strat-detail-block strat-detail-full">` +
+    `<div class="strat-detail-h">Recent trades</div>` +
+    `<table class="strat-detail-table"><tbody>${rows}</tbody></table>${pager}</div>`
+  );
+}
+
 function stratDetail(s) {
   const parts = [];
-  // Последние paper/real-сделки — выровненной таблицей.
-  const trades = Array.isArray(s.recentTrades) ? s.recentTrades : [];
-  if (trades.length) {
-    const rows = trades
-      .map((t) => {
-        const net = (t.realized_pnl || 0) - (t.fee_paid || 0);
-        const cls = net > 0 ? "strat-pos" : net < 0 ? "strat-neg" : "strat-dim";
-        const side = (t.side || "").toUpperCase();
-        return (
-          `<tr><td class="strat-dt-coin">${escapeHtml(t.coin)}</td>` +
-          `<td class="strat-dt-side">${side}</td>` +
-          `<td class="num ${cls}">${fmtMoney(net)}</td>` +
-          `<td class="strat-dt-reason strat-dim">${escapeHtml(t.reason || "")}</td>` +
-          `<td class="num strat-dim strat-dt-age">${stratAge(t.closed_at)} ago</td></tr>`
-        );
-      })
-      .join("");
-    parts.push(
-      `<div class="strat-detail-block"><div class="strat-detail-h">Recent trades</div>` +
-        `<table class="strat-detail-table"><tbody>${rows}</tbody></table></div>`,
-    );
-  }
-  // Сигналы радара (Candy Girl / Chill Boy) — тоже таблицей.
+  // Сигналы радара (Candy Girl / Chill Boy) — из WS-payload (in-memory, лёгкие).
   const sigs = Array.isArray(s.signals) ? s.signals : [];
   if (sigs.length) {
     const rows = sigs
@@ -3149,7 +3191,6 @@ function stratDetail(s) {
           `<tr><td class="strat-dt-coin">${escapeHtml(sig.coin || "")}</td>` +
           `<td class="strat-dt-side ${dcls}">${arrow} ${dir}</td>` +
           `<td class="num strat-dim">${fmtPrice(sig.price)}</td>` +
-          `<td></td>` +
           `<td class="num strat-dim strat-dt-age">${stratAge(sig.ts || sig.at || sig.time)} ago</td></tr>`
         );
       })
@@ -3159,8 +3200,17 @@ function stratDetail(s) {
         `<table class="strat-detail-table"><tbody>${rows}</tbody></table></div>`,
     );
   }
-  if (!parts.length) parts.push(`<div class="empty-state">no trades or signals yet</div>`);
+  // Сделки — постранично через REST-кэш.
+  parts.push(stratTradesBlock(s));
   return `<div class="strat-detail">${parts.join("")}</div>`;
+}
+
+// Длительность удержания в человекочитаемом виде.
+function stratHold(sec) {
+  if (!Number.isFinite(sec) || sec <= 0) return "";
+  if (sec < 3600) return `${Math.round(sec / 60)}m`;
+  if (sec < 86400) return `${(sec / 3600).toFixed(1)}h`;
+  return `${(sec / 86400).toFixed(1)}d`;
 }
 
 function stratRowHtml(s, planned) {
@@ -3268,11 +3318,24 @@ function renderStrategies(payload, force) {
     tbody._stratBound = true;
     const toggle = (id) => {
       if (!id) return;
-      if (_stratExpanded.has(id)) _stratExpanded.delete(id);
-      else _stratExpanded.add(id);
+      if (_stratExpanded.has(id)) {
+        _stratExpanded.delete(id);
+      } else {
+        _stratExpanded.add(id);
+        // При разворачивании — подгружаем свежую страницу сделок (REST).
+        const row = (_lastStrategies?.rows || []).find((r) => r.id === id);
+        loadStratTrades(id, row?.statMode || "PAPER", 0);
+      }
       renderStrategies(_lastStrategies, true);
     };
     tbody.addEventListener("click", (ev) => {
+      // Кнопки пагинации внутри detail — обрабатываем ДО toggle.
+      const pg = ev.target.closest(".strat-pg-btn");
+      if (pg && !pg.disabled) {
+        ev.stopPropagation();
+        loadStratTrades(pg.dataset.id, pg.dataset.mode, parseInt(pg.dataset.page, 10) || 0);
+        return;
+      }
       const row = ev.target.closest(".strat-row:not(.strat-row-planned)");
       if (row) toggle(row.getAttribute("data-id"));
     });

@@ -3581,15 +3581,25 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   border-bottom: 1px solid var(--border-muted);
 }
 /* Detail: Recent trades / signals — выровненная таблица. */
+.strat-detail-full {
+  flex: 1 1 100%; /* таблица сделок — на всю ширину detail */
+}
 .strat-detail-table {
   border-collapse: collapse;
   font-family: var(--font-mono);
-  font-size: 11.5px;
-  width: auto;
+  font-size: 12.5px;
+  width: 100%;
+}
+.strat-detail-full .strat-detail-table {
+  width: 100%;
 }
 .strat-detail-table td {
-  padding: 2px 12px 2px 0;
+  padding: 4px 14px 4px 0;
   white-space: nowrap;
+  border-bottom: 1px solid var(--border-muted);
+}
+.strat-detail-table tr:last-child td {
+  border-bottom: none;
 }
 .strat-detail-table td.num {
   text-align: right;
@@ -3601,12 +3611,47 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   color: var(--text-muted);
 }
 .strat-dt-reason {
-  max-width: 220px;
+  max-width: 280px;
   overflow: hidden;
   text-overflow: ellipsis;
+  width: 99%; /* забирает свободную ширину, прижимая числовые колонки вправо */
 }
 .strat-dt-age {
   color: var(--text-muted);
+}
+/* Пагинация сделок. */
+.strat-pager {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+.strat-pg-btn {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card-bg-elev);
+  color: var(--text-primary, inherit);
+  cursor: pointer;
+}
+.strat-pg-btn:hover:not(:disabled) {
+  background: var(--card-bg-hover);
+  border-color: var(--border-strong);
+}
+.strat-pg-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.strat-pg-info {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+.strat-pager .strat-pg-info {
+  margin-top: 0;
 }
 
 /* Hot Movers под-строка подсказок (colspan) на мобильной card-вёрстке (≤720px):

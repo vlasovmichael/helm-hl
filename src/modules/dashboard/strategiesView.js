@@ -17,7 +17,6 @@ import {
   getStrategyStats,
   getStrategyPnlSince,
   getStrategyNetSeries,
-  getRecentStrategyTrades,
   getActivePosition,
   getActivePaperPositionByStrategy,
 } from '../../core/database.js';
@@ -214,7 +213,8 @@ function buildRow(entry) {
     virtual:  vsnap ? { equity: vsnap.equity, pnlTotal: vsnap.pnlTotal, pnlPct: vsnap.pnlPct } : null,
     spark:    series,                         // raw net-серия (фронт делает cumsum)
     lastSignalAt,
-    recentTrades: getRecentStrategyTrades(entry.id, statMode, 8),
+    // recentTrades больше не шлём в WS — detail подгружает их постранично через
+    // /api/strategy-trades (легче payload + пагинация при многих сделках).
     signals:  Array.isArray(signals) ? signals.slice(0, 8) : null,
   };
 }

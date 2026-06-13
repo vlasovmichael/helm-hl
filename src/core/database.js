@@ -716,6 +716,28 @@ export function getRecentStrategyTrades(strategyId, mode, limit = 10) {
 }
 
 /**
+ * Страница сделок стратегии/режима (для пагинации в detail таблицы Strategies).
+ * @returns {{ total:number, trades:Array<Object> }}
+ */
+export function getStrategyTradesPage(strategyId, mode, limit = 10, offset = 0) {
+  const db = getDb();
+  const total = db
+    .prepare('SELECT COUNT(*) AS n FROM history WHERE strategy_id = ? AND mode = ?')
+    .get(strategyId, mode).n;
+  const trades = db
+    .prepare(`
+      SELECT coin, entry_time, closed_at, realized_pnl, fee_paid, reason,
+             entry_price, close_price, side, hold_seconds
+      FROM history
+      WHERE strategy_id = ? AND mode = ?
+      ORDER BY closed_at DESC
+      LIMIT ? OFFSET ?
+    `)
+    .all(strategyId, mode, limit, offset);
+  return { total, trades };
+}
+
+/**
  * Возвращает заархивированные сделки, закрытые после указанного timestamp.
  * Читает данные из data/history_archive.json.
  *
