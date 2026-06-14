@@ -85,9 +85,10 @@ const REGISTRY = [
   {
     id: 'candy_girl',
     label: 'Candy Girl',
-    kind: config.trading.candyGirlLongOnly !== false
-      ? 'radar · pullback-reclaim · long-only'
-      : 'radar · pullback-reclaim',
+    kind: 'radar · pullback-reclaim',
+    // long-only → таблица делит Candy на две строки: LONG (paper, торгуется) и
+    // SHORT (radar-only, исторические сделки видны как доказательство слабости).
+    splitLongOnly: () => config.trading.candyGirlLongOnly !== false,
     radar: true,
     virtual: () => safe(getCandyGirlVirtualEquitySnapshot),
     signals: () => safe(getCandyGirlSignals) || [],
@@ -167,49 +168,64 @@ function activeSummary(pos) {
   };
 }
 
-/** Одна строка реестра → строка таблицы. */
-function buildRow(entry) {
+/**
+ * Одна строка реестра → строка таблицы.
+ * @param {Object} entry — запись REGISTRY
+ * @param {'long'|'short'|null} [side] — если задан, строка по одной стороне
+ *   (split). uid/label/kind получают суффикс, stats/pnl/signals фильтруются.
+ * @param {{status?:string}} [overrides] — переопределение статуса для split-строки.
+ */
+function buildRow(entry, side = null, overrides = {}) {
   const r = entry.resolve();
-  const statMode = r.status === 'live' ? 'PRODUCTION' : 'PAPER';
+  const status = overrides.status || r.status;
+  const statMode = status === 'live' ? 'PRODUCTION' : 'PAPER';
 
-  const stats  = getStrategyStats(entry.id, statMode);
-  const series = getStrategyNetSeries(entry.id, statMode, 60);
+  const stats  = getStrategyStats(entry.id, statMode, side);
+  const series = getStrategyNetSeries(entry.id, statMode, 60, side);
   const edge   = computeEdge(stats, series);
 
   // Активная поза: live → реальный слот (если владелец совпал), иначе paper-слот.
+  // Для split-строки показываем позу только если её сторона совпадает.
   let pos = null;
-  if (r.status === 'live') {
+  if (status === 'live') {
     const slot = getActivePosition();
     if (slot && (slot.strategy_id || 'carry') === entry.id) pos = slot;
-  } else if (r.status === 'paper' || r.status === 'radar') {
+  } else if (status === 'paper' || status === 'radar') {
     pos = getActivePaperPositionByStrategy(entry.id);
   }
+  if (pos && side && (pos.side || 'short').toLowerCase() !== side) pos = null;
 
-  // Возраст последнего сигнала (radar) — из последнего сигнала, иначе last trade.
+  // Сигналы радара (если есть) — для split фильтруем по стороне.
   let lastSignalAt = stats.lastClosedAt || null;
   let signals = null;
   if (entry.signals) {
     signals = entry.signals();
+    if (side && Array.isArray(signals)) {
+      signals = signals.filter((s) => (s.direction || '').toLowerCase() === side);
+    }
     if (Array.isArray(signals) && signals.length) {
       const ts = signals[0].ts || signals[0].at || signals[0].time;
       if (Number.isFinite(ts)) lastSignalAt = Math.max(lastSignalAt || 0, ts);
     }
   }
 
-  const vsnap = entry.virtual ? entry.virtual() : null;
+  // virtual (compound-песочница) — только на основной/long строке, не на short.
+  const vsnap = entry.virtual && side !== 'short' ? entry.virtual() : null;
 
   return {
-    id:       entry.id,
-    label:    entry.label,
-    kind:     entry.kind,
-    status:   r.status,                       // live | paper | radar | off
+    id:       entry.id,                        // базовый strategy_id (для REST)
+    side,                                      // null | 'long' | 'short'
+    uid:      side ? `${entry.id}:${side}` : entry.id,  // идентичность строки в UI
+    label:    side ? `${entry.label} ${side.toUpperCase()}` : entry.label,
+    kind:     side ? `${entry.kind} · ${side}${status === 'radar' ? '-only' : ''}` : entry.kind,
+    status,                                    // live | paper | radar | off
     radar:    !!(r.radar || entry.radar),
     statMode,
     active:   activeSummary(pos),
     edge,
     pnl: {
-      day:  getStrategyPnlSince(entry.id, statMode, startOfTodayMs()).net,
-      week: getStrategyPnlSince(entry.id, statMode, Date.now() - 7 * DAY_MS).net,
+      day:  getStrategyPnlSince(entry.id, statMode, startOfTodayMs(), side).net,
+      week: getStrategyPnlSince(entry.id, statMode, Date.now() - 7 * DAY_MS, side).net,
       all:  edge.sumNet,
     },
     virtual:  vsnap ? { equity: vsnap.equity, pnlTotal: vsnap.pnlTotal, pnlPct: vsnap.pnlPct } : null,
@@ -226,13 +242,22 @@ function buildRow(entry) {
  * Кладётся в WS status-payload как `strategies`.
  */
 export function buildStrategiesPayload() {
-  const rows = REGISTRY.map((e) => {
+  const rows = [];
+  for (const e of REGISTRY) {
     try {
-      return buildRow(e);
+      // Split-стратегия (Candy long-only): LONG = торгуемый paper-слот,
+      // SHORT = radar-only (исторические сделки видны, но слот их не открывает).
+      if (typeof e.splitLongOnly === 'function' && e.splitLongOnly()) {
+        const base = e.resolve().status;        // 'paper' | 'off'
+        rows.push(buildRow(e, 'long',  { status: base }));
+        rows.push(buildRow(e, 'short', { status: base === 'off' ? 'off' : 'radar' }));
+      } else {
+        rows.push(buildRow(e));
+      }
     } catch {
-      return { id: e.id, label: e.label, kind: e.kind, status: 'off', edge: null, error: true };
+      rows.push({ id: e.id, uid: e.id, label: e.label, kind: e.kind, status: 'off', edge: null, error: true });
     }
-  });
-  const planned = PLANNED.map((p) => ({ ...p, status: 'planned' }));
+  }
+  const planned = PLANNED.map((p) => ({ ...p, uid: p.id, status: 'planned' }));
   return { rows, planned, generatedAt: Date.now() };
 }

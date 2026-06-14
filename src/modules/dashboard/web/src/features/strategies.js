@@ -63,27 +63,29 @@ function stratPnlCell(v) {
 }
 
 const STRAT_TRADES_PER_PAGE = 10;
-const _stratTrades = new Map(); // id → { mode, page, total, trades, loading, error }
+const _stratTrades = new Map(); // uid → { strategy, side, mode, page, total, trades, loading, error }
 
 // Ленивая подгрузка страницы сделок стратегии (REST, не WS). Двойной рендер:
-// сразу показываем loading, после ответа — данные.
-async function loadStratTrades(id, mode, page) {
-  _stratTrades.set(id, { ...(_stratTrades.get(id) || {}), mode, page, loading: true });
+// сразу показываем loading, после ответа — данные. uid = идентичность строки
+// (для split: candy_girl:long), strategy = базовый id, side = фильтр стороны.
+async function loadStratTrades(uid, strategy, side, mode, page) {
+  _stratTrades.set(uid, { ...(_stratTrades.get(uid) || {}), strategy, side, mode, page, loading: true });
   renderStrategies(_lastStrategies, true);
   try {
     const r = await fetchJson(
-      `/api/strategy-trades?strategy=${encodeURIComponent(id)}&mode=${mode}` +
+      `/api/strategy-trades?strategy=${encodeURIComponent(strategy)}&mode=${mode}` +
+        (side ? `&side=${side}` : "") +
         `&limit=${STRAT_TRADES_PER_PAGE}&offset=${page * STRAT_TRADES_PER_PAGE}`,
     );
-    _stratTrades.set(id, { mode, page, total: r.total ?? 0, trades: r.trades ?? [], loading: false });
+    _stratTrades.set(uid, { strategy, side, mode, page, total: r.total ?? 0, trades: r.trades ?? [], loading: false });
   } catch {
-    _stratTrades.set(id, { mode, page, total: 0, trades: [], loading: false, error: true });
+    _stratTrades.set(uid, { strategy, side, mode, page, total: 0, trades: [], loading: false, error: true });
   }
   renderStrategies(_lastStrategies, true);
 }
 
 function stratTradesBlock(s) {
-  const tc = _stratTrades.get(s.id);
+  const tc = _stratTrades.get(s.uid);
   if (!tc || tc.loading) {
     return `<div class="strat-detail-block strat-detail-full"><div class="strat-detail-h">Recent trades</div><div class="strat-dim">loading…</div></div>`;
   }
@@ -114,9 +116,9 @@ function stratTradesBlock(s) {
   const pager =
     pages > 1
       ? `<div class="strat-pager">` +
-        `<button class="strat-pg-btn" data-id="${s.id}" data-mode="${tc.mode}" data-page="${tc.page - 1}" ${tc.page <= 0 ? "disabled" : ""}>‹</button>` +
+        `<button class="strat-pg-btn" data-uid="${s.uid}" data-strategy="${s.id}" data-side="${s.side || ""}" data-mode="${tc.mode}" data-page="${tc.page - 1}" ${tc.page <= 0 ? "disabled" : ""}>‹</button>` +
         `<span class="strat-pg-info">${tc.page + 1}/${pages} · ${tc.total} trades</span>` +
-        `<button class="strat-pg-btn" data-id="${s.id}" data-mode="${tc.mode}" data-page="${tc.page + 1}" ${tc.page >= pages - 1 ? "disabled" : ""}>›</button>` +
+        `<button class="strat-pg-btn" data-uid="${s.uid}" data-strategy="${s.id}" data-side="${s.side || ""}" data-mode="${tc.mode}" data-page="${tc.page + 1}" ${tc.page >= pages - 1 ? "disabled" : ""}>›</button>` +
         `</div>`
       : `<div class="strat-pg-info">${tc.total} trade${tc.total === 1 ? "" : "s"}</div>`;
   return (
@@ -168,7 +170,7 @@ function stratRowHtml(s, planned) {
 
   if (planned) {
     return (
-      `<tr class="strat-row strat-row-planned${dim}" data-id="${s.id}">` +
+      `<tr class="strat-row strat-row-planned${dim}" data-id="${s.uid}">` +
       `<td class="strat-col-name"><div class="strat-name">${escapeHtml(s.label)}</div>` +
       `<div class="strat-kind">${escapeHtml(s.kind || "")}</div></td>` +
       `<td><span class="strat-pill ${st.cls}">${st.label}</span></td>` +
@@ -199,9 +201,9 @@ function stratRowHtml(s, planned) {
     ? `<span class="strat-neg">${fmtMoney(e.maxDd)}</span>`
     : '<span class="strat-dim">—</span>';
 
-  const expanded = _stratExpanded.has(s.id);
+  const expanded = _stratExpanded.has(s.uid);
   const main =
-    `<tr class="strat-row${dim}${expanded ? " is-expanded" : ""}" data-id="${s.id}" tabindex="0">` +
+    `<tr class="strat-row${dim}${expanded ? " is-expanded" : ""}" data-id="${s.uid}" tabindex="0">` +
     `<td class="strat-col-name"><div class="strat-name">${escapeHtml(s.label)} ` +
     `<span class="strat-caret">${expanded ? "▾" : "▸"}</span></div>` +
     `<div class="strat-kind">${escapeHtml(s.kind || "")}</div></td>` +
@@ -219,7 +221,7 @@ function stratRowHtml(s, planned) {
     `<td class="strat-col-spark">${stratSparkline(s.spark)}</td></tr>`;
 
   const detail = expanded
-    ? `<tr class="strat-detail-row" data-detail="${s.id}"><td colspan="13">${stratDetail(s)}</td></tr>`
+    ? `<tr class="strat-detail-row" data-detail="${s.uid}"><td colspan="13">${stratDetail(s)}</td></tr>`
     : "";
   return main + detail;
 }
@@ -265,15 +267,15 @@ export function renderStrategies(payload, force) {
   // Клик по строке → разворот detail (делегирование навешиваем один раз).
   if (!tbody._stratBound) {
     tbody._stratBound = true;
-    const toggle = (id) => {
-      if (!id) return;
-      if (_stratExpanded.has(id)) {
-        _stratExpanded.delete(id);
+    const toggle = (uid) => {
+      if (!uid) return;
+      if (_stratExpanded.has(uid)) {
+        _stratExpanded.delete(uid);
       } else {
-        _stratExpanded.add(id);
+        _stratExpanded.add(uid);
         // При разворачивании — подгружаем свежую страницу сделок (REST).
-        const row = (_lastStrategies?.rows || []).find((r) => r.id === id);
-        loadStratTrades(id, row?.statMode || "PAPER", 0);
+        const row = (_lastStrategies?.rows || []).find((r) => (r.uid || r.id) === uid);
+        loadStratTrades(uid, row?.id || uid, row?.side || null, row?.statMode || "PAPER", 0);
       }
       renderStrategies(_lastStrategies, true);
     };
@@ -282,7 +284,10 @@ export function renderStrategies(payload, force) {
       const pg = ev.target.closest(".strat-pg-btn");
       if (pg && !pg.disabled) {
         ev.stopPropagation();
-        loadStratTrades(pg.dataset.id, pg.dataset.mode, parseInt(pg.dataset.page, 10) || 0);
+        loadStratTrades(
+          pg.dataset.uid, pg.dataset.strategy, pg.dataset.side || null,
+          pg.dataset.mode, parseInt(pg.dataset.page, 10) || 0,
+        );
         return;
       }
       const row = ev.target.closest(".strat-row:not(.strat-row-planned)");

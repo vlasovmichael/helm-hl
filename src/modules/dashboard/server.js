@@ -986,12 +986,13 @@ export function startDashboard() {
   app.get("/api/strategy-trades", (req, res) => {
     const strategy = String(req.query.strategy || "");
     const mode = req.query.mode === "PRODUCTION" ? "PRODUCTION" : "PAPER";
+    const side = req.query.side === "long" || req.query.side === "short" ? req.query.side : null;
     const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 10));
     const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
     if (!strategy) return res.status(400).json({ error: "strategy required" });
     try {
-      const { total, trades } = getStrategyTradesPage(strategy, mode, limit, offset);
-      res.json({ strategy, mode, limit, offset, total, trades });
+      const { total, trades } = getStrategyTradesPage(strategy, mode, limit, offset, side);
+      res.json({ strategy, side, mode, limit, offset, total, trades });
     } catch (err) {
       logger.warn(`[Dashboard] /api/strategy-trades failed: ${err.message}`);
       res.status(500).json({ error: true });

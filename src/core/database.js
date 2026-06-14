@@ -627,7 +627,9 @@ export function getHistorySince(sinceMs) {
  * Возвращает n, sumNet, avgNet, worstNet, bestNet, winRate, lastClosedAt,
  * а также wins/losses/avgWin/avgLoss (для payoff = avgWin/|avgLoss|).
  */
-export function getStrategyStats(strategyId, mode) {
+export function getStrategyStats(strategyId, mode, side = null) {
+  const sideClause = side ? ' AND side = ?' : '';
+  const args = side ? [strategyId, mode, side] : [strategyId, mode];
   const row = getDb()
     .prepare(`
       SELECT
@@ -642,9 +644,9 @@ export function getStrategyStats(strategyId, mode) {
         COALESCE(AVG(CASE WHEN (realized_pnl - fee_paid) <= 0 THEN (realized_pnl - fee_paid) END), 0) AS avg_loss,
         MAX(closed_at)                             AS last_closed_at
       FROM history
-      WHERE strategy_id = ? AND mode = ?
+      WHERE strategy_id = ? AND mode = ?${sideClause}
     `)
-    .get(strategyId, mode);
+    .get(...args);
   return {
     n:            row.n,
     sumNet:       row.sum_net,
@@ -665,16 +667,18 @@ export function getStrategyStats(strategyId, mode) {
  * Для спарклайна equity и расчёта max drawdown в обзорной таблице стратегий.
  * @returns {number[]} net P&L каждой сделки, старые → новые
  */
-export function getStrategyNetSeries(strategyId, mode, limit = 100) {
+export function getStrategyNetSeries(strategyId, mode, limit = 100, side = null) {
+  const sideClause = side ? ' AND side = ?' : '';
+  const args = side ? [strategyId, mode, side, limit] : [strategyId, mode, limit];
   const rows = getDb()
     .prepare(`
       SELECT (realized_pnl - fee_paid) AS net
       FROM history
-      WHERE strategy_id = ? AND mode = ?
+      WHERE strategy_id = ? AND mode = ?${sideClause}
       ORDER BY closed_at DESC
       LIMIT ?
     `)
-    .all(strategyId, mode, limit);
+    .all(...args);
   // вернули DESC (новые первыми) → разворачиваем в хронологический порядок
   return rows.reverse().map((r) => r.net);
 }
@@ -685,16 +689,18 @@ export function getStrategyNetSeries(strategyId, mode, limit = 100) {
  *
  * @returns {{ n: number, net: number }}
  */
-export function getStrategyPnlSince(strategyId, mode, sinceMs) {
+export function getStrategyPnlSince(strategyId, mode, sinceMs, side = null) {
+  const sideClause = side ? ' AND side = ?' : '';
+  const args = side ? [strategyId, mode, sinceMs, side] : [strategyId, mode, sinceMs];
   const row = getDb()
     .prepare(`
       SELECT
         COUNT(*)                                  AS n,
         COALESCE(SUM(realized_pnl - fee_paid), 0) AS net
       FROM history
-      WHERE strategy_id = ? AND mode = ? AND closed_at >= ?
+      WHERE strategy_id = ? AND mode = ? AND closed_at >= ?${sideClause}
     `)
-    .get(strategyId, mode, sinceMs);
+    .get(...args);
   return { n: row.n, net: row.net };
 }
 
@@ -719,21 +725,22 @@ export function getRecentStrategyTrades(strategyId, mode, limit = 10) {
  * Страница сделок стратегии/режима (для пагинации в detail таблицы Strategies).
  * @returns {{ total:number, trades:Array<Object> }}
  */
-export function getStrategyTradesPage(strategyId, mode, limit = 10, offset = 0) {
+export function getStrategyTradesPage(strategyId, mode, limit = 10, offset = 0, side = null) {
   const db = getDb();
+  const sideClause = side ? ' AND side = ?' : '';
   const total = db
-    .prepare('SELECT COUNT(*) AS n FROM history WHERE strategy_id = ? AND mode = ?')
-    .get(strategyId, mode).n;
+    .prepare(`SELECT COUNT(*) AS n FROM history WHERE strategy_id = ? AND mode = ?${sideClause}`)
+    .get(...(side ? [strategyId, mode, side] : [strategyId, mode])).n;
   const trades = db
     .prepare(`
       SELECT coin, entry_time, closed_at, realized_pnl, fee_paid, reason,
              entry_price, close_price, side, hold_seconds
       FROM history
-      WHERE strategy_id = ? AND mode = ?
+      WHERE strategy_id = ? AND mode = ?${sideClause}
       ORDER BY closed_at DESC
       LIMIT ? OFFSET ?
     `)
-    .all(strategyId, mode, limit, offset);
+    .all(...(side ? [strategyId, mode, side, limit, offset] : [strategyId, mode, limit, offset]));
   return { total, trades };
 }
 

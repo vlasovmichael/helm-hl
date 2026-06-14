@@ -21,7 +21,7 @@ export default defineConfig({
       input: {
         index: resolve(webRoot, "index.html"),
         ledger: resolve(webRoot, "ledger.html"),
-        strategies: resolve(webRoot, "strategies.html"),
+        statistics: resolve(webRoot, "statistics.html"),
         login: resolve(webRoot, "login.html"),
       },
     },
