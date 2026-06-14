@@ -196,7 +196,21 @@ async function buildMoversPayload(limit = 12) {
       return b2 - a2;
     });
 
-    const top = enriched.slice(0, limit).map((m, idx) => {
+    // Гарантируем активные монеты в выдаче. Если позиция затихла (момент упал
+    // ниже limit), монета вылетала из top → фронт синтезировал строку из одной
+    // цены и весь ряд позиции превращался в «—». Это худший момент терять данные
+    // (оператор как раз держит эту монету). Дотягиваем её сюда с полными окнами,
+    // даже если по моменту она глубоко внизу (2026-06-14).
+    const selected = enriched.slice(0, limit);
+    const selectedSet = new Set(selected.map((m) => m.coin));
+    for (const m of enriched) {
+      if (activeCoins.has(m.coin) && !selectedSet.has(m.coin)) {
+        selected.push(m);
+        selectedSet.add(m.coin);
+      }
+    }
+
+    const top = selected.map((m, idx) => {
       let signal = "NEUTRAL";
       let blocked = null;
       let sl = null;
@@ -285,7 +299,17 @@ async function buildMoversPayload(limit = 12) {
     });
 
     // Обогащаем top vol-мультипликатором (≤20 монет; кеш 30с поглощает повторы).
-    await enrichVolMult(top.slice(0, 20));
+    // + активные монеты, даже если они упали за top-20 — чтобы Vol× позиции не
+    // висел «…» в самой важной строке.
+    const toEnrich = top.slice(0, 20);
+    const enrichSet = new Set(toEnrich.map((m) => m.coin));
+    for (const m of top) {
+      if (m.isActive && !enrichSet.has(m.coin)) {
+        toEnrich.push(m);
+        enrichSet.add(m.coin);
+      }
+    }
+    await enrichVolMult(toEnrich);
 
     return {
       ts: state.latestHunterAt || 0,

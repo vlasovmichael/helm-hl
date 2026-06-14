@@ -40,6 +40,7 @@ import {
   getHunterPeakPct,
   isHunterArmed,
 } from "../strategistSniper.js";
+import { getAdoptPeakPct } from "../strategistAdopt.js";
 import { getChillBoyHeartbeat, getChillBoySignals, getTrendFollowMfeMae } from "../strategistTrendFollow.js";
 import { getCandyGirlHeartbeat, getCandyGirlSignals, getCandyGirlStats } from "../strategistCandyGirl.js";
 import { getCandyGirlVirtualEquitySnapshot } from "../candyGirlVirtualEquity.js";
@@ -265,18 +266,45 @@ function buildBotManagement(position) {
   // Hunter SHORT — стоп/тейк фиксированы от входа, трейл/BE в in-memory мапах.
   if (sid === "hunter") {
     const peakPct = getHunterPeakPct(position.id) ?? 0;
+    const beArmed =
+      config.trading.hunterBeRatchetEnabled &&
+      peakPct >= config.trading.hunterBeArmPct;
+    const trailArmed =
+      config.trading.hunterTrailEnabled &&
+      (isHunterArmed(position.id) ||
+        peakPct >= config.trading.hunterTrailArmPct);
+
+    // Живой пол: где бот РЕАЛЬНО выйдет прямо сейчас (в unrealized % от входа,
+    // плюс = прибыль). Трейл → пик−giveback; BE взведён → безубыток (floor);
+    // иначе → жёсткий −SL. Статичный «стоп −2%» врал, как только взводился
+    // храповик — оператор видел −2%, а бот уже держал безубыток (2026-06-14).
+    let floorPct, floorKind;
+    if (trailArmed) {
+      floorPct = peakPct * (1 - config.trading.hunterTrailGiveBackPct / 100);
+      floorKind = "trail";
+    } else if (beArmed) {
+      floorPct = config.trading.hunterBeFloorPct;
+      floorKind = "be";
+    } else {
+      floorPct = -HUNTER_SL_PCT;
+      floorKind = "stop";
+    }
+    // unrealized% = (entry − price)/entry·100 для шорта (зеркально для лонга).
+    // price на полу: price = entry·(1 − dir·floorPct/100), dir=+1 short / −1 long.
+    const dir = isShort ? 1 : -1;
+    const floorPrice = entry * (1 - dir * (floorPct / 100));
+
     return {
       strategy: sid,
       stopPrice: entry * (1 + (isShort ? 1 : -1) * (HUNTER_SL_PCT / 100)),
       tpPrice: entry * (1 - (isShort ? 1 : -1) * (HUNTER_TP_PCT / 100)),
       stopPct: HUNTER_SL_PCT,
       peakPct,
-      beArmed:
-        config.trading.hunterBeRatchetEnabled &&
-        peakPct >= config.trading.hunterBeArmPct,
-      trailArmed:
-        isHunterArmed(position.id) ||
-        peakPct >= config.trading.hunterTrailArmPct,
+      beArmed,
+      trailArmed,
+      floorPct, // живой пол в unrealized % (плюс = прибыль)
+      floorPrice, // цена, на которой бот закроется сейчас
+      floorKind, // 'trail' | 'be' | 'stop'
     };
   }
 
@@ -293,6 +321,52 @@ function buildBotManagement(position) {
     };
   }
   return { strategy: sid, stopPrice: null, tpPrice: null, peakPct: null, beArmed: false, trailArmed: false };
+}
+
+// То же, что buildBotManagement, но для ручного входа под adopt-нянькой.
+// Логика выхода у adopt зеркальна Hunter (трейл пик−giveback / BE-безубыток /
+// жёсткий resting-SL на бирже), пороги — из adopt-конфига. Даёт оператору тот же
+// живой пол для ручной позиции, что и для бот-сделки (2026-06-14).
+function buildAdoptManagement(adoptPos) {
+  if (!adoptPos) return null;
+  const entry = adoptPos.entry_price;
+  if (!entry) return null;
+  const isShort = (adoptPos.side || "short").toLowerCase() === "short";
+  const peakPct = getAdoptPeakPct(adoptPos.id) ?? 0;
+  const t = config.trading;
+
+  const trailArmed = peakPct >= t.adoptTrailArmPct;
+  const beArmed = peakPct >= t.adoptBeArmPct;
+
+  let floorPct, floorKind;
+  if (trailArmed) {
+    floorPct = peakPct * (1 - t.adoptTrailGiveBackPct / 100);
+    floorKind = "trail";
+  } else if (beArmed) {
+    floorPct = t.adoptBeFloorPct;
+    floorKind = "be";
+  } else if (adoptPos.sl_price != null) {
+    // Жёсткий resting-SL стоит на бирже — берём его реальный % от входа.
+    floorPct = isShort
+      ? ((entry - adoptPos.sl_price) / entry) * 100
+      : ((adoptPos.sl_price - entry) / entry) * 100;
+    floorKind = "stop";
+  } else {
+    return { strategy: "adopt", peakPct, floorPct: null, floorKind: "stop" };
+  }
+  const dir = isShort ? 1 : -1;
+  const floorPrice = entry * (1 - dir * (floorPct / 100));
+
+  return {
+    strategy: "adopt",
+    stopPrice: adoptPos.sl_price ?? null,
+    peakPct,
+    beArmed,
+    trailArmed,
+    floorPct,
+    floorPrice,
+    floorKind,
+  };
 }
 
 // HL 2026-05-23: unified-by-default. Раньше дашборд отдельно дёргал
@@ -314,9 +388,14 @@ async function getStatusData() {
   const normCoin = (c) =>
     (c ?? "").toLowerCase().replace(/^@/, "").replace(/-perp$/, "");
   const adoptedCoins = new Set();
+  const adoptByCoin = new Map(); // normCoin → adopt DB-позиция (для живого пола)
   if (config.isProduction) {
     try {
-      for (const ap of getActiveAdoptPositions()) adoptedCoins.add(normCoin(ap.coin));
+      for (const ap of getActiveAdoptPositions()) {
+        const nc = normCoin(ap.coin);
+        adoptedCoins.add(nc);
+        adoptByCoin.set(nc, ap);
+      }
     } catch {
       /* ignore */
     }
@@ -414,6 +493,8 @@ async function getStatusData() {
           currentPrice: livePrice,
           // Бот уже подхватил этот ручной вход (adopt-нянька повесила стоп+трейл)?
           adopted: adoptedCoins.has(normCoin(p.coin)),
+          // Живой пол adopt-няньки — тот же форвард, что у бот-сделки.
+          bot: buildAdoptManagement(adoptByCoin.get(normCoin(p.coin))),
         });
       }
     } catch (err) {

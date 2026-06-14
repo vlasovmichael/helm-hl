@@ -98,9 +98,8 @@
    и плохо читался при alpha-фоне. Тёмный текст на ярком teal = макс. контраст
    в обеих темах. */
 .src-adopted {
-  color: #042f2e;
-  background: #2dd4bf;
-  border-color: #2dd4bf;
+  color: var(--accent);
+  border-color: var(--accent-line);
   font-weight: 800;
 }
 .src-manual {

@@ -40,7 +40,9 @@ export function updateActiveCoinSet(activePosition, manualPositions) {
           heldHours: null, // у ручной позы нет entry_time в payload
           sizeUsd: p.sizeUsd ?? null,
           liq: p.liquidationPrice ?? null,
-          bot: null, // ручную позу ведёт adopt-нянька (стоп на бирже), не отдаём детали
+          // adopt-нянька отдаёт живой пол (стоп/BE/трейл) — тот же форвард, что
+          // у бот-сделки. Для неусыновлённых ручных позиций bot=null (2026-06-14).
+          bot: p.bot ?? null,
           adopted: !!p.adopted,
           source: "manual",
         });
@@ -81,14 +83,31 @@ export function hmPosHintInner(coin) {
   // только то, чего там нет: что бот УЖЕ сделал со стопом + близость ликв.
   // «Жив ли движ» читается по momentum-ячейкам самой строки (2026-06-13).
   const chips = [];
-  // Что делает бот: стоп / BE / трейл / пик.
+  // Что бот защищает ПРЯМО СЕЙЧАС (форвард), а не что он уже сделал. Живой пол
+  // (floorPct/floorPrice/floorKind) приходит с бэка: трейл → пик−giveback,
+  // BE → безубыток, иначе → жёсткий −SL. Плюс расстояние цены до триггера —
+  // чтобы видеть, насколько близок выход, не дублируя P&L из Active Position.
   if (bot) {
-    if (bot.stopPrice != null) {
+    const fp = bot.floorPrice ?? bot.stopPrice;
+    const kind = bot.floorKind;
+    if (bot.floorPct != null) {
+      if (kind === "trail")
+        chips.push(["good", `защита +${bot.floorPct.toFixed(2)}% (трейл)`]);
+      else if (kind === "be") chips.push(["good", "защита б/у (BE)"]);
+      else
+        chips.push([
+          "neutral",
+          `стоп ${bot.floorPct >= 0 ? "+" : ""}${bot.floorPct.toFixed(1)}%`,
+        ]);
+    } else if (bot.stopPrice != null) {
       const sp = bot.stopPct != null ? ` (−${bot.stopPct.toFixed(1)}%)` : "";
       chips.push(["neutral", `стоп @${fmtPx(bot.stopPrice)}${sp}`]);
     }
-    if (bot.beArmed) chips.push(["good", "BE взведён"]);
-    if (bot.trailArmed) chips.push(["good", "трейл активен"]);
+    // Расстояние цены до спускового крючка бота — «сколько ещё до выхода».
+    if (fp != null && now != null && now > 0) {
+      const dist = (Math.abs(now - fp) / now) * 100;
+      chips.push(["neutral", `до выхода ${dist.toFixed(2)}%`]);
+    }
     if (bot.peakPct != null && bot.peakPct > 0.1)
       chips.push(["neutral", `пик +${bot.peakPct.toFixed(2)}%`]);
   }
