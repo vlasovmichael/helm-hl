@@ -290,13 +290,17 @@ export async function orphanCheck() {
 
   // ── Adopt Mode (multi-slot, plans/adopt-mode-plan.md) ─────
   // Подхватываем ВСЕ свежие ручные позы в adopt-слоты (reduce-only стоп + ведение).
-  // Условие: слот не держит БОТ-стратегия (Hunter/carry/...). Если слот свободен
-  // ИЛИ держится только adopt-позами — продолжаем подхватывать новые ручные входы.
-  // Усыновлённые монеты перестают быть «ручными»: убираем из manual-списка и
-  // flag'ов, чтобы не словить ложное «ручные закрыты» следующим тиком.
-  const botStrategyHoldsSlot = slotPos && (slotPos.strategy_id || 'carry') !== 'adopt';
+  // Adopt НЕ зависит от того, держит ли бот-стратегия (Hunter/carry/...) свой
+  // single-slot: усыновление вешает только reduce-only защитный стоп на ТВОЮ
+  // ручную позу по ДРУГОЙ монете — экспозицию не увеличивает и за слот бота не
+  // конкурирует. Раньше здесь стоял гейт «слот свободен от бот-стратегии», из-за
+  // которого ручной вход одновременно с входом бота (бот в NIL + ты в EIGEN)
+  // молча уходил в hands-off без стопа (incident 2026-06-14). Монета, которой
+  // владеет бот (slotPos.coin), уже исключена из manualPositions через ownedCoins,
+  // так что её adopt не тронет. Усыновлённые монеты перестают быть «ручными»:
+  // убираем из manual-списка и flag'ов, чтобы не словить ложное «ручные закрыты».
   let activeManual = manualPositions;
-  if (!botStrategyHoldsSlot && config.trading.adoptEnabled) {
+  if (config.trading.adoptEnabled) {
     try {
       const adoptedCoins = await maybeAdoptManualPosition(manualPositions);
       if (adoptedCoins.length > 0) {
@@ -308,7 +312,9 @@ export async function orphanCheck() {
         }
       }
     } catch (err) {
-      logger.debug(`[Manual] adopt attempt failed: ${err.message}`);
+      // Видимый лог: раньше debug → при LOG_LEVEL=info провал adopt был невидим
+      // и диагностировался только лазаньем в БД (incident 2026-06-14).
+      logger.warn(`[Manual] adopt attempt failed: ${err.message}`);
     }
   }
 
