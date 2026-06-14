@@ -378,7 +378,7 @@ export function renderHotMovers(payload, fmtTime) {
     const loading = !payload?.ts;
     const statusHtml = loading
       ? '<span class="loader-spinner hm-status-spinner"></span><span>Loading…</span>'
-      : "<span>no directional setups — all coins in WAIT</span>";
+      : "<span>quiet market — no movers</span>";
     items.push({
       key: "ph:status",
       cls: "hm-status-row",

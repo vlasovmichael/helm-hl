@@ -758,18 +758,18 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   background: transparent;
   pointer-events: none;
 }
+/* ВАЖНО: НЕ display:flex на <td> — флекс на ячейке таблицы ломает colspan и
+   схлопывает ширину (текст обрезался в «ps ·»). Обычная ячейка + center. */
 .hm-table tbody tr.hm-status-row .hm-status-cell {
   padding: 28px 0;
   text-align: center;
   color: var(--text-muted);
   font-size: 13px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
 }
 .hm-status-spinner {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 8px;
   width: 16px;
   height: 16px;
 }

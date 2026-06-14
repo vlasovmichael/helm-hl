@@ -458,7 +458,7 @@ function renderSetupScanner(payload) {
 
   if (!sorted.length) {
     tbody.innerHTML =
-      '<tr><td colspan="8" class="empty-state">нет направленных сетапов — все монеты в WAIT</td></tr>';
+      '<tr><td colspan="8" class="empty-state">no directional setups — all coins in WAIT</td></tr>';
     return;
   }
 
