@@ -4,9 +4,17 @@ import {
   deriveOiKind,
   evaluateSetup,
   classifyChase,
+  computeBreadthFlush,
+  isFadeMutedByFlush,
 } from '../src/modules/hotMoversSetup.js';
 
 const W = (vals) => [2, 5, 15, 60].map((mins, i) => ({ mins, spikePct: vals[i] }));
+
+// Строка breadth: ход + OI 15m.
+const ROW = (priceVals, oi15) => ({ windows: W(priceVals), oiDelta15m: oi15 });
+const DOWN_FLUSH = ROW([-2, -2, -2, -2], -2); // цена↓ + OI↓
+const UP_SQUEEZE = ROW([2, 2, 2, 2], -2); // цена↑ + OI↓
+const TREND_DOWN = ROW([-2, -2, -2, -2], 2); // цена↓ + OI↑ (не делевередж)
 
 test('deriveOiKind: 15m приоритетнее 5m, пороги', () => {
   assert.equal(deriveOiKind({ oiDelta15m: 2 }), 'up');
@@ -73,4 +81,59 @@ test('classifyChase: SHORT цена уже упала = extended (фейд от�
   // side SHORT, 15m −3 → extDir = +3 → late
   const c = classifyChase(W([0, 0, -3, 0]), 'SHORT', 5);
   assert.equal(c.state, 'extended');
+});
+
+// ── Breadth-слив ──────────────────────────────────────────────────────────────
+
+test('computeBreadthFlush: <FLUSH_MIN_N монет → inactive', () => {
+  const f = computeBreadthFlush(Array(5).fill(DOWN_FLUSH));
+  assert.equal(f.active, false);
+  assert.equal(f.n, 5);
+});
+
+test('computeBreadthFlush: широкий down-слив → active dir=down', () => {
+  const rows = [...Array(6).fill(DOWN_FLUSH), TREND_DOWN]; // 6/7 ≈ 0.86 ≥ 0.6
+  const f = computeBreadthFlush(rows);
+  assert.equal(f.active, true);
+  assert.equal(f.dir, 'down');
+  assert.ok(f.share >= 0.6);
+});
+
+test('computeBreadthFlush: широкий up-сквиз → active dir=up', () => {
+  const f = computeBreadthFlush(Array(8).fill(UP_SQUEEZE));
+  assert.equal(f.active, true);
+  assert.equal(f.dir, 'up');
+});
+
+test('computeBreadthFlush: ниже порога доли → inactive', () => {
+  // 3 down-flush + 5 trend-down = down-share 3/8 < 0.6
+  const rows = [...Array(3).fill(DOWN_FLUSH), ...Array(5).fill(TREND_DOWN)];
+  const f = computeBreadthFlush(rows);
+  assert.equal(f.active, false);
+});
+
+test('isFadeMutedByFlush: fade-long против down-слива → mute', () => {
+  assert.equal(isFadeMutedByFlush('LONG', 'fade', { active: true, dir: 'down' }), true);
+  assert.equal(isFadeMutedByFlush('SHORT', 'fade', { active: true, dir: 'up' }), true);
+});
+
+test('isFadeMutedByFlush: trend и fade В СТОРОНУ слива не трогаем', () => {
+  assert.equal(isFadeMutedByFlush('SHORT', 'trend', { active: true, dir: 'down' }), false);
+  assert.equal(isFadeMutedByFlush('SHORT', 'fade', { active: true, dir: 'down' }), false);
+  assert.equal(isFadeMutedByFlush('LONG', 'fade', { active: false, dir: null }), false);
+});
+
+test('evaluateSetup: fade-long в down-сливе → mode снят, flushMuted', () => {
+  const flush = { active: true, dir: 'down' };
+  const s = evaluateSetup(W([-3, -3, -3, -3]), { oiDelta15m: -2 }, flush);
+  assert.equal(s.side, 'LONG');
+  assert.equal(s.mode, null);
+  assert.equal(s.flushMuted, true);
+  assert.ok(s.score > 3); // сила сохраняется, гаснет только actionable
+});
+
+test('evaluateSetup: тот же сетап без flush → fade long actionable', () => {
+  const s = evaluateSetup(W([-3, -3, -3, -3]), { oiDelta15m: -2 });
+  assert.equal(s.side, 'LONG');
+  assert.equal(s.mode, 'fade');
 });

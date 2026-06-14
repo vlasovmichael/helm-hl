@@ -36,6 +36,7 @@ export function renderHotMovers(payload, fmtTime) {
   if (!tbody || !meta) return;
   const signals = Array.isArray(payload?.signals) ? payload.signals : [];
   const th = payload?.thresholds || {};
+  const flush = payload?.marketFlush || null;
 
   // Сортировка: по силе momentum'а (взвешенный ход по окнам + подтверждение
   // accel/vol). Едем ПО движению — ZEC-тип грайнда всплывает наверх как LONG.
@@ -55,6 +56,7 @@ export function renderHotMovers(payload, fmtTime) {
         deriveAccelKind(w2, w5),
         deriveVolKind(s.volMult),
         s,
+        flush,
       );
       return { s, windows, maxAbs, momScore: mom.score };
     })
@@ -95,9 +97,18 @@ export function renderHotMovers(payload, fmtTime) {
   const enriched = [...activeRows, ...restRows];
 
   const activeShown = activeRows.length;
-  meta.textContent = payload?.ts
-    ? `scope ${payload.universeSize} · top ${restRows.length} by momentum${activeShown ? ` · ${activeShown} open` : ""} · updated ${fmtTime(payload.ts)}`
-    : "—";
+  if (!payload?.ts) {
+    meta.textContent = "—";
+  } else {
+    const base = `scope ${payload.universeSize} · top ${restRows.length} by momentum${activeShown ? ` · ${activeShown} open` : ""} · updated ${fmtTime(payload.ts)}`;
+    if (flush?.active) {
+      const sharePct = Math.round((flush.share || 0) * 100);
+      const word = flush.dir === "up" ? "СКВИЗ" : "СЛИВ";
+      meta.innerHTML = `<span class="hm-flush-chip" title="Синхронный делевередж лидеров движения (${sharePct}% топа OI↓) — fade против движения = лов ножа, заглушён">⚠️ ${word} ${sharePct}%</span> · ${escapeHtml(base)}`;
+    } else {
+      meta.textContent = base;
+    }
+  }
 
   if (!enriched.length) {
     tbody.innerHTML =
@@ -293,7 +304,7 @@ export function renderHotMovers(payload, fmtTime) {
 
     // Setup: ОДИН сетап + причина. Режим выбирает OI (trend/fade), сила по
     // взвешенному ходу окон с подтверждением accel/vol.
-    const setup = computeMomentum(x.windows, accelKind, volKind, x.s);
+    const setup = computeMomentum(x.windows, accelKind, volKind, x.s, flush);
     const entry = hmEntryBadge(x.windows, setup.side, setup.score, setup.mode);
 
     // OI delta 5m — нейтральная раскраска: OI сам по себе не хорош/плох.
@@ -315,11 +326,17 @@ export function renderHotMovers(payload, fmtTime) {
       ? `<td class="hm-setup c" data-w="Setup"><span class="num-inline-muted">·</span></td>`
       : `<td class="hm-setup c ${setup.cls}" data-w="Setup" title="${setup.title}">${setup.label}</td>`;
 
+    // ENTER: для открытой монеты вход неактуален — показываем «держишь» (бот
+    // нянчит), управление/выход — в под-строке ниже. Иначе таймер входа 🎯/⏳/⛔.
+    const entryCell = isOpen
+      ? `<td class="hm-entry hm-entry-held" data-w="Вход" title="в позиции — вход сделан, управление в строке ниже"><span class="hm-entry-icon">🛡️</span></td>`
+      : `<td class="hm-entry hm-entry-${entry.state}" data-w="Вход" title="${entry.title}"><span class="hm-entry-icon">${entry.icon}</span></td>`;
+
     const rowHtml = `
       <td>${isOpen ? "📍" : idx + 1}</td>
       <td><span class="signals-price">#${escapeHtml(s.coin)}</span>${alignChip}</td>
       ${setupCell}
-      <td class="hm-entry hm-entry-${entry.state}" data-w="Вход" title="${entry.title}"><span class="hm-entry-icon">${entry.icon}</span></td>
+      ${entryCell}
       <td class="hm-price-cell r ${flashCls}"><span class="signals-price">${fmtPrice(s.price)}</span></td>
       ${cells}
       <td class="r ${accelCellCls}" data-w="Acc">${accelInner}</td>

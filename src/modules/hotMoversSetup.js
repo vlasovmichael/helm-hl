@@ -26,15 +26,77 @@ export function deriveOiKind({ oiDelta15m, oiDelta5m } = {}) {
   return null;
 }
 
+// ── Breadth-детектор «слива» (риск-офф / ликвид. каскад) ──────────────────────
+// HL не даёт фид ликвидаций, поэтому каскад ловим косвенно: здоровый «выдох» —
+// локальный, а каскад/делевередж — ШИРОКИЙ (много топ-муверов синхронно льётся с
+// падающим OI). Когда доля таких ≥ порога — fade ПРОТИВ доминирующего движения
+// (поймать нож) ненадёжен, и evaluateSetup снимает с него actionable-статус.
+export const FLUSH_SHARE = parseFloat(process.env.HOT_MOVERS_FLUSH_SHARE || '0.6');
+export const FLUSH_MIN_N = parseInt(process.env.HOT_MOVERS_FLUSH_MIN_N || '6', 10);
+
+// Знак хода монеты для breadth: вес окон как в evaluateSetup (15m/60m доминируют).
+function weightedSign(windows) {
+  let weighted = 0;
+  let have = false;
+  for (const w of windows || []) {
+    if (w?.spikePct == null) continue;
+    const wt = MOM_WEIGHTS[w.mins];
+    if (wt == null) continue;
+    weighted += w.spikePct * wt;
+    have = true;
+  }
+  return have ? Math.sign(weighted) : 0;
+}
+
+/**
+ * Доля топ-муверов в синхронном делевередже (OI↓) по каждой стороне. active,
+ * когда доминирующая доля ≥ FLUSH_SHARE при ≥ FLUSH_MIN_N монетах с данными.
+ *
+ * @param {Array<{windows:Array, oiDelta5m?:number|null, oiDelta15m?:number|null}>} rows
+ * @returns {{active:boolean, dir:'down'|'up'|null, share:number, n:number}}
+ */
+export function computeBreadthFlush(rows) {
+  let n = 0;
+  let flushDown = 0; // цена↓ + OI↓
+  let squeezeUp = 0; // цена↑ + OI↓
+  for (const r of rows || []) {
+    const oiKind = deriveOiKind(r);
+    const sign = weightedSign(r?.windows);
+    if (sign === 0 || oiKind == null) continue;
+    n += 1;
+    if (oiKind !== 'down') continue;
+    if (sign < 0) flushDown += 1;
+    else if (sign > 0) squeezeUp += 1;
+  }
+  if (n < FLUSH_MIN_N) return { active: false, dir: null, share: 0, n };
+  const downShare = flushDown / n;
+  const upShare = squeezeUp / n;
+  const dir = downShare >= upShare ? 'down' : 'up';
+  const share = Math.max(downShare, upShare);
+  return { active: share >= FLUSH_SHARE, dir: share >= FLUSH_SHARE ? dir : null, share, n };
+}
+
+// Глушим ли fade-вердикт ПРОТИВ доминирующего слива (fade-long в down, fade-short
+// в up). trend-вердикты и fade В СТОРОНУ слива не трогаем.
+export function isFadeMutedByFlush(side, mode, flush) {
+  if (!flush?.active || mode !== 'fade') return false;
+  return (
+    (flush.dir === 'down' && side === 'LONG') || (flush.dir === 'up' && side === 'SHORT')
+  );
+}
+
 /**
  * Setup-вердикт по окнам цены + OI. OI решает режим: trend = по движению,
  * fade = против. Без OI — направление по движению, mode не подтверждён.
+ * Если передан flush (breadth-слив) и вердикт = fade против слива — mode
+ * снимается (режим не подтверждён), side остаётся: пилл виден, но не actionable.
  *
  * @param {Array<{mins:number, spikePct:number|null}>} windows
  * @param {{oiDelta5m?:number|null, oiDelta15m?:number|null}} oi
- * @returns {{side:'LONG'|'SHORT'|null, mode:'trend'|'fade'|null, score:number}}
+ * @param {{active:boolean, dir:'down'|'up'|null}} [flush]
+ * @returns {{side:'LONG'|'SHORT'|null, mode:'trend'|'fade'|null, score:number, flushMuted?:boolean}}
  */
-export function evaluateSetup(windows, oi) {
+export function evaluateSetup(windows, oi, flush) {
   let weighted = 0;
   let haveData = false;
   for (const w of windows || []) {
@@ -60,6 +122,9 @@ export function evaluateSetup(windows, oi) {
   } else {
     mode = null; // OI флэт / нет данных — режим не подтверждён
     side = priceUp ? 'LONG' : 'SHORT';
+  }
+  if (isFadeMutedByFlush(side, mode, flush)) {
+    return { side, mode: null, score, flushMuted: true };
   }
   return { side, mode, score };
 }
@@ -124,11 +189,12 @@ export function buildCoinFeatures(item, now, deps) {
  *
  * @returns {{fire:boolean, side:string|null, mode:string|null, score:number, chase:object}}
  */
-export function evaluateCoinAlert(item, feats, prevByCoin, minScore) {
-  const setup = evaluateSetup(feats.windows, {
-    oiDelta5m: feats.oiDelta5m,
-    oiDelta15m: feats.oiDelta15m,
-  });
+export function evaluateCoinAlert(item, feats, prevByCoin, minScore, flush) {
+  const setup = evaluateSetup(
+    feats.windows,
+    { oiDelta5m: feats.oiDelta5m, oiDelta15m: feats.oiDelta15m },
+    flush,
+  );
   const chase = classifyChase(feats.windows, setup.side, setup.score);
   const actionable = !!setup.mode && setup.score >= minScore;
   const curState = actionable ? chase.state : 'none';

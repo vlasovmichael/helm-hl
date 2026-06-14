@@ -56,7 +56,15 @@ export function deriveVolKind(volMult) {
   return "normal";
 }
 
-export function computeMomentum(windows, accelKind, volKind, signal) {
+// Глушить ли fade против синхронного слива (зеркало isFadeMutedByFlush на сервере).
+function fadeMutedByFlush(side, mode, flush) {
+  if (!flush?.active || mode !== "fade") return false;
+  return (
+    (flush.dir === "down" && side === "LONG") || (flush.dir === "up" && side === "SHORT")
+  );
+}
+
+export function computeMomentum(windows, accelKind, volKind, signal, flush) {
   let weighted = 0;
   let haveData = false;
   for (const w of windows) {
@@ -107,6 +115,14 @@ export function computeMomentum(windows, accelKind, volKind, signal) {
     mode = null;
     side = priceUp ? "LONG" : "SHORT";
     why = oiKind === "flat" ? `OI флэт (${oiStr}) — режим не подтверждён` : "OI: нет данных";
+  }
+
+  // Breadth-слив: fade против синхронного делевереджа = лов ножа. Снимаем режим
+  // (пилл остаётся, но не actionable: 🎯-зона/ntfy гаснут), помечаем в подсказке.
+  if (fadeMutedByFlush(side, mode, flush)) {
+    mode = null;
+    const sharePct = Math.round((flush.share || 0) * 100);
+    why = `рыночный слив (${sharePct}% топа OI↓) — fade ненадёжен, лов ножа`;
   }
 
   const sideUp = side === "LONG";

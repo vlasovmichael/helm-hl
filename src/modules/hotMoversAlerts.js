@@ -18,7 +18,11 @@ import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
 import { state } from '../app/state.js';
 import { getPriceNMinAgo } from '../core/priceHistory.js';
-import { buildCoinFeatures, evaluateCoinAlert } from './hotMoversSetup.js';
+import {
+  buildCoinFeatures,
+  evaluateCoinAlert,
+  computeBreadthFlush,
+} from './hotMoversSetup.js';
 
 const ENABLED =
   (process.env.HOT_MOVERS_ALERT_ENABLED || 'true').toLowerCase() === 'true';
@@ -108,10 +112,22 @@ async function runOnce(now = Date.now()) {
   const { getOiNMinAgo } = await import('./dashboard/routes/movers.js');
   const deps = { priceNMinAgo: getPriceNMinAgo, oiNMinAgo: getOiNMinAgo };
 
+  // Breadth-слив: считаем фичи по всем монетам один раз, чтобы fade против
+  // синхронного делевереджа (лов ножа) не стрелял в ntfy.
+  const featByCoin = new Map();
+  const rows = [];
   for (const item of snap) {
     if (!item?.coin || item.price == null) continue;
     const feats = buildCoinFeatures(item, ts, deps);
-    const res = evaluateCoinAlert(item, feats, prevByCoin, MIN_SCORE);
+    featByCoin.set(item.coin, feats);
+    rows.push(feats);
+  }
+  const flush = computeBreadthFlush(rows);
+
+  for (const item of snap) {
+    if (!item?.coin || item.price == null) continue;
+    const feats = featByCoin.get(item.coin);
+    const res = evaluateCoinAlert(item, feats, prevByCoin, MIN_SCORE, flush);
     if (!res.fire) continue;
 
     const key = `${item.coin}:${res.side}`;

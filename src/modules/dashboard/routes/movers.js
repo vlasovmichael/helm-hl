@@ -18,6 +18,7 @@ import {
   HUNTER_SL_PCT,
   HUNTER_TP_PCT,
 } from "../../strategistSniper.js";
+import { computeBreadthFlush } from "../../hotMoversSetup.js";
 
 // ─────────────────────────────────────────────────
 //  OI history — ring buffer для oiDelta в /api/signals
@@ -311,6 +312,10 @@ async function buildMoversPayload(limit = 12) {
     }
     await enrichVolMult(toEnrich);
 
+    // Breadth-слив: синхронный делевередж лидеров движения (OI↓ у многих) →
+    // fade против движения = лов ножа. Клиент гасит actionable у таких вердиктов.
+    const marketFlush = computeBreadthFlush(top);
+
     return {
       ts: state.latestHunterAt || 0,
       thresholds: {
@@ -328,6 +333,7 @@ async function buildMoversPayload(limit = 12) {
       },
       universeSize: data.length,
       activeCoin,
+      marketFlush,
       count: top.length,
       signals: top,
       faderEnabled: config.trading.faderEnabled,
