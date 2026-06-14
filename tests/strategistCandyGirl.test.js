@@ -177,7 +177,7 @@ function shortSetup5m() {
   return fromCloses([...base, 194, 196, 197, 198, 188]);               // bounce вверх → reclaim вниз
 }
 
-test('long-only: радар пишет SHORT, но paper-слот его НЕ открывает (HOLD)', async () => {
+test('both-sided: радар пишет SHORT, paper-слот его ОТКРЫВАЕТ (2026-06-14 short re-enabled)', async () => {
   resetCandyGirlState();
   const now = Date.now();
   await scanCandyGirlRadar(
@@ -185,13 +185,15 @@ test('long-only: радар пишет SHORT, но paper-слот его НЕ о
     async () => shortSetup1h(),
     async () => shortSetup5m(),
   );
-  // Радар обязан зафиксировать SHORT (accuracy-логгер мерит обе стороны).
+  // Радар фиксирует SHORT (accuracy-логгер мерит обе стороны).
   const sigs = getCandyGirlSignals();
   assert.equal(sigs.length, 1, 'радар должен записать сигнал');
   assert.equal(sigs[0].direction, 'SHORT');
-  // …но paper-слот при long-only короткую сторону пропускает.
+  // Дефолт CANDY_GIRL_LONG_ONLY=false → короткая сторона тоже идёт в paper-слот
+  // (копим side-by-side статистику против long).
   const sig = analyzeCandyGirl([{ coin: 'SSS', price: 188 }], null, now);
-  assert.equal(sig.action, 'HOLD', 'long-only: short не открывается в paper-слот');
+  assert.equal(sig.action, 'OPEN', 'short открывается в paper-слот');
+  assert.equal(sig.direction, 'SHORT');
 });
 
 test('analyze: протухшие ранжированные хиты → HOLD', async () => {

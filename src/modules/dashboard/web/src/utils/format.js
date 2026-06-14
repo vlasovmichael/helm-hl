@@ -106,6 +106,9 @@ export function strategyDisplayName(sid) {
   if (sid === "hunter_long") return "Hunter LONG";
   if (sid === "trend_follow") return "Chill Boy";
   if (sid === "fade") return "Fade";
+  if (sid === "fader") return "Fader";
+  if (sid === "candy_girl") return "Candy Girl";
+  if (sid === "adopt") return "🤲 Adopted";
   if (sid === "manual") return "🖐 Manual";
   return sid || "Unknown";
 }

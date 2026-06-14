@@ -907,6 +907,70 @@ header {
   border-color: var(--border);
 }
 
+/* Источник сделки: bot / adopted / manual */
+.src-badge {
+  font-size: 9px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid currentColor;
+  line-height: 16px;
+  flex-shrink: 0;
+}
+.src-bot {
+  color: var(--text-muted);
+  background: var(--canvas-subtle);
+  border-color: var(--border);
+}
+.src-adopted {
+  color: var(--cyan, #2dd4bf);
+  background: rgba(45, 212, 191, 0.12);
+  border-color: rgba(45, 212, 191, 0.32);
+}
+.src-manual {
+  color: var(--yellow, #eab308);
+  background: rgba(234, 179, 8, 0.12);
+  border-color: rgba(234, 179, 8, 0.32);
+}
+
+/* Сторона позиции */
+.side-chip {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  line-height: 16px;
+  flex-shrink: 0;
+}
+.side-long {
+  color: var(--green);
+  background: rgba(63, 185, 80, 0.12);
+}
+.side-short {
+  color: var(--red);
+  background: rgba(248, 81, 73, 0.12);
+}
+
+.activity-meta {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.activity-meta + .activity-pnl {
+  margin-left: 0;
+}
+.activity-pnl.dim {
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
 /* ──────────────────────── Animated number reel
    IMPORTANT: app.js translates the reel by -1.1em on digit change, so every
    layer (.animated-value, .digit-reel, .digit-reel span) MUST be exactly

@@ -631,8 +631,14 @@ async function handleActivity(req, res) {
     const since = Date.now() - hours * 3_600_000;
     const events = [];
 
-    for (const t of realTradesForDisplay(getHistorySince(since))) {
-      if (!t.coin) continue;
+    // Источник сделки: adopt-слот = ручной вход под бот-нянькой ('adopted'),
+    // strategy_id 'manual' = чистая ручная, всё остальное = бот ('bot').
+    const sourceOf = (sid) =>
+      sid === "adopt" ? "adopted" : sid === "manual" ? "manual" : "bot";
+
+    const pushClose = (t) => {
+      if (!t.coin) return;
+      const sid = t.strategy_id || "carry";
       events.push({
         id: t.id,
         kind: "close",
@@ -640,33 +646,33 @@ async function handleActivity(req, res) {
         coin: t.coin,
         pnl: t.realized_pnl,
         reason: t.reason,
-        strategy_id: t.strategy_id || "carry",
+        side: t.side,
+        sizeUsd: t.size_usd,
+        entryPrice: t.entry_price,
+        entryTime: t.entry_time,
+        fee: t.fee_paid,
+        strategy_id: sid,
+        source: sourceOf(sid),
       });
-    }
-    for (const t of realTradesForDisplay(getArchivedHistorySince(since))) {
-      if (!t.coin) continue;
-      events.push({
-        id: t.id,
-        kind: "close",
-        ts: t.closed_at,
-        coin: t.coin,
-        pnl: t.realized_pnl,
-        reason: t.reason,
-        strategy_id: t.strategy_id || "carry",
-      });
-    }
+    };
+    for (const t of realTradesForDisplay(getHistorySince(since))) pushClose(t);
+    for (const t of realTradesForDisplay(getArchivedHistorySince(since)))
+      pushClose(t);
 
     const open = getActivePosition();
     if (open && open.coin && open.entry_time >= since) {
+      const sid = open.strategy_id || "carry";
       events.push({
         id: open.id,
         kind: "open",
         ts: open.entry_time,
         coin: open.coin,
+        side: open.side,
         sizeUsd: open.size_usd,
         entryPrice: open.entry_price,
         entryApy: open.entry_apy,
-        strategy_id: open.strategy_id || "carry",
+        strategy_id: sid,
+        source: sourceOf(sid),
       });
     }
 
@@ -687,7 +693,9 @@ async function handleActivity(req, res) {
           entryPrice: m.entryPrice,
           closePrice: m.closePrice,
           sizeUsd: m.sizeUsd,
+          reason: m.reason,
           strategy_id: "manual",
+          source: "manual",
         });
       }
     } catch {

@@ -8,10 +8,35 @@
 //  activity-клик + Escape. Экспорт: renderActivity, initModals.
 // ─────────────────────────────────────────────────
 
-import { strategyDisplayName } from "../utils/format.js";
+import {
+  strategyDisplayName,
+  escapeHtml,
+  fmtSince,
+  fmtNotional,
+} from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 
 let lastActivityEvents = [];
+
+// Источник сделки → бейдж. bot = бот сам открыл+закрыл; adopted = я вошёл,
+// бот подхватил выход (adopt-нянька); manual = вход и выход мои.
+const SOURCE_META = {
+  bot: { label: "BOT", cls: "src-bot" },
+  adopted: { label: "ADOPTED", cls: "src-adopted" },
+  manual: { label: "MANUAL", cls: "src-manual" },
+};
+
+function eventSource(e) {
+  if (e.source) return e.source;
+  if (e.strategy_id === "adopt") return "adopted";
+  if (e.kind === "manual_close" || e.strategy_id === "manual") return "manual";
+  return "bot";
+}
+
+function reasonLabel(reason) {
+  if (!reason) return "";
+  return String(reason).replace(/_/g, " ");
+}
 
 export function renderActivity(activity) {
   const container = document.getElementById("activity-container");
@@ -24,22 +49,56 @@ export function renderActivity(activity) {
   }
   container.innerHTML = events
     .map((e, idx) => {
-      const isManual = e.kind === "manual_close" || e.strategy_id === "manual";
-      const kindLabel =
-        e.kind === "manual_close" ? "CLOSE" : e.kind.toUpperCase();
-      const kindClass = e.kind === "manual_close" ? "close" : e.kind;
-      const manualBadge = isManual
-        ? '<span class="manual-badge" style="background:rgba(234,179,8,0.12); color:var(--yellow,#eab308); border:1px solid rgba(234,179,8,0.3); padding:1px 6px; border-radius:4px; font-size:9px; font-family:var(--font-mono); font-weight:700; margin-left:6px;">MANUAL</span>'
+      const isOpen = e.kind === "open";
+      const kindLabel = isOpen ? "OPEN" : "CLOSE";
+      const kindClass = isOpen ? "open" : "close";
+
+      const src = eventSource(e);
+      const sm = SOURCE_META[src] || SOURCE_META.bot;
+      const srcBadge = `<span class="src-badge ${sm.cls}" title="${strategyDisplayName(
+        e.strategy_id,
+      )}">${sm.label}</span>`;
+
+      const side = (e.side || "").toUpperCase();
+      const sideChip = side
+        ? `<span class="side-chip side-${side.toLowerCase()}">${side}</span>`
         : "";
-      const pnlVal = e.pnl || 0;
+
+      const reason = !isOpen && e.reason
+        ? `<span class="activity-reason">${escapeHtml(reasonLabel(e.reason))}</span>`
+        : "";
+
+      const metaBits = [];
+      if (Number.isFinite(e.sizeUsd) && e.sizeUsd > 0)
+        metaBits.push(fmtNotional(e.sizeUsd));
+      if (Number.isFinite(e.ts)) metaBits.push(`${fmtSince(e.ts)} ago`);
+      const meta = metaBits.length
+        ? `<span class="activity-meta">${metaBits.join(" · ")}</span>`
+        : "";
+
+      let pnlCell;
+      if (isOpen) {
+        pnlCell = '<span class="activity-pnl dim">open</span>';
+      } else {
+        const pnlVal = e.pnl || 0;
+        pnlCell = `<span class="activity-pnl ${
+          pnlVal >= 0 ? "positive" : "negative"
+        }">${pnlVal >= 0 ? "+" : ""}${pnlVal.toFixed(2)}</span>`;
+      }
+
       const canOpen =
         e.kind === "close" || e.kind === "manual_close" || e.kind === "open";
       const clickable = canOpen ? "clickable" : "";
       const idxAttr = canOpen ? `data-activity-idx="${idx}"` : "";
       return `
       <div class="activity-item ${clickable}" ${idxAttr}>
-        <div><span class="activity-kind ${kindClass}">${kindLabel}</span><span class="activity-coin">#${e.coin}</span>${manualBadge}</div>
-        <div class="activity-pnl ${pnlVal >= 0 ? "positive" : "negative"}">${pnlVal >= 0 ? "+" : ""}${pnlVal.toFixed(4)}</div>
+        <span class="activity-kind ${kindClass}">${kindLabel}</span>
+        <span class="activity-coin">#${escapeHtml(e.coin)}</span>
+        ${sideChip}
+        ${srcBadge}
+        ${reason}
+        ${meta}
+        ${pnlCell}
       </div>`;
     })
     .join("");

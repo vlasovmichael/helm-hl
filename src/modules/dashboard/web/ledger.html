@@ -235,6 +235,8 @@
   </head>
   <body>
     <div class="ledger-wrap">
+      <nav class="topnav" id="topnav" aria-label="Primary"></nav>
+
       <div class="ledger-head">
         <div>
           <h1>Monthly Ledger</h1>
@@ -243,7 +245,6 @@
             <span id="start-date">…</span>
           </div>
         </div>
-        <a class="back-link" href="/">← Dashboard</a>
       </div>
 
       <div class="summary-grid" id="summary"></div>
@@ -341,6 +342,7 @@
         const cards = [
           { k: "Net P&L · all time", v: fmt(t.net), c: cls(t.net), sub: "after fees + funding" },
           { k: "Bot net", v: fmt(t.botNet), c: cls(t.botNet), sub: `${t.botCount} trades · ${t.botWinRate}% win` },
+          { k: "Adopted net", v: fmt(t.adoptedNet), c: cls(t.adoptedNet), sub: `${t.adoptedCount} trades · ${t.adoptedWinRate}% win` },
           { k: "Manual net", v: fmt(t.manualNet), c: cls(t.manualNet), sub: `${t.manualCount} trades · ${t.manualWinRate}% win` },
           { k: "Fees paid", v: fmt(-t.fees, false), c: "neg", sub: "total maker+taker" },
           { k: "Funding", v: fmt(t.funding), c: cls(t.funding), sub: "carry accrual" },
@@ -364,9 +366,11 @@
             <td class="month">${monthLabel(m.month)}</td>
             <td class="grp-edge ${cls(m.botNet)}">${fmt(m.botNet)}${wr(m.botWins, m.botCount)}</td>
             <td class="col-opt dim">${m.botCount || "—"}</td>
+            <td class="grp-edge ${cls(m.adoptedNet)}">${m.adoptedCount ? fmt(m.adoptedNet) : "—"}${wr(m.adoptedWins, m.adoptedCount)}</td>
+            <td class="col-opt dim">${m.adoptedCount || "—"}</td>
             <td class="grp-edge ${cls(m.manualNet)}">${fmt(m.manualNet)}${wr(m.manualWins, m.manualCount)}</td>
             <td class="col-opt dim">${m.manualCount || "—"}</td>
-            <td class="grp-edge neg">${m.botFees + m.manualFees ? fmt(-(m.botFees + m.manualFees), false) : "—"}</td>
+            <td class="grp-edge neg">${m.botFees + m.adoptedFees + m.manualFees ? fmt(-(m.botFees + m.adoptedFees + m.manualFees), false) : "—"}</td>
             <td class="col-opt ${cls(m.funding)}">${m.funding ? fmt(m.funding) : "—"}</td>
             <td class="grp-edge net-cell ${cls(m.net)}">${fmt(m.net)}</td>
             <td class="${cls(m.cumulativeNet)}">${fmt(m.cumulativeNet)}</td>
@@ -381,6 +385,8 @@
               <tr>
                 <th>Month</th>
                 <th class="grp">Bot P&L</th>
+                <th class="col-opt">#</th>
+                <th class="grp" title="Я вошёл, бот подхватил и закрыл (adopt-нянька)">Adopted P&L</th>
                 <th class="col-opt">#</th>
                 <th class="grp">Manual P&L</th>
                 <th class="col-opt">#</th>
@@ -398,6 +404,8 @@
                 <td class="month">Total</td>
                 <td class="grp-edge ${cls(t.botNet)}">${fmt(t.botNet)}</td>
                 <td class="col-opt dim">${t.botCount}</td>
+                <td class="grp-edge ${cls(t.adoptedNet)}">${t.adoptedCount ? fmt(t.adoptedNet) : "—"}</td>
+                <td class="col-opt dim">${t.adoptedCount}</td>
                 <td class="grp-edge ${cls(t.manualNet)}">${fmt(t.manualNet)}</td>
                 <td class="col-opt dim">${t.manualCount}</td>
                 <td class="grp-edge neg">${fmt(-t.fees, false)}</td>
@@ -414,7 +422,7 @@
         const t = data.totals;
         const gross = t.botNet + t.manualNet + t.fees; // net + fees = gross price pnl (+funding rolled in net)
         document.getElementById("footnote").innerHTML = `
-          <b>Bot</b> = заявки бота (carry / hunter / chill boy). <b>Manual</b> = ручные сделки через UI.
+          <b>Bot</b> = бот открыл и закрыл сам. <b>Adopted</b> = я вошёл руками, бот подхватил и закрыл (adopt-нянька). <b>Manual</b> = и вход, и выход мои.
           Net = price&nbsp;P&L − комиссии + funding. Прошлые месяцы заморожены в снапшоте, текущий считается вживую из fills.
           <br/>Комиссий уплачено за период: <b>${fmt(t.fees, false)}</b> — это ключевая статья на малом депозите.`;
       }

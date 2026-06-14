@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────
 //  ledger.html — таблицу месяцев рендерит inline-скрипт страницы (/api/ledger).
 //  Отсюда: Recent Activity + Tax Summary (tick), trade-модалка, bans-strip.
-//  Тема пре-применяется inline-IIFE; theme/range-кнопок на странице нет.
+//  Тема: inline-IIFE гасит FOUC, bindTheme() вешает клики на topnav-свитчер.
 // ─────────────────────────────────────────────────
 
 import {
@@ -10,7 +10,9 @@ import {
   initWebSocket,
   markSuccess,
   startFooterTimer,
+  bindTheme,
 } from "./src/core/shell.js";
+import { mountTopnav } from "./src/core/topnav.js";
 import { fetchJson } from "./src/net/api.js";
 import { initModals, renderActivity } from "./src/features/modals.js";
 import { renderTax } from "./src/features/pnlInsights.js";
@@ -31,6 +33,8 @@ async function tick() {
 }
 
 // ── Bootstrap ──
+mountTopnav("ledger");
+bindTheme();
 initModals();
 initWebSocket({ onStatus });
 tick();

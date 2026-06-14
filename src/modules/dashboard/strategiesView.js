@@ -64,6 +64,7 @@ const REGISTRY = [
     id: 'carry',
     label: 'Carry',
     kind: 'mean-reversion · funding',
+    split: true,                              // и long, и short — сравниваем стороны
     resolve: () => {
       const enabled = config.trading.carryEnabled !== false;
       const live = config.isProduction && config.trading.carryProdEnabled;
@@ -74,6 +75,7 @@ const REGISTRY = [
     id: 'trend_follow',
     label: 'Chill Boy',
     kind: 'trend-follow',
+    split: true,
     virtual: () => safe(getVirtualEquitySnapshot),
     signals: () => safe(getChillBoySignals) || [],
     resolve: () => {
@@ -85,10 +87,10 @@ const REGISTRY = [
   {
     id: 'candy_girl',
     label: 'Candy Girl',
-    kind: 'radar · pullback-reclaim',
-    // long-only → таблица делит Candy на две строки: LONG (paper, торгуется) и
-    // SHORT (radar-only, исторические сделки видны как доказательство слабости).
-    splitLongOnly: () => config.trading.candyGirlLongOnly !== false,
+    kind: 'pullback-reclaim',
+    // 2026-06-14: short-paper переоткрыт → делим Candy на LONG/SHORT как остальные
+    // двусторонние, обе стороны paper. Радар по-прежнему мерит обе стороны.
+    split: true,
     radar: true,
     virtual: () => safe(getCandyGirlVirtualEquitySnapshot),
     signals: () => safe(getCandyGirlSignals) || [],
@@ -102,6 +104,7 @@ const REGISTRY = [
     id: 'fader',
     label: 'Fader',
     kind: 'contrarian · fade',
+    split: true,
     virtual: () => safe(getFaderVirtualSnapshot),
     resolve: () => {
       const enabled = config.trading.faderEnabled;
@@ -112,6 +115,7 @@ const REGISTRY = [
     id: 'adopt',
     label: 'Adopt',
     kind: 'manual-entry · babysit',
+    split: true,                              // ручные входы бывают и long, и short
     resolve: () => {
       const enabled = config.trading.adoptEnabled;
       // Подхватывает РУЧНЫЕ позы и ведёт их вживую → live, своих сделок не открывает.
@@ -245,12 +249,12 @@ export function buildStrategiesPayload() {
   const rows = [];
   for (const e of REGISTRY) {
     try {
-      // Split-стратегия (Candy long-only): LONG = торгуемый paper-слот,
-      // SHORT = radar-only (исторические сделки видны, но слот их не открывает).
-      if (typeof e.splitLongOnly === 'function' && e.splitLongOnly()) {
-        const base = e.resolve().status;        // 'paper' | 'off'
+      // Двусторонняя стратегия → две строки (LONG / SHORT) с тем же статусом.
+      // Сравниваем стороны: какая сторона стратегии тащит, какая сливает.
+      if (e.split) {
+        const base = e.resolve().status;        // 'live' | 'paper' | 'off'
         rows.push(buildRow(e, 'long',  { status: base }));
-        rows.push(buildRow(e, 'short', { status: base === 'off' ? 'off' : 'radar' }));
+        rows.push(buildRow(e, 'short', { status: base }));
       } else {
         rows.push(buildRow(e));
       }

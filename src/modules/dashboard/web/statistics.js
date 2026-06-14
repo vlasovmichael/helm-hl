@@ -14,6 +14,7 @@ import {
   markSuccess,
   startFooterTimer,
 } from "./src/core/shell.js";
+import { mountTopnav } from "./src/core/topnav.js";
 import { fetchJson } from "./src/net/api.js";
 import {
   initEquityChart,
@@ -76,6 +77,7 @@ async function tick() {
 }
 
 // ── Bootstrap ──
+mountTopnav("statistics");
 bindTheme([applyChartTheme]);
 bindRange(() => {
   showChartLoader();

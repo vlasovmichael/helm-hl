@@ -13,6 +13,7 @@ import {
   markSuccess,
   startFooterTimer,
 } from "./src/core/shell.js";
+import { mountTopnav } from "./src/core/topnav.js";
 import { fetchJson } from "./src/net/api.js";
 import { updateActiveCoinSet } from "./src/state/activeCoins.js";
 import {
@@ -97,6 +98,7 @@ async function tick() {
 }
 
 // ── Bootstrap ──
+mountTopnav("dashboard");
 bindTheme();
 bindRange(() => tick());
 initModals();

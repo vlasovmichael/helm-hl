@@ -8,10 +8,11 @@
 // on-chain fills, которые отдаёт userFillsByTime. Этот модуль восстанавливает
 // полную помесячную картину прямо из fills и НЕ зависит от trades.db.
 //
-// Каждый round-trip помечается source: 'bot' | 'manual':
-//   - 'bot'    — открывающий fill принадлежит боту (oid в bot_oid_log, либо
-//                fallback по time-window вокруг bot-позиции).
-//   - 'manual' — всё остальное (ручные сделки через UI).
+// Каждый round-trip помечается source: 'bot' | 'adopted' | 'manual':
+//   - 'bot'     — открывающий fill принадлежит боту (oid в bot_oid_log, либо
+//                 fallback по time-window вокруг bot-позиции).
+//   - 'adopted' — вход мой (ручной), но выход закрыл бот (adopt-нянька).
+//   - 'manual'  — и вход, и выход мои (ручная сделка через UI).
 //
 // closedPnl от HL — ДО комиссий (price PnL). Комиссии (fee) идут отдельной
 // строкой. Net = Σ closedPnl − Σ fees + funding.
@@ -53,13 +54,14 @@ function monthKey(ms) {
 function emptyMonth() {
   return {
     botPnl: 0, botFees: 0, botCount: 0, botWins: 0,
+    adoptedPnl: 0, adoptedFees: 0, adoptedCount: 0, adoptedWins: 0,
     manualPnl: 0, manualFees: 0, manualCount: 0, manualWins: 0,
     funding: 0,
   };
 }
 
 function totalCount(m) {
-  return (m.botCount || 0) + (m.manualCount || 0);
+  return (m.botCount || 0) + (m.adoptedCount || 0) + (m.manualCount || 0);
 }
 
 // ── reconstruct ВСЕ round-trip сделки (bot + manual), помеченные source ──
@@ -101,20 +103,25 @@ function reconstructAllTrades(fills, botOidSet, botByCoin) {
             sz: Math.abs(f.sz),
             pnl: 0,
             fee: f.fee,
-            anyBot: fillIsBot(f),
+            openIsBot: fillIsBot(f),
+            closeIsBot: false,
           };
         } else {
           cur.sz += Math.abs(f.sz);
           cur.fee += f.fee;
-          if (fillIsBot(f)) cur.anyBot = true;
+          if (fillIsBot(f)) cur.openIsBot = true;
         }
       } else if (isClose && cur) {
         cur.sz -= Math.abs(f.sz);
         cur.pnl += f.closedPnl;
         cur.fee += f.fee;
         cur.lastCloseTime = f.time;
-        if (fillIsBot(f)) cur.anyBot = true;
+        if (fillIsBot(f)) cur.closeIsBot = true;
         if (cur.sz <= 1e-9) {
+          // Три источника: бот открыл сам → 'bot'; я открыл, а закрыл бот
+          // (adopt-нянька подхватила выход) → 'adopted'; и вход, и выход мои
+          // → 'manual'.
+          const source = cur.openIsBot ? 'bot' : cur.closeIsBot ? 'adopted' : 'manual';
           trades.push({
             coin: cur.coin,
             side: cur.side,
@@ -122,7 +129,7 @@ function reconstructAllTrades(fills, botOidSet, botByCoin) {
             closeTime: cur.lastCloseTime,
             pnl: cur.pnl,
             fee: cur.fee,
-            source: cur.anyBot ? 'bot' : 'manual',
+            source,
             status: 'closed',
           });
           cur = null;
@@ -207,6 +214,9 @@ export async function getMonthlyLedger() {
     if (t.source === 'bot') {
       m.botPnl += t.pnl; m.botFees += t.fee; m.botCount += 1;
       if (t.pnl > 0) m.botWins += 1;
+    } else if (t.source === 'adopted') {
+      m.adoptedPnl += t.pnl; m.adoptedFees += t.fee; m.adoptedCount += 1;
+      if (t.pnl > 0) m.adoptedWins += 1;
     } else {
       m.manualPnl += t.pnl; m.manualFees += t.fee; m.manualCount += 1;
       if (t.pnl > 0) m.manualWins += 1;
@@ -240,14 +250,18 @@ export async function getMonthlyLedger() {
   const months = keys.map((k) => {
     const m = merged[k];
     const botNet = m.botPnl - m.botFees;
+    const adoptedNet = (m.adoptedPnl || 0) - (m.adoptedFees || 0);
     const manualNet = m.manualPnl - m.manualFees;
-    const net = botNet + manualNet + m.funding;
+    const net = botNet + adoptedNet + manualNet + m.funding;
     runningNet += net;
     return {
       month: k,
       botPnl: round(m.botPnl), botFees: round(m.botFees), botNet: round(botNet),
       botCount: m.botCount, botWins: m.botWins,
       botWinRate: m.botCount ? Math.round((100 * m.botWins) / m.botCount) : 0,
+      adoptedPnl: round(m.adoptedPnl || 0), adoptedFees: round(m.adoptedFees || 0), adoptedNet: round(adoptedNet),
+      adoptedCount: m.adoptedCount || 0, adoptedWins: m.adoptedWins || 0,
+      adoptedWinRate: m.adoptedCount ? Math.round((100 * m.adoptedWins) / m.adoptedCount) : 0,
       manualPnl: round(m.manualPnl), manualFees: round(m.manualFees), manualNet: round(manualNet),
       manualCount: m.manualCount, manualWins: m.manualWins,
       manualWinRate: m.manualCount ? Math.round((100 * m.manualWins) / m.manualCount) : 0,
@@ -260,14 +274,15 @@ export async function getMonthlyLedger() {
 
   const totals = emptyTotals();
   for (const m of months) {
-    totals.botNet += m.botNet; totals.manualNet += m.manualNet;
-    totals.fees += m.botFees + m.manualFees; totals.funding += m.funding;
-    totals.botCount += m.botCount; totals.manualCount += m.manualCount;
-    totals.botWins += m.botWins; totals.manualWins += m.manualWins;
+    totals.botNet += m.botNet; totals.adoptedNet += m.adoptedNet; totals.manualNet += m.manualNet;
+    totals.fees += m.botFees + m.adoptedFees + m.manualFees; totals.funding += m.funding;
+    totals.botCount += m.botCount; totals.adoptedCount += m.adoptedCount; totals.manualCount += m.manualCount;
+    totals.botWins += m.botWins; totals.adoptedWins += m.adoptedWins; totals.manualWins += m.manualWins;
     totals.net += m.net;
   }
   for (const k of Object.keys(totals)) totals[k] = round(totals[k]);
   totals.botWinRate = totals.botCount ? Math.round((100 * totals.botWins) / totals.botCount) : 0;
+  totals.adoptedWinRate = totals.adoptedCount ? Math.round((100 * totals.adoptedWins) / totals.adoptedCount) : 0;
   totals.manualWinRate = totals.manualCount ? Math.round((100 * totals.manualWins) / totals.manualCount) : 0;
 
   const payload = {
@@ -283,9 +298,10 @@ export async function getMonthlyLedger() {
 
 function emptyTotals() {
   return {
-    botNet: 0, manualNet: 0, fees: 0, funding: 0, net: 0,
-    botCount: 0, manualCount: 0, botWins: 0, manualWins: 0,
-    botWinRate: 0, manualWinRate: 0,
+    botNet: 0, adoptedNet: 0, manualNet: 0, fees: 0, funding: 0, net: 0,
+    botCount: 0, adoptedCount: 0, manualCount: 0,
+    botWins: 0, adoptedWins: 0, manualWins: 0,
+    botWinRate: 0, adoptedWinRate: 0, manualWinRate: 0,
   };
 }
 
