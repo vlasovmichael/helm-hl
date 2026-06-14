@@ -1,0 +1,1087 @@
+@use "../core/breakpoints" as *;
+/* ──────────────────────── Hunter Signals */
+.signals-meta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.signals-table-wrap {
+  overflow-x: auto;
+  margin: 0 -8px;
+  padding: 0 8px;
+}
+.signals-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 13px;
+
+  th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 9px 10px;
+    border-bottom: 1px solid var(--border);
+    background: var(--canvas-subtle);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+  td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--hairline);
+    color: var(--text-primary);
+    vertical-align: middle;
+  }
+  tbody tr {
+    transition: background 0.12s;
+
+    &:hover {
+      background: var(--card-bg-hover);
+    }
+  }
+}
+
+/* Hot Movers: фиксируем ширины колонок, чтобы таблица не «прыгала» при смене
+   цены (у разных монет разное число знаков: $0.00001 vs $104k, % меняет знак/
+   разряд). table-layout:fixed → ширина колонки не зависит от контента. Шрифт уже
+   моноширинный (tabular). Только desktop: на ≤720px ниже включается card-вёрстка
+   (@media), где фикс-ширины и nowrap не нужны и обрезали бы карточки. */
+@include from(721px) {
+  .hm-table {
+    table-layout: fixed;
+  }
+  .hm-table th,
+  .hm-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .hm-table th:nth-child(1),
+  .hm-table td:nth-child(1) {
+    width: 26px;
+  } /* # */
+  .hm-table th:nth-child(2),
+  .hm-table td:nth-child(2) {
+    width: 64px;
+  } /* Coin */
+  .hm-table th:nth-child(3),
+  .hm-table td:nth-child(3) {
+    width: 80px;
+  } /* Setup */
+  .hm-table th:nth-child(4),
+  .hm-table td:nth-child(4) {
+    width: 52px;
+  } /* Enter */
+  .hm-table th:nth-child(5),
+  .hm-table td:nth-child(5) {
+    width: 96px;
+  } /* Price */
+  .hm-table th:nth-child(6),
+  .hm-table td:nth-child(6),
+  .hm-table th:nth-child(7),
+  .hm-table td:nth-child(7),
+  .hm-table th:nth-child(8),
+  .hm-table td:nth-child(8) {
+    width: 58px;
+  } /* 2m/5m/15m % */
+  .hm-table th:nth-child(9),
+  .hm-table td:nth-child(9) {
+    width: 48px;
+  } /* Acc */
+  .hm-table th:nth-child(10),
+  .hm-table td:nth-child(10) {
+    width: 64px;
+  } /* OI 5m */
+  .hm-table th:nth-child(11),
+  .hm-table td:nth-child(11) {
+    width: 52px;
+  } /* Trend */
+  /* Под-строка позиции (colspan=11) — не зажимать в 26px nth-child(1), дать всю ширину. */
+  .hm-table .hm-pos-row td {
+    width: auto;
+    overflow: visible;
+    white-space: nowrap;
+    text-overflow: clip;
+  }
+}
+.signals-table tr.is-active {
+  background: var(--accent-soft);
+}
+/* Метка активной монеты рядом с тикером — заменяет дубль P&L в строке. */
+.hm-active-badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0 5px;
+  border-radius: 4px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-line);
+  vertical-align: middle;
+}
+/* Чип «согласие движа со стороной позиции» (S ✓ по движу / L ✗ против).
+   Единственный exit-read, которого нет в Active Position. */
+.hm-align {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0 6px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.hm-align-ok {
+  color: var(--green);
+  background: var(--green-soft);
+  border-color: var(--green-line);
+}
+.hm-align-bad {
+  color: var(--red);
+  background: var(--red-soft);
+  border-color: var(--red-line);
+  animation: hmAlignPulse 1.4s ease-in-out infinite;
+}
+.hm-align-flat {
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+/* «Против» мягко пульсирует — это сигнал внимания (движ развернулся). */
+@keyframes hmAlignPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+  50% {
+    box-shadow: 0 0 0 2px var(--red-soft);
+  }
+}
+/* Hot Movers — под-строка с данными открытой позиции (пиннутая монета). */
+.hm-pos-row td {
+  padding: 3px 10px 7px 30px !important;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--border);
+}
+.hm-pos-tag {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-right: 6px;
+  border: 1px solid var(--border);
+}
+.hm-pos-bot {
+  color: var(--accent-strong);
+  border-color: var(--accent-line);
+}
+.hm-pos-manual {
+  color: var(--yellow, #eab308);
+  background: rgba(234, 179, 8, 0.12);
+  border-color: rgba(234, 179, 8, 0.3);
+}
+/* Подсказки реального времени по открытой позиции. */
+.hm-hint {
+  font-weight: 600;
+}
+.hm-hint-bad {
+  color: var(--red);
+}
+.hm-hint-danger {
+  color: var(--red);
+  font-weight: 700;
+}
+.hm-hint-warn {
+  color: var(--orange, #f59e0b);
+}
+.hm-hint-good {
+  color: var(--green);
+}
+.hm-hint-neutral {
+  color: var(--text-secondary);
+}
+.hm-hint-pnl {
+  font-weight: 700;
+  margin-left: 4px;
+}
+/* Hot Movers — чейз-метр (🎯 можно / ⏳ жди / ⛔ нельзя). Эмодзи крупнее,
+   чип берёт *-soft/*-line из активной темы → корректно в любой палитре. */
+.signals-table td.hm-entry {
+  text-align: center;
+  padding: 4px 6px;
+  white-space: nowrap;
+}
+.hm-entry-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 26px;
+  font-size: 19px;
+  line-height: 1;
+  border-radius: 7px;
+  border: 1px solid transparent;
+}
+.hm-entry-zone .hm-entry-icon {
+  background: var(--green-soft);
+  border-color: var(--green-line);
+}
+.hm-entry-mid .hm-entry-icon {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+}
+.hm-entry-extended .hm-entry-icon {
+  background: var(--red-soft);
+  border-color: var(--red-line);
+}
+.hm-entry-none .hm-entry-icon {
+  opacity: 0.4;
+  font-size: 15px;
+}
+@include until($bp-md) {
+  .hm-entry-icon {
+    width: 26px;
+    height: 24px;
+    font-size: 17px;
+  }
+}
+/* Candy Girl signal rows — лёгкий tint по направлению. */
+.signals-table tr.cg-sig-row.dir-long {
+  background: rgba(61, 220, 132, 0.07);
+}
+.signals-table tr.cg-sig-row.dir-short {
+  background: rgba(255, 92, 92, 0.07);
+}
+.signals-coin {
+  font-weight: 600;
+}
+
+.signals-apy-good {
+  color: var(--green);
+  font-weight: 600;
+}
+.signals-apy-mid {
+  color: var(--text-primary);
+}
+.signals-apy-low {
+  color: var(--text-muted);
+}
+
+/* Shared data table used by BTC Divergence and Whale Watch */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 14px;
+
+  th {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--hairline);
+    text-align: left;
+    white-space: nowrap;
+
+    &.r {
+      text-align: right;
+    }
+    &.c {
+      text-align: center;
+    }
+  }
+  td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--hairline);
+    vertical-align: middle;
+    white-space: nowrap;
+
+    &.r {
+      text-align: right;
+    }
+    &.c {
+      text-align: center;
+    }
+  }
+  tbody tr:hover {
+    background: var(--card-bg-hover, rgba(255, 255, 255, 0.03));
+  }
+}
+
+.ww-sortable {
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    color: var(--text-primary);
+  }
+  &::after {
+    content: " ⇅";
+    opacity: 0.3;
+    font-size: 9px;
+  }
+}
+.ww-sort-active {
+  &::after {
+    content: " ↓";
+    opacity: 0.9;
+    color: var(--accent);
+  }
+  &.ww-sort-asc::after {
+    content: " ↑";
+    opacity: 0.9;
+    color: var(--accent);
+  }
+}
+
+.signals-status {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 2em;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid currentColor;
+  line-height: 18px;
+
+  &.tradable {
+    background: var(--red-soft);
+    color: var(--red);
+    border-color: var(--red-line);
+  }
+  &.long {
+    background: var(--green-soft);
+    color: var(--green);
+    border-color: var(--green-line);
+  }
+  &.blocked {
+    background: var(--canvas-subtle);
+    color: var(--text-muted);
+    border-color: var(--border);
+  }
+  &.active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-color: var(--accent-line);
+  }
+}
+.signals-drop-warn {
+  color: var(--red);
+}
+
+.signals-table {
+  td.num-pos-strong,
+  td.num-pos-strong * {
+    color: var(--green);
+    font-weight: 700;
+  }
+  td.num-pos,
+  td.num-pos * {
+    color: var(--green);
+    font-weight: 600;
+  }
+  td.num-pos-weak,
+  td.num-pos-weak * {
+    color: var(--green);
+    font-weight: 500;
+  }
+  td.num-neg-strong,
+  td.num-neg-strong * {
+    color: var(--red);
+    font-weight: 700;
+  }
+  td.num-neg,
+  td.num-neg * {
+    color: var(--red);
+    font-weight: 600;
+  }
+  td.num-neg-weak,
+  td.num-neg-weak * {
+    color: var(--red);
+    font-weight: 500;
+  }
+  td.num-muted,
+  td.num-muted * {
+    color: var(--text-muted);
+  }
+
+  td.num-pos-strong {
+    background: var(--tier-pos-strong);
+    border-radius: 4px;
+  }
+  td.num-pos {
+    background: var(--tier-pos-normal);
+    border-radius: 4px;
+  }
+  td.num-pos-weak {
+    background: var(--tier-pos-weak);
+    border-radius: 4px;
+  }
+  td.num-neg-strong {
+    background: var(--tier-neg-strong);
+    border-radius: 4px;
+  }
+  td.num-neg {
+    background: var(--tier-neg-normal);
+    border-radius: 4px;
+  }
+  td.num-neg-weak {
+    background: var(--tier-neg-weak);
+    border-radius: 4px;
+  }
+}
+
+.num-warn-glow {
+  font-weight: 700;
+}
+.signals-table {
+  .num-inline-pos {
+    color: var(--green);
+    font-weight: 600;
+  }
+  .num-inline-neg {
+    color: var(--red);
+    font-weight: 600;
+  }
+  .num-inline-muted {
+    color: var(--text-muted);
+  }
+  .signals-price {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+}
+
+/* ── Hot Movers: Setup verdict cell ──────────────────────────
+   SHORT = fade the pump (красный пилл со стрелкой вниз)
+   LONG  = fade the dump (зелёный пилл со стрелкой вверх)
+   WAIT  = ждём сигнала (dim, с едва заметным намёком на цвет)
+   —     = нет данных */
+.signals-table td.hm-setup {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  text-align: center;
+  border-radius: 4px;
+  padding: 3px 7px;
+  letter-spacing: 0.4px;
+
+  /* SHORT: fade pump → красный как на бирже «продажа» */
+  &.setup-short {
+    background: rgba(239, 68, 68, 0.25);
+    color: #f87171;
+    box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.4);
+  }
+  /* LONG: fade dump → зелёный как на бирже «покупка» */
+  &.setup-long {
+    background: rgba(34, 197, 94, 0.22);
+    color: #4ade80;
+    box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.35);
+  }
+}
+/* Light theme: pill-стиль в духе GitHub label — сочный фон + чёткая
+   рамка + тёмный насыщенный текст (соавтор-токены вместо «вылинявших»
+   полупрозрачных значений, настроенных под тёмную тему) */
+html[data-theme="light"] .signals-table td.hm-setup.setup-short {
+  background: var(--red-soft);
+  color: var(--red);
+  box-shadow: inset 0 0 0 1px var(--red-line);
+}
+html[data-theme="light"] .signals-table td.hm-setup.setup-long {
+  background: var(--green-soft);
+  color: var(--green);
+  box-shadow: inset 0 0 0 1px var(--green-line);
+}
+/* WAIT — нейтральный серый, без тревожного тинта (это «ждём», не сигнал) */
+.signals-table td.hm-setup {
+  &.setup-wait-short,
+  &.setup-wait-long {
+    background: transparent;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  &.setup-wait,
+  &.setup-none {
+    background: transparent;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  /* иконки в Setup ячейке */
+  svg {
+    vertical-align: middle;
+    margin-right: 3px;
+    flex-shrink: 0;
+  }
+  .setup-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+  }
+
+  /* ── Fader Setup column (Strategy #5) ──
+     Цвет фона — по direction (что фейдим), не по tier:
+       SHORT (fade pump) → зелёный
+       LONG  (fade dump) → красный
+     Tier контролируется иконкой и насыщенностью. RED tier (skip) — без цвета. */
+  &.fader-go-short {
+    background: rgba(34, 197, 94, 0.24);
+    color: var(--green);
+  }
+  &.fader-go-long {
+    background: rgba(239, 68, 68, 0.24);
+    color: var(--red);
+  }
+  &.fader-wait-short {
+    background: rgba(34, 197, 94, 0.1);
+    color: var(--green);
+  }
+  &.fader-wait-long {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--red);
+  }
+  &.fader-wait-neutral {
+    background: transparent;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+  &.fader-skip {
+    background: transparent;
+    color: var(--text-faint);
+    font-weight: 500;
+  }
+  .fader-lbl {
+    vertical-align: middle;
+    font-size: 11px;
+    letter-spacing: 0.3px;
+  }
+}
+.signals-table .signals-sltp {
+  white-space: nowrap;
+
+  .sep {
+    color: var(--text-faint);
+    margin: 0 4px;
+  }
+}
+
+.signals-table tr.is-active td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+/* ── Hot Movers: чистая биржевая раскраска ──
+   Без заливки всей строки (на микро-движениях это шум). Направление несут:
+   цвет цены + цвет процентов + тонкая левая кромка ТОЛЬКО на заметном
+   движении (mid ≥0.6% / strong ≥1.5%) + flash при изменении цены.
+   Слабые движения (<0.6%) — строка чистая, ничего не отвлекает. */
+.signals-table tr.row-up.row-heat-mid td:first-child {
+  box-shadow: inset 2px 0 0 rgba(34, 197, 94, 0.5);
+}
+.signals-table tr.row-down.row-heat-mid td:first-child {
+  box-shadow: inset 2px 0 0 rgba(239, 68, 68, 0.5);
+}
+.signals-table tr.row-up.row-heat-strong td:first-child {
+  box-shadow: inset 3px 0 0 var(--green);
+}
+.signals-table tr.row-down.row-heat-strong td:first-child {
+  box-shadow: inset 3px 0 0 var(--red);
+}
+/* цена — цвет по направлению движения (theme-aware, в тон процентам) */
+.signals-table tr.row-up .signals-price {
+  color: var(--green);
+}
+.signals-table tr.row-down .signals-price {
+  color: var(--red);
+}
+
+/* Активная монета (позиция бота ИЛИ ручная) — всегда поверх heat-раскраски:
+   фон-акцент + жирная левая кромка. !important, т.к. heat-классы выше по
+   специфичности и иначе перебивают кромку, когда монета ещё и двигается. */
+.signals-table tr.is-active,
+.data-table tr.is-active {
+  background: var(--accent-soft) !important;
+}
+.signals-table tr.is-active td:first-child,
+.data-table tr.is-active td:first-child {
+  box-shadow: inset 4px 0 0 var(--accent) !important;
+  font-weight: 700;
+}
+
+/* Биржевые flash-вспышки на ячейке цены при изменении (зелёный вверх / красный вниз). */
+@keyframes hmFlashUp {
+  0% {
+    background: rgba(34, 197, 94, 0.55);
+  }
+  100% {
+    background: transparent;
+  }
+}
+@keyframes hmFlashDown {
+  0% {
+    background: rgba(239, 68, 68, 0.55);
+  }
+  100% {
+    background: transparent;
+  }
+}
+.signals-table td.hm-price-cell {
+  border-radius: 4px;
+}
+.signals-table td.hm-price-cell.hm-flash-up {
+  animation: hmFlashUp 0.75s ease-out;
+}
+.signals-table td.hm-price-cell.hm-flash-down {
+  animation: hmFlashDown 0.75s ease-out;
+}
+@include reduced-motion {
+  .signals-table td.hm-price-cell.hm-flash-up,
+  .signals-table td.hm-price-cell.hm-flash-down {
+    animation: none;
+  }
+}
+
+/* ── Hot Movers: FLIP-анимации строк ──
+   Перестановку (глайд на новое место) ставит JS инлайн-трансформом; здесь —
+   только въезд новой монеты и угасание ушедшей. Трансформы на <tr> работают
+   в современных браузерах. */
+@keyframes hmRowEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+    background: var(--accent-soft);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    background: transparent;
+  }
+}
+@keyframes hmRowLeave {
+  0% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+}
+.hm-table tbody tr.hm-enter {
+  animation: hmRowEnter 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.hm-table tbody tr.hm-leaving {
+  animation: hmRowLeave 0.35s ease-in forwards;
+  pointer-events: none;
+}
+@include reduced-motion {
+  .hm-table tbody tr.hm-enter,
+  .hm-table tbody tr.hm-leaving {
+    animation: none;
+  }
+}
+
+/* ── Hot Movers — мобильная card-вёрстка (≤720px) ──
+   11 колонок не влезают в телефон → каждая монета становится карточкой:
+   строка 1 = ранг · тикер(+чип) · цена(справа) · тайминг входа;
+   строка 2 = Setup-вердикт во всю ширину;
+   строка 3 = окна 2m/5m/15m; строка 4 = Acc / OI / Trend.
+   Лейблы (2M, ACC…) — через td[data-w]::before только на метрик-ячейках.
+   Хот-муверс — единственная таблица с .signals-table+data-w. */
+@include until($bp-md) {
+  .hm-table,
+  .hm-table tbody {
+    display: block;
+  }
+  .hm-table thead {
+    display: none;
+  }
+  .hm-table tbody tr.hm-main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 7px 10px;
+    padding: 11px 12px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .hm-table tbody tr.hm-main td {
+    display: block;
+    padding: 0;
+    border: none;
+    white-space: nowrap;
+  }
+  /* строка 1 */
+  .hm-table tr.hm-main td:nth-child(1) {
+    order: 1;
+    flex: 0 0 auto;
+    width: auto;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .hm-table tr.hm-main td:nth-child(2) {
+    order: 2;
+    flex: 1 1 auto;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .hm-table tr.hm-main td.hm-price-cell {
+    order: 3;
+    flex: 0 0 auto;
+    margin-left: auto;
+    font-size: 13.5px;
+    text-align: right;
+  }
+  .hm-table tr.hm-main td.hm-entry {
+    order: 4;
+    flex: 0 0 auto;
+    padding: 0;
+  }
+  /* строка 2: Setup во всю ширину */
+  .hm-table tr.hm-main td.hm-setup {
+    order: 5;
+    flex: 0 0 100%;
+    text-align: left;
+    padding: 0;
+  }
+  /* строка 3: окна; строка 4: Acc/OI/Trend (по трети) */
+  .hm-table tr.hm-main td.hm-window {
+    order: 6;
+    flex: 1 1 26%;
+    text-align: left;
+  }
+  .hm-table tr.hm-main td[data-w="Acc"] {
+    order: 7;
+  }
+  .hm-table tr.hm-main td[data-w="OI"] {
+    order: 8;
+  }
+  .hm-table tr.hm-main td[data-w="Trend"] {
+    order: 9;
+  }
+  .hm-table tr.hm-main td[data-w="Acc"],
+  .hm-table tr.hm-main td[data-w="OI"],
+  .hm-table tr.hm-main td[data-w="Trend"] {
+    flex: 1 1 26%;
+    text-align: left;
+  }
+  /* лейблы только на метрик-ячейках (окна + Acc/OI/Trend) */
+  .hm-table tr.hm-main td[data-w]::before {
+    content: attr(data-w);
+    display: block;
+    font-size: 8.5px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 1px;
+    opacity: 0.7;
+  }
+  .hm-table tr.hm-main td.hm-setup::before,
+  .hm-table tr.hm-main td.hm-entry::before {
+    content: none;
+  }
+  /* живая кромка по направлению/позиции — слева на всей карточке
+     (на мобиле box-shadow td:first-child не даёт высоту) */
+  .hm-table tr.hm-main.row-up.row-heat-mid,
+  .hm-table tr.hm-main.row-up.row-heat-strong {
+    box-shadow: inset 3px 0 0 var(--green);
+  }
+  .hm-table tr.hm-main.row-down.row-heat-mid,
+  .hm-table tr.hm-main.row-down.row-heat-strong {
+    box-shadow: inset 3px 0 0 var(--red);
+  }
+  .hm-table tr.hm-main.is-active {
+    box-shadow: inset 4px 0 0 var(--accent) !important;
+  }
+  /* плейсхолдер (empty-state / waiting) обычным блоком */
+  .hm-table tbody tr:not(.hm-main):not(.hm-pos-row) {
+    display: block;
+  }
+  .hm-table tbody tr .empty-state {
+    display: block;
+    padding: 18px 12px;
+    text-align: center;
+  }
+}
+
+.signals-meta::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  margin-right: 6px;
+  vertical-align: middle;
+}
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+/* ──────────────────────── Hunter Signals — mobile card layout
+   Table → stacked cards. Each row becomes a 3-row grid. No horizontal scroll. */
+@include until($bp-md) {
+  .signals-table-wrap {
+    overflow-x: visible;
+    margin: 0;
+    padding: 0;
+  }
+  .signals-table {
+    display: block;
+    font-size: 12px;
+  }
+  .signals-table thead {
+    display: none;
+  }
+  .signals-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .signals-table tr {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas:
+      "rank  pair    price"
+      "spike trend   suggest"
+      "sltp  sltp    sltp";
+    gap: 6px 10px;
+    align-items: center;
+    padding: 11px 12px;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    border-left-width: 3px;
+  }
+  .signals-table tr.row-short {
+    border-left-color: var(--red);
+  }
+  .signals-table tr.row-long {
+    border-left-color: var(--green);
+  }
+  .signals-table tr.is-active {
+    border-left-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  /* Empty-state row: span the whole "card" */
+  .signals-table tr:has(td[colspan]) {
+    display: block;
+    border-left-width: 1px;
+  }
+
+  .signals-table td {
+    display: block;
+    padding: 0;
+    border: none;
+    background: transparent !important; /* overrides .num-pos / .num-neg pill bg */
+    border-radius: 0 !important;
+  }
+  .signals-table td:first-child {
+    box-shadow: none !important;
+  }
+
+  /* Column → grid area mapping */
+  .signals-table td:nth-child(1) {
+    grid-area: rank;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .signals-table td:nth-child(2) {
+    grid-area: pair;
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--text-primary);
+  }
+  .signals-table td:nth-child(3) {
+    grid-area: price;
+    text-align: right;
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .signals-table td:nth-child(4),
+  .signals-table td:nth-child(5) {
+    /* Spike / Trend — keep coloured pill but inline */
+    font-size: 11px;
+  }
+  .signals-table td:nth-child(4) {
+    grid-area: spike;
+  }
+  .signals-table td:nth-child(5) {
+    grid-area: trend;
+  }
+
+  /* Restore the small coloured-background pill on Spike/Trend cells (mobile) */
+  .signals-table td.num-pos-strong {
+    background: var(--tier-pos-strong) !important;
+  }
+  .signals-table td.num-pos {
+    background: var(--tier-pos-normal) !important;
+  }
+  .signals-table td.num-pos-weak {
+    background: var(--tier-pos-weak) !important;
+  }
+  .signals-table td.num-neg-strong {
+    background: var(--tier-neg-strong) !important;
+  }
+  .signals-table td.num-neg {
+    background: var(--tier-neg-normal) !important;
+  }
+  .signals-table td.num-neg-weak {
+    background: var(--tier-neg-weak) !important;
+  }
+  .signals-table td.num-pos-strong,
+  .signals-table td.num-pos,
+  .signals-table td.num-pos-weak,
+  .signals-table td.num-neg-strong,
+  .signals-table td.num-neg,
+  .signals-table td.num-neg-weak {
+    border-radius: 4px !important;
+    padding: 2px 6px !important;
+    width: fit-content;
+  }
+
+  .signals-table td:nth-child(6) {
+    grid-area: suggest;
+    text-align: right;
+    font-size: 11px;
+  }
+  .signals-table td:nth-child(7) {
+    grid-area: sltp;
+    color: var(--text-muted);
+    font-size: 11px;
+    padding-top: 4px !important;
+    border-top: 1px solid var(--hairline);
+  }
+  /* Re-add small spacing on top edge of sltp row */
+  .signals-table td:nth-child(7).num-pos,
+  .signals-table td:nth-child(7).num-neg {
+    padding-top: 4px !important;
+  }
+}
+
+/* ──────────────────────── BTC Divergence — mobile card layout */
+@include until($bp-md) {
+  /* Collapse table structure into block elements */
+  #div-table,
+  #div-table tbody {
+    display: block;
+  }
+  #div-table thead {
+    display: none;
+  }
+
+  #div-table tr {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto auto;
+    grid-template-areas:
+      "coin  signal"
+      "chg   whale"
+      "rel   whale";
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--hairline);
+    gap: 1px 10px;
+  }
+  #div-table td {
+    padding: 0;
+    border: none;
+    white-space: normal;
+    font-size: 12px;
+    display: block;
+  }
+  /* Coin — bold, top-left */
+  #div-table td:nth-child(1) {
+    grid-area: coin;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  /* Price — hidden */
+  #div-table td:nth-child(2) {
+    display: none;
+  }
+  /* Change% — middle-left */
+  #div-table td:nth-child(3) {
+    grid-area: chg;
+    font-size: 11px;
+  }
+  /* vs BTC — bottom-left */
+  #div-table td:nth-child(4) {
+    grid-area: rel;
+    font-size: 11px;
+    text-align: left;
+  }
+  /* Signal — top-right, badge-style */
+  #div-table td:nth-child(5) {
+    grid-area: signal;
+    text-align: right;
+    font-weight: 700;
+  }
+  /* Whale — right column, spans 2 rows, vertically centered */
+  #div-table td:nth-child(6) {
+    grid-area: whale;
+    text-align: right;
+    display: flex !important;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 2px;
+    font-size: 11px;
+    min-width: 60px;
+  }
+}
+
+/* ──────────────────────── Whale Watch — mobile compact */
+@include until($bp-md) {
+  #ww-table th,
+  #ww-table td {
+    padding: 6px 6px;
+    font-size: 12px;
+  }
+  /* Hide Lev column on small screens */
+  #ww-table th:nth-child(5),
+  #ww-table td:nth-child(5) {
+    display: none;
+  }
+  /* Since column: shorter text */
+  #ww-table th:nth-child(8),
+  #ww-table td:nth-child(8) {
+    font-size: 10px;
+  }
+}
+
+/* Hot Movers под-строка подсказок (colspan) на мобильной card-вёрстке (≤720px):
+   рендерим обычным блоком на всю ширину, без per-cell ::before лейблов. */
+@include until($bp-md) {
+  .signals-table tr.hm-pos-row td {
+    display: block;
+    width: 100%;
+    padding: 6px 12px !important;
+    white-space: normal;
+    box-shadow: none;
+  }
+  .signals-table tr.hm-pos-row td::before {
+    content: none !important;
+  }
+}

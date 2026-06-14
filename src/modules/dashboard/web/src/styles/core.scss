@@ -1,0 +1,18 @@
+// ─────────────────────────────────────────────────────────────
+//  core — общий «каркас» дашборды (грузится на каждой странице).
+//  Токены тем, reset, topnav, карточки, шапка, футер, модалки,
+//  лоадеры, motion-слой и весь блок глобального responsive.
+//  Фичи-специфика (hot movers, pnl, strategies…) — в features/*.
+// ─────────────────────────────────────────────────────────────
+@use "core/tokens";
+@use "core/base";
+@use "core/chrome";
+@use "core/datagrid";
+@use "core/loaders";
+@use "core/activity";
+@use "core/footer";
+@use "core/responsive";
+@use "core/nearmiss";
+@use "core/modals";
+@use "core/motion";
+@use "core/utilities";

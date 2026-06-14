@@ -1,3 +1,4 @@
+import "./src/styles/index.scss";
 // ─────────────────────────────────────────────────
 //  index.html — «радар»: header/position, divergence, hot movers,
 //  market context, setup scanner, whale watch, trade-модалка.

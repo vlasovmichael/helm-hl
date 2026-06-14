@@ -1,0 +1,98 @@
+/* ───────────────────────────────────────────────
+   Market Context bar — вердикт по фону (risk-on/off)
+   ─────────────────────────────────────────────── */
+.market-context {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  margin: 0 0 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--card-bg-elev);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
+
+  .mc-verdict {
+    font-weight: 700;
+    font-size: 15px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+  .mc-btc {
+    color: var(--text-secondary);
+    display: flex;
+    gap: 14px;
+    flex-wrap: wrap;
+    font-size: 14px;
+
+    .up {
+      color: var(--green);
+    }
+    .down {
+      color: var(--red);
+    }
+  }
+  .mc-fng {
+    color: var(--text-muted);
+    margin-left: auto;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .mc-fng-cap {
+    font-size: 13px;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+  }
+  .mc-fng-class {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  /* Светофор «можно/нельзя»: зелёный = есть чёткий фонд (RISK-ON или RISK-OFF),
+     можно входить по нему; жёлтый = MIXED, жди; серый = нет данных.
+     Направление (вверх/вниз) читается из подписи RISK-ON ↑ / RISK-OFF ↓. */
+  &.go {
+    border-left-color: var(--green-line);
+    background: var(--green-soft);
+
+    .mc-verdict {
+      color: var(--green);
+    }
+  }
+  &.wait {
+    border-left-color: var(--warn);
+    background: var(--warn-soft);
+
+    .mc-verdict {
+      color: var(--warn);
+    }
+  }
+  &.unknown .mc-verdict {
+    color: var(--text-muted);
+  }
+}
+.fng-gauge {
+  display: block;
+  overflow: visible;
+
+  .fng-needle {
+    stroke: var(--text-primary);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+  }
+  .fng-hub {
+    fill: var(--text-primary);
+  }
+  .fng-num {
+    fill: var(--text-primary);
+    font-size: 17px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+}

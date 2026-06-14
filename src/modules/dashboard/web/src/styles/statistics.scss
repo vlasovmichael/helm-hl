@@ -1,0 +1,9 @@
+//  statistics.html — strategies, P&L summary, insights, equity chart,
+//  shadow-cards (Chill Boy / Candy Girl / Fader), live logs.
+@use "core";
+@use "features/pnl";
+@use "features/strategies";
+@use "features/shadowcards";
+@use "features/insights";
+@use "features/logs";
+@use "features/charts";

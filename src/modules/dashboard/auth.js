@@ -80,11 +80,18 @@ export function isAuthenticated(req) {
   return verifySession(cookies[SESSION_COOKIE], AUTH_USER);
 }
 
-const PUBLIC_PATHS = new Set(["/login", "/styles.css", "/favicon.ico"]);
+const PUBLIC_PATHS = new Set(["/login", "/login.js", "/favicon.ico"]);
+
+// Логин-страница рендерится до авторизации, а её стили/скрипты теперь — это
+// хешированные Vite-бандлы в /assets/* (раньше был один публичный styles.css).
+// Хеш-ассеты безопасно отдавать без сессии: это статика сборки, не данные.
+function isPublicPath(p) {
+  return PUBLIC_PATHS.has(p) || p.startsWith("/assets/");
+}
 
 export function authGate(req, res, next) {
   if (!AUTH_ENABLED) return next();
-  if (PUBLIC_PATHS.has(req.path)) return next();
+  if (isPublicPath(req.path)) return next();
   if (isAuthenticated(req)) return next();
 
   if (req.path.startsWith("/api/")) {

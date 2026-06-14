@@ -1,0 +1,27 @@
+// Брейкпоинты дашборды + миксины-обёртки над @media.
+// Значения — ровно те, что были в литералах (менять = менять вёрстку).
+$bp-sm: 480px; // мелкий телефон
+$bp-nav: 640px; // topnav схлопывается в иконки
+$bp-md: 720px; // таблицы → card-вёрстка
+$bp-lg: 880px; // desktop → tablet (tape-bar, bottom-nav, общий responsive)
+
+// max-width (мобайл-вниз). $bp — переменная или литерал (напр. 721px).
+@mixin until($bp) {
+  @media (max-width: $bp) {
+    @content;
+  }
+}
+
+// min-width (desktop-вверх).
+@mixin from($bp) {
+  @media (min-width: $bp) {
+    @content;
+  }
+}
+
+// Пользователь просил меньше движения.
+@mixin reduced-motion {
+  @media (prefers-reduced-motion: reduce) {
+    @content;
+  }
+}

@@ -1,0 +1,60 @@
+/* ── Setup Scanner (Swing) — signal badges ───────────────── */
+.swing-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+
+  &.long {
+    color: var(--green);
+    background: rgba(14, 203, 129, 0.12);
+    border: 1px solid rgba(14, 203, 129, 0.3);
+  }
+  &.short {
+    color: var(--red);
+    background: rgba(246, 70, 92, 0.12);
+    border: 1px solid rgba(246, 70, 92, 0.3);
+  }
+  &.wait {
+    color: var(--text-muted);
+    background: rgba(128, 128, 128, 0.08);
+    border: 1px solid var(--hairline);
+  }
+}
+
+/* ── Setup Scanner (Swing) — row tint по сигналу ──────────
+   Вся строка дышит направлением: LONG зелёным, SHORT красным.
+   .sw-hot (цена в entry-зоне или открыта позиция) = ярче + кромка слева. */
+#setup-scanner-table {
+  tr.sw-long {
+    background: rgba(14, 203, 129, 0.05);
+
+    &.sw-hot {
+      background: rgba(14, 203, 129, 0.12);
+
+      td:first-child {
+        box-shadow: inset 3px 0 0 var(--green);
+      }
+    }
+    .signals-price {
+      color: var(--green);
+    }
+  }
+  tr.sw-short {
+    background: rgba(246, 70, 92, 0.05);
+
+    &.sw-hot {
+      background: rgba(246, 70, 92, 0.12);
+
+      td:first-child {
+        box-shadow: inset 3px 0 0 var(--red);
+      }
+    }
+    .signals-price {
+      color: var(--red);
+    }
+  }
+}

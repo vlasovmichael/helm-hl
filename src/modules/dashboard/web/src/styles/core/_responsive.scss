@@ -1,0 +1,220 @@
+@use "breakpoints" as *;
+/* ──────────────────────── Mobile bottom nav */
+.bottom-nav {
+  display: none;
+}
+
+@include until($bp-lg) {
+  .bottom-nav {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 60;
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter: blur(14px) saturate(140%);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    border-top: 1px solid var(--border);
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+    gap: 4px;
+  }
+  .bottom-nav-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 500;
+    padding: 6px 4px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.12s var(--ease);
+    min-height: 48px;
+  }
+  .bottom-nav-btn .nav-icon {
+    width: 18px;
+    height: 18px;
+    display: inline-block;
+    background: currentColor;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+  }
+  .bottom-nav-btn[data-target="sec-position"] .nav-icon {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M8 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM2 8a6 6 0 1 1 12 0A6 6 0 0 1 2 8zm6-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4z'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M8 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM2 8a6 6 0 1 1 12 0A6 6 0 0 1 2 8zm6-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4z'/></svg>");
+  }
+  /* Hot Movers — пламя (горячие монеты). */
+  .bottom-nav-btn[data-target="sec-movers"] .nav-icon {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M9.53.75c.22 2.39 1.47 3.63 2.66 4.81C13.2 6.5 14 7.5 14 9A6 6 0 1 1 2.76 6.23c.1.28.27.49.5.63.55.35 1.27.22 1.48-.46.3-1.01.38-2.4-.04-4.08a.75.75 0 0 1 .99-.88c.62.23 1.23.63 1.68 1.15.4-.55.85-1.04 1.32-1.53.32-.33.61-.66.86-1.03zM8 14a4 4 0 0 0 1.5-7.71c.14 1.16-.04 2.4-.86 3.16-.5.46-1.18.55-1.7.18a1.6 1.6 0 0 1-.62-1.3A4 4 0 0 0 8 14z'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M9.53.75c.22 2.39 1.47 3.63 2.66 4.81C13.2 6.5 14 7.5 14 9A6 6 0 1 1 2.76 6.23c.1.28.27.49.5.63.55.35 1.27.22 1.48-.46.3-1.01.38-2.4-.04-4.08a.75.75 0 0 1 .99-.88c.62.23 1.23.63 1.68 1.15.4-.55.85-1.04 1.32-1.53.32-.33.61-.66.86-1.03zM8 14a4 4 0 0 0 1.5-7.71c.14 1.16-.04 2.4-.86 3.16-.5.46-1.18.55-1.7.18a1.6 1.6 0 0 1-.62-1.3A4 4 0 0 0 8 14z'/></svg>");
+  }
+  /* Setup Scanner — лупа (скан сетапов). */
+  .bottom-nav-btn[data-target="sec-setup-scanner"] .nav-icon {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M10.68 11.74a6 6 0 1 1 1.06-1.06l3.04 3.04a.75.75 0 0 1-1.06 1.06zM12 7a5 5 0 1 0-10 0 5 5 0 0 0 10 0z'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M10.68 11.74a6 6 0 1 1 1.06-1.06l3.04 3.04a.75.75 0 0 1-1.06 1.06zM12 7a5 5 0 1 0-10 0 5 5 0 0 0 10 0z'/></svg>");
+  }
+  /* BTC Divergence — две встречные стрелки (расхождение vs BTC). */
+  .bottom-nav-btn[data-target="sec-divergence"] .nav-icon {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M4.5 1 1 5h2.25v10h2.5V5H8L4.5 1zm7 14L15 11h-2.25V1h-2.5v10H8l3.5 4z'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M4.5 1 1 5h2.25v10h2.5V5H8L4.5 1zm7 14L15 11h-2.25V1h-2.5v10H8l3.5 4z'/></svg>");
+  }
+  .bottom-nav-btn[data-target="sec-whale"] .nav-icon {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M2 10c0-2.76 2.24-5 5-5 1.7 0 3.18.85 4.1 2.14C12.28 6.43 13.58 6 15 6v1.5c-1.1 0-2.1.47-2.82 1.22A4.99 4.99 0 0 1 7 10H2zm0 2h5a4 4 0 0 0 3.46-2H2v2z'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M2 10c0-2.76 2.24-5 5-5 1.7 0 3.18.85 4.1 2.14C12.28 6.43 13.58 6 15 6v1.5c-1.1 0-2.1.47-2.82 1.22A4.99 4.99 0 0 1 7 10H2zm0 2h5a4 4 0 0 0 3.46-2H2v2z'/></svg>");
+  }
+  .bottom-nav-btn:active {
+    transform: scale(0.96);
+  }
+  .bottom-nav-btn.active {
+    color: var(--accent);
+    background: var(--accent-soft);
+  }
+}
+
+/* ──────────────────────── Responsive */
+@include until($bp-lg) {
+  .container {
+    padding: 16px 16px 96px;
+  }
+
+  header {
+    flex-direction: column;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+  }
+  .equity-group .value {
+    font-size: 36px;
+  }
+
+  .meta-group {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+    width: 100%;
+    padding-top: 0;
+  }
+  .meta-info {
+    flex-wrap: wrap;
+    row-gap: 4px;
+    flex: 1 1 100%;
+    order: 3;
+  }
+
+  .card {
+    padding: 16px;
+    margin-bottom: 12px;
+    border-radius: 10px;
+  }
+  .card-header {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .data-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .chart-container {
+    height: 220px;
+  }
+  #price-chart {
+    height: 440px !important;
+  }
+
+  .time-ranges {
+    width: 100%;
+  }
+  .time-ranges .range-btn {
+    flex: 1;
+    padding: 7px 8px;
+  }
+
+  .activity-item {
+    flex-wrap: wrap;
+    gap: 4px 10px;
+  }
+  .activity-pnl {
+    margin-left: auto;
+  }
+
+  .logs-controls {
+    width: 100%;
+  }
+  .logs-controls input[type="search"] {
+    width: 100%;
+    flex: 1 1 auto;
+  }
+  .logs-filters {
+    flex: 1 1 auto;
+  }
+  .logs-filter-btn {
+    flex: 1;
+    padding: 6px 8px;
+  }
+  .logs-pause-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .logs-viewport {
+    height: 280px;
+    font-size: 11px;
+  }
+  .log-row {
+    grid-template-columns: 56px 46px 1fr;
+    gap: 8px;
+    padding: 2px 10px;
+  }
+
+  footer {
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 24px;
+    padding-top: 14px;
+  }
+}
+
+@include until($bp-sm) {
+  .container {
+    padding: 12px 12px 96px;
+  }
+  .card {
+    padding: 14px;
+  }
+  .grid-item {
+    padding: 12px 14px;
+  }
+  .grid-item .item-value {
+    font-size: 18px;
+  }
+  .activity-item {
+    font-size: 12px;
+  }
+}
+
+@include reduced-motion {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}

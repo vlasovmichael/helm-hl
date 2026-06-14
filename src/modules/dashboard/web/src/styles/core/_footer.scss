@@ -1,0 +1,31 @@
+/* ──────────────────────── Footer */
+footer {
+  margin-top: 40px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.stale-warning {
+  color: var(--red);
+  font-weight: 600;
+}
+.logout-link {
+  color: var(--text-muted);
+  text-decoration: none;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  transition: all 0.12s var(--ease);
+}
+.logout-link:hover {
+  color: var(--accent);
+  background: var(--canvas-subtle);
+}

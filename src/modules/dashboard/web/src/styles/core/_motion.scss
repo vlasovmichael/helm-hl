@@ -1,0 +1,47 @@
+/* ════════════════════════════════════════════════════════════════════
+   Motion layer (2026-06-12) — tasteful, GPU-only (transform/opacity).
+   Cards rise in on scroll, lift on hover, titles draw an accent line.
+   Все эффекты композитные → стабильные 60fps. Глушится глобальным
+   prefers-reduced-motion блоком выше (ничего отдельно отключать не надо).
+   ════════════════════════════════════════════════════════════════════ */
+
+/* — Reveal-on-scroll: стартовое состояние выставляет JS (data-reveal),
+     чтобы при выключенном JS контент оставался видимым (no FOUC-ловушек). */
+[data-reveal] {
+  opacity: 0;
+  transform: translate3d(0, 16px, 0);
+  transition:
+    opacity 0.55s var(--ease),
+    transform 0.55s var(--ease);
+  transition-delay: calc(var(--reveal-i, 0) * 55ms);
+
+  &.is-revealed {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* — Card title: акцент-линия, «прорисовывается» при reveal.
+     scaleX по left-origin = композитно. */
+.card-title {
+  position: relative;
+
+  &::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -6px;
+    width: 28px;
+    height: 2px;
+    border-radius: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+    transform: scaleX(0);
+    transform-origin: left center;
+    transition: transform 0.5s var(--ease);
+    transition-delay: calc(var(--reveal-i, 0) * 55ms + 0.18s);
+  }
+}
+.card.is-revealed .card-title::after,
+[data-reveal].is-revealed > .card-header .card-title::after {
+  transform: scaleX(1);
+}

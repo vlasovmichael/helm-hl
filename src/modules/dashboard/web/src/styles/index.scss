@@ -1,0 +1,7 @@
+//  index.html — «радар»: hot movers / signals, market context,
+//  setup scanner, divergence, whale watch, orderbook.
+@use "core";
+@use "features/signals";
+@use "features/marketcontext";
+@use "features/setupscanner";
+@use "features/orderbook";

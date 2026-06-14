@@ -1,3 +1,4 @@
+import "./src/styles/ledger.scss";
 // ─────────────────────────────────────────────────
 //  ledger.html — таблицу месяцев рендерит inline-скрипт страницы (/api/ledger).
 //  Отсюда: Recent Activity + Tax Summary (tick), trade-модалка, bans-strip.

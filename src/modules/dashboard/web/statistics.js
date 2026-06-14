@@ -1,3 +1,4 @@
+import "./src/styles/statistics.scss";
 // ─────────────────────────────────────────────────
 //  strategies.html — таблица стратегий, Performance-график (equity),
 //  Chill Boy, P&L Summary + Insights, Live Logs.

@@ -1,0 +1,117 @@
+/* ──────────────────────────────────────────────────────────────────
+   HL Scanner — Dashboard
+   Aesthetic: calm, GitHub Primer-inspired. Mona Sans + JetBrains Mono.
+   ────────────────────────────────────────────────────────────────── */
+
+:root {
+  --font-sans:
+    "Mona Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
+    Helvetica, Arial, sans-serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    "Liberation Mono", monospace;
+
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 12px;
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* ── GitHub Primer: light theme (calm white) ─────────────────────── */
+html[data-theme="light"] {
+  --bg: #ffffff;
+  --canvas-subtle: #f6f8fa;
+  --canvas-inset: #eaeef2;
+  --card-bg: #ffffff;
+  --card-bg-elev: #f6f8fa;
+  --card-bg-hover: #f3f4f6;
+  --border: #d1d9e0;
+  --border-muted: #d8dee4;
+  --border-strong: #afb8c1;
+  --hairline: #eaeef2;
+
+  --text-primary: #1f2328;
+  --text-secondary: #59636e;
+  --text-muted: #6e7781;
+  --text-faint: #afb8c1;
+
+  --accent: #0969da;
+  --accent-strong: #0550ae;
+  --accent-soft: #ddf4ff;
+  --accent-line: #54aeff;
+
+  --green: #1a7f37;
+  --green-soft: #dafbe1;
+  --green-line: #4ac26b;
+  --red: #cf222e;
+  --red-soft: #ffebe9;
+  --red-line: #ff8182;
+
+  /* Tier backgrounds (Hot Movers): STRONG → NORMAL → WEAK */
+  --tier-pos-strong: rgba(46, 160, 67, 0.38);
+  --tier-pos-normal: rgba(46, 160, 67, 0.18);
+  --tier-pos-weak: rgba(46, 160, 67, 0.07);
+  --tier-neg-strong: rgba(207, 34, 46, 0.32);
+  --tier-neg-normal: rgba(207, 34, 46, 0.15);
+  --tier-neg-weak: rgba(207, 34, 46, 0.06);
+  --warn: #9a6700;
+  --warn-soft: #fff8c5;
+  --info: #0969da;
+
+  --grid-line: #eaeef2;
+  --shadow-sm: 0 1px 0 rgba(31, 35, 40, 0.04);
+  --shadow: 0 1px 3px rgba(31, 35, 40, 0.04), 0 8px 24px rgba(66, 74, 83, 0.04);
+
+  --skeleton-base: #eaeef2;
+  --skeleton-shine: #f6f8fa;
+}
+
+/* ── GitHub Primer: dark theme ───────────────────────────────────── */
+html[data-theme="dark"] {
+  --bg: #0d1117;
+  --canvas-subtle: #161b22;
+  --canvas-inset: #010409;
+  --card-bg: #0d1117;
+  --card-bg-elev: #161b22;
+  --card-bg-hover: #1c2128;
+  --border: #30363d;
+  --border-muted: #21262d;
+  --border-strong: #484f58;
+  --hairline: #21262d;
+
+  --text-primary: #e6edf3;
+  --text-secondary: #9198a1;
+  --text-muted: #8d96a0;
+  --text-faint: #6e7681;
+
+  --accent: #4493f8;
+  --accent-strong: #58a6ff;
+  --accent-soft: rgba(56, 139, 253, 0.15);
+  --accent-line: rgba(56, 139, 253, 0.4);
+
+  --green: #3fb950;
+  --green-soft: rgba(46, 160, 67, 0.15);
+  --green-line: rgba(46, 160, 67, 0.4);
+  --red: #f85149;
+  --red-soft: rgba(248, 81, 73, 0.15);
+  --red-line: rgba(248, 81, 73, 0.4);
+
+  /* Tier backgrounds (Hot Movers): STRONG → NORMAL → WEAK */
+  --tier-pos-strong: rgba(46, 160, 67, 0.42);
+  --tier-pos-normal: rgba(46, 160, 67, 0.2);
+  --tier-pos-weak: rgba(46, 160, 67, 0.08);
+  --tier-neg-strong: rgba(248, 81, 73, 0.38);
+  --tier-neg-normal: rgba(248, 81, 73, 0.18);
+  --tier-neg-weak: rgba(248, 81, 73, 0.07);
+  --warn: #d29922;
+  --warn-soft: rgba(187, 128, 9, 0.15);
+  --info: #4493f8;
+
+  --grid-line: #21262d;
+  --shadow-sm: 0 0 0 1px rgba(0, 0, 0, 0);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+
+  --skeleton-base: #161b22;
+  --skeleton-shine: #21262d;
+}

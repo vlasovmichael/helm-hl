@@ -1,0 +1,9 @@
+// Мелкие утилиты — заменяют повторяющиеся презентационные inline style=.
+// Сюда НЕ выносим display:none, которым управляет JS через el.style.display=""
+// (класс не сбросится reset'ом инлайна → элемент останется скрытым).
+.u-scroll-x {
+  overflow-x: auto;
+}
+.u-rel {
+  position: relative;
+}

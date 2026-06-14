@@ -1,0 +1,184 @@
+@use "../core/breakpoints" as *;
+
+/* ── P&L Summary card (2026-05-13) ── */
+#sec-pnl {
+  .pnl-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: stretch;
+    margin-bottom: 1rem;
+  }
+  .pnl-hero-main {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.25rem;
+  }
+  .pnl-hero-value {
+    font-family: var(--font-mono);
+    font-size: 2.1rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    color: var(--text);
+
+    &.positive {
+      color: var(--green);
+    }
+    &.negative {
+      color: var(--red);
+    }
+  }
+  .pnl-hero-sub {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+  }
+  .pnl-hero-side {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+  .pnl-mini {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .pnl-mini-value {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text);
+
+    &.positive {
+      color: var(--green);
+    }
+    &.negative {
+      color: var(--red);
+    }
+  }
+  .pnl-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+
+    .grid-item {
+      background: var(--bg-elev);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.55rem 0.75rem;
+    }
+  }
+  .pnl-strategy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    /* Floor-резерв. Точную высоту под самый «высокий» период выставляет JS
+       (renderPnlSummary) — иначе при переключении дней число строк-стратегий
+       меняется, карточка скачет и тянет за собой график ниже. */
+    min-height: 110px;
+  }
+  .strategy-row {
+    display: grid;
+    grid-template-columns: 110px 1fr auto auto;
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.45rem 0.75rem;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+  }
+  .strategy-name {
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.02em;
+  }
+  .strategy-bar {
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+  }
+  .strategy-bar-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    background: var(--green);
+    border-radius: 3px;
+
+    &.negative {
+      background: var(--red);
+    }
+  }
+  .strategy-pnl {
+    color: var(--text);
+
+    &.positive {
+      color: var(--green);
+    }
+    &.negative {
+      color: var(--red);
+    }
+  }
+  .strategy-meta {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+  }
+
+  .pnl-detector {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+    padding: 0.45rem 0.75rem;
+    background: var(--bg-elev);
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+  }
+  .detector-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+    color: var(--text);
+  }
+  .detector-stats {
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    color: var(--text-muted);
+  }
+
+  @include until($bp-md) {
+    .pnl-hero {
+      grid-template-columns: 1fr;
+      gap: 0.75rem;
+    }
+    .pnl-hero-side {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .pnl-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .strategy-row {
+      grid-template-columns: 80px 1fr auto;
+    }
+    .strategy-meta {
+      display: none;
+    }
+  }
+}

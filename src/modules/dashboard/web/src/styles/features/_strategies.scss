@@ -1,0 +1,245 @@
+/* ── Strategies overview table ─────────────────────────────── */
+.strat-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.strat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  white-space: nowrap;
+
+  thead th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    background: var(--card-bg);
+  }
+  th.num,
+  td.num {
+    text-align: right;
+    font-family: var(--font-mono);
+  }
+  tbody td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border-muted);
+    vertical-align: middle;
+  }
+}
+.strat-row {
+  cursor: pointer;
+  transition: background 0.12s var(--ease);
+
+  &:not(.strat-row-planned):hover {
+    background: var(--card-bg-hover);
+  }
+  &.is-expanded {
+    background: var(--card-bg-elev);
+  }
+}
+.strat-row-dim {
+  opacity: 0.5;
+}
+.strat-row-planned {
+  cursor: default;
+}
+.strat-col-name {
+  min-width: 150px;
+}
+.strat-name {
+  font-weight: 600;
+  color: var(--text-primary, inherit);
+}
+.strat-caret {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.strat-kind {
+  font-size: 10.5px;
+  color: var(--text-muted);
+  margin-top: 1px;
+}
+.strat-pill {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.strat-live {
+  background: var(--green-soft);
+  color: var(--green);
+  border-color: var(--green-line);
+}
+.strat-paper {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  border-color: var(--accent-line);
+}
+.strat-radar {
+  background: color-mix(in srgb, #a855f7 16%, transparent);
+  color: #a855f7;
+  border-color: color-mix(in srgb, #a855f7 40%, transparent);
+}
+.strat-off {
+  background: var(--card-bg-elev);
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+.strat-planned {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px dashed var(--border-strong);
+}
+.strat-summary-spacer {
+  flex: 1;
+}
+.strat-pos {
+  color: var(--green);
+}
+.strat-neg {
+  color: var(--red);
+}
+.strat-dim {
+  color: var(--text-muted);
+}
+.strat-pos-coin {
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+.strat-eq-pct {
+  font-size: 10.5px;
+}
+.strat-col-spark {
+  width: 90px;
+}
+.strat-spark {
+  width: 84px;
+  height: 22px;
+  display: block;
+}
+/* Detail drawer */
+.strat-detail-row > td {
+  background: var(--card-bg-elev);
+  padding: 10px 14px !important;
+}
+.strat-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 22px;
+}
+.strat-detail-block {
+  min-width: 220px;
+}
+.strat-detail-h {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+.strat-trade {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto auto;
+  gap: 10px;
+  font-size: 11.5px;
+  padding: 2px 0;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+.strat-trade-coin {
+  font-weight: 600;
+}
+.strat-trade-side {
+  color: var(--text-muted);
+}
+.strat-skel-row td {
+  padding: 10px !important;
+  border-bottom: 1px solid var(--border-muted);
+}
+/* Detail: Recent trades / signals — выровненная таблица. */
+.strat-detail-full {
+  flex: 1 1 100%; /* таблица сделок — на всю ширину detail */
+
+  .strat-detail-table {
+    width: 100%;
+  }
+}
+.strat-detail-table {
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  width: 100%;
+
+  td {
+    padding: 4px 14px 4px 0;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border-muted);
+  }
+  tr:last-child td {
+    border-bottom: none;
+  }
+  td.num {
+    text-align: right;
+  }
+}
+.strat-dt-coin {
+  font-weight: 600;
+}
+.strat-dt-side {
+  color: var(--text-muted);
+}
+.strat-dt-reason {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 99%; /* забирает свободную ширину, прижимая числовые колонки вправо */
+}
+.strat-dt-age {
+  color: var(--text-muted);
+}
+/* Пагинация сделок. */
+.strat-pager {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+
+  .strat-pg-info {
+    margin-top: 0;
+  }
+}
+.strat-pg-btn {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1;
+  padding: 3px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card-bg-elev);
+  color: var(--text-primary, inherit);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--card-bg-hover);
+    border-color: var(--border-strong);
+  }
+  &:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+}
+.strat-pg-info {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
