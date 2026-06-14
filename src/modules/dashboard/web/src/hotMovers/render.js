@@ -110,11 +110,10 @@ export function renderHotMovers(payload, fmtTime) {
     }
   }
 
-  if (!enriched.length) {
-    tbody.innerHTML =
-      '<tr><td colspan="11" class="empty-state">Quiet — no coins moving right now</td></tr>';
-    return;
-  }
+  // Пустых строк больше не делаем через innerHTML (это сбрасывало бы реконсилер
+  // и дёргало высоту) — таблица всегда добивается плейсхолдерами до HM_MAX_ROWS
+  // ниже, перед reconcileRows. При полном затишье покажем 8 пустых строк, статус
+  // «тихо» виден в meta (top 0 by momentum).
 
   const fmtPrice = (p) => {
     if (p == null) return "—";
@@ -365,6 +364,21 @@ export function renderHotMovers(payload, fmtTime) {
     }
   });
 
+  // Добиваем таблицу пустыми строками до HM_MAX_ROWS, чтобы высота не прыгала
+  // при малом числе монет (4 монеты → 4 пустышки). Плейсхолдеры — keyed (ph:N),
+  // едут через тот же реконсилер, но БЕЗ enter/leave/FLIP-анимаций (см.
+  // reconcileRows): монета въезжает в «освободившийся» пустой слот, пустышки не
+  // мельтешат. Считаем по ОСНОВНЫМ строкам (enriched.length), под-строки позиции
+  // (pos:) — отдельная намеренная высота, их не компенсируем.
+  const placeholdersNeeded = Math.max(0, HM_MAX_ROWS - enriched.length);
+  for (let i = 0; i < placeholdersNeeded; i++) {
+    items.push({
+      key: `ph:${i}`,
+      cls: "hm-placeholder-row",
+      html: '<td colspan="11" class="hm-ph-cell"><span class="signals-price">&nbsp;</span></td>',
+    });
+  }
+
   reconcileRows(tbody, items);
   mountDirArrows(tbody);
 }
@@ -425,10 +439,15 @@ function reconcileRows(tbody, items) {
     for (const [k, el] of live)
       firstTop.set(k, el.getBoundingClientRect().top);
 
+  // Плейсхолдеры (ph:N) — пустые добивочные строки: едут через реконсилер, но
+  // БЕЗ enter/leave/FLIP, чтобы не мельтешить и не трогать красивую анимацию
+  // реальных монет (монета просто въезжает в освободившийся пустой слот).
+  const isPh = (k) => k.startsWith("ph:");
+
   // EXIT: строки, которых больше нет в желаемом наборе — гасим и удаляем.
   for (const [k, el] of live) {
     if (desired.has(k)) continue;
-    if (reduceMotion) {
+    if (reduceMotion || isPh(k)) {
       el.remove();
       continue;
     }
@@ -470,6 +489,7 @@ function reconcileRows(tbody, items) {
 
   // LAST + INVERT + PLAY.
   for (const { el, key, entering } of ordered) {
+    if (isPh(key)) continue; // плейсхолдеры без анимации (мгновенно)
     if (entering) {
       el.classList.add("hm-enter");
       el.addEventListener(

@@ -742,6 +742,15 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
     animation: none;
   }
 }
+/* Пустые добивочные строки: резервируют 8 рядов, чтобы таблица не прыгала при
+   малом числе монет. Та же высота (signals-price &nbsp;), без тинта/ховера. */
+.hm-table tbody tr.hm-placeholder-row {
+  background: transparent;
+  pointer-events: none;
+}
+.hm-table tbody tr.hm-placeholder-row .hm-ph-cell {
+  visibility: hidden;
+}
 
 /* ── Hot Movers — мобильная card-вёрстка (≤720px) ──
    11 колонок не влезают в телефон → каждая монета становится карточкой:
