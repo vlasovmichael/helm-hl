@@ -1134,3 +1134,54 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
     content: none !important;
   }
 }
+
+/* ── Setup: живой тикер цены активной (POS) монеты ──
+   Стрелка крутится (спин) + цвет тика при каждом изменении цены по WS. */
+.setup-live {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  margin-left: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.setup-live-px {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.setup-live-arrow {
+  display: inline-block;
+  width: 0.9em;
+  text-align: center;
+  font-weight: 700;
+  transform-origin: 50% 55%;
+  &.up {
+    color: var(--green);
+  }
+  &.down {
+    color: var(--red);
+  }
+  /* Перезапуск анимации делается в JS через remove→reflow→add класса pulse. */
+  &.pulse {
+    animation: setupLiveSpin 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+}
+@keyframes setupLiveSpin {
+  0% {
+    transform: rotate(0deg) scale(1);
+    filter: brightness(1);
+  }
+  55% {
+    transform: rotate(360deg) scale(1.5);
+    filter: brightness(1.5);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+    filter: brightness(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .setup-live-arrow.pulse {
+    animation: none;
+  }
+}

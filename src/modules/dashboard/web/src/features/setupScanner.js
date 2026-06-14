@@ -11,8 +11,14 @@
 import { escapeHtml, fmtUsd, fmtPrice } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 import { getCandySignals } from "./candyGirl.js";
+import { getActivePos } from "../state/activeCoins.js";
 
 const SWING_RISK_PCT = 0.02; // риск на сделку = 2% equity (свинг-план размера)
+
+// Живая цена активной (POS) монеты в Setup: предыдущая цена по coin → стрелка
+// ↑/↓ + анимация при изменении. Питается из WS-status (≤2с), а не 60с-поллинга
+// таблицы (см. updateSetupLivePrice ниже).
+const _livePrevPx = new Map();
 
 // ── Кросс-состояние, которое считает main (tick / WS) ──────────────
 let _lastEquity = null; // последний известный equity (размер позиции в Swing-плане)
@@ -503,6 +509,14 @@ function renderSetupScanner(payload) {
     s.pos
       ? ` <span class="swing-badge ${s.pos === "long" ? "long" : "short"}" style="font-size:9px;padding:0 5px" title="Открытая позиция на счёте${s.entryPx ? ` · entry $${s.entryPx}` : ""}">POS·${s.pos === "long" ? "L" : "S"}</span>`
       : "";
+  // Живой тикер цены для активной (POS) монеты: стрелка + цена, которые
+  // обновляет updateSetupLivePrice() по WS-status. Текст наполняется при первом
+  // апдейте; при полном ре-рендере таблицы (60с) ячейка пересоздаётся пустой и
+  // тут же дозаполняется следующим status-пушем (≤2с).
+  const liveCell = (r, s) =>
+    s.pos
+      ? ` <span class="setup-live" data-live-coin="${escapeHtml(r.coin)}" title="Живая цена (WS) — стрелка мигает при изменении"><span class="setup-live-arrow"></span><span class="setup-live-px"></span></span>`
+      : "";
   // SL/TP-колонка (только POS-строки): дистанции от entry + R:R, читаемым размером.
   // Красным — нет стопа / стоп не с той стороны; оранжевым — R:R < 2 (правило 2:1).
   // Размер позиции для свинг-плана: риск = equity × 2%, size = риск / стоп-дист.
@@ -591,7 +605,7 @@ function renderSetupScanner(payload) {
       if (r.fundingPersist?.fractionExtreme != null)
         det.push(`funding extreme ${(r.fundingPersist.fractionExtreme * 100).toFixed(0)}% of 48h`);
       return `<tr class="${rowCls(s)}" title="${escapeHtml(det.join(" · "))}">
-      <td><span class="signals-price">#${escapeHtml(r.coin)}</span>${posPill(s)}</td>
+      <td><span class="signals-price">#${escapeHtml(r.coin)}</span>${posPill(s)}${liveCell(r, s)}</td>
       <td class="c">${badge(s.signal)}</td>
       <td class="c">${arrowCell(s.trend4h)}&nbsp;${arrowCell(s.trend1h)}</td>
       <td class="c">${entryCell(s)}</td>
@@ -602,6 +616,38 @@ function renderSetupScanner(payload) {
     </tr>`;
     })
     .join("");
+}
+
+// Живое обновление цены активной (POS) монеты — дёргается из WS-status (≤2с),
+// независимо от 60с-поллинга свинг-таблицы. Для каждой POS-строки берёт текущую
+// цену из стейта активных монет (getActivePos().now) и, если она изменилась,
+// рисует стрелку ↑/↓ нужного цвета и ретригерит CSS-анимацию (короткий «спин»).
+function fmtLivePx(px) {
+  if (px == null || !Number.isFinite(px)) return "—";
+  return px >= 100 ? px.toFixed(2) : px >= 1 ? px.toFixed(4) : px.toPrecision(4);
+}
+export function updateSetupLivePrice() {
+  const tbody = document.getElementById("setup-scanner-tbody");
+  if (!tbody) return;
+  const cells = tbody.querySelectorAll(".setup-live[data-live-coin]");
+  for (const cell of cells) {
+    const coin = cell.getAttribute("data-live-coin");
+    const px = getActivePos(coin)?.now;
+    if (px == null || !Number.isFinite(px)) continue;
+    const pxEl = cell.querySelector(".setup-live-px");
+    const arrowEl = cell.querySelector(".setup-live-arrow");
+    const prev = _livePrevPx.get(coin);
+    if (pxEl) pxEl.textContent = `$${fmtLivePx(px)}`;
+    if (prev != null && px !== prev && arrowEl) {
+      const up = px > prev;
+      arrowEl.textContent = up ? "↑" : "↓";
+      arrowEl.classList.remove("up", "down", "pulse");
+      // reflow → перезапуск анимации даже при подряд идущих тиках одной стороны.
+      void arrowEl.offsetWidth;
+      arrowEl.classList.add(up ? "up" : "down", "pulse");
+    }
+    _livePrevPx.set(coin, px);
+  }
 }
 
 // Свинг-данные меняются медленно (тренды 4h/1h, OI 7d) — поллим раз в 60с.

@@ -43,6 +43,7 @@ import {
   setHmSignals,
   setBtcMomentum1m,
   markTickReady,
+  updateSetupLivePrice,
 } from "./src/features/setupScanner.js";
 
 // WS шлёт hotMovers каждые ~2с. Пока поток живой — HTTP-фолбэк /api/signals
@@ -54,6 +55,7 @@ function onStatus(data) {
   if (Number.isFinite(data.equity)) setSwingEquity(data.equity);
   renderHeader(data);
   updateActiveCoinSet(data.activePosition, data.manualPositions);
+  updateSetupLivePrice(); // живая стрелка цены активной монеты в Setup (≤2с)
   renderPosition(data.activePosition);
   renderManualPositions(data.manualPositions);
   renderBans(data);
