@@ -128,8 +128,41 @@ function stratTradesBlock(s) {
   );
 }
 
+// Shadow-exits сравнение (measurement-only): реальный выход vs would-be
+// time-decay / chandelier. Показываем только если бэкенд накопил строки.
+function stratShadowBlock(s) {
+  const sh = s.shadow;
+  if (!sh || !sh.n) return "";
+  const cell = (net, delta, fired) => {
+    const dcls = delta > 0.005 ? "strat-pos" : delta < -0.005 ? "strat-neg" : "strat-dim";
+    const sign = delta >= 0 ? "+" : "";
+    return (
+      `<td class="num">${fmtMoney(net)}</td>` +
+      `<td class="num ${dcls}">${sign}${fmtMoney(delta)}</td>` +
+      `<td class="num strat-dim">${fired}/${sh.n}</td>`
+    );
+  };
+  return (
+    `<div class="strat-detail-block strat-detail-full">` +
+    `<div class="strat-detail-h">Shadow exits · what-if (${sh.n} closed)</div>` +
+    `<table class="strat-detail-table strat-shadow-table"><thead><tr>` +
+    `<th></th><th class="num">net</th><th class="num">Δ vs actual</th><th class="num">fired</th>` +
+    `</tr></thead><tbody>` +
+    `<tr><td class="strat-dt-coin">actual</td><td class="num">${fmtMoney(sh.actual)}</td>` +
+    `<td class="num strat-dim">—</td><td class="num strat-dim">—</td></tr>` +
+    `<tr><td class="strat-dt-coin">time-decay</td>${cell(sh.td, sh.tdDelta, sh.tdFired)}</tr>` +
+    `<tr><td class="strat-dt-coin">chandelier</td>${cell(sh.chandelier, sh.chDelta, sh.chFired)}</tr>` +
+    `</tbody></table>` +
+    `<div class="strat-dim strat-shadow-note">measurement-only · реальные выходы не тронуты · «fired» = сколько раз модель сработала раньше реального выхода</div>` +
+    `</div>`
+  );
+}
+
 function stratDetail(s) {
   const parts = [];
+  // Shadow-сравнение выходов (Hunter SHORT) — наверху detail, если есть данные.
+  const shadow = stratShadowBlock(s);
+  if (shadow) parts.push(shadow);
   // Сигналы радара (Candy Girl / Chill Boy) — из WS-payload (in-memory, лёгкие).
   const sigs = Array.isArray(s.signals) ? s.signals : [];
   if (sigs.length) {

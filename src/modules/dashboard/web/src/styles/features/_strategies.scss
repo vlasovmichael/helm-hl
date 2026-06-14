@@ -195,6 +195,23 @@
 .strat-dt-coin {
   font-weight: 600;
 }
+.strat-shadow-table {
+  th {
+    padding: 2px 14px 4px 0;
+    color: var(--text-muted);
+    font-weight: 500;
+    text-align: left;
+    border-bottom: 1px solid var(--border-muted);
+  }
+  th.num {
+    text-align: right;
+  }
+}
+.strat-shadow-note {
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+}
 .strat-dt-side {
   color: var(--text-muted);
 }

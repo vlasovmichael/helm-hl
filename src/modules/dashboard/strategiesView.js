@@ -19,6 +19,7 @@ import {
   getStrategyNetSeries,
   getActivePosition,
   getActivePaperPositionByStrategy,
+  getShadowAggregate,
 } from '../../core/database.js';
 import { getVirtualEquitySnapshot } from '../chillBoyVirtualEquity.js';
 import { getCandyGirlVirtualEquitySnapshot } from '../candyGirlVirtualEquity.js';
@@ -216,6 +217,22 @@ function buildRow(entry, side = null, overrides = {}) {
   // virtual (compound-песочница) — только на основной/long строке, не на short.
   const vsnap = entry.virtual && side !== 'short' ? entry.virtual() : null;
 
+  // Shadow exits (measurement-only): сравнение реального выхода с time-decay /
+  // chandelier. Пока пишется только для Hunter SHORT; для прочих вернёт null.
+  const shadowAgg = getShadowAggregate(entry.id, side);
+  const shadow = shadowAgg
+    ? {
+        n:          shadowAgg.n,
+        actual:     shadowAgg.actual,
+        td:         shadowAgg.td,
+        chandelier: shadowAgg.chandelier,
+        tdDelta:    shadowAgg.td - shadowAgg.actual,
+        chDelta:    shadowAgg.chandelier - shadowAgg.actual,
+        tdFired:    shadowAgg.tdFired,
+        chFired:    shadowAgg.chFired,
+      }
+    : null;
+
   return {
     id:       entry.id,                        // базовый strategy_id (для REST)
     side,                                      // null | 'long' | 'short'
@@ -233,6 +250,7 @@ function buildRow(entry, side = null, overrides = {}) {
       all:  edge.sumNet,
     },
     virtual:  vsnap ? { equity: vsnap.equity, pnlTotal: vsnap.pnlTotal, pnlPct: vsnap.pnlPct } : null,
+    shadow,                                    // null | { n, actual, td, chandelier, tdDelta, chDelta }
     spark:    series,                         // raw net-серия (фронт делает cumsum)
     lastSignalAt,
     // recentTrades больше не шлём в WS — detail подгружает их постранично через

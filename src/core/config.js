@@ -376,6 +376,11 @@ function loadConfig() {
     throw new Error(`HUNTER_BE_FLOOR_PCT must be in [0, HUNTER_BE_ARM_PCT). Got: "${process.env.HUNTER_BE_FLOOR_PCT}"`);
   }
 
+  // Shadow exits (2026-06-14): measurement-only. Мерим would-be P&L альтернативных
+  // выходов (time-decay TP + chandelier ATR-trail) и пишем в shadow_exits на каждом
+  // close, НЕ трогая реальные выходы. Агрегат в /strategies. Default on — это лог.
+  const hunterShadowExitsEnabled = (process.env.HUNTER_SHADOW_EXITS_ENABLED || 'true').toLowerCase() === 'true';
+
   // ── Hunter Long (Iter E.1) — Long-after-dump, зеркало Hunter SHORT ──
   // Default false: PAPER-only включается отдельно. Заняла слот после Fade soft-kill.
   // Все параметры зеркальны HUNTER_* но с собственными дефолтами под dump-сторону:
@@ -854,6 +859,7 @@ function loadConfig() {
       hunterBeRatchetEnabled,
       hunterBeArmPct,
       hunterBeFloorPct,
+      hunterShadowExitsEnabled,
       hunterLongEnabled,
       hunterLongProdEnabled,
       hunterLongDumpPct,

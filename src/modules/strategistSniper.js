@@ -20,6 +20,7 @@ import {
   getHunterCrossCooldownRemainMs,
 } from './hunterCrossCooldown.js';
 import { recordNearMiss } from './nearMisses.js';
+import { trackShadowTick, finalizeShadow } from './hunterShadowExits.js';
 import {
   loadHunterCooldowns,
   setShortPostSl,
@@ -407,6 +408,15 @@ function emitHeartbeat(data, activePosition, bestUnqualified, now) {
  */
 function checkHunterExit(position, scoutData) {
   const item = scoutData?.find((x) => x.coin === position.coin);
+  // Shadow exits: учитываем тик и финализируем сравнение на close. Полностью
+  // measurement-only — реальное решение ниже не зависит от этого.
+  if (item) trackShadowTick(position, item.price);
+  const result = checkHunterExitCore(position, scoutData, item);
+  if (result.action === 'CLOSE') finalizeShadow(position, result.price);
+  return result;
+}
+
+function checkHunterExitCore(position, scoutData, item) {
   if (!item) return { action: 'HOLD' };  // нет свежей цены — ждём следующий тик
 
   // Обновляем MFE/MAE на каждом тике (до проверки SL/TP — захватываем краевые

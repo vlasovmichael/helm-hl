@@ -244,6 +244,33 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS candy_signals_ts_idx ON candy_signals (ts);
   `);
 
+  // Shadow exits (2026-06-14) — measurement-only сравнение реального выхода
+  // Hunter'а с альтернативными (time-decay TP, chandelier ATR-trail). Одна строка
+  // на закрытую позицию. НЕ влияет на торговлю; питает сравнение в /strategies.
+  // position_id = PK → INSERT OR REPLACE идемпотентен при повторном finalize.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS shadow_exits (
+      position_id  INTEGER PRIMARY KEY,
+      strategy_id  TEXT    NOT NULL,
+      side         TEXT    NOT NULL,
+      coin         TEXT    NOT NULL,
+      closed_at    INTEGER NOT NULL,
+      notional_usd REAL,
+      actual_pnl   REAL    NOT NULL,
+      actual_pct   REAL,
+      td_pnl       REAL,
+      td_pct       REAL,
+      td_fired     INTEGER NOT NULL DEFAULT 0,
+      td_min       REAL,
+      ch_pnl       REAL,
+      ch_pct       REAL,
+      ch_fired     INTEGER NOT NULL DEFAULT 0,
+      ch_min       REAL
+    );
+    CREATE INDEX IF NOT EXISTS shadow_exits_strat_idx ON shadow_exits (strategy_id, side);
+    CREATE INDEX IF NOT EXISTS shadow_exits_closed_idx ON shadow_exits (closed_at);
+  `);
+
   logger.info(`[DB] Initialized at ${DB_PATH}`);
   return db;
 }
@@ -702,6 +729,66 @@ export function getStrategyPnlSince(strategyId, mode, sinceMs, side = null) {
     `)
     .get(...args);
   return { n: row.n, net: row.net };
+}
+
+/**
+ * Записывает строку shadow-сравнения выходов (Hunter time-decay / chandelier).
+ * position_id — PK → INSERT OR REPLACE (идемпотентно при повторном finalize).
+ */
+export function recordShadowExit(row) {
+  getDb()
+    .prepare(`
+      INSERT OR REPLACE INTO shadow_exits (
+        position_id, strategy_id, side, coin, closed_at, notional_usd,
+        actual_pnl, actual_pct, td_pnl, td_pct, td_fired, td_min,
+        ch_pnl, ch_pct, ch_fired, ch_min
+      ) VALUES (
+        @position_id, @strategy_id, @side, @coin, @closed_at, @notional_usd,
+        @actual_pnl, @actual_pct, @td_pnl, @td_pct, @td_fired, @td_min,
+        @ch_pnl, @ch_pct, @ch_fired, @ch_min
+      )
+    `)
+    .run({
+      td_min: row.td_min ?? null,
+      ch_min: row.ch_min ?? null,
+      notional_usd: row.notional_usd ?? null,
+      actual_pct: row.actual_pct ?? null,
+      td_pct: row.td_pct ?? null,
+      ch_pct: row.ch_pct ?? null,
+      ...row,
+    });
+}
+
+/**
+ * Агрегат shadow-выходов по стратегии (опц. сторона). Сравнивает суммарный
+ * realized actual vs would-be time-decay / chandelier. Для колонок в /strategies.
+ * @returns {{ n, actual, td, chandelier, tdFired, chFired }|null}
+ */
+export function getShadowAggregate(strategyId, side = null) {
+  const sideClause = side ? ' AND side = ?' : '';
+  const args = side ? [strategyId, side] : [strategyId];
+  const row = getDb()
+    .prepare(`
+      SELECT
+        COUNT(*)                AS n,
+        COALESCE(SUM(actual_pnl), 0) AS actual,
+        COALESCE(SUM(td_pnl), 0)     AS td,
+        COALESCE(SUM(ch_pnl), 0)     AS chandelier,
+        COALESCE(SUM(td_fired), 0)   AS td_fired,
+        COALESCE(SUM(ch_fired), 0)   AS ch_fired
+      FROM shadow_exits
+      WHERE strategy_id = ?${sideClause}
+    `)
+    .get(...args);
+  if (!row || row.n === 0) return null;
+  return {
+    n:          row.n,
+    actual:     row.actual,
+    td:         row.td,
+    chandelier: row.chandelier,
+    tdFired:    row.td_fired,
+    chFired:    row.ch_fired,
+  };
 }
 
 /**
