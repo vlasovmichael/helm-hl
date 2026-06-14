@@ -156,26 +156,48 @@
         </div>
       </section>
 
-      <!-- 07 / Performance (Equity Chart) -->
-      <section class="card">
+      <!-- 06.5 / Strategies — единый обзор всех стратегий (реестр-driven) -->
+      <!-- Одна большая таблица: строка = стратегия. Live (prod-сделки) / Paper
+           (накопление в shadow-слоте) / Radar / Off / Planned (место под будущие).
+           Данные — из WS status-payload (msg.data.strategies). renderStrategies(). -->
+      <section class="card" id="sec-strategies">
         <div class="card-header">
-          <div class="card-title" data-num="07">Performance</div>
-          <div class="equity-pill" id="equity-pill" hidden>
-            <span class="equity-pill-value" id="equity-pill-value">$0.00</span>
-            <span class="equity-pill-delta" id="equity-pill-delta">+0.00%</span>
+          <div
+            class="card-title"
+            data-num="06.5"
+            title="Все стратегии в одном месте. Live торгует реальными деньгами, Paper копит статистику в shadow-слоте (отдельно от прода), Radar только сигналит, Planned — зарезервированное место под будущие стратегии."
+          >
+            Strategies
           </div>
-          <div class="time-ranges">
-            <button class="range-btn" data-hours="1">1h</button>
-            <button class="range-btn active" data-hours="24">24h</button>
-            <button class="range-btn" data-hours="168">7d</button>
-            <button class="range-btn" data-hours="720">30d</button>
-          </div>
+          <div class="time-ranges" id="strategies-summary"></div>
         </div>
-        <div class="chart-container" id="chart-container">
-          <div id="equity-chart"></div>
-          <div class="local-loader" id="chart-loader">
-            <div class="loader-spinner"></div>
-          </div>
+        <div class="strat-table-wrap">
+          <table class="strat-table" id="strategies-table">
+            <thead>
+              <tr>
+                <th class="strat-col-name">Strategy</th>
+                <th title="Режим работы">Status</th>
+                <th title="Открытая позиция (slot / paper-slot)">Position</th>
+                <th class="num" title="Виртуальный equity compound-песочницы (paper)">Equity</th>
+                <th class="num" title="Число закрытых сделок">Trades</th>
+                <th class="num" title="Доля прибыльных">Win%</th>
+                <th class="num" title="Ожидание на сделку (avg net)">Exp</th>
+                <th class="num" title="Payoff = avgWin / |avgLoss|. ≥2 = здоровый профиль">Payoff</th>
+                <th class="num" title="Макс. просадка по кривой net-P&L">Max DD</th>
+                <th class="num" title="Net P&L сегодня">Today</th>
+                <th class="num" title="Net P&L за 7 дней">7d</th>
+                <th class="num" title="Net P&L за всё время">All</th>
+                <th class="strat-col-spark" title="Кривая накопленного P&L">Trend</th>
+              </tr>
+            </thead>
+            <tbody id="strategies-tbody">
+              <tr class="strat-skel-row"><td colspan="13"><div class="skeleton-row" style="width:70%"></div></td></tr>
+              <tr class="strat-skel-row"><td colspan="13"><div class="skeleton-row" style="width:85%"></div></td></tr>
+              <tr class="strat-skel-row"><td colspan="13"><div class="skeleton-row" style="width:60%"></div></td></tr>
+              <tr class="strat-skel-row"><td colspan="13"><div class="skeleton-row" style="width:78%"></div></td></tr>
+              <tr class="strat-skel-row"><td colspan="13"><div class="skeleton-row" style="width:66%"></div></td></tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -249,48 +271,26 @@
         </div>
       </section>
 
-      <!-- 06.5 / Strategies — единый обзор всех стратегий (реестр-driven) -->
-      <!-- Одна большая таблица: строка = стратегия. Live (prod-сделки) / Paper
-           (накопление в shadow-слоте) / Radar / Off / Planned (место под будущие).
-           Данные — из WS status-payload (msg.data.strategies). renderStrategies(). -->
-      <section class="card" id="sec-strategies">
+      <!-- 07 / Performance (Equity Chart) -->
+      <section class="card">
         <div class="card-header">
-          <div
-            class="card-title"
-            data-num="06.5"
-            title="Все стратегии в одном месте. Live торгует реальными деньгами, Paper копит статистику в shadow-слоте (отдельно от прода), Radar только сигналит, Planned — зарезервированное место под будущие стратегии."
-          >
-            Strategies
+          <div class="card-title" data-num="07">Performance</div>
+          <div class="equity-pill" id="equity-pill" hidden>
+            <span class="equity-pill-value" id="equity-pill-value">$0.00</span>
+            <span class="equity-pill-delta" id="equity-pill-delta">+0.00%</span>
           </div>
-          <div class="time-ranges" id="strategies-summary"></div>
+          <div class="time-ranges">
+            <button class="range-btn" data-hours="1">1h</button>
+            <button class="range-btn active" data-hours="24">24h</button>
+            <button class="range-btn" data-hours="168">7d</button>
+            <button class="range-btn" data-hours="720">30d</button>
+          </div>
         </div>
-        <div class="strat-table-wrap">
-          <table class="strat-table" id="strategies-table">
-            <thead>
-              <tr>
-                <th class="strat-col-name">Strategy</th>
-                <th title="Режим работы">Status</th>
-                <th title="Открытая позиция (slot / paper-slot)">Position</th>
-                <th class="num" title="Виртуальный equity compound-песочницы (paper)">Equity</th>
-                <th class="num" title="Число закрытых сделок">Trades</th>
-                <th class="num" title="Доля прибыльных">Win%</th>
-                <th class="num" title="Ожидание на сделку (avg net)">Exp</th>
-                <th class="num" title="Payoff = avgWin / |avgLoss|. ≥2 = здоровый профиль">Payoff</th>
-                <th class="num" title="Макс. просадка по кривой net-P&L">Max DD</th>
-                <th class="num" title="Net P&L сегодня">Today</th>
-                <th class="num" title="Net P&L за 7 дней">7d</th>
-                <th class="num" title="Net P&L за всё время">All</th>
-                <th class="strat-col-spark" title="Кривая накопленного P&L">Trend</th>
-              </tr>
-            </thead>
-            <tbody id="strategies-tbody">
-              <tr class="strat-skel-row"><td colspan="13"><div class="skeleton-row" style="width:70%"></div></td></tr>
-              <tr class="strat-skel-row"><td colspan="13"><div class="skeleton-row" style="width:85%"></div></td></tr>
-              <tr class="strat-skel-row"><td colspan="13"><div class="skeleton-row" style="width:60%"></div></td></tr>
-              <tr class="strat-skel-row"><td colspan="13"><div class="skeleton-row" style="width:78%"></div></td></tr>
-              <tr class="strat-skel-row"><td colspan="13"><div class="skeleton-row" style="width:66%"></div></td></tr>
-            </tbody>
-          </table>
+        <div class="chart-container" id="chart-container">
+          <div id="equity-chart"></div>
+          <div class="local-loader" id="chart-loader">
+            <div class="loader-spinner"></div>
+          </div>
         </div>
       </section>
 
