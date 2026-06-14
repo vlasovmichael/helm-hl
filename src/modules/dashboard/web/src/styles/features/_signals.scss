@@ -271,30 +271,30 @@
   align-items: center;
   justify-content: center;
 }
+/* Живая стрелка активной монеты: крутится (спин 360°) + цвет тика при КАЖДОМ
+   изменении цены по WS (≤2с), как в Setup-карточке. Раньше она лишь медленно
+   доворачивалась по направлению скан-тика и почти стояла — отсюда «не крутится».
+   Спин ретригерится из JS (remove→reflow→add .spin) в updateHotMoversLiveArrow. */
 .hm-dir-arrow {
   display: inline-block;
   line-height: 1;
+  font-weight: 700;
   color: var(--text-muted);
-  transform: rotate(var(--hm-rot, 90deg));
-  transition:
-    transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1),
-    color 0.35s ease;
+  transform-origin: 50% 55%;
+  transition: color 0.35s ease;
   &.up {
-    --hm-rot: 0deg;
     color: var(--green);
   }
   &.down {
-    --hm-rot: 180deg;
     color: var(--red);
   }
-  &.mid {
-    --hm-rot: 90deg;
-    color: var(--text-muted);
+  &.spin {
+    animation: setupLiveSpin 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .hm-dir-arrow {
-    transition: none;
+  .hm-dir-arrow.spin {
+    animation: none;
   }
 }
 @include until($bp-md) {
@@ -759,7 +759,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   pointer-events: none;
 }
 .hm-table tbody tr.hm-status-row .hm-status-cell {
-  height: 240px;
+  padding: 28px 0;
   text-align: center;
   color: var(--text-muted);
   font-size: 13px;

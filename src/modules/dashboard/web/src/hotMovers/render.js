@@ -377,8 +377,8 @@ export function renderHotMovers(payload, fmtTime) {
     // Ключ ph:* → едет по no-animation пути реконсилера (чистый снос при данных).
     const loading = !payload?.ts;
     const statusHtml = loading
-      ? '<span class="loader-spinner hm-status-spinner"></span><span>Загрузка…</span>'
-      : "<span>нет направленных сетапов — все монеты в WAIT</span>";
+      ? '<span class="loader-spinner hm-status-spinner"></span><span>Loading…</span>'
+      : "<span>no directional setups — all coins in WAIT</span>";
     items.push({
       key: "ph:status",
       cls: "hm-status-row",
@@ -401,11 +401,13 @@ export function renderHotMovers(payload, fmtTime) {
   mountDirArrows(tbody);
 }
 
-// Персистентные стрелки направления: строки перестраиваются (innerHTML) каждый
-// тик, поэтому переносим ОДИН и тот же DOM-узел стрелки в перестроенную ячейку
-// (appendChild сохраняет identity). Тогда смена класса .up/.down/.mid реально
-// твинит поворот/цвет через CSS-transition, а не щёлкает на новом элементе.
+// Персистентные стрелки активной монеты: строки перестраиваются (innerHTML)
+// каждый тик, поэтому переносим ОДИН и тот же DOM-узел стрелки в перестроенную
+// ячейку (appendChild сохраняет identity). Глифом/цветом/спином узла управляет
+// updateHotMoversLiveArrow() по ЖИВОЙ цене (WS ≤2с) — здесь только держим узел
+// смонтированным, чтобы его не сбрасывало перестроение строки.
 const _hmDirArrows = new Map(); // coin → <span.hm-dir-arrow>
+const _hmLivePrevPx = new Map(); // coin → последняя цена (для детекта изменения)
 
 function mountDirArrows(tbody) {
   const seen = new Set();
@@ -418,15 +420,39 @@ function mountDirArrows(tbody) {
     let arrow = _hmDirArrows.get(coin);
     if (!arrow) {
       arrow = document.createElement("span");
-      arrow.textContent = "↑";
+      arrow.className = "hm-dir-arrow";
+      // Стартовый глиф из направления скан-тика — до первого живого тика.
+      arrow.textContent = mount.dataset.dir === "down" ? "↓" : "↑";
       _hmDirArrows.set(coin, arrow);
     }
     if (arrow.parentNode !== mount) mount.appendChild(arrow);
-    const cls = `hm-dir-arrow ${mount.dataset.dir || "mid"}`;
-    if (arrow.className !== cls) arrow.className = cls;
   }
   // Монета закрылась/ушла из таблицы — отпускаем узел (не копим Map).
-  for (const coin of _hmDirArrows.keys()) if (!seen.has(coin)) _hmDirArrows.delete(coin);
+  for (const coin of _hmDirArrows.keys())
+    if (!seen.has(coin)) {
+      _hmDirArrows.delete(coin);
+      _hmLivePrevPx.delete(coin);
+    }
+}
+
+// Живой спин стрелки активной монеты — дёргается из onStatus по WS-status (≤2с),
+// независимо от скан-тика Hot Movers. Для каждой активной монеты берёт текущую
+// цену (getActivePos().now) и, если она изменилась, ставит глиф ↑/↓ нужного
+// цвета и ретригерит CSS-спин (как setup-live-arrow). Это и есть «крутится».
+export function updateHotMoversLiveArrow() {
+  for (const [coin, arrow] of _hmDirArrows) {
+    const px = getActivePos(coin)?.now;
+    if (px == null || !Number.isFinite(px)) continue;
+    const prev = _hmLivePrevPx.get(coin);
+    if (prev != null && px !== prev) {
+      const up = px > prev;
+      arrow.textContent = up ? "↑" : "↓";
+      arrow.classList.remove("up", "down", "spin");
+      void arrow.offsetWidth; // reflow → перезапуск спина даже при тиках одной стороны
+      arrow.classList.add(up ? "up" : "down", "spin");
+    }
+    _hmLivePrevPx.set(coin, px);
+  }
 }
 
 // ── keyed-реконсилер с FLIP-анимациями ──

@@ -23,7 +23,10 @@ import {
   renderManualPositions,
   renderBans,
 } from "./src/features/accountStatus.js";
-import { renderHotMovers } from "./src/hotMovers/render.js";
+import {
+  renderHotMovers,
+  updateHotMoversLiveArrow,
+} from "./src/hotMovers/render.js";
 import { renderMarketContext } from "./src/features/marketContext.js";
 import {
   initWhaleWatch,
@@ -65,6 +68,9 @@ function onStatus(data) {
     renderHotMovers(data.hotMovers, fmtTime);
     lastWsHotMoversAt = Date.now();
   }
+  // Живой спин стрелки активной монеты в Hot Movers (≤2с) — после рендера, чтобы
+  // спин ставился на уже смонтированный узел и не сбрасывался перестроением строк.
+  updateHotMoversLiveArrow();
 }
 
 async function tick() {
