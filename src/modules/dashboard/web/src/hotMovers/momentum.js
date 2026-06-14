@@ -14,6 +14,24 @@ const HM_ENTRY_ZONE_PCT = 0.5;
 const HM_ENTRY_EXT_PCT = 2.5;
 const HM_ENTRY_MIN_SCORE = 3; // = порог рамки Setup (score≥3 + mode)
 
+// Направление цены по взвешенному ходу окон (для активной монеты в колонке
+// Enter): up / down / mid (боковик). Band ±0.3 отсекает дрожь у нуля.
+export function priceDirection(windows) {
+  let weighted = 0;
+  let have = false;
+  for (const w of windows || []) {
+    if (w?.spikePct == null) continue;
+    const wt = _MOM_WEIGHTS[w.mins];
+    if (wt == null) continue;
+    weighted += w.spikePct * wt;
+    have = true;
+  }
+  if (!have) return "mid";
+  if (weighted > 0.3) return "up";
+  if (weighted < -0.3) return "down";
+  return "mid";
+}
+
 export function deriveOiKind(s) {
   const d15 = s?.oiDelta15m, d5 = s?.oiDelta5m;
   if (typeof d15 === "number" && isFinite(d15)) {

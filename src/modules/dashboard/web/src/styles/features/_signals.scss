@@ -258,6 +258,23 @@
   opacity: 0.4;
   font-size: 15px;
 }
+/* Активная монета: направление цены вместо таймера входа. */
+.hm-dir-up .hm-entry-icon {
+  background: var(--green-soft);
+  border-color: var(--green-line);
+  color: var(--pos, #30a46c);
+  font-size: 15px;
+}
+.hm-dir-down .hm-entry-icon {
+  background: var(--red-soft);
+  border-color: var(--red-line);
+  color: var(--neg, #e5484d);
+  font-size: 15px;
+}
+.hm-dir-mid .hm-entry-icon {
+  color: var(--text-muted);
+  font-size: 16px;
+}
 @include until($bp-md) {
   .hm-entry-icon {
     width: 26px;

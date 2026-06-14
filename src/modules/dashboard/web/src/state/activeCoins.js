@@ -92,35 +92,35 @@ export function hmPosHintInner(coin) {
     const kind = bot.floorKind;
     if (bot.floorPct != null) {
       if (kind === "trail")
-        chips.push(["good", `защита +${bot.floorPct.toFixed(2)}% (трейл)`]);
-      else if (kind === "be") chips.push(["good", "защита б/у (BE)"]);
+        chips.push(["good", `floor +${bot.floorPct.toFixed(2)}% (trail)`]);
+      else if (kind === "be") chips.push(["good", "floor breakeven (BE)"]);
       else
         chips.push([
           "neutral",
-          `стоп ${bot.floorPct >= 0 ? "+" : ""}${bot.floorPct.toFixed(1)}%`,
+          `stop ${bot.floorPct >= 0 ? "+" : ""}${bot.floorPct.toFixed(1)}%`,
         ]);
     } else if (bot.stopPrice != null) {
       const sp = bot.stopPct != null ? ` (−${bot.stopPct.toFixed(1)}%)` : "";
-      chips.push(["neutral", `стоп @${fmtPx(bot.stopPrice)}${sp}`]);
+      chips.push(["neutral", `stop @${fmtPx(bot.stopPrice)}${sp}`]);
     }
     // Расстояние цены до спускового крючка бота — «сколько ещё до выхода».
     if (fp != null && now != null && now > 0) {
       const dist = (Math.abs(now - fp) / now) * 100;
-      chips.push(["neutral", `до выхода ${dist.toFixed(2)}%`]);
+      chips.push(["neutral", `to exit ${dist.toFixed(2)}%`]);
     }
     if (bot.peakPct != null && bot.peakPct > 0.1)
-      chips.push(["neutral", `пик +${bot.peakPct.toFixed(2)}%`]);
+      chips.push(["neutral", `peak +${bot.peakPct.toFixed(2)}%`]);
   }
   // Близость ликвидации — единственный «алерт», и тот информативный.
   if (liq && now) {
     const liqDist = (Math.abs(now - liq) / now) * 100;
-    if (liqDist < 8) chips.push(["danger", `⚠️ ликв. в ${liqDist.toFixed(1)}%`]);
+    if (liqDist < 8) chips.push(["danger", `⚠️ liq. in ${liqDist.toFixed(1)}%`]);
   }
   // Нет действий бота и ликв не близко → под-строка не нужна: метка активной
   // монеты остаётся на самой строке (📍 + бейдж), P&L смотри в Active Position.
   if (!chips.length) return "";
 
-  const tag = source === "manual" ? (adopted ? "ТЫ + бот" : "ТЫ") : "BOT";
+  const tag = source === "manual" ? (adopted ? "YOU + BOT" : "YOU") : "BOT";
   const chipsHtml = chips
     .map(([k, t]) => `<span class="hm-hint hm-hint-${k}">${escapeHtml(t)}</span>`)
     .join(" ");

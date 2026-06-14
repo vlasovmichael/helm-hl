@@ -15,6 +15,7 @@ import {
   hmEntryBadge,
   deriveAccelKind,
   deriveVolKind,
+  priceDirection,
 } from "./momentum.js";
 import {
   isActiveCoin,
@@ -103,8 +104,8 @@ export function renderHotMovers(payload, fmtTime) {
     const base = `scope ${payload.universeSize} · top ${restRows.length} by momentum${activeShown ? ` · ${activeShown} open` : ""} · updated ${fmtTime(payload.ts)}`;
     if (flush?.active) {
       const sharePct = Math.round((flush.share || 0) * 100);
-      const word = flush.dir === "up" ? "СКВИЗ" : "СЛИВ";
-      meta.innerHTML = `<span class="hm-flush-chip" title="Синхронный делевередж лидеров движения (${sharePct}% топа OI↓) — fade против движения = лов ножа, заглушён">⚠️ ${word} ${sharePct}%</span> · ${escapeHtml(base)}`;
+      const word = flush.dir === "up" ? "SQUEEZE" : "FLUSH";
+      meta.innerHTML = `<span class="hm-flush-chip" title="Synchronized deleveraging across movers (${sharePct}% of top with OI↓) — fade against the move = catching a knife, muted">⚠️ ${word} ${sharePct}%</span> · ${escapeHtml(base)}`;
     } else {
       meta.textContent = base;
     }
@@ -326,11 +327,21 @@ export function renderHotMovers(payload, fmtTime) {
       ? `<td class="hm-setup c" data-w="Setup"><span class="num-inline-muted">·</span></td>`
       : `<td class="hm-setup c ${setup.cls}" data-w="Setup" title="${setup.title}">${setup.label}</td>`;
 
-    // ENTER: для открытой монеты вход неактуален — показываем «держишь» (бот
-    // нянчит), управление/выход — в под-строке ниже. Иначе таймер входа 🎯/⏳/⛔.
-    const entryCell = isOpen
-      ? `<td class="hm-entry hm-entry-held" data-w="Вход" title="в позиции — вход сделан, управление в строке ниже"><span class="hm-entry-icon">🛡️</span></td>`
-      : `<td class="hm-entry hm-entry-${entry.state}" data-w="Вход" title="${entry.title}"><span class="hm-entry-icon">${entry.icon}</span></td>`;
+    // ENTER: для открытой монеты вход неактуален — вместо таймера показываем,
+    // куда сейчас идёт цена (up/down/mid). Управление/выход — в под-строке.
+    let entryCell;
+    if (isOpen) {
+      const dir = priceDirection(x.windows);
+      const dirMap = {
+        up: ["▲", "hm-dir-up", "price moving up"],
+        down: ["▼", "hm-dir-down", "price moving down"],
+        mid: ["→", "hm-dir-mid", "price sideways"],
+      };
+      const [icon, cls, title] = dirMap[dir];
+      entryCell = `<td class="hm-entry ${cls}" data-w="Dir" title="in position — ${title}"><span class="hm-entry-icon">${icon}</span></td>`;
+    } else {
+      entryCell = `<td class="hm-entry hm-entry-${entry.state}" data-w="Enter" title="${entry.title}"><span class="hm-entry-icon">${entry.icon}</span></td>`;
+    }
 
     const rowHtml = `
       <td>${isOpen ? "📍" : idx + 1}</td>
