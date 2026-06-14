@@ -19,16 +19,6 @@ services:
       - gateway_net
       - tax_net
 
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: cloudflared
-    restart: unless-stopped
-    mem_limit: 512m
-    mem_reservation: 256m
-    command: tunnel --protocol http2 --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
-    networks:
-      - gateway_net
-
   tui:
     profiles: [tui]
     build:
