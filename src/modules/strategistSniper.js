@@ -495,6 +495,14 @@ function checkHunterExitCore(position, scoutData, item) {
   // чем SL (price=entry+2%). Порог ARM ниже trail-arm — берёт и подарки,
   // которые не дотянули до trail.
   if (HUNTER_BE_RATCHET_ENABLED && peak >= HUNTER_BE_ARM_PCT) {
+    // Лог только на переходе (взвод), не на каждом тике — чтобы был явный
+    // след "храповик взведён", и больше не возникало "а где же он?".
+    if (hunterBeArmedMap.get(position.id) !== true) {
+      logger.info(
+        `[Hunter] 🛡 BREAKEVEN RATCHET ARMED #${position.coin} (id=${position.id}): peak +${peak.toFixed(2)}% ≥ ${HUNTER_BE_ARM_PCT}% — ` +
+          `floor ${HUNTER_BE_FLOOR_PCT}%, теперь не отдадим в минус`,
+      );
+    }
     hunterBeArmedMap.set(position.id, true);
   }
   if (hunterBeArmedMap.get(position.id) === true && unrealizedPct <= HUNTER_BE_FLOOR_PCT) {
