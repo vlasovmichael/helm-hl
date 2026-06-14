@@ -752,6 +752,28 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   visibility: hidden;
 }
 
+/* Статус-строка (нет данных / все в WAIT): одна центрированная строка вместо
+   пустых рядов. Резервирует ~высоту 8 строк, чтобы карточка не схлопывалась. */
+.hm-table tbody tr.hm-status-row {
+  background: transparent;
+  pointer-events: none;
+}
+.hm-table tbody tr.hm-status-row .hm-status-cell {
+  height: 240px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.hm-status-spinner {
+  width: 16px;
+  height: 16px;
+}
+
 /* ── Hot Movers — мобильная card-вёрстка (≤720px) ──
    11 колонок не влезают в телефон → каждая монета становится карточкой:
    строка 1 = ранг · тикер(+чип) · цена(справа) · тайминг входа;

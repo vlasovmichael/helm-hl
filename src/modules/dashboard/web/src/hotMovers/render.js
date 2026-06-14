@@ -370,13 +370,31 @@ export function renderHotMovers(payload, fmtTime) {
   // reconcileRows): монета въезжает в «освободившийся» пустой слот, пустышки не
   // мельтешат. Считаем по ОСНОВНЫМ строкам (enriched.length), под-строки позиции
   // (pos:) — отдельная намеренная высота, их не компенсируем.
-  const placeholdersNeeded = Math.max(0, HM_MAX_ROWS - enriched.length);
-  for (let i = 0; i < placeholdersNeeded; i++) {
+  if (enriched.length === 0) {
+    // Совсем нечего показать (ни позиции, ни прошедших фильтр монет). Раньше
+    // тут выезжало 8 пустых строк — выглядело как «битая таблица». Вместо них
+    // одна статус-строка: лоадер до первого снапшота, текст про WAIT в тишине.
+    // Ключ ph:* → едет по no-animation пути реконсилера (чистый снос при данных).
+    const loading = !payload?.ts;
+    const statusHtml = loading
+      ? '<span class="loader-spinner hm-status-spinner"></span><span>Загрузка…</span>'
+      : "<span>нет направленных сетапов — все монеты в WAIT</span>";
     items.push({
-      key: `ph:${i}`,
-      cls: "hm-placeholder-row",
-      html: '<td colspan="11" class="hm-ph-cell"><span class="signals-price">&nbsp;</span></td>',
+      key: "ph:status",
+      cls: "hm-status-row",
+      html: `<td colspan="11" class="hm-status-cell">${statusHtml}</td>`,
     });
+  } else {
+    // Есть хотя бы одна монета → добиваем пустыми строками до HM_MAX_ROWS,
+    // чтобы высота карточки не прыгала при малом числе монет.
+    const placeholdersNeeded = Math.max(0, HM_MAX_ROWS - enriched.length);
+    for (let i = 0; i < placeholdersNeeded; i++) {
+      items.push({
+        key: `ph:${i}`,
+        cls: "hm-placeholder-row",
+        html: '<td colspan="11" class="hm-ph-cell"><span class="signals-price">&nbsp;</span></td>',
+      });
+    }
   }
 
   reconcileRows(tbody, items);
