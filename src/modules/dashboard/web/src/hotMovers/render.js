@@ -15,7 +15,6 @@ import {
   hmEntryBadge,
   deriveAccelKind,
   deriveVolKind,
-  priceDirection,
 } from "./momentum.js";
 import {
   isActiveCoin,
@@ -334,7 +333,9 @@ export function renderHotMovers(payload, fmtTime) {
     // переживает, поэтому поворот реально твинит. Управление/выход — в под-строке.
     let entryCell;
     if (isOpen) {
-      const dir = priceDirection(x.windows); // up | down | mid
+      // Направление = знак domMove (то же, что тинт строки и hm-align): up/down,
+      // mid при почти нулевом движении (порог как у align-чипа).
+      const dir = moveAbs < 0.05 ? "mid" : domMove > 0 ? "up" : "down";
       const tip =
         dir === "up" ? "price moving up" : dir === "down" ? "price moving down" : "price sideways";
       entryCell = `<td class="hm-entry hm-dir" data-w="Dir" title="in position — ${tip}"><span class="hm-entry-icon"><span class="hm-dir-mount" data-dir="${dir}"></span></span></td>`;
