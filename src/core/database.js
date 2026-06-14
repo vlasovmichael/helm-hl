@@ -650,85 +650,96 @@ export function getHistorySince(sinceMs) {
 }
 
 /**
+ * Сделки стратегии/режима из ОБОИХ источников: live-таблица history + архив
+ * (data/history_archive.json). Auto-Cleanup при простое бота чистит live-таблицу
+ * (см. archiveAndClearHistory), поэтому статистика стратегий обязана читать архив,
+ * иначе трек-рекорд обнуляется при каждом простое (инцидент 2026-06-14). Дедуп по
+ * id на случай гонки архивации. Отсортировано closed_at ASC (старые → новые).
+ */
+function getStrategyHistoryMerged(strategyId, mode, side = null) {
+  const live = getDb()
+    .prepare('SELECT * FROM history WHERE strategy_id = ? AND mode = ?')
+    .all(strategyId, mode);
+  const archived = getArchivedHistorySince(0).filter(
+    (r) => r.strategy_id === strategyId && r.mode === mode,
+  );
+  const seen = new Set();
+  const merged = [];
+  for (const r of [...archived, ...live]) {
+    if (side && r.side !== side) continue;
+    if (r.id != null) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+    }
+    merged.push(r);
+  }
+  merged.sort((a, b) => (a.closed_at || 0) - (b.closed_at || 0));
+  return merged;
+}
+
+/**
  * Stats для конкретной стратегии/режима — для dashboard карточки.
  * Возвращает n, sumNet, avgNet, worstNet, bestNet, winRate, lastClosedAt,
  * а также wins/losses/avgWin/avgLoss (для payoff = avgWin/|avgLoss|).
+ * Читает live + архив (archive-aware), чтобы Auto-Cleanup не обнулял трек-рекорд.
  */
 export function getStrategyStats(strategyId, mode, side = null) {
-  const sideClause = side ? ' AND side = ?' : '';
-  const args = side ? [strategyId, mode, side] : [strategyId, mode];
-  const row = getDb()
-    .prepare(`
-      SELECT
-        COUNT(*)                                   AS n,
-        COALESCE(SUM(realized_pnl - fee_paid), 0)  AS sum_net,
-        COALESCE(AVG(realized_pnl - fee_paid), 0)  AS avg_net,
-        COALESCE(MIN(realized_pnl - fee_paid), 0)  AS worst_net,
-        COALESCE(MAX(realized_pnl - fee_paid), 0)  AS best_net,
-        SUM(CASE WHEN (realized_pnl - fee_paid) > 0 THEN 1 ELSE 0 END) AS wins,
-        SUM(CASE WHEN (realized_pnl - fee_paid) <= 0 THEN 1 ELSE 0 END) AS losses,
-        COALESCE(AVG(CASE WHEN (realized_pnl - fee_paid) > 0  THEN (realized_pnl - fee_paid) END), 0) AS avg_win,
-        COALESCE(AVG(CASE WHEN (realized_pnl - fee_paid) <= 0 THEN (realized_pnl - fee_paid) END), 0) AS avg_loss,
-        MAX(closed_at)                             AS last_closed_at
-      FROM history
-      WHERE strategy_id = ? AND mode = ?${sideClause}
-    `)
-    .get(...args);
+  const rows = getStrategyHistoryMerged(strategyId, mode, side);
+  const n = rows.length;
+  if (n === 0) {
+    return {
+      n: 0, sumNet: 0, avgNet: 0, worstNet: 0, bestNet: 0,
+      wins: 0, losses: 0, avgWin: 0, avgLoss: 0, winRate: 0, lastClosedAt: null,
+    };
+  }
+  let sumNet = 0, wins = 0, losses = 0, sumWin = 0, sumLoss = 0;
+  let worstNet = Infinity, bestNet = -Infinity, lastClosedAt = 0;
+  for (const r of rows) {
+    const net = (r.realized_pnl || 0) - (r.fee_paid || 0);
+    sumNet += net;
+    if (net > 0) { wins++; sumWin += net; } else { losses++; sumLoss += net; }
+    if (net < worstNet) worstNet = net;
+    if (net > bestNet) bestNet = net;
+    if ((r.closed_at || 0) > lastClosedAt) lastClosedAt = r.closed_at;
+  }
   return {
-    n:            row.n,
-    sumNet:       row.sum_net,
-    avgNet:       row.avg_net,
-    worstNet:     row.worst_net,
-    bestNet:      row.best_net,
-    wins:         row.wins,
-    losses:       row.losses,
-    avgWin:       row.avg_win,
-    avgLoss:      row.avg_loss,
-    winRate:      row.n > 0 ? row.wins / row.n : 0,
-    lastClosedAt: row.last_closed_at,
+    n,
+    sumNet,
+    avgNet:       sumNet / n,
+    worstNet,
+    bestNet,
+    wins,
+    losses,
+    avgWin:       wins > 0 ? sumWin / wins : 0,
+    avgLoss:      losses > 0 ? sumLoss / losses : 0,
+    winRate:      wins / n,
+    lastClosedAt: lastClosedAt || null,
   };
 }
 
 /**
  * Упорядоченная по времени серия net-P&L закрытых сделок стратегии/режима.
  * Для спарклайна equity и расчёта max drawdown в обзорной таблице стратегий.
- * @returns {number[]} net P&L каждой сделки, старые → новые
+ * Archive-aware (live + архив). @returns {number[]} net P&L каждой сделки, старые → новые
  */
 export function getStrategyNetSeries(strategyId, mode, limit = 100, side = null) {
-  const sideClause = side ? ' AND side = ?' : '';
-  const args = side ? [strategyId, mode, side, limit] : [strategyId, mode, limit];
-  const rows = getDb()
-    .prepare(`
-      SELECT (realized_pnl - fee_paid) AS net
-      FROM history
-      WHERE strategy_id = ? AND mode = ?${sideClause}
-      ORDER BY closed_at DESC
-      LIMIT ?
-    `)
-    .all(...args);
-  // вернули DESC (новые первыми) → разворачиваем в хронологический порядок
-  return rows.reverse().map((r) => r.net);
+  const rows = getStrategyHistoryMerged(strategyId, mode, side); // ASC
+  // последние `limit` по времени, в хронологическом порядке
+  return rows.slice(-limit).map((r) => (r.realized_pnl || 0) - (r.fee_paid || 0));
 }
 
 /**
  * Net P&L и число сделок стратегии/режима, закрытых после sinceMs.
- * Для summary «за день / за неделю» под таблицей paper-слота.
+ * Для summary «за день / за неделю» под таблицей paper-слота. Archive-aware.
  *
  * @returns {{ n: number, net: number }}
  */
 export function getStrategyPnlSince(strategyId, mode, sinceMs, side = null) {
-  const sideClause = side ? ' AND side = ?' : '';
-  const args = side ? [strategyId, mode, sinceMs, side] : [strategyId, mode, sinceMs];
-  const row = getDb()
-    .prepare(`
-      SELECT
-        COUNT(*)                                  AS n,
-        COALESCE(SUM(realized_pnl - fee_paid), 0) AS net
-      FROM history
-      WHERE strategy_id = ? AND mode = ? AND closed_at >= ?${sideClause}
-    `)
-    .get(...args);
-  return { n: row.n, net: row.net };
+  const rows = getStrategyHistoryMerged(strategyId, mode, side).filter(
+    (r) => (r.closed_at || 0) >= sinceMs,
+  );
+  const net = rows.reduce((s, r) => s + (r.realized_pnl || 0) - (r.fee_paid || 0), 0);
+  return { n: rows.length, net };
 }
 
 /**
@@ -813,21 +824,23 @@ export function getRecentStrategyTrades(strategyId, mode, limit = 10) {
  * @returns {{ total:number, trades:Array<Object> }}
  */
 export function getStrategyTradesPage(strategyId, mode, limit = 10, offset = 0, side = null) {
-  const db = getDb();
-  const sideClause = side ? ' AND side = ?' : '';
-  const total = db
-    .prepare(`SELECT COUNT(*) AS n FROM history WHERE strategy_id = ? AND mode = ?${sideClause}`)
-    .get(...(side ? [strategyId, mode, side] : [strategyId, mode])).n;
-  const trades = db
-    .prepare(`
-      SELECT coin, entry_time, closed_at, realized_pnl, fee_paid, reason,
-             entry_price, close_price, side, hold_seconds
-      FROM history
-      WHERE strategy_id = ? AND mode = ?${sideClause}
-      ORDER BY closed_at DESC
-      LIMIT ? OFFSET ?
-    `)
-    .all(...(side ? [strategyId, mode, side, limit, offset] : [strategyId, mode, limit, offset]));
+  // Archive-aware: live history + архив (Auto-Cleanup чистит live-таблицу).
+  const all = getStrategyHistoryMerged(strategyId, mode, side); // ASC
+  const total = all.length;
+  // Нужен DESC (новые первыми) для пагинации, как в прежнем SQL.
+  const desc = all.slice().reverse();
+  const trades = desc.slice(offset, offset + limit).map((r) => ({
+    coin: r.coin,
+    entry_time: r.entry_time,
+    closed_at: r.closed_at,
+    realized_pnl: r.realized_pnl,
+    fee_paid: r.fee_paid,
+    reason: r.reason,
+    entry_price: r.entry_price,
+    close_price: r.close_price,
+    side: r.side,
+    hold_seconds: r.hold_seconds,
+  }));
   return { total, trades };
 }
 
