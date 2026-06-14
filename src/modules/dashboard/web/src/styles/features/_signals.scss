@@ -258,22 +258,44 @@
   opacity: 0.4;
   font-size: 15px;
 }
-/* Активная монета: направление цены вместо таймера входа. */
-.hm-dir-up .hm-entry-icon {
-  background: var(--green-soft);
-  border-color: var(--green-line);
-  color: var(--pos, #30a46c);
-  font-size: 15px;
+/* Активная монета: ОДНА стрелка ↑ (персистентный узел, см. mountDirArrows),
+   поворачивается по направлению цены (up=0° / mid=90° / down=180°) с плавным
+   tween и сменой цвета. */
+.hm-dir .hm-entry-icon {
+  font-size: 18px;
+  font-weight: 700;
+  border-color: transparent;
 }
-.hm-dir-down .hm-entry-icon {
-  background: var(--red-soft);
-  border-color: var(--red-line);
-  color: var(--neg, #e5484d);
-  font-size: 15px;
+.hm-dir-mount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
-.hm-dir-mid .hm-entry-icon {
+.hm-dir-arrow {
+  display: inline-block;
+  line-height: 1;
   color: var(--text-muted);
-  font-size: 16px;
+  transform: rotate(var(--hm-rot, 90deg));
+  transition:
+    transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1),
+    color 0.35s ease;
+  &.up {
+    --hm-rot: 0deg;
+    color: var(--green);
+  }
+  &.down {
+    --hm-rot: 180deg;
+    color: var(--red);
+  }
+  &.mid {
+    --hm-rot: 90deg;
+    color: var(--text-muted);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hm-dir-arrow {
+    transition: none;
+  }
 }
 @include until($bp-md) {
   .hm-entry-icon {

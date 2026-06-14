@@ -327,18 +327,17 @@ export function renderHotMovers(payload, fmtTime) {
       ? `<td class="hm-setup c" data-w="Setup"><span class="num-inline-muted">·</span></td>`
       : `<td class="hm-setup c ${setup.cls}" data-w="Setup" title="${setup.title}">${setup.label}</td>`;
 
-    // ENTER: для открытой монеты вход неактуален — вместо таймера показываем,
-    // куда сейчас идёт цена (up/down/mid). Управление/выход — в под-строке.
+    // ENTER: для открытой монеты вход неактуален — вместо таймера ОДНА стрелка,
+    // которая поворачивается по направлению цены (up=0° / mid=90° / down=180°)
+    // с плавным transition и сменой цвета. Сама стрелка — персистентный узел
+    // (см. mountDirArrows ниже): строка перестраивается каждый тик, а узел
+    // переживает, поэтому поворот реально твинит. Управление/выход — в под-строке.
     let entryCell;
     if (isOpen) {
-      const dir = priceDirection(x.windows);
-      const dirMap = {
-        up: ["▲", "hm-dir-up", "price moving up"],
-        down: ["▼", "hm-dir-down", "price moving down"],
-        mid: ["→", "hm-dir-mid", "price sideways"],
-      };
-      const [icon, cls, title] = dirMap[dir];
-      entryCell = `<td class="hm-entry ${cls}" data-w="Dir" title="in position — ${title}"><span class="hm-entry-icon">${icon}</span></td>`;
+      const dir = priceDirection(x.windows); // up | down | mid
+      const tip =
+        dir === "up" ? "price moving up" : dir === "down" ? "price moving down" : "price sideways";
+      entryCell = `<td class="hm-entry hm-dir" data-w="Dir" title="in position — ${tip}"><span class="hm-entry-icon"><span class="hm-dir-mount" data-dir="${dir}"></span></span></td>`;
     } else {
       entryCell = `<td class="hm-entry hm-entry-${entry.state}" data-w="Enter" title="${entry.title}"><span class="hm-entry-icon">${entry.icon}</span></td>`;
     }
@@ -366,6 +365,35 @@ export function renderHotMovers(payload, fmtTime) {
   });
 
   reconcileRows(tbody, items);
+  mountDirArrows(tbody);
+}
+
+// Персистентные стрелки направления: строки перестраиваются (innerHTML) каждый
+// тик, поэтому переносим ОДИН и тот же DOM-узел стрелки в перестроенную ячейку
+// (appendChild сохраняет identity). Тогда смена класса .up/.down/.mid реально
+// твинит поворот/цвет через CSS-transition, а не щёлкает на новом элементе.
+const _hmDirArrows = new Map(); // coin → <span.hm-dir-arrow>
+
+function mountDirArrows(tbody) {
+  const seen = new Set();
+  for (const mount of tbody.querySelectorAll(".hm-dir-mount")) {
+    const row = mount.closest("tr");
+    const key = row?.dataset.hmkey || ""; // "m:COIN"
+    const coin = key.startsWith("m:") ? key.slice(2) : key;
+    if (!coin) continue;
+    seen.add(coin);
+    let arrow = _hmDirArrows.get(coin);
+    if (!arrow) {
+      arrow = document.createElement("span");
+      arrow.textContent = "↑";
+      _hmDirArrows.set(coin, arrow);
+    }
+    if (arrow.parentNode !== mount) mount.appendChild(arrow);
+    const cls = `hm-dir-arrow ${mount.dataset.dir || "mid"}`;
+    if (arrow.className !== cls) arrow.className = cls;
+  }
+  // Монета закрылась/ушла из таблицы — отпускаем узел (не копим Map).
+  for (const coin of _hmDirArrows.keys()) if (!seen.has(coin)) _hmDirArrows.delete(coin);
 }
 
 // ── keyed-реконсилер с FLIP-анимациями ──
