@@ -21,6 +21,25 @@ const STRAT_STATUS = {
   planned: { label: "PLANNED", cls: "strat-planned" },
 };
 
+// Цвет «семейства» стратегии (базовый strategy_id). Двусторонние стратегии
+// (Candy LONG/SHORT и т.п.) делят один id → один оттенок → читаются как пара.
+// Разные стратегии — разные оттенки. Применяется как левая акцент-полоса строки.
+const STRAT_FAMILY_HUE = {
+  hunter:        8,   // red-orange
+  hunter_long: 150,   // green
+  carry:       265,   // violet
+  trend_follow:200,   // blue
+  candy_girl:  328,   // pink
+  fader:        45,   // amber
+  adopt:       178,   // teal
+};
+function familyHue(id) {
+  if (id in STRAT_FAMILY_HUE) return STRAT_FAMILY_HUE[id];
+  let h = 0;
+  for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) % 360;
+  return h;
+}
+
 function stratAge(ts) {
   if (!Number.isFinite(ts)) return "—";
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -197,9 +216,14 @@ function stratHold(sec) {
   return `${(sec / 86400).toFixed(1)}d`;
 }
 
-function stratRowHtml(s, planned) {
+function stratRowHtml(s, planned, opts = {}) {
   const st = STRAT_STATUS[s.status] || STRAT_STATUS.off;
   const dim = planned || s.status === "off" ? " strat-row-dim" : "";
+  // Акцент семейства: оттенок по базовому id + класс strat-fam-first на первой
+  // строке группы (рисует разделитель между семействами).
+  const famHue = planned ? null : familyHue(s.id || s.uid);
+  const famAttr = famHue != null ? ` style="--fam-hue:${famHue}"` : "";
+  const famCls = planned ? "" : ` strat-fam${opts.famFirst ? " strat-fam-first" : ""}`;
 
   if (planned) {
     return (
@@ -236,7 +260,7 @@ function stratRowHtml(s, planned) {
 
   const expanded = _stratExpanded.has(s.uid);
   const main =
-    `<tr class="strat-row${dim}${expanded ? " is-expanded" : ""}" data-id="${s.uid}" tabindex="0">` +
+    `<tr class="strat-row${famCls}${dim}${expanded ? " is-expanded" : ""}" data-id="${s.uid}"${famAttr} tabindex="0">` +
     `<td class="strat-col-name"><div class="strat-name">${escapeHtml(s.label)} ` +
     `<span class="strat-caret">${expanded ? "▾" : "▸"}</span></div>` +
     `<div class="strat-kind">${escapeHtml(s.kind || "")}</div></td>` +
@@ -254,7 +278,7 @@ function stratRowHtml(s, planned) {
     `<td class="strat-col-spark">${stratSparkline(s.spark)}</td></tr>`;
 
   const detail = expanded
-    ? `<tr class="strat-detail-row" data-detail="${s.uid}"><td colspan="13">${stratDetail(s)}</td></tr>`
+    ? `<tr class="strat-detail-row strat-fam" data-detail="${s.uid}"${famAttr}><td colspan="13">${stratDetail(s)}</td></tr>`
     : "";
   return main + detail;
 }
@@ -266,16 +290,29 @@ export function renderStrategies(payload, force) {
   const rows = Array.isArray(payload.rows) ? payload.rows : [];
   const planned = Array.isArray(payload.planned) ? payload.planned : [];
 
-  // Сортировка: live → paper → radar → off; внутри по |all P&L|.
+  // Группируем по семейству (базовый strategy_id), чтобы LONG/SHORT одной
+  // стратегии всегда стояли рядом, а не разъезжались по |P&L|. Внутри семейства
+  // сохраняем порядок payload (long → short). Семейства сортируем
+  // live → paper → radar → off, внутри статуса — по |суммарному P&L| семейства.
   const order = { live: 0, paper: 1, radar: 2, off: 3 };
-  const sorted = [...rows].sort((a, b) => {
-    const so = (order[a.status] ?? 9) - (order[b.status] ?? 9);
-    if (so !== 0) return so;
-    return Math.abs(b.pnl?.all || 0) - Math.abs(a.pnl?.all || 0);
-  });
+  const statusRank = (s) => order[s.status] ?? 9;
+  const fam = new Map();
+  for (const r of rows) {
+    const key = r.id || r.uid;
+    if (!fam.has(key)) fam.set(key, []);
+    fam.get(key).push(r);
+  }
+  const families = [...fam.values()].map((frows) => ({
+    rows: frows,
+    rank: Math.min(...frows.map(statusRank)),
+    weight: Math.max(...frows.map((r) => Math.abs(r.pnl?.all || 0))),
+  }));
+  families.sort((a, b) => (a.rank - b.rank) || (b.weight - a.weight));
 
   const html =
-    sorted.map((s) => stratRowHtml(s, false)).join("") +
+    families
+      .flatMap((f) => f.rows.map((s, i) => stratRowHtml(s, false, { famFirst: i === 0 })))
+      .join("") +
     planned.map((s) => stratRowHtml(s, true)).join("");
 
   // WS шлёт статус каждые ~1-2с. Если отрендеренный HTML не изменился — НЕ трогаем

@@ -94,10 +94,14 @@
   background: var(--canvas-subtle);
   border-color: var(--border);
 }
+/* Залитый чип (не контурный, как bot/manual) — adopted самый важный источник
+   и плохо читался при alpha-фоне. Тёмный текст на ярком teal = макс. контраст
+   в обеих темах. */
 .src-adopted {
-  color: var(--cyan, #2dd4bf);
-  background: rgba(45, 212, 191, 0.12);
-  border-color: rgba(45, 212, 191, 0.32);
+  color: #042f2e;
+  background: #2dd4bf;
+  border-color: #2dd4bf;
+  font-weight: 800;
 }
 .src-manual {
   color: var(--yellow, #eab308);

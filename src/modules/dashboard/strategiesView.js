@@ -65,7 +65,9 @@ const REGISTRY = [
     id: 'carry',
     label: 'Carry',
     kind: 'mean-reversion · funding',
-    split: true,                              // и long, и short — сравниваем стороны
+    // НЕ split: carry-long (CARRY_LONG_ENABLED) по pivot 2026-05-08 не активирован,
+    // все реальные carry-сделки — SHORT. LONG-строка была всегда пустой (0 сделок) →
+    // убрана, чтобы не путать. Вернуть split, если когда-нибудь включим carry-long.
     resolve: () => {
       const enabled = config.trading.carryEnabled !== false;
       const live = config.isProduction && config.trading.carryProdEnabled;

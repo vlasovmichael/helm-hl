@@ -47,6 +47,15 @@
 .strat-row-dim {
   opacity: 0.5;
 }
+/* Акцент семейства: левая цветная полоса по --fam-hue (LONG/SHORT одной
+   стратегии делят оттенок → читаются как пара). strat-fam-first рисует
+   разделитель между семействами. */
+.strat-fam td:first-child {
+  border-left: 3px solid hsl(var(--fam-hue, 0) 60% 55% / 0.9);
+}
+.strat-fam-first td {
+  border-top: 1px solid var(--border);
+}
 .strat-row-planned {
   cursor: default;
 }
