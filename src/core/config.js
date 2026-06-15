@@ -351,6 +351,11 @@ function loadConfig() {
   const hunterTrailShadowLog    = (process.env.HUNTER_TRAIL_SHADOW_LOG || 'true').toLowerCase() === 'true';
   const hunterTrailArmPct       = parseFloat(process.env.HUNTER_TRAIL_ARM_PCT       || '2');
   const hunterTrailGiveBackPct  = parseFloat(process.env.HUNTER_TRAIL_GIVE_BACK_PCT || '30');
+  // Uncap TP при взведённом трейле: если true, фикс-TP (+3%) НЕ закрывает позу,
+  // когда трейл armed — поза едет на трейле сколько угодно (выход только по
+  // откату giveback/SL/BE). false = текущее поведение (потолок +3% остаётся).
+  // Дефолт false: наблюдаем shadow-лог [Hunter UNCAP-SHADOW] на ≥15 сделках.
+  const hunterTrailUncapTp      = (process.env.HUNTER_TRAIL_UNCAP_TP || 'false').toLowerCase() === 'true';
 
   if (isNaN(hunterTrailArmPct) || hunterTrailArmPct <= 0 || hunterTrailArmPct >= 3) {
     throw new Error(`HUNTER_TRAIL_ARM_PCT must be in (0, 3) — strictly less than HUNTER_TP_PCT=3. Got: "${process.env.HUNTER_TRAIL_ARM_PCT}"`);
@@ -859,6 +864,7 @@ function loadConfig() {
       hunterTrailShadowLog,
       hunterTrailArmPct,
       hunterTrailGiveBackPct,
+      hunterTrailUncapTp,
       hunterBeRatchetEnabled,
       hunterBeArmPct,
       hunterBeFloorPct,

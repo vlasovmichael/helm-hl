@@ -90,11 +90,15 @@ const hunterArmedMap      = new Map();
 const hunterArmRequestMap = new Map();
 // Iter D3: breakeven храповик. positionId → true, как только peak ≥ BE_ARM_PCT.
 const hunterBeArmedMap    = new Map();
+// UNCAP-shadow дедуп: positionId, по которым уже залогировали «фикс-TP сработал
+// при armed-трейле» (отдельно от hunterArmedMap, чтобы не ломать arm-state).
+const hunterUncapShadowLogged = new Set();
 
 const HUNTER_TRAIL_ENABLED      = config.trading.hunterTrailEnabled;
 const HUNTER_TRAIL_SHADOW_LOG   = config.trading.hunterTrailShadowLog;
 const HUNTER_TRAIL_ARM_PCT      = config.trading.hunterTrailArmPct;
 const HUNTER_TRAIL_GIVE_BACK_PCT = config.trading.hunterTrailGiveBackPct;
+const HUNTER_TRAIL_UNCAP_TP     = config.trading.hunterTrailUncapTp;
 const HUNTER_BE_RATCHET_ENABLED = config.trading.hunterBeRatchetEnabled;
 const HUNTER_BE_ARM_PCT         = config.trading.hunterBeArmPct;
 const HUNTER_BE_FLOOR_PCT       = config.trading.hunterBeFloorPct;
@@ -106,6 +110,7 @@ export function clearHunterTrailState(positionId) {
   hunterArmedMap.delete(positionId);
   hunterArmRequestMap.delete(positionId);
   hunterBeArmedMap.delete(positionId);
+  hunterUncapShadowLogged.delete(positionId);
 }
 
 /** tick.js: проверить и забрать pending ARM request (one-shot). */
@@ -550,13 +555,29 @@ function checkHunterExitCore(position, scoutData, item) {
     };
   }
   if (position.tp_price != null && item.price <= position.tp_price) {
-    setHunterCrossCooldown(position.coin);
-    return {
-      action: 'CLOSE',
-      coin:   position.coin,
-      price:  position.tp_price,
-      reason: 'hunter_tp',
-    };
+    const armed = isHunterArmed(position.id);
+    // Uncap: при взведённом трейле фикс-TP НЕ режет — поза едет на трейле
+    // (выход по giveback/SL/BE). Иначе остаётся потолок +3% (текущее поведение).
+    if (HUNTER_TRAIL_UNCAP_TP && armed) {
+      // Не закрываем по TP — пусть трейл ведёт. Падаем в HOLD ниже.
+    } else {
+      // Shadow: фикс-TP сработал, ХОТЯ трейл был armed — ровно те кейсы, где
+      // UNCAP вёл бы себя иначе. Лог раз на позицию, для оценки на ≥15 сделках.
+      if (armed && !hunterUncapShadowLogged.has(position.id)) {
+        hunterUncapShadowLogged.add(position.id);
+        logger.info(
+          `[Hunter UNCAP-SHADOW] #${position.coin} (id=${position.id}): фикс-TP +${HUNTER_TP_PCT}% сработал при ВЗВЕДЁННОМ трейле ` +
+            `(peak +${peak.toFixed(2)}%) — HUNTER_TRAIL_UNCAP_TP=true дал бы ехать дальше на трейле.`,
+        );
+      }
+      setHunterCrossCooldown(position.coin);
+      return {
+        action: 'CLOSE',
+        coin:   position.coin,
+        price:  position.tp_price,
+        reason: 'hunter_tp',
+      };
+    }
   }
 
   // Time-stop: mean-reversion должен отработать за минуты-десятки. Если позиция
