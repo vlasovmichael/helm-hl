@@ -558,8 +558,13 @@ export function closePosition(id, data) {
  */
 export function getActivePosition() {
   const mode = config.isProduction ? 'PRODUCTION' : 'PAPER';
+  // Single-slot = ТОЛЬКО бот-стратегии (hunter/carry/...). Adopt-позы исключаем:
+  // у них свой multi-slot аксессор getActiveAdoptPositions(). Иначе свежая adopt-поза
+  // с бОльшим id перехватывала слот (ORDER BY id DESC) и осиротляла реальную позу
+  // бота — она выпадала из ownedCoins и бот бросал её как «ничейную ручную»
+  // (incident WLD+INJ 2026-06-15). strategy_id IS NULL = легаси carry, оставляем.
   return getDb()
-    .prepare('SELECT * FROM positions WHERE status = ? AND mode = ? ORDER BY id DESC LIMIT 1')
+    .prepare("SELECT * FROM positions WHERE status = ? AND mode = ? AND (strategy_id IS NULL OR strategy_id != 'adopt') ORDER BY id DESC LIMIT 1")
     .get('OPEN', mode);
 }
 
