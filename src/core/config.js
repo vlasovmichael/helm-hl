@@ -446,6 +446,12 @@ function loadConfig() {
   // strategy_id='adopt' и СРАЗУ ставит реальный reduce-only стоп на бирже
   // (чинит главный леак: держал лузеров до нуля). Храповик/трейл — следующим шагом.
   const adoptEnabled          = (process.env.ADOPT_ENABLED || 'false').toLowerCase() === 'true';
+  // Vapor (Exhaustion Short, Трек A) — PAPER-only shadow-слот, OI-дивергенция.
+  const vaporEnabled          = (process.env.VAPOR_ENABLED || 'false').toLowerCase() === 'true';
+  const vaporBalanceUtil      = parseFloat(process.env.VAPOR_BALANCE_UTILIZATION || '0.5');
+  if (isNaN(vaporBalanceUtil) || vaporBalanceUtil <= 0 || vaporBalanceUtil > 0.95) {
+    throw new Error(`VAPOR_BALANCE_UTILIZATION must be in (0, 0.95], got ${process.env.VAPOR_BALANCE_UTILIZATION}`);
+  }
   const adoptMaxAgeMin        = parseFloat(process.env.ADOPT_MAX_AGE_MIN        || '10');
   // Жёсткий стоп: ATR-режим подстраивает дистанцию под волатильность монеты
   // (фейдеру нужен воздух — фикс-% либо душит, либо болтается). dist = ATR(1h,14)
@@ -877,6 +883,8 @@ function loadConfig() {
       hunterLongTrailGiveBackPct,
       hunterCrossCooldownMin,
       adoptEnabled,
+      vaporEnabled,
+      vaporBalanceUtil,
       adoptMaxAgeMin,
       adoptStopMode,
       adoptStopPct,

@@ -115,6 +115,9 @@ export function initDB() {
     ['entry_funding_rate',   'REAL'],  // funding на момент входа
     ['entry_volume_24h_usd', 'REAL'],  // dayNtlVlm
     ['entry_oi_usd',         'REAL'],  // openInterest * markPx
+    ['entry_oi_delta_2m',    'REAL'],  // ΔOI% за окно спайка (Трек B forced-ness)
+    ['entry_oi_delta_5m',    'REAL'],  // ΔOI% за 5 мин (медленная форсированность)
+    ['entry_oi_delta_15m',   'REAL'],  // ΔOI% за 15 мин (Vapor-дивергенция; freebie для Hunter)
     ['entry_hour_utc',       'INTEGER'], // 0–23
   ];
   for (const [col, type] of hunterEntryCols) {
@@ -423,6 +426,9 @@ export function savePosition(data) {
     entry_funding_rate:   null,
     entry_volume_24h_usd: null,
     entry_oi_usd:         null,
+    entry_oi_delta_2m:    null,
+    entry_oi_delta_5m:    null,
+    entry_oi_delta_15m:   null,
     entry_hour_utc:       null,
     ...data,
   };
@@ -432,14 +438,16 @@ export function savePosition(data) {
       strategy_id, sl_price, tp_price, entry_equity, side,
       hunter_sl_oid, hunter_tp_oid,
       entry_spike_pct, entry_trend_15m_pct, entry_trend_1h_pct,
-      entry_funding_rate, entry_volume_24h_usd, entry_oi_usd, entry_hour_utc
+      entry_funding_rate, entry_volume_24h_usd, entry_oi_usd,
+      entry_oi_delta_2m, entry_oi_delta_5m, entry_oi_delta_15m, entry_hour_utc
     )
     VALUES (
       @coin, @size_usd, @entry_price, @entry_apy, @entry_time, @mode,
       @strategy_id, @sl_price, @tp_price, @entry_equity, @side,
       @hunter_sl_oid, @hunter_tp_oid,
       @entry_spike_pct, @entry_trend_15m_pct, @entry_trend_1h_pct,
-      @entry_funding_rate, @entry_volume_24h_usd, @entry_oi_usd, @entry_hour_utc
+      @entry_funding_rate, @entry_volume_24h_usd, @entry_oi_usd,
+      @entry_oi_delta_2m, @entry_oi_delta_5m, @entry_oi_delta_15m, @entry_hour_utc
     )
   `);
   const result = stmt.run(row);
@@ -474,14 +482,16 @@ export function closePosition(id, data) {
     INSERT INTO history (
       coin, entry_price, close_price, realized_pnl, fee_paid, mode, closed_at, reason, strategy_id, side,
       entry_spike_pct, entry_trend_15m_pct, entry_trend_1h_pct,
-      entry_funding_rate, entry_volume_24h_usd, entry_oi_usd, entry_hour_utc,
+      entry_funding_rate, entry_volume_24h_usd, entry_oi_usd,
+      entry_oi_delta_2m, entry_oi_delta_5m, entry_oi_delta_15m, entry_hour_utc,
       mfe_usd, mae_usd, mfe_pct, mae_pct, hold_seconds,
       entry_time, funding_collected
     )
     VALUES (
       @coin, @entry_price, @close_price, @realized_pnl, @fee_paid, @mode, @closed_at, @reason, @strategy_id, @side,
       @entry_spike_pct, @entry_trend_15m_pct, @entry_trend_1h_pct,
-      @entry_funding_rate, @entry_volume_24h_usd, @entry_oi_usd, @entry_hour_utc,
+      @entry_funding_rate, @entry_volume_24h_usd, @entry_oi_usd,
+      @entry_oi_delta_2m, @entry_oi_delta_5m, @entry_oi_delta_15m, @entry_hour_utc,
       @mfe_usd, @mae_usd, @mfe_pct, @mae_pct, @hold_seconds,
       @entry_time, @funding_collected
     )
@@ -513,6 +523,9 @@ export function closePosition(id, data) {
       entry_funding_rate:   position.entry_funding_rate   ?? null,
       entry_volume_24h_usd: position.entry_volume_24h_usd ?? null,
       entry_oi_usd:         position.entry_oi_usd         ?? null,
+      entry_oi_delta_2m:    position.entry_oi_delta_2m    ?? null,
+      entry_oi_delta_5m:    position.entry_oi_delta_5m    ?? null,
+      entry_oi_delta_15m:   position.entry_oi_delta_15m   ?? null,
       entry_hour_utc:       position.entry_hour_utc       ?? null,
       // Hunter exit features (опциональны — передаются только для hunter)
       mfe_usd:      exit.mfe_usd      ?? null,

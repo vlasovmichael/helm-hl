@@ -14,6 +14,7 @@ const {
   HUNTER_SPIKE_PCT, HUNTER_SL_PCT, HUNTER_TP_PCT, HUNTER_COOLDOWN_MS,
 } = await import('../src/modules/strategistSniper.js');
 const { resetHunterCrossCooldowns } = await import('../src/modules/hunterCrossCooldown.js');
+const { recordOiSnapshot, _resetOiHistory } = await import('../src/core/oiHistory.js');
 
 const MIN = 60_000;
 const T0  = 1_700_000_000_000;
@@ -22,6 +23,7 @@ function reset() {
   clearAll();
   resetHunterCooldowns();
   resetHunterCrossCooldowns();
+  _resetOiHistory();
 }
 
 function seedHistory(coin, basePrice, now) {
@@ -74,6 +76,33 @@ test('IDLE + pump ≥ threshold → OPEN SHORT с корректным SL/TP', (
   assert.equal(r.sl.toFixed(4), (53000 * 1.02).toFixed(4));
   // TP = -3% (53000 * 0.97)
   assert.equal(r.tp.toFixed(4), (53000 * 0.97).toFixed(4));
+});
+
+test('Трек B: entry_oi_delta_2m/5m считаются из OI-истории (forced-ness)', () => {
+  reset();
+  const now = T0 + 6 * MIN;
+  seedHistory('BTC', 50000, now);
+  // OI: 2мин назад = 100M, 5мин назад = 80M, сейчас в item = 110M.
+  // ΔOI_2m = +10%, ΔOI_5m = +37.5% (растущий OI = форсированный памп).
+  recordOiSnapshot([{ coin: 'BTC', oiUsd: 80_000_000 }], now - 5 * MIN);
+  recordOiSnapshot([{ coin: 'BTC', oiUsd: 100_000_000 }], now - 2 * MIN);
+  const r = analyzeHunter([{ coin: 'BTC', price: 53000, oiUsd: 110_000_000 }], null, now);
+
+  assert.equal(r.action, 'OPEN');
+  assert.equal(r.entryFeatures.entry_oi_usd, 110_000_000);
+  assert.equal(r.entryFeatures.entry_oi_delta_2m.toFixed(2), '10.00');
+  assert.equal(r.entryFeatures.entry_oi_delta_5m.toFixed(2), '37.50');
+});
+
+test('Трек B: ΔOI = null когда OI-истории нет', () => {
+  reset();
+  const now = T0 + 6 * MIN;
+  seedHistory('BTC', 50000, now);
+  const r = analyzeHunter([{ coin: 'BTC', price: 53000, oiUsd: 110_000_000 }], null, now);
+
+  assert.equal(r.action, 'OPEN');
+  assert.equal(r.entryFeatures.entry_oi_delta_2m, null);
+  assert.equal(r.entryFeatures.entry_oi_delta_5m, null);
 });
 
 test('IDLE + dump ≥ 5% → HOLD (short-only, никаких long-after-dump)', () => {

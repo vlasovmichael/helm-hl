@@ -20,6 +20,7 @@ import { processHunterTrailArm } from './hunterTrailArm.js';
 import { tickTrendFollowPaper } from './trendFollowPaperTick.js';
 import { tickFaderPaper } from './faderPaperTick.js';
 import { tickHunterPaper } from './hunterPaperTick.js';
+import { tickVaporPaper } from './vaporPaperTick.js';
 import { tickHunterLongPaper } from './hunterLongPaperTick.js';
 import { tickCarryPaper } from './carryPaperTick.js';
 import { runBalanceDiag } from './balanceDiag.js';
@@ -95,6 +96,7 @@ export async function tick() {
         // реального слота, копят статистику даже в HANDS-OFF (как ChillBoy/Fader).
         await tickHunterPaper(handsOffHunter);
         await tickHunterLongPaper(handsOffHunter);
+        await tickVaporPaper(handsOffHunter);
         await tickCarryPaper(handsOffScout);
         // Equity-снапшот для Performance-графика. Ручная торговля — основной
         // режим оператора (часами держит монету руками), и тик тут делает return
@@ -166,6 +168,7 @@ export async function tick() {
     // Hunter SHORT live (HUNTER_PROD_ENABLED=true) → tickHunterPaper сам no-op.
     await tickHunterPaper(hunterData);
     await tickHunterLongPaper(hunterData);
+    await tickVaporPaper(hunterData);
     await tickCarryPaper(scoutData);
 
     await runSmartAlerts(scoutData, signal, activePosition);

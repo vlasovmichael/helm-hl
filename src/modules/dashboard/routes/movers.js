@@ -21,41 +21,22 @@ import {
 import { computeBreadthFlush } from "../../hotMoversSetup.js";
 
 // ─────────────────────────────────────────────────
-//  OI history — ring buffer для oiDelta в /api/signals
+//  OI history — буфер вынесен в core/oiHistory.js (2026-06-15)
 // ─────────────────────────────────────────────────
-// Снапшот берётся из state.latestHunter каждые 30с.
-// Нужно ~20 снапшотов для 15m окна (30с × 30 = 15 мин).
-const OI_SNAPSHOT_MS  = 30_000;
-const OI_MAX_SNAPS    = 40;   // 20 мин запаса
-const _oiHistory      = new Map(); // coin → [{ts, oiUsd}]
+// Снапшот берётся из state.latestHunter каждые OI_SNAPSHOT_MS (таймер в
+// server.js lifecycle зовёт takeOiSnapshot). getOiNMinAgo/OI_SNAPSHOT_MS
+// реэкспортятся отсюда ради старых импортов (server.js, hotMoversAlerts).
+import {
+  recordOiSnapshot,
+  getOiNMinAgo,
+  OI_SNAPSHOT_MS,
+} from "../../../core/oiHistory.js";
 
 export function takeOiSnapshot() {
-  const data = state.latestHunter;
-  if (!Array.isArray(data) || data.length === 0) return;
-  const ts = Date.now();
-  for (const item of data) {
-    if (item.oiUsd == null) continue;
-    let arr = _oiHistory.get(item.coin);
-    if (!arr) { arr = []; _oiHistory.set(item.coin, arr); }
-    arr.push({ ts, oiUsd: item.oiUsd });
-    if (arr.length > OI_MAX_SNAPS) arr.shift();
-  }
+  recordOiSnapshot(state.latestHunter);
 }
 
-export function getOiNMinAgo(coin, mins, now) {
-  const arr = _oiHistory.get(coin);
-  if (!arr || arr.length < 2) return null;
-  const target = now - mins * 60_000;
-  let best = null;
-  for (const snap of arr) {
-    if (snap.ts <= target) best = snap;
-    else break;
-  }
-  return best?.oiUsd ?? null;
-}
-
-// Интервал OI-снапшота — экспортируется для таймера в server.js lifecycle.
-export { OI_SNAPSHOT_MS };
+export { OI_SNAPSHOT_MS, getOiNMinAgo };
 
 // Multi-window spike scoring (Hunter Signals A+B).
 // 2m остаётся «нативным» Hunter-окном (бот всё ещё триггерит по нему через

@@ -73,6 +73,16 @@ const REGISTRY = [
     },
   },
   {
+    id: 'vapor',
+    label: 'Vapor',
+    kind: 'exhaustion · short',
+    resolve: () => {
+      // PAPER-only (PROD-пути нет): enabled → paper, иначе off.
+      const enabled = config.trading.vaporEnabled;
+      return { enabled, status: enabled ? 'paper' : 'off' };
+    },
+  },
+  {
     id: 'adopt',
     label: 'Adopt',
     kind: 'manual-entry · babysit',

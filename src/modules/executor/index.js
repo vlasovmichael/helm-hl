@@ -12,7 +12,7 @@ import { getAccountEquity } from '../wallet.js';
 import { checkVolatility } from '../volatility.js';
 import {
   paperOpen, paperClose, hunterPaperOpen, hunterLongPaperOpen, trendFollowPaperOpen,
-  faderPaperOpen, candyPaperOpen,
+  faderPaperOpen, candyPaperOpen, vaporPaperOpen,
 } from './paper.js';
 import {
   productionOpen, productionClose, productionRotate,
@@ -235,6 +235,19 @@ async function handleOpen(signal) {
       return { ok: false };
     }
     return candyPaperOpen(
+      signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
+    );
+  }
+
+  // Vapor (Exhaustion Short, Трек A) route: PAPER-only shadow-слот. PROD-пути нет —
+  // open всегда виртуальный. Carry-guard'ы (CB/drawdown/OI) применяем, как у candy.
+  if (strategyId === 'vapor') {
+    const pre = await preflightChecks(signal.coin, null);
+    if (!pre.allowed) {
+      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
+      return { ok: false };
+    }
+    return vaporPaperOpen(
       signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
     );
   }

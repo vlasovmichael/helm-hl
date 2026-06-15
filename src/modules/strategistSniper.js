@@ -14,6 +14,7 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getPriceNMinAgo, getBufferLength } from '../core/priceHistory.js';
+import { getOiNMinAgo } from '../core/oiHistory.js';
 import {
   setHunterCrossCooldown,
   isHunterCrossCooldownActive,
@@ -342,6 +343,17 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
     ? ((best.price - trend1hPast) / trend1hPast) * 100
     : null;
 
+  // Трек B (squeeze-фильтр, 2026-06-15): «форсированность» пампа — растёт ли OI
+  // синхронно со спайком (свежий леверидж → склонность к сквизу-откату) или
+  // движение тянет short-covering (OI flat/вниз). Measurement-only: пишем
+  // ΔOI%, гейт на входе НЕ ставим — решаем фильтр по ≥20 live-сделкам.
+  const oiNow    = best.item?.oiUsd ?? null;
+  const oi2mAgo  = getOiNMinAgo(best.coin, HUNTER_SPIKE_WINDOW_MIN, now);
+  const oi5mAgo  = getOiNMinAgo(best.coin, 5, now);
+  const oi15mAgo = getOiNMinAgo(best.coin, 15, now);
+  const oiDelta = (past) => oiNow != null && past != null && past > 0
+    ? ((oiNow - past) / past) * 100 : null;
+
   const entryFeatures = {
     entry_spike_pct:      best.pct,
     entry_trend_15m_pct:  best.trend15mPct,
@@ -349,6 +361,9 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
     entry_funding_rate:   best.item?.fundingRate  ?? null,
     entry_volume_24h_usd: best.item?.volume24hUsd ?? null,
     entry_oi_usd:         best.item?.oiUsd        ?? null,
+    entry_oi_delta_2m:    oiDelta(oi2mAgo),
+    entry_oi_delta_5m:    oiDelta(oi5mAgo),
+    entry_oi_delta_15m:   oiDelta(oi15mAgo),
     entry_hour_utc:       new Date(now).getUTCHours(),
   };
 

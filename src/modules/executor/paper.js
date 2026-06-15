@@ -437,6 +437,69 @@ export async function candyPaperOpen(coin, price, direction, sl, tp, silent = fa
 }
 
 /**
+ * Открывает виртуальную позицию для Vapor (Exhaustion Short, Трек A).
+ * Short-only, risk-based размер от реального paper-баланса (util из config).
+ * SL/TP заданы детектором. strategy_id='vapor'. PAPER-only.
+ *
+ * @param {string} coin
+ * @param {number} price
+ * @param {'SHORT'} direction
+ * @param {number} sl
+ * @param {number} tp
+ * @param {boolean} [silent=false]
+ * @param {Object} [entryFeatures=null]
+ */
+export async function vaporPaperOpen(coin, price, direction, sl, tp, silent = false, entryFeatures = null) {
+  const balance = await getPaperBalance();
+  if (balance <= 0) {
+    logger.warn(`[Executor] [Vapor] Cannot open — balance is $${balance.toFixed(2)}`);
+    return { ok: false };
+  }
+  const utilization = config.trading.vaporBalanceUtil;
+  const szDecimals = resolvePaperSzDecimals(coin);
+  if (szDecimals == null) return { ok: false };
+  const { sizeUsd, sz, tooSmall } = resolveEntrySize({
+    coin, tag: 'Vapor', equity: balance, capBase: balance,
+    capUtil: utilization, price, sl, szDecimals,
+  });
+  if (tooSmall) {
+    const why = sizeUsd < MIN_ORDER_USD
+      ? `size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min`
+      : `sz=${sz} rounds to 0 (szDecimals=${szDecimals}, price $${price})`;
+    logger.warn(`[Executor] [Vapor SKIP] #${coin} — ${why} (${(utilization * 100).toFixed(0)}% real $${balance.toFixed(2)})`);
+    return { ok: false };
+  }
+
+  const fee  = sizeUsd * ONE_LEG;
+  const side = direction === 'LONG' ? 'long' : 'short';
+
+  const id = savePosition({
+    coin,
+    size_usd:    sizeUsd,
+    entry_price: price,
+    entry_apy:   0,
+    entry_time:  Date.now(),
+    mode:        'PAPER',
+    strategy_id: 'vapor',
+    side,
+    sl_price:    sl,
+    tp_price:    tp,
+    ...(entryFeatures || {}),
+  });
+
+  logger.info(
+    `[Executor] 💨 Vapor OPEN ${direction} #${coin} | $${sizeUsd.toFixed(2)} (of real $${balance.toFixed(2)}) @ $${price} ` +
+      `| SL $${sl.toFixed(6)} / TP $${tp.toFixed(6)} | fee $${fee.toFixed(4)} | id: ${id}`,
+  );
+
+  notify('afterOpen', {
+    coin, price, sizeUsd, positionId: Number(id), mode: 'PAPER', strategy: 'vapor',
+  });
+
+  return { ok: true, positionId: Number(id), sizeUsd };
+}
+
+/**
  * Открывает виртуальную позицию для Strategy #5 Fader.
  *
  * Fader — paper-only contrarian scalper. Размер позиции = NOMINAL × LEVERAGE
@@ -536,7 +599,7 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
     pricePnl = (position.size_usd * (position.entry_price - closePrice)) / position.entry_price;
   } else if (position.strategy_id === 'hunter_long') {
     pricePnl = (position.size_usd * (closePrice - position.entry_price)) / position.entry_price;
-  } else if (position.strategy_id === 'trend_follow' || position.strategy_id === 'candy_girl') {
+  } else if (position.strategy_id === 'trend_follow' || position.strategy_id === 'candy_girl' || position.strategy_id === 'vapor') {
     const isLong = (position.side || '').toLowerCase() === 'long';
     pricePnl = isLong
       ? (position.size_usd * (closePrice - position.entry_price)) / position.entry_price
@@ -612,6 +675,9 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
       mae_pct:      mm?.maePct ?? null,
       hold_seconds: Math.round(holdMs / 1000),
     };
+  } else if (position.strategy_id === 'vapor') {
+    // Iter 1: MFE/MAE-трекинг не делаем, но hold_seconds полезен для оценки.
+    exitFeatures = { hold_seconds: Math.round(holdMs / 1000) };
   }
 
   const finalFee = totalFeeOverride ?? totalFee;
