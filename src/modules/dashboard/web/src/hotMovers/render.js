@@ -442,24 +442,37 @@ export function renderHotMovers(payload, fmtTime) {
 
 // Персистентные стрелки активной монеты: строки перестраиваются (innerHTML)
 // каждый тик, поэтому переносим ОДИН и тот же DOM-узел стрелки в перестроенную
-// ячейку (appendChild сохраняет identity). Узел крутится НЕПРЕРЫВНО (CSS
-// infinite), пока монета в позиции — цвет = направление цены, скорость = по
-// величине хода. updateHotMoversLiveArrow() по ЖИВОЙ цене (WS ≤2с) обновляет
-// цвет и скорость; здесь только держим узел смонтированным.
+// ячейку (appendChild сохраняет identity). Стрелка СТАТИЧНА и показывает «цена в
+// мою сторону?»: вверх+зелёная = в плюсе (цена прошла entry в сторону позиции),
+// вниз+красная = против. При смене знака плавно ПЕРЕВОРАЧИВАЕТСЯ (CSS-transition
+// на rotate, см. _signals.scss). updateHotMoversLiveArrow() по живой цене (WS
+// ≤2с) лишь переключает up/down; здесь держим узел смонтированным.
 const _hmDirArrows = new Map(); // coin → <span.hm-dir-arrow>
-const _hmLivePrevPx = new Map(); // coin → последняя цена (для детекта изменения)
-const _hmSpinDur = new Map(); // coin → текущая длительность оборота (бакет)
+const _hmFav = new Map(); // coin → bool (последнее «в мою сторону») для гистерезиса
 
-// Центрированная (вокруг 6,6) SVG-стрелка — крутится без «виляния», в отличие
-// от текстового глифа ↑/↓ (он не центрирован в em-боксе). currentColor = .up/.down.
+// Центрированная (вокруг 6,6) SVG-стрелка — переворот rotate(180°) идёт ровно,
+// в отличие от текстового глифа ↑/↓ (не центрирован в em-боксе → вилял).
 const _SVG_DIR_ARROW = `<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M6 2.5V9.5M3.2 5.3 6 2.5l2.8 2.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
 
-// |Δ%| хода за тик (~2с) → длительность одного оборота (с). Больше ход = быстрее.
-function spinDurForDelta(deltaPct) {
-  if (deltaPct >= 0.15) return 0.7;
-  if (deltaPct >= 0.06) return 1.1;
-  if (deltaPct >= 0.02) return 1.7;
-  return 2.6; // почти стоит → ленивое вращение «жива»
+// «Цена в мою сторону?» по позиции: now vs entry с учётом side. Дедбэнд ±0.05%
+// вокруг entry — у безубытка держим прошлое состояние, чтобы стрелка не дёргалась.
+// Возвращает true (в плюсе) / false (против) / null (нет данных — не трогаем).
+const _FAV_DEADBAND = 0.0005;
+function favForCoin(coin) {
+  const pos = getActivePos(coin);
+  if (!pos || pos.now == null || !Number.isFinite(pos.now)) return null;
+  const { side, entry, now } = pos;
+  if (entry == null || !(entry > 0)) return null;
+  const diff = (now - entry) / entry; // signed
+  const favRaw = side === "SHORT" ? -diff : diff; // >0 = в плюсе
+  if (favRaw > _FAV_DEADBAND) return true;
+  if (favRaw < -_FAV_DEADBAND) return false;
+  return _hmFav.get(coin) ?? favRaw >= 0; // мёртвая зона → держим прошлое
+}
+
+function setArrowFav(arrow, fav) {
+  arrow.classList.toggle("up", fav);
+  arrow.classList.toggle("down", !fav);
 }
 
 function mountDirArrows(tbody) {
@@ -473,11 +486,11 @@ function mountDirArrows(tbody) {
     let arrow = _hmDirArrows.get(coin);
     if (!arrow) {
       arrow = document.createElement("span");
-      // spin-loop = непрерывное вращение; стартовый цвет из направления скан-тика.
-      const dir = mount.dataset.dir === "down" ? "down" : "up";
-      arrow.className = `hm-dir-arrow spin-loop ${dir}`;
+      arrow.className = "hm-dir-arrow";
       arrow.innerHTML = _SVG_DIR_ARROW;
-      arrow.style.setProperty("--hm-spin-dur", "2.6s");
+      const fav = favForCoin(coin) ?? mount.dataset.dir !== "down";
+      _hmFav.set(coin, fav);
+      setArrowFav(arrow, fav);
       _hmDirArrows.set(coin, arrow);
     }
     if (arrow.parentNode !== mount) mount.appendChild(arrow);
@@ -486,35 +499,18 @@ function mountDirArrows(tbody) {
   for (const coin of _hmDirArrows.keys())
     if (!seen.has(coin)) {
       _hmDirArrows.delete(coin);
-      _hmLivePrevPx.delete(coin);
-      _hmSpinDur.delete(coin);
+      _hmFav.delete(coin);
     }
 }
 
-// Живой апдейт стрелки активной монеты — из onStatus по WS-status (≤2с). Стрелка
-// уже крутится сама (CSS infinite); здесь лишь красим по направлению последнего
-// тика и задаём скорость по величине хода. При нулевом ходе скорость спадает к
-// ленивой (2.6с/оборот) — «жива», но не суетится. Длительность ставим только
-// при смене бакета, чтобы не дёргать infinite-анимацию каждый тик.
+// Живой апдейт стрелки активной монеты — из onStatus по WS-status (≤2с). Считает
+// «цена в мою сторону?» и переключает up/down; сам переворот анимирует CSS.
 export function updateHotMoversLiveArrow() {
   for (const [coin, arrow] of _hmDirArrows) {
-    const px = getActivePos(coin)?.now;
-    if (px == null || !Number.isFinite(px)) continue;
-    const prev = _hmLivePrevPx.get(coin);
-    if (prev != null && prev > 0) {
-      const deltaPct = px !== prev ? (Math.abs(px - prev) / prev) * 100 : 0;
-      if (px !== prev) {
-        const up = px > prev;
-        arrow.classList.toggle("up", up);
-        arrow.classList.toggle("down", !up);
-      }
-      const dur = spinDurForDelta(deltaPct);
-      if (_hmSpinDur.get(coin) !== dur) {
-        arrow.style.setProperty("--hm-spin-dur", `${dur}s`);
-        _hmSpinDur.set(coin, dur);
-      }
-    }
-    _hmLivePrevPx.set(coin, px);
+    const fav = favForCoin(coin);
+    if (fav == null) continue; // нет данных позиции — оставляем как есть
+    _hmFav.set(coin, fav);
+    setArrowFav(arrow, fav);
   }
 }
 
