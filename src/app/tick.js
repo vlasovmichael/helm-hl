@@ -18,7 +18,6 @@ import { hunterReconcile } from './hunterReconcile.js';
 import { hunterLongReconcile } from './hunterLongReconcile.js';
 import { processHunterTrailArm } from './hunterTrailArm.js';
 import { tickTrendFollowPaper } from './trendFollowPaperTick.js';
-import { tickCandyGirlPaper } from './candyGirlPaperTick.js';
 import { tickFaderPaper } from './faderPaperTick.js';
 import { tickHunterPaper } from './hunterPaperTick.js';
 import { tickHunterLongPaper } from './hunterLongPaperTick.js';
@@ -83,10 +82,9 @@ export async function tick() {
         // Candy Girl радар (signal-only, см. candy_girl_idea.md). Расцеплен от
         // слота — никогда не торгует, только лента + TG-алерты. Default OFF.
         if (config.trading.candyGirlEnabled) {
+          // Candy Girl = radar-only (5m-сигналы кормят Setup Scanner · Swing).
+          // Paper-стратегия удалена 2026-06-15 (−$26 на 121 сделке, см. ledger).
           await scanCandyGirlRadar(handsOffHunter);
-          // Candy Girl paper-слот (Iter 2): после радара, переиспользует его
-          // ранжированные хиты. Независим от реального слота (как ChillBoy paper).
-          await tickCandyGirlPaper(handsOffHunter);
         }
         // ChillBoy paper shadow-слот независим от реального слота — должен тикать
         // даже в HANDS-OFF, иначе зависшая ручная PROD-поза подвешивает paper
@@ -123,11 +121,11 @@ export async function tick() {
     // поэтому сканируем здесь напрямую. Никогда не открывает позицию. Default OFF.
     if (config.trading.candyGirlEnabled) {
       try {
+        // Candy Girl = radar-only (5m-сигналы для Setup Scanner · Swing).
+        // Paper-стратегия удалена 2026-06-15 (убыточная, см. ledger).
         await scanCandyGirlRadar(scoutData);
-        // Iter 2 paper-слот: сразу после радара, переиспользует ранжированные хиты.
-        await tickCandyGirlPaper(scoutData);
       } catch (err) {
-        logger.debug(`[Tick] Candy Girl radar/paper failed: ${err.message}`);
+        logger.debug(`[Tick] Candy Girl radar failed: ${err.message}`);
       }
     }
 

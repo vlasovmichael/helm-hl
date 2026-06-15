@@ -14,6 +14,9 @@ process.env.EXIT_BUFFER           = '5';
 process.env.MIN_HOLD_TIME_MINUTES = '60';
 process.env.BREATHING_MINUTES     = '30';
 process.env.LEVERAGE              = '1';
+// Carry default-off с 2026-06-15 (стратегия снята). Ветка кода ещё есть —
+// эти тесты её механику и проверяют, поэтому включаем флаг явно.
+process.env.CARRY_ENABLED         = 'true';
 process.env.FADE_ENABLED          = 'true';
 process.env.FADE_MAX_HOLD_MINUTES = '120';
 process.env.FADE_MIN_CURRENT_APY  = '200';

@@ -21,11 +21,7 @@ import {
   getActivePaperPositionByStrategy,
   getShadowAggregate,
 } from '../../core/database.js';
-import { getVirtualEquitySnapshot } from '../chillBoyVirtualEquity.js';
-import { getCandyGirlVirtualEquitySnapshot } from '../candyGirlVirtualEquity.js';
 import { getFaderVirtualSnapshot } from '../faderVirtualEquity.js';
-import { getCandyGirlSignals } from '../strategistCandyGirl.js';
-import { getChillBoySignals } from '../strategistTrendFollow.js';
 
 const DAY_MS = 86_400_000;
 
@@ -61,52 +57,14 @@ const REGISTRY = [
       return { enabled, status: !enabled ? 'off' : live ? 'live' : 'paper' };
     },
   },
-  {
-    id: 'carry',
-    label: 'Carry',
-    kind: 'mean-reversion · funding',
-    // НЕ split: carry-long (CARRY_LONG_ENABLED) по pivot 2026-05-08 не активирован,
-    // все реальные carry-сделки — SHORT. LONG-строка была всегда пустой (0 сделок) →
-    // убрана, чтобы не путать. Вернуть split, если когда-нибудь включим carry-long.
-    resolve: () => {
-      const enabled = config.trading.carryEnabled !== false;
-      const live = config.isProduction && config.trading.carryProdEnabled;
-      return { enabled, status: !enabled ? 'off' : live ? 'live' : 'paper' };
-    },
-  },
-  {
-    id: 'trend_follow',
-    label: 'Chill Boy',
-    kind: 'trend-follow',
-    split: true,
-    virtual: () => safe(getVirtualEquitySnapshot),
-    signals: () => safe(getChillBoySignals) || [],
-    resolve: () => {
-      const enabled = config.trading.chillBoyEnabled;
-      const live = config.isProduction && config.trading.chillBoyProdEnabled;
-      return { enabled, status: !enabled ? 'off' : live ? 'live' : 'paper' };
-    },
-  },
-  {
-    id: 'candy_girl',
-    label: 'Candy Girl',
-    kind: 'pullback-reclaim',
-    // 2026-06-14: short-paper переоткрыт → делим Candy на LONG/SHORT как остальные
-    // двусторонние, обе стороны paper. Радар по-прежнему мерит обе стороны.
-    split: true,
-    radar: true,
-    virtual: () => safe(getCandyGirlVirtualEquitySnapshot),
-    signals: () => safe(getCandyGirlSignals) || [],
-    resolve: () => {
-      const enabled = config.trading.candyGirlEnabled;
-      // Candy Girl всегда radar+paper (prod-гейт лишь глушит shadow-слот).
-      return { enabled, status: enabled ? 'paper' : 'off', radar: true };
-    },
-  },
+  // Carry / Chill Boy / Candy Girl-strategy удалены 2026-06-15 (убыточный трек,
+  // см. memory/strategy_cull_2026_06_15.md). Carry+ChillBoy выключены флагами;
+  // Candy Girl остаётся как radar-only (5m-сигналы для Setup Scanner · Swing),
+  // но как ТОРГОВАЯ стратегия из таблицы убрана.
   {
     id: 'fader',
     label: 'Fader',
-    kind: 'contrarian · fade',
+    kind: 'contrarian · fade-short',
     split: true,
     virtual: () => safe(getFaderVirtualSnapshot),
     resolve: () => {

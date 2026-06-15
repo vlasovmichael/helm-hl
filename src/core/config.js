@@ -41,7 +41,9 @@ function loadConfig() {
   // ── Mode presets ──
   // AGGRESSIVE_MODE=true uses AGG_* defaults. Individual env vars override if set.
   const aggressive = (process.env.AGGRESSIVE_MODE || 'false').toLowerCase() === 'true';
-  const carryEnabled = (process.env.CARRY_ENABLED || 'true').toLowerCase() === 'true';
+  // Carry (дед) удалён 2026-06-15 (PROD −$8.72, тезис похоронен при pivot на
+  // price-action). Default OFF; CARRY_ENABLED=true может временно вернуть.
+  const carryEnabled = (process.env.CARRY_ENABLED || 'false').toLowerCase() === 'true';
   // PROD-gate carry (как у Hunter/ChillBoy). false (дефолт) → в PROD-боте carry
   // уходит в paper-накопление (tickCarryPaper), не занимая реальный слот. true →
   // реальные carry-входы через coordinator. Согласовано с cull (carry на паузе).
@@ -622,6 +624,9 @@ function loadConfig() {
   // ── Strategy #5: Fader — contrarian fade scalper (PAPER-only) ──
   // План: plans/fader-strategy-plan.md.
   const faderEnabled            = (process.env.FADER_ENABLED || 'false').toLowerCase() === 'true';
+  // SHORT-only 2026-06-15: фейд-LONG (лов падающего ножа) слил −$20.70/5 сделок;
+  // фейд-SHORT (контр-памп) был +$3.43. Глушим LONG-сторону, оставляем SHORT.
+  const faderShortOnly          = (process.env.FADER_SHORT_ONLY || 'true').toLowerCase() === 'true';
   const faderVirtualBalance     = parseFloat(process.env.FADER_VIRTUAL_BALANCE      || '0');
   const faderNominalUsd         = parseFloat(process.env.FADER_NOMINAL_USD          || '50');
   const faderLeverage           = parseFloat(process.env.FADER_LEVERAGE             || '2');
@@ -929,6 +934,7 @@ function loadConfig() {
       candyGirlPaperVirtualUtil,
       candyGirlBalanceUtil,
       faderEnabled,
+      faderShortOnly,
       faderVirtualBalance,
       faderNominalUsd,
       faderLeverage,

@@ -264,6 +264,9 @@ export async function analyzeFader(scoutData, activePosition, now = Date.now()) 
     const impulsePct = Math.abs(m.movePct);
     // direction: pump → SHORT (fade up), dump → LONG (fade down)
     const direction = m.movePct > 0 ? 'SHORT' : 'LONG';
+    // SHORT-only (2026-06-15): фейд-LONG = лов падающего ножа, слил −$20.70.
+    // Пропускаем dump-кандидатов, ждём следующего пампа для фейд-SHORT.
+    if (config.trading.faderShortOnly && direction === 'LONG') continue;
     chosen = { item: it, metrics: m, impulsePct, direction };
   }
 
