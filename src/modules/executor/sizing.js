@@ -30,6 +30,30 @@ import { calcSize, calcRiskSize } from './math.js';
  * @param {number} p.szDecimals
  * @returns {{ sizeUsd: number, sz: number, tooSmall: boolean }}
  */
+/**
+ * Целевой НОТИОНАЛ от полного депо с потолком по свободной марже.
+ *
+ *   желаемая маржа = equity(весь депо) × util
+ *   потолок маржи  = free(свободно) × safety   (буфер под комиссии/округление)
+ *   маржа          = min(желаемая, потолок)
+ *   нотионал       = маржа × leverage
+ *
+ * Когда других позиций нет, free ≈ equity → нотионал = equity × util × lev,
+ * т.е. ровно как старый free-based (equity × util × lev при free=equity). Разница
+ * включается только когда часть депо уже занята (free < equity): бот держит
+ * стабильный размер «util от всего депо», не ужимаясь дважды, но не выходит за
+ * свободную маржу. См. memory: hunter sizing from equity.
+ *
+ * @returns {number} нотионал в USD (0 если нет свободной маржи)
+ */
+export function equityCappedNotional(free, equity, util, leverage, safety = 0.97) {
+  if (!(free > 0) || !(equity > 0)) return 0;
+  const desiredMargin = equity * util;
+  const marginCap     = free * safety;
+  const margin        = Math.min(desiredMargin, marginCap);
+  return Math.max(0, margin * leverage);
+}
+
 export function resolveEntrySize({ coin, tag, equity, capBase, capUtil, price, sl, szDecimals }) {
   const { riskBasedSizing, riskSizingShadow, riskPctPerTrade } = config.trading;
   const balanceBased = calcSize(capBase, price, szDecimals, capUtil);

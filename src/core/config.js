@@ -316,6 +316,13 @@ function loadConfig() {
   if (isNaN(hunterLongBalanceUtil) || hunterLongBalanceUtil <= 0 || hunterLongBalanceUtil > 0.95) {
     throw new Error(`HUNTER_LONG_BALANCE_UTILIZATION must be in (0, 0.95]. Got: "${process.env.HUNTER_LONG_BALANCE_UTILIZATION}"`);
   }
+  // Сайзинг от ВСЕГО депо (equity), а не от свободного остатка. Когда у оператора
+  // открыта ручная поза, она ест свободное → бот раньше ужимался дважды (брал
+  // util от уменьшенного остатка). Теперь бот целит util от полного депо, но
+  // НЕ больше свободной маржи (потолок) — стабильный размер «половина депо», и
+  // свободные деньги не простаивают. Когда других поз нет, free=equity → размер
+  // тот же, что раньше (см. executor/sizing.js equityCappedNotional). Kill-switch.
+  const hunterSizeFromEquity  = (process.env.HUNTER_SIZE_FROM_EQUITY || 'true').toLowerCase() === 'true';
 
   // Anti-trend filter: не шортим если цена N мин назад была ниже current на ≥M%
   // (значит за N мин уже был устойчивый рост — это тренд, не reversion-кандидат).
@@ -855,6 +862,7 @@ function loadConfig() {
       hunterLeverage,
       hunterBalanceUtil,
       hunterLongBalanceUtil,
+      hunterSizeFromEquity,
       hunterMinVolume,
       hunterTrendLookbackMin,
       hunterTrendMaxRisePct,

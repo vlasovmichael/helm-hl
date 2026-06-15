@@ -19,7 +19,7 @@ import {
   setLeverage,
 } from '../exchange.js';
 import { resolveAsset, parseFillResponse } from './fill-parser.js';
-import { resolveEntrySize } from './sizing.js';
+import { resolveEntrySize, equityCappedNotional } from './sizing.js';
 import { fetchUserFills, classifyClose } from '../userFills.js';
 import {
   calcSize, calcPnl, checkSlippage, formatHlPrice, calcVolSizeMultiplier,
@@ -440,19 +440,34 @@ export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, si
     return { ok: false };
   }
 
-  // Leverage расширяет нотиональный размер позиции: effectiveBalance = balance × leverage.
-  // На $100 при util=0.5, lev=3 → $150 поза, маржа всё ещё $50.
+  // Leverage расширяет нотиональный размер позиции. Два режима сайзинга:
+  //  · fromEquity=false (старый): база = свободный баланс × leverage, util от него.
+  //  · fromEquity=true: целим util от ВСЕГО депо (equity), потолок — свободная
+  //    маржа. Стабильный размер «половина депо», не ужимается при открытой ручной
+  //    позе, но за свободную маржу не выходит. См. equityCappedNotional.
   const leverage = config.trading.hunterLeverage;
   const util = config.trading.hunterBalanceUtil;
-  const effectiveBalance = balance * leverage;
+  let capBase, capUtil, riskEquity;
+  if (config.trading.hunterSizeFromEquity) {
+    let equity = balance;
+    try { ({ equity } = await getAccountSummary()); } catch { /* fallback на free */ }
+    if (!(equity > 0)) equity = balance;
+    capBase = equityCappedNotional(balance, equity, util, leverage); // уже нотионал
+    capUtil = 1;
+    riskEquity = equity;
+  } else {
+    capBase = balance * leverage;
+    capUtil = util;
+    riskEquity = balance;
+  }
   const { sizeUsd, sz, tooSmall } = resolveEntrySize({
-    coin, tag: 'Hunter', equity: balance, capBase: effectiveBalance,
-    capUtil: util, price: markPrice, sl, szDecimals,
+    coin, tag: 'Hunter', equity: riskEquity, capBase,
+    capUtil, price: markPrice, sl, szDecimals,
   });
   if (tooSmall) {
     logger.warn(
       `[Executor] [HUNTER SKIP] #${coin} — size $${sizeUsd.toFixed(2)} / sz=${sz} ` +
-        `(${(util * 100).toFixed(0)}% от $${balance.toFixed(2)} × ${leverage}x lev = $${effectiveBalance.toFixed(2)})`,
+        `(free $${balance.toFixed(2)}, ${leverage}x, fromEquity=${config.trading.hunterSizeFromEquity})`,
     );
     return { ok: false };
   }
@@ -727,17 +742,31 @@ export async function productionHunterLongOpen(coin, markPrice, dumpPct, sl, tp,
     return { ok: false };
   }
 
+  // Сайзинг как у Hunter SHORT: fromEquity → util от всего депо с потолком по
+  // свободной марже; иначе старый free-based. См. equityCappedNotional.
   const leverage = config.trading.hunterLeverage; // тот же leverage что у Hunter SHORT
   const util = config.trading.hunterLongBalanceUtil;
-  const effectiveBalance = balance * leverage;
+  let capBase, capUtil, riskEquity;
+  if (config.trading.hunterSizeFromEquity) {
+    let equity = balance;
+    try { ({ equity } = await getAccountSummary()); } catch { /* fallback на free */ }
+    if (!(equity > 0)) equity = balance;
+    capBase = equityCappedNotional(balance, equity, util, leverage);
+    capUtil = 1;
+    riskEquity = equity;
+  } else {
+    capBase = balance * leverage;
+    capUtil = util;
+    riskEquity = balance;
+  }
   const { sizeUsd, sz, tooSmall } = resolveEntrySize({
-    coin, tag: 'HunterLong', equity: balance, capBase: effectiveBalance,
-    capUtil: util, price: markPrice, sl, szDecimals,
+    coin, tag: 'HunterLong', equity: riskEquity, capBase,
+    capUtil, price: markPrice, sl, szDecimals,
   });
   if (tooSmall) {
     logger.warn(
       `[Executor] [HUNTER_LONG SKIP] #${coin} — size $${sizeUsd.toFixed(2)} / sz=${sz} ` +
-        `(${(util * 100).toFixed(0)}% от $${balance.toFixed(2)} × ${leverage}x lev = $${effectiveBalance.toFixed(2)})`,
+        `(free $${balance.toFixed(2)}, ${leverage}x, fromEquity=${config.trading.hunterSizeFromEquity})`,
     );
     return { ok: false };
   }
