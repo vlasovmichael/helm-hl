@@ -6,6 +6,7 @@ import { push as pushPriceHistory } from '../core/priceHistory.js';
 import { comparePoll } from '../core/priceFeed.js';
 import { getActivePosition, getActivePaperCoins, recordSetupSnapshots } from '../core/database.js';
 import { hlInfo } from '../core/hlClient.js';
+import { state } from '../app/state.js';
 
 const RTT_LIMIT_MS = 10_000; // отклоняем ответы медленнее 10 с
 
@@ -351,6 +352,14 @@ export async function scan() {
   // получает item=undefined и пропускает SL/TP (инцидент BTC id=90, 2026-05-22).
   // Пинним ВСЕ активные paper-коины — независимые слоты Fader+ChillBoy сосуществуют.
   const activePaperCoins = getActivePaperCoins();
+  // Живые/ручные позы (бот + adopt/HANDS-OFF) пинним в hunter-scope так же, как
+  // paper. Иначе монета, которую оператор ДЕРЖИТ, но которой нет в hunterSet (ниже
+  // volume-floor), выпадает из скана → для неё не копится priceHistory → окна
+  // Hot Movers вечно «—» (синтез-строка фронта). Корень «пропадающих цифр
+  // активной монеты», который чинили на стороне вывода, а не скана (2026-06-15).
+  const heldLiveCoins = new Set();
+  if (activeCoin) heldLiveCoins.add(activeCoin);
+  for (const c of state.manualPositionCoins) heldLiveCoins.add(String(c).toUpperCase());
 
   const results       = [];  // для carry/fade (узкая liquid-вселенная)
   const hunterResults = [];  // для Hunter (шире — по hunterSet)
@@ -406,7 +415,8 @@ export async function scan() {
     // Paper-shadow позицию (ChillBoy virtual) пинним даже если её coin выпал
     // из hunterSet — иначе exit-check не получит цену для SL/TP.
     const isHeldPaper = activePaperCoins.has(coinUpper);
-    const inHunterSet = hunterSet.size === 0 || hunterSet.has(coinUpper) || isHeldPaper;
+    const isHeldLive  = heldLiveCoins.has(coinUpper);
+    const inHunterSet = hunterSet.size === 0 || hunterSet.has(coinUpper) || isHeldPaper || isHeldLive;
     if (inHunterSet) {
       // Доп. фичи рынка для extended-логирования (см. database.js миграция).
       // Все nullable: при missing в API будут null'ы в БД, не блокируем сигнал.
