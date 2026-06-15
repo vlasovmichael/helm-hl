@@ -626,17 +626,10 @@ export async function notifySlippageBan({ coin, slipLabel, banMinutes }) {
   );
 }
 
-export async function notifyCircuitBreaker({ losses, pauseMinutes, lastCoin, lastPnl }) {
-  await sendMessage(
-    `🛑 <b>[CIRCUIT BREAKER]</b>\n` +
-      `<code>═════════════════════</code>\n` +
-      `📉 <b>${losses}</b> убыточных сделки за час\n` +
-      `Последняя: <b>#${lastCoin}</b> ($${lastPnl.toFixed(4)})\n` +
-      `<code>─────────────────────</code>\n` +
-      `⏸ Торговля приостановлена на <b>${pauseMinutes} мин</b>\n` +
-      `Бот возобновит работу автоматически.`,
-    true,
-  );
+export async function notifyCircuitBreaker(_payload) {
+  // TG-уведомление о circuit breaker убрано по запросу. Само срабатывание CB
+  // по-прежнему логируется в paper.js/production.js ([Executor] 🛑 CIRCUIT
+  // BREAKER TRIPPED ...) и видно в статусе через getCircuitBreakerStatus().
 }
 
 export async function notifyOpenBlocked({ coin, reason, details }) {

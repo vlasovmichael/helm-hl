@@ -108,29 +108,34 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
       `held: ${holdHours.toFixed(1)}h | estimated PnL: $${estimatedPnl.toFixed(4)}`,
   );
 
-  const pnlSign  = estimatedPnl >= 0 ? '+' : '';
-  const pnlEmoji = estimatedPnl >= 0 ? '📈' : '📉';
-  const pnlLine = pnlAccurate
-    ? `${pnlEmoji} PnL: <b>${pnlSign}$${estimatedPnl.toFixed(4)}</b>\n`
-    : `📊 PnL: <i>точная оценка недоступна (нет entry_equity для этой позиции)</i>\n` +
-      `   Смотри Hyperliquid UI или сравни с предыдущим equity вручную.\n`;
+  // TG-уведомление о внешнем закрытии — только для БОТ-стратегий: там external
+  // close = ADL/ликвидация/неожиданность, реальный риск-сигнал. Для adopt ручное
+  // закрытие — штатный путь выхода, поэтому молчим (событие остаётся в логе выше).
+  if (dbPosition.strategy_id !== 'adopt') {
+    const pnlSign  = estimatedPnl >= 0 ? '+' : '';
+    const pnlEmoji = estimatedPnl >= 0 ? '📈' : '📉';
+    const pnlLine = pnlAccurate
+      ? `${pnlEmoji} PnL: <b>${pnlSign}$${estimatedPnl.toFixed(4)}</b>\n`
+      : `📊 PnL: <i>точная оценка недоступна (нет entry_equity для этой позиции)</i>\n` +
+        `   Смотри Hyperliquid UI или сравни с предыдущим equity вручную.\n`;
 
-  await sendMessage(
-    `⚠️ <b>ВНЕШНЕЕ ЗАКРЫТИЕ ПОЗИЦИИ</b>\n` +
-      `<code>═════════════════════</code>\n` +
-      `🔍 Обнаружено расхождение:\n` +
-      `<b>#${dbPosition.coin}</b> закрыт на стороне биржи\n` +
-      `<i>(ADL, ликвидация или ручное действие)</i>\n` +
-      `<code>─────────────────────</code>\n` +
-      `💰 Размер: <b>$${dbPosition.size_usd.toFixed(2)}</b>\n` +
-      `💵 Entry: <b>$${dbPosition.entry_price}</b>\n` +
-      `⏳ Удержание: <b>${holdHours.toFixed(1)}ч</b>\n` +
-      pnlLine +
-      `💰 Equity: <b>$${equity.toFixed(2)}</b> | Withdrawable: <b>$${withdrawable.toFixed(2)}</b>\n` +
-      `<code>═════════════════════</code>\n` +
-      `🤖 Слот освобождён.`,
-    true,
-  );
+    await sendMessage(
+      `⚠️ <b>ВНЕШНЕЕ ЗАКРЫТИЕ ПОЗИЦИИ</b>\n` +
+        `<code>═════════════════════</code>\n` +
+        `🔍 Обнаружено расхождение:\n` +
+        `<b>#${dbPosition.coin}</b> закрыт на стороне биржи\n` +
+        `<i>(ADL, ликвидация или ручное действие)</i>\n` +
+        `<code>─────────────────────</code>\n` +
+        `💰 Размер: <b>$${dbPosition.size_usd.toFixed(2)}</b>\n` +
+        `💵 Entry: <b>$${dbPosition.entry_price}</b>\n` +
+        `⏳ Удержание: <b>${holdHours.toFixed(1)}ч</b>\n` +
+        pnlLine +
+        `💰 Equity: <b>$${equity.toFixed(2)}</b> | Withdrawable: <b>$${withdrawable.toFixed(2)}</b>\n` +
+        `<code>═════════════════════</code>\n` +
+        `🤖 Слот освобождён.`,
+      true,
+    );
+  }
 
   return true;
 }
