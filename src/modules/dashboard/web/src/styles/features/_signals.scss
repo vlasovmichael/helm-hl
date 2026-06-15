@@ -178,27 +178,33 @@
   font-size: 11.5px;
   font-family: var(--font-mono);
   color: var(--text-secondary);
-  background: var(--accent-soft);
+  /* Нейтральный фон вместо --accent-soft: синий фон душил синий тег BOT.
+     Лёгкая чернильная подложка + тонкая кромка-акцент слева. */
+  background: var(--canvas-inset);
   border-bottom: 1px solid var(--border);
+  box-shadow: inset 2px 0 0 var(--brand, var(--accent));
 }
+/* Теги BOT / YOU / YOU+BOT — заливные пилюли с белым текстом: контраст читаемый
+   на любом фоне (раньше цветной текст на одноцветном фоне сливался). */
 .hm-pos-tag {
   display: inline-block;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  padding: 1px 5px;
+  padding: 1px 6px;
   border-radius: 4px;
   margin-right: 6px;
-  border: 1px solid var(--border);
+  color: #fff;
+  border: none;
 }
 .hm-pos-bot {
-  color: var(--accent-strong);
-  border-color: var(--accent-line);
+  background: var(--accent);
 }
 .hm-pos-manual {
-  color: var(--yellow, #eab308);
-  background: rgba(234, 179, 8, 0.12);
-  border-color: rgba(234, 179, 8, 0.3);
+  /* Ручная/усыновлённая поза: тёплый янтарь, тёмный текст для максимального
+     контраста (на жёлтом белый плохо читается). */
+  color: #1a1205;
+  background: var(--amber, #f0a020);
 }
 /* Подсказки реального времени по открытой позиции. */
 .hm-hint {
@@ -1192,18 +1198,20 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   &.down {
     color: var(--red);
   }
-  /* Перезапуск анимации делается в JS через remove→reflow→add класса pulse. */
-  &.pulse {
+  /* Перезапуск анимации делается в JS (utils/arrowPop.js) через
+     remove→reflow→add класса .spin. Сила прыжка — из CSS-var --hm-pop. */
+  &.spin {
     animation: setupLiveSpin 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 }
+/* --hm-pop = пик scale, ставится из JS по величине тика цены (чуть/сильно). */
 @keyframes setupLiveSpin {
   0% {
     transform: rotate(0deg) scale(1);
     filter: brightness(1);
   }
   55% {
-    transform: rotate(360deg) scale(1.5);
+    transform: rotate(360deg) scale(var(--hm-pop, 1.5));
     filter: brightness(1.5);
   }
   100% {
@@ -1212,7 +1220,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .setup-live-arrow.pulse {
+  .setup-live-arrow.spin {
     animation: none;
   }
 }

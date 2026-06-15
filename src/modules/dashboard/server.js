@@ -299,6 +299,7 @@ function buildBotManagement(position) {
       stopPrice: entry * (1 + (isShort ? 1 : -1) * (HUNTER_SL_PCT / 100)),
       tpPrice: entry * (1 - (isShort ? 1 : -1) * (HUNTER_TP_PCT / 100)),
       stopPct: HUNTER_SL_PCT,
+      initialRiskPct: HUNTER_SL_PCT, // исходный риск (для R-multiple на фронте)
       peakPct,
       beArmed,
       trailArmed,
@@ -310,11 +311,16 @@ function buildBotManagement(position) {
 
   // Прочие стратегии: показываем сохранённый стоп/тейк, если есть.
   if (position.sl_price || position.tp_price) {
+    const initialRiskPct =
+      position.sl_price != null
+        ? Math.abs((entry - position.sl_price) / entry) * 100
+        : null;
     return {
       strategy: sid,
       stopPrice: position.sl_price ?? null,
       tpPrice: position.tp_price ?? null,
       stopPct: null,
+      initialRiskPct,
       peakPct: null,
       beArmed: false,
       trailArmed: false,
@@ -356,10 +362,17 @@ function buildAdoptManagement(adoptPos) {
   }
   const dir = isShort ? 1 : -1;
   const floorPrice = entry * (1 - dir * (floorPct / 100));
+  // Исходный риск (для R-multiple): дистанция входа до resting-SL на бирже.
+  // Стабильна даже когда BE/трейл взвели floorPct в плюс (hard SL не двигается).
+  const initialRiskPct =
+    adoptPos.sl_price != null
+      ? Math.abs((entry - adoptPos.sl_price) / entry) * 100
+      : null;
 
   return {
     strategy: "adopt",
     stopPrice: adoptPos.sl_price ?? null,
+    initialRiskPct,
     peakPct,
     beArmed,
     trailArmed,

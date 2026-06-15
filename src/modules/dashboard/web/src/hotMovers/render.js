@@ -10,6 +10,7 @@
 // ─────────────────────────────────────────────────
 
 import { escapeHtml } from "../utils/format.js";
+import { popArrow, bindArrowPopEnd } from "../utils/arrowPop.js";
 import {
   computeMomentum,
   hmEntryBadge,
@@ -423,6 +424,7 @@ function mountDirArrows(tbody) {
       arrow.className = "hm-dir-arrow";
       // Стартовый глиф из направления скан-тика — до первого живого тика.
       arrow.textContent = mount.dataset.dir === "down" ? "↓" : "↑";
+      bindArrowPopEnd(arrow); // снимать флаг «идёт спин» по завершении
       _hmDirArrows.set(coin, arrow);
     }
     if (arrow.parentNode !== mount) mount.appendChild(arrow);
@@ -444,12 +446,9 @@ export function updateHotMoversLiveArrow() {
     const px = getActivePos(coin)?.now;
     if (px == null || !Number.isFinite(px)) continue;
     const prev = _hmLivePrevPx.get(coin);
-    if (prev != null && px !== prev) {
-      const up = px > prev;
-      arrow.textContent = up ? "↑" : "↓";
-      arrow.classList.remove("up", "down", "spin");
-      void arrow.offsetWidth; // reflow → перезапуск спина даже при тиках одной стороны
-      arrow.classList.add(up ? "up" : "down", "spin");
+    if (prev != null && px !== prev && prev > 0) {
+      const deltaPct = (Math.abs(px - prev) / prev) * 100;
+      popArrow(arrow, px > prev, deltaPct);
     }
     _hmLivePrevPx.set(coin, px);
   }

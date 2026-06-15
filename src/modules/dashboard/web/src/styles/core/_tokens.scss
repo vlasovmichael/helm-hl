@@ -41,6 +41,20 @@ html[data-theme="light"] {
   --accent-soft: #ddf4ff;
   --accent-line: #54aeff;
 
+  /* Фирменный акцент: индиго→циан. Используется для хедера, ключевых кромок,
+     тега BOT. Мягкий, не «крипто-казино». --amber = тёплый акцент (YOU/ручное). */
+  --brand: #6c4cf1;
+  --brand-2: #1ba6c2;
+  --brand-soft: rgba(108, 76, 241, 0.08);
+  --brand-line: rgba(108, 76, 241, 0.32);
+  --amber: #d9930a;
+  --grad-brand: linear-gradient(135deg, #6c4cf1 0%, #1ba6c2 100%);
+  --grad-brand-soft: linear-gradient(
+    135deg,
+    rgba(108, 76, 241, 0.1) 0%,
+    rgba(27, 166, 194, 0.08) 100%
+  );
+
   --green: #1a7f37;
   --green-soft: #dafbe1;
   --green-line: #4ac26b;
@@ -89,6 +103,19 @@ html[data-theme="dark"] {
   --accent-strong: #58a6ff;
   --accent-soft: rgba(56, 139, 253, 0.15);
   --accent-line: rgba(56, 139, 253, 0.4);
+
+  /* Фирменный акцент (dark): чуть ярче для контраста на тёмном. */
+  --brand: #8b6dff;
+  --brand-2: #2cc6e0;
+  --brand-soft: rgba(139, 109, 255, 0.12);
+  --brand-line: rgba(139, 109, 255, 0.4);
+  --amber: #f0a020;
+  --grad-brand: linear-gradient(135deg, #8b6dff 0%, #2cc6e0 100%);
+  --grad-brand-soft: linear-gradient(
+    135deg,
+    rgba(139, 109, 255, 0.14) 0%,
+    rgba(44, 198, 224, 0.08) 100%
+  );
 
   --green: #3fb950;
   --green-soft: rgba(46, 160, 67, 0.15);

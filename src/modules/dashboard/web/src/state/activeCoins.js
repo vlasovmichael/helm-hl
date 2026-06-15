@@ -74,7 +74,16 @@ export function getActivePos(coin) {
 export function hmPosHintInner(coin) {
   const p = activePosByCoin.get(coin);
   if (!p) return "";
-  const { now, liq, source, bot, adopted } = p;
+  const { now, liq, source, bot, adopted, side, entry, sizeUsd, heldHours } = p;
+
+  // Held-time коротким форматом: 45m / 2h13m.
+  const fmtHeld = (hrs) => {
+    if (hrs == null || !(hrs >= 0)) return null;
+    const mins = Math.round(hrs * 60);
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return h > 0 ? `${h}h${m}m` : `${m}m`;
+  };
 
   const fmtPx = (px) =>
     px == null ? "—" : px >= 100 ? px.toFixed(2) : px >= 1 ? px.toFixed(4) : px.toPrecision(4);
@@ -103,6 +112,27 @@ export function hmPosHintInner(coin) {
       const sp = bot.stopPct != null ? ` (−${bot.stopPct.toFixed(1)}%)` : "";
       chips.push(["neutral", `stop @${fmtPx(bot.stopPrice)}${sp}`]);
     }
+    // Locked profit: когда взведён BE/трейл — сколько $ бот уже зафиксировал
+    // храповиком (floorPct% от номинала). Видно, что защита реально работает.
+    if (
+      (kind === "be" || kind === "trail") &&
+      bot.floorPct > 0 &&
+      sizeUsd != null
+    ) {
+      const lockedUsd = (bot.floorPct / 100) * sizeUsd;
+      if (lockedUsd >= 0.01)
+        chips.push(["good", `locked +$${lockedUsd.toFixed(2)}`]);
+    }
+    // R-multiple: текущий ход в единицах исходного риска (+1.2R / −0.5R).
+    // Главная метрика дисциплины payoff (плюсы тянутся, минусы маленькие).
+    if (bot.initialRiskPct > 0 && entry != null && now != null && now > 0) {
+      const unrealPct =
+        side === "SHORT"
+          ? ((entry - now) / entry) * 100
+          : ((now - entry) / entry) * 100;
+      const r = unrealPct / bot.initialRiskPct;
+      chips.push([r >= 0 ? "good" : "bad", `${r >= 0 ? "+" : ""}${r.toFixed(2)}R`]);
+    }
     // Расстояние цены до спускового крючка бота — «сколько ещё до выхода».
     if (fp != null && now != null && now > 0) {
       const dist = (Math.abs(now - fp) / now) * 100;
@@ -110,6 +140,9 @@ export function hmPosHintInner(coin) {
     }
     if (bot.peakPct != null && bot.peakPct > 0.1)
       chips.push(["neutral", `peak +${bot.peakPct.toFixed(2)}%`]);
+    // Held-time — сколько держится позиция (есть только у бот-сделки).
+    const held = fmtHeld(heldHours);
+    if (held) chips.push(["neutral", `held ${held}`]);
   }
   // Близость ликвидации — единственный «алерт», и тот информативный.
   if (liq && now) {

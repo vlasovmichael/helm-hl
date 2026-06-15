@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────
 
 import { escapeHtml, fmtUsd, fmtPrice } from "../utils/format.js";
+import { popArrow, bindArrowPopEnd } from "../utils/arrowPop.js";
 import { fetchJson } from "../net/api.js";
 import { getCandySignals } from "./candyGirl.js";
 import { getActivePos } from "../state/activeCoins.js";
@@ -638,13 +639,10 @@ export function updateSetupLivePrice() {
     const arrowEl = cell.querySelector(".setup-live-arrow");
     const prev = _livePrevPx.get(coin);
     if (pxEl) pxEl.textContent = `$${fmtLivePx(px)}`;
-    if (prev != null && px !== prev && arrowEl) {
-      const up = px > prev;
-      arrowEl.textContent = up ? "↑" : "↓";
-      arrowEl.classList.remove("up", "down", "pulse");
-      // reflow → перезапуск анимации даже при подряд идущих тиках одной стороны.
-      void arrowEl.offsetWidth;
-      arrowEl.classList.add(up ? "up" : "down", "pulse");
+    if (prev != null && px !== prev && prev > 0 && arrowEl) {
+      bindArrowPopEnd(arrowEl);
+      const deltaPct = (Math.abs(px - prev) / prev) * 100;
+      popArrow(arrowEl, px > prev, deltaPct);
     }
     _livePrevPx.set(coin, px);
   }
