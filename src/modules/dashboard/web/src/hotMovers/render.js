@@ -329,6 +329,23 @@ export function renderHotMovers(payload, fmtTime) {
     const setup = computeMomentum(x.windows, accelKind, volKind, x.s, flush);
     const entry = hmEntryBadge(x.windows, setup.side, setup.score, setup.mode);
 
+    // Chase-gate: actionable Setup-пилл (trend/fade score≥3), но цена уже ⛔
+    // растянута в сторону сделки (entry.state==='extended') — вход проехал.
+    // Гасим яркий пилл до wait-вида (как fade-mute при flush), чтобы «LONG
+    // TREND» на хае не выглядел кнопкой «вход». Колонка Enter и так показывает
+    // ⛔, но яркий пилл перетягивал глаз и провоцировал вход на топе.
+    // Презентационно: actionable-решение ntfy (evaluateCoinAlert) уже требует
+    // chase==='zone', так что пуши на extended и не приходят — синхронизируем
+    // лишь визуал таблицы. (entry.state==='extended' ⇒ side+mode+score≥3.)
+    let setupCls = setup.cls;
+    let setupLabel = setup.label;
+    let setupTitle = setup.title;
+    if (!isOpen && entry.state === "extended") {
+      setupCls = setup.side === "LONG" ? "setup-wait-long" : "setup-wait-short";
+      setupLabel = setupLabel.replace(" ●", ""); // снять STRONG-точку «вход»
+      setupTitle = `⛔ ПОЗДНО — ${entry.title}. Сетап есть, но вход проехал — жди отката (🎯). · ${setup.title}`;
+    }
+
     // OI delta 5m — нейтральная раскраска: OI сам по себе не хорош/плох.
     let oiInner = '<span class="num-inline-muted">—</span>';
     if (typeof s.oiDelta5m === "number" && isFinite(s.oiDelta5m)) {
@@ -346,7 +363,7 @@ export function renderHotMovers(payload, fmtTime) {
     // У открытой монеты Setup-вердикт гасим — вход уже сделан, действие в подсказке.
     const setupCell = isOpen
       ? `<td class="hm-setup c" data-w="Setup"><span class="num-inline-muted">·</span></td>`
-      : `<td class="hm-setup c ${setup.cls}" data-w="Setup" title="${setup.title}">${setup.label}</td>`;
+      : `<td class="hm-setup c ${setupCls}" data-w="Setup" title="${setupTitle}">${setupLabel}</td>`;
 
     // ENTER: для открытой монеты вход неактуален — вместо таймера ОДНА стрелка,
     // которая поворачивается по направлению цены (up=0° / mid=90° / down=180°)
