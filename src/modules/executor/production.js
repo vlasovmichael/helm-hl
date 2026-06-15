@@ -19,7 +19,7 @@ import {
   setLeverage,
 } from '../exchange.js';
 import { resolveAsset, parseFillResponse } from './fill-parser.js';
-import { resolveEntrySize, equityCappedNotional } from './sizing.js';
+import { resolveEntrySize, sizeBudgetFromEquity } from './sizing.js';
 import { fetchUserFills, classifyClose } from '../userFills.js';
 import {
   calcSize, calcPnl, checkSlippage, formatHlPrice, calcVolSizeMultiplier,
@@ -452,7 +452,19 @@ export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, si
     let equity = balance;
     try { ({ equity } = await getAccountSummary()); } catch { /* fallback на free */ }
     if (!(equity > 0)) equity = balance;
-    capBase = equityCappedNotional(balance, equity, util, leverage); // уже нотионал
+    const budget = sizeBudgetFromEquity(
+      balance, equity, util, leverage, config.trading.hunterMinSizeFraction,
+    );
+    // Свободной маржи мало → доступный размер < доли от нормального → не лезем пылью.
+    if (!budget.ok) {
+      logger.info(
+        `[Executor] [HUNTER SKIP] #${coin} — мало свободной маржи: доступно $${budget.available.toFixed(2)} ` +
+          `< ${(config.trading.hunterMinSizeFraction * 100).toFixed(0)}% от нормы $${budget.intended.toFixed(2)} ` +
+          `(free $${balance.toFixed(2)}). Жду освобождения маржи.`,
+      );
+      return { ok: false };
+    }
+    capBase = budget.available; // уже нотионал
     capUtil = 1;
     riskEquity = equity;
   } else {
@@ -751,7 +763,18 @@ export async function productionHunterLongOpen(coin, markPrice, dumpPct, sl, tp,
     let equity = balance;
     try { ({ equity } = await getAccountSummary()); } catch { /* fallback на free */ }
     if (!(equity > 0)) equity = balance;
-    capBase = equityCappedNotional(balance, equity, util, leverage);
+    const budget = sizeBudgetFromEquity(
+      balance, equity, util, leverage, config.trading.hunterMinSizeFraction,
+    );
+    if (!budget.ok) {
+      logger.info(
+        `[Executor] [HUNTER_LONG SKIP] #${coin} — мало свободной маржи: доступно $${budget.available.toFixed(2)} ` +
+          `< ${(config.trading.hunterMinSizeFraction * 100).toFixed(0)}% от нормы $${budget.intended.toFixed(2)} ` +
+          `(free $${balance.toFixed(2)}). Жду освобождения маржи.`,
+      );
+      return { ok: false };
+    }
+    capBase = budget.available;
     capUtil = 1;
     riskEquity = equity;
   } else {

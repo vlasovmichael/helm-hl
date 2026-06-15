@@ -54,6 +54,25 @@ export function equityCappedNotional(free, equity, util, leverage, safety = 0.97
   return Math.max(0, margin * leverage);
 }
 
+/**
+ * Бюджет входа от полного депо + решение «стоит ли вообще открывать».
+ *
+ * intended  = нормальный размер бота (equity × util × lev) — что он взял бы на
+ *             пустом депо.
+ * available = реально доступный размер с потолком по свободной марже.
+ * ok        = available ≥ intended × minFraction. Не привязано к $: масштабируется
+ *             под депо. Когда свободного мало (занят ручными позами), доступный
+ *             размер падает — и ниже доли minFraction бот ЖДЁТ, а не лезет пылью.
+ *
+ * @returns {{ available:number, intended:number, ok:boolean }}
+ */
+export function sizeBudgetFromEquity(free, equity, util, leverage, minFraction, safety = 0.97) {
+  const intended  = Math.max(0, equity * util * leverage);
+  const available = equityCappedNotional(free, equity, util, leverage, safety);
+  const ok = intended > 0 && available >= intended * minFraction;
+  return { available, intended, ok };
+}
+
 export function resolveEntrySize({ coin, tag, equity, capBase, capUtil, price, sl, szDecimals }) {
   const { riskBasedSizing, riskSizingShadow, riskPctPerTrade } = config.trading;
   const balanceBased = calcSize(capBase, price, szDecimals, capUtil);

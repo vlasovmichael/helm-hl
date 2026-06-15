@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 process.env.TRADING_MODE          = 'PAPER';
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-const { equityCappedNotional } = await import('../src/modules/executor/sizing.js');
+const { equityCappedNotional, sizeBudgetFromEquity } = await import('../src/modules/executor/sizing.js');
 
 const UTIL = 0.5;
 const LEV = 2;
@@ -42,4 +42,30 @@ test('старый free-based и новый совпадают, когда free=
     const neu = equityCappedNotional(50, 50, util, LEV);
     assert.ok(Math.abs(oldFreeBased - neu) < 1e-9, `util=${util}: ${oldFreeBased} vs ${neu}`);
   }
+});
+
+// ── sizeBudgetFromEquity: skip по доле от нормального размера ──
+const MINFRAC = 0.5;
+test('budget: пустой депо → ok, размер = норма', () => {
+  const b = sizeBudgetFromEquity(50, 50, UTIL, LEV, MINFRAC);
+  assert.equal(b.intended, 50);
+  assert.equal(b.available, 50);
+  assert.equal(b.ok, true);
+});
+
+test('budget: free $4.92 при депо $50 → доступно ~$9.5 < 50% нормы → НЕ открывать', () => {
+  const b = sizeBudgetFromEquity(4.92, 50, UTIL, LEV, MINFRAC);
+  assert.ok(b.available < b.intended * MINFRAC, `${b.available} vs ${b.intended * MINFRAC}`);
+  assert.equal(b.ok, false);
+});
+
+test('budget: free $30 → доступно полная норма → открывать', () => {
+  const b = sizeBudgetFromEquity(30, 50, UTIL, LEV, MINFRAC);
+  assert.equal(b.available, 50);
+  assert.equal(b.ok, true);
+});
+
+test('budget: free $12 → доступно ~$23 = 47% нормы < 50% → НЕ открывать', () => {
+  const b = sizeBudgetFromEquity(12, 50, UTIL, LEV, MINFRAC);
+  assert.equal(b.ok, false);
 });

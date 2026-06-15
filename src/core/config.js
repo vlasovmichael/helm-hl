@@ -323,6 +323,13 @@ function loadConfig() {
   // свободные деньги не простаивают. Когда других поз нет, free=equity → размер
   // тот же, что раньше (см. executor/sizing.js equityCappedNotional). Kill-switch.
   const hunterSizeFromEquity  = (process.env.HUNTER_SIZE_FROM_EQUITY || 'true').toLowerCase() === 'true';
+  // Минимальная доля от НОРМАЛЬНОГО размера бота, ниже которой он не открывает
+  // (защита от «пыли», когда свободной маржи мало из-за открытых ручных поз).
+  // 0.5 = «бери ≥50% обычной позы или жди». Не привязано к $ — масштаб под депо.
+  const hunterMinSizeFraction = parseFloat(process.env.HUNTER_MIN_SIZE_FRACTION || '0.5');
+  if (isNaN(hunterMinSizeFraction) || hunterMinSizeFraction <= 0 || hunterMinSizeFraction > 1) {
+    throw new Error(`HUNTER_MIN_SIZE_FRACTION must be in (0, 1]. Got: "${process.env.HUNTER_MIN_SIZE_FRACTION}"`);
+  }
 
   // Anti-trend filter: не шортим если цена N мин назад была ниже current на ≥M%
   // (значит за N мин уже был устойчивый рост — это тренд, не reversion-кандидат).
@@ -863,6 +870,7 @@ function loadConfig() {
       hunterBalanceUtil,
       hunterLongBalanceUtil,
       hunterSizeFromEquity,
+      hunterMinSizeFraction,
       hunterMinVolume,
       hunterTrendLookbackMin,
       hunterTrendMaxRisePct,
