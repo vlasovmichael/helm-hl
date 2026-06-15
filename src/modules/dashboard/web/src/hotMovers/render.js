@@ -442,37 +442,47 @@ export function renderHotMovers(payload, fmtTime) {
 
 // Персистентные стрелки активной монеты: строки перестраиваются (innerHTML)
 // каждый тик, поэтому переносим ОДИН и тот же DOM-узел стрелки в перестроенную
-// ячейку (appendChild сохраняет identity). Стрелка СТАТИЧНА и показывает «цена в
-// мою сторону?»: вверх+зелёная = в плюсе (цена прошла entry в сторону позиции),
-// вниз+красная = против. При смене знака плавно ПЕРЕВОРАЧИВАЕТСЯ (CSS-transition
-// на rotate, см. _signals.scss). updateHotMoversLiveArrow() по живой цене (WS
-// ≤2с) лишь переключает up/down; здесь держим узел смонтированным.
+// ячейку (appendChild сохраняет identity). Стрелка показывает НАПРАВЛЕНИЕ ЦЕНЫ:
+// вверх+зелёная = цена растёт, вниз+красная = падает. При смене направления
+// плавно ПЕРЕВОРАЧИВАЕТСЯ (CSS-transition на rotate, см. _signals.scss).
+// updateHotMoversLiveArrow() по живой цене (WS ≤2с) переключает up/down.
 const _hmDirArrows = new Map(); // coin → <span.hm-dir-arrow>
-const _hmFav = new Map(); // coin → bool (последнее «в мою сторону») для гистерезиса
+const _hmDirUp = new Map(); // coin → bool (последнее направление) для гистерезиса
+const _hmDirRef = new Map(); // coin → опорная цена (от неё мерим ход для флипа)
 
 // Центрированная (вокруг 6,6) SVG-стрелка — переворот rotate(180°) идёт ровно,
 // в отличие от текстового глифа ↑/↓ (не центрирован в em-боксе → вилял).
 const _SVG_DIR_ARROW = `<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M6 2.5V9.5M3.2 5.3 6 2.5l2.8 2.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
 
-// «Цена в мою сторону?» по позиции: now vs entry с учётом side. Дедбэнд ±0.05%
-// вокруг entry — у безубытка держим прошлое состояние, чтобы стрелка не дёргалась.
-// Возвращает true (в плюсе) / false (против) / null (нет данных — не трогаем).
-const _FAV_DEADBAND = 0.0005;
-function favForCoin(coin) {
-  const pos = getActivePos(coin);
-  if (!pos || pos.now == null || !Number.isFinite(pos.now)) return null;
-  const { side, entry, now } = pos;
-  if (entry == null || !(entry > 0)) return null;
-  const diff = (now - entry) / entry; // signed
-  const favRaw = side === "SHORT" ? -diff : diff; // >0 = в плюсе
-  if (favRaw > _FAV_DEADBAND) return true;
-  if (favRaw < -_FAV_DEADBAND) return false;
-  return _hmFav.get(coin) ?? favRaw >= 0; // мёртвая зона → держим прошлое
+// Направление цены с ГИСТЕРЕЗИСОМ (debounce): флипаем, только когда цена ушла от
+// опорной точки больше чем на _DIR_BAND. Мелкая дрожь в полосе направление не
+// меняет → стрелка не дёргается. Возвращает true(вверх)/false(вниз)/null(нет данных).
+const _DIR_BAND = 0.001; // 0.1% — ход меньше считаем шумом
+function dirUpForCoin(coin) {
+  const now = getActivePos(coin)?.now;
+  if (now == null || !Number.isFinite(now) || !(now > 0)) return null;
+  const ref = _hmDirRef.get(coin);
+  if (ref == null) {
+    _hmDirRef.set(coin, now);
+    return _hmDirUp.get(coin) ?? true;
+  }
+  const move = (now - ref) / ref;
+  if (move > _DIR_BAND) {
+    _hmDirRef.set(coin, now);
+    _hmDirUp.set(coin, true);
+    return true;
+  }
+  if (move < -_DIR_BAND) {
+    _hmDirRef.set(coin, now);
+    _hmDirUp.set(coin, false);
+    return false;
+  }
+  return _hmDirUp.get(coin) ?? true; // в полосе → держим прошлое
 }
 
-function setArrowFav(arrow, fav) {
-  arrow.classList.toggle("up", fav);
-  arrow.classList.toggle("down", !fav);
+function setArrowUp(arrow, up) {
+  arrow.classList.toggle("up", up);
+  arrow.classList.toggle("down", !up);
 }
 
 function mountDirArrows(tbody) {
@@ -488,9 +498,9 @@ function mountDirArrows(tbody) {
       arrow = document.createElement("span");
       arrow.className = "hm-dir-arrow";
       arrow.innerHTML = _SVG_DIR_ARROW;
-      const fav = favForCoin(coin) ?? mount.dataset.dir !== "down";
-      _hmFav.set(coin, fav);
-      setArrowFav(arrow, fav);
+      const up = dirUpForCoin(coin) ?? mount.dataset.dir !== "down";
+      _hmDirUp.set(coin, up);
+      setArrowUp(arrow, up);
       _hmDirArrows.set(coin, arrow);
     }
     if (arrow.parentNode !== mount) mount.appendChild(arrow);
@@ -499,18 +509,18 @@ function mountDirArrows(tbody) {
   for (const coin of _hmDirArrows.keys())
     if (!seen.has(coin)) {
       _hmDirArrows.delete(coin);
-      _hmFav.delete(coin);
+      _hmDirUp.delete(coin);
+      _hmDirRef.delete(coin);
     }
 }
 
 // Живой апдейт стрелки активной монеты — из onStatus по WS-status (≤2с). Считает
-// «цена в мою сторону?» и переключает up/down; сам переворот анимирует CSS.
+// направление цены (с гистерезисом) и переключает up/down; переворот анимирует CSS.
 export function updateHotMoversLiveArrow() {
   for (const [coin, arrow] of _hmDirArrows) {
-    const fav = favForCoin(coin);
-    if (fav == null) continue; // нет данных позиции — оставляем как есть
-    _hmFav.set(coin, fav);
-    setArrowFav(arrow, fav);
+    const up = dirUpForCoin(coin);
+    if (up == null) continue; // нет данных позиции — оставляем как есть
+    setArrowUp(arrow, up);
   }
 }
 
