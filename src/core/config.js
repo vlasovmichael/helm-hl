@@ -83,7 +83,7 @@ function loadConfig() {
     throw new Error(`LIQUID_CACHE_HOURS must be positive number. Got: "${process.env.LIQUID_CACHE_HOURS}"`);
   }
 
-  // ── Strategy constants (shared by carry + fade) ──
+  // ── Strategy constants (carry) ──
   const roundTrip             = parseFloat(process.env.ROUND_TRIP              || String(aggressive ? aggRoundTrip : 0.001));
   const maxPaybackHours       = parseFloat(process.env.MAX_PAYBACK_HOURS       || '24');
   const maxBreakevenHours     = parseFloat(process.env.MAX_BREAKEVEN_HOURS     || '24');
@@ -94,11 +94,7 @@ function loadConfig() {
   const predictedDropThreshold = parseFloat(process.env.PREDICTED_DROP_THRESHOLD || '30') / 100;
   const fundingGateMinutes    = parseInt(process.env.FUNDING_GATE_MINUTES      || '10', 10);
 
-  // ── Fade strategy (Predicted Funding Fade) ──
-  const fadeMaxHoldMinutes = parseInt(process.env.FADE_MAX_HOLD_MINUTES  || '120', 10);
-  const fadeMinCurrentApy  = parseFloat(process.env.FADE_MIN_CURRENT_APY || '200');
-  const fadeMinDropPct     = parseFloat(process.env.FADE_MIN_DROP_PCT    || '40') / 100;
-  const fadeEnabled        = (process.env.FADE_ENABLED || 'true').toLowerCase() === 'true';
+  // Fade strategy удалена 2026-06-15 (0 сделок за трек, deprecated с 12 мая).
 
   // ── Carry trailing take-profit ──
   // Защита от сценария «unrealized PnL вырос до +20%, но дед ждёт negative_funding
@@ -843,10 +839,6 @@ function loadConfig() {
       setupSnapshotIntervalMin,
       carryEnabled,
       carryProdEnabled,
-      fadeEnabled,
-      fadeMaxHoldMinutes,
-      fadeMinCurrentApy,
-      fadeMinDropPct,
       hunterEnabled,
       hunterProdEnabled,
       hunterLeverage,

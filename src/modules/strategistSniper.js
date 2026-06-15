@@ -6,7 +6,7 @@
 //
 // ВАЖНО про имя: см. memory/naming_sniper_vs_hunter.md.
 // Этот модуль — НЕ executor-sniper (maker-exit improvement). Это стратегия
-// уровня strategist.js / strategistFade.js. Single-slot, strategy_id='hunter'.
+// уровня strategist.js. Single-slot, strategy_id='hunter'.
 //
 // Iter A.1: только analyzeHunter (чистая функция). В coordinator НЕ подключён.
 // Наполнение priceHistory — в Iter A.3 через scout.js.

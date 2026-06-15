@@ -12,10 +12,6 @@ process.env.LEVERAGE              = '1';
 // Carry default-off с 2026-06-15 (стратегия снята). Ветка кода ещё есть —
 // эти тесты её механику и проверяют, поэтому включаем флаг явно.
 process.env.CARRY_ENABLED         = 'true';
-process.env.FADE_ENABLED          = 'true';
-process.env.FADE_MAX_HOLD_MINUTES = '120';
-process.env.FADE_MIN_CURRENT_APY  = '200';
-process.env.FADE_MIN_DROP_PCT     = '40';
 
 const { coordinate } = await import('../src/modules/coordinator.js');
 const { analyze }    = await import('../src/modules/strategist.js');
@@ -84,41 +80,11 @@ test('Coordinator: no position + carry candidate → OPEN carry', async () => {
   assert.equal(r.coin, 'ZRO');
 });
 
-test('Coordinator: no position + no carry + fade candidate → OPEN fade', async () => {
-  resetAll();
-  // Below carry threshold (40%) but high enough for fade (500%+)
-  // Actually, the item needs smoothedApy ≥ 200 AND predicted drop ≥ 40%
-  // AND fee-gate pass. So 500% with predicted 100%.
-  // But carry would also want this (500% > 40%)...
-  // Carry will HOLD because of predicted-drop filter (500 → 100 = 80% drop > 30%)
-  const data = [makeScoutItem('FART', 500, { rawApy: 500, predictedApy: 100 })];
-  const r = await coordinate(data, undefined);
-  assert.equal(r.action, 'OPEN');
-  assert.equal(r.strategy_id, 'fade');
-  assert.equal(r.coin, 'FART');
-});
-
-test('Coordinator: no position + both candidates → carry wins (priority)', async () => {
-  resetAll();
-  // Two coins: one stable (carry) and one spike (fade)
-  const data = [
-    makeScoutItem('FART', 500, { rawApy: 500, predictedApy: 100 }),
-    makeScoutItem('ZRO', 80, { rawApy: 80, predictedApy: 75 }),
-  ];
-  // Carry picks ZRO (80% > 40%, no predicted drop issue)
-  // But wait — scoutData is sorted by smoothedApy desc. So FART comes first.
-  // Carry looks at scoutData[0] = FART, but FART has predicted drop 80% > 30% → HOLD
-  // Hmm... carry checks only best (scoutData[0]). If FART is blocked by predicted-drop,
-  // carry should skip to... no, carry only checks scoutData[0].
-  // So carry returns HOLD, then fade returns OPEN FART.
-  const r = await coordinate(data, undefined);
-  assert.equal(r.action, 'OPEN');
-  assert.equal(r.strategy_id, 'fade');
-});
+// Fade-стратегия удалена 2026-06-15 — тесты «OPEN fade» / «fade priority» сняты.
 
 test('Coordinator: no position + nothing interesting → HOLD', async () => {
   resetAll();
-  const data = [makeScoutItem('ZRO', 10)]; // too low for carry and fade
+  const data = [makeScoutItem('ZRO', 10)]; // too low for carry
   const r = await coordinate(data, undefined);
   assert.equal(r.action, 'HOLD');
 });
@@ -141,32 +107,6 @@ test('Coordinator: carry position → routes to carry strategist', async () => {
   } finally {
     restore();
   }
-});
-
-test('Coordinator: fade position → routes to fade strategist', async () => {
-  resetAll();
-  const restore = freezeTime(2026, 3, 15, 14, 30);
-  try {
-    const pos = makePosition('FART', 500, 'fade', {
-      entry_time: Date.now() - 130 * 60_000,
-    });
-    const data = [makeScoutItem('FART', 400, { rawApy: 400 })];
-    const r = await coordinate(data, pos);
-    assert.equal(r.action, 'CLOSE');
-    assert.equal(r.reason, 'fade_time_stop');
-  } finally {
-    restore();
-  }
-});
-
-test('Coordinator: fade position holding → HOLD (no strategy_id on hold)', async () => {
-  resetAll();
-  const pos = makePosition('FART', 500, 'fade', {
-    entry_time: Date.now() - 30 * 60_000, // 30min, within time-stop
-  });
-  const data = [makeScoutItem('FART', 400, { rawApy: 400 })];
-  const r = await coordinate(data, pos);
-  assert.equal(r.action, 'HOLD');
 });
 
 // Adopt Mode Iter 1 (SHADOW): подхваченная ручная поза занимает слот, но бот ею

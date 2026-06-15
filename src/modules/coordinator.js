@@ -2,7 +2,6 @@ import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { isPaused, isEnabled } from '../core/runtimeFlags.js';
 import { analyze } from './strategist.js';
-import { analyzeFade } from './strategistFade.js';
 import { analyzeHunter } from './strategistSniper.js';
 import { analyzeHunterLong } from './strategistHunterLong.js';
 import { analyzeTrendFollow } from './strategistTrendFollow.js';
@@ -15,12 +14,12 @@ import { analyzeTrendFollow } from './strategistTrendFollow.js';
  * Если позиции нет, стратегии опрашиваются по приоритету:
  *   1. Hunter (если HUNTER_ENABLED) — pump ≥ 5% за 2мин → short. Priority #1.
  *   2. Hunter Long (если HUNTER_LONG_ENABLED) — dump ≥ X% за 2мин → long. Iter E.1 (PAPER).
- *   3. Carry (дед) — стабильный фандинг.
- *   4. Fade (deprecated, по умолчанию выключен) — спайки с predicted drop.
+ *   3. Carry (дед, снят 2026-06-15, по умолчанию выключен) — стабильный фандинг.
  *
- * Iter A: без эвикшена. Если slot занят carry/fade — Hunter ждёт.
+ * Iter A: без эвикшена. Если slot занят — Hunter ждёт.
+ * (Fade удалён 2026-06-15 — 0 сделок за трек, deprecated с 12 мая.)
  *
- * @param {Array} scoutData — carry/fade scope (узкая ликвидная вселенная)
+ * @param {Array} scoutData — carry scope (узкая ликвидная вселенная)
  * @param {Object|undefined} activePosition
  * @param {Array} [hunterData] — Hunter scope (шире, low-liq monеты тоже). Default: scoutData.
  * @returns {{ action: string, strategy_id?: string, [key: string]: any }}
@@ -39,10 +38,6 @@ export async function coordinate(scoutData, activePosition, hunterData = scoutDa
 
     if (sid === 'trend_follow') {
       return analyzeTrendFollow(hunterData, activePosition);
-    }
-
-    if (sid === 'fade') {
-      return analyzeFade(scoutData, activePosition);
     }
 
     // Adopt Mode (multi-slot): подхваченные ручные позы ведёт НЕ coordinator, а
@@ -101,14 +96,6 @@ export async function coordinate(scoutData, activePosition, hunterData = scoutDa
     if (carrySignal.action !== 'HOLD') {
       logger.debug(`[Coordinator] carry → ${carrySignal.action} ${carrySignal.coin}`);
       return { ...carrySignal, strategy_id: 'carry' };
-    }
-  }
-
-  if (config.trading.fadeEnabled) {
-    const fadeSignal = analyzeFade(scoutData, undefined);
-    if (fadeSignal.action !== 'HOLD') {
-      logger.debug(`[Coordinator] fade → ${fadeSignal.action} ${fadeSignal.coin}`);
-      return fadeSignal;
     }
   }
 

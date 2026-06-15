@@ -17,10 +17,6 @@ process.env.LEVERAGE              = '1';
 // Carry default-off с 2026-06-15 (стратегия снята). Ветка кода ещё есть —
 // эти тесты её механику и проверяют, поэтому включаем флаг явно.
 process.env.CARRY_ENABLED         = 'true';
-process.env.FADE_ENABLED          = 'true';
-process.env.FADE_MAX_HOLD_MINUTES = '120';
-process.env.FADE_MIN_CURRENT_APY  = '200';
-process.env.FADE_MIN_DROP_PCT     = '40';
 process.env.HUNTER_ENABLED        = 'true';
 
 const { coordinate } = await import('../src/modules/coordinator.js');

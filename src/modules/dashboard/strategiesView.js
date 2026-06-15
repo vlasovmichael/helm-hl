@@ -87,7 +87,6 @@ const REGISTRY = [
 
 // Зарезервированное место под будущие стратегии (кода ещё нет).
 const PLANNED = [
-  { id: 'vulture',       label: 'Vulture',       kind: 'liquidation sniper' },
   { id: 'setup_swing',   label: 'Setup Swing',   kind: 'HL-structure · swing' },
 ];
 

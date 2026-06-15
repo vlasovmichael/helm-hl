@@ -13,7 +13,6 @@ process.env.EXIT_BUFFER           = '5';
 process.env.MIN_HOLD_TIME_MINUTES = '60';
 process.env.BREATHING_MINUTES     = '30';
 process.env.LEVERAGE              = '1';
-process.env.FADE_ENABLED          = 'false';
 process.env.HUNTER_ENABLED        = 'false';  // изолируем — только LONG включён
 process.env.HUNTER_LONG_ENABLED   = 'true';
 
