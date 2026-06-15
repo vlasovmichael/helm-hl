@@ -52,7 +52,7 @@ export function mountTopnav(active) {
   if (!nav) return;
   nav.setAttribute("aria-label", "Primary");
   nav.innerHTML = `
-    <a class="topnav-brand" href="/">HL&nbsp;Scanner</a>
+    <a class="topnav-brand" href="/">Helm</a>
     <div class="topnav-links">${LINKS.map((l) => navLink(l, active)).join("")}</div>
     <div class="topnav-right">
       <div class="theme-switcher" role="group" aria-label="Theme">

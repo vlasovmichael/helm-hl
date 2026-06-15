@@ -378,24 +378,28 @@ async function sendMessageWithButton(text, critical = false) {
  * @param {{ balance: number, activePosition: Object|null }} info
  */
 export async function sendStartupNotification({ balance, activePosition }) {
-  let posLine = '💤 Нет открытых позиций';
+  // Освежённая стартовая нотификация. Убран carry-жаргон (APY-цель/round-trip/
+  // выход по APY) — проект ушёл в price-action, эти числа ничего не значат
+  // (см. project_pivot). Состав стратегий/параметры — на дашборде, тут не дублируем.
+  const RULE = '<code>━━━━━━━━━━━━━━━━━━━</code>';
+
+  let posLine = '💤 Слот свободен — ждём сигнал';
   if (activePosition) {
-    const heldH = ((Date.now() - activePosition.entry_time) / 3_600_000).toFixed(1);
+    const side = (activePosition.side || 'short').toUpperCase();
+    const arrow = side === 'SHORT' ? '▼' : '▲';
+    const heldH = (Date.now() - activePosition.entry_time) / 3_600_000;
+    const held = heldH >= 1 ? `${heldH.toFixed(1)}h` : `${Math.round(heldH * 60)}m`;
     posLine =
-      `📌 Позиция: <b>#${activePosition.coin}</b>\n` +
-      `💰 $${activePosition.size_usd.toFixed(2)} @ $${activePosition.entry_price}\n` +
-      `📊 APY: ${activePosition.entry_apy.toFixed(2)}%\n` +
-      `⏳ Удержание: ${heldH}ч`;
+      `📌 <b>#${activePosition.coin}</b> ${arrow} ${side} · ` +
+      `$${activePosition.size_usd.toFixed(2)} @ $${activePosition.entry_price} · held ${held}`;
   }
 
+  const statusDot = config.isProduction ? '🟢' : '🟡';
+
   await sendMessageWithButton(
-    `🚀 <b>${config.mode} запущен</b>${config.aggressive ? ' ⚡️ AGGRESSIVE' : ''}\n` +
-    `<code>─────────────────────</code>\n` +
-    `💵 Баланс: <b>$${balance.toFixed(2)}</b>\n` +
-    `🎯 Цель: APY &gt; <b>${config.trading.entryApy}%</b>\n` +
-    `🛡 Выход: APY &lt; <b>${config.trading.minApy - config.trading.exitBuffer}%</b>\n` +
-    `💸 Round-trip: <b>${(config.trading.roundTrip * 100).toFixed(2)}%</b>\n` +
-    `<code>─────────────────────</code>\n` +
+    `${statusDot} <b>HELM ONLINE</b>\n` +
+    `${RULE}\n` +
+    `💵 Equity  <b>$${balance.toFixed(2)}</b>\n` +
     `${posLine}`,
     // critical=false: startup — штатная операция, тишина ночью
   );
