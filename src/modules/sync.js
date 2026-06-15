@@ -3,6 +3,7 @@ import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getActivePosition, closePosition as dbClosePosition } from '../core/database.js';
 import { sendMessage } from './reporter.js';
+import { fetchUserFills, classifyClose } from './userFills.js';
 import { checkAccountLeverage, getPositionsCached } from './exchange.js';
 import { restoreCircuitBreaker, restoreSniper, restoreOiCapBans } from './executor/state.js';
 
@@ -194,19 +195,51 @@ async function handleMismatch(dbPosition) {
     `Position was closed while bot was offline. Held: ${heldH}h`,
   );
 
-  // ── Закрываем stale DB-позицию ───────────────
-  // PnL неизвестен — пользователь должен сверить вручную с биржей.
+  // ── Дотягиваем реальный PnL/цену закрытия из HL fills ───
+  // Раньше писали нули («PnL неизвестен») → Recent Activity показывал +$0.00
+  // на сделках, закрытых пока бот лежал, хотя на бирже PnL реальный. Берём тот
+  // же источник истины, что integrity.js/ledger (userFills + classifyClose).
+  let realizedPnl = 0;
+  let closePx = 0;
+  let closeReason = 'closed_offline';
+  let pnlAccurate = false;
+  try {
+    const fills = await fetchUserFills(dbPosition.entry_time - 60_000);
+    const coinFills = fills.filter(
+      (f) => f.coin.toUpperCase() === dbPosition.coin.toUpperCase(),
+    );
+    const c = classifyClose(dbPosition, coinFills);
+    if (Number.isFinite(c.pnl)) {
+      realizedPnl = c.pnl;
+      pnlAccurate = true;
+    }
+    if (Number.isFinite(c.closePx)) closePx = c.closePx;
+    // Причину уточняем (sl_trigger/tp_trigger/liquidation/manual_close), но
+    // помечаем что закрытие случилось оффлайн, для отличия в истории.
+    if (c.reason !== 'external_unknown') closeReason = `offline_${c.reason}`;
+    logger.info(
+      `[Sync] #${dbPosition.coin} offline-close resolved via fills: ` +
+        `${pnlAccurate ? `PnL=$${realizedPnl.toFixed(4)}` : 'PnL n/a'} | ` +
+        `closePx=${closePx ? '$' + closePx : 'n/a'} | reason=${closeReason}`,
+    );
+  } catch (fillsErr) {
+    logger.warn(
+      `[Sync] fills lookup for offline-close #${dbPosition.coin} failed: ${fillsErr.message} — записываю нули`,
+    );
+  }
+
+  // ── Закрываем stale DB-позицию с реальными (или нулевыми) значениями ──
   let dbClosed = false;
   try {
     dbClosePosition(dbPosition.id, {
-      close_price:  0,
-      realized_pnl: 0,
+      close_price:  closePx,
+      realized_pnl: realizedPnl,
       fee_paid:     0,
-      reason:       'closed_offline',
+      reason:       closeReason,
     });
     dbClosed = true;
     logger.info(
-      `[Sync] ✅ Stale DB position #${dbPosition.coin} (id=${dbPosition.id}) marked as closed_offline`,
+      `[Sync] ✅ Stale DB position #${dbPosition.coin} (id=${dbPosition.id}) closed (${closeReason})`,
     );
   } catch (err) {
     logger.error(
@@ -220,6 +253,10 @@ async function handleMismatch(dbPosition) {
     ? `🤖 БД синхронизирована. Бот свободен для новых сделок.`
     : `❌ <b>БД НЕ СИНХРОНИЗИРОВАНА!</b> Требуется ручная очистка.`;
 
+  const pnlLine = pnlAccurate
+    ? `${realizedPnl >= 0 ? '📈' : '📉'} PnL: <b>${realizedPnl >= 0 ? '+' : ''}$${realizedPnl.toFixed(4)}</b> (из fills)\n`
+    : `📊 PnL: <i>не удалось дотянуть из fills — сверь на бирже</i>\n`;
+
   await sendMessage(
     `🚨 <b>[SYNC] ЧП! Сделка закрыта оффлайн</b>\n` +
     `<code>─────────────────────</code>\n` +
@@ -229,8 +266,8 @@ async function handleMismatch(dbPosition) {
     `📊 APY: ${dbPosition.entry_apy.toFixed(2)}%\n` +
     `⏳ Удержание до выключения: ${heldH}ч\n` +
     `<code>─────────────────────</code>\n` +
-    `❗️ Причина: <b>TP/SL или Ликвидация</b>\n` +
-    `🔍 <b>Проверь баланс и историю на бирже!</b>\n` +
+    `❗️ Причина: <b>${closeReason}</b>\n` +
+    pnlLine +
     `<code>─────────────────────</code>\n` +
     `${dbStatusLine}`,
     true, // critical
