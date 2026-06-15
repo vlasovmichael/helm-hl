@@ -140,6 +140,18 @@ export function hmPosHintInner(coin) {
     }
     if (bot.peakPct != null && bot.peakPct > 0.1)
       chips.push(["neutral", `peak +${bot.peakPct.toFixed(2)}%`]);
+    // Обратный отсчёт до time-stop (авто-закрытие по рынку, если ни SL, ни TP).
+    // Есть только у бот-стратегий с max-hold (Hunter). Остаток = timeStop − held.
+    if (bot.timeStopMin != null && heldHours != null && heldHours >= 0) {
+      const remainMin = bot.timeStopMin - heldHours * 60;
+      if (remainMin > 0) {
+        const rm = Math.ceil(remainMin);
+        const label = rm >= 60 ? `${Math.floor(rm / 60)}h${rm % 60}m` : `${rm}m`;
+        chips.push(["neutral", `auto-close ~${label}`]);
+      } else {
+        chips.push(["neutral", "auto-close imminent"]);
+      }
+    }
     // Held-time — сколько держится позиция (есть только у бот-сделки).
     const held = fmtHeld(heldHours);
     if (held) chips.push(["neutral", `held ${held}`]);

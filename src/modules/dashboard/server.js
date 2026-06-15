@@ -306,6 +306,7 @@ function buildBotManagement(position) {
       floorPct, // живой пол в unrealized % (плюс = прибыль)
       floorPrice, // цена, на которой бот закроется сейчас
       floorKind, // 'trail' | 'be' | 'stop'
+      timeStopMin: config.trading.hunterTimeStopMin, // max-hold: фронт считает остаток от heldHours
     };
   }
 

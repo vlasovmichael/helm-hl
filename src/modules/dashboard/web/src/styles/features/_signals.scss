@@ -117,7 +117,7 @@
   }
 }
 .signals-table tr.is-active {
-  background: var(--accent-soft);
+  background: var(--grad-brand-soft);
 }
 /* Метка активной монеты рядом с тикером — заменяет дубль P&L в строке. */
 .hm-active-badge {
@@ -128,9 +128,9 @@
   letter-spacing: 0.04em;
   padding: 0 5px;
   border-radius: 4px;
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-line);
+  color: var(--brand);
+  background: var(--brand-soft);
+  border: 1px solid var(--brand-line);
   vertical-align: middle;
 }
 /* Чип «согласие движа со стороной позиции» (S ✓ по движу / L ✗ против).
@@ -640,7 +640,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
 }
 
 .signals-table tr.is-active td:first-child {
-  box-shadow: inset 3px 0 0 var(--accent);
+  box-shadow: inset 3px 0 0 var(--brand);
 }
 
 /* ── Hot Movers: чистая биржевая раскраска ──
@@ -673,11 +673,11 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
    специфичности и иначе перебивают кромку, когда монета ещё и двигается. */
 .signals-table tr.is-active,
 .data-table tr.is-active {
-  background: var(--accent-soft) !important;
+  background: var(--grad-brand-soft) !important;
 }
 .signals-table tr.is-active td:first-child,
 .data-table tr.is-active td:first-child {
-  box-shadow: inset 4px 0 0 var(--accent) !important;
+  box-shadow: inset 4px 0 0 var(--brand) !important;
   font-weight: 700;
 }
 
