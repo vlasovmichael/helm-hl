@@ -10,6 +10,7 @@
 // ─────────────────────────────────────────────────
 
 import { escapeHtml } from "../utils/format.js";
+import { popArrow, bindArrowPopEnd } from "../utils/arrowPop.js";
 import {
   computeMomentum,
   hmEntryBadge,
@@ -442,48 +443,11 @@ export function renderHotMovers(payload, fmtTime) {
 
 // Персистентные стрелки активной монеты: строки перестраиваются (innerHTML)
 // каждый тик, поэтому переносим ОДИН и тот же DOM-узел стрелки в перестроенную
-// ячейку (appendChild сохраняет identity). Стрелка показывает НАПРАВЛЕНИЕ ЦЕНЫ:
-// вверх+зелёная = цена растёт, вниз+красная = падает. При смене направления
-// плавно ПЕРЕВОРАЧИВАЕТСЯ (CSS-transition на rotate, см. _signals.scss).
-// updateHotMoversLiveArrow() по живой цене (WS ≤2с) переключает up/down.
+// ячейку (appendChild сохраняет identity). Глифом/цветом/спином узла управляет
+// updateHotMoversLiveArrow() по ЖИВОЙ цене (WS ≤2с) — здесь только держим узел
+// смонтированным, чтобы его не сбрасывало перестроение строки.
 const _hmDirArrows = new Map(); // coin → <span.hm-dir-arrow>
-const _hmDirUp = new Map(); // coin → bool (последнее направление) для гистерезиса
-const _hmDirRef = new Map(); // coin → опорная цена (от неё мерим ход для флипа)
-
-// Центрированная (вокруг 6,6) SVG-стрелка — переворот rotate(180°) идёт ровно,
-// в отличие от текстового глифа ↑/↓ (не центрирован в em-боксе → вилял).
-const _SVG_DIR_ARROW = `<svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true"><path d="M6 2.5V9.5M3.2 5.3 6 2.5l2.8 2.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
-
-// Направление цены с ГИСТЕРЕЗИСОМ (debounce): флипаем, только когда цена ушла от
-// опорной точки больше чем на _DIR_BAND. Мелкая дрожь в полосе направление не
-// меняет → стрелка не дёргается. Возвращает true(вверх)/false(вниз)/null(нет данных).
-const _DIR_BAND = 0.001; // 0.1% — ход меньше считаем шумом
-function dirUpForCoin(coin) {
-  const now = getActivePos(coin)?.now;
-  if (now == null || !Number.isFinite(now) || !(now > 0)) return null;
-  const ref = _hmDirRef.get(coin);
-  if (ref == null) {
-    _hmDirRef.set(coin, now);
-    return _hmDirUp.get(coin) ?? true;
-  }
-  const move = (now - ref) / ref;
-  if (move > _DIR_BAND) {
-    _hmDirRef.set(coin, now);
-    _hmDirUp.set(coin, true);
-    return true;
-  }
-  if (move < -_DIR_BAND) {
-    _hmDirRef.set(coin, now);
-    _hmDirUp.set(coin, false);
-    return false;
-  }
-  return _hmDirUp.get(coin) ?? true; // в полосе → держим прошлое
-}
-
-function setArrowUp(arrow, up) {
-  arrow.classList.toggle("up", up);
-  arrow.classList.toggle("down", !up);
-}
+const _hmLivePrevPx = new Map(); // coin → последняя цена (для детекта изменения)
 
 function mountDirArrows(tbody) {
   const seen = new Set();
@@ -497,10 +461,9 @@ function mountDirArrows(tbody) {
     if (!arrow) {
       arrow = document.createElement("span");
       arrow.className = "hm-dir-arrow";
-      arrow.innerHTML = _SVG_DIR_ARROW;
-      const up = dirUpForCoin(coin) ?? mount.dataset.dir !== "down";
-      _hmDirUp.set(coin, up);
-      setArrowUp(arrow, up);
+      // Стартовый глиф из направления скан-тика — до первого живого тика.
+      arrow.textContent = mount.dataset.dir === "down" ? "↓" : "↑";
+      bindArrowPopEnd(arrow); // снимать флаг «идёт спин» по завершении
       _hmDirArrows.set(coin, arrow);
     }
     if (arrow.parentNode !== mount) mount.appendChild(arrow);
@@ -509,18 +472,24 @@ function mountDirArrows(tbody) {
   for (const coin of _hmDirArrows.keys())
     if (!seen.has(coin)) {
       _hmDirArrows.delete(coin);
-      _hmDirUp.delete(coin);
-      _hmDirRef.delete(coin);
+      _hmLivePrevPx.delete(coin);
     }
 }
 
-// Живой апдейт стрелки активной монеты — из onStatus по WS-status (≤2с). Считает
-// направление цены (с гистерезисом) и переключает up/down; переворот анимирует CSS.
+// Живой спин стрелки активной монеты — дёргается из onStatus по WS-status (≤2с),
+// независимо от скан-тика Hot Movers. Для каждой активной монеты берёт текущую
+// цену (getActivePos().now) и, если она изменилась, ставит глиф ↑/↓ нужного
+// цвета и ретригерит CSS-спин (как setup-live-arrow). Это и есть «крутится».
 export function updateHotMoversLiveArrow() {
   for (const [coin, arrow] of _hmDirArrows) {
-    const up = dirUpForCoin(coin);
-    if (up == null) continue; // нет данных позиции — оставляем как есть
-    setArrowUp(arrow, up);
+    const px = getActivePos(coin)?.now;
+    if (px == null || !Number.isFinite(px)) continue;
+    const prev = _hmLivePrevPx.get(coin);
+    if (prev != null && px !== prev && prev > 0) {
+      const deltaPct = (Math.abs(px - prev) / prev) * 100;
+      popArrow(arrow, px > prev, deltaPct);
+    }
+    _hmLivePrevPx.set(coin, px);
   }
 }
 
