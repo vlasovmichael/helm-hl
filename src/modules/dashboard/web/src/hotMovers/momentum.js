@@ -125,6 +125,26 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush) {
     why = `рыночный слив (${sharePct}% топа OI↓) — fade ненадёжен, лов ножа`;
   }
 
+  // Fade = ставка на ВЫДОХ. Гасим actionable, если выдоха нет: (a) движение
+  // ускоряется в свою сторону (accel↑ — нож разгоняется, не тормозит; ср.
+  // коммент колонки ACC «≥1.2 = ускорение, не фейди»); (b) фейдим ПО старшему
+  // 1h-тренду (fade-short при тренде вверх / fade-long при тренде вниз) — это
+  // движение по тренду, не откат под фейд. Держать в синхроне с
+  // fadeExhaustionMuted() на сервере (hotMoversSetup.js).
+  const htf = signal?.htfTrend ?? null;
+  if (mode === "fade") {
+    if (accelKind === "up") {
+      mode = null;
+      why = `⛔ ускорение в сторону движения — не выдох (нож разгоняется) · ${why}`;
+    } else if (priceUp && htf === "up") {
+      mode = null;
+      why = `⛔ 1h-тренд ВВЕРХ — фейд-шорт против тренда · ${why}`;
+    } else if (!priceUp && htf === "down") {
+      mode = null;
+      why = `⛔ 1h-тренд ВНИЗ — фейд-лонг против тренда · ${why}`;
+    }
+  }
+
   const sideUp = side === "LONG";
   const arrow = sideUp ? _SVG_ARROW_UP : _SVG_ARROW_DOWN;
   const modeTag = mode

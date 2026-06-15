@@ -85,18 +85,49 @@ export function isFadeMutedByFlush(side, mode, flush) {
   );
 }
 
+// Ускорение хода: |2m| vs линейная экстраполяция 5m (×0.4). ≥1.2 = ускоряется
+// в сторону движения ('up'), ≤0.6 = выдыхается ('down'), знаки разные = разворот
+// ('rev'). ⚠️ Зеркало deriveAccelKind в dashboard/web/src/hotMovers/momentum.js.
+export function deriveAccelKind(w2, w5) {
+  if (!w2 || !w5 || w2.spikePct == null || w5.spikePct == null) return null;
+  const a = w2.spikePct;
+  const b = w5.spikePct;
+  if (Math.abs(b) < 0.05) return 'flat';
+  if (a > 0 !== b > 0 && Math.abs(a) > 0.2) return 'rev';
+  const ratio = Math.abs(a) / Math.abs(b * 0.4);
+  return ratio >= 1.2 ? 'up' : ratio <= 0.6 ? 'down' : 'flat';
+}
+
+// Fade = ставка на ВЫДОХ движения. actionable снимаем, когда выдоха НЕТ:
+//  (a) accelKind === 'up' — ход ускоряется в свою сторону (нож разгоняется, не
+//      тормозит) → лов ножа, не истощение;
+//  (b) фейдим ПО старшему 1h-тренду: fade-short (priceUp) при htfTrend==='up'
+//      или fade-long (!priceUp) при htfTrend==='down' — движение по тренду, а
+//      не откат под фейд.
+// Возвращает причину ('accel'|'htf') или null. ⚠️ Зеркало в momentum.js.
+export function fadeExhaustionMuted(mode, priceUp, accelKind, htfTrend) {
+  if (mode !== 'fade') return null;
+  if (accelKind === 'up') return 'accel';
+  if (priceUp && htfTrend === 'up') return 'htf';
+  if (!priceUp && htfTrend === 'down') return 'htf';
+  return null;
+}
+
 /**
  * Setup-вердикт по окнам цены + OI. OI решает режим: trend = по движению,
  * fade = против. Без OI — направление по движению, mode не подтверждён.
  * Если передан flush (breadth-слив) и вердикт = fade против слива — mode
  * снимается (режим не подтверждён), side остаётся: пилл виден, но не actionable.
+ * accelKind/htfTrend (опц.) гасят fade без выдоха (см. fadeExhaustionMuted).
  *
  * @param {Array<{mins:number, spikePct:number|null}>} windows
  * @param {{oiDelta5m?:number|null, oiDelta15m?:number|null}} oi
  * @param {{active:boolean, dir:'down'|'up'|null}} [flush]
- * @returns {{side:'LONG'|'SHORT'|null, mode:'trend'|'fade'|null, score:number, flushMuted?:boolean}}
+ * @param {'up'|'down'|'rev'|'flat'|null} [accelKind]
+ * @param {'up'|'down'|'none'|null} [htfTrend]
+ * @returns {{side:'LONG'|'SHORT'|null, mode:'trend'|'fade'|null, score:number, flushMuted?:boolean, fadeMuted?:string}}
  */
-export function evaluateSetup(windows, oi, flush) {
+export function evaluateSetup(windows, oi, flush, accelKind = null, htfTrend = null) {
   let weighted = 0;
   let haveData = false;
   for (const w of windows || []) {
@@ -125,6 +156,10 @@ export function evaluateSetup(windows, oi, flush) {
   }
   if (isFadeMutedByFlush(side, mode, flush)) {
     return { side, mode: null, score, flushMuted: true };
+  }
+  const fadeMuted = fadeExhaustionMuted(mode, priceUp, accelKind, htfTrend);
+  if (fadeMuted) {
+    return { side, mode: null, score, fadeMuted };
   }
   return { side, mode, score };
 }
@@ -187,13 +222,20 @@ export function buildCoinFeatures(item, now, deps) {
  * не-zone состояния (улетел → откатился). Первое наблюдение и флип стороны не
  * пушат (анти-спам на старте).
  *
+ * htfTrend (1h-EMA тренд) гасит fade по тренду — fetch'ит воркер и прокидывает.
+ *
  * @returns {{fire:boolean, side:string|null, mode:string|null, score:number, chase:object}}
  */
-export function evaluateCoinAlert(item, feats, prevByCoin, minScore, flush) {
+export function evaluateCoinAlert(item, feats, prevByCoin, minScore, flush, htfTrend = null) {
+  const w2 = (feats.windows || []).find((w) => w.mins === 2);
+  const w5 = (feats.windows || []).find((w) => w.mins === 5);
+  const accelKind = deriveAccelKind(w2, w5);
   const setup = evaluateSetup(
     feats.windows,
     { oiDelta5m: feats.oiDelta5m, oiDelta15m: feats.oiDelta15m },
     flush,
+    accelKind,
+    htfTrend,
   );
   const chase = classifyChase(feats.windows, setup.side, setup.score);
   const actionable = !!setup.mode && setup.score >= minScore;

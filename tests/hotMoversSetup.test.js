@@ -6,6 +6,8 @@ import {
   classifyChase,
   computeBreadthFlush,
   isFadeMutedByFlush,
+  deriveAccelKind,
+  fadeExhaustionMuted,
 } from '../src/modules/hotMoversSetup.js';
 
 const W = (vals) => [2, 5, 15, 60].map((mins, i) => ({ mins, spikePct: vals[i] }));
@@ -136,4 +138,53 @@ test('evaluateSetup: тот же сетап без flush → fade long actionabl
   const s = evaluateSetup(W([-3, -3, -3, -3]), { oiDelta15m: -2 });
   assert.equal(s.side, 'LONG');
   assert.equal(s.mode, 'fade');
+});
+
+// ── deriveAccelKind ──────────────────────────────────────────────────────────
+test('deriveAccelKind: ускорение/выдох/разворот', () => {
+  // NIL-кейс: 2m −0.36, 5m −0.50 → ratio 1.8 → ускорение в сторону движения.
+  assert.equal(deriveAccelKind({ spikePct: -0.36 }, { spikePct: -0.5 }), 'up');
+  // 2m мал относительно 5m → выдыхается.
+  assert.equal(deriveAccelKind({ spikePct: -0.1 }, { spikePct: -0.5 }), 'down');
+  // знаки разные + |2m|>0.2 → разворот.
+  assert.equal(deriveAccelKind({ spikePct: 0.5 }, { spikePct: -0.5 }), 'rev');
+  assert.equal(deriveAccelKind(null, { spikePct: -0.5 }), null);
+});
+
+// ── fadeExhaustionMuted (юнит) ───────────────────────────────────────────────
+test('fadeExhaustionMuted: только fade, accel↑ и фейд-по-тренду', () => {
+  assert.equal(fadeExhaustionMuted('fade', true, 'up', null), 'accel'); // нож разгоняется
+  assert.equal(fadeExhaustionMuted('fade', true, 'down', 'up'), 'htf'); // fade-short в up-тренде
+  assert.equal(fadeExhaustionMuted('fade', false, 'down', 'down'), 'htf'); // fade-long в down-тренде
+  assert.equal(fadeExhaustionMuted('fade', false, 'down', 'none'), null); // выдох + нет тренда → ок
+  assert.equal(fadeExhaustionMuted('trend', true, 'up', 'up'), null); // trend не трогаем
+});
+
+// ── evaluateSetup: fade-гейт по ускорению (NIL/CHIP — лов ножа) ──────────────
+test('evaluateSetup: fade + accel↑ → mode снят, fadeMuted=accel', () => {
+  const s = evaluateSetup(W([-3, -3, -3, -3]), { oiDelta15m: -2 }, null, 'up', null);
+  assert.equal(s.side, 'LONG');
+  assert.equal(s.mode, null);
+  assert.equal(s.fadeMuted, 'accel');
+  assert.ok(s.score > 3); // сила есть, гаснет только actionable
+});
+
+// ── evaluateSetup: fade-гейт по старшему тренду (BABY) ───────────────────────
+test('evaluateSetup: fade-short против 1h-аплёта → fadeMuted=htf', () => {
+  const s = evaluateSetup(W([3, 3, 3, 3]), { oiDelta15m: -2 }, null, 'down', 'up');
+  assert.equal(s.side, 'SHORT');
+  assert.equal(s.mode, null);
+  assert.equal(s.fadeMuted, 'htf');
+});
+
+test('evaluateSetup: fade-long при затухании и без тренда → остаётся actionable', () => {
+  const s = evaluateSetup(W([-3, -3, -3, -3]), { oiDelta15m: -2 }, null, 'down', 'none');
+  assert.equal(s.side, 'LONG');
+  assert.equal(s.mode, 'fade');
+});
+
+test('evaluateSetup: trend не трогается accel↑/htf', () => {
+  const s = evaluateSetup(W([3, 3, 3, 3]), { oiDelta15m: 2 }, null, 'up', 'down');
+  assert.equal(s.side, 'LONG');
+  assert.equal(s.mode, 'trend');
 });

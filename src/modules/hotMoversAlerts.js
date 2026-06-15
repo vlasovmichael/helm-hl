@@ -22,6 +22,7 @@ import {
   buildCoinFeatures,
   evaluateCoinAlert,
   computeBreadthFlush,
+  deriveOiKind,
 } from './hotMoversSetup.js';
 
 const ENABLED =
@@ -109,7 +110,7 @@ async function runOnce(now = Date.now()) {
   if (!Array.isArray(snap) || snap.length === 0) return;
   const ts = state.latestHunterAt || now;
   // Ленивый импорт: модуль тянет config/exchange — не грузим на старте/в тестах.
-  const { getOiNMinAgo } = await import('./dashboard/routes/movers.js');
+  const { getOiNMinAgo, getHtfTrend } = await import('./dashboard/routes/movers.js');
   const deps = { priceNMinAgo: getPriceNMinAgo, oiNMinAgo: getOiNMinAgo };
 
   // Breadth-слив: считаем фичи по всем монетам один раз, чтобы fade против
@@ -127,7 +128,13 @@ async function runOnce(now = Date.now()) {
   for (const item of snap) {
     if (!item?.coin || item.price == null) continue;
     const feats = featByCoin.get(item.coin);
-    const res = evaluateCoinAlert(item, feats, prevByCoin, MIN_SCORE, flush);
+    // HTF-тренд нужен только fade-сетапам (OI↓). Дёргаем 1h-свечи лишь для них,
+    // чтобы не бомбить API по всей вселенной (cache 5мин/60с всё равно гасит).
+    const htfTrend =
+      deriveOiKind(feats) === 'down'
+        ? await getHtfTrend(item.coin, item.price, ts)
+        : null;
+    const res = evaluateCoinAlert(item, feats, prevByCoin, MIN_SCORE, flush, htfTrend);
     if (!res.fire) continue;
 
     const key = `${item.coin}:${res.side}`;

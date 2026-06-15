@@ -19,6 +19,8 @@ import {
   HUNTER_TP_PCT,
 } from "../../strategistSniper.js";
 import { computeBreadthFlush } from "../../hotMoversSetup.js";
+import { getHourlyCandles } from "../../candleCache.js";
+import { classifyTrend } from "../../candyGirlEma.js";
 
 // ─────────────────────────────────────────────────
 //  OI history — буфер вынесен в core/oiHistory.js (2026-06-15)
@@ -105,6 +107,48 @@ async function enrichVolMult(items) {
   const results = await Promise.allSettled(items.map((it) => fetchVolMult(it.coin)));
   results.forEach((r, i) => {
     items[i].volMult = r.status === "fulfilled" ? r.value : null;
+  });
+  return items;
+}
+
+// ─── HTF-тренд (1h EMA20/200) для гейта fade-сигналов ────────────────────────
+// Fade («против движения») валиден только как контр-тренд к старшему тренду.
+// Считаем 1h-тренд тем же классификатором, что Candy Girl (classifyTrend), и
+// прокидываем 'up'|'down'|'none' на сигнал. computeMomentum (фронт) и
+// evaluateSetup (сервер/ntfy) гасят actionable у fade ПО тренду.
+// 1h-свечи кэшируются 5 мин в candleCache → доп. _htfCache (60с) лишь срезает
+// повторный расчёт EMA на каждый WS-кадр (TTL движков 3с).
+const HTF_FAST = config.trading.candyGirlFast1h;
+const HTF_SLOW = config.trading.candyGirlSlow1h;
+const HTF_SLOPE = config.trading.candyGirlSlopeLookback;
+const HTF_LOOKBACK_HOURS = HTF_SLOW + HTF_SLOPE + 5;
+const HTF_TTL_MS = 60_000;
+const _htfCache = new Map(); // coin → { ts, trend }
+
+export async function getHtfTrend(coin, price, now = Date.now()) {
+  const cached = _htfCache.get(coin);
+  if (cached && now - cached.ts < HTF_TTL_MS) return cached.trend;
+  try {
+    const candles1h = await getHourlyCandles(coin, HTF_LOOKBACK_HOURS, now);
+    const { trend } = classifyTrend(candles1h, price, {
+      fast: HTF_FAST,
+      slow: HTF_SLOW,
+      slopeLookback: HTF_SLOPE,
+    });
+    _htfCache.set(coin, { ts: now, trend });
+    return trend;
+  } catch {
+    _htfCache.set(coin, { ts: now, trend: "none" });
+    return "none";
+  }
+}
+
+async function enrichHtfTrend(items, now) {
+  const results = await Promise.allSettled(
+    items.map((it) => getHtfTrend(it.coin, it.price, now)),
+  );
+  results.forEach((r, i) => {
+    items[i].htfTrend = r.status === "fulfilled" ? r.value : "none";
   });
   return items;
 }
@@ -277,6 +321,7 @@ async function buildMoversPayload(limit = 12) {
         fader: faderTiers?.get(m.coin) ?? null,
         oiDelta5m,
         oiDelta15m,
+        htfTrend: null, // заполняется enrichHtfTrend (1h EMA-тренд) для fade-гейта
       };
     });
 
@@ -292,6 +337,7 @@ async function buildMoversPayload(limit = 12) {
       }
     }
     await enrichVolMult(toEnrich);
+    await enrichHtfTrend(toEnrich, now);
 
     // Breadth-слив: синхронный делевередж лидеров движения (OI↓ у многих) →
     // fade против движения = лов ножа. Клиент гасит actionable у таких вердиктов.
