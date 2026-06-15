@@ -173,6 +173,14 @@
   }
 }
 /* Hot Movers — под-строка с данными открытой позиции (пиннутая монета). */
+/* Клик по строке монеты открывает TradingView — кликабельный аффорданс. */
+#hot-movers-tbody tr[data-hmkey^="m:"],
+#hot-movers-tbody tr[data-hmkey^="pos:"] {
+  cursor: pointer;
+}
+#hot-movers-tbody tr[data-hmkey^="m:"]:hover {
+  box-shadow: inset 3px 0 0 var(--brand);
+}
 .hm-pos-row td {
   padding: 3px 10px 7px 30px !important;
   font-size: 11.5px;
