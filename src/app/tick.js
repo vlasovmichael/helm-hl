@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────
 
 import { logger } from '../core/logger.js';
-import { getActivePosition } from '../core/database.js';
+import { getActivePosition, getActiveAdoptPositions } from '../core/database.js';
 import { scan } from '../modules/scout.js';
 import { coordinate } from '../modules/coordinator.js';
 import { config } from '../core/config.js';
@@ -145,7 +145,18 @@ export async function tick() {
       state.lastIdleAt = 0;
     }
 
-    const signal = await coordinate(scoutData, activePosition, hunterData);
+    // Монеты, в которых оператор уже сидит руками (усыновлённые adopt-позы) — бот не
+    // должен открывать на них вторую позу: на одном кошельке HL встречный ордер
+    // неттит твою позу, одинаковый — двоит риск (incident WLD 2026-06-16, Hunter
+    // зашортил поверх живого adopt-шорта). Неусыновлённые ручные позы и так пускают
+    // бот в HANDS-OFF (return выше), так что здесь достаточно adopt-коинов.
+    const ownedCoins = new Set(
+      getActiveAdoptPositions()
+        .map((p) => (p.coin || '').toUpperCase())
+        .filter(Boolean),
+    );
+
+    const signal = await coordinate(scoutData, activePosition, hunterData, ownedCoins);
 
     // Iter D2: если checkHunterExit (внутри coordinate→analyzeHunter) выставил
     // ARM request — выполняем cancel TP-trigger ДО execute(). Это гарантирует,

@@ -90,6 +90,33 @@ test('Coordinator: no position + nothing interesting → HOLD', async () => {
 });
 
 // ═══════════════════════════════════════════════
+//  excludeCoins — бот не лезет в монету оператора (WLD 2026-06-16)
+// ═══════════════════════════════════════════════
+
+test('Coordinator: excludeCoins блокирует открытие на монете оператора → HOLD', async () => {
+  resetAll();
+  const data = [makeScoutItem('ZRO', 80)]; // обычно дал бы OPEN carry
+  const r = await coordinate(data, undefined, data, new Set(['ZRO']));
+  assert.equal(r.action, 'HOLD');
+});
+
+test('Coordinator: excludeCoins не трогает прочие монеты → OPEN', async () => {
+  resetAll();
+  const data = [makeScoutItem('ZRO', 80)];
+  // Юзер сидит в другой монете — ZRO остаётся валидным кандидатом.
+  const r = await coordinate(data, undefined, data, new Set(['WLD']));
+  assert.equal(r.action, 'OPEN');
+  assert.equal(r.coin, 'ZRO');
+});
+
+test('Coordinator: excludeCoins регистронезависимо (lowercase coin)', async () => {
+  resetAll();
+  const data = [makeScoutItem('zro', 80)];
+  const r = await coordinate(data, undefined, data, new Set(['ZRO']));
+  assert.equal(r.action, 'HOLD');
+});
+
+// ═══════════════════════════════════════════════
 //  Has position — routes to correct strategy
 // ═══════════════════════════════════════════════
 

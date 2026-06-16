@@ -22,9 +22,14 @@ import { analyzeTrendFollow } from './strategistTrendFollow.js';
  * @param {Array} scoutData — carry scope (узкая ликвидная вселенная)
  * @param {Object|undefined} activePosition
  * @param {Array} [hunterData] — Hunter scope (шире, low-liq monеты тоже). Default: scoutData.
+ * @param {Set<string>} [excludeCoins] — монеты, в которых оператор уже сидит (adopt/
+ *   ручные). Бот-стратегиям запрещено ОТКРЫВАТЬ на них вторую позу — иначе на
+ *   одном кошельке HL встречный ордер неттит твою позу, а одинаковый — двоит
+ *   риск (incident WLD 2026-06-16: Hunter зашортил WLD поверх живого adopt-шорта).
+ *   Применяется ТОЛЬКО в ветке открытия; сопровождение активной позы не трогаем.
  * @returns {{ action: string, strategy_id?: string, [key: string]: any }}
  */
-export async function coordinate(scoutData, activePosition, hunterData = scoutData) {
+export async function coordinate(scoutData, activePosition, hunterData = scoutData, excludeCoins = new Set()) {
   if (activePosition) {
     const sid = activePosition.strategy_id || 'carry';
 
@@ -60,8 +65,17 @@ export async function coordinate(scoutData, activePosition, hunterData = scoutDa
   // No position — query strategies in priority order.
   if (isPaused()) return { action: 'HOLD' };
 
+  // Выкидываем монеты, в которых оператор уже держит позу (adopt/ручные), из набора
+  // кандидатов — чтобы НИ ОДНА бот-стратегия не открыла на них вторую позицию
+  // (неттинг при встречной стороне / двойной риск при одинаковой). Фильтруем
+  // только здесь, в ветке открытия: сопровождение активной позы выше работает
+  // на полном наборе данных. См. WLD 2026-06-16.
+  const notOwned = (d) => !excludeCoins.has((d.coin || '').toUpperCase());
+  const scoutOpen  = excludeCoins.size ? scoutData.filter(notOwned)  : scoutData;
+  const hunterOpen = excludeCoins.size ? hunterData.filter(notOwned) : hunterData;
+
   if (isEnabled('hunter', config.trading.hunterEnabled) && (!config.isProduction || config.trading.hunterProdEnabled)) {
-    const hunterSignal = analyzeHunter(hunterData, undefined);
+    const hunterSignal = analyzeHunter(hunterOpen, undefined);
     if (hunterSignal.action !== 'HOLD') {
       logger.debug(`[Coordinator] hunter → ${hunterSignal.action} ${hunterSignal.coin}`);
       return hunterSignal;
@@ -69,7 +83,7 @@ export async function coordinate(scoutData, activePosition, hunterData = scoutDa
   }
 
   if (isEnabled('hunterLong', config.trading.hunterLongEnabled) && (!config.isProduction || config.trading.hunterLongProdEnabled)) {
-    const hunterLongSignal = analyzeHunterLong(hunterData, undefined);
+    const hunterLongSignal = analyzeHunterLong(hunterOpen, undefined);
     if (hunterLongSignal.action !== 'HOLD') {
       logger.debug(`[Coordinator] hunter_long → ${hunterLongSignal.action} ${hunterLongSignal.coin}`);
       return hunterLongSignal;
@@ -82,7 +96,7 @@ export async function coordinate(scoutData, activePosition, hunterData = scoutDa
   // shadow-слоте (см. tickTrendFollowPaper) и сюда не лезет, иначе бумажная поза
   // заняла бы реальный single-slot.
   if (isEnabled('chillBoy', config.trading.chillBoyEnabled) && (!config.isProduction || config.trading.chillBoyProdEnabled)) {
-    const tfSignal = await analyzeTrendFollow(hunterData, undefined);
+    const tfSignal = await analyzeTrendFollow(hunterOpen, undefined);
     if (tfSignal.action !== 'HOLD') {
       logger.debug(`[Coordinator] trend_follow → ${tfSignal.action} ${tfSignal.coin}`);
       return tfSignal;
@@ -92,7 +106,7 @@ export async function coordinate(scoutData, activePosition, hunterData = scoutDa
   // Carry prod-gate (как у Hunter/ChillBoy): в PROD-боте при CARRY_PROD_ENABLED=false
   // реальных carry-входов нет — carry уходит в paper-накопление (tickCarryPaper).
   if (isEnabled('carry', config.trading.carryEnabled !== false) && (!config.isProduction || config.trading.carryProdEnabled)) {
-    const carrySignal = analyze(scoutData, undefined);
+    const carrySignal = analyze(scoutOpen, undefined);
     if (carrySignal.action !== 'HOLD') {
       logger.debug(`[Coordinator] carry → ${carrySignal.action} ${carrySignal.coin}`);
       return { ...carrySignal, strategy_id: 'carry' };
