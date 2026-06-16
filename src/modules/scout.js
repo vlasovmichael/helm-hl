@@ -5,7 +5,7 @@ import { getRuntimeBlacklist, getOiCapBans } from './executor/index.js';
 import { push as pushPriceHistory } from '../core/priceHistory.js';
 import { comparePoll } from '../core/priceFeed.js';
 import { getActivePosition, getActivePaperCoins, recordSetupSnapshots } from '../core/database.js';
-import { hlInfo } from '../core/hlClient.js';
+import { hlInfo, HL_PRIORITY } from '../core/hlClient.js';
 import { state } from '../app/state.js';
 
 const RTT_LIMIT_MS = 10_000; // отклоняем ответы медленнее 10 с
@@ -179,7 +179,7 @@ async function fetchPredictedFundings() {
   }
 
   try {
-    const data = await hlInfo({ type: 'predictedFundings' }, { label: 'scout/predictedFundings' });
+    const data = await hlInfo({ type: 'predictedFundings' }, { label: 'scout/predictedFundings', priority: HL_PRIORITY.HIGH });
 
     if (!Array.isArray(data)) {
       logger.warn(`[Scout] predictedFundings: unexpected shape, ignoring`);
@@ -218,7 +218,7 @@ async function fetchPredictedFundings() {
  */
 async function fetchMarkets() {
   const t0 = Date.now();
-  const data = await hlInfo({ type: 'metaAndAssetCtxs' }, { label: 'scout/markets' });
+  const data = await hlInfo({ type: 'metaAndAssetCtxs' }, { label: 'scout/markets', priority: HL_PRIORITY.HIGH });
   const rtt = Date.now() - t0;
 
   if (rtt > RTT_LIMIT_MS) {

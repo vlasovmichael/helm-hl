@@ -7,7 +7,7 @@
 // а сжатый вердикт для ручного трейда.
 
 import axios from "axios";
-import { hlInfo } from "../../../core/hlClient.js";
+import { hlInfo, HL_PRIORITY } from "../../../core/hlClient.js";
 
 const FNG_TTL_MS = 30 * 60_000;
 let fngCache = { value: null, label: null, ts: 0 };
@@ -51,7 +51,7 @@ async function getBtcMoves() {
         type: "candleSnapshot",
         req: { coin: "BTC", interval: "15m", startTime: now - 5 * 3600_000, endTime: now },
       },
-      { label: "dash/market-context", timeoutMs: 5000, maxRetries: 1 },
+      { label: "dash/market-context", timeoutMs: 5000, maxRetries: 1, priority: HL_PRIORITY.LOW },
     );
   } catch {
     return btcMovesCache.moves; // stale (или null) — полоса деградирует тихо

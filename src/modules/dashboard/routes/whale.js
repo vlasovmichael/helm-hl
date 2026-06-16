@@ -8,7 +8,7 @@
 import axios from "axios";
 import { config } from "../../../core/config.js";
 import { logger } from "../../../core/logger.js";
-import { hlInfo } from "../../../core/hlClient.js";
+import { hlInfo, HL_PRIORITY } from "../../../core/hlClient.js";
 
 const WHALE_DEFAULT_ADDRESS = "0x3ed4033676d0bdb3938728ca4ac673d00e74bd06";
 const WHALE_CACHE_TTL_MS = 30_000;
@@ -133,7 +133,7 @@ export async function handleWhaleWatch(req, res) {
   try {
     const state = await hlInfo(
       { type: "clearinghouseState", user: addr },
-      { label: "dash/whaleWatch", timeoutMs: 8_000, maxRetries: 2 },
+      { label: "dash/whaleWatch", timeoutMs: 8_000, maxRetries: 2, priority: HL_PRIORITY.LOW },
     );
 
     const positions = (state?.assetPositions ?? [])

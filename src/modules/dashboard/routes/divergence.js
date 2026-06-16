@@ -8,7 +8,7 @@
 // Broadcast по WS остаётся в server.js (где живёт wss): refreshDivergenceSnapshot
 // делает только fetch+store и сообщает, появился ли новый снапшот.
 
-import { hlInfo } from "../../../core/hlClient.js";
+import { hlInfo, HL_PRIORITY } from "../../../core/hlClient.js";
 
 export const DIVERGENCE_WATCHLIST = ["BTC", "HYPE", "ZEC", "WLD", "NEAR", "LIT", "ASTER"];
 export const DIVERGENCE_SNAPSHOT_MS = 60_000;
@@ -27,7 +27,7 @@ export async function refreshDivergenceSnapshot() {
   try {
     const data = await hlInfo(
       { type: "metaAndAssetCtxs" },
-      { label: "dashboard/divergence", timeoutMs: 10_000 },
+      { label: "dashboard/divergence", timeoutMs: 10_000, priority: HL_PRIORITY.LOW },
     );
     const [meta, ctxs] = data ?? [];
     if (!Array.isArray(meta?.universe) || !Array.isArray(ctxs)) return false;

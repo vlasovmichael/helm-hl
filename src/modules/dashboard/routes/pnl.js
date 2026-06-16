@@ -11,7 +11,7 @@
 
 import { config } from "../../../core/config.js";
 import { logger } from "../../../core/logger.js";
-import { hlInfo } from "../../../core/hlClient.js";
+import { hlInfo, HL_PRIORITY } from "../../../core/hlClient.js";
 import { getAccountSummary, getPositionsCached } from "../../exchange.js";
 import { getAccountEquity } from "../../wallet.js";
 import {
@@ -63,7 +63,7 @@ async function getFundingHistory() {
         user: config.wallet.address,
         startTime,
       },
-      { label: "dash/userFunding", timeoutMs: 8000 },
+      { label: "dash/userFunding", timeoutMs: 8000, priority: HL_PRIORITY.LOW },
     );
     if (!Array.isArray(data)) return fundingCache.deltas;
     // Каждый элемент: { time, hash, delta: { coin, usdc, szi, fundingRate, nSamples } }

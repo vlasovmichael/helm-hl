@@ -7,7 +7,7 @@
 // Возвращает массив объектов {open, high, low, close, time} oldest→newest.
 
 import { logger } from '../core/logger.js';
-import { hlInfo } from '../core/hlClient.js';
+import { hlInfo, HL_PRIORITY } from '../core/hlClient.js';
 import { resolveApiCoin } from '../core/universe.js';
 
 const TTL_MS   = 5 * 60_000;
@@ -41,9 +41,10 @@ function parseCandles(raw) {
  * @param {string} coin
  * @param {number} lookbackHours — сколько часов истории нужно (минимум atrLong+1)
  * @param {number} [now=Date.now()]
+ * @param {number} [priority=HL_PRIORITY.NORMAL] — LOW для косметики дашборда
  * @returns {Promise<Array<{open,high,low,close,time}>|null>}
  */
-export async function getHourlyCandles(coin, lookbackHours, now = Date.now()) {
+export async function getHourlyCandles(coin, lookbackHours, now = Date.now(), priority = HL_PRIORITY.NORMAL) {
   const cached = cache.get(coin);
   if (cached && now - cached.fetchedAt < TTL_MS) {
     return cached.candles;
@@ -59,7 +60,7 @@ export async function getHourlyCandles(coin, lookbackHours, now = Date.now()) {
       type: 'candleSnapshot',
       req:  { coin: resolveApiCoin(coin), interval: INTERVAL, startTime, endTime: now },
     },
-    { label: `candleCache/${coin}` },
+    { label: `candleCache/${coin}`, priority },
   ).then((data) => {
     const candles = parseCandles(data);
     cache.set(coin, { fetchedAt: Date.now(), candles, inflight: null });

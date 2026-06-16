@@ -18,7 +18,7 @@ import { logger } from "../core/logger.js";
 import { retryWithBackoff } from "../core/retry.js";
 import { getCachedBalance } from "../core/balanceCache.js";
 import { coalesce } from "../core/accountState.js";
-import { hlInfo } from "../core/hlClient.js";
+import { hlInfo, HL_PRIORITY } from "../core/hlClient.js";
 import {
   getLivePrice as feedGetLivePrice,
   isFeedFresh,
@@ -263,7 +263,7 @@ export async function getPositions() {
   // флудом за IP-бюджет 1200/min без координации → "unknown error"/$0.
   const state = await hlInfo(
     { type: "clearinghouseState", user: config.wallet.address },
-    { label: "get-positions" },
+    { label: "get-positions", priority: HL_PRIORITY.HIGH },
   );
   return state?.assetPositions ?? [];
 }
@@ -308,7 +308,7 @@ export async function fetchSpotUsdcBalance() {
   try {
     const state = await hlInfo(
       { type: "spotClearinghouseState", user: config.wallet.address },
-      { label: "spot-balance" },
+      { label: "spot-balance", priority: HL_PRIORITY.HIGH },
     );
     const usdc = (state?.balances ?? []).find((b) => {
       const c = (b.coin ?? "").toUpperCase();
@@ -342,7 +342,7 @@ async function fetchBalanceFromSdk() {
   const [perpState, spotUsdc] = await Promise.all([
     hlInfo(
       { type: "clearinghouseState", user: config.wallet.address },
-      { label: "balance-perp" },
+      { label: "balance-perp", priority: HL_PRIORITY.HIGH },
     ),
     fetchSpotUsdcBalance(),
   ]);
@@ -406,7 +406,7 @@ export async function getAccountSummary() {
 export async function getClearinghouseStateFull() {
   return hlInfo(
     { type: "clearinghouseState", user: config.wallet.address },
-    { label: "get-clearinghouse-state-full" },
+    { label: "get-clearinghouse-state-full", priority: HL_PRIORITY.HIGH },
   );
 }
 
@@ -416,7 +416,7 @@ export async function getClearinghouseStateFull() {
  * @returns {Promise<Object>}
  */
 export async function getMeta() {
-  return hlInfo({ type: "meta" }, { label: "get-meta", maxRetries: 2 });
+  return hlInfo({ type: "meta" }, { label: "get-meta", maxRetries: 2, priority: HL_PRIORITY.HIGH });
 }
 
 /**
@@ -432,7 +432,7 @@ export async function getMarkPrice(coin) {
   try {
     const data = await hlInfo(
       { type: "metaAndAssetCtxs" },
-      { label: "exchange/markPrice", timeoutMs: 10_000 },
+      { label: "exchange/markPrice", timeoutMs: 10_000, priority: HL_PRIORITY.HIGH },
     );
 
     const [meta, ctxs] = data ?? [];

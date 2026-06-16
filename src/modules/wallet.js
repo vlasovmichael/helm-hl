@@ -1,6 +1,6 @@
 import { config } from '../core/config.js';
 import { getCachedBalance } from '../core/balanceCache.js';
-import { hlInfo } from '../core/hlClient.js';
+import { hlInfo, HL_PRIORITY } from '../core/hlClient.js';
 
 // HL 2026-05-23 migration: unified account стал default'ом. Source of truth
 // баланса — spotClearinghouseState. clearinghouseState (perp) теперь by
@@ -15,11 +15,11 @@ async function fetchUnifiedBalance() {
   const [perp, spot] = await Promise.all([
     hlInfo(
       { type: 'clearinghouseState', user: config.wallet.address },
-      { label: 'wallet/perp', timeoutMs: 10_000 },
+      { label: 'wallet/perp', timeoutMs: 10_000, priority: HL_PRIORITY.HIGH },
     ),
     hlInfo(
       { type: 'spotClearinghouseState', user: config.wallet.address },
-      { label: 'wallet/spot', timeoutMs: 10_000 },
+      { label: 'wallet/spot', timeoutMs: 10_000, priority: HL_PRIORITY.HIGH },
     ),
   ]);
 

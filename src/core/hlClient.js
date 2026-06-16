@@ -28,25 +28,49 @@ const COOLDOWN_429_MS = parseInt(process.env.HL_COOLDOWN_429_MS || '3000', 10);
 
 const DEFAULT_HEADERS = { 'Content-Type': 'application/json' };
 
+// Приоритеты очереди. Торговый путь (позиции/баланс/цены/ордера/scout) должен
+// обходить косметику дашборда (volMult/htf/divergence/whale) — иначе бурст
+// тяжёлых candleSnapshot выжирает весовой бюджет HL, ловит 429-кулдаун и
+// рикошетом тормозит критичные вызовы бота. Больше число → раньше из очереди.
+export const HL_PRIORITY = { HIGH: 2, NORMAL: 1, LOW: 0 };
+
 let inFlight = 0;
 let lastSentAt = 0;
 let cooldownUntil = 0;
-const waiters = [];
+let seq = 0; // монотонный счётчик для FIFO внутри одного приоритета
+const waiters = []; // { priority, seq, resolve }
 
-function acquire() {
+function acquire(priority = HL_PRIORITY.NORMAL) {
   if (inFlight < MAX_CONCURRENT) {
     inFlight++;
     return Promise.resolve();
   }
-  return new Promise((resolve) => waiters.push(resolve));
+  return new Promise((resolve) => {
+    waiters.push({ priority, seq: seq++, resolve });
+  });
+}
+
+function takeNextWaiter() {
+  if (waiters.length === 0) return null;
+  // Высший приоритет; при равенстве — самый ранний (FIFO, без голодания внутри
+  // приоритета).
+  let bestIdx = 0;
+  for (let i = 1; i < waiters.length; i++) {
+    const w = waiters[i];
+    const b = waiters[bestIdx];
+    if (w.priority > b.priority || (w.priority === b.priority && w.seq < b.seq)) {
+      bestIdx = i;
+    }
+  }
+  return waiters.splice(bestIdx, 1)[0];
 }
 
 function release() {
   inFlight--;
-  const next = waiters.shift();
+  const next = takeNextWaiter();
   if (next) {
     inFlight++;
-    next();
+    next.resolve();
   }
 }
 
@@ -76,14 +100,15 @@ function trip429() {
  * @param {string} [opts.label]      — метка для логов retry (например 'scout/markets')
  * @param {number} [opts.timeoutMs]  — override таймаута
  * @param {number} [opts.maxRetries] — override числа попыток (default 3)
+ * @param {number} [opts.priority]   — HL_PRIORITY.HIGH|NORMAL|LOW (default NORMAL)
  * @returns {Promise<any>} data из ответа HL
  */
 export async function hlInfo(body, opts = {}) {
-  const { label = 'hl/info', timeoutMs, maxRetries = 3 } = opts;
+  const { label = 'hl/info', timeoutMs, maxRetries = 3, priority = HL_PRIORITY.NORMAL } = opts;
 
   return retryWithBackoff(
     async () => {
-      await acquire();
+      await acquire(priority);
       try {
         await gap();
         const response = await axios.post(HL_INFO_URL, body, {

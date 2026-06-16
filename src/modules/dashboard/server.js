@@ -10,7 +10,7 @@ import { dirname, join } from "node:path";
 import { readFileSync } from "node:fs";
 import { config } from "../../core/config.js";
 import { logger, getLogBuffer, subscribeLogs } from "../../core/logger.js";
-import { hlInfo } from "../../core/hlClient.js";
+import { hlInfo, HL_PRIORITY } from "../../core/hlClient.js";
 import {
   getActivePosition,
   getActiveAdoptPositions,
@@ -1185,7 +1185,7 @@ export function startDashboard() {
           type: "candleSnapshot",
           req: { coin, interval, startTime: now - windowMs, endTime: now },
         },
-        { label: "dash/candles", timeoutMs: 5000, maxRetries: 2 },
+        { label: "dash/candles", timeoutMs: 5000, maxRetries: 2, priority: HL_PRIORITY.LOW },
       );
       candlesCache.set(cacheKey, { ts: now, data: null, inFlight: promise });
 
