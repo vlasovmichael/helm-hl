@@ -133,7 +133,10 @@ export async function hlInfo(body, opts = {}) {
         release();
       }
     },
-    { maxRetries, label },
+    // LOW-приоритет = косметика дашборда (volMult/htf/divergence/whale). Её 429
+    // и ретраи логируем тихо (debug): они безвредны (гасятся в null) и раньше
+    // забивали лог «авариями», маскируя реальные торговые сбои.
+    { maxRetries, label, quiet: priority === HL_PRIORITY.LOW },
   );
 }
 

@@ -24,6 +24,10 @@ import { logger } from './logger.js';
  * @param {number}    [opts.baseDelayMs=1000] — начальная задержка (удваивается)
  * @param {number}    [opts.maxDelayMs=10000] — потолок задержки
  * @param {string}    [opts.label='']        — метка для логов
+ * @param {boolean}   [opts.quiet=false]     — косметика (LOW-приоритет): ретраи
+ *                    логируем на debug, а не warn/error — чтобы блипы Vol×/htf
+ *                    не выглядели в логе как авария (они сами дожёвываются/гасятся
+ *                    в null). Торговый путь остаётся громким.
  * @returns {Promise<any>}            — результат fn()
  * @throws {Error}                    — если все попытки исчерпаны
  */
@@ -33,9 +37,12 @@ export async function retryWithBackoff(fn, opts = {}) {
     baseDelayMs = 1000,
     maxDelayMs  = 10_000,
     label       = '',
+    quiet       = false,
   } = opts;
 
   const tag = label ? `[Retry:${label}]` : '[Retry]';
+  const logWarn  = quiet ? logger.debug.bind(logger) : logger.warn.bind(logger);
+  const logErr   = quiet ? logger.debug.bind(logger) : logger.error.bind(logger);
 
   let lastError;
 
@@ -47,13 +54,13 @@ export async function retryWithBackoff(fn, opts = {}) {
 
       // ── Определяем, стоит ли ретраить ───────────────
       if (!isRetryable(err)) {
-        logger.error(`${tag} Non-retryable error on attempt ${attempt}: ${err.message}`);
+        logErr(`${tag} Non-retryable error on attempt ${attempt}: ${err.message}`);
         throw err; // бросаем сразу — retry бесполезен
       }
 
       // ── Последняя попытка — не ждём, бросаем ───────
       if (attempt === maxRetries) {
-        logger.error(
+        logErr(
           `${tag} All ${maxRetries} attempts failed. Last error: ${err.message}`,
         );
         throw err;
@@ -74,7 +81,7 @@ export async function retryWithBackoff(fn, opts = {}) {
       const jitter = delay * 0.2 * (Math.random() * 2 - 1);
       delay = Math.round(delay + jitter);
 
-      logger.warn(
+      logWarn(
         `${tag} Attempt ${attempt}/${maxRetries} failed: ${err.message} — ` +
         `retrying in ${delay}ms…`,
       );
