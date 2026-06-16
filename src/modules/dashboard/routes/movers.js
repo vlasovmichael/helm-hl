@@ -8,8 +8,8 @@
 
 import { config } from "../../../core/config.js";
 import { logger } from "../../../core/logger.js";
-import { hlInfo } from "../../../core/hlClient.js";
-import { getPriceNMinAgo, getBufferLength } from "../../../core/priceHistory.js";
+import { hlInfo, HL_PRIORITY } from "../../../core/hlClient.js";
+import { getPriceNMinAgo, getBufferLength, getLatestPrice } from "../../../core/priceHistory.js";
 import { getActivePosition } from "../../../core/database.js";
 import { TICK_INTERVAL_MS, state } from "../../../app/state.js";
 import {
@@ -69,6 +69,13 @@ function computeTier(absPct, threshold) {
 // 30s давал шторм candleSnapshot-запросов с каждого тика дашборда + 429.
 const volMultCache = new Map(); // coin -> { ts, mult }
 const VOL_MULT_TTL_MS = 120_000;
+
+// Сколько монет обогащать тяжёлыми candleSnapshot (volMult) + 1h-свечами (htf).
+// Дашборд рендерит только HM_MAX_ROWS=8 строк, а раньше enrich-или top-20 → ~12
+// тяжёлых запросов на цикл уходили впустую и бурстом ловили 429. Кап = 8 видимых
+// + буфер на расхождение серверной (tier/ratio) и фронтовой (momScore) сортировок
+// + активные монеты добавляются сверху безусловно (см. ниже). Env-tunable.
+const ENRICH_CAP = parseInt(process.env.HOT_MOVERS_ENRICH_CAP || '12', 10);
 async function fetchVolMult(coin) {
   const cached = volMultCache.get(coin);
   if (cached && Date.now() - cached.ts < VOL_MULT_TTL_MS) return cached.mult;
@@ -80,7 +87,7 @@ async function fetchVolMult(coin) {
         type: "candleSnapshot",
         req: { coin: hlCoin, interval: "1m", startTime: Date.now() - 60 * 60_000, endTime: Date.now() },
       },
-      { label: "dash/volMult", timeoutMs: 4000, maxRetries: 2 },
+      { label: "dash/volMult", timeoutMs: 4000, maxRetries: 2, priority: HL_PRIORITY.LOW },
     );
     if (!Array.isArray(data) || data.length < 10) {
       volMultCache.set(coin, { ts: Date.now(), mult: null });
@@ -129,7 +136,7 @@ export async function getHtfTrend(coin, price, now = Date.now()) {
   const cached = _htfCache.get(coin);
   if (cached && now - cached.ts < HTF_TTL_MS) return cached.trend;
   try {
-    const candles1h = await getHourlyCandles(coin, HTF_LOOKBACK_HOURS, now);
+    const candles1h = await getHourlyCandles(coin, HTF_LOOKBACK_HOURS, now, HL_PRIORITY.LOW);
     const { trend } = classifyTrend(candles1h, price, {
       fast: HTF_FAST,
       slow: HTF_SLOW,
@@ -172,7 +179,10 @@ async function buildMoversPayload(limit = 12) {
       Math.ceil((HUNTER_SPIKE_WINDOW_MIN * 60_000) / TICK_INTERVAL_MS),
     );
 
-    const enriched = data.map((item) => {
+    // Маппер одной монеты в signal-строку. Окна/тренд считаются из priceHistory
+    // (независимо от scout-данных) — поэтому строку можно построить даже для
+    // монеты, которой нет в scout-вселенной, лишь бы был price-буфер.
+    const mapSignal = (item) => {
       // Считаем спайки по всем окнам.
       const windows = HUNTER_SIGNAL_WINDOWS.map((w) => {
         const past = getPriceNMinAgo(item.coin, w.mins, now);
@@ -207,7 +217,24 @@ async function buildMoversPayload(limit = 12) {
         trendPct,
         bufLen,
       };
-    });
+    };
+
+    const enriched = data.map(mapSignal);
+
+    // 🛟 Удерживаемая монета (позиция бота / ручная) могла выпасть из scout-
+    // вселенной (low-cap, scope 61↔60) → её не было в `data` → строка в дашборде
+    // благовала всеми «—» (фронт синтезировал пустую строку). Это «пропадание
+    // активной строки», которое чинили много раз: предыдущие фиксы дотягивали
+    // активную монету ТОЛЬКО если она уже в `data`. Здесь добиваем настоящую
+    // строку из price-буфера, даже когда scout её не видит (2026-06-16).
+    const enrichedCoins = new Set(enriched.map((e) => e.coin));
+    for (const coin of activeCoins) {
+      if (enrichedCoins.has(coin)) continue;
+      const price = getLatestPrice(coin);
+      if (price == null) continue; // нет даже price-истории — пусть фронт фолбэкнет
+      enriched.push(mapSignal({ coin, price }));
+      enrichedCoins.add(coin);
+    }
 
     // Сортировка: best tier rank desc → ratio desc → 2m abs desc (для пустых).
     enriched.sort((a, b) => {
@@ -325,10 +352,10 @@ async function buildMoversPayload(limit = 12) {
       };
     });
 
-    // Обогащаем top vol-мультипликатором (≤20 монет; кеш 30с поглощает повторы).
-    // + активные монеты, даже если они упали за top-20 — чтобы Vol× позиции не
-    // висел «…» в самой важной строке.
-    const toEnrich = top.slice(0, 20);
+    // Обогащаем top vol-мультипликатором (≤ENRICH_CAP монет; per-coin кэш гасит
+    // повторы). + активные монеты, даже если они упали за кап — чтобы Vol×
+    // позиции не висел «…» в самой важной строке.
+    const toEnrich = top.slice(0, ENRICH_CAP);
     const enrichSet = new Set(toEnrich.map((m) => m.coin));
     for (const m of top) {
       if (m.isActive && !enrichSet.has(m.coin)) {

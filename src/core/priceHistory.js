@@ -50,6 +50,17 @@ export function getPriceNMinAgo(coin, minutes, now = Date.now()) {
   return result ? result.price : null;
 }
 
+/**
+ * Самый свежий сэмпл цены (последний в буфере). null если буфера нет.
+ * Нужен дашборду, чтобы синтезировать строку Hot Movers для удерживаемой
+ * монеты, которая выпала из scout-вселенной (см. movers.js).
+ */
+export function getLatestPrice(coin) {
+  const arr = buffers.get(coin);
+  if (!arr || arr.length === 0) return null;
+  return arr[arr.length - 1].price;
+}
+
 /** @returns {boolean} Есть ли в буфере данные минимум на N минут назад. */
 export function hasEnoughHistory(coin, minutes, now = Date.now()) {
   return getPriceNMinAgo(coin, minutes, now) !== null;
