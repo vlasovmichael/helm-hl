@@ -7,6 +7,10 @@
 const _SVG_ARROW_DOWN = `<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px"><path d="M6 1v8M3 7l3 3 3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
 const _SVG_ARROW_UP = `<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px"><path d="M6 11V3M3 5l3-3 3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
 const _SVG_WAIT = `<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px;opacity:0.7"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M6 4v2.5l1.5 1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/></svg>`;
+// FADE = контртренд. Иконка ⟲ (разворотная стрелка) визуально отделяет fade от
+// trend (у trend — направленная стрелка ↑/↓), чтобы «LONG TREND» нельзя было
+// спутать с «LONG FADE».
+const _SVG_FADE = `<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px"><path d="M9.7 4.6A4 4 0 1 0 10.1 7.2" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M9.9 1.9v2.8H7.1" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 
 const _MOM_WEIGHTS = { 2: 0.2, 5: 0.4, 15: 0.8, 60: 1.2 };
 
@@ -146,19 +150,52 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush) {
   }
 
   const sideUp = side === "LONG";
-  const arrow = sideUp ? _SVG_ARROW_UP : _SVG_ARROW_DOWN;
-  const modeTag = mode
-    ? `<span style="opacity:.65;font-size:9px;font-weight:600"> ${mode.toUpperCase()}</span>`
-    : "";
 
-  if (score >= 3 && mode) {
+  // (1) Режим НЕ подтверждён (OI флэт/нет данных) ИЛИ заглушён выше (нож /
+  // против старшего тренда / синхронный слив) → НЕ выдаём направленный сигнал.
+  // Setup честно показывает WAIT: сторона и так видна по тинту строки и по
+  // %-ячейкам, а «уверенный LONG/SHORT» на неподтверждённом ходе вводил в
+  // заблуждение (кейс CHIP: заглушённый fade-long выглядел как trend-long).
+  if (!mode) {
+    return {
+      label: `<span class="setup-pill">${_SVG_WAIT} WAIT</span>`,
+      cls: "setup-wait",
+      title: `Нет подтверждённого сетапа · ${why}`,
+      score, // величину хода сохраняем — для сортировки муверов
+      side: null, // hmEntryBadge → none (вход не таймим)
+      mode: null,
+    };
+  }
+
+  // (2) Режим подтверждён. trend = ПО движению (стрелка ↑/↓, залитый пилл);
+  // fade = КОНТРтренд (иконка ⟲, обведённый пилл). Разный вид не даёт спутать
+  // «LONG TREND» с «LONG FADE».
+  const isFade = mode === "fade";
+  const icon = isFade ? _SVG_FADE : sideUp ? _SVG_ARROW_UP : _SVG_ARROW_DOWN;
+  const modeTag = `<span style="opacity:.65;font-size:9px;font-weight:600"> ${mode.toUpperCase()}</span>`;
+  const strongCls = isFade
+    ? sideUp
+      ? "setup-fade-long"
+      : "setup-fade-short"
+    : sideUp
+      ? "setup-long"
+      : "setup-short";
+  const weakCls = isFade
+    ? sideUp
+      ? "setup-fade-wait-long"
+      : "setup-fade-wait-short"
+    : sideUp
+      ? "setup-wait-long"
+      : "setup-wait-short";
+
+  if (score >= 3) {
     // STRONG ≥6 помечаем точкой; NORMAL — обычный пилл.
     const dot = score >= 6 ? " ●" : "";
     const confirm =
       (accelKind === "up" ? "accel↑ " : "") + (volKind === "high" ? "vol↑" : "");
     return {
-      label: `<span class="setup-pill">${arrow}${side}${dot}${modeTag}</span>`,
-      cls: sideUp ? "setup-long" : "setup-short",
+      label: `<span class="setup-pill">${icon}${side}${dot}${modeTag}</span>`,
+      cls: strongCls,
       title:
         `${mode.toUpperCase()} ${side} (score ${score.toFixed(1)}) · ${why}` +
         (confirm ? " · " + confirm.trim() : ""),
@@ -169,19 +206,18 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush) {
   }
   if (score >= 1.5) {
     return {
-      label: `<span class="setup-pill">${arrow}${side}${modeTag}</span>`,
-      cls: sideUp ? "setup-wait-long" : "setup-wait-short",
-      title: mode
-        ? `Слабый ${mode.toUpperCase()} ${side} (score ${score.toFixed(1)}) · ${why} — наблюдаем`
-        : `Momentum ${side} (score ${score.toFixed(1)}) · ${why} — наблюдаем`,
-      score: mode ? score : score * 0.7, // без OI-подтверждения ниже в сортировке
+      label: `<span class="setup-pill">${icon}${side}${modeTag}</span>`,
+      cls: weakCls,
+      title: `Слабый ${mode.toUpperCase()} ${side} (score ${score.toFixed(1)}) · ${why} — наблюдаем`,
+      score,
       side,
       mode,
     };
   }
+  // Режим подтверждён, но хода почти нет → нейтральный WAIT.
   return {
     label: `<span class="setup-pill">${_SVG_WAIT} WAIT</span>`,
-    cls: sideUp ? "setup-wait-long" : "setup-wait-short",
+    cls: "setup-wait",
     title: `Хода мало — ждём явный сетап · ${why}`,
     score,
     side,
