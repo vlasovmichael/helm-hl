@@ -10,7 +10,7 @@
 // ─────────────────────────────────────────────────
 
 import { escapeHtml } from "../utils/format.js";
-import { popArrow, bindArrowPopEnd } from "../utils/arrowPop.js";
+import { popArrow, bindArrowPopEnd, initChevronArrow } from "../utils/arrowPop.js";
 import {
   computeMomentum,
   hmEntryBadge,
@@ -363,7 +363,7 @@ export function renderHotMovers(payload, fmtTime) {
     // У открытой монеты Setup-вердикт гасим — вход уже сделан, действие в подсказке.
     const setupCell = isOpen
       ? `<td class="hm-setup c" data-w="Setup"><span class="num-inline-muted">·</span></td>`
-      : `<td class="hm-setup c ${setupCls}" data-w="Setup" title="${setupTitle}">${setupLabel}</td>`;
+      : `<td class="hm-setup c ${setupCls}" data-w="Setup" title="${setupTitle}"><span class="hm-setup-pill">${setupLabel}</span></td>`;
 
     // ENTER: для открытой монеты вход неактуален — вместо таймера ОДНА стрелка,
     // которая поворачивается по направлению цены (up=0° / mid=90° / down=180°)
@@ -461,9 +461,10 @@ function mountDirArrows(tbody) {
     if (!arrow) {
       arrow = document.createElement("span");
       arrow.className = "hm-dir-arrow";
-      // Стартовый глиф из направления скан-тика — до первого живого тика.
-      arrow.textContent = mount.dataset.dir === "down" ? "↓" : "↑";
-      bindArrowPopEnd(arrow); // снимать флаг «идёт спин» по завершении
+      // Стартовый шеврон из направления скан-тика — серый, до первого живого тика.
+      initChevronArrow(arrow);
+      arrow.classList.add(mount.dataset.dir === "down" ? "down" : "up");
+      bindArrowPopEnd(arrow); // снимать флаг волны по завершении
       _hmDirArrows.set(coin, arrow);
     }
     if (arrow.parentNode !== mount) mount.appendChild(arrow);

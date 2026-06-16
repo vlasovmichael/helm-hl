@@ -1,50 +1,78 @@
 // ─────────────────────────────────────────────────
-//  Живой «поп» стрелки активной монеты (Hot Movers + Setup).
-//  Стрелка крутится (360°) + подпрыгивает (scale) при каждом изменении цены.
-//  Две задачи решены здесь:
-//   1. АНТИ-СТРОБ: WS шлёт цену по нескольку раз в секунду → если перезапускать
-//      анимацию на каждом тике, она не успевает доиграть свои 0.5s и стробит.
-//      Поэтому идущий спин НЕ перебиваем, пока новый удар не СИЛЬНЕЕ текущего
-//      (микро-тики только обновляют глиф/цвет). Флаг снимается по animationend.
-//   2. СИЛА ОТ ВЕЛИЧИНЫ: scale прыжка зависит от |Δ%| цены — чуть дёрнулась →
-//      лёгкий поп, ударила сильно → большой скачок. Прокидывается в CSS-var
-//      --hm-pop, который читает @keyframes setupLiveSpin.
+//  Живая стрелка-шеврон активной монеты (Hot Movers + Setup).
+//  Вместо крутящегося глифа ↑/↓ — стопка из 3 шевронов (SVG), которую гораздо
+//  проще «настроить» визуально:
+//   • ЦВЕТ — по направлению цены: серый по умолчанию (видно на тёмной/светлой
+//     теме), зелёный вверх / красный вниз при тике по WS.
+//   • СИЛА — |Δ%| тика задаёт data-strength (1..3): сколько шевронов от острия
+//     зажигается цветом, плюс амплитуду подпрыгивания (--hm-pop).
+//   • АНИМАЦИЯ — волна-«подпрыгивание» к острию (вверх для роста, вниз для
+//     падения), а не вращение. Шевроны подсвечиваются по очереди от хвоста к острию.
+//  АНТИ-СТРОБ (как раньше): WS шлёт цену по нескольку раз в секунду → идущую
+//  волну НЕ перебиваем, пока новый удар не СИЛЬНЕЕ текущего; флаг снимается по
+//  animationend собственной анимации спана (target === arrow).
 // ─────────────────────────────────────────────────
 
 const NOISE_PCT = 0.003; // |Δ%| ниже — шум, не ретригерим (иначе мелкая дрожь)
-const MIN_SCALE = 1.2; // минимальный поп (едва заметный тик)
-const MAX_SCALE = 2.1; // максимальный поп (сильный удар)
-const GAIN = 1.6; // |Δ%| → scale: ~0.5% уже почти максимум
+const TIER_1 = 0.02; // <TIER_1 → 1 шеврон (слабый тик)
+const TIER_2 = 0.08; // <TIER_2 → 2 шеврона, иначе 3 (сильный удар)
+const MIN_SCALE = 1.05; // минимальная амплитуда подпрыгивания
+const MAX_SCALE = 1.5; // максимальная амплитуда
+const GAIN = 1.6; // |Δ%| → амплитуда
 
-// Навесить один раз: по завершении спина снять флаг «идёт анимация».
+// Стопка из трёх шевронов, остриём вверх. Для «вниз» весь SVG отражается по Y
+// в CSS (.chv-arrow.down .chv { transform: scaleY(-1) }) — так и геометрия, и
+// порядок подсветки от острия совпадают для обоих направлений.
+const CHEVRON_SVG =
+  '<svg class="chv" viewBox="0 0 24 26" fill="none" aria-hidden="true">' +
+  '<path class="chv-p chv-1" d="M5 8 L12 3 L19 8"/>' +
+  '<path class="chv-p chv-2" d="M5 15 L12 10 L19 15"/>' +
+  '<path class="chv-p chv-3" d="M5 22 L12 17 L19 22"/>' +
+  "</svg>";
+
+// Один раз вложить SVG-шевроны в пустой спан стрелки.
+export function initChevronArrow(arrow) {
+  if (arrow.dataset.chv === "1") return;
+  arrow.dataset.chv = "1";
+  arrow.classList.add("chv-arrow");
+  arrow.innerHTML = CHEVRON_SVG;
+}
+
+// Навесить один раз: по завершении СОБСТВЕННОЙ анимации спана снять флаг волны.
+// Анимации дочерних путей всплывают сюда же — их игнорируем (target !== arrow).
 export function bindArrowPopEnd(arrow) {
   if (arrow.dataset.popBound === "1") return;
   arrow.dataset.popBound = "1";
-  arrow.addEventListener("animationend", () => {
+  arrow.addEventListener("animationend", (e) => {
+    if (e.target !== arrow) return;
     arrow.dataset.popping = "0";
     arrow.dataset.popScale = "0";
+    arrow.classList.remove("wave");
   });
 }
 
-// Проиграть поп при изменении цены. deltaPct = |Δ%| относительно прошлой цены.
+// Проиграть волну при изменении цены. deltaPct = |Δ%| относительно прошлой цены.
 export function popArrow(arrow, up, deltaPct) {
-  // Всегда держим глиф/цвет актуальными (даже на микро-тике).
-  arrow.textContent = up ? "↑" : "↓";
+  initChevronArrow(arrow);
+  // Направление держим актуальным даже на микро-тике.
   arrow.classList.remove(up ? "down" : "up");
   arrow.classList.add(up ? "up" : "down");
 
-  if (!(deltaPct > NOISE_PCT)) return; // шум → без анимации
+  if (!(deltaPct > NOISE_PCT)) return; // шум → без волны
+
+  const tier = deltaPct < TIER_1 ? 1 : deltaPct < TIER_2 ? 2 : 3;
+  arrow.dataset.strength = String(tier);
 
   const scale = Math.min(MAX_SCALE, MIN_SCALE + deltaPct * GAIN);
   const running = arrow.dataset.popping === "1";
   const runScale = parseFloat(arrow.dataset.popScale || "0");
-  // Идёт спин и новый удар не сильнее → не перебиваем, даём доиграть (анти-строб).
+  // Идёт волна и новый удар не сильнее → не перебиваем, даём доиграть (анти-строб).
   if (running && scale <= runScale) return;
 
   arrow.style.setProperty("--hm-pop", scale.toFixed(2));
   arrow.dataset.popScale = String(scale);
   arrow.dataset.popping = "1";
-  arrow.classList.remove("spin");
+  arrow.classList.remove("wave");
   void arrow.offsetWidth; // reflow → чистый перезапуск анимации
-  arrow.classList.add("spin");
+  arrow.classList.add("wave");
 }

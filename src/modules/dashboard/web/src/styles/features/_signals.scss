@@ -285,30 +285,16 @@
   align-items: center;
   justify-content: center;
 }
-/* Живая стрелка активной монеты: крутится (спин 360°) + цвет тика при КАЖДОМ
-   изменении цены по WS (≤2с), как в Setup-карточке. Раньше она лишь медленно
-   доворачивалась по направлению скан-тика и почти стояла — отсюда «не крутится».
-   Спин ретригерится из JS (remove→reflow→add .spin) в updateHotMoversLiveArrow. */
+/* Живая стрелка-шеврон активной монеты (см. utils/arrowPop.js). Стопка из 3
+   шевронов: серая по умолчанию, цвет = направление цены (зел/крас), число
+   зажжённых от острия + амплитуда подпрыгивания = сила тика по WS (≤2с).
+   Базовые стили шеврона — в общем блоке .chv-arrow ниже. */
 .hm-dir-arrow {
-  display: inline-block;
-  line-height: 1;
-  font-weight: 700;
-  color: var(--text-muted);
-  transform-origin: 50% 55%;
-  transition: color 0.35s ease;
-  &.up {
-    color: var(--green);
-  }
-  &.down {
-    color: var(--red);
-  }
-  &.spin {
-    animation: setupLiveSpin 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .hm-dir-arrow.spin {
-    animation: none;
+  display: inline-flex;
+  vertical-align: middle;
+  .chv {
+    width: 16px;
+    height: 18px;
   }
 }
 @include until($bp-md) {
@@ -843,12 +829,34 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
     flex: 0 0 auto;
     padding: 0;
   }
-  /* строка 2: Setup во всю ширину */
+  /* строка 2: Setup на своей строке, но пилл обнимает контент (не растягивается
+     во всю ширину). Бокс снимаем с ячейки и вешаем на внутренний .hm-setup-pill,
+     цвет фона/рамки берём из currentColor (он уже выставлен по состоянию
+     long/short/wait) — так один блок покрывает все варианты сетапа. */
   .hm-table tr.hm-main td.hm-setup {
     order: 5;
     flex: 0 0 100%;
     text-align: left;
     padding: 0;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  .hm-table tr.hm-main td.hm-setup .hm-setup-pill {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 5px;
+    background: color-mix(in srgb, currentColor 15%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 40%, transparent);
+  }
+  /* WAIT/нет сигнала — без бокса, просто приглушённый текст (как было). */
+  .hm-table tr.hm-main td.hm-setup.setup-wait .hm-setup-pill,
+  .hm-table tr.hm-main td.hm-setup.setup-wait-short .hm-setup-pill,
+  .hm-table tr.hm-main td.hm-setup.setup-wait-long .hm-setup-pill,
+  .hm-table tr.hm-main td.hm-setup.setup-none .hm-setup-pill,
+  .hm-table tr.hm-main td.hm-setup.fader-wait-neutral .hm-setup-pill {
+    padding-left: 0;
+    background: transparent;
+    box-shadow: none;
   }
   /* строка 3: окна; строка 4: Acc/OI/Trend (по трети) */
   .hm-table tr.hm-main td.hm-window {
@@ -902,6 +910,12 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   /* плейсхолдер (empty-state / waiting) обычным блоком */
   .hm-table tbody tr:not(.hm-main):not(.hm-pos-row) {
     display: block;
+  }
+  /* Добивочные строки (резерв высоты до HM_MAX_ROWS) на мобиле не нужны —
+     карточки в потоке. Иначе .signals-table tr (border+radius+bg) рисует их
+     как пустые рамки-боксы (ячейка visibility:hidden, но строка с рамкой). */
+  .hm-table tbody tr.hm-placeholder-row {
+    display: none;
   }
   .hm-table tbody tr .empty-state {
     display: block;
@@ -1195,40 +1209,107 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-long {
   font-variant-numeric: tabular-nums;
 }
 .setup-live-arrow {
-  display: inline-block;
-  width: 0.9em;
-  text-align: center;
-  font-weight: 700;
-  transform-origin: 50% 55%;
-  &.up {
-    color: var(--green);
-  }
-  &.down {
-    color: var(--red);
-  }
-  /* Перезапуск анимации делается в JS (utils/arrowPop.js) через
-     remove→reflow→add класса .spin. Сила прыжка — из CSS-var --hm-pop. */
-  &.spin {
-    animation: setupLiveSpin 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: inline-flex;
+  vertical-align: middle;
+  .chv {
+    width: 13px;
+    height: 15px;
   }
 }
-/* --hm-pop = пик scale, ставится из JS по величине тика цены (чуть/сильно). */
-@keyframes setupLiveSpin {
-  0% {
-    transform: rotate(0deg) scale(1);
-    filter: brightness(1);
+
+/* ── Общий шеврон-стрелка (Hot Movers + Setup) ──
+   Серый по умолчанию; --chv-col = цвет направления, зажигается от острия
+   (chv-1) по data-strength. Волна (.wave) ставится из JS по тику цены. */
+.chv-arrow {
+  --chv-col: var(--text-muted);
+  .chv {
+    display: block;
+    overflow: visible;
+    transform-origin: 50% 50%;
   }
-  55% {
-    transform: rotate(360deg) scale(var(--hm-pop, 1.5));
-    filter: brightness(1.5);
+  .chv-p {
+    fill: none;
+    stroke: var(--text-muted);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.28;
+    transition:
+      stroke 0.3s ease,
+      opacity 0.3s ease;
+  }
+  &.up {
+    --chv-col: var(--green);
+  }
+  &.down {
+    --chv-col: var(--red);
+    .chv {
+      transform: scaleY(-1);
+    }
+  }
+  /* Сколько шевронов зажечь цветом — от острия (chv-1) к хвосту. */
+  &[data-strength="1"] .chv-1,
+  &[data-strength="2"] .chv-1,
+  &[data-strength="2"] .chv-2,
+  &[data-strength="3"] .chv-p {
+    stroke: var(--chv-col);
+    opacity: 1;
+  }
+  /* Подпрыгивание к острию (вверх при росте, вниз при падении). */
+  &.up.wave {
+    animation: chevBounceUp 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  &.down.wave {
+    animation: chevBounceDown 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  /* Волна подсветки от хвоста (chv-3) к острию (chv-1). */
+  &.wave .chv-3 {
+    animation: chevGlow 0.4s ease both;
+  }
+  &.wave .chv-2 {
+    animation: chevGlow 0.4s ease 0.07s both;
+  }
+  &.wave .chv-1 {
+    animation: chevGlow 0.4s ease 0.14s both;
+  }
+}
+/* --hm-pop = амплитуда подпрыгивания, ставится из JS по величине тика цены. */
+@keyframes chevBounceUp {
+  0% {
+    transform: translateY(0);
+  }
+  45% {
+    transform: translateY(calc(-3px * var(--hm-pop, 1)));
   }
   100% {
-    transform: rotate(360deg) scale(1);
-    filter: brightness(1);
+    transform: translateY(0);
+  }
+}
+@keyframes chevBounceDown {
+  0% {
+    transform: translateY(0);
+  }
+  45% {
+    transform: translateY(calc(3px * var(--hm-pop, 1)));
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+@keyframes chevGlow {
+  0% {
+    filter: none;
+  }
+  50% {
+    filter: drop-shadow(0 0 3px var(--chv-col)) brightness(1.35);
+  }
+  100% {
+    filter: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .setup-live-arrow.spin {
+  .chv-arrow.wave,
+  .chv-arrow.wave .chv-p {
     animation: none;
   }
 }
