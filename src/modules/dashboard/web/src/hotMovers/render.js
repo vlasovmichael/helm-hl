@@ -389,18 +389,22 @@ export function renderHotMovers(payload, fmtTime) {
       : `<td class="hm-setup c ${setupCls}" data-w="Setup" title="${setupTitle}"><span class="hm-setup-pill">${setupLabel}</span></td>`;
 
     // ENTER: для открытой монеты вход неактуален — вместо таймера ОДНА стрелка,
-    // которая поворачивается по направлению цены (up=0° / mid=90° / down=180°)
-    // с плавным transition и сменой цвета. Сама стрелка — персистентный узел
-    // (см. mountDirArrows ниже): строка перестраивается каждый тик, а узел
-    // переживает, поэтому поворот реально твинит. Управление/выход — в под-строке.
+    // которая поворачивается ПО МНЕ, а не по цене: up (зелёная) = движ в мою
+    // сторону, down (красная) = против, mid при почти нулевом движении. Сама
+    // стрелка — персистентный узел (см. mountDirArrows ниже): строка
+    // перестраивается каждый тик, а узел переживает, поэтому поворот реально
+    // твинит. Управление/выход — в под-строке (2026-06-16: цена→прибыль).
     let entryCell;
     if (isOpen) {
-      // Направление = знак domMove (то же, что тинт строки и hm-align): up/down,
-      // mid при почти нулевом движении (порог как у align-чипа).
-      const dir = moveAbs < 0.05 ? "mid" : domMove > 0 ? "up" : "down";
+      // Направление = согласие движа со стороной позиции (та же логика, что у
+      // hm-align ✓/✗): SHORT в плюс при падении, LONG в плюс при росте. Без
+      // известного side или почти без движа — mid (нейтрально, серый).
+      const aSide = (getActivePos(s.coin)?.side || "").toUpperCase();
+      const aligned = aSide === "SHORT" ? domMove < 0 : domMove > 0;
+      const dir = moveAbs < 0.05 || !aSide ? "mid" : aligned ? "up" : "down";
       const tip =
-        dir === "up" ? "price moving up" : dir === "down" ? "price moving down" : "price sideways";
-      entryCell = `<td class="hm-entry hm-dir" data-w="Dir" title="in position — ${tip}"><span class="hm-entry-icon"><span class="hm-dir-mount" data-dir="${dir}"></span></span></td>`;
+        dir === "up" ? "цена в твою сторону" : dir === "down" ? "цена против тебя" : "движения почти нет";
+      entryCell = `<td class="hm-entry hm-dir" data-w="Dir" title="в позиции — ${tip}"><span class="hm-entry-icon"><span class="hm-dir-mount" data-dir="${dir}"></span></span></td>`;
     } else {
       const eico = ENTRY_ICON_SVG[entry.state] || entry.icon;
       entryCell = `<td class="hm-entry hm-entry-${entry.state}" data-w="Enter" title="${entry.title}"><span class="hm-entry-icon">${eico}</span></td>`;
@@ -503,16 +507,22 @@ function mountDirArrows(tbody) {
 
 // Живой спин стрелки активной монеты — дёргается из onStatus по WS-status (≤2с),
 // независимо от скан-тика Hot Movers. Для каждой активной монеты берёт текущую
-// цену (getActivePos().now) и, если она изменилась, ставит глиф ↑/↓ нужного
-// цвета и ретригерит CSS-спин (как setup-live-arrow). Это и есть «крутится».
+// цену (getActivePos().now) и, если она изменилась, играет волну В МОЮ СТОРОНУ:
+// favor (движ в плюс позиции) → зелёный шеврон/ракета вверх, against → красный
+// вниз. Для SHORT выгода = падение цены, для LONG = рост (2026-06-16).
 export function updateHotMoversLiveArrow() {
   for (const [coin, arrow] of _hmDirArrows) {
-    const px = getActivePos(coin)?.now;
+    const pos = getActivePos(coin);
+    const px = pos?.now;
     if (px == null || !Number.isFinite(px)) continue;
     const prev = _hmLivePrevPx.get(coin);
     if (prev != null && px !== prev && prev > 0) {
       const deltaPct = (Math.abs(px - prev) / prev) * 100;
-      popArrow(arrow, px > prev, deltaPct);
+      const priceUp = px > prev;
+      const side = (pos?.side || "").toUpperCase();
+      // favor = движ в мою сторону. Без известного side падаем на сырое priceUp.
+      const favor = side === "SHORT" ? !priceUp : priceUp;
+      popArrow(arrow, favor, deltaPct);
     }
     _hmLivePrevPx.set(coin, px);
   }

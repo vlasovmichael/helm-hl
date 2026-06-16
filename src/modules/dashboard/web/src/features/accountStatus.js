@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────
 
 import { fmtUsd, fmtPrice, fmtPct, formatUptime } from "../utils/format.js";
+import { renderRiskBar } from "../utils/riskBar.js";
 
 const lastAnimatedValues = new Map();
 // Знак прошлого Net(Mkt) бот-позиции — чтобы пыхнуть карточкой при переходе
@@ -120,13 +121,21 @@ export function renderPosition(pos) {
   }
   const side = (pos.side || "SHORT").toUpperCase();
   const sideCls = side === "SHORT" ? "negative" : "positive";
+  // Шкала SL│entry│●now→2R — рисуем, если бот ведёт позицию (есть стоп).
+  const riskBar = renderRiskBar({
+    entry: pos.entryPrice,
+    now: pos.currentPrice,
+    side,
+    stopPrice: pos.bot?.stopPrice,
+    sizeUsd: pos.sizeUsd,
+  });
   container.innerHTML = `
     <div class="data-grid">
       <div class="grid-item"><div class="item-label">Coin · Side</div><div class="item-value highlight">#${pos.coin} <span class="${sideCls}" style="font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px; margin-left:4px;">${side}</span></div></div>
       <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(pos.sizeUsd)}</div></div>
       <div class="grid-item"><div class="item-label">Entry</div><div class="item-value">${fmtPrice(pos.entryPrice)}</div></div>
       <div class="grid-item"><div class="item-label">APY · Held</div><div class="item-value">${fmtPct(pos.entryApy)} · ${pos.heldHours.toFixed(1)}h</div></div>
-    </div>${pnlBlock}`;
+    </div>${pnlBlock}${riskBar}`;
 }
 
 export function renderManualPositions(list) {
@@ -150,6 +159,15 @@ export function renderManualPositions(list) {
       const manualBadge = p.adopted
         ? `HANDS-OFF · MANUAL · <span style="color:var(--green,#22c55e)">ADOPTED</span>`
         : "HANDS-OFF · MANUAL";
+      // Шкала SL│entry│●now→2R — только у усыновлённых (нянька повесила стоп).
+      // У голого HANDS-OFF стопа нет → renderRiskBar вернёт "".
+      const riskBar = renderRiskBar({
+        entry: p.entryPrice,
+        now: p.currentPrice,
+        side: p.side,
+        stopPrice: p.bot?.stopPrice,
+        sizeUsd: p.sizeUsd,
+      });
       return `
       <div style="margin-top:0.75rem; padding:0.75rem; border:1px dashed var(--border); border-radius:8px;">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:0.5rem;">
@@ -162,7 +180,7 @@ export function renderManualPositions(list) {
           <div class="grid-item"><div class="item-label">Entry · Now</div><div class="item-value">${fmtPrice(p.entryPrice)} · ${cur}</div></div>
           <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}"><div class="item-label">uPnL</div><div class="item-value ${cls(p.unrealizedPnl)}">${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}</div></div>
           <div class="grid-item"><div class="item-label">Liq</div><div class="item-value">${liq}</div></div>
-        </div>
+        </div>${riskBar}
       </div>`;
     })
     .join("");
