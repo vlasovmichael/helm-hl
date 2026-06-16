@@ -55,6 +55,53 @@
     color: var(--red);
   }
 }
+
+/* Заливка PnL-карточки по знаку (зелёный/красный). Перебивает accent-soft у
+   grid-item-primary, чтобы главная Net-цифра читалась как «в плюсе/минусе». */
+.grid-item.pnl-tint {
+  transition:
+    background 0.45s ease,
+    border-color 0.45s ease,
+    box-shadow 0.45s ease;
+  &.pnl-pos {
+    background: var(--green-soft);
+    border-color: var(--green-line);
+  }
+  &.pnl-neg {
+    background: var(--red-soft);
+    border-color: var(--red-line);
+  }
+  &.grid-item-primary.pnl-pos {
+    box-shadow: inset 0 0 0 1px var(--green-line);
+  }
+  &.grid-item-primary.pnl-neg {
+    box-shadow: inset 0 0 0 1px var(--red-line);
+  }
+  .primary-tag {
+    color: inherit;
+  }
+}
+/* Пых при кроссе нуля (плюс↔минус) — ставится из JS классом .pnl-flip. */
+.grid-item.pnl-tint.pnl-flip {
+  animation: pnlFlip 0.6s ease;
+}
+@keyframes pnlFlip {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.035);
+    filter: brightness(1.12);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .grid-item.pnl-tint.pnl-flip {
+    animation: none;
+  }
+}
 .primary-tag {
   font-family: var(--font-mono);
   font-size: 9px;

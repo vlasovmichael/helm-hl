@@ -11,6 +11,9 @@
 import { fmtUsd, fmtPrice, fmtPct, formatUptime } from "../utils/format.js";
 
 const lastAnimatedValues = new Map();
+// Знак прошлого Net(Mkt) бот-позиции — чтобы пыхнуть карточкой при переходе
+// через ноль (плюс↔минус), а не на каждый ре-рендер.
+let _lastNetSign = null;
 
 // Odometer-анимация числа: крутим только изменившиеся цифры на реальную дельту.
 function updateAnimatedNumber(elId, newValueStr) {
@@ -92,6 +95,7 @@ export function renderPosition(pos) {
   const container = document.getElementById("position-container");
   if (!container) return; // нет секции (напр. /strategies.html)
   if (!pos) {
+    _lastNetSign = null; // позиция закрыта — сбрасываем трекер знака
     container.innerHTML =
       '<div class="empty-state">No active positions — bot is IDLE</div>';
     return;
@@ -101,9 +105,14 @@ export function renderPosition(pos) {
   if (pnl) {
     const cls = (v) => (v >= 0 ? "positive" : "negative");
     const sgn = (v) => (v >= 0 ? "+" : "−");
+    // Заливка главной Net(Mkt)-карточки зелёным/красным + пых при кроссе нуля.
+    const netSign = pnl.netMarket >= 0 ? "pos" : "neg";
+    const flip = _lastNetSign && _lastNetSign !== netSign ? " pnl-flip" : "";
+    _lastNetSign = netSign;
+    const primaryCls = `grid-item grid-item-primary pnl-tint pnl-${netSign}${flip}`;
     pnlBlock = `
       <div class="data-grid" style="margin-top:0.75rem">
-        <div class="grid-item grid-item-primary"><div class="item-label">Net (Mkt) <span class="primary-tag">total</span></div><div class="item-value ${cls(pnl.netMarket)}">${sgn(pnl.netMarket)}$${Math.abs(pnl.netMarket).toFixed(4)}</div></div>
+        <div class="${primaryCls}"><div class="item-label">Net (Mkt) <span class="primary-tag">total</span></div><div class="item-value ${cls(pnl.netMarket)}">${sgn(pnl.netMarket)}$${Math.abs(pnl.netMarket).toFixed(4)}</div></div>
         <div class="grid-item"><div class="item-label">Net (Mkr)</div><div class="item-value ${cls(pnl.netMaker)}">${sgn(pnl.netMaker)}$${Math.abs(pnl.netMaker).toFixed(4)}</div></div>
         <div class="grid-item"><div class="item-label">Price PnL</div><div class="item-value ${cls(pnl.price)}">${sgn(pnl.price)}$${Math.abs(pnl.price).toFixed(4)}</div></div>
         <div class="grid-item"><div class="item-label">Funding</div><div class="item-value ${cls(pnl.funding)}">${sgn(pnl.funding)}$${Math.abs(pnl.funding).toFixed(4)}</div></div>
@@ -151,7 +160,7 @@ export function renderManualPositions(list) {
         <div class="data-grid">
           <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}</div></div>
           <div class="grid-item"><div class="item-label">Entry · Now</div><div class="item-value">${fmtPrice(p.entryPrice)} · ${cur}</div></div>
-          <div class="grid-item"><div class="item-label">uPnL</div><div class="item-value ${cls(p.unrealizedPnl)}">${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}</div></div>
+          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}"><div class="item-label">uPnL</div><div class="item-value ${cls(p.unrealizedPnl)}">${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}</div></div>
           <div class="grid-item"><div class="item-label">Liq</div><div class="item-value">${liq}</div></div>
         </div>
       </div>`;

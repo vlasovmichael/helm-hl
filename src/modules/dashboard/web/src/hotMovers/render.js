@@ -26,6 +26,29 @@ import {
 
 const _hmPrevPrices = new Map();
 
+// Line-SVG иконки колонки Enter (вместо emoji 🎯/⏳/⛔). stroke=currentColor →
+// цвет наследуется от .hm-entry-${state} (зелёный/янтарный/красный/серый).
+//  · zone     — мишень/прицел: цена у базы, вход рядом (pulse привлекает взгляд).
+//  · mid      — песочные часы: растянулась, дай откатить.
+//  · extended — знак «нельзя»: уехала, поздно.
+//  · none     — тире: сетапа нет.
+const ENTRY_ICON_SVG = {
+  zone:
+    '<svg class="hm-eico hm-eico-zone" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+    '<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3.4"/>' +
+    '<circle class="hm-eico-dot" cx="12" cy="12" r="1.1"/>' +
+    '<path d="M12 1.6v2.8M12 19.6v2.8M1.6 12h2.8M19.6 12h2.8"/></svg>',
+  mid:
+    '<svg class="hm-eico" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+    '<path d="M6 3.2h12M6 20.8h12M6 3.2l6 8.8 6-8.8M6 20.8l6-8.8 6 8.8"/></svg>',
+  extended:
+    '<svg class="hm-eico" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+    '<circle cx="12" cy="12" r="8.4"/><path d="M6.6 6.6l10.8 10.8"/></svg>',
+  none:
+    '<svg class="hm-eico" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+    '<path d="M8 12h8"/></svg>',
+};
+
 // Клик по строке Hot Movers → открыть монету в TradingView (новая вкладка).
 // Если задать ID сохранённого TV-лэйаута — откроется он (с твоими EMA20/200);
 // пусто → дефолтный график. Символ по умолчанию Binance perp (как у оператора в TV).
@@ -379,7 +402,8 @@ export function renderHotMovers(payload, fmtTime) {
         dir === "up" ? "price moving up" : dir === "down" ? "price moving down" : "price sideways";
       entryCell = `<td class="hm-entry hm-dir" data-w="Dir" title="in position — ${tip}"><span class="hm-entry-icon"><span class="hm-dir-mount" data-dir="${dir}"></span></span></td>`;
     } else {
-      entryCell = `<td class="hm-entry hm-entry-${entry.state}" data-w="Enter" title="${entry.title}"><span class="hm-entry-icon">${entry.icon}</span></td>`;
+      const eico = ENTRY_ICON_SVG[entry.state] || entry.icon;
+      entryCell = `<td class="hm-entry hm-entry-${entry.state}" data-w="Enter" title="${entry.title}"><span class="hm-entry-icon">${eico}</span></td>`;
     }
 
     const rowHtml = `

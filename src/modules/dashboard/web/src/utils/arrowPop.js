@@ -20,6 +20,51 @@ const MIN_SCALE = 1.05; // минимальная амплитуда подпр�
 const MAX_SCALE = 1.5; // максимальная амплитуда
 const GAIN = 1.6; // |Δ%| → амплитуда
 
+// 🚀 Экстрим: тик сильнее EXTREME_PCT (одиночный WS-удар!) → поверх шеврона
+// запускаем ракету. Редкое событие (обычный тик << 0.1%), поэтому ощущается
+// как «полетела». Cooldown не даёт спамить серией ударов подряд.
+const EXTREME_PCT = 0.12;
+const ROCKET_COOLDOWN_MS = 1400;
+const _lastRocketAt = new WeakMap(); // arrow → ts последнего запуска
+
+// Аккуратная SVG-ракета остриём вверх (для «вниз» весь оверлей разворачивается
+// в CSS). Корпус/плавники = currentColor (зелёный рост / красный падение),
+// иллюминатор = фон карточки, пламя = тёплый оранжевый (читается в обе стороны).
+const ROCKET_SVG =
+  '<svg class="hm-rkt" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+  '<path class="rkt-flame" d="M10.1 16.5h3.8c-.2 2.2-.9 4-1.9 5.3-1-1.3-1.7-3.1-1.9-5.3z"/>' +
+  '<path class="rkt-body" d="M12 1.8c2.7 2.6 4.3 6.3 4.3 10.3 0 1.9-.5 3.5-1.3 4.9H9c-.8-1.4-1.3-3-1.3-4.9 0-4 1.6-7.7 4.3-10.3z"/>' +
+  '<path class="rkt-fin" d="M7.9 12.6c-1.9 1-3 2.6-3.3 4.9 1.9-.2 3.4-1 4.4-2.2"/>' +
+  '<path class="rkt-fin" d="M16.1 12.6c1.9 1 3 2.6 3.3 4.9-1.9-.2-3.4-1-4.4-2.2"/>' +
+  '<circle class="rkt-win" cx="12" cy="9.6" r="1.9"/>' +
+  "</svg>";
+
+function prefersReducedMotion() {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches
+  );
+}
+
+// Одноразовая ракета поверх стрелки: летит вверх (рост) или ныряет вниз
+// (падение), оставляет короткий шлейф и сама себя удаляет по animationend.
+// Не трогает персистентный шеврон-узел — просто оверлей.
+function launchRocket(arrow, up) {
+  if (prefersReducedMotion()) return;
+  const now = Date.now();
+  if (now - (_lastRocketAt.get(arrow) || 0) < ROCKET_COOLDOWN_MS) return;
+  _lastRocketAt.set(arrow, now);
+
+  const rocket = document.createElement("span");
+  rocket.className = `hm-rocket ${up ? "up" : "down"}`;
+  rocket.innerHTML = ROCKET_SVG;
+  arrow.appendChild(rocket);
+  rocket.addEventListener("animationend", () => rocket.remove(), { once: true });
+  // Подстраховка, если animationend не прилетит (анимация отменена и т.п.).
+  setTimeout(() => rocket.remove(), 1200);
+}
+
 // Стопка из трёх шевронов, остриём вверх. Для «вниз» весь SVG отражается по Y
 // в CSS (.chv-arrow.down .chv { transform: scaleY(-1) }) — так и геометрия, и
 // порядок подсветки от острия совпадают для обоих направлений.
@@ -75,4 +120,7 @@ export function popArrow(arrow, up, deltaPct) {
   arrow.classList.remove("wave");
   void arrow.offsetWidth; // reflow → чистый перезапуск анимации
   arrow.classList.add("wave");
+
+  // Сильный одиночный удар → ракета поверх шеврона.
+  if (deltaPct >= EXTREME_PCT) launchRocket(arrow, up);
 }
