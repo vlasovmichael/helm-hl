@@ -81,6 +81,53 @@
     color: inherit;
   }
 }
+/* Глубинная заливка: насыщенность фона/рамки растёт по мере приближения к 2R
+   (зелёный) или к стопу (красный). --rb-depth (0..1) ставится из JS из риск-
+   геометрии. transition выше (pnl-tint) даёт плавный перелив при движении цены. */
+.grid-item.pnl-tint.rb-depth {
+  &.pnl-pos {
+    background: color-mix(
+      in srgb,
+      var(--green) calc(7% + var(--rb-depth, 0) * 33%),
+      transparent
+    );
+    border-color: color-mix(
+      in srgb,
+      var(--green-line) calc(45% + var(--rb-depth, 0) * 55%),
+      transparent
+    );
+  }
+  &.pnl-neg {
+    background: color-mix(
+      in srgb,
+      var(--red) calc(7% + var(--rb-depth, 0) * 33%),
+      transparent
+    );
+    border-color: color-mix(
+      in srgb,
+      var(--red-line) calc(45% + var(--rb-depth, 0) * 55%),
+      transparent
+    );
+  }
+}
+/* У краёв (depth≥0.75) — мягкий пульс яркости: близко к цели или к стопу. */
+.grid-item.pnl-tint.rb-depth.rb-hot {
+  animation: rbPulse 1.8s ease-in-out infinite;
+}
+@keyframes rbPulse {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.18);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .grid-item.pnl-tint.rb-depth.rb-hot {
+    animation: none;
+  }
+}
 /* Пых при кроссе нуля (плюс↔минус) — ставится из JS классом .pnl-flip. */
 .grid-item.pnl-tint.pnl-flip {
   animation: pnlFlip 0.6s ease;

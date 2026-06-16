@@ -9,7 +9,16 @@
 // ─────────────────────────────────────────────────
 
 import { fmtUsd, fmtPrice, fmtPct, formatUptime, escapeHtml } from "../utils/format.js";
-import { renderRiskBar } from "../utils/riskBar.js";
+import { riskTint } from "../utils/riskBar.js";
+
+// Доп. классы + inline-стиль для глубинной заливки PnL-карточки.
+// tint = riskTint(...) | null. Возвращает { cls, attr } для подстановки в HTML.
+function tintAttrs(tint) {
+  if (!tint) return { cls: "", attr: "" };
+  const cls = ` rb-depth${tint.hot ? " rb-hot" : ""}`;
+  const attr = ` style="--rb-depth:${tint.depth.toFixed(3)}"${tint.tip ? ` title="${tint.tip}"` : ""}`;
+  return { cls, attr };
+}
 
 const lastAnimatedValues = new Map();
 // Знак прошлого Net(Mkt) бот-позиции — чтобы пыхнуть карточкой при переходе
@@ -101,6 +110,17 @@ export function renderPosition(pos) {
       '<div class="empty-state">No active positions — bot is IDLE</div>';
     return;
   }
+  const side = (pos.side || "SHORT").toUpperCase();
+  // Глубинная заливка главной Net(Mkt)-карточки: насыщенность растёт по мере
+  // приближения к 2R / стопу (есть стоп → бот ведёт позицию).
+  const tint = riskTint({
+    entry: pos.entryPrice,
+    now: pos.currentPrice,
+    side,
+    stopPrice: pos.bot?.stopPrice,
+    sizeUsd: pos.sizeUsd,
+  });
+  const { cls: rbCls, attr: rbAttr } = tintAttrs(tint);
   const pnl = pos.currentPnl;
   let pnlBlock = "";
   if (pnl) {
@@ -110,32 +130,23 @@ export function renderPosition(pos) {
     const netSign = pnl.netMarket >= 0 ? "pos" : "neg";
     const flip = _lastNetSign && _lastNetSign !== netSign ? " pnl-flip" : "";
     _lastNetSign = netSign;
-    const primaryCls = `grid-item grid-item-primary pnl-tint pnl-${netSign}${flip}`;
+    const primaryCls = `grid-item grid-item-primary pnl-tint pnl-${netSign}${flip}${rbCls}`;
     pnlBlock = `
       <div class="data-grid" style="margin-top:0.75rem">
-        <div class="${primaryCls}"><div class="item-label">Net (Mkt) <span class="primary-tag">total</span></div><div class="item-value ${cls(pnl.netMarket)}">${sgn(pnl.netMarket)}$${Math.abs(pnl.netMarket).toFixed(4)}</div></div>
+        <div class="${primaryCls}"${rbAttr}><div class="item-label">Net (Mkt) <span class="primary-tag">total</span></div><div class="item-value ${cls(pnl.netMarket)}">${sgn(pnl.netMarket)}$${Math.abs(pnl.netMarket).toFixed(4)}</div></div>
         <div class="grid-item"><div class="item-label">Net (Mkr)</div><div class="item-value ${cls(pnl.netMaker)}">${sgn(pnl.netMaker)}$${Math.abs(pnl.netMaker).toFixed(4)}</div></div>
         <div class="grid-item"><div class="item-label">Price PnL</div><div class="item-value ${cls(pnl.price)}">${sgn(pnl.price)}$${Math.abs(pnl.price).toFixed(4)}</div></div>
         <div class="grid-item"><div class="item-label">Funding</div><div class="item-value ${cls(pnl.funding)}">${sgn(pnl.funding)}$${Math.abs(pnl.funding).toFixed(4)}</div></div>
       </div>`;
   }
-  const side = (pos.side || "SHORT").toUpperCase();
   const sideCls = side === "SHORT" ? "negative" : "positive";
-  // Шкала SL│entry│●now→2R — рисуем, если бот ведёт позицию (есть стоп).
-  const riskBar = renderRiskBar({
-    entry: pos.entryPrice,
-    now: pos.currentPrice,
-    side,
-    stopPrice: pos.bot?.stopPrice,
-    sizeUsd: pos.sizeUsd,
-  });
   container.innerHTML = `
     <div class="data-grid">
       <div class="grid-item"><div class="item-label">Coin · Side</div><div class="item-value highlight">#${pos.coin} <span class="${sideCls}" style="font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px; margin-left:4px;">${side}</span></div></div>
       <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(pos.sizeUsd)}</div></div>
       <div class="grid-item"><div class="item-label">Entry</div><div class="item-value">${fmtPrice(pos.entryPrice)}</div></div>
       <div class="grid-item"><div class="item-label">APY · Held</div><div class="item-value">${fmtPct(pos.entryApy)} · ${pos.heldHours.toFixed(1)}h</div></div>
-    </div>${pnlBlock}${riskBar}`;
+    </div>${pnlBlock}`;
 }
 
 export function renderManualPositions(list) {
@@ -163,15 +174,17 @@ export function renderManualPositions(list) {
         : p.adoptSkipReason
           ? `HANDS-OFF · MANUAL · <span style="color:var(--red,#cf222e)">без стопа: ${escapeHtml(p.adoptSkipReason)}</span>`
           : "HANDS-OFF · MANUAL";
-      // Шкала SL│entry│●now→2R — только у усыновлённых (нянька повесила стоп).
-      // У голого HANDS-OFF стопа нет → renderRiskBar вернёт "".
-      const riskBar = renderRiskBar({
+      // Глубинная заливка карточки uPnL — только у усыновлённых (нянька повесила
+      // стоп). У голого HANDS-OFF стопа нет → riskTint вернёт null, карточка
+      // остаётся статичной (pnl-tint по знаку).
+      const tint = riskTint({
         entry: p.entryPrice,
         now: p.currentPrice,
         side: p.side,
         stopPrice: p.bot?.stopPrice,
         sizeUsd: p.sizeUsd,
       });
+      const { cls: rbCls, attr: rbAttr } = tintAttrs(tint);
       return `
       <div style="margin-top:0.75rem; padding:0.75rem; border:1px dashed var(--border); border-radius:8px;">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:0.5rem;">
@@ -182,9 +195,9 @@ export function renderManualPositions(list) {
         <div class="data-grid">
           <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}</div></div>
           <div class="grid-item"><div class="item-label">Entry · Now</div><div class="item-value">${fmtPrice(p.entryPrice)} · ${cur}</div></div>
-          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}"><div class="item-label">uPnL</div><div class="item-value ${cls(p.unrealizedPnl)}">${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}</div></div>
+          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}><div class="item-label">uPnL</div><div class="item-value ${cls(p.unrealizedPnl)}">${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}</div></div>
           <div class="grid-item"><div class="item-label">Liq</div><div class="item-value">${liq}</div></div>
-        </div>${riskBar}
+        </div>
       </div>`;
     })
     .join("");
