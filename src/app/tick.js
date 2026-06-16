@@ -21,6 +21,8 @@ import { tickTrendFollowPaper } from './trendFollowPaperTick.js';
 import { tickFaderPaper } from './faderPaperTick.js';
 import { tickHunterPaper } from './hunterPaperTick.js';
 import { tickVaporPaper } from './vaporPaperTick.js';
+import { tickHotMoversPaper } from './hotMoversPaperTick.js';
+import { tickSwingPaper } from './swingPaperTick.js';
 import { tickHunterLongPaper } from './hunterLongPaperTick.js';
 import { tickCarryPaper } from './carryPaperTick.js';
 import { runBalanceDiag } from './balanceDiag.js';
@@ -97,6 +99,8 @@ export async function tick() {
         await tickHunterPaper(handsOffHunter);
         await tickHunterLongPaper(handsOffHunter);
         await tickVaporPaper(handsOffHunter);
+        await tickHotMoversPaper(handsOffHunter);
+        await tickSwingPaper(handsOffHunter);
         await tickCarryPaper(handsOffScout);
         // Equity-снапшот для Performance-графика. Ручная торговля — основной
         // режим оператора (часами держит монету руками), и тик тут делает return
@@ -180,6 +184,8 @@ export async function tick() {
     await tickHunterPaper(hunterData);
     await tickHunterLongPaper(hunterData);
     await tickVaporPaper(hunterData);
+    await tickHotMoversPaper(hunterData);
+    await tickSwingPaper(hunterData);
     await tickCarryPaper(scoutData);
 
     await runSmartAlerts(scoutData, signal, activePosition);

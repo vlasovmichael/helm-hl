@@ -471,6 +471,26 @@ function loadConfig() {
   if (isNaN(vaporBalanceUtil) || vaporBalanceUtil <= 0 || vaporBalanceUtil > 0.95) {
     throw new Error(`VAPOR_BALANCE_UTILIZATION must be in (0, 0.95], got ${process.env.VAPOR_BALANCE_UTILIZATION}`);
   }
+  // Hot Movers paper — PAPER-only shadow-слот, торгует вердикт карточки 1:1.
+  const hotMoversPaperEnabled = (process.env.HOT_MOVERS_PAPER_ENABLED || 'false').toLowerCase() === 'true';
+  const hotMoversPaperBalanceUtil = parseFloat(process.env.HOT_MOVERS_PAPER_BALANCE_UTILIZATION || '0.5');
+  if (isNaN(hotMoversPaperBalanceUtil) || hotMoversPaperBalanceUtil <= 0 || hotMoversPaperBalanceUtil > 0.95) {
+    throw new Error(`HOT_MOVERS_PAPER_BALANCE_UTILIZATION must be in (0, 0.95], got ${process.env.HOT_MOVERS_PAPER_BALANCE_UTILIZATION}`);
+  }
+  const hotMoversPaperLeverage = parseFloat(process.env.HOT_MOVERS_PAPER_LEVERAGE || '3');
+  if (isNaN(hotMoversPaperLeverage) || hotMoversPaperLeverage < 1 || hotMoversPaperLeverage > 20) {
+    throw new Error(`HOT_MOVERS_PAPER_LEVERAGE must be in [1, 20], got ${process.env.HOT_MOVERS_PAPER_LEVERAGE}`);
+  }
+  // Setup Swing paper — PAPER-only shadow-слот, торгует вердикт карточки Swing 1:1.
+  const swingPaperEnabled     = (process.env.SWING_PAPER_ENABLED || 'false').toLowerCase() === 'true';
+  const swingPaperBalanceUtil = parseFloat(process.env.SWING_PAPER_BALANCE_UTILIZATION || '0.5');
+  if (isNaN(swingPaperBalanceUtil) || swingPaperBalanceUtil <= 0 || swingPaperBalanceUtil > 0.95) {
+    throw new Error(`SWING_PAPER_BALANCE_UTILIZATION must be in (0, 0.95], got ${process.env.SWING_PAPER_BALANCE_UTILIZATION}`);
+  }
+  const swingPaperLeverage = parseFloat(process.env.SWING_PAPER_LEVERAGE || '3');
+  if (isNaN(swingPaperLeverage) || swingPaperLeverage < 1 || swingPaperLeverage > 20) {
+    throw new Error(`SWING_PAPER_LEVERAGE must be in [1, 20], got ${process.env.SWING_PAPER_LEVERAGE}`);
+  }
   // 6ч по умолчанию: ловит нормальные ручные входы (даже если бот заметил их не
   // сразу — был в другой монете или рестартился), но всё ещё отсекает древние
   // забытые orphan'ы/carry-ноги. Был 10мин — оказался миной (cooldown истекал
@@ -911,6 +931,12 @@ function loadConfig() {
       adoptEnabled,
       vaporEnabled,
       vaporBalanceUtil,
+      hotMoversPaperEnabled,
+      hotMoversPaperBalanceUtil,
+      hotMoversPaperLeverage,
+      swingPaperEnabled,
+      swingPaperBalanceUtil,
+      swingPaperLeverage,
       adoptMaxAgeMin,
       adoptStopMode,
       adoptStopPct,

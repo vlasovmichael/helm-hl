@@ -12,7 +12,7 @@ import { getAccountEquity } from '../wallet.js';
 import { checkVolatility } from '../volatility.js';
 import {
   paperOpen, paperClose, hunterPaperOpen, hunterLongPaperOpen, trendFollowPaperOpen,
-  faderPaperOpen, candyPaperOpen, vaporPaperOpen,
+  faderPaperOpen, candyPaperOpen, vaporPaperOpen, hotMoversPaperOpen, swingPaperOpen,
 } from './paper.js';
 import {
   productionOpen, productionClose, productionRotate,
@@ -248,6 +248,33 @@ async function handleOpen(signal) {
       return { ok: false };
     }
     return vaporPaperOpen(
+      signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
+    );
+  }
+
+  // Hot Movers paper route: PAPER-only shadow-слот, торгует вердикт карточки 1:1
+  // (LONG/SHORT). PROD-пути нет — open всегда виртуальный. Carry-guard'ы (CB/
+  // drawdown/OI) применяем, как у vapor/candy.
+  if (strategyId === 'hotmovers') {
+    const pre = await preflightChecks(signal.coin, null);
+    if (!pre.allowed) {
+      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
+      return { ok: false };
+    }
+    return hotMoversPaperOpen(
+      signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
+    );
+  }
+
+  // Setup Swing paper route: PAPER-only shadow-слот, вердикт карточки Swing 1:1
+  // (LONG/SHORT, план SL/TP от карточки). PROD-пути нет. Carry-guard'ы применяем.
+  if (strategyId === 'swing') {
+    const pre = await preflightChecks(signal.coin, null);
+    if (!pre.allowed) {
+      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
+      return { ok: false };
+    }
+    return swingPaperOpen(
       signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
     );
   }

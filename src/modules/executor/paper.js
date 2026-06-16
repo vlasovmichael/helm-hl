@@ -500,6 +500,134 @@ export async function vaporPaperOpen(coin, price, direction, sl, tp, silent = fa
 }
 
 /**
+ * Открывает виртуальную позицию для Hot Movers paper (торгует вердикт карточки).
+ * LONG или SHORT (side из direction), risk-based размер от реального paper-баланса
+ * (util из config). SL/TP заданы детектором. strategy_id='hotmovers'. PAPER-only.
+ *
+ * @param {string} coin
+ * @param {number} price
+ * @param {'LONG'|'SHORT'} direction
+ * @param {number} sl
+ * @param {number} tp
+ * @param {boolean} [silent=false]
+ * @param {Object} [entryFeatures=null]
+ */
+export async function hotMoversPaperOpen(coin, price, direction, sl, tp, silent = false, entryFeatures = null) {
+  const balance = await getPaperBalance();
+  if (balance <= 0) {
+    logger.warn(`[Executor] [HotMovers] Cannot open — balance is $${balance.toFixed(2)}`);
+    return { ok: false };
+  }
+  const utilization = config.trading.hotMoversPaperBalanceUtil;
+  const leverage = config.trading.hotMoversPaperLeverage;
+  const szDecimals = resolvePaperSzDecimals(coin);
+  if (szDecimals == null) return { ok: false };
+  const { sizeUsd, sz, tooSmall } = resolveEntrySize({
+    coin, tag: 'HotMovers', equity: balance, capBase: balance * leverage,
+    capUtil: utilization, price, sl, szDecimals,
+  });
+  if (tooSmall) {
+    const why = sizeUsd < MIN_ORDER_USD
+      ? `size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min`
+      : `sz=${sz} rounds to 0 (szDecimals=${szDecimals}, price $${price})`;
+    logger.warn(`[Executor] [HotMovers SKIP] #${coin} — ${why} (${(utilization * 100).toFixed(0)}% real $${balance.toFixed(2)})`);
+    return { ok: false };
+  }
+
+  const fee  = sizeUsd * ONE_LEG;
+  const side = direction === 'LONG' ? 'long' : 'short';
+
+  const id = savePosition({
+    coin,
+    size_usd:    sizeUsd,
+    entry_price: price,
+    entry_apy:   0,
+    entry_time:  Date.now(),
+    mode:        'PAPER',
+    strategy_id: 'hotmovers',
+    side,
+    sl_price:    sl,
+    tp_price:    tp,
+    ...(entryFeatures || {}),
+  });
+
+  logger.info(
+    `[Executor] 👀 HotMovers OPEN ${direction} #${coin} | $${sizeUsd.toFixed(2)} (${leverage}x of real $${balance.toFixed(2)}) @ $${price} ` +
+      `| SL $${sl.toFixed(6)} / TP $${tp.toFixed(6)} | fee $${fee.toFixed(4)} | id: ${id}`,
+  );
+
+  notify('afterOpen', {
+    coin, price, sizeUsd, positionId: Number(id), mode: 'PAPER', strategy: 'hotmovers',
+  });
+
+  return { ok: true, positionId: Number(id), sizeUsd };
+}
+
+/**
+ * Открывает виртуальную позицию для Setup Swing paper (вердикт карточки Swing).
+ * LONG или SHORT (side из direction), risk-based размер от реального paper-баланса
+ * (util из config). SL/TP = план карточки. strategy_id='swing'. PAPER-only.
+ *
+ * @param {string} coin
+ * @param {number} price
+ * @param {'LONG'|'SHORT'} direction
+ * @param {number} sl
+ * @param {number} tp
+ * @param {boolean} [silent=false]
+ * @param {Object} [entryFeatures=null]
+ */
+export async function swingPaperOpen(coin, price, direction, sl, tp, silent = false, entryFeatures = null) {
+  const balance = await getPaperBalance();
+  if (balance <= 0) {
+    logger.warn(`[Executor] [Swing] Cannot open — balance is $${balance.toFixed(2)}`);
+    return { ok: false };
+  }
+  const utilization = config.trading.swingPaperBalanceUtil;
+  const leverage = config.trading.swingPaperLeverage;
+  const szDecimals = resolvePaperSzDecimals(coin);
+  if (szDecimals == null) return { ok: false };
+  const { sizeUsd, sz, tooSmall } = resolveEntrySize({
+    coin, tag: 'Swing', equity: balance, capBase: balance * leverage,
+    capUtil: utilization, price, sl, szDecimals,
+  });
+  if (tooSmall) {
+    const why = sizeUsd < MIN_ORDER_USD
+      ? `size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min`
+      : `sz=${sz} rounds to 0 (szDecimals=${szDecimals}, price $${price})`;
+    logger.warn(`[Executor] [Swing SKIP] #${coin} — ${why} (${(utilization * 100).toFixed(0)}% real $${balance.toFixed(2)})`);
+    return { ok: false };
+  }
+
+  const fee  = sizeUsd * ONE_LEG;
+  const side = direction === 'LONG' ? 'long' : 'short';
+
+  const id = savePosition({
+    coin,
+    size_usd:    sizeUsd,
+    entry_price: price,
+    entry_apy:   0,
+    entry_time:  Date.now(),
+    mode:        'PAPER',
+    strategy_id: 'swing',
+    side,
+    sl_price:    sl,
+    tp_price:    tp,
+    ...(entryFeatures || {}),
+  });
+
+  logger.info(
+    `[Executor] 📐 Swing OPEN ${direction} #${coin} | $${sizeUsd.toFixed(2)} (${leverage}x of real $${balance.toFixed(2)}) @ $${price} ` +
+      `| SL $${sl.toFixed(6)} / TP $${tp.toFixed(6)} | fee $${fee.toFixed(4)} | id: ${id}`,
+  );
+
+  notify('afterOpen', {
+    coin, price, sizeUsd, positionId: Number(id), mode: 'PAPER', strategy: 'swing',
+  });
+
+  return { ok: true, positionId: Number(id), sizeUsd };
+}
+
+/**
  * Открывает виртуальную позицию для Strategy #5 Fader.
  *
  * Fader — paper-only contrarian scalper. Размер позиции = NOMINAL × LEVERAGE

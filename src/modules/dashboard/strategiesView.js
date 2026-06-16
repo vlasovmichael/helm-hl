@@ -83,6 +83,28 @@ const REGISTRY = [
     },
   },
   {
+    id: 'hotmovers',
+    label: 'Hot Movers',
+    kind: 'card-mirror · scalp',
+    split: true,                              // вердикт карточки бывает long и short
+    resolve: () => {
+      // PAPER-only (PROD-пути нет): enabled → paper, иначе off.
+      const enabled = config.trading.hotMoversPaperEnabled;
+      return { enabled, status: enabled ? 'paper' : 'off' };
+    },
+  },
+  {
+    id: 'swing',
+    label: 'Setup Swing',
+    kind: 'HL-structure · swing',
+    split: true,                              // карточка даёт и LONG, и SHORT
+    resolve: () => {
+      // PAPER-only (PROD-пути нет): enabled → paper, иначе off.
+      const enabled = config.trading.swingPaperEnabled;
+      return { enabled, status: enabled ? 'paper' : 'off' };
+    },
+  },
+  {
     id: 'adopt',
     label: 'Adopt',
     kind: 'manual-entry · babysit',
@@ -96,9 +118,7 @@ const REGISTRY = [
 ];
 
 // Зарезервированное место под будущие стратегии (кода ещё нет).
-const PLANNED = [
-  { id: 'setup_swing',   label: 'Setup Swing',   kind: 'HL-structure · swing' },
-];
+const PLANNED = [];
 
 /** Безопасный вызов опционального источника (модуль может быть не инициализирован). */
 function safe(fn) {
