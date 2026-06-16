@@ -30,7 +30,6 @@ import {
 } from '../modules/executor/production.js';
 import { resolveAsset } from '../modules/executor/fill-parser.js';
 import { fetchUserFills, reconstructManualTrades } from '../modules/userFills.js';
-import { isHunterCrossCooldownActive } from '../modules/hunterCrossCooldown.js';
 import { isQuietHour } from '../modules/setupScannerAlerts.js';
 import { atr } from '../modules/trendFollowAtr.js';
 import { getHourlyCandles } from '../modules/candleCache.js';
@@ -152,11 +151,11 @@ export async function maybeAdoptManualPosition(manualPositions) {
     const sz      = Math.abs(ex.szi);
     const sizeUsd = sz * entry;
 
-    // Гард: не подхватываем монету в Hunter cross-cooldown (после недавнего close).
-    if (isHunterCrossCooldownActive(coin, now)) {
-      logger.info(`[Adopt] skip #${coin} — Hunter cross-cooldown active`);
-      continue;
-    }
+    // ВНИМАНИЕ: Hunter cross-cooldown здесь НЕ применяется. Он защищает авто-входы
+    // бота от «ловли ножа» после собственного close, но для adopt смысл обратный —
+    // оператор уже вошёл руками сам, няньке остаётся лишь повесить защитный стоп. Раньше
+    // гард оставлял такие позы вообще без стопа (cooldown 60м + max-age 10м = монета,
+    // которую бот только что торговал, не усыновлялась никогда). Убрано 2026-06-16.
 
     // Гард: возраст. null → возраст неизвестен → не рискуем (возможно старый orphan).
     const openTime = await getManualOpenTime(coin);
