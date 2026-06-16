@@ -27,10 +27,15 @@ function row(coin, signal, { entryZone = 'zone', strength = 5, sl = 98, tp = 104
   };
 }
 
-test('LONG + zone + plan → кандидат с планом карточки', () => {
+// Candy Girl 5m-сигнал (лента newest-first).
+function candy(coin, direction, ageMin = 0, now = T0) {
+  return { coin, direction, ts: now - ageMin * MIN };
+}
+
+test('LONG + plan + свежий 🍬 → кандидат с планом карточки', () => {
   resetSwingState();
   const now = T0;
-  const best = selectSwingCandidate([row('AAA', 'LONG')], new Map([['AAA', 100.2]]), now);
+  const best = selectSwingCandidate([row('AAA', 'LONG')], new Map([['AAA', 100.2]]), [candy('AAA', 'LONG')], now);
   assert.ok(best);
   assert.equal(best.coin, 'AAA');
   assert.equal(best.direction, 'LONG');
@@ -39,29 +44,47 @@ test('LONG + zone + plan → кандидат с планом карточки',
   assert.equal(best.swing.plan.tp, 104);
 });
 
-test('WAIT и extended (не зона) → нет кандидата', () => {
+test('🍬 WAIT (нет candy-подтверждения) → НЕ входим (баг ZEC LONG)', () => {
   resetSwingState();
   const now = T0;
-  assert.equal(selectSwingCandidate([row('AAA', 'WAIT')], new Map([['AAA', 100]]), now), null);
-  assert.equal(selectSwingCandidate([row('BBB', 'LONG', { entryZone: 'extended' })], new Map([['BBB', 100]]), now), null);
+  // directional + zone, но Candy Girl молчит → вход не созрел.
+  assert.equal(selectSwingCandidate([row('AAA', 'LONG')], new Map([['AAA', 100]]), [], now), null);
+});
+
+test('🍬 не в ту сторону / устаревший → НЕ входим', () => {
+  resetSwingState();
+  const now = T0;
+  // candy SHORT при свинг LONG.
+  assert.equal(selectSwingCandidate([row('AAA', 'LONG')], new Map([['AAA', 100]]), [candy('AAA', 'SHORT')], now), null);
+  resetSwingState();
+  // candy старше 90 мин.
+  assert.equal(selectSwingCandidate([row('AAA', 'LONG')], new Map([['AAA', 100]]), [candy('AAA', 'LONG', 120, now)], now), null);
+});
+
+test('WAIT-сигнал свинга → нет кандидата (даже с 🍬)', () => {
+  resetSwingState();
+  const now = T0;
+  assert.equal(selectSwingCandidate([row('AAA', 'WAIT')], new Map([['AAA', 100]]), [candy('AAA', 'LONG')], now), null);
 });
 
 test('edge-trigger: повтор того же состояния не открывает второй раз', () => {
   resetSwingState();
   const now = T0;
   const pm = new Map([['AAA', 100]]);
-  const first = selectSwingCandidate([row('AAA', 'LONG')], pm, now);
+  const cs = [candy('AAA', 'LONG', 0, now)];
+  const first = selectSwingCandidate([row('AAA', 'LONG')], pm, cs, now);
   assert.ok(first); // первый вход
-  const second = selectSwingCandidate([row('AAA', 'LONG')], pm, now + MIN);
-  assert.equal(second, null); // держится в зоне — не повторяем
+  const second = selectSwingCandidate([row('AAA', 'LONG')], pm, [candy('AAA', 'LONG', 1, now + MIN)], now + MIN);
+  assert.equal(second, null); // candy держится — не повторяем
 });
 
-test('лучший по strength среди нескольких directional', () => {
+test('лучший по strength среди нескольких directional (оба с 🍬)', () => {
   resetSwingState();
   const now = T0;
   const best = selectSwingCandidate(
     [row('AAA', 'LONG', { strength: 3 }), row('BBB', 'SHORT', { strength: 9, sl: 102, tp: 96 })],
     new Map([['AAA', 100], ['BBB', 100]]),
+    [candy('AAA', 'LONG'), candy('BBB', 'SHORT')],
     now,
   );
   assert.equal(best.coin, 'BBB');
@@ -71,7 +94,7 @@ test('лучший по strength среди нескольких directional', (
 test('цена fallback на mark, если нет в живом снапшоте', () => {
   resetSwingState();
   const now = T0;
-  const best = selectSwingCandidate([row('AAA', 'LONG', { mark: 101 })], new Map(), now);
+  const best = selectSwingCandidate([row('AAA', 'LONG', { mark: 101 })], new Map(), [candy('AAA', 'LONG')], now);
   assert.equal(best.price, 101);
 });
 
@@ -123,7 +146,7 @@ test('post-exit cooldown: не входим в монету сразу посл�
   };
   const closed = analyzeSwing([{ coin: 'AAA', price: 97.5 }], pos, now);
   assert.equal(closed.action, 'CLOSE');
-  // Сразу же валидный сетап в AAA — подавлен cooldown'ом.
-  const cand = selectSwingCandidate([row('AAA', 'LONG')], new Map([['AAA', 100]]), now + MIN);
+  // Сразу же валидный сетап в AAA (с 🍬) — подавлен cooldown'ом.
+  const cand = selectSwingCandidate([row('AAA', 'LONG')], new Map([['AAA', 100]]), [candy('AAA', 'LONG', 0, now + MIN)], now + MIN);
   assert.equal(cand, null);
 });

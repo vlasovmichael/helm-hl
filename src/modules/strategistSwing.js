@@ -7,10 +7,12 @@
 // plan{sl,tp} (стоп за 1h slow-EMA = инвалидация тренда, таргет 2R). Берём это
 // 1:1 — план карточки и есть наш выход.
 //
-// Вход: монета ВОШЛА в actionable-состояние = directional-сигнал (LONG/SHORT) +
-// entryZone='zone' (цена откатила к EMA20, не chase) + есть plan. Edge-trigger:
-// открываем на переходе в это состояние (не пока оно держится). Свинг — медленный
-// ТФ (4h/1h), поэтому тяжёлый агрегат getSetupScannerRows троттлим (60с); выход
+// Вход = directional-сигнал свинга (LONG/SHORT) + есть plan + СВЕЖЕЕ Candy Girl
+// 5m-подтверждение в ту же сторону (findCandyConfirm) — это слой тайминга входа,
+// которым оператор пользуется руками: одна 1h-зона ≠ вход, ждём «🍬 reclaim
+// напечатался». Без candy НЕ входим (фикс 2026-06-17: бот зашёл ZEC LONG по зоне
+// при 🍬 WAIT). Edge-trigger по появлению candy. Свинг — медленный ТФ (4h/1h),
+// поэтому тяжёлый агрегат getSetupScannerRows троттлим (60с); выход
 // (SL/TP/time-stop) проверяем каждый тик по живой цене.
 //
 // Слот: независимый paper-слот strategy_id='swing', одна поза за раз,
@@ -19,7 +21,8 @@
 
 import { logger } from '../core/logger.js';
 import { getSetupScannerRows } from '../core/database.js';
-import { enrichSwingSignals } from './setupScannerSwing.js';
+import { enrichSwingSignals, findCandyConfirm } from './setupScannerSwing.js';
+import { getCandyGirlSignals } from './strategistCandyGirl.js';
 
 // ── Параметры (env-overrideable) ──
 export const SWING_EVAL_INTERVAL_MS    = parseInt(process.env.SWING_PAPER_EVAL_INTERVAL_SEC || '60', 10) * 1_000;
@@ -51,14 +54,18 @@ function priceMapOf(hunterData) {
 }
 
 /**
- * Actionable-ключ строки: directional-сигнал + зона входа + готовый план.
- * @returns {'LONG:zone'|'SHORT:zone'|'none'}
+ * Actionable-ключ строки: directional-сигнал свинга + готовый план + СВЕЖЕЕ
+ * Candy Girl 5m-подтверждение в ту же сторону (слой тайминга входа — оператор входит
+ * руками только по нему, не по одной 1h-зоне; см. findCandyConfirm). Триггером
+ * делаем именно candy: если 🍬 печатается, когда монета уже в зоне, ключ
+ * переходит none→go и edge-trigger срабатывает.
+ * @returns {'LONG:go'|'SHORT:go'|'none'}
  */
-function actionableKey(swing) {
+function actionableKey(swing, candy) {
   if (!swing) return 'none';
-  const { signal, entryZone, plan } = swing;
-  if ((signal === 'LONG' || signal === 'SHORT') && entryZone === 'zone' && plan) {
-    return `${signal}:zone`;
+  const { signal, plan } = swing;
+  if ((signal === 'LONG' || signal === 'SHORT') && plan && candy) {
+    return `${signal}:go`;
   }
   return 'none';
 }
@@ -69,12 +76,14 @@ function actionableKey(swing) {
  *
  * @param {Array<{coin, mark, fundingRate, vol24hUsd, oiUsd, oi7d, swing}>} enriched
  * @param {Map<string,number>} priceByCoin — живые цены (fallback на mark)
+ * @param {Array<{coin, direction, ts}>} candySignals — лента Candy Girl (newest-first)
  * @param {number} now
  */
-export function selectSwingCandidate(enriched, priceByCoin, now) {
+export function selectSwingCandidate(enriched, priceByCoin, candySignals, now) {
   let best = null;
   for (const r of enriched ?? []) {
-    const key = actionableKey(r.swing);
+    const candy = findCandyConfirm(r.coin, r.swing?.signal, candySignals, now);
+    const key = actionableKey(r.swing, candy);
     const prev = prevByCoin.get(r.coin);
     prevByCoin.set(r.coin, key);
 
@@ -86,7 +95,7 @@ export function selectSwingCandidate(enriched, priceByCoin, now) {
     if (price == null || !(price > 0)) continue;
     const strength = r.swing.strength ?? 0;
     if (!best || strength > best.strength) {
-      best = { coin: r.coin, price, direction: r.swing.signal, swing: r.swing, row: r, strength };
+      best = { coin: r.coin, price, direction: r.swing.signal, swing: r.swing, row: r, strength, candy };
     }
   }
   return best;
@@ -121,11 +130,12 @@ export function analyzeSwing(hunterData, activePosition, now = Date.now()) {
     return { action: 'HOLD' };
   }
 
-  const best = selectSwingCandidate(enriched, priceByCoin, now);
+  const candySignals = getCandyGirlSignals();
+  const best = selectSwingCandidate(enriched, priceByCoin, candySignals, now);
 
   if (now - lastHeartbeatAt >= SWING_HEARTBEAT_MS) {
     const directional = (enriched ?? []).filter((r) => r.swing?.signal === 'LONG' || r.swing?.signal === 'SHORT').length;
-    logger.info(`[Swing] 📐 rows=${(enriched ?? []).length} | directional=${directional} | slot=IDLE`);
+    logger.info(`[Swing] 📐 rows=${(enriched ?? []).length} | directional=${directional} | 🍬=${candySignals.length} | slot=IDLE`);
     lastHeartbeatAt = now;
   }
 
@@ -143,8 +153,8 @@ export function analyzeSwing(hunterData, activePosition, now = Date.now()) {
 
   logger.info(
     `[Swing] 🎯 OPEN ${best.direction} #${best.coin} @ $${best.price} ` +
-      `| 4h${best.swing.trend4h ?? '?'} 1h${best.swing.trend1h ?? '?'}, strength ${best.strength.toFixed(1)} ` +
-      `| SL $${sl.toFixed(6)} / TP $${tp.toFixed(6)} (R:R ${best.swing.plan.rr})`,
+      `| 4h${best.swing.trend4h ?? '?'} 1h${best.swing.trend1h ?? '?'}, strength ${best.strength.toFixed(1)}, ` +
+      `🍬 ${best.candy?.ageMin ?? '?'}m | SL $${sl.toFixed(6)} / TP $${tp.toFixed(6)} (R:R ${best.swing.plan.rr})`,
   );
 
   return {
