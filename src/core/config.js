@@ -471,7 +471,11 @@ function loadConfig() {
   if (isNaN(vaporBalanceUtil) || vaporBalanceUtil <= 0 || vaporBalanceUtil > 0.95) {
     throw new Error(`VAPOR_BALANCE_UTILIZATION must be in (0, 0.95], got ${process.env.VAPOR_BALANCE_UTILIZATION}`);
   }
-  const adoptMaxAgeMin        = parseFloat(process.env.ADOPT_MAX_AGE_MIN        || '10');
+  // 6ч по умолчанию: ловит нормальные ручные входы (даже если бот заметил их не
+  // сразу — был в другой монете или рестартился), но всё ещё отсекает древние
+  // забытые orphan'ы/carry-ноги. Был 10мин — оказался миной (cooldown истекал
+  // позже окна, поза не усыновлялась никогда). 2026-06-16.
+  const adoptMaxAgeMin        = parseFloat(process.env.ADOPT_MAX_AGE_MIN        || '360');
   // Жёсткий стоп: ATR-режим подстраивает дистанцию под волатильность монеты
   // (фейдеру нужен воздух — фикс-% либо душит, либо болтается). dist = ATR(1h,14)
   // × MULT, зажат в [MIN_PCT, MAX_PCT]. Фолбэк на фикс-% если свечей/ATR нет.

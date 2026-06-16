@@ -8,7 +8,7 @@
 //  приватный, нужен только хедеру.
 // ─────────────────────────────────────────────────
 
-import { fmtUsd, fmtPrice, fmtPct, formatUptime } from "../utils/format.js";
+import { fmtUsd, fmtPrice, fmtPct, formatUptime, escapeHtml } from "../utils/format.js";
 import { renderRiskBar } from "../utils/riskBar.js";
 
 const lastAnimatedValues = new Map();
@@ -156,9 +156,13 @@ export function renderManualPositions(list) {
       const cur = p.currentPrice != null ? fmtPrice(p.currentPrice) : "—";
       // Бот подхватил вход (adopt) → дописываем ADOPTED, чтобы было видно, что
       // на нём уже висит стоп+трейл няньки. Не подхватил → чистый HANDS-OFF.
+      // Не усыновлена → показываем ПОЧЕМУ (если бэк знает причину), чтобы не
+      // лезть в логи на сервере. Усыновлена → зелёный ADOPTED.
       const manualBadge = p.adopted
         ? `HANDS-OFF · MANUAL · <span style="color:var(--green,#22c55e)">ADOPTED</span>`
-        : "HANDS-OFF · MANUAL";
+        : p.adoptSkipReason
+          ? `HANDS-OFF · MANUAL · <span style="color:var(--red,#cf222e)">без стопа: ${escapeHtml(p.adoptSkipReason)}</span>`
+          : "HANDS-OFF · MANUAL";
       // Шкала SL│entry│●now→2R — только у усыновлённых (нянька повесила стоп).
       // У голого HANDS-OFF стопа нет → renderRiskBar вернёт "".
       const riskBar = renderRiskBar({

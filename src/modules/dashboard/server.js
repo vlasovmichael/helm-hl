@@ -34,6 +34,7 @@ import { getAvailableBalance, getAccountEquity } from "../wallet.js";
 import { getTaxSummary } from "../taxCollector/index.js";
 import { getRuntimeBlacklist } from "../executor/index.js";
 import { TICK_INTERVAL_MS, state } from "../../app/state.js";
+import { getAdoptSkipReason } from "../../app/adoptReconcile.js";
 import {
   HUNTER_SL_PCT,
   HUNTER_TP_PCT,
@@ -507,6 +508,10 @@ async function getStatusData() {
           currentPrice: livePrice,
           // Бот уже подхватил этот ручной вход (adopt-нянька повесила стоп+трейл)?
           adopted: adoptedCoins.has(normCoin(p.coin)),
+          // Если НЕ подхватил — почему (виден на дашборде, без лазанья в логи).
+          adoptSkipReason: adoptedCoins.has(normCoin(p.coin))
+            ? null
+            : getAdoptSkipReason(p.coin),
           // Живой пол adopt-няньки — тот же форвард, что у бот-сделки.
           bot: buildAdoptManagement(adoptByCoin.get(normCoin(p.coin))),
         });

@@ -37,6 +37,15 @@ import { getHourlyCandles } from '../modules/candleCache.js';
 const ATR_PERIOD = 14;            // стандартный период ATR
 const ATR_LOOKBACK_HOURS = 48;    // с запасом ≥ ATR_PERIOD+1 свечей
 
+// Последнее решение adopt по монете — чтобы причина «не усыновил» была видна на
+// дашборде, а не только в логах на сервере (оператору надоело лазить в SSH каждый
+// раз, когда вход не подхватился — 2026-06-16). coin → краткая причина-строка.
+// Усыновлённая монета причину чистит (её ведёт adopt, вопрос снят).
+const _adoptSkipReason = new Map();
+export function getAdoptSkipReason(coin) {
+  return _adoptSkipReason.get(coin) || null;
+}
+
 /**
  * Дистанция жёсткого стопа в % от входа.
  * ATR-режим: ATR(1h, 14) × MULT / цена, зажат в [MIN_PCT, MAX_PCT] — подстраивает
@@ -161,11 +170,13 @@ export async function maybeAdoptManualPosition(manualPositions) {
     const openTime = await getManualOpenTime(coin);
     if (openTime == null) {
       logger.info(`[Adopt] skip #${coin} — open time undetermined (not adopting unknown-age orphan)`);
+      _adoptSkipReason.set(coin, 'возраст входа неизвестен');
       continue;
     }
     const ageMin = (now - openTime) / 60_000;
     if (now - openTime > maxAgeMs) {
       logger.info(`[Adopt] skip #${coin} — too old (${ageMin.toFixed(1)}min > ${config.trading.adoptMaxAgeMin}min)`);
+      _adoptSkipReason.set(coin, `слишком старая (${ageMin.toFixed(0)}м > ${config.trading.adoptMaxAgeMin}м)`);
       continue;
     }
 
@@ -181,6 +192,7 @@ export async function maybeAdoptManualPosition(manualPositions) {
       ({ szDecimals } = resolveAsset(coin));
     } catch (err) {
       logger.warn(`[Adopt] skip #${coin} — resolveAsset failed: ${err.message}`);
+      _adoptSkipReason.set(coin, 'не распознал тикер');
       continue;
     }
 
@@ -195,6 +207,7 @@ export async function maybeAdoptManualPosition(manualPositions) {
         `[Adopt] ❌ SL placement failed for #${coin} ${side} @ $${plannedSl.toPrecision(6)}: ${err.message}. ` +
         `NOT adopting — позиция остаётся в обычном hands-off.`,
       );
+      _adoptSkipReason.set(coin, 'стоп не встал на бирже');
       continue;
     }
 
@@ -246,6 +259,7 @@ export async function maybeAdoptManualPosition(manualPositions) {
       ['handshake'],
     );
 
+    _adoptSkipReason.delete(coin); // усыновлена — вопрос «почему не adopted» снят
     adopted.push(coin); // multi-slot — продолжаем подхватывать остальные
   }
 
