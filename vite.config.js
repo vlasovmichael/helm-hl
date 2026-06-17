@@ -22,6 +22,7 @@ export default defineConfig({
         index: resolve(webRoot, "index.html"),
         ledger: resolve(webRoot, "ledger.html"),
         statistics: resolve(webRoot, "statistics.html"),
+        lab: resolve(webRoot, "lab.html"),
         login: resolve(webRoot, "login.html"),
       },
     },

@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta
+      name="theme-color"
+      content="#0c0a09"
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta
+      name="theme-color"
+      content="#f5f1ea"
+      media="(prefers-color-scheme: light)"
+    />
+    <title>Helm · Lab</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Mona+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("hl-scanner-theme") || "auto";
+          var theme;
+          if (stored === "auto") {
+            theme = window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+          } else {
+            theme = stored === "light" ? "light" : "dark";
+          }
+          document.documentElement.setAttribute("data-theme", theme);
+        } catch (_) {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="container">
+      <nav class="topnav" id="topnav" aria-label="Primary"></nav>
+
+      <header>
+        <div class="equity-group">
+          <div class="label">Lab</div>
+          <div class="value" style="font-size: 20px">Research · Divergence &amp; Whales</div>
+        </div>
+        <div class="meta-group">
+          <div id="ws-pill" class="status-pill offline">WS connecting…</div>
+        </div>
+      </header>
+      <!-- 02 / BTC Divergence -->
+      <section class="card" id="sec-divergence">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-num="02"
+            title="Относительная сила/слабость монеты vs BTC. Монета слабее BTC = кандидат на шорт. Монета сильнее BTC на падении = кандидат на лонг."
+          >
+            BTC Divergence
+          </div>
+          <div class="time-ranges" id="div-tabs">
+            <button class="range-btn" data-window="5m">5m</button>
+            <button class="range-btn active" data-window="15m">15m</button>
+            <button class="range-btn" data-window="1h">1h</button>
+            <button class="range-btn" data-window="all">All ↓</button>
+          </div>
+          <span
+            id="div-meta"
+            style="
+              font-size: 11px;
+              font-family: var(--font-mono);
+              color: var(--text-muted);
+            "
+          ></span>
+        </div>
+        <div
+          id="div-watchlist-bar"
+          style="
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px 0;
+            flex-wrap: wrap;
+          "
+        ></div>
+        <div class="u-scroll-x">
+          <table class="data-table" id="div-table">
+            <thead>
+              <tr>
+                <th>Coin</th>
+                <th class="r">Price</th>
+                <th class="r" id="div-th-change">15m %</th>
+                <th
+                  class="r"
+                  title="Разница между изменением монеты и BTC. Красный = монета слабее BTC (шорт). Зелёный = монета сильнее BTC (лонг)."
+                >
+                  vs BTC
+                </th>
+                <th class="c">Signal</th>
+                <th
+                  class="r"
+                  id="div-th-whale"
+                  title="Позиция кита по этой монете"
+                >
+                  🐋
+                </th>
+              </tr>
+            </thead>
+            <tbody id="div-tbody">
+              <tr>
+                <td colspan="6" class="empty-state">накапливаем историю…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 02.5 / Whale Watch -->
+      <section class="card" id="sec-whale">
+        <div class="card-header" style="flex-wrap: wrap; gap: 6px">
+          <div
+            class="card-title"
+            data-num="02.5"
+            title="Perp-позиции отслеживаемых HL-адресов. Обновляется раз в 30 секунд."
+          >
+            Whale Watch
+          </div>
+          <div
+            id="ww-chips"
+            style="
+              display: flex;
+              gap: 4px;
+              flex-wrap: wrap;
+              align-items: center;
+            "
+          ></div>
+          <button
+            id="ww-add-btn"
+            title="Добавить адрес"
+            style="
+              background: none;
+              border: 1px solid var(--hairline);
+              border-radius: 4px;
+              color: var(--text-muted);
+              font-size: 11px;
+              font-family: var(--font-mono);
+              padding: 2px 8px;
+              cursor: pointer;
+              white-space: nowrap;
+            "
+          >
+            + Add
+          </button>
+          <span
+            id="ww-bias"
+            style="
+              font-size: 12px;
+              font-family: var(--font-mono);
+              color: var(--text-muted);
+              margin-left: auto;
+            "
+          ></span>
+        </div>
+        <div
+          id="ww-form"
+          style="
+            display: none;
+            padding: 6px 10px 4px;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+          "
+        >
+          <input
+            id="ww-form-label"
+            type="text"
+            placeholder="Имя (Василий)"
+            style="
+              width: 120px;
+              background: var(--bg-card);
+              border: 1px solid var(--hairline);
+              border-radius: 4px;
+              color: var(--text-primary);
+              font-family: var(--font-mono);
+              font-size: 13px;
+              padding: 5px 8px;
+            "
+          />
+          <input
+            id="ww-form-addr"
+            type="text"
+            placeholder="0x…"
+            style="
+              flex: 1;
+              min-width: 200px;
+              background: var(--bg-card);
+              border: 1px solid var(--hairline);
+              border-radius: 4px;
+              color: var(--text-primary);
+              font-family: var(--font-mono);
+              font-size: 12px;
+              padding: 5px 8px;
+            "
+          />
+          <button
+            id="ww-form-save"
+            style="
+              background: var(--accent, #6366f1);
+              color: #fff;
+              border: none;
+              border-radius: 4px;
+              padding: 5px 14px;
+              font-size: 13px;
+              cursor: pointer;
+            "
+          >
+            Save
+          </button>
+          <button
+            id="ww-form-cancel"
+            style="
+              background: none;
+              border: 1px solid var(--hairline);
+              border-radius: 4px;
+              color: var(--text-muted);
+              font-size: 13px;
+              padding: 5px 10px;
+              cursor: pointer;
+            "
+          >
+            Cancel
+          </button>
+        </div>
+        <div style="overflow-x: auto; max-height: 480px; overflow-y: auto">
+          <table class="data-table" id="ww-table">
+            <thead>
+              <tr>
+                <th>Whale</th>
+                <th data-ww-sort="coin" class="r ww-sortable">Coin</th>
+                <th class="r">Side</th>
+                <th
+                  data-ww-sort="sizeUsd"
+                  class="r ww-sortable ww-sort-active ww-sort-desc"
+                >
+                  Size
+                </th>
+                <th class="r">Lev</th>
+                <th
+                  data-ww-sort="unrealizedPnl"
+                  class="r ww-sortable"
+                  title="Unrealized P&L"
+                >
+                  uPnL
+                </th>
+                <th class="r">Entry</th>
+                <th
+                  data-ww-sort="firstSeenAt"
+                  class="r ww-sortable"
+                  title="Когда позиция впервые замечена"
+                >
+                  Since
+                </th>
+              </tr>
+            </thead>
+            <tbody id="ww-tbody">
+              <tr>
+                <td colspan="8" class="empty-state">загружаем…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div
+          id="ww-footer"
+          style="
+            padding: 4px 10px 6px;
+            font-size: 11px;
+            font-family: var(--font-mono);
+            color: var(--text-faint);
+          "
+        ></div>
+        <div
+          id="ww-leaderboard-section"
+          style="border-top: 1px solid var(--hairline); padding: 8px 10px 4px"
+        >
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              gap: 8px;
+              margin-bottom: 6px;
+            "
+          >
+            <span
+              style="
+                font-size: 11px;
+                font-family: var(--font-mono);
+                color: var(--text-muted);
+                font-weight: 600;
+                text-transform: uppercase;
+                letter-spacing: 0.06em;
+              "
+              >HL Leaderboard</span
+            >
+            <button
+              id="ww-lb-load"
+              style="
+                background: none;
+                border: 1px solid var(--hairline);
+                border-radius: 4px;
+                color: var(--text-muted);
+                font-size: 11px;
+                font-family: var(--font-mono);
+                padding: 2px 8px;
+                cursor: pointer;
+                white-space: nowrap;
+              "
+            >
+              Load top 30
+            </button>
+            <span
+              id="ww-lb-meta"
+              style="
+                font-size: 10px;
+                font-family: var(--font-mono);
+                color: var(--text-faint);
+              "
+            ></span>
+          </div>
+          <div style="overflow-x: auto; display: none" id="ww-lb-table-wrap">
+            <table class="data-table" id="ww-lb-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Address / Name</th>
+                  <th class="r">Account $</th>
+                  <th class="r">30d PnL</th>
+                  <th class="r">30d ROI</th>
+                  <th class="r">30d Vol</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="ww-lb-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <footer id="footer-status">
+        <span>Connecting to core…</span>
+        <a
+          href="/logout"
+          class="logout-link"
+          id="logout-link"
+          style="display: none"
+          >Sign out</a
+        >
+      </footer>
+    </div>
+
+    <script type="module" src="/lab.js"></script>
+  </body>
+</html>

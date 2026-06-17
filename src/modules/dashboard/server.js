@@ -389,9 +389,11 @@ async function getStatusData() {
     }
   }
 
-  // Hot Movers едут в WS-статусе (≤2с свежесть вместо 10с-поллинга). Кэш TTL
-  // дедупит compute между броадкастом и HTTP /api/signals.
-  const hotMovers = await getMoversPayloadCached(30);
+  // Hot Movers едут в WS-статусе (≤2с свежесть вместо 10с-поллинга). enrich=false:
+  // always-on броадкаст НЕ дёргает candleSnapshot (Vol×/HTF) — иначе шторм
+  // тяжёлых запросов выжирал весовой бюджет HL и 429-ил торговые чтения. Строки
+  // (цена/спайки/окна/OI) считаются локально. Vol×/HTF — по запросу /api/signals.
+  const hotMovers = await getMoversPayloadCached(30, false);
 
   return {
     mode: config.mode,

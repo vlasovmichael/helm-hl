@@ -1,8 +1,8 @@
 import "./src/styles/index.scss";
 // ─────────────────────────────────────────────────
-//  index.html — «радар»: header/position, divergence, hot movers,
-//  market context, setup scanner, whale watch, trade-модалка.
-//  Графики/strategies/pnl/logs живут на других страницах — сюда не грузятся.
+//  index.html — «радар»: header/position, hot movers, market context,
+//  setup scanner, trade-модалка.
+//  Divergence/whale → /lab.html; графики/strategies/pnl/logs — др. страницы.
 // ─────────────────────────────────────────────────
 
 import {
@@ -28,15 +28,6 @@ import {
   updateHotMoversLiveArrow,
 } from "./src/hotMovers/render.js";
 import { renderMarketContext } from "./src/features/marketContext.js";
-import {
-  initWhaleWatch,
-  setOnPositionsUpdated,
-} from "./src/features/whaleWatch.js";
-import {
-  divRefresh,
-  renderBtcDivergence,
-  initDivergenceUi,
-} from "./src/features/divergence.js";
 import { initModals } from "./src/features/modals.js";
 import {
   initSetupScanner,
@@ -111,12 +102,11 @@ mountTopnav("dashboard");
 bindTheme();
 bindRange(() => tick());
 initModals();
-initWebSocket({ onStatus, onDivergence: () => divRefresh() });
+// BTC Divergence + Whale Watch вынесены на /lab.html — их HL-поллинг
+// (candleSnapshot/metaAndAssetCtxs) грузится только когда открыта Lab, а не на
+// торговом дашборде (разгрузка весового бюджета HL, защита от 429). 2026-06-17.
+initWebSocket({ onStatus });
 tick();
-initDivergenceUi();
-divRefresh();
-setOnPositionsUpdated(() => renderBtcDivergence(null));
-initWhaleWatch();
 setInterval(tick, REFRESH_MS);
 startFooterTimer();
 initSetupScanner({ fmtTime });

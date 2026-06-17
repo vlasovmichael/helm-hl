@@ -17,19 +17,14 @@
 
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
-import {
-  savePosition,
-  getHistorySince,
-  getArchivedHistorySince,
-  getBotOidsSince,
-} from '../core/database.js';
+import { savePosition } from '../core/database.js';
 import { getAccountSummary } from '../modules/exchange.js';
 import {
   placeHunterTrigger,
   placeHunterLongTrigger,
 } from '../modules/executor/hunterOpen.js';
 import { resolveAsset } from '../modules/executor/fill-parser.js';
-import { fetchUserFills, reconstructManualTrades } from '../modules/userFills.js';
+import { fetchUserFills } from '../modules/userFills.js';
 import { isQuietHour } from '../modules/setupScannerAlerts.js';
 import { atr } from '../modules/trendFollowAtr.js';
 import { getHourlyCandles } from '../modules/candleCache.js';
@@ -76,11 +71,50 @@ export async function computeStopDistPct(coin) {
 }
 
 /**
+ * Время открытия ТЕКУЩЕЙ непрерывной позиции по монете из сырых HL fills.
+ *
+ * Берём правду с биржи без реконструкции ручной истории: позиция на бирже =
+ * знаковая сумма ВСЕХ fills (и бот, и ручных). Идём по fills во времени, держим
+ * net-размер; открытие текущей позы = момент, когда |net| ушёл от нуля (или
+ * сменил знак). Бот-закрытие усыновлённой позы (Close-fill) при этом естественно
+ * обнуляет net → фантомные «висящие» ноги, которые копила фильтрация бот-fills по
+ * oid, физически невозможны (XPL incident 2026-06-17: adopt считал свежую позу
+ * возрастом 6888мин и отказывал по too-old → поза без стопа → −$7.36).
+ *
+ * @param {Array} fills — сырые HL fills (как из fetchUserFills), любой порядок.
+ * @returns {number|null} unix ms открытия текущей позы, либо null если по монете
+ *   нет открытой позы в пределах загруженного окна fills.
+ */
+export function resolveManualOpenTime({ coin, fills }) {
+  const C = String(coin).toUpperCase();
+  const list = (fills || [])
+    .filter((f) => f.coin?.toUpperCase() === C && typeof f.dir === 'string')
+    .sort((a, b) => a.time - b.time);
+
+  const EPS = 1e-9;
+  let net = 0;          // знаковый размер: >0 long, <0 short
+  let openTime = null;
+  for (const f of list) {
+    const sz = Math.abs(Number(f.sz) || 0);
+    const isOpen = f.dir.startsWith('Open ');
+    const isLong = f.dir.includes('Long');
+    // long-открытие / short-закрытие → +sz; short-открытие / long-закрытие → −sz
+    const signed = isOpen === isLong ? sz : -sz;
+    const prev = net;
+    net += signed;
+    if (Math.abs(net) < EPS) {
+      openTime = null;                                    // поза схлопнулась
+    } else if (Math.abs(prev) < EPS || (prev > 0) !== (net > 0)) {
+      openTime = f.time;                                  // 0→поза или разворот знака
+    }
+  }
+  return openTime;
+}
+
+/**
  * Время открытия текущей ОТКРЫТОЙ ручной позиции по монете (unix ms) или null.
- * Используем reconstructManualTrades (тот же источник, что дашборд) — он
- * отслеживает running size по fills и отдаёт entryTime открытой ноги, исключая
- * fills бота по oid. null → не смогли определить (тогда из осторожности НЕ
- * подхватываем — не усыновляем позу неизвестного возраста).
+ * Источник — сырые HL fills (правда с биржи), см. resolveManualOpenTime. null →
+ * не смогли определить (поза старше окна fills) → из осторожности НЕ подхватываем.
  */
 async function getManualOpenTime(coin) {
   let fills;
@@ -90,16 +124,7 @@ async function getManualOpenTime(coin) {
     logger.debug(`[Adopt] fetchUserFills failed: ${err.message}`);
     return null;
   }
-  const botTrades = [
-    ...getHistorySince(0).map((t) => ({ coin: t.coin, entry_time: t.entry_time, closed_at: t.closed_at })),
-    ...getArchivedHistorySince(0).map((t) => ({ coin: t.coin, entry_time: t.entry_time, closed_at: t.closed_at })),
-  ];
-  const botOidSet = getBotOidsSince(0);
-  const trades = reconstructManualTrades(fills, botTrades, botOidSet);
-  const open = trades.find(
-    (t) => t.status === 'open' && t.coin.toUpperCase() === coin.toUpperCase(),
-  );
-  return open ? open.entryTime : null;
+  return resolveManualOpenTime({ coin, fills });
 }
 
 /** ntfy-пуш (best-effort). Тихий час 00–08 → priority=1 (без звука). */
