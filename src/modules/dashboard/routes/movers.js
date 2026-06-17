@@ -165,7 +165,13 @@ async function enrichHtfTrend(items, now) {
   return items;
 }
 
-async function buildMoversPayload(limit = 12) {
+// enrich=false → строит Hot Movers БЕЗ тяжёлых candleSnapshot (Vol× / HTF-тренд).
+// Это путь always-on WS-броадкаста: он крутится каждые 2с пока открыта любая
+// вкладка, и его candleSnapshot-шторм выжирал весовой бюджет HL → 429 рикошетом
+// в торговые чтения (get-positions/balance). Без enrich payload делает 0 запросов
+// к HL (всё из state.latestHunter + priceHistory + oiHistory). Vol×/HTF остаются
+// доступны по запросу через /api/signals (enrich=true) для отдельной страницы. 2026-06-17.
+async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
   try {
     const data = Array.isArray(state.latestHunter) ? state.latestHunter : [];
     const now = state.latestHunterAt || Date.now();
@@ -358,16 +364,18 @@ async function buildMoversPayload(limit = 12) {
     // Обогащаем top vol-мультипликатором (≤ENRICH_CAP монет; per-coin кэш гасит
     // повторы). + активные монеты, даже если они упали за кап — чтобы Vol×
     // позиции не висел «…» в самой важной строке.
-    const toEnrich = top.slice(0, ENRICH_CAP);
-    const enrichSet = new Set(toEnrich.map((m) => m.coin));
-    for (const m of top) {
-      if (m.isActive && !enrichSet.has(m.coin)) {
-        toEnrich.push(m);
-        enrichSet.add(m.coin);
+    if (enrich) {
+      const toEnrich = top.slice(0, ENRICH_CAP);
+      const enrichSet = new Set(toEnrich.map((m) => m.coin));
+      for (const m of top) {
+        if (m.isActive && !enrichSet.has(m.coin)) {
+          toEnrich.push(m);
+          enrichSet.add(m.coin);
+        }
       }
+      await enrichVolMult(toEnrich);
+      await enrichHtfTrend(toEnrich, now);
     }
-    await enrichVolMult(toEnrich);
-    await enrichHtfTrend(toEnrich, now);
 
     // Breadth-слив: синхронный делевередж лидеров движения (OI↓ у многих) →
     // fade против движения = лов ножа. Клиент гасит actionable у таких вердиктов.
@@ -403,23 +411,29 @@ async function buildMoversPayload(limit = 12) {
 // Кэш Hot Movers: WS-броадкаст зовёт каждые 2с — считаем не чаще TTL, чтобы
 // тяжёлую сборку (окна по вселенной + enrichVolMult) не гонять на каждый кадр.
 // Тот же кэш обслуживает HTTP /api/signals (дедуп compute).
-const _moversCache = { ts: 0, limit: null, payload: null };
+// Раздельный кэш для enriched/cheap — у них разная стоимость и разные
+// потребители (broadcast зовёт cheap, /api/signals — enriched).
+const _moversCache = {
+  true:  { ts: 0, limit: null, payload: null },
+  false: { ts: 0, limit: null, payload: null },
+};
 const MOVERS_CACHE_TTL_MS = 3000;
 
-export async function getMoversPayloadCached(limit = 12) {
+export async function getMoversPayloadCached(limit = 12, enrich = true) {
   const now = Date.now();
+  const slot = _moversCache[enrich ? "true" : "false"];
   if (
-    _moversCache.payload &&
-    _moversCache.limit === limit &&
-    now - _moversCache.ts < MOVERS_CACHE_TTL_MS
+    slot.payload &&
+    slot.limit === limit &&
+    now - slot.ts < MOVERS_CACHE_TTL_MS
   ) {
-    return _moversCache.payload;
+    return slot.payload;
   }
-  const payload = await buildMoversPayload(limit);
+  const payload = await buildMoversPayload(limit, { enrich });
   if (payload) {
-    _moversCache.ts = now;
-    _moversCache.limit = limit;
-    _moversCache.payload = payload;
+    slot.ts = now;
+    slot.limit = limit;
+    slot.payload = payload;
   }
   return payload;
 }
