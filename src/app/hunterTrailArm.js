@@ -13,7 +13,7 @@ import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getPositionsCached, cancelOrderFor, getOpenOrders } from '../modules/exchange.js';
 import { getActivePosition, updateHunterTriggerOids } from '../core/database.js';
-import { placeHunterTrigger } from '../modules/executor/production.js';
+import { placeHunterTrigger } from '../modules/executor/hunterOpen.js';
 import { resolveAsset } from '../modules/executor/fill-parser.js';
 import {
   consumeHunterArmRequest,

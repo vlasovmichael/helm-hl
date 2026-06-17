@@ -27,7 +27,7 @@ import { getAccountSummary } from '../modules/exchange.js';
 import {
   placeHunterTrigger,
   placeHunterLongTrigger,
-} from '../modules/executor/production.js';
+} from '../modules/executor/hunterOpen.js';
 import { resolveAsset } from '../modules/executor/fill-parser.js';
 import { fetchUserFills, reconstructManualTrades } from '../modules/userFills.js';
 import { isQuietHour } from '../modules/setupScannerAlerts.js';
