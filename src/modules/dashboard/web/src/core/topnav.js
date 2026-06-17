@@ -23,12 +23,16 @@ const ICONS = {
     <path d="M4 5a2 2 0 0 1 2-2h12a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2z" />
     <line x1="4" y1="17" x2="19" y2="17" />
     <line x1="9" y1="3" x2="9" y2="21" />`,
+  lab: `
+    <path d="M9 3h6M10 3v6.5L5.5 17a2 2 0 0 0 1.8 3h9.4a2 2 0 0 0 1.8-3L14 9.5V3" />
+    <line x1="8" y1="14" x2="16" y2="14" />`,
 };
 
 const LINKS = [
   { key: "dashboard", href: "/", label: "Dashboard" },
   { key: "statistics", href: "/statistics.html", label: "Statistics" },
   { key: "ledger", href: "/ledger.html", label: "Ledger", title: "Monthly P&L ledger" },
+  { key: "lab", href: "/lab.html", label: "Lab", title: "Research: BTC Divergence + Whale Watch" },
 ];
 
 const navLink = (l, active) => {
@@ -45,7 +49,7 @@ const navLink = (l, active) => {
 /**
  * Рендерит topnav в placeholder `#topnav`. Вызывать ДО bindTheme() — иначе
  * .theme-btn ещё не существуют в DOM.
- * @param {'dashboard'|'statistics'|'ledger'} active
+ * @param {'dashboard'|'statistics'|'ledger'|'lab'} active
  */
 export function mountTopnav(active) {
   const nav = document.getElementById("topnav");
