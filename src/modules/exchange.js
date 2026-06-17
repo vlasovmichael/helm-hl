@@ -491,3 +491,117 @@ export async function getLivePrice(coin) {
     return null;
   }
 }
+
+// ─────────────────────────────────────────────────
+//  Order primitives — единственный шов к торговому API биржи
+// ─────────────────────────────────────────────────
+//
+// ЗАЧЕМ ЭТОТ БЛОК: раньше executor лез в SDK напрямую
+// (getExchange().custom.marketOpen / .exchange.placeOrder / .cancelOrder) и
+// сам лепил суффикс "-PERP". Это «протекающая абстракция»: смена биржи
+// требовала правок по всему executor'у. Теперь ВСЯ торговля идёт через эти 4
+// примитива — при переезде на другую биржу переписываются только они
+// (+ парсинг fills), а не логика стратегий.
+//
+// Поведение 1:1 с прежними сырыми вызовами. Retry/backoff осознанно НЕ здесь:
+// он остаётся на местах вызова (разные label/maxRetries под операцию).
+// Формат цены (formatHlPrice) пока тоже у вызова — это HL-математика; в шаг 2
+// (под конкретную новую биржу) она переедет внутрь placeTrigger.
+
+/**
+ * Маркет-открытие (IoC-лимит как имитация маркета на HL).
+ * @param {string}  coin     — "ETH" (без "-PERP")
+ * @param {boolean} isBuy    — long=true (BUY), short=false (SELL)
+ * @param {number}  sz       — размер
+ * @param {number}  slippage — допустимый слип (доля, напр. 0.02)
+ * @returns {Promise<Object>} — сырой результат SDK (со statuses)
+ */
+export function openMarket(coin, isBuy, sz, slippage) {
+  return getExchange().custom.marketOpen(`${coin}-PERP`, isBuy, sz, undefined, slippage);
+}
+
+/**
+ * Маркет-закрытие позиции.
+ * @param {string} coin     — "ETH" (без "-PERP")
+ * @param {number} sz       — размер к закрытию
+ * @param {number} slippage — допустимый слип
+ * @returns {Promise<Object>} — сырой результат SDK
+ */
+export function closeMarket(coin, sz, slippage) {
+  return getExchange().custom.marketClose(`${coin}-PERP`, sz, undefined, slippage);
+}
+
+/**
+ * Размещение trigger-ордера (SL/TP). px должен быть УЖЕ отформатирован под
+ * правила биржи (см. formatHlPrice).
+ * @param {Object}  p
+ * @param {string}  p.coin       — "ETH"
+ * @param {boolean} p.isBuy      — направление закрытия
+ * @param {number}  p.sz
+ * @param {number}  p.px         — цена-плейсхолдер limit_px (= triggerPx)
+ * @param {'sl'|'tp'} p.tpsl
+ * @param {boolean} [p.reduceOnly=true]
+ * @param {boolean} [p.isMarket=true]
+ * @returns {Promise<Object>} — сырой результат SDK (со statuses)
+ */
+export function placeTrigger({ coin, isBuy, sz, px, tpsl, reduceOnly = true, isMarket = true }) {
+  return getExchange().exchange.placeOrder({
+    coin: `${coin}-PERP`,
+    is_buy: isBuy,
+    sz,
+    limit_px: px,
+    order_type: { trigger: { triggerPx: px, isMarket, tpsl } },
+    reduce_only: reduceOnly,
+  });
+}
+
+/**
+ * Размещение лимитного ордера. Используется снайпером (post-only Alo).
+ * px должен быть валиден под правила биржи.
+ * @param {Object}  p
+ * @param {string}  p.coin
+ * @param {boolean} p.isBuy
+ * @param {number}  p.sz
+ * @param {number}  p.px         — лимитная цена
+ * @param {string}  [p.tif='Alo'] — time-in-force ('Alo' = post-only, 'Gtc', 'Ioc')
+ * @param {boolean} [p.reduceOnly=true]
+ * @returns {Promise<Object>} — сырой результат SDK (со statuses)
+ */
+export function placeLimit({ coin, isBuy, sz, px, tif = 'Alo', reduceOnly = true }) {
+  return getExchange().exchange.placeOrder({
+    coin: `${coin}-PERP`,
+    is_buy: isBuy,
+    sz,
+    limit_px: px,
+    order_type: { limit: { tif } },
+    reduce_only: reduceOnly,
+  });
+}
+
+/**
+ * Отмена ордера по oid.
+ * @param {string} coin — "ETH" (без "-PERP")
+ * @param {number} oid
+ * @returns {Promise<Object>}
+ */
+export function cancelOrderFor(coin, oid) {
+  return getExchange().exchange.cancelOrder({ coin: `${coin}-PERP`, o: oid });
+}
+
+/**
+ * L2-ордербук по монете (чтение). Снайпер берёт отсюда bestBid/bestAsk.
+ * @param {string} coin — "ETH" (без "-PERP")
+ * @returns {Promise<Object>} — сырой L2Book SDK
+ */
+export function getOrderBook(coin) {
+  return getExchange().info.getL2Book(`${coin}-PERP`);
+}
+
+/**
+ * Открытые ордера аккаунта (чтение). Реконсайлеры берут отсюда живые
+ * trigger-oid'ы для сверки с БД.
+ * @returns {Promise<Array>} — сырой список open orders SDK
+ */
+export function getOpenOrders() {
+  return getExchange().info.getUserOpenOrders(config.wallet.address);
+}

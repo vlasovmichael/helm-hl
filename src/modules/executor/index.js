@@ -19,7 +19,7 @@ import {
   productionHunterOpen, productionHunterLongOpen, productionTrendFollowOpen,
 } from './production.js';
 import { productionArmSniper, finalizeProdSniperPartial } from './sniper.js';
-import { getExchange } from '../exchange.js';
+import { cancelOrderFor } from '../exchange.js';
 import {
   notifyRotate, notifyRotateFailed,
   notifyOpenBlocked, notifyDrawdownBreached,
@@ -376,7 +376,7 @@ async function handleClose(signal, position) {
       // PROD-слот мог иметь живой ордер — пробуем отменить.
       if (slot.mode === 'PROD' && slot.orderId) {
         try {
-          await getExchange().exchange.cancelOrder({ coin: `${slot.coin}-PERP`, o: slot.orderId });
+          await cancelOrderFor(slot.coin, slot.orderId);
           logger.info(`[Executor] cancelled stale Sniper oid=${slot.orderId} on #${slot.coin}`);
         } catch (err) {
           logger.warn(`[Executor] failed to cancel stale Sniper oid=${slot.orderId}: ${err.message}`);
@@ -422,7 +422,7 @@ async function handleClose(signal, position) {
     );
     if (emergencySlot.mode === 'PROD' && emergencySlot.orderId) {
       try {
-        await getExchange().exchange.cancelOrder({ coin: `${emergencySlot.coin}-PERP`, o: emergencySlot.orderId });
+        await cancelOrderFor(emergencySlot.coin, emergencySlot.orderId);
         logger.info(`[Executor] emergency cancel of Sniper oid=${emergencySlot.orderId} on #${emergencySlot.coin}`);
       } catch (err) {
         logger.warn(`[Executor] emergency cancelOrder failed (oid=${emergencySlot.orderId}): ${err.message}`);
@@ -451,7 +451,7 @@ async function handleClose(signal, position) {
     const triggerOids = [position.hunter_sl_oid, position.hunter_tp_oid].filter(Boolean);
     for (const oid of triggerOids) {
       try {
-        await getExchange().exchange.cancelOrder({ coin: `${position.coin}-PERP`, o: oid });
+        await cancelOrderFor(position.coin, oid);
         logger.info(`[Executor] HUNTER pre-close cancel #${position.coin} trigger oid=${oid}`);
       } catch (err) {
         // Триггер мог уже сработать / быть отменённым reconciler'ом — это OK.

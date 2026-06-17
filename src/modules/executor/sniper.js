@@ -15,7 +15,8 @@ import { getActivePosition, closePosition as dbClosePosition } from '../../core/
 import { paperClose } from './paper.js';
 import { productionClose } from './production.js';
 import {
-  getExchange, getPositions, getMarkPrice,
+  getPositions, getMarkPrice,
+  placeLimit, closeMarket, cancelOrderFor, getOrderBook,
 } from '../exchange.js';
 import { retryWithBackoff } from '../../core/retry.js';
 import {
@@ -175,7 +176,6 @@ async function tickPaperSniper(scoutData) {
  * @param {Object} position — строка из БД
  */
 export async function productionArmSniper(signal, position) {
-  const exchange = getExchange();
   const coin = position.coin;
 
   // ── 1. Verify position alive on exchange ──
@@ -202,7 +202,7 @@ export async function productionArmSniper(signal, position) {
   let bestBid;
   try {
     const book = await retryWithBackoff(
-      () => exchange.info.getL2Book(`${coin}-PERP`),
+      () => getOrderBook(coin),
       { label: `sniper-l2-${coin}`, maxRetries: 2, baseDelayMs: 800 },
     );
     const bids = book?.levels?.[0];
@@ -250,14 +250,7 @@ export async function productionArmSniper(signal, position) {
   try {
     result = await retryWithBackoff(
       () =>
-        exchange.exchange.placeOrder({
-          coin: `${coin}-PERP`,
-          is_buy: true,
-          sz,
-          limit_px: bestBid,
-          order_type: { limit: { tif: 'Alo' } },
-          reduce_only: true,
-        }),
+        placeLimit({ coin, isBuy: true, sz, px: bestBid, tif: 'Alo' }),
       { label: `sniper-arm-${coin}`, maxRetries: 2, baseDelayMs: 1000 },
     );
   } catch (err) {
@@ -393,7 +386,6 @@ async function finalizeProdSniperFill(position, slot, elapsedMs) {
  * @returns {Promise<{ ok: boolean, pnl?: number, holdHours?: number, marketAvgPx?: number }>}
  */
 export async function finalizeProdSniperPartial(position, slot, reason) {
-  const exchange = getExchange();
   const coin = position.coin;
   const holdHours = (Date.now() - position.entry_time) / 3_600_000;
 
@@ -407,12 +399,7 @@ export async function finalizeProdSniperPartial(position, slot, reason) {
     try {
       result = await retryWithBackoff(
         () =>
-          exchange.custom.marketClose(
-            `${coin}-PERP`,
-            undefined,           // size: закрыть полностью что осталось
-            undefined,           // px: SDK берёт midPrice
-            MARKET_SLIPPAGE,
-          ),
+          closeMarket(coin, undefined, MARKET_SLIPPAGE), // size undefined → закрыть остаток
         { label: `sniper-partial-close-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
       );
     } catch (err) {
@@ -495,7 +482,6 @@ export async function finalizeProdSniperPartial(position, slot, reason) {
 }
 
 async function tickProductionSniper(slot) {
-  const exchange = getExchange();
   const coin = slot.coin;
   const elapsed = Date.now() - slot.armedAt;
 
@@ -564,7 +550,7 @@ async function tickProductionSniper(slot) {
       );
 
       try {
-        await exchange.exchange.cancelOrder({ coin: `${coin}-PERP`, o: slot.orderId });
+        await cancelOrderFor(coin, slot.orderId);
         logger.info(`[Sniper PROD] adverse-cancel OK for #${coin} oid=${slot.orderId}`);
       } catch (err) {
         logger.warn(
@@ -606,10 +592,7 @@ async function tickProductionSniper(slot) {
 
     // Cancel — игнорируем ошибки (ордер мог уже быть исполнен/отменён).
     try {
-      await exchange.exchange.cancelOrder({
-        coin: `${coin}-PERP`,
-        o: slot.orderId,
-      });
+      await cancelOrderFor(coin, slot.orderId);
       logger.info(`[Sniper PROD] cancelOrder OK for #${coin} oid=${slot.orderId}`);
     } catch (err) {
       logger.warn(

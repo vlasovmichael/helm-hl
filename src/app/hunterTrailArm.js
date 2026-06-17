@@ -11,7 +11,7 @@
 
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
-import { getExchange, getPositionsCached } from '../modules/exchange.js';
+import { getPositionsCached, cancelOrderFor, getOpenOrders } from '../modules/exchange.js';
 import { getActivePosition, updateHunterTriggerOids } from '../core/database.js';
 import { placeHunterTrigger } from '../modules/executor/production.js';
 import { resolveAsset } from '../modules/executor/fill-parser.js';
@@ -34,10 +34,7 @@ export async function processHunterTrailArm(position) {
   if (!consumeHunterArmRequest(position.id)) return;
 
   try {
-    await getExchange().exchange.cancelOrder({
-      coin: `${position.coin}-PERP`,
-      o:    position.hunter_tp_oid,
-    });
+    await cancelOrderFor(position.coin, position.hunter_tp_oid);
     setHunterArmed(position.id);
     logger.info(
       `[HunterTrail] 🔫 ARMED #${position.coin} (id=${position.id}): cancelled exchange TP oid=${position.hunter_tp_oid}. ` +
@@ -77,9 +74,8 @@ export async function restoreHunterTrailIfNeeded() {
 
   let openOrders, positions;
   try {
-    const sdk = getExchange();
     [openOrders, positions] = await Promise.all([
-      sdk.info.getUserOpenOrders(config.wallet.address),
+      getOpenOrders(),
       getPositionsCached(),
     ]);
   } catch (err) {

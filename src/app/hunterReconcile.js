@@ -17,7 +17,7 @@ import {
   getActivePosition,
   closePosition as dbClosePosition,
 } from '../core/database.js';
-import { getExchange, getPositionsCached } from '../modules/exchange.js';
+import { getPositionsCached, cancelOrderFor, getOpenOrders } from '../modules/exchange.js';
 import { ONE_LEG } from '../modules/executor/math.js';
 import { setCooldown } from '../modules/executor/state.js';
 import { recordHunterSlExternal, consumeHunterMfeMae, isHunterArmed } from '../modules/strategistSniper.js';
@@ -34,15 +34,13 @@ function isSameCoin(apiCoin, targetCoin) {
 }
 
 async function fetchOpenOrders() {
-  const sdk = getExchange();
-  // SDK info.getUserOpenOrders ожидает wallet address.
-  return sdk.info.getUserOpenOrders(config.wallet.address);
+  return getOpenOrders();
 }
 
 async function cancelTriggerSafe(coin, oid) {
   if (!oid) return;
   try {
-    await getExchange().exchange.cancelOrder({ coin: `${coin}-PERP`, o: oid });
+    await cancelOrderFor(coin, oid);
     logger.info(`[HunterRecon] cancelled stale trigger oid=${oid} on #${coin}`);
   } catch (err) {
     logger.warn(`[HunterRecon] cancel oid=${oid} failed (likely already gone): ${err.message}`);

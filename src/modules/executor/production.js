@@ -12,7 +12,10 @@ import {
   recordBotOid,
 } from '../../core/database.js';
 import {
-  getExchange,
+  openMarket,
+  closeMarket,
+  placeTrigger,
+  cancelOrderFor,
   getBalance,
   getAccountSummary,
   getPositions,
@@ -71,7 +74,7 @@ const OI_CAP_REGEX = /open\s*interest|oi\s*cap/i;
  * Открывает реальную SHORT-позицию на Hyperliquid.
  *
  * Стратегия дельта-нейтральная: шортим перп для сбора фандинга.
- * Ордер: IoC Limit (имитация маркета) через sdk.custom.marketOpen().
+ * Ордер: IoC Limit (имитация маркета) через exchange.openMarket().
  *
  * @param {string}  coin
  * @param {number}  price — текущая markPrice
@@ -80,7 +83,6 @@ const OI_CAP_REGEX = /open\s*interest|oi\s*cap/i;
  * @returns {Promise<{ ok: boolean, positionId?: number, sizeUsd?: number }>}
  */
 export async function productionOpen(coin, price, apy, silent = false, strategyId = 'carry', side = 'short', volIdx = 0) {
-  const exchange = getExchange();
   const isLong   = side === 'long';
   const orderLabel = isLong ? 'BUY' : 'SELL';
   const isBuy    = isLong; // is_buy=true → BUY (long), false → SELL (short)
@@ -197,13 +199,7 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
   try {
     result = await retryWithBackoff(
       () =>
-        exchange.custom.marketOpen(
-          `${coin}-PERP`,
-          isBuy, // is_buy: long=true (BUY), short=false (SELL)
-          sz,
-          undefined, // px: SDK берёт midPrice
-          MARKET_SLIPPAGE,
-        ),
+        openMarket(coin, isBuy, sz, MARKET_SLIPPAGE),
       { label: `open-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
     );
   } catch (err) {
@@ -362,23 +358,13 @@ export async function productionOpen(coin, price, apy, silent = false, strategyI
  * @param {'sl'|'tp'} tpsl
  */
 export async function placeHunterTrigger(coin, sz, triggerPx, tpsl, szDecimals) {
-  const exchange = getExchange();
   // HL отклоняет цены с >5 значащих цифр / >(6−szDecimals) десятичных.
   // Сырая `entry × 1.02` для низкопрайсовых монет (REZ ~$0.05) даёт 7 sig figs
   // → "Order has invalid price". Округляем здесь явно.
   const px = formatHlPrice(triggerPx, szDecimals);
   const result = await retryWithBackoff(
     () =>
-      exchange.exchange.placeOrder({
-        coin: `${coin}-PERP`,
-        is_buy: true, // закрытие SHORT → BUY reduce_only
-        sz,
-        // limit_px при isMarket=true игнорируется как цена исполнения, но HL требует поле.
-        // Используем triggerPx как безопасный плейсхолдер.
-        limit_px: px,
-        order_type: { trigger: { triggerPx: px, isMarket: true, tpsl } },
-        reduce_only: true,
-      }),
+      placeTrigger({ coin, isBuy: true, sz, px, tpsl }), // закрытие SHORT → BUY reduce_only
     { label: `hunter-${tpsl}-${coin}`, maxRetries: 2, baseDelayMs: 1000 },
   );
 
@@ -414,7 +400,6 @@ export async function placeHunterTrigger(coin, sz, triggerPx, tpsl, szDecimals) 
  * @param {boolean} [silent=false]
  */
 export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, silent = false, entryFeatures = null) {
-  const exchange = getExchange();
 
   // ── 1. Баланс ──
   let balance;
@@ -501,7 +486,7 @@ export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, si
   let result;
   try {
     result = await retryWithBackoff(
-      () => exchange.custom.marketOpen(`${coin}-PERP`, false, sz, undefined, MARKET_SLIPPAGE),
+      () => openMarket(coin, false, sz, MARKET_SLIPPAGE),
       { label: `hunter-open-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
     );
   } catch (err) {
@@ -635,12 +620,11 @@ export async function productionHunterOpen(coin, markPrice, spikePct, sl, tp, si
  * прерывает остальные. Главная цель — не оставить позицию без SL.
  */
 async function rollbackHunterOpen(coin, sz, dbId, fillPx, triggerOids) {
-  const exchange = getExchange();
 
   // Cancel уже поставленных триггеров (если есть)
   for (const oid of triggerOids) {
     try {
-      await exchange.exchange.cancelOrder({ coin: `${coin}-PERP`, o: oid });
+      await cancelOrderFor(coin, oid);
       logger.info(`[Executor] HUNTER ROLLBACK #${coin} — cancelled trigger oid=${oid}`);
     } catch (err) {
       logger.error(`[Executor] HUNTER ROLLBACK #${coin} — cancel oid=${oid} failed: ${err.message}`);
@@ -651,7 +635,7 @@ async function rollbackHunterOpen(coin, sz, dbId, fillPx, triggerOids) {
   let closeResult;
   try {
     closeResult = await retryWithBackoff(
-      () => exchange.custom.marketClose(`${coin}-PERP`, sz, undefined, MARKET_SLIPPAGE),
+      () => closeMarket(coin, sz, MARKET_SLIPPAGE),
       { label: `hunter-rollback-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
     );
   } catch (err) {
@@ -694,18 +678,10 @@ async function rollbackHunterOpen(coin, sz, dbId, fillPx, triggerOids) {
  * Отличие от placeHunterTrigger: is_buy=false (закрытие LONG → SELL).
  */
 export async function placeHunterLongTrigger(coin, sz, triggerPx, tpsl, szDecimals) {
-  const exchange = getExchange();
   const px = formatHlPrice(triggerPx, szDecimals);
   const result = await retryWithBackoff(
     () =>
-      exchange.exchange.placeOrder({
-        coin: `${coin}-PERP`,
-        is_buy: false, // закрытие LONG → SELL reduce_only
-        sz,
-        limit_px: px,
-        order_type: { trigger: { triggerPx: px, isMarket: true, tpsl } },
-        reduce_only: true,
-      }),
+      placeTrigger({ coin, isBuy: false, sz, px, tpsl }), // закрытие LONG → SELL reduce_only
     { label: `hunter-long-${tpsl}-${coin}`, maxRetries: 2, baseDelayMs: 1000 },
   );
 
@@ -730,7 +706,6 @@ export async function placeHunterLongTrigger(coin, sz, triggerPx, tpsl, szDecima
  * При сбое триггеров — rollback (cancel + market SELL).
  */
 export async function productionHunterLongOpen(coin, markPrice, dumpPct, sl, tp, silent = false, entryFeatures = null) {
-  const exchange = getExchange();
 
   let balance;
   try {
@@ -809,7 +784,7 @@ export async function productionHunterLongOpen(coin, markPrice, dumpPct, sl, tp,
   let result;
   try {
     result = await retryWithBackoff(
-      () => exchange.custom.marketOpen(`${coin}-PERP`, true, sz, undefined, MARKET_SLIPPAGE),
+      () => openMarket(coin, true, sz, MARKET_SLIPPAGE),
       { label: `hunter-long-open-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
     );
   } catch (err) {
@@ -930,11 +905,10 @@ export async function productionHunterLongOpen(coin, markPrice, dumpPct, sl, tp,
  * Откат при сбое триггеров для LONG: cancel triggers + market SELL для закрытия long.
  */
 async function rollbackHunterLongOpen(coin, sz, dbId, fillPx, triggerOids) {
-  const exchange = getExchange();
 
   for (const oid of triggerOids) {
     try {
-      await exchange.exchange.cancelOrder({ coin: `${coin}-PERP`, o: oid });
+      await cancelOrderFor(coin, oid);
       logger.info(`[Executor] HUNTER_LONG ROLLBACK #${coin} — cancelled trigger oid=${oid}`);
     } catch (err) {
       logger.error(`[Executor] HUNTER_LONG ROLLBACK #${coin} — cancel oid=${oid} failed: ${err.message}`);
@@ -944,7 +918,7 @@ async function rollbackHunterLongOpen(coin, sz, dbId, fillPx, triggerOids) {
   let closeResult;
   try {
     closeResult = await retryWithBackoff(
-      () => exchange.custom.marketClose(`${coin}-PERP`, sz, undefined, MARKET_SLIPPAGE),
+      () => closeMarket(coin, sz, MARKET_SLIPPAGE),
       { label: `hunter-long-rollback-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
     );
   } catch (err) {
@@ -991,7 +965,6 @@ async function rollbackHunterLongOpen(coin, sz, dbId, fillPx, triggerOids) {
 export async function productionTrendFollowOpen(
   coin, markPrice, direction, sl, tp, silent = false, entryFeatures = null,
 ) {
-  const exchange = getExchange();
   const isLong   = direction === 'LONG';
   const sideLbl  = isLong ? 'LONG' : 'SHORT';
   const placeTrigger = isLong ? placeHunterLongTrigger : placeHunterTrigger;
@@ -1049,7 +1022,7 @@ export async function productionTrendFollowOpen(
   let result;
   try {
     result = await retryWithBackoff(
-      () => exchange.custom.marketOpen(`${coin}-PERP`, isLong, sz, undefined, MARKET_SLIPPAGE),
+      () => openMarket(coin, isLong, sz, MARKET_SLIPPAGE),
       { label: `chillboy-open-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
     );
   } catch (err) {
@@ -1168,11 +1141,10 @@ export async function productionTrendFollowOpen(
  * marketClose сам инвертирует направление по open-позиции.
  */
 async function rollbackTrendFollowOpen(coin, sz, dbId, fillPx, isLong, triggerOids) {
-  const exchange = getExchange();
 
   for (const oid of triggerOids) {
     try {
-      await exchange.exchange.cancelOrder({ coin: `${coin}-PERP`, o: oid });
+      await cancelOrderFor(coin, oid);
       logger.info(`[Executor] CHILLBOY ROLLBACK #${coin} — cancelled trigger oid=${oid}`);
     } catch (err) {
       logger.error(`[Executor] CHILLBOY ROLLBACK #${coin} — cancel oid=${oid} failed: ${err.message}`);
@@ -1182,7 +1154,7 @@ async function rollbackTrendFollowOpen(coin, sz, dbId, fillPx, isLong, triggerOi
   let closeResult;
   try {
     closeResult = await retryWithBackoff(
-      () => exchange.custom.marketClose(`${coin}-PERP`, sz, undefined, MARKET_SLIPPAGE),
+      () => closeMarket(coin, sz, MARKET_SLIPPAGE),
       { label: `chillboy-rollback-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
     );
   } catch (err) {
@@ -1232,7 +1204,6 @@ async function rollbackTrendFollowOpen(coin, sz, dbId, fillPx, isLong, triggerOi
  * @returns {Promise<{ ok: boolean, pnl?: number, holdHours?: number }>}
  */
 export async function productionClose(signal, position, silent = false) {
-  const exchange = getExchange();
   const coin = position.coin;
   // Close-направление инвертируется к open: short→BUY, long→SELL.
   const posSide      = position.side || 'short';
@@ -1288,12 +1259,7 @@ export async function productionClose(signal, position, silent = false) {
   try {
     result = await retryWithBackoff(
       () =>
-        exchange.custom.marketClose(
-          `${coin}-PERP`,
-          undefined, // size: закрыть полностью
-          undefined, // px: SDK берёт midPrice
-          MARKET_SLIPPAGE,
-        ),
+        closeMarket(coin, undefined, MARKET_SLIPPAGE), // size undefined → закрыть полностью
       { label: `close-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
     );
   } catch (err) {
