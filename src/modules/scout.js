@@ -347,10 +347,10 @@ export async function scan() {
   // HYPE 2026-05-15). APY/liquidity-фильтры гейтят ВХОД, а не управление открытой
   // позицией — её надо видеть, чтобы штатно выйти (negative_funding).
   const activeCoin = (getActivePosition()?.coin || '').toUpperCase();
-  // Paper shadow-слоты (ChillBoy, Fader) нуждаются в свежей цене для SL/TP /
-  // exit-check. Без этого, если coin выпадает из hunterSet/liquidSet, exit-check
-  // получает item=undefined и пропускает SL/TP (инцидент BTC id=90, 2026-05-22).
-  // Пинним ВСЕ активные paper-коины — независимые слоты Fader+ChillBoy сосуществуют.
+  // Paper shadow-слоты нуждаются в свежей цене для SL/TP / exit-check. Без
+  // этого, если coin выпадает из hunterSet/liquidSet, exit-check получает
+  // item=undefined и пропускает SL/TP (инцидент BTC id=90, 2026-05-22).
+  // Пинним ВСЕ активные paper-коины — независимые слоты сосуществуют.
   const activePaperCoins = getActivePaperCoins();
   // Живые/ручные позы (бот + adopt/HANDS-OFF) пинним в hunter-scope так же, как
   // paper. Иначе монета, которую оператор ДЕРЖИТ, но которой нет в hunterSet (ниже
@@ -436,11 +436,11 @@ export async function scan() {
       pushPriceHistory(coin, price);
     }
 
-    // ── Carry/Fade scope: тот же price + funding, но только для liquidSet ──
-    // isHeld: главная активная поза ИЛИ любой активный paper-коин (ChillBoy/
-    // Fader/CandyGirl). CandyGirl exit-check читает scoutData (не hunterData),
-    // поэтому held paper-coin обязан попасть и сюда — иначе SL/TP пропускаются
-    // и сыплется "#COIN нет в scoutData" (SUI 2026-06-03).
+    // ── liquidSet scope: тот же price + funding, но только для liquidSet ──
+    // isHeld: главная активная поза ИЛИ любой активный paper-коин. CandyGirl
+    // exit-check читает scoutData (не hunterData), поэтому held paper-coin
+    // обязан попасть и сюда — иначе SL/TP пропускаются и сыплется
+    // "#COIN нет в scoutData" (SUI 2026-06-03).
     const isHeld = coinUpper === activeCoin || isHeldPaper;
     if (liquidSet.size > 0 && !liquidSet.has(coinUpper) && !isHeld) {
       skippedIlliquid++;

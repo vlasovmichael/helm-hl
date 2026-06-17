@@ -648,43 +648,6 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     align-items: center;
     gap: 3px;
   }
-
-  /* ── Fader Setup column (Strategy #5) ──
-     Цвет фона — по direction (что фейдим), не по tier:
-       SHORT (fade pump) → зелёный
-       LONG  (fade dump) → красный
-     Tier контролируется иконкой и насыщенностью. RED tier (skip) — без цвета. */
-  &.fader-go-short {
-    background: rgba(34, 197, 94, 0.24);
-    color: var(--green);
-  }
-  &.fader-go-long {
-    background: rgba(239, 68, 68, 0.24);
-    color: var(--red);
-  }
-  &.fader-wait-short {
-    background: rgba(34, 197, 94, 0.1);
-    color: var(--green);
-  }
-  &.fader-wait-long {
-    background: rgba(239, 68, 68, 0.1);
-    color: var(--red);
-  }
-  &.fader-wait-neutral {
-    background: transparent;
-    color: var(--text-muted);
-    font-weight: 500;
-  }
-  &.fader-skip {
-    background: transparent;
-    color: var(--text-faint);
-    font-weight: 500;
-  }
-  .fader-lbl {
-    vertical-align: middle;
-    font-size: 11px;
-    letter-spacing: 0.3px;
-  }
 }
 .signals-table .signals-sltp {
   white-space: nowrap;
@@ -924,8 +887,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   .hm-table tr.hm-main td.hm-setup.setup-wait-long .hm-setup-pill,
   .hm-table tr.hm-main td.hm-setup.setup-fade-wait-short .hm-setup-pill,
   .hm-table tr.hm-main td.hm-setup.setup-fade-wait-long .hm-setup-pill,
-  .hm-table tr.hm-main td.hm-setup.setup-none .hm-setup-pill,
-  .hm-table tr.hm-main td.hm-setup.fader-wait-neutral .hm-setup-pill {
+  .hm-table tr.hm-main td.hm-setup.setup-none .hm-setup-pill {
     padding-left: 0;
     background: transparent;
     box-shadow: none;

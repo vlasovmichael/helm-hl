@@ -16,7 +16,6 @@ import { superviseAdoptPositions } from './adoptSupervise.js';
 import { hunterReconcile } from './hunterReconcile.js';
 import { hunterLongReconcile } from './hunterLongReconcile.js';
 import { processHunterTrailArm } from './hunterTrailArm.js';
-import { tickFaderPaper } from './faderPaperTick.js';
 import { tickHunterPaper } from './hunterPaperTick.js';
 import { tickVaporPaper } from './vaporPaperTick.js';
 import { tickHotMoversPaper } from './hotMoversPaperTick.js';
@@ -83,9 +82,8 @@ export async function tick() {
         // Paper shadow-слоты независимы от реального слота — должны тикать даже
         // в HANDS-OFF, иначе зависшая ручная PROD-поза подвешивает paper-позицию
         // навсегда (инцидент BTC id=90 + PURR HANDS-OFF, 2026-05-22/23).
-        await tickFaderPaper(handsOffHunter);
-        // Hunter SHORT/Long + Carry shadow paper-слоты (Этап 2): независимы от
-        // реального слота, копят статистику даже в HANDS-OFF (как ChillBoy/Fader).
+        // Hunter SHORT/Long shadow paper-слоты (Этап 2): независимы от
+        // реального слота, копят статистику даже в HANDS-OFF.
         await tickHunterPaper(handsOffHunter);
         await tickHunterLongPaper(handsOffHunter);
         await tickVaporPaper(handsOffHunter);
@@ -97,7 +95,7 @@ export async function tick() {
         // HANDS-OFF и схлопывается в одну «живую» точку (2026-06-09).
         await runBalanceDiag();
       } catch (err) {
-        logger.debug(`[Tick] HANDS-OFF scan/chillboy/fader failed: ${err.message}`);
+        logger.debug(`[Tick] HANDS-OFF scan/paper failed: ${err.message}`);
       }
       return;
     }
@@ -160,9 +158,6 @@ export async function tick() {
     if (signal.action !== 'HOLD') {
       await execute(signal, activePosition);
     }
-
-    // Fader (Strategy #5) бумажный слот — независим от реального.
-    await tickFaderPaper(hunterData);
 
     // Hunter SHORT/Long + Carry shadow paper-слоты (Этап 2): каждая копит
     // статистику в своём независимом paper-слоте, пока её PROD-гейт выключен.

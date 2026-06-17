@@ -68,7 +68,7 @@ export function hasEnoughHistory(coin, minutes, now = Date.now()) {
 
 /**
  * Возвращает сэмплы за окно последних `minutes` минут (ASC по ts).
- * Используется Fader-ом для chopRatio (нужен high/low + first/last).
+ * Используется Vapor-ом (range/high/low за окно).
  */
 export function getSamplesSince(coin, minutes, now = Date.now()) {
   const arr = buffers.get(coin);

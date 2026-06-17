@@ -593,8 +593,8 @@ export function getActivePaperPosition() {
 
 /**
  * Возвращает активную PAPER позицию КОНКРЕТНОЙ стратегии (или undefined).
- * Нужен для независимых paper-слотов: ChillBoy и Fader торгуют параллельно,
- * каждый видит только свою позицию (а не "слот вообще занят").
+ * Нужен для независимых paper-слотов: несколько paper-стратегий торгуют
+ * параллельно, каждая видит только свою позицию (а не "слот вообще занят").
  */
 export function getActivePaperPositionByStrategy(strategyId) {
   return getDb()

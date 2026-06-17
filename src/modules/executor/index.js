@@ -12,7 +12,7 @@ import { getAccountEquity } from '../wallet.js';
 import { checkVolatility } from '../volatility.js';
 import {
   paperClose, hunterPaperOpen, hunterLongPaperOpen,
-  faderPaperOpen, vaporPaperOpen, hotMoversPaperOpen, swingPaperOpen,
+  vaporPaperOpen, hotMoversPaperOpen, swingPaperOpen,
 } from './paper.js';
 import {
   productionClose,
@@ -234,20 +234,6 @@ async function handleOpen(signal) {
     }
     return swingPaperOpen(
       signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
-    );
-  }
-
-  // Strategy #5 (Fader) route: PAPER only, fixed nominal × leverage, no SL,
-  // adaptive TP. Не использует preflight'овые carry-guard'ы — это отдельный
-  // sandbox на виртуальном балансе. Drawdown/CB всё ещё применяем.
-  if (strategyId === 'fader') {
-    const cb = getCircuitBreakerStatus();
-    if (cb.broken) {
-      logger.warn(`[Executor] [Fader] CB active — skip open #${signal.coin}`);
-      return { ok: false };
-    }
-    return faderPaperOpen(
-      signal.coin, signal.price, signal.direction, signal.tp, false, signal.entryFeatures,
     );
   }
 
