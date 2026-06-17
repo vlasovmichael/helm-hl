@@ -392,11 +392,6 @@ function loadConfig() {
   // ⚠️ НЕ стратегия: радар алертов для ручной торговли. План: memory/candy_girl_idea.md.
   // Никогда не открывает позицию. Master-флаг default OFF.
   const candyGirlEnabled            = (process.env.CANDY_GIRL_ENABLED || 'false').toLowerCase() === 'true';
-  // long-only: paper-слот торгует только LONG. Диагностика 2026-06-14 показала слабый
-  // short (−$11/31, wr 35%, payoff 0.96) против профитного long (+$6.6/22, payoff 1.48),
-  // но short-paper переоткрыт намеренно — копим свежую статистику обеих сторон для
-  // честного side-by-side в /statistics. Дефолт false = торгуются обе стороны.
-  const candyGirlLongOnly           = (process.env.CANDY_GIRL_LONG_ONLY || 'false').toLowerCase() === 'true';
   const candyGirlAlertEnabled       = (process.env.CANDY_GIRL_ALERT_ENABLED || 'true').toLowerCase() === 'true';
   // Канал алертов: ntfy шлётся всегда (когда alertEnabled), TG-дубль опционален.
   // default OFF — Candy Girl живёт в ntfy-ленте вместе со Swing-сканером.
@@ -453,25 +448,6 @@ function loadConfig() {
   }
   if (!Number.isInteger(candyGirlMaxSignalsPerTick) || candyGirlMaxSignalsPerTick < 1) {
     throw new Error(`CANDY_GIRL_MAX_SIGNALS_PER_TICK must be positive integer. Got: "${process.env.CANDY_GIRL_MAX_SIGNALS_PER_TICK}"`);
-  }
-
-  // ── Candy Girl paper-слот (Iter 2): зеркало ChillBoy shadow-слота ──
-  // Радар (выше) только сигналит; paper-слот торгует лучший ранжированный сигнал
-  // виртуально, чтобы собрать P&L с комиссиями перед PROD-гейтом. План:
-  // memory/candy_girl_strategy_plan.md. PROD-путь пока НЕ построен — даже при
-  // candyGirlProdEnabled=true open идёт в PAPER; флаг лишь глушит shadow-слот.
-  const candyGirlProdEnabled        = (process.env.CANDY_GIRL_PROD_ENABLED || 'false').toLowerCase() === 'true';
-  const candyGirlPaperVirtualBalance = parseFloat(process.env.CANDY_GIRL_PAPER_VIRTUAL_BALANCE || '0');
-  const candyGirlPaperVirtualUtil   = parseFloat(process.env.CANDY_GIRL_PAPER_VIRTUAL_UTILIZATION || '0.9');
-  const candyGirlBalanceUtil        = parseFloat(process.env.CANDY_GIRL_BALANCE_UTILIZATION || '0.5');
-  if (isNaN(candyGirlPaperVirtualBalance) || candyGirlPaperVirtualBalance < 0) {
-    throw new Error(`CANDY_GIRL_PAPER_VIRTUAL_BALANCE must be ≥ 0. Got: "${process.env.CANDY_GIRL_PAPER_VIRTUAL_BALANCE}"`);
-  }
-  if (isNaN(candyGirlPaperVirtualUtil) || candyGirlPaperVirtualUtil <= 0 || candyGirlPaperVirtualUtil > 0.95) {
-    throw new Error(`CANDY_GIRL_PAPER_VIRTUAL_UTILIZATION must be in (0, 0.95]. Got: "${process.env.CANDY_GIRL_PAPER_VIRTUAL_UTILIZATION}"`);
-  }
-  if (isNaN(candyGirlBalanceUtil) || candyGirlBalanceUtil <= 0 || candyGirlBalanceUtil > 0.95) {
-    throw new Error(`CANDY_GIRL_BALANCE_UTILIZATION must be in (0, 0.95]. Got: "${process.env.CANDY_GIRL_BALANCE_UTILIZATION}"`);
   }
 
   // ── Strategy #5: Fader — contrarian fade scalper (PAPER-only) ──
@@ -755,7 +731,6 @@ function loadConfig() {
       adoptTrailGiveBackPct,
       // ── Candy Girl радар (signal-only) ──
       candyGirlEnabled,
-      candyGirlLongOnly,
       candyGirlAlertEnabled,
       candyGirlTgEnabled,
       candyGirlFast1h,
@@ -772,10 +747,6 @@ function loadConfig() {
       candyGirlSlopeLookback4h,
       candyGirlSignalLogEnabled,
       candyGirlSignalTimeoutMin,
-      candyGirlProdEnabled,
-      candyGirlPaperVirtualBalance,
-      candyGirlPaperVirtualUtil,
-      candyGirlBalanceUtil,
       faderEnabled,
       faderShortOnly,
       faderVirtualBalance,

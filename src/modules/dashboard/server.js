@@ -15,7 +15,6 @@ import {
   getActivePosition,
   getActiveAdoptPositions,
   getActivePaperPosition,
-  getActivePaperPositionByStrategy,
   getHistorySince,
   getArchivedHistorySince,
   getEquitySnapshotsSince,
@@ -43,7 +42,6 @@ import {
 } from "../strategistSniper.js";
 import { getAdoptPeakPct } from "../strategistAdopt.js";
 import { getCandyGirlHeartbeat, getCandyGirlSignals, getCandyGirlStats } from "../strategistCandyGirl.js";
-import { getCandyGirlVirtualEquitySnapshot } from "../candyGirlVirtualEquity.js";
 import { getFaderHeartbeat, getFaderMfeMae } from "../strategistFader.js";
 import { getFaderVirtualSnapshot } from "../faderVirtualEquity.js";
 import { buildStrategiesPayload } from "./strategiesView.js";
@@ -163,44 +161,6 @@ function startOfTodayMs() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d.getTime();
-}
-
-// Активная Candy Girl paper-позиция — независимый слот (strategy_id='candy_girl',
-// compound-песочница). PAPER-only, показываем всегда когда есть открытая позиция,
-// независимо от режима бота. SL+TP заданы детектором, MFE/MAE-трекера нет.
-async function buildCandyGirlPaperPosition() {
-  const pos = getActivePaperPositionByStrategy('candy_girl');
-  if (!pos) return null;
-
-  let livePrice = null;
-  try { livePrice = await getLivePrice(pos.coin); } catch { /* ignore */ }
-
-  const entry  = pos.entry_price;
-  const isLong = (pos.side || '').toLowerCase() === 'long';
-  let unrealPct = null;
-  let unrealUsd = null;
-  if (livePrice && entry) {
-    unrealPct = isLong ? ((livePrice - entry) / entry) * 100 : ((entry - livePrice) / entry) * 100;
-    unrealUsd = pos.size_usd * (unrealPct / 100);
-  }
-  const distPct = (t) => (livePrice && t ? Math.abs(t - livePrice) / livePrice * 100 : null);
-
-  return {
-    id:           pos.id,
-    coin:         pos.coin,
-    side:         (pos.side || '').toUpperCase(),
-    sizeUsd:      pos.size_usd,
-    entryPrice:   entry,
-    currentPrice: livePrice,
-    entryTime:    pos.entry_time,
-    heldMin:      Math.round((Date.now() - pos.entry_time) / 60_000),
-    slPrice:      pos.sl_price,
-    tpPrice:      pos.tp_price,
-    slDistPct:    distPct(pos.sl_price),
-    tpDistPct:    distPct(pos.tp_price),
-    unrealPct,
-    unrealUsd,
-  };
 }
 
 // Сводка того, как БОТ ведёт активную позицию прямо сейчас: где стоп, взведён
@@ -503,26 +463,14 @@ async function getStatusData() {
     manualPositions,
     // Единый обзор всех стратегий (реестр-driven) для таблицы на /strategies.
     strategies: buildStrategiesPayload(),
-    // Candy Girl — радар (1h EMA-тренд + 5m pullback-reclaim) + paper shadow-слот
-    // (Iter 2): независимый compound-слот strategy_id='candy_girl', PAPER-only.
+    // Candy Girl — signal-only радар (1h EMA-тренд + 5m pullback-reclaim).
+    // Сигналы кормят Smart Signals и Swing-подтверждение; торгового слота нет.
     candyGirl: config.trading.candyGirlEnabled
       ? {
           enabled: true,
-          prod: config.isProduction && config.trading.candyGirlProdEnabled,
           heartbeat: getCandyGirlHeartbeat(),
           signals: getCandyGirlSignals(),
           stats: getCandyGirlStats(),
-          virtualBalance: config.trading.candyGirlPaperVirtualBalance,
-          virtualEquity:  config.trading.candyGirlPaperVirtualBalance > 0
-            ? getCandyGirlVirtualEquitySnapshot()
-            : null,
-          paperStats:  getStrategyStats('candy_girl', 'PAPER'),
-          paperTrades: getRecentStrategyTrades('candy_girl', 'PAPER', 10),
-          paperPeriod: {
-            day:  getStrategyPnlSince('candy_girl', 'PAPER', startOfTodayMs()),
-            week: getStrategyPnlSince('candy_girl', 'PAPER', Date.now() - 7 * 86_400_000),
-          },
-          paperPosition: await buildCandyGirlPaperPosition(),
         }
       : null,
     fader: config.trading.faderEnabled

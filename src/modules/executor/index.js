@@ -12,7 +12,7 @@ import { getAccountEquity } from '../wallet.js';
 import { checkVolatility } from '../volatility.js';
 import {
   paperClose, hunterPaperOpen, hunterLongPaperOpen,
-  faderPaperOpen, candyPaperOpen, vaporPaperOpen, hotMoversPaperOpen, swingPaperOpen,
+  faderPaperOpen, vaporPaperOpen, hotMoversPaperOpen, swingPaperOpen,
 } from './paper.js';
 import {
   productionClose,
@@ -197,22 +197,8 @@ async function handleOpen(signal) {
     );
   }
 
-  // Candy Girl route (Iter 2): PAPER-only shadow-слот. PROD-путь пока не построен —
-  // open всегда виртуальный (даже в isProduction). Guard'ы применяем (CB/
-  // drawdown/OI).
-  if (strategyId === 'candy_girl') {
-    const pre = await preflightChecks(signal.coin, null);
-    if (!pre.allowed) {
-      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
-      return { ok: false };
-    }
-    return candyPaperOpen(
-      signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
-    );
-  }
-
   // Vapor (Exhaustion Short, Трек A) route: PAPER-only shadow-слот. PROD-пути нет —
-  // open всегда виртуальный. Carry-guard'ы (CB/drawdown/OI) применяем, как у candy.
+  // open всегда виртуальный. Carry-guard'ы (CB/drawdown/OI) применяем.
   if (strategyId === 'vapor') {
     const pre = await preflightChecks(signal.coin, null);
     if (!pre.allowed) {
@@ -226,7 +212,7 @@ async function handleOpen(signal) {
 
   // Hot Movers paper route: PAPER-only shadow-слот, торгует вердикт карточки 1:1
   // (LONG/SHORT). PROD-пути нет — open всегда виртуальный. Carry-guard'ы (CB/
-  // drawdown/OI) применяем, как у vapor/candy.
+  // drawdown/OI) применяем, как у vapor.
   if (strategyId === 'hotmovers') {
     const pre = await preflightChecks(signal.coin, null);
     if (!pre.allowed) {
