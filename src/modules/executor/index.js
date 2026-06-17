@@ -14,10 +14,10 @@ import {
   paperClose, hunterPaperOpen, hunterLongPaperOpen,
   vaporPaperOpen, hotMoversPaperOpen, swingPaperOpen,
 } from './paper.js';
+import { productionClose } from './close.js';
 import {
-  productionClose,
   productionHunterOpen, productionHunterLongOpen,
-} from './production.js';
+} from './hunterOpen.js';
 import { cancelOrderFor } from '../exchange.js';
 import {
   notifyOpenBlocked, notifyDrawdownBreached,
