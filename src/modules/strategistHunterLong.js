@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────
 //  Strategy #3: Hunter LONG (Iter E.1) — Long-after-dump
 // ─────────────────────────────────────────────────
-// Зеркало strategistSniper.js на long-сторону: ловим резкий dump (≥X% за 2мин)
+// Зеркало strategistHunter.js на long-сторону: ловим резкий dump (≥X% за 2мин)
 // и лонгуем в противоход, рассчитывая на mean-reversion (отскок).
 //
 // Заняла слот после soft-kill Fade. См. memory/hunter_iter_e_plan.md.
@@ -477,7 +477,7 @@ function checkHunterLongExit(position, scoutData) {
     }
     setHunterCrossCooldown(position.coin);
     const heldMin = Math.round((Date.now() - position.entry_time) / 60_000);
-    // Observability: peak% vs current% при time-stop (см. аналог в strategistSniper.js).
+    // Observability: peak% vs current% при time-stop (см. аналог в strategistHunter.js).
     logger.info(
       `[HunterLong] ⏱ TIME-STOP #${position.coin} (id=${position.id}): held ${heldMin}min | peak +${peak.toFixed(2)}% | now ${exitPnlPct >= 0 ? '+' : ''}${exitPnlPct.toFixed(2)}%`,
     );

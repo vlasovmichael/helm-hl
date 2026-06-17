@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────
 //  Price History — per-coin ring buffer (in-memory)
 // ─────────────────────────────────────────────────
-// Используется Sniper-Hunter'ом (strategistSniper.js) для детекции
+// Используется Sniper-Hunter'ом (strategistHunter.js) для детекции
 // спайков (|Δprice| за N минут). Iter A.1: только API, без интеграции.
 // Наполнение из scout.js добавится в Iter A.3.
 //

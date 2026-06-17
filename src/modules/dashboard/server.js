@@ -39,7 +39,7 @@ import {
   HUNTER_TP_PCT,
   getHunterPeakPct,
   isHunterArmed,
-} from "../strategistSniper.js";
+} from "../strategistHunter.js";
 import { getAdoptPeakPct } from "../strategistAdopt.js";
 import { getCandyGirlHeartbeat, getCandyGirlSignals, getCandyGirlStats } from "../strategistCandyGirl.js";
 import { buildStrategiesPayload } from "./strategiesView.js";

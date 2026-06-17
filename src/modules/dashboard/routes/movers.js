@@ -17,7 +17,7 @@ import {
   HUNTER_SPIKE_WINDOW_MIN,
   HUNTER_SL_PCT,
   HUNTER_TP_PCT,
-} from "../../strategistSniper.js";
+} from "../../strategistHunter.js";
 import { computeBreadthFlush } from "../../hotMoversSetup.js";
 import { getHourlyCandles } from "../../candleCache.js";
 import { classifyTrend } from "../../candyGirlEma.js";

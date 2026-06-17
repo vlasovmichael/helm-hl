@@ -23,7 +23,7 @@ import {
   notifyHunterOpen, notifyHunterSL, notifyHunterTP, notifyHunterTrailTp,
   notifyHunterLongOpen, notifyHunterLongSL, notifyHunterLongTP, notifyHunterLongTrailTp,
 } from './notifications.js';
-import { consumeHunterMfeMae, clearHunterTrailState, getHunterPeakPct } from '../strategistSniper.js';
+import { consumeHunterMfeMae, clearHunterTrailState, getHunterPeakPct } from '../strategistHunter.js';
 import {
   consumeHunterLongMfeMae, clearHunterLongTrailState, getHunterLongPeakPct,
 } from '../strategistHunterLong.js';
@@ -70,7 +70,7 @@ function resolvePaperSzDecimals(coin) {
  *
  * Отличия от paperOpen:
  *  - Размер = HUNTER_BALANCE_UTILIZATION × баланс (env-настраиваемо), не 95%.
- *  - Записывает sl_price / tp_price в БД (триггеры симулируются в strategistSniper.analyzeHunter).
+ *  - Записывает sl_price / tp_price в БД (триггеры симулируются в strategistHunter.analyzeHunter).
  *  - strategy_id = 'hunter', entry_apy = 0 (Hunter не получает funding).
  *  - Направление в Iter A — всегда SHORT (short-after-pump).
  *
