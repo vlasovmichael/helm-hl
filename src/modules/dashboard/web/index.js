@@ -120,3 +120,9 @@ initWhaleWatch();
 setInterval(tick, REFRESH_MS);
 startFooterTimer();
 initSetupScanner({ fmtTime });
+
+// DEV: ?mock=1 → засимулировать активную монету (risk-bar + ракета) без бэка.
+// Динамический импорт → в обычной сборке/проде модуль даже не грузится.
+if (new URLSearchParams(location.search).has("mock")) {
+  import("./src/dev/mockActive.js").then((m) => m.startMock({ onStatus }));
+}

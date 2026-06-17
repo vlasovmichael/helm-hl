@@ -15,8 +15,8 @@ import { riskTint } from "../utils/riskBar.js";
 // tint = riskTint(...) | null. Возвращает { cls, attr } для подстановки в HTML.
 function tintAttrs(tint) {
   if (!tint) return { cls: "", attr: "" };
-  const cls = ` rb-depth${tint.hot ? " rb-hot" : ""}`;
-  const attr = ` style="--rb-depth:${tint.depth.toFixed(3)}"${tint.tip ? ` title="${tint.tip}"` : ""}`;
+  const cls = ` rb-depth rb-${tint.phase}${tint.hot ? " rb-hot" : ""}`;
+  const attr = ` style="--rb-now:${tint.now.toFixed(3)}"${tint.tip ? ` title="${tint.tip}"` : ""}`;
   return { cls, attr };
 }
 
@@ -119,6 +119,9 @@ export function renderPosition(pos) {
     side,
     stopPrice: pos.bot?.stopPrice,
     sizeUsd: pos.sizeUsd,
+    beArmPct: pos.bot?.beArmPct,
+    beArmed: pos.bot?.beArmed,
+    tpPrice: pos.bot?.tpPrice,
   });
   const { cls: rbCls, attr: rbAttr } = tintAttrs(tint);
   const pnl = pos.currentPnl;
@@ -183,6 +186,9 @@ export function renderManualPositions(list) {
         side: p.side,
         stopPrice: p.bot?.stopPrice,
         sizeUsd: p.sizeUsd,
+        beArmPct: p.bot?.beArmPct,
+        beArmed: p.bot?.beArmed,
+        tpPrice: p.bot?.tpPrice,
       });
       const { cls: rbCls, attr: rbAttr } = tintAttrs(tint);
       return `

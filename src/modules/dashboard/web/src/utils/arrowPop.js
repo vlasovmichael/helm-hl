@@ -27,6 +27,14 @@ const EXTREME_PCT = 0.12;
 const ROCKET_COOLDOWN_MS = 1400;
 const _lastRocketAt = new WeakMap(); // arrow → ts последнего запуска
 
+// 🚀 СЁРДЖ: цена «дёрнулась сразу» — суммарный ход В МОЮ СТОРОНУ за короткое окно
+// (а не один тик). Ловит резкий слайд, который приходит серией под-0.12% тиков
+// (как падение монеты за свечу): по одному каждый — шум, вместе — ракета.
+// signedPct копится со знаком (откаты гасят накопленное), окно скользит.
+const SURGE_WINDOW_MS = 5000; // «сразу» = за столько мс
+const SURGE_PCT = 0.5; // суммарный favorable ход за окно, % → ракета
+const _surge = new WeakMap(); // arrow → [{ ts, signedPct }]
+
 // Аккуратная SVG-ракета остриём вверх (для «вниз» весь оверлей разворачивается
 // в CSS). Корпус/плавники = currentColor (зелёный рост / красный падение),
 // иллюминатор = фон карточки, пламя = тёплый оранжевый (читается в обе стороны).
@@ -122,5 +130,21 @@ export function popArrow(arrow, up, deltaPct) {
   arrow.classList.add("wave");
 
   // Сильный одиночный удар → ракета поверх шеврона.
-  if (deltaPct >= EXTREME_PCT) launchRocket(arrow, up);
+  if (deltaPct >= EXTREME_PCT) {
+    launchRocket(arrow, up);
+    return;
+  }
+  // Иначе копим скользящее окно: серия мелких тиков в одну сторону = «дёрнулась
+  // сразу» → ракета. signedPct: + если в мою сторону (up), − если против.
+  const now = Date.now();
+  const log = (_surge.get(arrow) || []).filter(
+    (e) => now - e.ts <= SURGE_WINDOW_MS,
+  );
+  log.push({ ts: now, signedPct: up ? deltaPct : -deltaPct });
+  _surge.set(arrow, log);
+  const net = log.reduce((s, e) => s + e.signedPct, 0);
+  if (net >= SURGE_PCT) {
+    launchRocket(arrow, true);
+    _surge.set(arrow, []); // сбросить окно, чтобы не зациклить серию ракет
+  }
 }

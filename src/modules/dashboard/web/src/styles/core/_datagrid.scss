@@ -81,33 +81,51 @@
     color: inherit;
   }
 }
-/* Глубинная заливка: насыщенность фона/рамки растёт по мере приближения к 2R
-   (зелёный) или к стопу (красный). --rb-depth (0..1) ставится из JS из риск-
-   геометрии. transition выше (pnl-tint) даёт плавный перелив при движении цены. */
+/* Risk-bar как фон карточки: горизонтальная заливка слева на --rb-now (0..1) —
+   прогресс до ближайшей вехи (стоп / храповик / профит, выставляет JS). Полоса
+   едет плавно (transition pnl-tint выше). Поверх — базовый wash по знаку, чтобы
+   карточка читалась и при пустой полосе. Текст получает halo под цвет канвы,
+   чтобы цифры читались поверх любой длины заливки. */
 .grid-item.pnl-tint.rb-depth {
+  position: relative;
+  overflow: hidden;
+  transition:
+    background 0.45s ease,
+    border-color 0.45s ease;
+
+  .item-label,
+  .item-value {
+    position: relative;
+    z-index: 1;
+    text-shadow:
+      0 0 2px var(--card-bg),
+      0 1px 2px var(--card-bg);
+  }
   &.pnl-pos {
-    background: color-mix(
-      in srgb,
-      var(--green) calc(7% + var(--rb-depth, 0) * 33%),
-      transparent
-    );
-    border-color: color-mix(
-      in srgb,
-      var(--green-line) calc(45% + var(--rb-depth, 0) * 55%),
-      transparent
-    );
+    background:
+      linear-gradient(
+          90deg,
+          color-mix(in srgb, var(--green) 32%, transparent) 0,
+          color-mix(in srgb, var(--green) 32%, transparent)
+            calc(var(--rb-now, 0) * 100%),
+          transparent calc(var(--rb-now, 0) * 100%)
+        )
+        no-repeat,
+      var(--green-soft);
+    border-color: var(--green-line);
   }
   &.pnl-neg {
-    background: color-mix(
-      in srgb,
-      var(--red) calc(7% + var(--rb-depth, 0) * 33%),
-      transparent
-    );
-    border-color: color-mix(
-      in srgb,
-      var(--red-line) calc(45% + var(--rb-depth, 0) * 55%),
-      transparent
-    );
+    background:
+      linear-gradient(
+          90deg,
+          color-mix(in srgb, var(--red) 32%, transparent) 0,
+          color-mix(in srgb, var(--red) 32%, transparent)
+            calc(var(--rb-now, 0) * 100%),
+          transparent calc(var(--rb-now, 0) * 100%)
+        )
+        no-repeat,
+      var(--red-soft);
+    border-color: var(--red-line);
   }
 }
 /* У краёв (depth≥0.75) — мягкий пульс яркости: близко к цели или к стопу. */

@@ -212,6 +212,7 @@ function buildBotManagement(position) {
       initialRiskPct: HUNTER_SL_PCT, // исходный риск (для R-multiple на фронте)
       peakPct,
       beArmed,
+      beArmPct: config.trading.hunterBeArmPct, // веха храповика (% от входа)
       trailArmed,
       floorPct, // живой пол в unrealized % (плюс = прибыль)
       floorPrice, // цена, на которой бот закроется сейчас
@@ -286,6 +287,7 @@ function buildAdoptManagement(adoptPos) {
     initialRiskPct,
     peakPct,
     beArmed,
+    beArmPct: t.adoptBeArmPct, // веха храповика (% от входа)
     trailArmed,
     floorPct,
     floorPrice,
