@@ -191,7 +191,16 @@ export function reconstructManualTrades(fills, botTrades, botOidSet = null) {
   }
 
   function isBotFill(f) {
-    if (useOidFilter && f.oid != null && botOidSet.has(Number(f.oid))) return true;
+    // OID присутствует и фильтр активен → oid решает ОДНОЗНАЧНО (и для bot,
+    // и для НЕ-bot fills). Раньше тут срабатывал только positive-match, а любой
+    // не-совпавший fill всё равно проваливался в time-fallback ниже — и ручной
+    // re-open в течение GRACE_MS (60с) после бот-закрытия той же монеты
+    // ошибочно глотался как «ботовский» → adopt не видел свежий вход → поза
+    // оставалась без стопа. Time-fallback теперь ТОЛЬКО для fills без oid
+    // (legacy). См. tests/userFills.test.js.
+    if (useOidFilter && f.oid != null) {
+      return botOidSet.has(Number(f.oid));
+    }
     // Fallback: для старых fills (oid не записан в log) — time-based.
     return inBotWindow(f.coin, f.time);
   }
