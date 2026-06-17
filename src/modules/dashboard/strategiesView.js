@@ -93,6 +93,19 @@ const REGISTRY = [
     },
   },
   {
+    id: 'darkknight',
+    label: 'Dark Knight (TG)',
+    kind: 'copy-signal · paper',
+    // Внешний канал-сигнал (TG): входы парсятся, исходы РЕЗОЛВИМ САМИ по свечам
+    // (их скрин-прибыль не используем). Чистая измерительная paper-карточка —
+    // бэкфилл строк через temp/signals_paper.py (WRITE_DB=1). Логики в боте нет,
+    // поэтому статус data-driven, гейт только на скрытие: DARKKNIGHT_ENABLED=false.
+    resolve: () => {
+      const enabled = process.env.DARKKNIGHT_ENABLED !== 'false';
+      return { enabled, status: enabled ? 'paper' : 'off' };
+    },
+  },
+  {
     id: 'adopt',
     label: 'Adopt',
     kind: 'manual-entry · babysit',
