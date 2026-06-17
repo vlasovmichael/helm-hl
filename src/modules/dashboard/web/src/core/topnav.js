@@ -31,8 +31,8 @@ const ICONS = {
 const LINKS = [
   { key: "dashboard", href: "/", label: "Dashboard" },
   { key: "statistics", href: "/statistics.html", label: "Statistics" },
-  { key: "ledger", href: "/ledger.html", label: "Ledger", title: "Monthly P&L ledger" },
   { key: "lab", href: "/lab.html", label: "Lab", title: "Research: BTC Divergence + Whale Watch" },
+  { key: "ledger", href: "/ledger.html", label: "Ledger", title: "Monthly P&L ledger" },
 ];
 
 const navLink = (l, active) => {
