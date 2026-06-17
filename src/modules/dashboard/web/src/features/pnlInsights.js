@@ -16,6 +16,7 @@ let lastPnlSummary = null;
 let lastInsights = null;
 let currentInsightsTab = "per-coin";
 let perCoinSort = { key: "pnl", dir: "desc" };
+let currentHeatmapYear = null; // выбранный год сетки (null → последний с данными)
 let _fmtTime = (ts) => String(ts); // зависит от currentRangeHours в main
 
 export function setPnlSummary(payload) {
@@ -232,71 +233,121 @@ function renderPerCoin() {
     .join("");
 }
 
+// Локальный YYYY-MM-DD (тот же формат, что отдаёт бэкенд).
+function localDateKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+const MONTH_NAMES = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
 function renderHeatmap() {
-  const days = lastInsights.daily || [];
+  const days = lastInsights.daily || []; // только дни с торговлей, по возрастанию
   const grid = document.getElementById("heatmap-grid");
   const meta = document.getElementById("heatmap-meta");
   if (!grid) return;
 
-  const tradedDays = days.filter((d) => d.trades > 0);
-  const totalPnl = days.reduce((s, d) => s + d.pnl, 0);
-  if (meta) {
-    meta.textContent = `${tradedDays.length}/${days.length} active days · ${fmtMoney(totalPnl)} (90d)`;
-  }
+  const byDate = new Map(days.map((d) => [d.date, d]));
 
-  // Тиры по абсолюту daily P&L: 3 ступени win + 3 loss + empty.
-  const absVals = days.map((d) => Math.abs(d.pnl)).filter((v) => v > 0);
-  absVals.sort((a, b) => a - b);
+  // Доступные года из данных + текущий; кламп выбранного года к диапазону.
+  const nowYear = new Date().getFullYear();
+  const years = new Set(days.map((d) => +d.date.slice(0, 4)));
+  years.add(nowYear);
+  const yearList = [...years].sort((a, b) => a - b);
+  const minYear = yearList[0];
+  const maxYear = yearList[yearList.length - 1];
+  if (
+    currentHeatmapYear == null ||
+    currentHeatmapYear < minYear ||
+    currentHeatmapYear > maxYear
+  ) {
+    currentHeatmapYear = maxYear;
+  }
+  const year = currentHeatmapYear;
+
+  // Тиры по абсолюту daily P&L за ВСЮ историю — цвета сопоставимы между годами.
+  const absVals = days
+    .map((d) => Math.abs(d.pnl))
+    .filter((v) => v > 0)
+    .sort((a, b) => a - b);
   const q = (p) =>
     absVals.length === 0 ? 0 : absVals[Math.floor((absVals.length - 1) * p)];
   const t1 = q(0.33);
   const t2 = q(0.66);
-
   const cellClass = (d) => {
-    if (d.trades === 0) return "empty";
+    if (!d || d.trades === 0) return "empty";
     const a = Math.abs(d.pnl);
     const tier = a >= t2 ? "strong" : a >= t1 ? "normal" : "weak";
     return d.pnl >= 0 ? `win-${tier}` : `loss-${tier}`;
   };
 
-  // Сетка: колонки = недели, строки = дни недели (Mon..Sun).
-  // Первая колонка может быть неполной (если 90д начинается с середины недели).
-  const cellsByCol = [];
-  let col = [];
-  for (const d of days) {
-    const date = new Date(d.date + "T00:00:00");
-    const dow = (date.getDay() + 6) % 7; // 0 = Mon ... 6 = Sun
-    if (col.length === 0 && dow > 0) {
-      for (let i = 0; i < dow; i++) col.push(null);
-    }
-    col.push(d);
-    if (dow === 6) {
-      cellsByCol.push(col);
-      col = [];
-    }
-  }
-  if (col.length) cellsByCol.push(col);
+  const todayKey = localDateKey(new Date());
 
-  const html = cellsByCol
-    .map((week) => {
-      const cells = [];
-      for (let i = 0; i < 7; i++) {
-        const d = week[i];
-        if (!d) {
-          cells.push('<div class="heatmap-cell placeholder"></div>');
-          continue;
-        }
-        const cls = cellClass(d);
-        const todayCls = d.isToday ? " is-today" : "";
-        const tip = `${d.date} · ${fmtMoney(d.pnl)} · ${d.trades} trade${d.trades === 1 ? "" : "s"}`;
-        cells.push(
-          `<div class="heatmap-cell ${cls}${todayCls}" title="${tip}"></div>`,
-        );
+  // 12 месячных блоков выбранного года (календарная сетка Mon..Sun).
+  const months = [];
+  for (let m = 0; m < 12; m++) {
+    const lead = (new Date(year, m, 1).getDay() + 6) % 7; // Mon=0
+    const daysInMonth = new Date(year, m + 1, 0).getDate();
+    const cells = [];
+    for (let i = 0; i < lead; i++) {
+      cells.push('<div class="heatmap-cell placeholder"></div>');
+    }
+    let monthPnl = 0;
+    let monthTrades = 0;
+    for (let dd = 1; dd <= daysInMonth; dd++) {
+      const key = `${year}-${String(m + 1).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+      const d = byDate.get(key);
+      if (d) {
+        monthPnl += d.pnl;
+        monthTrades += d.trades;
       }
-      return `<div class="heatmap-col">${cells.join("")}</div>`;
-    })
-    .join("");
-  grid.innerHTML = html;
+      const todayCls = key === todayKey ? " is-today" : "";
+      const tip = d
+        ? `${key} · ${fmtMoney(d.pnl)} · ${d.trades} trade${d.trades === 1 ? "" : "s"}`
+        : key;
+      cells.push(
+        `<div class="heatmap-cell ${cellClass(d)}${todayCls}" title="${tip}"></div>`,
+      );
+    }
+    const pnlCls = monthPnl > 0 ? "pos" : monthPnl < 0 ? "neg" : "";
+    const pnlTag =
+      monthTrades > 0
+        ? `<span class="heatmap-month-pnl ${pnlCls}">${fmtMoney(monthPnl)}</span>`
+        : "";
+    months.push(
+      `<div class="heatmap-month">
+        <div class="heatmap-month-head">
+          <span class="heatmap-month-name">${MONTH_NAMES[m]}</span>${pnlTag}
+        </div>
+        <div class="heatmap-month-grid">${cells.join("")}</div>
+      </div>`,
+    );
+  }
+
+  const prevDis = year <= minYear ? "disabled" : "";
+  const nextDis = year >= maxYear ? "disabled" : "";
+  grid.innerHTML = `
+    <div class="heatmap-nav">
+      <button class="heatmap-year-btn" data-dir="-1" ${prevDis} aria-label="Previous year">‹</button>
+      <span class="heatmap-year">${year}</span>
+      <button class="heatmap-year-btn" data-dir="1" ${nextDis} aria-label="Next year">›</button>
+    </div>
+    <div class="heatmap-months">${months.join("")}</div>`;
+
+  if (meta) {
+    const yearDays = days.filter((d) => d.date.startsWith(`${year}-`));
+    const yearPnl = yearDays.reduce((s, d) => s + d.pnl, 0);
+    const yearTrades = yearDays.reduce((s, d) => s + d.trades, 0);
+    meta.textContent =
+      yearDays.length > 0
+        ? `${year}: ${yearDays.length} active days · ${yearTrades} trades · ${fmtMoney(yearPnl)}`
+        : `${year}: no trades`;
+  }
 }
 
 export function renderTax(tax) {
@@ -345,6 +396,14 @@ export function initPnlInsights({ fmtTime } = {}) {
       renderInsights();
     }),
   );
+
+  // Навигация по годам heatmap (делегирование — сетка перерисовывается).
+  document.getElementById("heatmap-grid")?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".heatmap-year-btn");
+    if (!btn || btn.disabled) return;
+    currentHeatmapYear += parseInt(btn.dataset.dir, 10);
+    renderHeatmap();
+  });
 
   document.querySelectorAll(".per-coin-table th[data-sort]").forEach((th) =>
     th.addEventListener("click", () => {

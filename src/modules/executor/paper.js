@@ -236,10 +236,11 @@ export async function vaporPaperOpen(coin, price, direction, sl, tp, silent = fa
     return { ok: false };
   }
   const utilization = config.trading.vaporBalanceUtil;
+  const leverage = config.trading.vaporPaperLeverage;
   const szDecimals = resolvePaperSzDecimals(coin);
   if (szDecimals == null) return { ok: false };
   const { sizeUsd, sz, tooSmall } = resolveEntrySize({
-    coin, tag: 'Vapor', equity: balance, capBase: balance,
+    coin, tag: 'Vapor', equity: balance, capBase: balance * leverage,
     capUtil: utilization, price, sl, szDecimals,
   });
   if (tooSmall) {
@@ -268,7 +269,7 @@ export async function vaporPaperOpen(coin, price, direction, sl, tp, silent = fa
   });
 
   logger.info(
-    `[Executor] 💨 Vapor OPEN ${direction} #${coin} | $${sizeUsd.toFixed(2)} (of real $${balance.toFixed(2)}) @ $${price} ` +
+    `[Executor] 💨 Vapor OPEN ${direction} #${coin} | $${sizeUsd.toFixed(2)} (${leverage}x of real $${balance.toFixed(2)}) @ $${price} ` +
       `| SL $${sl.toFixed(6)} / TP $${tp.toFixed(6)} | fee $${fee.toFixed(4)} | id: ${id}`,
   );
 

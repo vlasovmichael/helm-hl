@@ -95,15 +95,87 @@
   font-family: var(--font-mono);
 }
 .heatmap-grid {
-  display: flex;
-  gap: 3px;
-  overflow-x: auto;
+  display: block;
   padding-bottom: 6px;
 }
-.heatmap-col {
+
+/* Год-навигация над сеткой месяцев */
+.heatmap-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.heatmap-year {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 48px;
+  text-align: center;
+  color: var(--text-primary);
+}
+.heatmap-year-btn {
+  background: var(--canvas-subtle);
+  border: 1px solid var(--hairline);
+  color: var(--text-primary);
+  border-radius: 6px;
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover:not(:disabled) {
+    border-color: var(--accent);
+  }
+  &:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+}
+
+/* 12 месячных блоков, перенос по ширине карточки */
+.heatmap-months {
   display: grid;
-  grid-template-rows: repeat(7, 14px);
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 14px 16px;
+}
+.heatmap-month-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 5px;
+}
+.heatmap-month-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.heatmap-month-pnl {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  &.pos {
+    color: var(--green);
+  }
+  &.neg {
+    color: var(--red);
+  }
+}
+.heatmap-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
   gap: 3px;
+
+  .heatmap-cell {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1 / 1;
+  }
 }
 .heatmap-cell {
   width: 14px;

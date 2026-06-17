@@ -368,9 +368,10 @@ export async function handleInsights(_req, res) {
       }))
       .sort((a, b) => b.pnl - a.pnl);
 
-    // ── Daily P&L for last 90 days (heatmap) ──
-    const DAY_MS = 86_400_000;
-    const HEATMAP_DAYS = 90;
+    // ── Daily P&L across full history (heatmap, в UI сгруппирован по месяцам/годам) ──
+    // Возвращаем ТОЛЬКО дни с торговлей (без заливки пустых) — фронт сам строит
+    // календарную сетку по месяцам и подставляет дни по date-ключу. Окно не
+    // ограничено 90 днями: фронт листает года.
     // День в локальной зоне сервера: YYYY-MM-DD.
     const localDayKey = (ts) => {
       const d = new Date(ts);
@@ -379,30 +380,18 @@ export async function handleInsights(_req, res) {
       const dd = String(d.getDate()).padStart(2, "0");
       return `${y}-${m}-${dd}`;
     };
-    const cutoff = now - HEATMAP_DAYS * DAY_MS;
     const dailyMap = new Map();
     for (const t of combined) {
-      if (!t.closed_at || t.closed_at < cutoff) continue;
+      if (!t.closed_at) continue;
       const key = localDayKey(t.closed_at);
       if (!dailyMap.has(key)) dailyMap.set(key, { date: key, pnl: 0, trades: 0 });
       const row = dailyMap.get(key);
       row.pnl += t.realized_pnl || 0;
       row.trades += 1;
     }
-    // Заполняем все дни в окне (включая пустые) для непрерывной сетки.
-    const daily = [];
-    const todayKey = localDayKey(now);
-    for (let i = HEATMAP_DAYS - 1; i >= 0; i--) {
-      const ts = now - i * DAY_MS;
-      const key = localDayKey(ts);
-      const row = dailyMap.get(key) || { date: key, pnl: 0, trades: 0 };
-      daily.push({
-        date: row.date,
-        pnl: row.pnl,
-        trades: row.trades,
-        isToday: row.date === todayKey,
-      });
-    }
+    const daily = [...dailyMap.values()].sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
 
     res.json({ now, perCoin, daily });
   } catch (err) {

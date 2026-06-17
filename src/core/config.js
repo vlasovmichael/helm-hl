@@ -312,6 +312,13 @@ function loadConfig() {
   if (isNaN(vaporBalanceUtil) || vaporBalanceUtil <= 0 || vaporBalanceUtil > 0.95) {
     throw new Error(`VAPOR_BALANCE_UTILIZATION must be in (0, 0.95], got ${process.env.VAPOR_BALANCE_UTILIZATION}`);
   }
+  // Плечо paper-слота Vapor — множит нотиональный размер (как hotMovers/swing).
+  // Default 3: у Vapor лучший эдж из paper-стратегий, даём ему вес. Плечо НЕ меняет
+  // win-rate/expectancy — масштабирует и прибыль, и убыток (и комиссию) пропорц.
+  const vaporPaperLeverage    = parseFloat(process.env.VAPOR_PAPER_LEVERAGE || '3');
+  if (isNaN(vaporPaperLeverage) || vaporPaperLeverage < 1 || vaporPaperLeverage > 20) {
+    throw new Error(`VAPOR_PAPER_LEVERAGE must be in [1, 20], got ${process.env.VAPOR_PAPER_LEVERAGE}`);
+  }
   // Hot Movers paper — PAPER-only shadow-слот, торгует вердикт карточки 1:1.
   const hotMoversPaperEnabled = (process.env.HOT_MOVERS_PAPER_ENABLED || 'false').toLowerCase() === 'true';
   const hotMoversPaperBalanceUtil = parseFloat(process.env.HOT_MOVERS_PAPER_BALANCE_UTILIZATION || '0.5');
@@ -624,6 +631,7 @@ function loadConfig() {
       adoptEnabled,
       vaporEnabled,
       vaporBalanceUtil,
+      vaporPaperLeverage,
       hotMoversPaperEnabled,
       hotMoversPaperBalanceUtil,
       hotMoversPaperLeverage,
