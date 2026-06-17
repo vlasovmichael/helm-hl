@@ -14,13 +14,9 @@ process.env.EXIT_BUFFER           = '5';
 process.env.MIN_HOLD_TIME_MINUTES = '60';
 process.env.BREATHING_MINUTES     = '30';
 process.env.LEVERAGE              = '1';
-// Carry default-off с 2026-06-15 (стратегия снята). Ветка кода ещё есть —
-// эти тесты её механику и проверяют, поэтому включаем флаг явно.
-process.env.CARRY_ENABLED         = 'true';
 process.env.HUNTER_ENABLED        = 'true';
 
 const { coordinate } = await import('../src/modules/coordinator.js');
-const { analyze }    = await import('../src/modules/strategist.js');
 const { push: pushPriceHistory, clearAll } =
   await import('../src/core/priceHistory.js');
 const { resetHunterCooldowns } =
@@ -32,7 +28,6 @@ const MIN = 60_000;
 const T0  = 1_700_000_000_000;
 
 function resetAll() {
-  analyze([], undefined);
   clearAll();
   resetHunterCooldowns();
   resetHunterCrossCooldowns();
@@ -67,13 +62,12 @@ function freezeDateNow(ts) {
 
 // ── IDLE + spike → Hunter приоритет ─────────────
 
-test('IDLE + spike → Hunter OPEN (перебивает carry даже если тот бы взял)', async () => {
+test('IDLE + spike → Hunter OPEN', async () => {
   resetAll();
   const now = T0 + 3 * MIN;
   const restore = freezeDateNow(now);
   try {
     seedHistory('MEME', 1.0, now);
-    // MEME с +6% спайком и APY 80% (carry тоже хочет)
     const r = await coordinate(
       [scoutItem('MEME', 1.06, 80)],
       undefined,
@@ -89,21 +83,20 @@ test('IDLE + spike → Hunter OPEN (перебивает carry даже если
   }
 });
 
-test('IDLE + no spike + carry кандидат → carry работает (hunter не мешает)', async () => {
+test('IDLE + no spike → HOLD', async () => {
   resetAll();
   const now = T0 + 3 * MIN;
   const restore = freezeDateNow(now);
   try {
     seedHistory('ZRO', 100, now);  // ровный прайс, без спайка
     const r = await coordinate([scoutItem('ZRO', 100, 80)], undefined);
-    assert.equal(r.action, 'OPEN');
-    assert.equal(r.strategy_id, 'carry');
+    assert.equal(r.action, 'HOLD');
   } finally {
     restore();
   }
 });
 
-test('IDLE + spike на одной, carry-кандидат на другой → Hunter приоритет', async () => {
+test('IDLE + spike на одной монете → Hunter берёт именно её', async () => {
   resetAll();
   const now = T0 + 3 * MIN;
   const restore = freezeDateNow(now);
@@ -112,8 +105,8 @@ test('IDLE + spike на одной, carry-кандидат на другой →
     seedHistory('ZRO', 100, now);
     const r = await coordinate(
       [
-        scoutItem('MEME', 1.06, 5),   // spike но низкий APY
-        scoutItem('ZRO', 100, 80),     // нет spike, но APY годный
+        scoutItem('MEME', 1.06, 5),   // spike
+        scoutItem('ZRO', 100, 80),     // нет spike
       ],
       undefined,
     );
@@ -125,13 +118,12 @@ test('IDLE + spike на одной, carry-кандидат на другой →
   }
 });
 
-test('IDLE + dump → Hunter HOLD (short-only), carry подбирает если подходит', async () => {
+test('IDLE + dump → Hunter HOLD (short-only)', async () => {
   resetAll();
   const now = T0 + 3 * MIN;
   const restore = freezeDateNow(now);
   try {
     seedHistory('MEME', 1.0, now);
-    // -6% dump → Hunter HOLD, но APY=0 → carry тоже HOLD
     const r = await coordinate([scoutItem('MEME', 0.94, 0)], undefined);
     assert.equal(r.action, 'HOLD');
   } finally {
@@ -179,19 +171,19 @@ test('Hunter position + price между уровнями → HOLD', async () =>
   assert.equal(r.action, 'HOLD');
 });
 
-test('Carry position остаётся → Hunter не эвиктит (Iter A)', async () => {
+test('Активная не-hunter поза остаётся → Hunter не эвиктит (Iter A)', async () => {
   resetAll();
   const now = T0 + 3 * MIN;
   const restore = freezeDateNow(now);
   try {
     seedHistory('MEME', 1.0, now);
-    const carryPos = {
+    // Легаси-поза (без распознанного strategy_id) занимает single-slot.
+    const legacyPos = {
       id: 1, coin: 'ZRO', size_usd: 100, entry_price: 100, entry_apy: 80,
-      entry_time: Date.now() - 5 * MIN, mode: 'PAPER', status: 'OPEN', strategy_id: 'carry',
+      entry_time: Date.now() - 5 * MIN, mode: 'PAPER', status: 'OPEN', strategy_id: 'legacy',
     };
-    // Жирный спайк по MEME, но carry-позиция активна
-    const r = await coordinate([scoutItem('MEME', 1.10, 5), scoutItem('ZRO', 100, 80)], carryPos);
-    // coordinator направил в carry-стратегию → её решение (HOLD или CLOSE по слабому APY)
+    // Жирный спайк по MEME, но слот занят → Hunter не открывается.
+    const r = await coordinate([scoutItem('MEME', 1.10, 5), scoutItem('ZRO', 100, 80)], legacyPos);
     assert.notEqual(r.action, 'OPEN');
     assert.notEqual(r.strategy_id, 'hunter');
   } finally {

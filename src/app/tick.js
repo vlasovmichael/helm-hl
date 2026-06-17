@@ -24,7 +24,6 @@ import { tickVaporPaper } from './vaporPaperTick.js';
 import { tickHotMoversPaper } from './hotMoversPaperTick.js';
 import { tickSwingPaper } from './swingPaperTick.js';
 import { tickHunterLongPaper } from './hunterLongPaperTick.js';
-import { tickCarryPaper } from './carryPaperTick.js';
 import { runBalanceDiag } from './balanceDiag.js';
 import { flushBotStatePeriodic } from './lifecycle.js';
 import { state } from './state.js';
@@ -73,7 +72,7 @@ export async function tick() {
       // Дашборд (Hot Movers / Hunter signals) должен продолжать обновляться,
       // даже когда бот в HANDS-OFF. Делаем чистый scan без coordinate/execute.
       try {
-        const { scoutData: handsOffScout, hunterData: handsOffHunter } = await scan();
+        const { hunterData: handsOffHunter } = await scan();
         state.latestHunter   = handsOffHunter;
         state.latestHunterAt = Date.now();
         // Радар Chill Boy расцеплен от торгового слота: при ручной позе (HANDS-OFF)
@@ -101,7 +100,6 @@ export async function tick() {
         await tickVaporPaper(handsOffHunter);
         await tickHotMoversPaper(handsOffHunter);
         await tickSwingPaper(handsOffHunter);
-        await tickCarryPaper(handsOffScout);
         // Equity-снапшот для Performance-графика. Ручная торговля — основной
         // режим оператора (часами держит монету руками), и тик тут делает return
         // ДО runBalanceDiag() в конце. Без этого Performance молчит весь
@@ -186,7 +184,6 @@ export async function tick() {
     await tickVaporPaper(hunterData);
     await tickHotMoversPaper(hunterData);
     await tickSwingPaper(hunterData);
-    await tickCarryPaper(scoutData);
 
     await runSmartAlerts(scoutData, signal, activePosition);
 

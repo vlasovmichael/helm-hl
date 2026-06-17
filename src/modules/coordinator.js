@@ -1,7 +1,6 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { isPaused, isEnabled } from '../core/runtimeFlags.js';
-import { analyze } from './strategist.js';
 import { analyzeHunter } from './strategistSniper.js';
 import { analyzeHunterLong } from './strategistHunterLong.js';
 import { analyzeTrendFollow } from './strategistTrendFollow.js';
@@ -55,11 +54,9 @@ export async function coordinate(scoutData, activePosition, hunterData = scoutDa
       return { action: 'HOLD', strategy_id: 'adopt' };
     }
 
-    const signal = analyze(scoutData, activePosition);
-    if (signal.action !== 'HOLD') {
-      return { ...signal, strategy_id: 'carry' };
-    }
-    return signal;
+    // Carry удалён (2026-06-17). Легаси-позы без распознанного strategy_id больше
+    // не ведём из coordinator — биржевой SL держит риск, мягкий выход не навешиваем.
+    return { action: 'HOLD', strategy_id: sid };
   }
 
   // No position — query strategies in priority order.
@@ -71,7 +68,6 @@ export async function coordinate(scoutData, activePosition, hunterData = scoutDa
   // только здесь, в ветке открытия: сопровождение активной позы выше работает
   // на полном наборе данных. См. WLD 2026-06-16.
   const notOwned = (d) => !excludeCoins.has((d.coin || '').toUpperCase());
-  const scoutOpen  = excludeCoins.size ? scoutData.filter(notOwned)  : scoutData;
   const hunterOpen = excludeCoins.size ? hunterData.filter(notOwned) : hunterData;
 
   if (isEnabled('hunter', config.trading.hunterEnabled) && (!config.isProduction || config.trading.hunterProdEnabled)) {
@@ -103,15 +99,7 @@ export async function coordinate(scoutData, activePosition, hunterData = scoutDa
     }
   }
 
-  // Carry prod-gate (как у Hunter/ChillBoy): в PROD-боте при CARRY_PROD_ENABLED=false
-  // реальных carry-входов нет — carry уходит в paper-накопление (tickCarryPaper).
-  if (isEnabled('carry', config.trading.carryEnabled !== false) && (!config.isProduction || config.trading.carryProdEnabled)) {
-    const carrySignal = analyze(scoutOpen, undefined);
-    if (carrySignal.action !== 'HOLD') {
-      logger.debug(`[Coordinator] carry → ${carrySignal.action} ${carrySignal.coin}`);
-      return { ...carrySignal, strategy_id: 'carry' };
-    }
-  }
+  // Carry удалён (2026-06-17). Был последним в приоритете после Hunter/ChillBoy.
 
   return { action: 'HOLD' };
 }

@@ -9,84 +9,99 @@ process.env.EXIT_BUFFER           = '5';
 process.env.MIN_HOLD_TIME_MINUTES = '60';
 process.env.BREATHING_MINUTES     = '30';
 process.env.LEVERAGE              = '1';
-// Carry default-off с 2026-06-15 (стратегия снята). Ветка кода ещё есть —
-// эти тесты её механику и проверяют, поэтому включаем флаг явно.
-process.env.CARRY_ENABLED         = 'true';
+process.env.HUNTER_ENABLED        = 'true';
 
 const { coordinate } = await import('../src/modules/coordinator.js');
-const { analyze }    = await import('../src/modules/strategist.js');
+const { push: pushPriceHistory, clearAll } =
+  await import('../src/core/priceHistory.js');
+const { resetHunterCooldowns } =
+  await import('../src/modules/strategistSniper.js');
+const { resetHunterCrossCooldowns } =
+  await import('../src/modules/hunterCrossCooldown.js');
 
-const HOUR_MS = 3_600_000;
+const MIN = 60_000;
+const T0  = 1_700_000_000_000;
 
-function makeScoutItem(coin, smoothedApy, opts = {}) {
+function resetAll() {
+  clearAll();
+  resetHunterCooldowns();
+  resetHunterCrossCooldowns();
+}
+
+function scoutItem(coin, price, smoothedApy = 0) {
   return {
-    coin,
-    price:        opts.price        ?? 100,
-    fundingRate:  opts.fundingRate  ?? smoothedApy / 100 / 365 / 24,
-    rawApy:       opts.rawApy       ?? smoothedApy,
+    coin, price,
+    fundingRate:  smoothedApy / 100 / 365 / 24,
+    rawApy:       smoothedApy,
     smoothedApy,
-    slowApy:      opts.slowApy      ?? smoothedApy,
-    predictedApy: opts.predictedApy ?? null,
+    slowApy:      smoothedApy,
+    predictedApy: null,
   };
 }
 
-function freezeTime(year, month, day, hour, minute) {
+function seedHistory(coin, basePrice, now) {
+  pushPriceHistory(coin, basePrice, now - 3 * MIN);
+  pushPriceHistory(coin, basePrice, now - 2 * MIN);
+  pushPriceHistory(coin, basePrice, now - 1 * MIN);
+}
+
+function freezeDateNow(ts) {
   const RealDate = global.Date;
-  const fixed    = RealDate.UTC(year, month, day, hour, minute, 0);
   class FakeDate extends RealDate {
     constructor(...args) {
-      if (args.length === 0) {
-        super(fixed);
-        return;
-      }
-      super(...args);
+      if (args.length === 0) super(ts);
+      else super(...args);
     }
-    static now() {
-      return fixed;
-    }
+    static now() { return ts; }
   }
   global.Date = FakeDate;
   return () => { global.Date = RealDate; };
 }
 
-function makePosition(coin, entryApy, strategyId = 'carry', opts = {}) {
+function makePosition(coin, strategyId, opts = {}) {
   return {
     id:          1,
     coin,
     size_usd:    100,
     entry_price: opts.entry_price ?? 100,
-    entry_apy:   entryApy,
-    entry_time:  opts.entry_time  ?? Date.now() - 50 * HOUR_MS,
+    entry_apy:   opts.entry_apy   ?? 0,
+    entry_time:  opts.entry_time  ?? Date.now() - 5 * MIN,
     mode:        'PAPER',
     status:      'OPEN',
     strategy_id: strategyId,
   };
 }
 
-function resetAll() {
-  analyze([], undefined);
-}
-
 // ═══════════════════════════════════════════════
 //  No position — strategy priority
 // ═══════════════════════════════════════════════
 
-test('Coordinator: no position + carry candidate → OPEN carry', async () => {
+test('Coordinator: no position + spike → OPEN hunter', async () => {
   resetAll();
-  const data = [makeScoutItem('ZRO', 80)];
-  const r = await coordinate(data, undefined);
-  assert.equal(r.action, 'OPEN');
-  assert.equal(r.strategy_id, 'carry');
-  assert.equal(r.coin, 'ZRO');
+  const now = T0 + 3 * MIN;
+  const restore = freezeDateNow(now);
+  try {
+    seedHistory('MEME', 1.0, now);
+    const r = await coordinate([scoutItem('MEME', 1.06, 80)], undefined);
+    assert.equal(r.action, 'OPEN');
+    assert.equal(r.strategy_id, 'hunter');
+    assert.equal(r.coin, 'MEME');
+  } finally {
+    restore();
+  }
 });
-
-// Fade-стратегия удалена 2026-06-15 — тесты «OPEN fade» / «fade priority» сняты.
 
 test('Coordinator: no position + nothing interesting → HOLD', async () => {
   resetAll();
-  const data = [makeScoutItem('ZRO', 10)]; // too low for carry
-  const r = await coordinate(data, undefined);
-  assert.equal(r.action, 'HOLD');
+  const now = T0 + 3 * MIN;
+  const restore = freezeDateNow(now);
+  try {
+    seedHistory('ZRO', 100, now);
+    const r = await coordinate([scoutItem('ZRO', 100, 10)], undefined);
+    assert.equal(r.action, 'HOLD');
+  } finally {
+    restore();
+  }
 });
 
 // ═══════════════════════════════════════════════
@@ -95,58 +110,82 @@ test('Coordinator: no position + nothing interesting → HOLD', async () => {
 
 test('Coordinator: excludeCoins блокирует открытие на монете оператора → HOLD', async () => {
   resetAll();
-  const data = [makeScoutItem('ZRO', 80)]; // обычно дал бы OPEN carry
-  const r = await coordinate(data, undefined, data, new Set(['ZRO']));
-  assert.equal(r.action, 'HOLD');
+  const now = T0 + 3 * MIN;
+  const restore = freezeDateNow(now);
+  try {
+    seedHistory('MEME', 1.0, now);
+    const data = [scoutItem('MEME', 1.06, 80)]; // обычно дал бы OPEN hunter
+    const r = await coordinate(data, undefined, data, new Set(['MEME']));
+    assert.equal(r.action, 'HOLD');
+  } finally {
+    restore();
+  }
 });
 
 test('Coordinator: excludeCoins не трогает прочие монеты → OPEN', async () => {
   resetAll();
-  const data = [makeScoutItem('ZRO', 80)];
-  // Юзер сидит в другой монете — ZRO остаётся валидным кандидатом.
-  const r = await coordinate(data, undefined, data, new Set(['WLD']));
-  assert.equal(r.action, 'OPEN');
-  assert.equal(r.coin, 'ZRO');
+  const now = T0 + 3 * MIN;
+  const restore = freezeDateNow(now);
+  try {
+    seedHistory('MEME', 1.0, now);
+    const data = [scoutItem('MEME', 1.06, 80)];
+    // Юзер сидит в другой монете — MEME остаётся валидным кандидатом.
+    const r = await coordinate(data, undefined, data, new Set(['WLD']));
+    assert.equal(r.action, 'OPEN');
+    assert.equal(r.coin, 'MEME');
+  } finally {
+    restore();
+  }
 });
 
 test('Coordinator: excludeCoins регистронезависимо (lowercase coin)', async () => {
   resetAll();
-  const data = [makeScoutItem('zro', 80)];
-  const r = await coordinate(data, undefined, data, new Set(['ZRO']));
-  assert.equal(r.action, 'HOLD');
+  const now = T0 + 3 * MIN;
+  const restore = freezeDateNow(now);
+  try {
+    seedHistory('meme', 1.0, now);
+    const data = [scoutItem('meme', 1.06, 80)];
+    const r = await coordinate(data, undefined, data, new Set(['MEME']));
+    assert.equal(r.action, 'HOLD');
+  } finally {
+    restore();
+  }
 });
 
 // ═══════════════════════════════════════════════
 //  Has position — routes to correct strategy
 // ═══════════════════════════════════════════════
 
-test('Coordinator: carry position → routes to carry strategist', async () => {
+// Adopt Mode (SHADOW): подхваченная ручная поза занимает слот, но бот ею НЕ
+// управляет — coordinator должен вернуть HOLD и НЕ провалиться в открытие.
+test('Coordinator: adopt position → HOLD (keeps strategy_id)', async () => {
   resetAll();
-  const restore = freezeTime(2026, 3, 15, 14, 30); // safe from funding gate
+  const now = T0 + 3 * MIN;
+  const restore = freezeDateNow(now);
   try {
-    const pos = makePosition('ZRO', 80, 'carry', {
-      entry_time: Date.now() - 50 * HOUR_MS,
-    });
-    const data = [makeScoutItem('ZRO', 5, { slowApy: 5 })];
-    const r = await coordinate(data, pos);
-    assert.equal(r.action, 'CLOSE');
-    assert.equal(r.strategy_id, 'carry');
+    seedHistory('NIL', 1.0, now);
+    const pos = makePosition('NIL', 'adopt');
+    // Жирный спайк на той же монете: adopt-ветка обязана перехватить раньше.
+    const r = await coordinate([scoutItem('NIL', 1.10, 80)], pos);
+    assert.equal(r.action, 'HOLD');
+    assert.equal(r.strategy_id, 'adopt');
   } finally {
     restore();
   }
 });
 
-// Adopt Mode Iter 1 (SHADOW): подхваченная ручная поза занимает слот, но бот ею
-// НЕ управляет — coordinator должен вернуть HOLD и НЕ провалиться в carry-fallback.
-test('Coordinator: adopt position → HOLD (no carry fallback, keeps strategy_id)', async () => {
+// Легаси-поза без распознанного strategy_id (carry удалён 2026-06-17): coordinator
+// больше её не ведёт — возвращает HOLD, не открывая ничего поверх.
+test('Coordinator: legacy position → HOLD', async () => {
   resetAll();
-  const pos = makePosition('NIL', 0, 'adopt', {
-    entry_time: Date.now() - 5 * 60_000,
-  });
-  // Дать carry-кандидата на ту же монету: если бы coordinator провалился в carry,
-  // он бы попытался ею управлять. Adopt-ветка обязана перехватить раньше.
-  const data = [makeScoutItem('NIL', 80, { slowApy: 5 })];
-  const r = await coordinate(data, pos);
-  assert.equal(r.action, 'HOLD');
-  assert.equal(r.strategy_id, 'adopt');
+  const now = T0 + 3 * MIN;
+  const restore = freezeDateNow(now);
+  try {
+    seedHistory('ZRO', 100, now);
+    const pos = makePosition('ZRO', 'legacy');
+    const r = await coordinate([scoutItem('ZRO', 100, 80)], pos);
+    assert.equal(r.action, 'HOLD');
+  } finally {
+    restore();
+  }
 });

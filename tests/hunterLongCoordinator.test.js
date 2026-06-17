@@ -17,7 +17,6 @@ process.env.HUNTER_ENABLED        = 'false';  // изолируем — толь
 process.env.HUNTER_LONG_ENABLED   = 'true';
 
 const { coordinate } = await import('../src/modules/coordinator.js');
-const { analyze }    = await import('../src/modules/strategist.js');
 const { push: pushPriceHistory, clearAll } =
   await import('../src/core/priceHistory.js');
 const { resetHunterLongCooldowns } =
@@ -29,7 +28,6 @@ const MIN = 60_000;
 const T0  = 1_700_000_000_000;
 
 function resetAll() {
-  analyze([], undefined);
   clearAll();
   resetHunterLongCooldowns();
   resetHunterCrossCooldowns();
@@ -98,9 +96,9 @@ test('Активная hunter_long позиция → coordinator делегир
   assert.equal(r.reason, 'hunter_long_tp');
 });
 
-test('HUNTER_LONG_ENABLED=false → hunter_long не запрашивается даже при dump', async () => {
-  // Не можем перезагрузить config, но можем проверить что приоритет работает:
-  // если slot занят carry — hunter_long не должен пробить.
+test('Slot занят другой позой → hunter_long не пробивает даже при dump', async () => {
+  // Single-slot: если позиция уже открыта (любой strategy_id), ветка открытия
+  // не запускается — hunter_long не должен влезть.
   resetAll();
   const now = T0 + 3 * MIN;
   const restore = freezeDateNow(now);
@@ -108,9 +106,8 @@ test('HUNTER_LONG_ENABLED=false → hunter_long не запрашивается 
     seedHistory('MEME', 1.0, now);
     const r = await coordinate(
       [scoutItem('MEME', 0.94, 80)],
-      { strategy_id: 'carry', coin: 'ETH', entry_apy: 80 },
+      { strategy_id: 'legacy', coin: 'ETH', entry_apy: 80 },
     );
-    // slot занят carry → coordinator передаст в strategist.analyze, не hunter_long
     assert.notEqual(r.strategy_id, 'hunter_long');
   } finally {
     restore();

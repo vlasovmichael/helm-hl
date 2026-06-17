@@ -15,13 +15,12 @@ import {
   faderPaperOpen, candyPaperOpen, vaporPaperOpen, hotMoversPaperOpen, swingPaperOpen,
 } from './paper.js';
 import {
-  productionOpen, productionClose, productionRotate,
+  productionClose,
   productionHunterOpen, productionHunterLongOpen, productionTrendFollowOpen,
 } from './production.js';
 import { productionArmSniper, finalizeProdSniperPartial } from './sniper.js';
 import { cancelOrderFor } from '../exchange.js';
 import {
-  notifyRotate, notifyRotateFailed,
   notifyOpenBlocked, notifyDrawdownBreached,
   notifySniperArmed,
 } from './notifications.js';
@@ -53,8 +52,6 @@ export async function execute(signal, activePosition) {
       return afterMutation(handleOpen(signal));
     case "CLOSE":
       return afterMutation(handleClose(signal, activePosition));
-    case "ROTATE":
-      return afterMutation(handleRotate(signal, activePosition));
     case "HOLD":
       return { ok: true };
     default:
@@ -317,30 +314,11 @@ async function handleOpen(signal) {
     );
   }
 
-  const pre = await preflightChecks(signal.coin, signal.apy);
-  if (!pre.allowed) {
-    await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
-    return { ok: false };
-  }
-
-  const side = signal.side || 'short';
-  const volIdx = pre.volIdx ?? 0;
-
-  // Carry PROD-gate (Этап 2): при CARRY_PROD_ENABLED=false carry в PROD-боте идёт
-  // в PAPER (shadow-накопление через tickCarryPaper), а не в реальный ордер. Без
-  // этого carry — единственная стратегия без paper-ветки — слала бы реальные
-  // ордера из paper-тика. Остальные strategy_id здесь — как раньше.
-  const carryPaperOnly = strategyId === 'carry' && !config.trading.carryProdEnabled;
-
-  if (config.isProduction && !carryPaperOnly) {
-    return productionOpen(signal.coin, signal.price, signal.apy, false, strategyId, side, volIdx);
-  }
-  if (config.isProduction) {
-    logger.info(
-      `[Executor] Carry PROD-путь выключен (CARRY_PROD_ENABLED=false) — сигнал #${signal.coin} идёт в PAPER.`,
-    );
-  }
-  return paperOpen(signal.coin, signal.price, signal.apy, false, strategyId, side, volIdx);
+  // Carry удалён (2026-06-17) — это была единственная стратегия, попадавшая в
+  // этот fallthrough. Любой неизвестный strategy_id теперь — баг диспетчера, а
+  // не молчаливый carry-открытие реального ордера.
+  logger.warn(`[Executor] Неизвестный strategy_id="${strategyId}" для #${signal.coin} — open пропущен.`);
+  return { ok: false };
 }
 
 async function handleClose(signal, position) {
@@ -467,93 +445,4 @@ async function handleClose(signal, position) {
     return productionClose(signal, position);
   }
   return paperClose(signal, position);
-}
-
-async function handleRotate(signal, position) {
-  if (!position) {
-    logger.warn(
-      `[Executor] ROTATE signal but no active position — treating as OPEN`,
-    );
-    return handleOpen({
-      action: "OPEN",
-      coin: signal.openCoin,
-      price: signal.openPrice,
-      apy: signal.openApy,
-      side: signal.openSide || 'short',
-    });
-  }
-
-  // Preflight: блокируем только открытие новой ноги. Старую позицию НЕ закрываем,
-  // если новую открыть нельзя — ротация теряет смысл.
-  const pre = await preflightChecks(signal.openCoin, signal.openApy);
-  if (!pre.allowed) {
-    await notifyOpenBlocked({ coin: signal.openCoin, reason: pre.reason, details: pre.details });
-    return { ok: false };
-  }
-
-  // volIdx прокидывается в open-нога ротации через signal — иначе придётся
-  // двойной API-call внутри paperRotate/productionRotate.
-  signal.volIdx = pre.volIdx ?? 0;
-
-  if (config.isProduction) {
-    return productionRotate(signal, position);
-  }
-  return paperRotate(signal, position);
-}
-
-// ── Paper rotate (inline) ──────────────────────
-
-async function paperRotate(signal, position) {
-  const closeResult = await paperClose(
-    { price: signal.closePrice, reason: signal.reason },
-    position,
-    true, // silent
-  );
-
-  if (!closeResult.ok) return closeResult;
-
-  // Гард: close мог триггернуть circuit breaker
-  const cb = getCircuitBreakerStatus();
-  if (cb.broken) {
-    logger.warn(
-      `[Executor] PAPER ROTATE aborted: circuit breaker tripped during close. Bot stays IDLE.`,
-    );
-    return { ok: true, closePnl: closeResult.pnl };
-  }
-
-  const openResult = await paperOpen(
-    signal.openCoin,
-    signal.openPrice,
-    signal.openApy,
-    true, // silent
-    signal.strategy_id || 'carry',
-    signal.openSide || position.side || 'short',
-    signal.volIdx ?? 0,
-  );
-
-  if (!openResult.ok) {
-    await notifyRotateFailed({
-      closeCoin: signal.closeCoin, openCoin: signal.openCoin,
-      closePnl: closeResult.pnl, phase: 'open',
-    });
-    return { ok: false, closePnl: closeResult.pnl };
-  }
-
-  await notifyRotate({
-    closeCoin: signal.closeCoin, openCoin: signal.openCoin,
-    holdHours: closeResult.holdHours, closePnl: closeResult.pnl,
-    openSizeUsd: openResult.sizeUsd, openApy: signal.openApy,
-    paybackHours: signal.paybackHours, isProd: false,
-  });
-
-  notify('afterRotate', {
-    closeCoin: signal.closeCoin, openCoin: signal.openCoin,
-    closePnl: closeResult.pnl, positionId: openResult.positionId,
-  });
-
-  return {
-    ok: true,
-    closePnl: closeResult.pnl,
-    positionId: openResult.positionId,
-  };
 }
