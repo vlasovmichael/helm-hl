@@ -3,7 +3,6 @@ import { logger } from '../core/logger.js';
 import { isPaused, isEnabled } from '../core/runtimeFlags.js';
 import { analyzeHunter } from './strategistSniper.js';
 import { analyzeHunterLong } from './strategistHunterLong.js';
-import { analyzeTrendFollow } from './strategistTrendFollow.js';
 
 /**
  * Coordinator: единая точка входа для стратегий.
@@ -38,10 +37,6 @@ export async function coordinate(scoutData, activePosition, hunterData = scoutDa
 
     if (sid === 'hunter_long') {
       return analyzeHunterLong(hunterData, activePosition);
-    }
-
-    if (sid === 'trend_follow') {
-      return analyzeTrendFollow(hunterData, activePosition);
     }
 
     // Adopt Mode (multi-slot): подхваченные ручные позы ведёт НЕ coordinator, а
@@ -86,18 +81,6 @@ export async function coordinate(scoutData, activePosition, hunterData = scoutDa
     }
   }
 
-  // Strategy #4: trend_follow (Chill Boy). Async — 1h candle fetch с кэшем.
-  // Приоритет после Hunter (Hunter ловит быстрые спайки за секунды), до Carry.
-  // В PROD-боте при CHILL_BOY_PROD_ENABLED=false стратегия торгует в отдельном
-  // shadow-слоте (см. tickTrendFollowPaper) и сюда не лезет, иначе бумажная поза
-  // заняла бы реальный single-slot.
-  if (isEnabled('chillBoy', config.trading.chillBoyEnabled) && (!config.isProduction || config.trading.chillBoyProdEnabled)) {
-    const tfSignal = await analyzeTrendFollow(hunterOpen, undefined);
-    if (tfSignal.action !== 'HOLD') {
-      logger.debug(`[Coordinator] trend_follow → ${tfSignal.action} ${tfSignal.coin}`);
-      return tfSignal;
-    }
-  }
 
   // Carry удалён (2026-06-17). Был последним в приоритете после Hunter/ChillBoy.
 

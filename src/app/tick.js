@@ -7,7 +7,6 @@ import { getActivePosition, getActiveAdoptPositions } from '../core/database.js'
 import { scan } from '../modules/scout.js';
 import { coordinate } from '../modules/coordinator.js';
 import { config } from '../core/config.js';
-import { scanChillBoyRadar } from '../modules/strategistTrendFollow.js';
 import { scanCandyGirlRadar } from '../modules/strategistCandyGirl.js';
 import { execute } from '../modules/executor/index.js';
 import { tickSniper } from '../modules/executor/sniper.js';
@@ -17,7 +16,6 @@ import { superviseAdoptPositions } from './adoptSupervise.js';
 import { hunterReconcile } from './hunterReconcile.js';
 import { hunterLongReconcile } from './hunterLongReconcile.js';
 import { processHunterTrailArm } from './hunterTrailArm.js';
-import { tickTrendFollowPaper } from './trendFollowPaperTick.js';
 import { tickFaderPaper } from './faderPaperTick.js';
 import { tickHunterPaper } from './hunterPaperTick.js';
 import { tickVaporPaper } from './vaporPaperTick.js';
@@ -75,12 +73,6 @@ export async function tick() {
         const { hunterData: handsOffHunter } = await scan();
         state.latestHunter   = handsOffHunter;
         state.latestHunterAt = Date.now();
-        // Радар Chill Boy расцеплен от торгового слота: при ручной позе (HANDS-OFF)
-        // coordinator не вызывается → analyzeTrendFollow не сканирует. Зовём скан
-        // напрямую, чтобы лента находок и TG-алерты жили, пока оператор торгует руками.
-        if (config.trading.chillBoyEnabled) {
-          await scanChillBoyRadar(handsOffHunter);
-        }
         // Candy Girl радар (signal-only, см. candy_girl_idea.md). Расцеплен от
         // слота — никогда не торгует, только лента + TG-алерты. Default OFF.
         if (config.trading.candyGirlEnabled) {
@@ -88,10 +80,9 @@ export async function tick() {
           // Paper-стратегия удалена 2026-06-15 (−$26 на 121 сделке, см. ledger).
           await scanCandyGirlRadar(handsOffHunter);
         }
-        // ChillBoy paper shadow-слот независим от реального слота — должен тикать
-        // даже в HANDS-OFF, иначе зависшая ручная PROD-поза подвешивает paper
-        // позицию навсегда (инцидент BTC id=90 + PURR HANDS-OFF, 2026-05-22/23).
-        await tickTrendFollowPaper(handsOffHunter);
+        // Paper shadow-слоты независимы от реального слота — должны тикать даже
+        // в HANDS-OFF, иначе зависшая ручная PROD-поза подвешивает paper-позицию
+        // навсегда (инцидент BTC id=90 + PURR HANDS-OFF, 2026-05-22/23).
         await tickFaderPaper(handsOffHunter);
         // Hunter SHORT/Long + Carry shadow paper-слоты (Этап 2): независимы от
         // реального слота, копят статистику даже в HANDS-OFF (как ChillBoy/Fader).
@@ -170,10 +161,7 @@ export async function tick() {
       await execute(signal, activePosition);
     }
 
-    // ChillBoy (trend_follow) бумажный слот — независим от реального.
-    await tickTrendFollowPaper(hunterData);
-
-    // Fader (Strategy #5) бумажный слот — share общий paper slot с ChillBoy.
+    // Fader (Strategy #5) бумажный слот — независим от реального.
     await tickFaderPaper(hunterData);
 
     // Hunter SHORT/Long + Carry shadow paper-слоты (Этап 2): каждая копит

@@ -27,14 +27,12 @@ import { consumeHunterMfeMae, clearHunterTrailState, getHunterPeakPct } from '..
 import {
   consumeHunterLongMfeMae, clearHunterLongTrailState, getHunterLongPeakPct,
 } from '../strategistHunterLong.js';
-import { consumeTrendFollowMfeMae } from '../strategistTrendFollow.js';
 import {
   consumeFaderMfeMae, clearFaderPositionState, recordFaderLoss, setFaderCooldown,
 } from '../strategistFader.js';
 import { setHunterCrossCooldown } from '../hunterCrossCooldown.js';
 import { resolveAsset } from './fill-parser.js';
 import { resolveEntrySize } from './sizing.js';
-import { getVirtualEquity, applyVirtualPnl } from '../chillBoyVirtualEquity.js';
 import { getFaderVirtualEquity, applyFaderVirtualPnl } from '../faderVirtualEquity.js';
 import { getCandyGirlVirtualEquity, applyCandyGirlVirtualPnl } from '../candyGirlVirtualEquity.js';
 
@@ -218,79 +216,6 @@ export async function hunterLongPaperOpen(coin, price, dumpPct, sl, tp, silent =
 
   notify('afterOpen', {
     coin, price, sizeUsd, positionId: Number(id), mode: 'PAPER', strategy: 'hunter_long',
-  });
-
-  return { ok: true, positionId: Number(id), sizeUsd };
-}
-
-/**
- * Открывает виртуальную позицию для Strategy #4 trend_follow (Chill Boy).
- *
- * Отличия:
- *  - Размер = CHILL_BOY_BALANCE_UTILIZATION (default 50%).
- *  - strategy_id='trend_follow', side зависит от direction.
- *  - SL/TP — в ATR-единицах от entry (расчёт в strategist'е).
- *
- * @param {string} coin
- * @param {number} price
- * @param {'LONG'|'SHORT'} direction
- * @param {number} sl
- * @param {number} tp
- * @param {boolean} [silent=false]
- * @param {Object} [entryFeatures=null]
- */
-export async function trendFollowPaperOpen(coin, price, direction, sl, tp, silent = false, entryFeatures = null) {
-  const virtualMode = config.trading.chillBoyPaperVirtualBalance > 0;
-  const balance = virtualMode ? getVirtualEquity() : await getPaperBalance();
-  if (balance <= 0) {
-    logger.warn(`[Executor] [ChillBoy] Cannot open — balance is $${balance.toFixed(2)}`);
-    return { ok: false };
-  }
-  const balanceTag = virtualMode ? `virtual $${balance.toFixed(2)}` : `real $${balance.toFixed(2)}`;
-
-  const utilization = virtualMode
-    ? config.trading.chillBoyPaperVirtualUtil
-    : config.trading.chillBoyBalanceUtil;
-  const szDecimals = resolvePaperSzDecimals(coin);
-  if (szDecimals == null) return { ok: false };
-  const { sizeUsd, sz, tooSmall } = resolveEntrySize({
-    coin, tag: 'ChillBoy', equity: balance, capBase: balance,
-    capUtil: utilization, price, sl, szDecimals,
-  });
-  if (tooSmall) {
-    const why = sizeUsd < MIN_ORDER_USD
-      ? `size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min`
-      : `sz=${sz} rounds to 0 (szDecimals=${szDecimals}, price $${price})`;
-    logger.warn(
-      `[Executor] [ChillBoy SKIP] #${coin} — ${why} (${(utilization * 100).toFixed(0)}% ${balanceTag})`,
-    );
-    return { ok: false };
-  }
-
-  const fee  = sizeUsd * ONE_LEG;
-  const side = direction === 'LONG' ? 'long' : 'short';
-
-  const id = savePosition({
-    coin,
-    size_usd:    sizeUsd,
-    entry_price: price,
-    entry_apy:   0,
-    entry_time:  Date.now(),
-    mode:        "PAPER",
-    strategy_id: 'trend_follow',
-    side,
-    sl_price:    sl,
-    tp_price:    tp,
-    ...(entryFeatures || {}),
-  });
-
-  logger.info(
-    `[Executor] 🎯 ChillBoy OPEN ${direction} #${coin} | $${sizeUsd.toFixed(2)} (of ${balanceTag}) @ $${price} ` +
-      `| SL $${sl.toFixed(6)} / TP $${tp.toFixed(6)} | fee $${fee.toFixed(4)} | id: ${id}`,
-  );
-
-  notify('afterOpen', {
-    coin, price, sizeUsd, positionId: Number(id), mode: 'PAPER', strategy: 'trend_follow',
   });
 
   return { ok: true, positionId: Number(id), sizeUsd };
@@ -659,7 +584,7 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
     pricePnl = (position.size_usd * (position.entry_price - closePrice)) / position.entry_price;
   } else if (position.strategy_id === 'hunter_long') {
     pricePnl = (position.size_usd * (closePrice - position.entry_price)) / position.entry_price;
-  } else if (position.strategy_id === 'trend_follow' || position.strategy_id === 'candy_girl' || position.strategy_id === 'vapor') {
+  } else if (position.strategy_id === 'candy_girl' || position.strategy_id === 'vapor') {
     const isLong = (position.side || '').toLowerCase() === 'long';
     pricePnl = isLong
       ? (position.size_usd * (closePrice - position.entry_price)) / position.entry_price
@@ -717,15 +642,6 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
       exitFeatures.trail_give_back_pct = signal.giveBackPct ?? null;
     }
     clearHunterLongTrailState(position.id);
-  } else if (position.strategy_id === 'trend_follow') {
-    const mm = consumeTrendFollowMfeMae(position.id);
-    exitFeatures = {
-      mfe_usd:      mm?.mfeUsd ?? null,
-      mae_usd:      mm?.maeUsd ?? null,
-      mfe_pct:      mm?.mfePct ?? null,
-      mae_pct:      mm?.maePct ?? null,
-      hold_seconds: Math.round(holdMs / 1000),
-    };
   } else if (position.strategy_id === 'fader') {
     const mm = consumeFaderMfeMae(position.id);
     exitFeatures = {
@@ -748,15 +664,6 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
     reason:       signal.reason,
     exitFeatures,
   });
-
-  // Compound sandbox: ChillBoy paper virtual equity tracks net P&L over time.
-  if (
-    position.strategy_id === 'trend_follow' &&
-    position.mode === 'PAPER' &&
-    config.trading.chillBoyPaperVirtualBalance > 0
-  ) {
-    applyVirtualPnl(realizedPnl - totalFee, { coin: position.coin, reason: signal.reason });
-  }
 
   // Compound sandbox: Candy Girl paper virtual equity (Iter 2).
   if (
@@ -870,9 +777,9 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
   }
 
   // Circuit breaker: фиксируем убыток только для реальных стратегий.
-  // trend_follow (ChillBoy) и candy_girl торгуют в виртуальных sandbox-слотах —
-  // их PAPER убытки не должны блокировать реальные Hunter сделки.
-  const virtualSandbox = position.strategy_id === 'trend_follow' || position.strategy_id === 'candy_girl';
+  // candy_girl торгует в виртуальном sandbox-слоте — её PAPER убытки не должны
+  // блокировать реальные Hunter сделки.
+  const virtualSandbox = position.strategy_id === 'candy_girl';
   if (realizedPnl < 0 && !virtualSandbox) {
     const tripped = recordLoss(position.coin, realizedPnl);
     if (tripped) {

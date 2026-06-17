@@ -223,29 +223,6 @@ const HELP_CONTENT = {
       },
     ],
   },
-  chillBoy: {
-    title: "Chill Boy — Shadow Trading",
-    lead: "Trend-follow squeeze-breakout стратегия #4. Детектор работает в PROD-боте, но НЕ торгует реальный slot — всё в PAPER. Карточка собирает данные для решения о промоушене стратегии в live.",
-    sections: [
-      {
-        title: "Режим",
-        rows: [
-          [
-            '<span class="status-pill">PAPER</span>',
-            "Сигналы есть, сделки виртуальные — реальный slot не занят",
-          ],
-          [
-            '<span class="status-pill prod">PROD</span>',
-            "Стратегия промоутнута в live — торгует реальный slot (карточка скрыта)",
-          ],
-        ],
-      },
-      {
-        title: "Detector heartbeat",
-        sub: "Низ карточки: tracked (сколько монет в фокусе) · squeezed (сколько в squeeze) · breakouts (сколько пробоев за тик) · slot (IDLE/IN_POS) · cooldowns (re-cooldown + post-SL cooldown).",
-      },
-    ],
-  },
 };
 
 function renderHelpSection(s) {

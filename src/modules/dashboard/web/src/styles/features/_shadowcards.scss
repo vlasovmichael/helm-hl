@@ -1,9 +1,8 @@
 @use "../core/breakpoints" as *;
 
-/* ── Shadow-trading cards (Chill Boy / Candy Girl / Fader) ─────
-   .cb-* — общие утилиты для трёх strategy-карточек. Раньше были заскоплены
-   на #sec-chillboy, из-за чего Candy Girl и Fader рендерились без стилей. */
-$cards: ":is(#sec-chillboy, #sec-candygirl, #sec-fader)";
+/* ── Shadow-trading cards (Candy Girl / Fader) ─────
+   .cb-* — общие утилиты для strategy-карточек. */
+$cards: ":is(#sec-candygirl, #sec-fader)";
 
 #{$cards} {
   .cb-grid {

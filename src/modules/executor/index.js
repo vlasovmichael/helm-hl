@@ -11,12 +11,12 @@ import { invalidateAccountState } from '../../core/accountState.js';
 import { getAccountEquity } from '../wallet.js';
 import { checkVolatility } from '../volatility.js';
 import {
-  paperOpen, paperClose, hunterPaperOpen, hunterLongPaperOpen, trendFollowPaperOpen,
+  paperClose, hunterPaperOpen, hunterLongPaperOpen,
   faderPaperOpen, candyPaperOpen, vaporPaperOpen, hotMoversPaperOpen, swingPaperOpen,
 } from './paper.js';
 import {
   productionClose,
-  productionHunterOpen, productionHunterLongOpen, productionTrendFollowOpen,
+  productionHunterOpen, productionHunterLongOpen,
 } from './production.js';
 import { productionArmSniper, finalizeProdSniperPartial } from './sniper.js';
 import { cancelOrderFor } from '../exchange.js';
@@ -197,34 +197,9 @@ async function handleOpen(signal) {
     );
   }
 
-  // Strategy #4 (trend_follow / Chill Boy) route. Iter F.1b: PAPER only.
-  // PROD путь — Iter F.3, под gate CHILL_BOY_PROD_ENABLED.
-  if (strategyId === 'trend_follow') {
-    const pre = await preflightChecks(signal.coin, null);
-    if (!pre.allowed) {
-      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
-      return { ok: false };
-    }
-    // Двойной gate: CHILL_BOY_ENABLED=true пускает сигнал, реальные ордера идут
-    // только с CHILL_BOY_PROD_ENABLED=true. Без него — PAPER (даже в isProduction).
-    if (config.isProduction && config.trading.chillBoyProdEnabled) {
-      return productionTrendFollowOpen(
-        signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
-      );
-    }
-    if (config.isProduction) {
-      logger.info(
-        `[Executor] ChillBoy PROD-путь выключен (CHILL_BOY_PROD_ENABLED=false) — сигнал #${signal.coin} идёт в PAPER.`,
-      );
-    }
-    return trendFollowPaperOpen(
-      signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
-    );
-  }
-
   // Candy Girl route (Iter 2): PAPER-only shadow-слот. PROD-путь пока не построен —
-  // open всегда виртуальный (даже в isProduction). Carry-guard'ы применяем (CB/
-  // drawdown/OI), как у trend_follow.
+  // open всегда виртуальный (даже в isProduction). Guard'ы применяем (CB/
+  // drawdown/OI).
   if (strategyId === 'candy_girl') {
     const pre = await preflightChecks(signal.coin, null);
     if (!pre.allowed) {

@@ -27,8 +27,6 @@ const STRAT_STATUS = {
 const STRAT_FAMILY_HUE = {
   hunter:        8,   // red-orange
   hunter_long: 150,   // green
-  carry:       265,   // violet
-  trend_follow:200,   // blue
   candy_girl:  328,   // pink
   fader:        45,   // amber
   adopt:       178,   // teal

@@ -42,12 +42,10 @@ import {
   isHunterArmed,
 } from "../strategistSniper.js";
 import { getAdoptPeakPct } from "../strategistAdopt.js";
-import { getChillBoyHeartbeat, getChillBoySignals, getTrendFollowMfeMae } from "../strategistTrendFollow.js";
 import { getCandyGirlHeartbeat, getCandyGirlSignals, getCandyGirlStats } from "../strategistCandyGirl.js";
 import { getCandyGirlVirtualEquitySnapshot } from "../candyGirlVirtualEquity.js";
 import { getFaderHeartbeat, getFaderMfeMae } from "../strategistFader.js";
 import { getFaderVirtualSnapshot } from "../faderVirtualEquity.js";
-import { getVirtualEquitySnapshot } from "../chillBoyVirtualEquity.js";
 import { buildStrategiesPayload } from "./strategiesView.js";
 import { getNearMisses } from "../nearMisses.js";
 import { enrichSwingSignals, findCandyConfirm } from "../setupScannerSwing.js";
@@ -118,55 +116,6 @@ let divergenceTimer = null;
 //  Status Logic (Shared)
 // ─────────────────────────────────────────────────
 
-// Активная shadow paper-позиция Chill Boy (PROD-бот, прод-флаг выкл). Возвращает
-// готовый payload c live price, PnL, MFE/MAE и distance до SL/TP. На торговую
-// логику не влияет: чисто отображение для решения о промоушене стратегии.
-async function buildChillBoyPaperPosition() {
-  if (!config.isProduction) return null;            // в PAPER-боте shadow-слота нет
-  if (config.trading.chillBoyProdEnabled) return null; // PROD-режим карточку гасит
-  const pos = getActivePaperPosition();
-  if (!pos || pos.strategy_id !== 'trend_follow') return null;
-
-  let livePrice = null;
-  try { livePrice = await getLivePrice(pos.coin); } catch { /* ignore */ }
-
-  const entry  = pos.entry_price;
-  const isLong = (pos.side || '').toLowerCase() === 'long';
-  let unrealPct = null;
-  let unrealUsd = null;
-  if (livePrice && entry) {
-    unrealPct = isLong ? ((livePrice - entry) / entry) * 100 : ((entry - livePrice) / entry) * 100;
-    unrealUsd = pos.size_usd * (unrealPct / 100);
-  }
-
-  // Distance to SL/TP в % от текущей цены (полезно для «насколько близко»).
-  const distPct = (target) => (livePrice && target ? Math.abs(target - livePrice) / livePrice * 100 : null);
-
-  const mm = getTrendFollowMfeMae(pos.id);
-
-  return {
-    id:           pos.id,
-    coin:         pos.coin,
-    side:         (pos.side || '').toUpperCase(),
-    sizeUsd:      pos.size_usd,
-    entryPrice:   entry,
-    currentPrice: livePrice,
-    entryTime:    pos.entry_time,
-    heldMin:      Math.round((Date.now() - pos.entry_time) / 60_000),
-    slPrice:      pos.sl_price,
-    tpPrice:      pos.tp_price,
-    slDistPct:    distPct(pos.sl_price),
-    tpDistPct:    distPct(pos.tp_price),
-    unrealPct,
-    unrealUsd,
-    mfeUsd: mm?.mfeUsd ?? null,
-    maeUsd: mm?.maeUsd ?? null,
-    mfePct: mm?.mfePct ?? null,
-    maePct: mm?.maePct ?? null,
-    entry_atr_short:    pos.entry_atr_short ?? null,
-    entry_squeeze_ratio: pos.entry_squeeze_ratio ?? null,
-  };
-}
 
 // Активная Fader paper-позиция — для одноимённой карточки. Live PnL +
 // distance до TP (SL у Fader нет — adverse-kill симулируется в strategist'е).
@@ -554,23 +503,6 @@ async function getStatusData() {
     manualPositions,
     // Единый обзор всех стратегий (реестр-driven) для таблицы на /strategies.
     strategies: buildStrategiesPayload(),
-    // Chill Boy — только отображение состояния детектора. На реальные prod-сделки
-    // не влияет: показываем когда стратегия включена (paper или prod).
-    chillBoy: config.trading.chillBoyEnabled
-      ? {
-          enabled: true,
-          prod: config.isProduction && config.trading.chillBoyProdEnabled,
-          heartbeat: getChillBoyHeartbeat(),
-          signals: getChillBoySignals(),
-          virtualBalance: config.trading.chillBoyPaperVirtualBalance,
-          virtualEquity:  config.trading.chillBoyPaperVirtualBalance > 0
-            ? getVirtualEquitySnapshot()
-            : null,
-          paperStats: getStrategyStats('trend_follow', 'PAPER'),
-          paperTrades: getRecentStrategyTrades('trend_follow', 'PAPER', 10),
-          paperPosition: await buildChillBoyPaperPosition(),
-        }
-      : null,
     // Candy Girl — радар (1h EMA-тренд + 5m pullback-reclaim) + paper shadow-слот
     // (Iter 2): независимый compound-слот strategy_id='candy_girl', PAPER-only.
     candyGirl: config.trading.candyGirlEnabled

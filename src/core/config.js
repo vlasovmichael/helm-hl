@@ -300,30 +300,6 @@ function loadConfig() {
     throw new Error(`HUNTER_CROSS_COOLDOWN_MIN must be positive. Got: "${process.env.HUNTER_CROSS_COOLDOWN_MIN}"`);
   }
 
-  // ── Strategy #4: trend_follow (codename Chill Boy) ─────────
-  // Vol-squeeze breakout trend-follower. План: memory/trend_follow_plan.md.
-  // Iter F.1b: paper only. PROD-gate (CHILL_BOY_PROD_ENABLED) — Iter F.3.
-  const chillBoyEnabled        = (process.env.CHILL_BOY_ENABLED        || 'false').toLowerCase() === 'true';
-  const chillBoyProdEnabled    = (process.env.CHILL_BOY_PROD_ENABLED   || 'false').toLowerCase() === 'true';
-  const chillBoyAtrShort       = parseInt(process.env.CHILL_BOY_ATR_SHORT       || '20', 10);
-  const chillBoyAtrLong        = parseInt(process.env.CHILL_BOY_ATR_LONG        || '50', 10);
-  const chillBoySqueezeRatio   = parseFloat(process.env.CHILL_BOY_SQUEEZE_RATIO || '0.7');
-  const chillBoyBreakoutMult   = parseFloat(process.env.CHILL_BOY_BREAKOUT_MULT || '0.5');
-  const chillBoySlAtrMult      = parseFloat(process.env.CHILL_BOY_SL_ATR_MULT   || '1.5');
-  const chillBoyTpAtrMult      = parseFloat(process.env.CHILL_BOY_TP_ATR_MULT   || '3.0');
-  const chillBoyTimeStopHours  = parseFloat(process.env.CHILL_BOY_TIME_STOP_HOURS || '6');
-  const chillBoyBalanceUtil    = parseFloat(process.env.CHILL_BOY_BALANCE_UTILIZATION || '0.5');
-  const chillBoyPostSlCooldownMin = parseFloat(process.env.CHILL_BOY_POST_SL_COOLDOWN_MIN || '120');
-  // Радар-алерты: TG-уведомление при каждом обнаруженном пробое (signal-radar),
-  // независимо от того, входит ли бот. Дедуп per-coin раз в COOLDOWN_MIN.
-  const chillBoyAlertEnabled     = (process.env.CHILL_BOY_ALERT_ENABLED || 'true').toLowerCase() === 'true';
-  const chillBoyAlertCooldownMin = parseFloat(process.env.CHILL_BOY_ALERT_COOLDOWN_MIN || '45');
-  // Виртуальный paper-баланс ChillBoy: позволяет shadow-сделкам открываться,
-  // даже когда реальный free-balance занят carry. 0 = старое поведение (real balance).
-  const chillBoyPaperVirtualBalance = parseFloat(process.env.CHILL_BOY_PAPER_VIRTUAL_BALANCE || '0');
-  // Util только для virtual paper-режима (compound sandbox). Реальный paper
-  // продолжает использовать CHILL_BOY_BALANCE_UTILIZATION.
-  const chillBoyPaperVirtualUtil = parseFloat(process.env.CHILL_BOY_PAPER_VIRTUAL_UTILIZATION || '0.9');
 
   // ── Adopt Mode — бот-нянька на ручные входы (plans/adopt-mode-plan.md) ──
   // Юзер открывает позу руками → бот подхватывает её в свободный слот как
@@ -411,39 +387,6 @@ function loadConfig() {
   const riskBasedSizing  = (process.env.RISK_BASED_SIZING  || 'false').toLowerCase() === 'true';
   const riskSizingShadow = (process.env.RISK_SIZING_SHADOW || 'true').toLowerCase() === 'true';
   const riskPctPerTrade  = parseFloat(process.env.RISK_PCT_PER_TRADE || '0.01');
-  if (!Number.isInteger(chillBoyAtrShort) || chillBoyAtrShort < 5 || chillBoyAtrShort >= chillBoyAtrLong) {
-    throw new Error(`CHILL_BOY_ATR_SHORT must be integer in [5, CHILL_BOY_ATR_LONG). Got: "${process.env.CHILL_BOY_ATR_SHORT}"`);
-  }
-  if (!Number.isInteger(chillBoyAtrLong) || chillBoyAtrLong < 10 || chillBoyAtrLong > 200) {
-    throw new Error(`CHILL_BOY_ATR_LONG must be integer in [10, 200]. Got: "${process.env.CHILL_BOY_ATR_LONG}"`);
-  }
-  if (isNaN(chillBoySqueezeRatio) || chillBoySqueezeRatio <= 0 || chillBoySqueezeRatio >= 1) {
-    throw new Error(`CHILL_BOY_SQUEEZE_RATIO must be in (0, 1). Got: "${process.env.CHILL_BOY_SQUEEZE_RATIO}"`);
-  }
-  if (isNaN(chillBoyBreakoutMult) || chillBoyBreakoutMult < 0) {
-    throw new Error(`CHILL_BOY_BREAKOUT_MULT must be ≥ 0. Got: "${process.env.CHILL_BOY_BREAKOUT_MULT}"`);
-  }
-  if (isNaN(chillBoySlAtrMult) || chillBoySlAtrMult <= 0) {
-    throw new Error(`CHILL_BOY_SL_ATR_MULT must be positive. Got: "${process.env.CHILL_BOY_SL_ATR_MULT}"`);
-  }
-  if (isNaN(chillBoyTpAtrMult) || chillBoyTpAtrMult <= 0 || chillBoyTpAtrMult <= chillBoySlAtrMult) {
-    throw new Error(`CHILL_BOY_TP_ATR_MULT must be > CHILL_BOY_SL_ATR_MULT (ниже = плохой R:R). Got: "${process.env.CHILL_BOY_TP_ATR_MULT}"`);
-  }
-  if (isNaN(chillBoyTimeStopHours) || chillBoyTimeStopHours <= 0) {
-    throw new Error(`CHILL_BOY_TIME_STOP_HOURS must be positive. Got: "${process.env.CHILL_BOY_TIME_STOP_HOURS}"`);
-  }
-  if (isNaN(chillBoyBalanceUtil) || chillBoyBalanceUtil <= 0 || chillBoyBalanceUtil > 0.95) {
-    throw new Error(`CHILL_BOY_BALANCE_UTILIZATION must be in (0, 0.95]. Got: "${process.env.CHILL_BOY_BALANCE_UTILIZATION}"`);
-  }
-  if (isNaN(chillBoyPostSlCooldownMin) || chillBoyPostSlCooldownMin <= 0) {
-    throw new Error(`CHILL_BOY_POST_SL_COOLDOWN_MIN must be positive. Got: "${process.env.CHILL_BOY_POST_SL_COOLDOWN_MIN}"`);
-  }
-  if (isNaN(chillBoyPaperVirtualBalance) || chillBoyPaperVirtualBalance < 0) {
-    throw new Error(`CHILL_BOY_PAPER_VIRTUAL_BALANCE must be ≥ 0. Got: "${process.env.CHILL_BOY_PAPER_VIRTUAL_BALANCE}"`);
-  }
-  if (isNaN(chillBoyPaperVirtualUtil) || chillBoyPaperVirtualUtil <= 0 || chillBoyPaperVirtualUtil > 0.95) {
-    throw new Error(`CHILL_BOY_PAPER_VIRTUAL_UTILIZATION must be in (0, 0.95]. Got: "${process.env.CHILL_BOY_PAPER_VIRTUAL_UTILIZATION}"`);
-  }
 
   // ── Candy Girl — SIGNAL-ONLY радар (1h EMA-тренд + 5m pullback-reclaim) ──
   // ⚠️ НЕ стратегия: радар алертов для ручной торговли. План: memory/candy_girl_idea.md.
@@ -810,21 +753,6 @@ function loadConfig() {
       adoptBeFloorPct,
       adoptTrailArmPct,
       adoptTrailGiveBackPct,
-      chillBoyEnabled,
-      chillBoyProdEnabled,
-      chillBoyAtrShort,
-      chillBoyAtrLong,
-      chillBoySqueezeRatio,
-      chillBoyBreakoutMult,
-      chillBoySlAtrMult,
-      chillBoyTpAtrMult,
-      chillBoyTimeStopHours,
-      chillBoyBalanceUtil,
-      chillBoyPostSlCooldownMin,
-      chillBoyAlertEnabled,
-      chillBoyAlertCooldownMin,
-      chillBoyPaperVirtualBalance,
-      chillBoyPaperVirtualUtil,
       // ── Candy Girl радар (signal-only) ──
       candyGirlEnabled,
       candyGirlLongOnly,

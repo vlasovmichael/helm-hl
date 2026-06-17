@@ -27,10 +27,6 @@ import {
 } from "./src/charts/equityChart.js";
 import { renderStrategies } from "./src/features/strategies.js";
 import {
-  renderChillBoy,
-  renderChillBoyCard,
-} from "./src/features/chillBoy.js";
-import {
   setPnlSummary,
   setInsights,
   initPnlInsights,
@@ -43,8 +39,6 @@ import {
 
 function onStatus(data) {
   renderStrategies(data.strategies);
-  renderChillBoy(data.chillBoy);
-  renderChillBoyCard(data.chillBoy);
 }
 
 async function tick() {

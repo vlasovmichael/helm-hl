@@ -10,7 +10,6 @@ const DEFAULTS = {
   paused:     false,   // true = no new entries (exits still managed)
   hunter:     null,    // null = follow env; true/false = explicit override
   hunterLong: null,
-  chillBoy:   null,
 };
 
 let _flags = { ...DEFAULTS };
