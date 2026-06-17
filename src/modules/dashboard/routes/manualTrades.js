@@ -1,14 +1,14 @@
 // ─────────────────────────────────────────────────
-//  Manual trades cache — reconstruct from HL userFills
+//  Round-trip cache — reconstruct from HL userFills
 // ─────────────────────────────────────────────────
-// Восстанавливает ручные сделки из HL userFills (дедуп против бот-сделок по
-// монете/времени/oid). Тяжёлый запрос (userFills 60d + group) — кэш 30с.
-// Общий источник для /api/activity, /api/pnl-summary, /api/insights,
+// Восстанавливает ВСЕ round-trip'ы (bot/adopted/manual) из HL userFills через
+// единый движок reconstructRoundTrips. Тяжёлый запрос (userFills 60d + group) —
+// кэш 30с. Общий источник для /api/activity, /api/pnl-summary, /api/insights,
 // /api/trade-markers и debug-эндпоинта.
 
 import { config } from "../../../core/config.js";
 import { logger } from "../../../core/logger.js";
-import { fetchUserFills, reconstructManualTrades } from "../../userFills.js";
+import { fetchUserFills, reconstructRoundTrips } from "../../userFills.js";
 import {
   getHistorySince,
   getArchivedHistorySince,
@@ -16,13 +16,18 @@ import {
   getBotOidsSince,
 } from "../../../core/database.js";
 
-const MANUAL_CACHE_TTL_MS = 30_000;
-let manualCache = { ts: 0, trades: [] };
+const CACHE_TTL_MS = 30_000;
+let cache = { ts: 0, trades: [] };
 
-export async function getManualTrades() {
+/**
+ * Все round-trip'ы из fills, помеченные source (bot/adopted/manual). Единый
+ * fills-источник правды для дашборда — совпадает с Monthly Ledger (ledger.js
+ * дёргает тот же reconstructRoundTrips).
+ */
+export async function getAllRoundTrips() {
   if (!config.isProduction) return [];
-  if (Date.now() - manualCache.ts < MANUAL_CACHE_TTL_MS) {
-    return manualCache.trades;
+  if (Date.now() - cache.ts < CACHE_TTL_MS) {
+    return cache.trades;
   }
   try {
     const fills = await fetchUserFills(0); // 60d default
@@ -48,11 +53,19 @@ export async function getManualTrades() {
         status: "OPEN",
       });
     const botOidSet = getBotOidsSince(0);
-    const trades = reconstructManualTrades(fills, botTrades, botOidSet);
-    manualCache = { ts: Date.now(), trades };
+    const trades = reconstructRoundTrips(fills, botTrades, botOidSet);
+    cache = { ts: Date.now(), trades };
     return trades;
   } catch (err) {
-    logger.debug(`[Dashboard] getManualTrades failed: ${err.message}`);
-    return manualCache.trades; // stale-OK
+    logger.debug(`[Dashboard] getAllRoundTrips failed: ${err.message}`);
+    return cache.trades; // stale-OK
   }
+}
+
+/**
+ * Ручные сделки (source='manual') — обёртка над getAllRoundTrips для прежних
+ * потребителей (activity, pnl-summary manual-split, trade-markers).
+ */
+export async function getManualTrades() {
+  return (await getAllRoundTrips()).filter((t) => t.source === "manual");
 }

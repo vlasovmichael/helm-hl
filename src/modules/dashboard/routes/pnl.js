@@ -20,7 +20,7 @@ import {
   realTradesForDisplay,
   getActivePosition,
 } from "../../../core/database.js";
-import { getManualTrades } from "./manualTrades.js";
+import { getManualTrades, getAllRoundTrips } from "./manualTrades.js";
 
 const PERIODS = [
   { key: "today", label: "Today" },
@@ -319,21 +319,22 @@ export async function handleInsights(_req, res) {
   try {
     const now = Date.now();
 
-    // Combined dataset (bot DB + archive + reconstructed manual).
-    const allDb = getHistorySince(0);
-    const allArch = getArchivedHistorySince(0);
-    const botTrades = realTradesForDisplay([...allDb, ...allArch]);
-    const manualTrades = await getManualTrades();
-    const manualClosed = manualTrades.filter((m) => m.status === "closed");
-    const manualAsTrades = manualClosed.map((m) => ({
-      coin: m.coin,
-      realized_pnl: m.pnl || 0,
-      fee_paid: m.fee || 0,
-      strategy_id: "manual",
-      entry_time: m.entryTime,
-      closed_at: m.closeTime,
-    }));
-    const combined = [...botTrades, ...manualAsTrades];
+    // ЕДИНЫЙ источник = HL fills (тот же reconstructRoundTrips, что у Monthly
+    // Ledger) → Insights сходится с Ledger. Раньше bot брался из trades.db
+    // (теряет историю при порче БД, см. ledger.js), а manual — из fills: две
+    // правды не сходились. pnl = price PnL (как DB realized_pnl, gross),
+    // fee — отдельно; net = pnl − fee.
+    const roundTrips = await getAllRoundTrips();
+    const combined = roundTrips
+      .filter((t) => t.status === "closed")
+      .map((t) => ({
+        coin: t.coin,
+        realized_pnl: t.pnl || 0,
+        fee_paid: t.fee || 0,
+        strategy_id: t.source, // bot | adopted | manual
+        entry_time: t.entryTime,
+        closed_at: t.closeTime,
+      }));
 
     // ── Per-coin aggregation (lifetime, all periods) ──
     const byCoin = new Map();

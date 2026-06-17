@@ -28,7 +28,7 @@ import { join, dirname } from 'path';
 import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
 import { hlInfo } from '../core/hlClient.js';
-import { fetchUserFills } from './userFills.js';
+import { fetchUserFills, reconstructRoundTrips } from './userFills.js';
 import {
   getBotOidsSince,
   getHistorySince,
@@ -64,82 +64,10 @@ function totalCount(m) {
   return (m.botCount || 0) + (m.adoptedCount || 0) + (m.manualCount || 0);
 }
 
-// ── reconstruct ВСЕ round-trip сделки (bot + manual), помеченные source ──
-
-function reconstructAllTrades(fills, botOidSet, botByCoin) {
-  const useOid = botOidSet instanceof Set && botOidSet.size > 0;
-  const LEADING_GRACE_MS = 10_000;
-  const TRAILING_GRACE_MS = 60_000;
-
-  function inBotWindow(coin, ts) {
-    const ranges = botByCoin.get(coin.toUpperCase()) || [];
-    return ranges.some((r) => ts >= r.entry - LEADING_GRACE_MS && ts <= r.close + TRAILING_GRACE_MS);
-  }
-  function fillIsBot(f) {
-    if (useOid && f.oid != null && botOidSet.has(Number(f.oid))) return true;
-    return inBotWindow(f.coin, f.time);
-  }
-
-  const byCoin = new Map();
-  for (const f of fills) {
-    if (!f.coin) continue;
-    if (!byCoin.has(f.coin)) byCoin.set(f.coin, []);
-    byCoin.get(f.coin).push(f);
-  }
-
-  const trades = [];
-  for (const [coin, list] of byCoin) {
-    list.sort((a, b) => a.time - b.time);
-    let cur = null;
-    for (const f of list) {
-      const isOpen = f.dir.startsWith('Open ');
-      const isClose = f.dir.startsWith('Close ');
-      if (isOpen) {
-        const side = f.dir.includes('Long') ? 'long' : 'short';
-        if (!cur) {
-          cur = {
-            coin, side,
-            entryTime: f.time,
-            sz: Math.abs(f.sz),
-            pnl: 0,
-            fee: f.fee,
-            openIsBot: fillIsBot(f),
-            closeIsBot: false,
-          };
-        } else {
-          cur.sz += Math.abs(f.sz);
-          cur.fee += f.fee;
-          if (fillIsBot(f)) cur.openIsBot = true;
-        }
-      } else if (isClose && cur) {
-        cur.sz -= Math.abs(f.sz);
-        cur.pnl += f.closedPnl;
-        cur.fee += f.fee;
-        cur.lastCloseTime = f.time;
-        if (fillIsBot(f)) cur.closeIsBot = true;
-        if (cur.sz <= 1e-9) {
-          // Три источника: бот открыл сам → 'bot'; я открыл, а закрыл бот
-          // (adopt-нянька подхватила выход) → 'adopted'; и вход, и выход мои
-          // → 'manual'.
-          const source = cur.openIsBot ? 'bot' : cur.closeIsBot ? 'adopted' : 'manual';
-          trades.push({
-            coin: cur.coin,
-            side: cur.side,
-            entryTime: cur.entryTime,
-            closeTime: cur.lastCloseTime,
-            pnl: cur.pnl,
-            fee: cur.fee,
-            source,
-            status: 'closed',
-          });
-          cur = null;
-        }
-      }
-    }
-    // открытая (незакрытая) позиция в журнал по месяцам не идёт — только closed.
-  }
-  return trades;
-}
+// Реконструкция round-trip'ов вынесена в userFills.reconstructRoundTrips() —
+// единый движок для Ledger и дашборда (Activity/Insights). Раньше тут была своя
+// копия, которая отстала от net-position фикса и теряла/иначе классифицировала
+// деньги (commit 7175611 чинил только userFills, не ledger).
 
 // ── снапшот завершённых месяцев ──────────────────
 
@@ -184,28 +112,21 @@ export async function getMonthlyLedger() {
   const fills = await fetchUserFills(LEDGER_START_MS);
   const funding = await fetchFunding(LEDGER_START_MS);
 
-  // 2. bot oids + bot-позиции (для дедупа bot/manual).
+  // 2. bot oids + bot-сделки (для дедупа bot/adopted/manual).
   const botOidSet = getBotOidsSince(0);
-  const botByCoin = new Map();
-  const botRows = [
+  const botTrades = [
     ...getHistorySince(0),
     ...getArchivedHistorySince(0),
-  ];
-  for (const r of botRows) {
-    if (!r?.coin) continue;
-    const c = r.coin.toUpperCase();
-    if (!botByCoin.has(c)) botByCoin.set(c, []);
-    botByCoin.get(c).push({ entry: r.entry_time, close: r.closed_at || r.entry_time });
-  }
+  ].map((r) => ({ coin: r.coin, entry_time: r.entry_time, closed_at: r.closed_at }));
   const open = getActivePosition();
   if (open?.coin) {
-    const c = open.coin.toUpperCase();
-    if (!botByCoin.has(c)) botByCoin.set(c, []);
-    botByCoin.get(c).push({ entry: open.entry_time, close: Number.POSITIVE_INFINITY });
+    botTrades.push({ coin: open.coin, entry_time: open.entry_time, closed_at: null, status: 'OPEN' });
   }
 
-  // 3. round-trips → агрегация по месяцам (live, из доступного окна).
-  const trades = reconstructAllTrades(fills, botOidSet, botByCoin);
+  // 3. round-trips → агрегация по месяцам (live, из доступного окна). Только
+  // закрытые: открытая поза в месячный журнал не идёт.
+  const trades = reconstructRoundTrips(fills, botTrades, botOidSet)
+    .filter((t) => t.status === 'closed');
   const live = {};
   for (const t of trades) {
     const k = monthKey(t.closeTime || t.entryTime);
@@ -228,12 +149,24 @@ export async function getMonthlyLedger() {
     live[k].funding += f.usdc;
   }
 
-  // 4. merge со снапшотом ("макс. сделок выигрывает") + заморозка прошлых месяцев.
+  // 4. merge со снапшотом + заморозка прошлых месяцев.
+  // Завершённый месяц, целиком попадающий в fills-окно HL (~60d), пересчитывается
+  // НАСИЛЬНО — это самолечение снапшота под исправленный движок reconstructRoundTrips
+  // (старый ledger.reconstructAllTrades мог зафиксировать кривые/фантомные цифры,
+  // которые правило "макс. сделок" не давало переписать). Месяцы ВНЕ окна
+  // (ранний апрель) пересчитать неоткуда — их снапшот сохраняем как есть.
+  const SAFE_RECOMPUTE_MS = 55 * 24 * 3600_000;
+  const recomputeFloor = Date.now() - SAFE_RECOMPUTE_MS;
+  const monthStartMs = (k) => {
+    const [y, mo] = k.split('-').map(Number);
+    return Date.UTC(y, mo - 1, 1);
+  };
   const curKey = monthKey(Date.now());
   const snap = loadSnapshot();
   for (const [k, m] of Object.entries(live)) {
     if (k === curKey) continue; // текущий месяц не морозим — он ещё меняется
-    if (!snap[k] || totalCount(m) >= totalCount(snap[k])) snap[k] = m;
+    const fullyInWindow = monthStartMs(k) >= recomputeFloor;
+    if (!snap[k] || fullyInWindow || totalCount(m) >= totalCount(snap[k])) snap[k] = m;
   }
   saveSnapshot(snap);
 

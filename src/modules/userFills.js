@@ -145,23 +145,30 @@ export function classifyClose(position, fills) {
 }
 
 /**
- * Извлекает ручные трейды (НЕ принадлежащие боту) из fills.
+ * Реконструирует ВСЕ round-trip сделки из fills, помечая каждую source'ом:
+ *   - 'bot'     — открывающий fill принадлежит боту (oid в bot_oid_log / time-window).
+ *   - 'adopted' — вход мой (ручной), но выход закрыл бот (adopt-нянька) ЛИБО
+ *                 entry точно матчит bot-history (усыновление).
+ *   - 'manual'  — и вход, и выход мои.
  *
- * Бот ведёт positions table — все его OPEN/CLOSE fills известны по entry_time
- * (open) и closed_at (close) ± grace window. Всё, что не попадает в bot windows,
- * считается manual.
+ * ЕДИНЫЙ источник правды для дашборда (Activity/Insights) и Monthly Ledger —
+ * раньше у Ledger была своя копия этой логики (ledger.js reconstructAllTrades),
+ * которая отстала от net-position фикса и теряла/иначе классифицировала деньги.
  *
- * Группировка: позиция = последовательность fills для coin, начинающаяся с
- * dir 'Open *' и заканчивающаяся когда running |position| вернулась в ~0.
+ * Группировка: позиция на бирже = знаковая сумма ВСЕХ fills (бот + ручные),
+ * заякоренная startPosition первого fill (ловит позы, открытые до 60d-окна HL).
+ * Когда net возвращается в ~0 — нога завершена. pnl = Σ closedPnl (price PnL ДО
+ * комиссий, как DB realized_pnl), fee — отдельно; net money = pnl − fee.
  *
- * @param {Array} fills    — все fills (sorted by time asc).
- * @param {Array} botTrades — closed bot trades (history rows) + open bot positions.
- *                           Каждый: { coin, entry_time, closed_at|null }.
- * @returns {Array<{ coin, side: 'long'|'short', entryTime, closeTime|null,
- *                   entryPrice, closePrice|null, sizeUsd, pnl, status: 'open'|'closed',
- *                   sl|null, tp|null }>}
+ * @param {Array} fills    — все fills (любой порядок; сортируется внутри).
+ * @param {Array} botTrades — bot trades (history rows) + open bot позиция.
+ *                           Каждый: { coin, entry_time, closed_at|null, status? }.
+ * @param {Set}   [botOidSet] — oid'ы бот-ордеров (bot_oid_log).
+ * @returns {Array<{ coin, side:'long'|'short', source:'bot'|'adopted'|'manual',
+ *                   entryTime, closeTime|null, entryPrice, closePrice|null,
+ *                   sizeUsd, pnl, fee, status:'open'|'closed' }>}
  */
-export function reconstructManualTrades(fills, botTrades, botOidSet = null) {
+export function reconstructRoundTrips(fills, botTrades, botOidSet = null) {
   if (!Array.isArray(fills) || fills.length === 0) return [];
   const botByCoin = new Map();
   for (const bt of botTrades || []) {
@@ -191,11 +198,10 @@ export function reconstructManualTrades(fills, botTrades, botOidSet = null) {
   }
 
   // Дедуп adopt-позиций: усыновлённая поза открыта вручную, но бот хранит её в
-  // history с entry_time = временем того же ручного open-fill. Если ручная нога
-  // ТОЧНО совпадает по entry (±ENTRY_MATCH_MS) с бот-сделкой — она уже в history
-  // как 'adopt', не дублируем как ручную. Точный матч (а НЕ 60с-grace inBotWindow):
-  // быстрый ручной re-open сразу после bot-close той же монеты иначе глотался бы
-  // грейсом (XPL 35с, ср. commit 7e76034).
+  // history с entry_time = временем того же ручного open-fill. Точный матч по
+  // entry (±ENTRY_MATCH_MS, а НЕ 60с-grace) → 'adopted': быстрый ручной re-open
+  // сразу после bot-close той же монеты иначе глотался бы грейсом (XPL 35с,
+  // ср. commit 7e76034).
   const ENTRY_MATCH_MS = 3000;
   function isBotOwnedEntry(coin, entryTime) {
     const ranges = botByCoin.get(coin.toUpperCase()) || [];
@@ -204,24 +210,19 @@ export function reconstructManualTrades(fills, botTrades, botOidSet = null) {
 
   function isBotFill(f) {
     // OID присутствует и фильтр активен → oid решает ОДНОЗНАЧНО (и для bot,
-    // и для НЕ-bot fills). Раньше тут срабатывал только positive-match, а любой
-    // не-совпавший fill всё равно проваливался в time-fallback ниже — и ручной
-    // re-open в течение GRACE_MS (60с) после бот-закрытия той же монеты
-    // ошибочно глотался как «ботовский» → adopt не видел свежий вход → поза
-    // оставалась без стопа. Time-fallback теперь ТОЛЬКО для fills без oid
-    // (legacy). См. tests/userFills.test.js.
+    // и для НЕ-bot fills). Time-fallback ТОЛЬКО для fills без oid (legacy):
+    // иначе ручной re-open в течение GRACE_MS после бот-закрытия той же монеты
+    // ошибочно глотался как «ботовский» → adopt не видел вход → поза без стопа.
     if (useOidFilter && f.oid != null) {
       return botOidSet.has(Number(f.oid));
     }
-    // Fallback: для старых fills (oid не записан в log) — time-based.
     return inBotWindow(f.coin, f.time);
   }
 
   // Группируем ВСЕ fills по coin (бот + ручные). Позиция на бирже = знаковая
   // сумма всех fills, поэтому бот-закрытие усыновлённой позы естественно обнуляет
-  // net и схлопывает ручную ногу — без фантомных «висящих» ног, которые копила
-  // фильтрация бот-fills по oid (XPL incident 2026-06-17: ручная нога не
-  // закрывалась на adopt_trail_tp → −$7.36 не попадал в Recent Activities).
+  // net и схлопывает ногу — без фантомных «висящих» ног (XPL incident
+  // 2026-06-17: −$7.36 не закрывался на adopt_trail_tp).
   const byCoin = new Map();
   for (const f of fills) {
     if (!f.coin) continue;
@@ -229,60 +230,83 @@ export function reconstructManualTrades(fills, botTrades, botOidSet = null) {
     byCoin.get(f.coin).push(f);
   }
 
+  function classify(cur) {
+    if (cur.openIsBot) return 'bot';
+    if (cur.closeIsBot || isBotOwnedEntry(cur.coin, cur.entryTime)) return 'adopted';
+    return 'manual';
+  }
+  function emit(out, cur, closed) {
+    const entryPrice = cur.entryPxDen > 0 ? cur.entryPxNum / cur.entryPxDen : 0;
+    out.push({
+      coin: cur.coin, side: cur.side, source: classify(cur),
+      entryTime: cur.entryTime, closeTime: closed ? (cur.lastCloseTime ?? null) : null,
+      entryPrice, closePrice: closed ? (cur.lastClosePx ?? null) : null,
+      sizeUsd: entryPrice * cur.entryPxDen,
+      pnl: cur.pnl, fee: cur.fee,
+      status: closed ? 'closed' : 'open',
+    });
+  }
+
   const trades = [];
   const EPS = 1e-9;
   for (const [coin, list] of byCoin) {
     list.sort((a, b) => a.time - b.time);
-    let cur = null;  // ручная нога: { side, entryTime, entryPxNum, entryPxDen, pnl, fee, lastClose* }
-    let net = 0;     // знаковый размер позиции на бирже (по ВСЕМ fills): >0 long, <0 short
+    let cur = null;
+    // Якорь: позиция на бирже ДО первого fill в окне (ловит позы, открытые до
+    // 60d-окна HL — иначе их закрывающие fills теряли бы closedPnl).
+    const sp0 = Number(list[0]?.startPosition);
+    let net = Number.isFinite(sp0) ? sp0 : 0;
 
     for (const f of list) {
       const sz     = Math.abs(Number(f.sz) || 0);
       const isOpen = f.dir.startsWith('Open ');
+      const isClose = f.dir.startsWith('Close ');
+      if (!isOpen && !isClose) continue;     // флип-диры ("Long > Short") — пропуск
       const isLong = f.dir.includes('Long');
       const bot    = isBotFill(f);
       net += isOpen === isLong ? sz : -sz;   // long-open/short-close → +; иначе −
 
-      if (isOpen && !bot) {
-        // Ручное открытие — старт или усреднение ручной ноги.
+      if (isOpen) {
         if (!cur) {
           cur = { coin, side: isLong ? 'long' : 'short', entryTime: f.time,
-                  entryPxNum: f.px * sz, entryPxDen: sz, pnl: 0, fee: f.fee };
+                  entryPxNum: f.px * sz, entryPxDen: sz, pnl: 0, fee: f.fee,
+                  openIsBot: bot, closeIsBot: false, status: 'open' };
         } else {
           cur.entryPxNum += f.px * sz; cur.entryPxDen += sz; cur.fee += f.fee;
+          if (bot) cur.openIsBot = true;
         }
-      } else if (!isOpen && cur) {
-        // Закрытие (бот ИЛИ ручное) — относим pnl/комиссию к ручной ноге.
+      } else {
+        // Закрытие. Поза могла быть открыта до окна (cur=null) — заводим ногу с
+        // неизвестным входом, чтобы не потерять closedPnl.
+        if (!cur) {
+          cur = { coin, side: isLong ? 'long' : 'short', entryTime: f.time,
+                  entryPxNum: 0, entryPxDen: 0, pnl: 0, fee: 0,
+                  openIsBot: false, closeIsBot: false, status: 'closed' };
+        }
         cur.pnl += f.closedPnl; cur.fee += f.fee;
         cur.lastClosePx = f.px; cur.lastCloseTime = f.time;
+        if (bot) cur.closeIsBot = true;
       }
 
-      // Биржевая позиция схлопнулась → ручная нога завершена.
       if (Math.abs(net) < EPS && cur) {
-        // Усыновлённая ботом поза (точный матч entry) уже в history как 'adopt' —
-        // не дублируем её как ручную. Чисто ручная нога → эмитим в ленту.
-        if (!isBotOwnedEntry(coin, cur.entryTime)) {
-          const entryPrice = cur.entryPxDen > 0 ? cur.entryPxNum / cur.entryPxDen : 0;
-          trades.push({
-            coin, side: cur.side, entryTime: cur.entryTime, closeTime: cur.lastCloseTime,
-            entryPrice, closePrice: cur.lastClosePx, sizeUsd: entryPrice * cur.entryPxDen,
-            pnl: cur.pnl, fee: cur.fee, status: 'closed',
-          });
-        }
+        emit(trades, cur, true);
         cur = null;
       }
     }
 
-    if (cur && !isBotOwnedEntry(coin, cur.entryTime)) {
-      const entryPrice = cur.entryPxDen > 0 ? cur.entryPxNum / cur.entryPxDen : 0;
-      trades.push({
-        coin, side: cur.side, entryTime: cur.entryTime, closeTime: null,
-        entryPrice, closePrice: null, sizeUsd: entryPrice * cur.entryPxDen,
-        pnl: cur.pnl, fee: cur.fee, status: 'open',
-      });
-    }
+    if (cur) emit(trades, cur, false);
   }
 
   trades.sort((a, b) => (a.closeTime || a.entryTime) - (b.closeTime || b.entryTime));
   return trades;
+}
+
+/**
+ * Ручные трейды (source='manual') — тонкая обёртка над reconstructRoundTrips.
+ * Adopt-позы и бот-сделки отфильтрованы (они уже в bot history). Сохраняет
+ * прежний контракт для /api/activity, /api/pnl-summary, /api/trade-markers.
+ */
+export function reconstructManualTrades(fills, botTrades, botOidSet = null) {
+  return reconstructRoundTrips(fills, botTrades, botOidSet)
+    .filter((t) => t.source === 'manual');
 }
