@@ -81,17 +81,54 @@
     color: inherit;
   }
 }
-/* Risk-bar как фон карточки: горизонтальная заливка слева на --rb-now (0..1) —
-   прогресс до ближайшей вехи (стоп / храповик / профит, выставляет JS). Полоса
-   едет плавно (transition pnl-tint выше). Поверх — базовый wash по знаку, чтобы
-   карточка читалась и при пустой полосе. Текст получает halo под цвет канвы,
-   чтобы цифры читались поверх любой длины заливки. */
+/* Registered custom-props — без них градиент-ползунок и цвет «телепортируются»:
+   браузер интерполирует @property-значения, поэтому --rb-now едет плавно, а
+   --pnl-c кроссфейдит зелёный↔красный. Карточку при этом нельзя пересоздавать
+   каждый тик (JS патчит DOM на месте — иначе transition не запустится). */
+@property --rb-now {
+  syntax: "<number>";
+  inherits: true; /* ::before-«вода» читает то же значение, что и карточка */
+  initial-value: 0;
+}
+@property --pnl-c {
+  syntax: "<color>";
+  inherits: false;
+  initial-value: transparent;
+}
+
+/* Risk-bar как «вода» в карточке: заливка слева на --rb-now (0..1) — прогресс до
+   ближайшей вехи (стоп / храповик / профит, выставляет JS). Сам столб воды —
+   псевдо-слой ::before ПОВЕРХ текста с mix-blend-mode: screen, поэтому цифры/
+   буквы, на которые наезжает край, подсвечиваются в цвет PnL (= «символы меняют
+   цвет»). Край размыт на ~8px → мениск, как у жидкости. --rb-now едет с упругим
+   overshoot-easing → ползунок не телепортируется, а мягко переливается-оседает
+   («желе/вода»). Цвет перетекает через @property --pnl-c. Карточку при этом
+   нельзя пересоздавать каждый тик — JS патчит DOM на месте. */
 .grid-item.pnl-tint.rb-depth {
   position: relative;
   overflow: hidden;
+  --pnl-c: var(--red);
+  /* Сам прогресс-бар: видимый столб слева до --rb-now (behind text) + faint
+     base-tint. Край размыт на ~8px → мягкий «мениск», а не резкая граница. */
+  background:
+    linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--pnl-c) 34%, transparent) 0,
+        color-mix(in srgb, var(--pnl-c) 34%, transparent)
+          calc(var(--rb-now) * 100% - 8px),
+        color-mix(in srgb, var(--pnl-c) 20%, transparent)
+          calc(var(--rb-now) * 100% - 1px),
+        transparent calc(var(--rb-now) * 100%)
+      )
+      no-repeat,
+    color-mix(in srgb, var(--pnl-c) 13%, transparent);
+  border-color: color-mix(in srgb, var(--pnl-c) 42%, var(--border));
+  /* Сильный упругий overshoot-easing → ползунок мягко пружинит-оседает
+     («желе/вода»), но без рывка. Цвет перетекает через @property --pnl-c. */
   transition:
-    background 0.45s ease,
-    border-color 0.45s ease;
+    --rb-now 0.85s cubic-bezier(0.22, 1.7, 0.36, 1),
+    --pnl-c 0.5s ease,
+    border-color 0.5s ease;
 
   .item-label,
   .item-value {
@@ -102,33 +139,15 @@
       0 1px 2px var(--card-bg);
   }
   &.pnl-pos {
-    background:
-      linear-gradient(
-          90deg,
-          color-mix(in srgb, var(--green) 32%, transparent) 0,
-          color-mix(in srgb, var(--green) 32%, transparent)
-            calc(var(--rb-now, 0) * 100%),
-          transparent calc(var(--rb-now, 0) * 100%)
-        )
-        no-repeat,
-      var(--green-soft);
-    border-color: var(--green-line);
+    --pnl-c: var(--green);
   }
   &.pnl-neg {
-    background:
-      linear-gradient(
-          90deg,
-          color-mix(in srgb, var(--red) 32%, transparent) 0,
-          color-mix(in srgb, var(--red) 32%, transparent)
-            calc(var(--rb-now, 0) * 100%),
-          transparent calc(var(--rb-now, 0) * 100%)
-        )
-        no-repeat,
-      var(--red-soft);
-    border-color: var(--red-line);
+    --pnl-c: var(--red);
   }
 }
-/* У краёв (depth≥0.75) — мягкий пульс яркости: близко к цели или к стопу. */
+/* У краёв (depth≥0.75) — мягкий пульс яркости: близко к цели или к стопу.
+   Анимирует filter, поэтому не конфликтует с jelly-wobble (тот гонит transform
+   через WAAPI из JS). */
 .grid-item.pnl-tint.rb-depth.rb-hot {
   animation: rbPulse 1.8s ease-in-out infinite;
 }
@@ -143,27 +162,6 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .grid-item.pnl-tint.rb-depth.rb-hot {
-    animation: none;
-  }
-}
-/* Пых при кроссе нуля (плюс↔минус) — ставится из JS классом .pnl-flip. */
-.grid-item.pnl-tint.pnl-flip {
-  animation: pnlFlip 0.6s ease;
-}
-@keyframes pnlFlip {
-  0% {
-    transform: scale(1);
-  }
-  35% {
-    transform: scale(1.035);
-    filter: brightness(1.12);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .grid-item.pnl-tint.pnl-flip {
     animation: none;
   }
 }
