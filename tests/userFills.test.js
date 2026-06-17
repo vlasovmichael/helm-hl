@@ -88,3 +88,47 @@ test('legacy fill без oid ВНЕ bot-окна — остаётся', () => {
   assert.equal(trades[0].status, 'open');
   assert.equal(trades[0].entryTime, 130_000);
 });
+
+// ═══════════════════════════════════════════════
+//  Net-position по всем fills: ручная нога схлопывается на bot-close, не висит
+//  фантомом (XPL incident 2026-06-17 — −$7.36 пропадал из Recent Activities)
+// ═══════════════════════════════════════════════
+
+test('ручной re-open после adopt-close (bot) → закрытая ручная сделка, не фантом-open', () => {
+  // Юзер: Open Short руками @ t0 (oid 100). Бот усыновил и ЗАКРЫЛ @ t1 (oid 200,
+  // в bot_oid_log). Юзер снова Open Short @ t1+35s (oid 300), закрыл руками @ t2.
+  const t0 = 0, t1 = 5 * 86_400_000, t2 = t1 + 2 * 3_600_000;
+  const fills = [
+    makeFill({ time: t0,          dir: 'Open Short',  oid: 100, px: 0.11, sz: 700 }),
+    makeFill({ time: t1,          dir: 'Close Short', oid: 200, px: 0.10, sz: 700, closedPnl: 1.5 }),
+    makeFill({ time: t1 + 35_000, dir: 'Open Short',  oid: 300, px: 0.11, sz: 777 }),
+    makeFill({ time: t2,          dir: 'Close Short', oid: 301, px: 0.12, sz: 777, closedPnl: -7.36 }),
+  ];
+  // Бот-history: усыновлённая поза t0..t1 (entry_time = t0).
+  const botTrades = [{ coin: 'X', entry_time: t0, closed_at: t1 }];
+  const botOidSet = new Set([200]); // только бот-ордер закрытия
+
+  const trades = reconstructManualTrades(fills, botTrades, botOidSet).filter((t) => t.coin === 'X');
+  const open = trades.find((t) => t.status === 'open');
+  assert.equal(open, undefined, 'не должно быть фантомной открытой ноги');
+  // Усыновлённая поза (entry=t0) деду­плится (в history); остаётся свежая ручная.
+  const fresh = trades.find((t) => t.entryTime === t1 + 35_000);
+  assert.ok(fresh, 'свежий ручной re-open должен стать закрытой сделкой');
+  assert.equal(fresh.status, 'closed');
+  assert.equal(fresh.closeTime, t2);
+  assert.ok(Math.abs(fresh.pnl - (-7.36)) < 1e-9, 'pnl = −7.36');
+});
+
+test('adopt-поза (entry матчит bot-history) НЕ дублируется как ручная', () => {
+  const t0 = 1_000_000, t1 = t0 + 600_000;
+  const fills = [
+    makeFill({ time: t0, dir: 'Open Short',  oid: 100, px: 1, sz: 100 }),
+    makeFill({ time: t1, dir: 'Close Short', oid: 101, px: 0.99, sz: 100, closedPnl: 0.5 }), // ручное закрытие adopt
+  ];
+  // Бот усыновил: history entry_time ≈ t0 (тот же ручной open).
+  const botTrades = [{ coin: 'X', entry_time: t0 + 500, closed_at: t1 }];
+  const botOidSet = new Set([999]); // close-fill oid 101 НЕ бот → иначе был бы виден как ручной
+
+  const trades = reconstructManualTrades(fills, botTrades, botOidSet).filter((t) => t.coin === 'X');
+  assert.equal(trades.length, 0, 'adopt уже в history → как ручная не эмитится');
+});
