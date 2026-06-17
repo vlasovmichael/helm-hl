@@ -12,7 +12,7 @@
 //     внутри strategist'а; здесь не фильтруем.
 //
 // Bug 2026-05-22: postSlCooldown и slStreak жили только в in-memory Map'ах
-// внутри strategistHunterLong.js / strategistSniper.js. При любом рестарте
+// внутри strategistHunterLong.js / strategistHunter.js. При любом рестарте
 // контейнера 24h-ban (consecutive SL streak) и 3ч post-SL cooldown
 // обнулялись → бот моментально снова входил в забаненую монету.
 //
@@ -24,7 +24,7 @@
 // ленивая загрузка при первом обращении. Просроченные записи отбрасываются
 // при загрузке (на момент load Date.now() > unbanAt).
 //
-// Не вызывать напрямую — модули strategistHunterLong / strategistSniper
+// Не вызывать напрямую — модули strategistHunterLong / strategistHunter
 // заворачивают вызовы в свои read/write helpers.
 
 import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'fs';

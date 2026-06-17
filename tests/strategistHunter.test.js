@@ -12,7 +12,7 @@ const { push, clearAll } =
 const {
   analyzeHunter, resetHunterCooldowns, recordHunterSlExternal,
   HUNTER_SPIKE_PCT, HUNTER_SL_PCT, HUNTER_TP_PCT, HUNTER_COOLDOWN_MS,
-} = await import('../src/modules/strategistSniper.js');
+} = await import('../src/modules/strategistHunter.js');
 const { resetHunterCrossCooldowns } = await import('../src/modules/hunterCrossCooldown.js');
 const { recordOiSnapshot, _resetOiHistory } = await import('../src/core/oiHistory.js');
 
@@ -302,7 +302,7 @@ test('post-SL cooldown: после SL Hunter не возвращается к э
   assert.equal(slResult.reason, 'hunter_sl');
 
   // 2) Через 5мин — пытаемся снова войти. Спайк есть, history достаточная.
-  // (используем Date.now мок на этот тест нельзя — strategistSniper использует 'now' аргумент,
+  // (используем Date.now мок на этот тест нельзя — strategistHunter использует 'now' аргумент,
   // а post-SL cooldown пишется через Date.now() внутри checkHunterExit. Берём тест "напрямую":
   // SL только что сработал, а entry-проверка делается сразу = within 30 min.)
   const now = Date.now();

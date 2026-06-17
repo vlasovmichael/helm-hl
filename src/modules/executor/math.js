@@ -16,20 +16,6 @@ export const MARKET_SLIPPAGE     = 0.03;     // 3% потолок IoC
 export const SLIPPAGE_WARN_PCT   = 0.5;      // предупреждение
 export const SLIPPAGE_BAN_PCT    = 1.5;      // бан
 
-// ── Sniper Mode (maker-only exits на soft-причинах) ─────
-export const SNIPER_WINDOW_MS    = 5 * 60_000;   // 5 мин окно maker-выхода (PROD: меньше — меньше дрейф цены)
-// Adverse drift abort: для шорта рост цены = убыток. Если mark поднялся > 30 bps от armPrice
-// внутри окна → cancel + market раньше чем мы потеряем больше чем экономим на fee.
-// Калибровка: ONE_LEG = ~3 bps (0.03%). Драйф 30 bps уже "съел" 10× экономии — пора рвать.
-export const SNIPER_ADVERSE_DRIFT_BPS = 30;
-// Soft-причины → идут через Sniper. Emergency (delisted, price_spike_protection,
-// negative_funding в минус) и ROTATE (better_apy) остаются market, чтобы не терять скорость.
-export const SNIPER_SOFT_REASONS = new Set([
-  'apy_below_threshold',         // grandfather carry exit
-  'fade_time_stop',              // fade 120min time-stop
-  'negative_funding_softexit',   // negative_funding но позиция в плюсе ≥ NEGATIVE_FUNDING_SOFT_EXIT_MIN_PNL_PCT
-]);
-
 // ── Reconciliation ─────────────────────────────
 export const RECONCILIATION_TOLERANCE_PCT = 2.0;
 export const RECONCILE_INITIAL_DELAY_MS   = 3_000;
@@ -189,7 +175,7 @@ export function checkSlippage(expectedPrice, fillPrice, side) {
  * Нет pricePnl (в paper-режиме цена закрытия условна).
  * @param {Object} position — {size_usd, entry_apy}
  * @param {number} holdHours
- * @param {number} [exitFeeRate=ONE_LEG] — ставка комиссии выхода (ONE_LEG для market, MAKER_FEE_RATE для sniper-fill)
+ * @param {number} [exitFeeRate=ONE_LEG] — ставка комиссии выхода (ONE_LEG для market, MAKER_FEE_RATE для maker-fill)
  * @returns {{ fundingPnl: number, totalFee: number, realizedPnl: number }}
  */
 export function calcPaperClose(position, holdHours, exitFeeRate = ONE_LEG) {
@@ -240,7 +226,7 @@ export function calcPnl(position, fillPrice, holdHours, realFundingUsd = null, e
     fundingSource = 'estimate';
   }
 
-  // Вход всегда taker (FEE_RATE), выход — по exitFeeRate (FEE_RATE для market, MAKER_FEE_RATE для Sniper-fill).
+  // Вход всегда taker (FEE_RATE), выход — по exitFeeRate (FEE_RATE для market, MAKER_FEE_RATE для maker-fill).
   const totalFee    = position.size_usd * (FEE_RATE + exitFeeRate);
   const realizedPnl = pricePnl + fundingPnl - totalFee;
 

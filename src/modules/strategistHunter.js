@@ -1,15 +1,12 @@
 // ─────────────────────────────────────────────────
-//  Strategy #3: Sniper-Hunter — Volatility Spike Mean-Reversion
+//  Strategy #3: Hunter SHORT — Volatility Spike Mean-Reversion
 // ─────────────────────────────────────────────────
 // Directional short-only скальп: ловим резкий pump (≥5% за 2мин) и шортим
 // в противоход, рассчитывая на mean-reversion. SL/TP ставятся сразу.
 //
-// ВАЖНО про имя: см. memory/naming_sniper_vs_hunter.md.
-// Этот модуль — НЕ executor-sniper (maker-exit improvement). Это стратегия
-// уровня strategist.js. Single-slot, strategy_id='hunter'.
-//
-// Iter A.1: только analyzeHunter (чистая функция). В coordinator НЕ подключён.
-// Наполнение priceHistory — в Iter A.3 через scout.js.
+// Переименован из strategistSniper.js (2026-06-17) после удаления executor
+// Sniper Mode (maker-exit) — путаница «sniper» снята. Single-slot,
+// strategy_id='hunter'. Зеркало на long-сторону — strategistHunterLong.js.
 
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';

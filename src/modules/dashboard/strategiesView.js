@@ -21,7 +21,6 @@ import {
   getActivePaperPositionByStrategy,
   getShadowAggregate,
 } from '../../core/database.js';
-import { getFaderVirtualSnapshot } from '../faderVirtualEquity.js';
 
 const DAY_MS = 86_400_000;
 
@@ -57,21 +56,10 @@ const REGISTRY = [
       return { enabled, status: !enabled ? 'off' : live ? 'live' : 'paper' };
     },
   },
-  // Carry / Chill Boy / Candy Girl-strategy удалены 2026-06-15 (убыточный трек,
-  // см. memory/strategy_cull_2026_06_15.md). Carry+ChillBoy выключены флагами;
-  // Candy Girl остаётся как radar-only (5m-сигналы для Setup Scanner · Swing),
-  // но как ТОРГОВАЯ стратегия из таблицы убрана.
-  {
-    id: 'fader',
-    label: 'Fader',
-    kind: 'contrarian · fade-short',
-    split: true,
-    virtual: () => safe(getFaderVirtualSnapshot),
-    resolve: () => {
-      const enabled = config.trading.faderEnabled;
-      return { enabled, status: enabled ? 'paper' : 'off' };
-    },
-  },
+  // Carry / Chill Boy / Candy Girl / Fader удалены как торговые стратегии
+  // (убыточный трек, см. memory/strategy_cull_2026_06_15.md + cull-рефактор
+  // 2026-06-17). Candy Girl остаётся radar-only (5m-сигналы для Setup Scanner ·
+  // Swing); Fader снесён целиком — его радар фронт уже не рендерил.
   {
     id: 'vapor',
     label: 'Vapor',

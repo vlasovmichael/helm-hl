@@ -18,7 +18,7 @@ process.env.HUNTER_BE_FLOOR_PCT      = '0';
 const { clearAll } = await import('../src/core/priceHistory.js');
 const {
   analyzeHunter, resetHunterCooldowns, clearHunterTrailState,
-} = await import('../src/modules/strategistSniper.js');
+} = await import('../src/modules/strategistHunter.js');
 
 function reset() {
   clearAll();

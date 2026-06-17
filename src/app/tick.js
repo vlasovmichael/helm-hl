@@ -9,14 +9,12 @@ import { coordinate } from '../modules/coordinator.js';
 import { config } from '../core/config.js';
 import { scanCandyGirlRadar } from '../modules/strategistCandyGirl.js';
 import { execute } from '../modules/executor/index.js';
-import { tickSniper } from '../modules/executor/sniper.js';
 import { runSmartAlerts } from './alerts.js';
 import { integrityCheck, orphanCheck } from './integrity.js';
 import { superviseAdoptPositions } from './adoptSupervise.js';
 import { hunterReconcile } from './hunterReconcile.js';
 import { hunterLongReconcile } from './hunterLongReconcile.js';
 import { processHunterTrailArm } from './hunterTrailArm.js';
-import { tickFaderPaper } from './faderPaperTick.js';
 import { tickHunterPaper } from './hunterPaperTick.js';
 import { tickVaporPaper } from './vaporPaperTick.js';
 import { tickHotMoversPaper } from './hotMoversPaperTick.js';
@@ -83,9 +81,8 @@ export async function tick() {
         // Paper shadow-слоты независимы от реального слота — должны тикать даже
         // в HANDS-OFF, иначе зависшая ручная PROD-поза подвешивает paper-позицию
         // навсегда (инцидент BTC id=90 + PURR HANDS-OFF, 2026-05-22/23).
-        await tickFaderPaper(handsOffHunter);
-        // Hunter SHORT/Long + Carry shadow paper-слоты (Этап 2): независимы от
-        // реального слота, копят статистику даже в HANDS-OFF (как ChillBoy/Fader).
+        // Hunter SHORT/Long shadow paper-слоты (Этап 2): независимы от
+        // реального слота, копят статистику даже в HANDS-OFF.
         await tickHunterPaper(handsOffHunter);
         await tickHunterLongPaper(handsOffHunter);
         await tickVaporPaper(handsOffHunter);
@@ -97,7 +94,7 @@ export async function tick() {
         // HANDS-OFF и схлопывается в одну «живую» точку (2026-06-09).
         await runBalanceDiag();
       } catch (err) {
-        logger.debug(`[Tick] HANDS-OFF scan/chillboy/fader failed: ${err.message}`);
+        logger.debug(`[Tick] HANDS-OFF scan/paper failed: ${err.message}`);
       }
       return;
     }
@@ -123,11 +120,6 @@ export async function tick() {
         logger.debug(`[Tick] Candy Girl radar failed: ${err.message}`);
       }
     }
-
-    // Sniper (PAPER): попытка maker-fill / fallback-таймаут ДО coordinator'а,
-    // чтобы если снайпер закрыл позицию этим тиком — координатор увидел IDLE
-    // и мог сразу открыть новую сделку, не теряя тик.
-    await tickSniper(scoutData);
 
     const activePosition = getActivePosition();
 
@@ -160,9 +152,6 @@ export async function tick() {
     if (signal.action !== 'HOLD') {
       await execute(signal, activePosition);
     }
-
-    // Fader (Strategy #5) бумажный слот — независим от реального.
-    await tickFaderPaper(hunterData);
 
     // Hunter SHORT/Long + Carry shadow paper-слоты (Этап 2): каждая копит
     // статистику в своём независимом paper-слоте, пока её PROD-гейт выключен.

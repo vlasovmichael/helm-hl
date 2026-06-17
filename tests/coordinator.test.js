@@ -15,7 +15,7 @@ const { coordinate } = await import('../src/modules/coordinator.js');
 const { push: pushPriceHistory, clearAll } =
   await import('../src/core/priceHistory.js');
 const { resetHunterCooldowns } =
-  await import('../src/modules/strategistSniper.js');
+  await import('../src/modules/strategistHunter.js');
 const { resetHunterCrossCooldowns } =
   await import('../src/modules/hunterCrossCooldown.js');
 

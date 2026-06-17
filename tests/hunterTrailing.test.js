@@ -16,7 +16,7 @@ const {
   analyzeHunter, resetHunterCooldowns,
   getHunterPeakPct, isHunterArmed,
   consumeHunterArmRequest, clearHunterTrailState,
-} = await import('../src/modules/strategistSniper.js');
+} = await import('../src/modules/strategistHunter.js');
 
 function reset() {
   clearAll();

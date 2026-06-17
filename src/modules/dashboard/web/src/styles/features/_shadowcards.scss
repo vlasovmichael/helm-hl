@@ -1,8 +1,8 @@
 @use "../core/breakpoints" as *;
 
-/* ── Shadow-trading cards (Candy Girl / Fader) ─────
+/* ── Shadow-trading cards (Candy Girl) ─────
    .cb-* — общие утилиты для strategy-карточек. */
-$cards: ":is(#sec-candygirl, #sec-fader)";
+$cards: ":is(#sec-candygirl)";
 
 #{$cards} {
   .cb-grid {
@@ -144,8 +144,7 @@ $cards: ":is(#sec-candygirl, #sec-fader)";
   #cb-cooldowns-body,
   #cb-history-body,
   #cg-active-body,
-  #cg-history-body,
-  #fader-history-body {
+  #cg-history-body {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     margin: 0 -0.6rem;

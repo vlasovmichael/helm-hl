@@ -30,7 +30,7 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getActivePosition } from '../core/database.js';
-import { analyzeHunter } from '../modules/strategistSniper.js';
+import { analyzeHunter } from '../modules/strategistHunter.js';
 import { analyzeHunterLong } from '../modules/strategistHunterLong.js';
 import { execute } from '../modules/executor/index.js';
 import { getLivePrice, isFeedFresh } from '../core/priceFeed.js';

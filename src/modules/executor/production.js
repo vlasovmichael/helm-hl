@@ -40,7 +40,7 @@ import {
 import { reconcile } from './reconciler.js';
 import { sleep } from './reconciler.js';
 import { gate, notify } from './hooks.js';
-import { consumeHunterMfeMae, clearHunterTrailState, getHunterPeakPct, recordHunterSlExternal } from '../strategistSniper.js';
+import { consumeHunterMfeMae, clearHunterTrailState, getHunterPeakPct, recordHunterSlExternal } from '../strategistHunter.js';
 import {
   consumeHunterLongMfeMae, clearHunterLongTrailState, getHunterLongPeakPct,
 } from '../strategistHunterLong.js';

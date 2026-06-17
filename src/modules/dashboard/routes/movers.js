@@ -17,7 +17,7 @@ import {
   HUNTER_SPIKE_WINDOW_MIN,
   HUNTER_SL_PCT,
   HUNTER_TP_PCT,
-} from "../../strategistSniper.js";
+} from "../../strategistHunter.js";
 import { computeBreadthFlush } from "../../hotMoversSetup.js";
 import { getHourlyCandles } from "../../candleCache.js";
 import { classifyTrend } from "../../candyGirlEma.js";
@@ -169,7 +169,6 @@ async function buildMoversPayload(limit = 12) {
   try {
     const data = Array.isArray(state.latestHunter) ? state.latestHunter : [];
     const now = state.latestHunterAt || Date.now();
-    const faderTiers = state.latestFader instanceof Map ? state.latestFader : null;
     const trendLookback = config.trading.hunterTrendLookbackMin;
     const trendMaxRise = config.trading.hunterTrendMaxRisePct;
     // Активные монеты для подсветки в Hot Movers: позиция бота + все ручные
@@ -350,7 +349,6 @@ async function buildMoversPayload(limit = 12) {
         bufferLen: m.bufLen,
         bufferNeeded: ticksNeeded,
         isActive: activeCoins.has(m.coin),
-        fader: faderTiers?.get(m.coin) ?? null,
         oiDelta5m,
         oiDelta15m,
         htfTrend: null, // заполняется enrichHtfTrend (1h EMA-тренд) для fade-гейта
@@ -395,7 +393,6 @@ async function buildMoversPayload(limit = 12) {
       marketFlush,
       count: top.length,
       signals: top,
-      faderEnabled: config.trading.faderEnabled,
     };
   } catch (err) {
     logger.warn(`[Movers] build failed: ${err.message}`);

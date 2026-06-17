@@ -12,24 +12,20 @@ import { getAccountEquity } from '../wallet.js';
 import { checkVolatility } from '../volatility.js';
 import {
   paperClose, hunterPaperOpen, hunterLongPaperOpen,
-  faderPaperOpen, vaporPaperOpen, hotMoversPaperOpen, swingPaperOpen,
+  vaporPaperOpen, hotMoversPaperOpen, swingPaperOpen,
 } from './paper.js';
 import {
   productionClose,
   productionHunterOpen, productionHunterLongOpen,
 } from './production.js';
-import { productionArmSniper, finalizeProdSniperPartial } from './sniper.js';
 import { cancelOrderFor } from '../exchange.js';
 import {
   notifyOpenBlocked, notifyDrawdownBreached,
-  notifySniperArmed,
 } from './notifications.js';
 import {
   getCircuitBreakerStatus, checkDrawdown,
   CB_PAUSE_MS, isOiCapBanned, getOiCapBanRemainMs,
-  armSniper, getSniper, clearSniper, hasSniper,
 } from './state.js';
-import { SNIPER_SOFT_REASONS, SNIPER_WINDOW_MS } from './math.js';
 import { notify } from './hooks.js';
 
 // Re-exports для внешних модулей
@@ -237,20 +233,6 @@ async function handleOpen(signal) {
     );
   }
 
-  // Strategy #5 (Fader) route: PAPER only, fixed nominal × leverage, no SL,
-  // adaptive TP. Не использует preflight'овые carry-guard'ы — это отдельный
-  // sandbox на виртуальном балансе. Drawdown/CB всё ещё применяем.
-  if (strategyId === 'fader') {
-    const cb = getCircuitBreakerStatus();
-    if (cb.broken) {
-      logger.warn(`[Executor] [Fader] CB active — skip open #${signal.coin}`);
-      return { ok: false };
-    }
-    return faderPaperOpen(
-      signal.coin, signal.price, signal.direction, signal.tp, false, signal.entryFeatures,
-    );
-  }
-
   // Hunter Long route (Iter E.1): PAPER only. PROD путь — Iter E.3.
   if (strategyId === 'hunter_long') {
     const pre = await preflightChecks(signal.coin, null);
@@ -290,92 +272,10 @@ async function handleClose(signal, position) {
     return { ok: false };
   }
 
-  // Shadow-paper позиция в PROD-боте (напр. ChillBoy до PROD-активации) закрывается
-  // строго виртуально и НЕ касается Sniper-слота: armSniper/clearSniper ниже —
-  // это слот РЕАЛЬНОЙ позиции, бумажный exit не должен его трогать.
+  // Shadow-paper позиция в PROD-боте (напр. shadow-стратегия до PROD-активации)
+  // закрывается строго виртуально и не отправляет реальный market-ордер.
   if (config.isProduction && position.mode === 'PAPER') {
     return paperClose(signal, position);
-  }
-
-  // ── Sniper routing (soft-причины → maker-only exit) ─────────
-  const isSoft = SNIPER_SOFT_REASONS.has(signal.reason);
-  const sniperActive = hasSniper();
-
-  if (isSoft) {
-    // Dup soft-signal при армированном снайпере → silent skip: снайпер уже работает.
-    if (sniperActive) {
-      const slot = getSniper();
-      if (slot.coin === position.coin) {
-        return { ok: true };
-      }
-      // Разные монеты — странное состояние, но лучше не ломать: снимаем и армимся заново.
-      logger.warn(
-        `[Executor] Sniper armed on #${slot.coin}, but close signal for #${position.coin} — clearing stale slot`,
-      );
-      // PROD-слот мог иметь живой ордер — пробуем отменить.
-      if (slot.mode === 'PROD' && slot.orderId) {
-        try {
-          await cancelOrderFor(slot.coin, slot.orderId);
-          logger.info(`[Executor] cancelled stale Sniper oid=${slot.orderId} on #${slot.coin}`);
-        } catch (err) {
-          logger.warn(`[Executor] failed to cancel stale Sniper oid=${slot.orderId}: ${err.message}`);
-        }
-      }
-      clearSniper();
-    }
-
-    if (position.mode === 'PRODUCTION') {
-      return productionArmSniper(signal, position);
-    }
-
-    // PAPER путь — оставляем как было.
-    armSniper({
-      positionId: position.id,
-      coin:       position.coin,
-      reason:     signal.reason,
-      armPrice:   signal.price,
-      side:       'BUY',
-      mode:       'PAPER',
-      signal,
-    });
-    const windowMinutes = Math.round(SNIPER_WINDOW_MS / 60_000);
-    logger.info(
-      `[Executor] 🎯 Sniper ARMED #${position.coin} @ $${signal.price} ` +
-        `(reason: ${signal.reason}) — maker-fill окно ${windowMinutes}мин`,
-    );
-    await notifySniperArmed({
-      coin: position.coin,
-      armPrice: signal.price,
-      reason: signal.reason,
-      windowMinutes,
-    });
-    return { ok: true };
-  }
-
-  // Emergency reason при армированном снайпере → отменяем снайпер, идём в market.
-  let emergencySlot = null;
-  if (sniperActive) {
-    emergencySlot = getSniper();
-    logger.warn(
-      `[Executor] ⚡ Emergency reason "${signal.reason}" — abort Sniper on #${emergencySlot.coin}`,
-    );
-    if (emergencySlot.mode === 'PROD' && emergencySlot.orderId) {
-      try {
-        await cancelOrderFor(emergencySlot.coin, emergencySlot.orderId);
-        logger.info(`[Executor] emergency cancel of Sniper oid=${emergencySlot.orderId} on #${emergencySlot.coin}`);
-      } catch (err) {
-        logger.warn(`[Executor] emergency cancelOrder failed (oid=${emergencySlot.orderId}): ${err.message}`);
-      }
-    }
-    clearSniper();
-  }
-
-  // Если был partial-fill PROD-снайпера → используем комбинированную бухгалтерию вместо чистого market.
-  if (config.isProduction && emergencySlot?.mode === 'PROD' && (emergencySlot.partialFilledSz ?? 0) > 0) {
-    logger.info(
-      `[Executor] emergency #${position.coin} с partial-fill (${emergencySlot.partialFilledSz}/${emergencySlot.armSzi}) — combined accounting`,
-    );
-    return finalizeProdSniperPartial(position, emergencySlot, signal.reason);
   }
 
   // Hunter PROD: перед market-close снимаем висящие SL/TP триггеры, чтобы они не остались

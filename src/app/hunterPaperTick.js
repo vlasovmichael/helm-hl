@@ -15,7 +15,7 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getActivePaperPositionByStrategy } from '../core/database.js';
-import { analyzeHunter } from '../modules/strategistSniper.js';
+import { analyzeHunter } from '../modules/strategistHunter.js';
 import { execute } from '../modules/executor/index.js';
 
 export async function tickHunterPaper(hunterData) {

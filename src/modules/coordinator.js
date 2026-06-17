@@ -1,7 +1,7 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { isPaused, isEnabled } from '../core/runtimeFlags.js';
-import { analyzeHunter } from './strategistSniper.js';
+import { analyzeHunter } from './strategistHunter.js';
 import { analyzeHunterLong } from './strategistHunterLong.js';
 
 /**

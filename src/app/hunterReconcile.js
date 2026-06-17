@@ -20,7 +20,7 @@ import {
 import { getPositionsCached, cancelOrderFor, getOpenOrders } from '../modules/exchange.js';
 import { ONE_LEG } from '../modules/executor/math.js';
 import { setCooldown } from '../modules/executor/state.js';
-import { recordHunterSlExternal, consumeHunterMfeMae, isHunterArmed } from '../modules/strategistSniper.js';
+import { recordHunterSlExternal, consumeHunterMfeMae, isHunterArmed } from '../modules/strategistHunter.js';
 import {
   notifyHunterSL,
   notifyHunterTP,

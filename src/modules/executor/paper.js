@@ -23,17 +23,13 @@ import {
   notifyHunterOpen, notifyHunterSL, notifyHunterTP, notifyHunterTrailTp,
   notifyHunterLongOpen, notifyHunterLongSL, notifyHunterLongTP, notifyHunterLongTrailTp,
 } from './notifications.js';
-import { consumeHunterMfeMae, clearHunterTrailState, getHunterPeakPct } from '../strategistSniper.js';
+import { consumeHunterMfeMae, clearHunterTrailState, getHunterPeakPct } from '../strategistHunter.js';
 import {
   consumeHunterLongMfeMae, clearHunterLongTrailState, getHunterLongPeakPct,
 } from '../strategistHunterLong.js';
-import {
-  consumeFaderMfeMae, clearFaderPositionState, recordFaderLoss, setFaderCooldown,
-} from '../strategistFader.js';
 import { setHunterCrossCooldown } from '../hunterCrossCooldown.js';
 import { resolveAsset } from './fill-parser.js';
 import { resolveEntrySize } from './sizing.js';
-import { getFaderVirtualEquity, applyFaderVirtualPnl } from '../faderVirtualEquity.js';
 
 /**
  * Определяет баланс для расчёта размера позиции.
@@ -74,7 +70,7 @@ function resolvePaperSzDecimals(coin) {
  *
  * Отличия от paperOpen:
  *  - Размер = HUNTER_BALANCE_UTILIZATION × баланс (env-настраиваемо), не 95%.
- *  - Записывает sl_price / tp_price в БД (триггеры симулируются в strategistSniper.analyzeHunter).
+ *  - Записывает sl_price / tp_price в БД (триггеры симулируются в strategistHunter.analyzeHunter).
  *  - strategy_id = 'hunter', entry_apy = 0 (Hunter не получает funding).
  *  - Направление в Iter A — всегда SHORT (short-after-pump).
  *
@@ -412,83 +408,19 @@ export async function swingPaperOpen(coin, price, direction, sl, tp, silent = fa
 }
 
 /**
- * Открывает виртуальную позицию для Strategy #5 Fader.
- *
- * Fader — paper-only contrarian scalper. Размер позиции = NOMINAL × LEVERAGE
- * (фикс notional, по умолч. $50 × 2 = $100). Берётся из faderVirtualEquity
- * (не из реального баланса) — это отдельный compound-sandbox. Не использует
- * resolveEntrySize, т.к. сайз фиксированный, не risk-based.
- *
- * @param {string} coin
- * @param {number} price
- * @param {'LONG'|'SHORT'} direction
- * @param {number} tp
- * @param {Object} [entryFeatures=null]
- */
-export async function faderPaperOpen(coin, price, direction, tp, silent = false, entryFeatures = null) {
-  const virtualBalance = getFaderVirtualEquity();
-  const nominal  = config.trading.faderNominalUsd;
-  const leverage = config.trading.faderLeverage;
-  const notional = nominal * leverage;
-
-  if (virtualBalance < nominal) {
-    logger.warn(
-      `[Executor] [Fader] Cannot open — virtual balance $${virtualBalance.toFixed(2)} < nominal $${nominal}`,
-    );
-    return { ok: false };
-  }
-
-  const szDecimals = resolvePaperSzDecimals(coin);
-  if (szDecimals == null) return { ok: false };
-
-  // Fader не использует resolveEntrySize (нет SL → нет risk-based size).
-  // Считаем sz напрямую от notional. tooSmall если notional < MIN_ORDER_USD.
-  if (notional < MIN_ORDER_USD) {
-    logger.warn(`[Executor] [Fader SKIP] #${coin} — notional $${notional} < $${MIN_ORDER_USD}`);
-    return { ok: false };
-  }
-
-  const side = direction === 'LONG' ? 'long' : 'short';
-  const id = savePosition({
-    coin,
-    size_usd:    notional,
-    entry_price: price,
-    entry_apy:   0,
-    entry_time:  Date.now(),
-    mode:        'PAPER',
-    strategy_id: 'fader',
-    side,
-    sl_price:    null,
-    tp_price:    tp,
-    ...(entryFeatures || {}),
-  });
-
-  logger.info(
-    `[Executor] 🪞 FADER OPEN ${direction} #${coin} | notional $${notional.toFixed(2)} ` +
-      `(nominal $${nominal} × ${leverage}x) @ $${price} | TP $${tp.toFixed(6)} | id: ${id} | virtual $${virtualBalance.toFixed(2)}`,
-  );
-
-  notify('afterOpen', {
-    coin, price, sizeUsd: notional, positionId: Number(id), mode: 'PAPER', strategy: 'fader',
-  });
-
-  return { ok: true, positionId: Number(id), sizeUsd: notional };
-}
-
-/**
  * Закрывает виртуальную позицию.
  *
  * Paper PnL = fundingPnl − fees (без pricePnl, т.к. нет реального fill).
  * Fee по умолчанию = size_usd × ONE_LEG × 2 (taker+slippage на обе ноги).
  *
- * opts используется Sniper-симуляцией (Iter 2): при maker-fill exit идёт
- * по MAKER_FEE_RATE без slippage, close_price = armPrice (наш limit).
+ * opts позволяет переопределить close_price / ставку выходной комиссии
+ * (напр. maker-fill по MAKER_FEE_RATE без slippage).
  *
  * @param {{ price: number, reason: string }} signal
  * @param {Object} position — строка из БД
  * @param {boolean} [silent=false]
  * @param {Object} [opts]
- * @param {number} [opts.closePrice] — override signal.price (например, armPrice Sniper)
+ * @param {number} [opts.closePrice] — override signal.price
  * @param {number} [opts.exitFeeRate] — override ставки комиссии выхода (default: ONE_LEG)
  * @returns {Promise<{ ok: boolean, pnl: number, holdHours: number }>}
  */
@@ -516,27 +448,8 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
     pricePnl = isLong
       ? (position.size_usd * (closePrice - position.entry_price)) / position.entry_price
       : (position.size_usd * (position.entry_price - closePrice)) / position.entry_price;
-  } else if (position.strategy_id === 'fader') {
-    // Fader paper PnL = pricePnl − modelled fees+slippage (нет funding).
-    // baseRealized (funding−fees) НЕ применяется: Fader не carry, и его fee-модель
-    // фиксированная ($0.19/round по дефолту), а не % от size.
-    const isLong = (position.side || '').toLowerCase() === 'long';
-    pricePnl = isLong
-      ? (position.size_usd * (closePrice - position.entry_price)) / position.entry_price
-      : (position.size_usd * (position.entry_price - closePrice)) / position.entry_price;
   }
-  // Fader: переопределяем realized = pricePnl − fader-fees (игнорим baseRealized).
-  let realizedPnl;
-  let totalFeeOverride = null;
-  if (position.strategy_id === 'fader') {
-    const feePct  = config.trading.faderFeeRoundtripPct;  // % notional
-    const fee     = (feePct * 0.01) * position.size_usd;
-    const slip    = config.trading.faderSlippageRoundtripUsd;
-    totalFeeOverride = fee + slip;
-    realizedPnl = pricePnl - totalFeeOverride;
-  } else {
-    realizedPnl = baseRealized + pricePnl;
-  }
+  const realizedPnl = baseRealized + pricePnl;
 
   // Hunter / Hunter Long: подмешиваем MFE/MAE из tick-трекера + hold_seconds.
   // Для carry/fade — exitFeatures null (поля в history останутся NULL).
@@ -569,40 +482,18 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
       exitFeatures.trail_give_back_pct = signal.giveBackPct ?? null;
     }
     clearHunterLongTrailState(position.id);
-  } else if (position.strategy_id === 'fader') {
-    const mm = consumeFaderMfeMae(position.id);
-    exitFeatures = {
-      mfe_usd:      mm?.mfeUsd ?? null,
-      mae_usd:      mm?.maeUsd ?? null,
-      mfe_pct:      mm?.mfePct ?? null,
-      mae_pct:      mm?.maePct ?? null,
-      hold_seconds: Math.round(holdMs / 1000),
-    };
   } else if (position.strategy_id === 'vapor') {
     // Iter 1: MFE/MAE-трекинг не делаем, но hold_seconds полезен для оценки.
     exitFeatures = { hold_seconds: Math.round(holdMs / 1000) };
   }
 
-  const finalFee = totalFeeOverride ?? totalFee;
   dbClosePosition(position.id, {
     close_price:  closePrice,
     realized_pnl: realizedPnl,
-    fee_paid:     finalFee,
+    fee_paid:     totalFee,
     reason:       signal.reason,
     exitFeatures,
   });
-
-  // Fader virtual equity — net pnl уже включает modelled fees+slip.
-  if (
-    position.strategy_id === 'fader' &&
-    position.mode === 'PAPER' &&
-    config.trading.faderVirtualBalance > 0
-  ) {
-    applyFaderVirtualPnl(realizedPnl, { coin: position.coin, reason: signal.reason });
-    setFaderCooldown(position.coin);
-    clearFaderPositionState(position.id);
-    if (realizedPnl < 0) recordFaderLoss();
-  }
 
   // Cross-strategy cooldown: на любом close Hunter-позиции бьём общий cooldown.
   // Покрывает и external/reconcile closes, не только strategist-инициированные.
@@ -619,7 +510,7 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
   const sign = realizedPnl >= 0 ? "+" : "";
   logger.info(
     `[Executor] PAPER CLOSE #${position.coin} | reason: ${signal.reason} ` +
-      `| held: ${holdHours.toFixed(1)}h | PnL: ${sign}$${realizedPnl.toFixed(4)} | fees: $${finalFee.toFixed(4)}`,
+      `| held: ${holdHours.toFixed(1)}h | PnL: ${sign}$${realizedPnl.toFixed(4)} | fees: $${totalFee.toFixed(4)}`,
   );
 
   if (!silent) {

@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────
 //  Price History — per-coin ring buffer (in-memory)
 // ─────────────────────────────────────────────────
-// Используется Sniper-Hunter'ом (strategistSniper.js) для детекции
+// Используется Sniper-Hunter'ом (strategistHunter.js) для детекции
 // спайков (|Δprice| за N минут). Iter A.1: только API, без интеграции.
 // Наполнение из scout.js добавится в Iter A.3.
 //
@@ -68,7 +68,7 @@ export function hasEnoughHistory(coin, minutes, now = Date.now()) {
 
 /**
  * Возвращает сэмплы за окно последних `minutes` минут (ASC по ts).
- * Используется Fader-ом для chopRatio (нужен high/low + first/last).
+ * Используется Vapor-ом (range/high/low за окно).
  */
 export function getSamplesSince(coin, minutes, now = Date.now()) {
   const arr = buffers.get(coin);

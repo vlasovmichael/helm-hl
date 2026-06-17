@@ -21,7 +21,7 @@ import {
   isHunterArmed,
   requestHunterArm,
   clearHunterArmed,
-} from '../modules/strategistSniper.js';
+} from '../modules/strategistHunter.js';
 
 export async function processHunterTrailArm(position) {
   if (!config.isProduction) return;
