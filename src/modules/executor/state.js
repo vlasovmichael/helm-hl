@@ -38,13 +38,6 @@ const oiCapRepeatMap   = new Map();  // coin → { count, lastBannedAt } — д�
 const recentLosses = [];              // [{ ts, pnl, coin }]
 let circuitBrokenUntil = 0;           // timestamp когда снимается блокировка
 
-// ── Sniper Mode: pending maker exit ───────────
-// Единый slot — матчит single-position архитектуру.
-// Shape (Iter 2+): { positionId, coin, reason, armedAt, armPrice, side, signal, orderId? }
-// Iter 1: только API, интеграция в handleClose появится в Iter 2.
-// Restart: в памяти; live order на бирже остаётся — Iter 3 должен это обработать.
-let pendingSniper = null;
-
 // ── Мутации ────────────────────────────────────
 
 export function banRuntime(coin)       { runtimeBlacklist.set(coin, Date.now()); }
@@ -326,62 +319,6 @@ export function getRuntimeBlacklist() {
   }
 
   return active;
-}
-
-// ── Sniper Mode API ───────────────────────────
-
-/**
- * Арм Sniper-слота. Перезаписывает предыдущий слот (должен быть один снайпер за раз).
- * @param {Object} data — {positionId, coin, reason, armPrice, side, signal, orderId?}
- */
-export function armSniper(data) {
-  pendingSniper = { ...data, armedAt: Date.now() };
-}
-
-/** @returns {Object|null} Текущий pending-снайпер или null. */
-export function getSniper() {
-  return pendingSniper;
-}
-
-/** Мержит patch в существующий слот. No-op если слот пуст. */
-export function updateSniper(patch) {
-  if (!pendingSniper) return;
-  pendingSniper = { ...pendingSniper, ...patch };
-}
-
-/** Снимает слот. Идемпотентно. */
-export function clearSniper() {
-  pendingSniper = null;
-}
-
-/** @returns {boolean} Есть ли активный Sniper. */
-export function hasSniper() {
-  return pendingSniper !== null;
-}
-
-/**
- * Сериализует Sniper-слот для bot_state.json. Возвращает null если слота нет.
- * Live order на бирже (orderId) переживает рестарт — после restart мы продолжаем
- * поллить статус и закроем как только биржа исполнит / истечёт окно.
- */
-export function serializeSniper() {
-  if (!pendingSniper) return null;
-  return { ...pendingSniper };
-}
-
-/**
- * Восстанавливает Sniper-слот из bot_state.json. Толерантен к null/мусору.
- * Если слот старый (armedAt + window < now), просто игнорируем — на бирже
- * ордер либо уже исполнен, либо отменён по TIF, sync позаботится о позиции.
- */
-export function restoreSniper(saved) {
-  if (!saved || typeof saved !== 'object') return;
-  if (typeof saved.armedAt !== 'number' || !saved.coin) return;
-  pendingSniper = { ...saved };
-  logger.info(
-    `[Executor] 🎯 Sniper RESTORED from state — #${saved.coin} @ $${saved.armPrice} ` +
-      `(mode: ${saved.mode ?? 'PAPER'}, oid: ${saved.orderId ?? 'n/a'}, age: ${Math.round((Date.now() - saved.armedAt) / 60_000)}min)`,
-  );
 }
 
 // ── Dashboard API ──────────────────────────────

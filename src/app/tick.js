@@ -9,7 +9,6 @@ import { coordinate } from '../modules/coordinator.js';
 import { config } from '../core/config.js';
 import { scanCandyGirlRadar } from '../modules/strategistCandyGirl.js';
 import { execute } from '../modules/executor/index.js';
-import { tickSniper } from '../modules/executor/sniper.js';
 import { runSmartAlerts } from './alerts.js';
 import { integrityCheck, orphanCheck } from './integrity.js';
 import { superviseAdoptPositions } from './adoptSupervise.js';
@@ -121,11 +120,6 @@ export async function tick() {
         logger.debug(`[Tick] Candy Girl radar failed: ${err.message}`);
       }
     }
-
-    // Sniper (PAPER): попытка maker-fill / fallback-таймаут ДО coordinator'а,
-    // чтобы если снайпер закрыл позицию этим тиком — координатор увидел IDLE
-    // и мог сразу открыть новую сделку, не теряя тик.
-    await tickSniper(scoutData);
 
     const activePosition = getActivePosition();
 

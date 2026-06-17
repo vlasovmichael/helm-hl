@@ -413,14 +413,14 @@ export async function swingPaperOpen(coin, price, direction, sl, tp, silent = fa
  * Paper PnL = fundingPnl − fees (без pricePnl, т.к. нет реального fill).
  * Fee по умолчанию = size_usd × ONE_LEG × 2 (taker+slippage на обе ноги).
  *
- * opts используется Sniper-симуляцией (Iter 2): при maker-fill exit идёт
- * по MAKER_FEE_RATE без slippage, close_price = armPrice (наш limit).
+ * opts позволяет переопределить close_price / ставку выходной комиссии
+ * (напр. maker-fill по MAKER_FEE_RATE без slippage).
  *
  * @param {{ price: number, reason: string }} signal
  * @param {Object} position — строка из БД
  * @param {boolean} [silent=false]
  * @param {Object} [opts]
- * @param {number} [opts.closePrice] — override signal.price (например, armPrice Sniper)
+ * @param {number} [opts.closePrice] — override signal.price
  * @param {number} [opts.exitFeeRate] — override ставки комиссии выхода (default: ONE_LEG)
  * @returns {Promise<{ ok: boolean, pnl: number, holdHours: number }>}
  */

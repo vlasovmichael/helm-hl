@@ -507,18 +507,6 @@ function loadConfig() {
     throw new Error(`HUNTER_LONG_TRAIL_GIVE_BACK_PCT must be in (0, 100). Got: "${process.env.HUNTER_LONG_TRAIL_GIVE_BACK_PCT}"`);
   }
 
-  // ── Carry: soft-sniper exit on negative_funding when in profit ──
-  // Если funding ушёл в минус, но позиция в плюсе ≥X% — закрываем через snайпера
-  // (maker, экономия 0.02% комиссии). Иначе — market (чтоб не терять время).
-  const negativeFundingSoftExitMinPnlPct = parseFloat(
-    process.env.NEGATIVE_FUNDING_SOFT_EXIT_MIN_PNL_PCT || '2',
-  );
-  if (isNaN(negativeFundingSoftExitMinPnlPct) || negativeFundingSoftExitMinPnlPct < 0) {
-    throw new Error(
-      `NEGATIVE_FUNDING_SOFT_EXIT_MIN_PNL_PCT must be ≥ 0. Got: "${process.env.NEGATIVE_FUNDING_SOFT_EXIT_MIN_PNL_PCT}"`,
-    );
-  }
-
   const maxDrawdownPct = parseFloat(process.env.MAX_DRAWDOWN_PCT || '10');
   const cbMaxLosses    = parseInt(process.env.CB_MAX_LOSSES      || '3', 10);
   const cbPauseHours   = parseFloat(process.env.CB_PAUSE_HOURS   || '2');
@@ -681,7 +669,6 @@ function loadConfig() {
       marketRegimeBtcEnabled,
       marketRegimeBtcPumpPct,
       marketRegimeBtcLookbackMin,
-      negativeFundingSoftExitMinPnlPct,
       // ── WS price feed ──
       wsFeedEnabled,
       wsExitsEnabled,
