@@ -11,7 +11,6 @@ const DEFAULTS = {
   hunter:     null,    // null = follow env; true/false = explicit override
   hunterLong: null,
   chillBoy:   null,
-  carry:      null,
 };
 
 let _flags = { ...DEFAULTS };

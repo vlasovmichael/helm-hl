@@ -509,14 +509,12 @@ const STRATEGY_ALIASES = {
   long:       'hunterLong',
   chill:      'chillBoy',
   chillboy:   'chillBoy',
-  carry:      'carry',
 };
 
 const STRATEGY_LABELS = {
   hunter:     'Hunter SHORT',
   hunterLong: 'Hunter Long',
   chillBoy:   'Chill Boy',
-  carry:      'Carry',
 };
 
 // Default effective state (env-based) for display when no override set
@@ -525,7 +523,6 @@ function envDefault(key) {
   if (key === 'hunter')     return t.hunterEnabled && (!config.isProduction || t.hunterProdEnabled);
   if (key === 'hunterLong') return t.hunterLongEnabled && (!config.isProduction || t.hunterLongProdEnabled);
   if (key === 'chillBoy')   return t.chillBoyEnabled;
-  if (key === 'carry')      return t.carryEnabled !== false;
   return false;
 }
 
@@ -549,7 +546,6 @@ async function sendStrategiesMessage(prefix = '') {
     `${stratLine('hunter',     flags)}\n` +
     `${stratLine('hunterLong', flags)}\n` +
     `${stratLine('chillBoy',   flags)}\n` +
-    `${stratLine('carry',      flags)}\n` +
     `<code>─────────────────────</code>\n` +
     `${pauseLine}`;
 
@@ -566,10 +562,6 @@ async function sendStrategiesMessage(prefix = '') {
       [
         { text: '🌊 Chill ON',  callback_data: 'strat_chill_on'  },
         { text: '🌊 Chill OFF', callback_data: 'strat_chill_off' },
-      ],
-      [
-        { text: '💸 Carry ON',  callback_data: 'strat_carry_on'  },
-        { text: '💸 Carry OFF', callback_data: 'strat_carry_off' },
       ],
       [
         { text: '⏸ Пауза',    callback_data: 'bot_pause'  },
@@ -629,8 +621,8 @@ export function startCallbackPolling() {
       { command: 'strategies', description: 'Состояние стратегий' },
       { command: 'pause',      description: 'Заморозить новые входы' },
       { command: 'resume',     description: 'Возобновить торговлю' },
-      { command: 'on',         description: 'Включить стратегию: hunter / long / chill / carry' },
-      { command: 'off',        description: 'Выключить стратегию: hunter / long / chill / carry' },
+      { command: 'on',         description: 'Включить стратегию: hunter / long / chill' },
+      { command: 'off',        description: 'Выключить стратегию: hunter / long / chill' },
       { command: 'tax',        description: 'Налоговый отчёт [год]' },
     ],
   }).catch((err) => logger.warn(`[Reporter] setMyCommands failed: ${err.message}`));
@@ -730,7 +722,7 @@ export function startCallbackPolling() {
           if (!key) {
             await sendMessage(
               `⚠️ Неизвестная стратегия: <code>${alias}</code>\n` +
-              `Доступные: <code>hunter</code>, <code>long</code>, <code>chill</code>, <code>carry</code>`,
+              `Доступные: <code>hunter</code>, <code>long</code>, <code>chill</code>`,
             );
           } else {
             setFlag(key, enable);

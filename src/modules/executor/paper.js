@@ -10,7 +10,7 @@ import {
 } from '../../core/database.js';
 import { getAvailableBalance } from '../wallet.js';
 import {
-  calcSize, calcPaperClose, calcVolSizeMultiplier,
+  calcSize, calcPaperClose,
   ONE_LEG, MIN_ORDER_USD,
 } from './math.js';
 import {
@@ -70,74 +70,6 @@ function resolvePaperSzDecimals(coin) {
     logger.warn(`[Executor] PAPER #${coin} — resolveAsset failed: ${err.message}`);
     return null;
   }
-}
-
-/**
- * Открывает виртуальную позицию.
- *
- * @param {string}  coin
- * @param {number}  price
- * @param {number}  apy
- * @param {boolean} [silent=false]
- * @returns {Promise<{ ok: boolean, positionId?: number, sizeUsd?: number }>}
- */
-export async function paperOpen(coin, price, apy, silent = false, strategyId = 'carry', side = 'short', volIdx = 0) {
-  const balance = await getPaperBalance();
-
-  if (balance <= 0) {
-    logger.warn(`[Executor] Cannot open — balance is $${balance.toFixed(2)}`);
-    return { ok: false };
-  }
-
-  // Vol-based sizing: на high-vol монетах режем размер carry-позиции.
-  const volMult = strategyId === 'carry'
-    ? calcVolSizeMultiplier(volIdx, config.trading.carryVolSizePenalty, config.trading.carryVolSizeMinMult)
-    : 1;
-  const effectiveUtilization = 0.95 * volMult;
-
-  const szDecimals = resolvePaperSzDecimals(coin);
-  if (szDecimals == null) return { ok: false };
-  const { sizeUsd, sz, tooSmall } = calcSize(balance, price, szDecimals, effectiveUtilization);
-
-  if (tooSmall) {
-    const why = sizeUsd < MIN_ORDER_USD
-      ? `order size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} minimum`
-      : `sz=${sz} rounds to 0 (szDecimals=${szDecimals}, price $${price})`;
-    logger.warn(`[Executor] [SKIP] PAPER #${coin} — ${why}`);
-    return { ok: false };
-  }
-
-  if (volMult < 1) {
-    logger.info(
-      `[Sizing] #${coin} volIdx=${volIdx.toFixed(4)} → ×${volMult.toFixed(2)} → size $${sizeUsd.toFixed(2)} (base $${(balance * 0.95).toFixed(2)})`,
-    );
-  }
-
-  const fee = sizeUsd * ONE_LEG;
-
-  // entry_apy всегда сохраняется как abs — carry-edge magnitude. Знак заложен в side.
-  const id = savePosition({
-    coin,
-    size_usd: sizeUsd,
-    entry_price: price,
-    entry_apy: Math.abs(apy),
-    entry_time: Date.now(),
-    mode: "PAPER",
-    strategy_id: strategyId,
-    side,
-  });
-
-  logger.info(
-    `[Executor] PAPER OPEN ${side.toUpperCase()} #${coin} | $${sizeUsd.toFixed(2)} (of $${balance.toFixed(2)}) @ $${price} | APY: ${apy.toFixed(2)}% | fee: $${fee.toFixed(4)} | id: ${id}`,
-  );
-
-  if (!silent) {
-    await notifyPaperOpen({ coin, sizeUsd, balance, price, apy, fee, side });
-  }
-
-  notify('afterOpen', { coin, price, apy, sizeUsd, positionId: Number(id), mode: 'PAPER' });
-
-  return { ok: true, positionId: Number(id), sizeUsd };
 }
 
 /**

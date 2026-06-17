@@ -453,14 +453,9 @@ export async function scan() {
     const rawApy = fundingRate * 24 * 365 * 100;
     const { fast, slow } = updateEma(coin, rawApy);
 
-    // Под флагом carryLongEnabled пускаем и отрицательный fast (long-сторона).
-    // Без флага — старое поведение: только положительный funding (short).
-    // isHeld обходит фильтр: held-монету Стратег обязан видеть всегда.
-    if (config.trading.carryLongEnabled) {
-      if (fast === 0 && !isHeld) continue;
-    } else {
-      if (fast <= 0 && !isHeld) continue;
-    }
+    // Только положительный funding (short-сторона). isHeld обходит фильтр:
+    // held-монету Стратег обязан видеть всегда.
+    if (fast <= 0 && !isHeld) continue;
 
     const side = fast >= 0 ? 'short' : 'long';
 
@@ -478,13 +473,8 @@ export async function scan() {
     );
   }
 
-  // Под флагом carryLongEnabled сортируем по абсолютному APY (long-сторона
-  // тоже годится), без флага — по знаку (только short-кандидаты).
-  if (config.trading.carryLongEnabled) {
-    results.sort((a, b) => Math.abs(b.smoothedApy) - Math.abs(a.smoothedApy));
-  } else {
-    results.sort((a, b) => b.smoothedApy - a.smoothedApy);
-  }
+  // Сортируем по знаку smoothedApy (только short-кандидаты).
+  results.sort((a, b) => b.smoothedApy - a.smoothedApy);
 
   // INFO при смене лидера, иначе debug — не забиваем консоль
   const topCoin = results[0]?.coin ?? '—';

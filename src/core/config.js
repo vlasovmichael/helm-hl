@@ -41,13 +41,6 @@ function loadConfig() {
   // ── Mode presets ──
   // AGGRESSIVE_MODE=true uses AGG_* defaults. Individual env vars override if set.
   const aggressive = (process.env.AGGRESSIVE_MODE || 'false').toLowerCase() === 'true';
-  // Carry (дед) удалён 2026-06-15 (PROD −$8.72, тезис похоронен при pivot на
-  // price-action). Default OFF; CARRY_ENABLED=true может временно вернуть.
-  const carryEnabled = (process.env.CARRY_ENABLED || 'false').toLowerCase() === 'true';
-  // PROD-gate carry (как у Hunter/ChillBoy). false (дефолт) → в PROD-боте carry
-  // уходит в paper-накопление (tickCarryPaper), не занимая реальный слот. true →
-  // реальные carry-входы через coordinator. Согласовано с cull (carry на паузе).
-  const carryProdEnabled = (process.env.CARRY_PROD_ENABLED || 'false').toLowerCase() === 'true';
 
   const aggMinApy    = parseFloat(process.env.AGG_MIN_APY            || '15');
   const aggEntryApy  = parseFloat(process.env.AGG_ENTRY_APY         || '25');
@@ -83,7 +76,7 @@ function loadConfig() {
     throw new Error(`LIQUID_CACHE_HOURS must be positive number. Got: "${process.env.LIQUID_CACHE_HOURS}"`);
   }
 
-  // ── Strategy constants (carry) ──
+  // ── Strategy constants (funding / exit math, shared) ──
   const roundTrip             = parseFloat(process.env.ROUND_TRIP              || String(aggressive ? aggRoundTrip : 0.001));
   const maxPaybackHours       = parseFloat(process.env.MAX_PAYBACK_HOURS       || '24');
   const maxBreakevenHours     = parseFloat(process.env.MAX_BREAKEVEN_HOURS     || '24');
@@ -96,134 +89,6 @@ function loadConfig() {
 
   // Fade strategy удалена 2026-06-15 (0 сделок за трек, deprecated с 12 мая).
 
-  // ── Carry trailing take-profit ──
-  // Защита от сценария «unrealized PnL вырос до +20%, но дед ждёт negative_funding
-  // и закрывается в ноль». Триггерим выход, когда позиция сдала GIVE_BACK% от пика.
-  // ARM_PCT = пока unrealized < этого порога, peak не трекаем (фильтр шума).
-  const carryTrailEnabled       = (process.env.CARRY_TRAIL_ENABLED || 'true').toLowerCase() === 'true';
-  const carryTrailArmPct        = parseFloat(process.env.CARRY_TRAIL_ARM_PCT        || '3');
-  // ARM_PCT_EQUITY: 1.5→1.2 (2026-05-11) — фиксируем wins чуть раньше, чтоб
-  // увеличить hit-rate trailing TP против дешёвых проседаний.
-  const carryTrailArmPctEquity  = parseFloat(process.env.CARRY_TRAIL_ARM_PCT_EQUITY || '1.2');
-  const carryTrailGiveBackPct   = parseFloat(process.env.CARRY_TRAIL_GIVE_BACK_PCT  || '25');
-  // SPIKE_PROTECTION_PCT: 6→4 (2026-05-11) — VVV в логах PROD дважды стопанулась
-  // на 6% (-$2.94, -$2.61) и съела 5 wins по +$0.55-0.95. Cap loss до ~$1.5.
-  const carrySpikeProtectionPct = parseFloat(process.env.CARRY_SPIKE_PROTECTION_PCT || '4');
-  // LOSS_COOLDOWN_MIN: после price_spike_protection монета банится на N минут.
-  // Защита от паттерна VVV 2026-05-10/11: stop-out → монета снова #1 по APY →
-  // re-entry через 17ч → второй stop-out. Дефолт 720мин (12ч).
-  const carryLossCooldownMin = parseFloat(process.env.CARRY_LOSS_COOLDOWN_MIN || '720');
-
-  // ── Дед v2: breakeven храповик + «цена > фандинг» ──
-  // Проблема: дед — funding-машина, держит позицию ради высокого APY и отдаёт
-  // реальный ценовой подарок ($1+) обратно в 0, ждя negative_funding/apy_below.
-  // На депо $50-100 funding = шум, деньги делает движение цены (carry = mean-rev).
-  //
-  // BE_RATCHET: как только цена дала даже небольшой плюс (peak ≥ arm), ставим
-  // жёсткий пол на breakeven. Дед больше НИКОГДА не отдаёт подарок в 0 — выходит
-  // в безубыток. Ловит подарки МЕНЬШЕ trail-arm (1.2% eq). Arm двойной: $-порог
-  // ИЛИ %-equity порог (что сработает первым), чтоб защищать и мелкое депо.
-  //   FLOOR_PCT_EQUITY: пол по цене как % equity. 0 = чистый breakeven.
-  const carryBeRatchetEnabled = (process.env.CARRY_BE_RATCHET_ENABLED || 'true').toLowerCase() === 'true';
-  const carryBeArmPctEquity   = parseFloat(process.env.CARRY_BE_ARM_PCT_EQUITY || '0.5');
-  const carryBeArmUsd         = parseFloat(process.env.CARRY_BE_ARM_USD         || '0.40');
-  const carryBeFloorPctEquity = parseFloat(process.env.CARRY_BE_FLOOR_PCT_EQUITY || '0');
-  // PRICE_OVER_FUNDING: пока цена в плюсе и trail/ratchet взведён — funding-выходы
-  // (apy_below / apy_decay / stale) НЕ выдёргивают деда. Пусть trail едет, выход
-  // отдаём ценовой логике. Hard-выходы (negative_funding, spike) остаются.
-  const carryPriceOverFunding = (process.env.CARRY_PRICE_OVER_FUNDING || 'true').toLowerCase() === 'true';
-  if (isNaN(carryBeArmPctEquity) || carryBeArmPctEquity <= 0) {
-    throw new Error(`CARRY_BE_ARM_PCT_EQUITY must be positive number. Got: "${process.env.CARRY_BE_ARM_PCT_EQUITY}"`);
-  }
-  if (isNaN(carryBeArmUsd) || carryBeArmUsd < 0) {
-    throw new Error(`CARRY_BE_ARM_USD must be ≥ 0. Got: "${process.env.CARRY_BE_ARM_USD}"`);
-  }
-  if (isNaN(carryBeFloorPctEquity) || carryBeFloorPctEquity < 0) {
-    throw new Error(`CARRY_BE_FLOOR_PCT_EQUITY must be ≥ 0. Got: "${process.env.CARRY_BE_FLOOR_PCT_EQUITY}"`);
-  }
-
-  // Vol-based position sizing для carry: на high-vol монетах режем размер позиции,
-  // чтобы lose-trade не съедал N win-trades. Формула: size × clamp(1 - volIdx × penalty, minMult, 1).
-  // penalty=50, minMult=0.4: VolIdx=0.003→×1.00, 0.008→×0.60, 0.015→×0.40.
-  const carryVolSizePenalty = parseFloat(process.env.CARRY_VOL_SIZE_PENALTY || '50');
-  const carryVolSizeMinMult = parseFloat(process.env.CARRY_VOL_SIZE_MIN_MULT || '0.4');
-  if (isNaN(carryVolSizePenalty) || carryVolSizePenalty < 0) {
-    throw new Error(`CARRY_VOL_SIZE_PENALTY must be ≥ 0. Got: "${process.env.CARRY_VOL_SIZE_PENALTY}"`);
-  }
-  if (isNaN(carryVolSizeMinMult) || carryVolSizeMinMult <= 0 || carryVolSizeMinMult > 1) {
-    throw new Error(`CARRY_VOL_SIZE_MIN_MULT must be in (0, 1]. Got: "${process.env.CARRY_VOL_SIZE_MIN_MULT}"`);
-  }
-
-  if (isNaN(carryTrailArmPct) || carryTrailArmPct <= 0) {
-    throw new Error(`CARRY_TRAIL_ARM_PCT must be positive number. Got: "${process.env.CARRY_TRAIL_ARM_PCT}"`);
-  }
-  if (isNaN(carryTrailArmPctEquity) || carryTrailArmPctEquity <= 0) {
-    throw new Error(`CARRY_TRAIL_ARM_PCT_EQUITY must be positive number. Got: "${process.env.CARRY_TRAIL_ARM_PCT_EQUITY}"`);
-  }
-  if (isNaN(carryTrailGiveBackPct) || carryTrailGiveBackPct <= 0 || carryTrailGiveBackPct >= 100) {
-    throw new Error(`CARRY_TRAIL_GIVE_BACK_PCT must be in (0, 100). Got: "${process.env.CARRY_TRAIL_GIVE_BACK_PCT}"`);
-  }
-  if (isNaN(carrySpikeProtectionPct) || carrySpikeProtectionPct <= 0 || carrySpikeProtectionPct >= 100) {
-    throw new Error(`CARRY_SPIKE_PROTECTION_PCT must be in (0, 100). Got: "${process.env.CARRY_SPIKE_PROTECTION_PCT}"`);
-  }
-  if (isNaN(carryLossCooldownMin) || carryLossCooldownMin < 0) {
-    throw new Error(`CARRY_LOSS_COOLDOWN_MIN must be ≥ 0. Got: "${process.env.CARRY_LOSS_COOLDOWN_MIN}"`);
-  }
-
-  // ── Carry "smart guards" против тихих позиций ──
-  // FARTCOIN 2026-05-13: вход @ APY 37%, держал 16h при PnL≈$0 (флэт), trail так и не армился,
-  // dynamic hold lock = 23.5h. Три ортогональные защиты:
-  //   1) STALE_TIMEOUT — если за N мин ни разу не достигли STALE_MIN_PNL_EQUITY% от equity → close
-  //   2) APY_DECAY_EXIT_RATIO — если slowApy/entryApy < ratio → игнорим hold lock, выходим
-  //   3) MAX_HOLD_MIN — hard cap для dynamic hold lock (страховка против APY≈0 глюка + длинных хвостов)
-  // 0 = выключить соответствующий guard.
-  const carryStaleTimeoutMin    = parseFloat(process.env.CARRY_STALE_TIMEOUT_MIN    || '360');
-  const carryStaleMinPnlEquity  = parseFloat(process.env.CARRY_STALE_MIN_PNL_EQUITY || '0.5');
-  const carryApyDecayExitRatio  = parseFloat(process.env.CARRY_APY_DECAY_EXIT_RATIO || '0.5');
-  const carryMaxHoldMin         = parseFloat(process.env.CARRY_MAX_HOLD_MIN         || '480');
-
-  if (isNaN(carryStaleTimeoutMin) || carryStaleTimeoutMin < 0) {
-    throw new Error(`CARRY_STALE_TIMEOUT_MIN must be ≥ 0. Got: "${process.env.CARRY_STALE_TIMEOUT_MIN}"`);
-  }
-  if (isNaN(carryStaleMinPnlEquity) || carryStaleMinPnlEquity < 0) {
-    throw new Error(`CARRY_STALE_MIN_PNL_EQUITY must be ≥ 0. Got: "${process.env.CARRY_STALE_MIN_PNL_EQUITY}"`);
-  }
-  if (isNaN(carryApyDecayExitRatio) || carryApyDecayExitRatio < 0 || carryApyDecayExitRatio >= 1) {
-    throw new Error(`CARRY_APY_DECAY_EXIT_RATIO must be in [0, 1). Got: "${process.env.CARRY_APY_DECAY_EXIT_RATIO}"`);
-  }
-  if (isNaN(carryMaxHoldMin) || carryMaxHoldMin < 0) {
-    throw new Error(`CARRY_MAX_HOLD_MIN must be ≥ 0. Got: "${process.env.CARRY_MAX_HOLD_MIN}"`);
-  }
-
-  // ── Carry entry trend gate (Дед v3 — симметрия к v2 «цена решает») ──
-  // v2 сделал ВЫХОД price-aware (храповик + цена>фандинг). Но ВХОД остался
-  // funding-only: берём топ-APY монету, у которой сейчас сильнейшее направленное
-  // давление → fade-short часто продолжает ехать против нас, и underwater-дед
-  // сидит до CARRY_MAX_HOLD_MIN (8ч), т.к. guards в минусе не фолсят.
-  // Velocity gate ловит резкий СПАЙК (30м/3%, 2ч/5%), но медленный грайнд
-  // (≤ этих порогов, но устойчиво против нас прямо сейчас) проходит.
-  // Этот гейт: не открываемся, пока за CARRY_ENTRY_TREND_LOOKBACK_MIN цена ещё
-  // движется adversely > CARRY_ENTRY_TREND_ADVERSE_PCT — ждём, пока импульс
-  // выдохнется/развернётся (fade хочет реверсию, а не вход в живой тренд).
-  // Default off — включается флагом. paper-first.
-  const carryEntryTrendEnabled =
-    (process.env.CARRY_ENTRY_TREND_ENABLED || 'false').toLowerCase() === 'true';
-  const carryEntryTrendLookbackMin = parseFloat(process.env.CARRY_ENTRY_TREND_LOOKBACK_MIN || '15');
-  const carryEntryTrendAdversePct  = parseFloat(process.env.CARRY_ENTRY_TREND_ADVERSE_PCT  || '0.6');
-
-  if (isNaN(carryEntryTrendLookbackMin) || carryEntryTrendLookbackMin <= 0 || carryEntryTrendLookbackMin > 240) {
-    throw new Error(`CARRY_ENTRY_TREND_LOOKBACK_MIN must be in (0, 240]. Got: "${process.env.CARRY_ENTRY_TREND_LOOKBACK_MIN}"`);
-  }
-  if (isNaN(carryEntryTrendAdversePct) || carryEntryTrendAdversePct <= 0) {
-    throw new Error(`CARRY_ENTRY_TREND_ADVERSE_PCT must be positive. Got: "${process.env.CARRY_ENTRY_TREND_ADVERSE_PCT}"`);
-  }
-
-  // ── Carry long side (symmetric to short on negative funding) ──
-  // Default false: исторически Grandfather только шортил при положительном
-  // funding. Long-ветка зеркальна: при отрицательном funding (шорты платят
-  // лонгам) открываем long. Активируется ПОСЛЕ полного staged rollout
-  // (Iter 1.0–1.4); пока флаг выключен — поведение идентично прежнему.
-  const carryLongEnabled = (process.env.CARRY_LONG_ENABLED || 'false').toLowerCase() === 'true';
 
   // ── Market Regime: per-coin velocity entry gate (Iter A) ──
   // Защита от «шорта в зелёный рынок»: перед OPEN смотрим, что монета сделала
@@ -886,8 +751,6 @@ function loadConfig() {
       liquidMinVolume,
       liquidCacheMs: liquidCacheHours * 3_600_000,
       setupSnapshotIntervalMin,
-      carryEnabled,
-      carryProdEnabled,
       hunterEnabled,
       hunterProdEnabled,
       hunterLeverage,
@@ -1009,27 +872,6 @@ function loadConfig() {
       riskBasedSizing,
       riskSizingShadow,
       riskPctPerTrade,
-      carryTrailEnabled,
-      carryTrailArmPct,
-      carryTrailArmPctEquity,
-      carryTrailGiveBackPct,
-      carrySpikeProtectionPct,
-      carryLossCooldownMin,
-      carryBeRatchetEnabled,
-      carryBeArmPctEquity,
-      carryBeArmUsd,
-      carryBeFloorPctEquity,
-      carryPriceOverFunding,
-      carryVolSizePenalty,
-      carryVolSizeMinMult,
-      carryStaleTimeoutMin,
-      carryStaleMinPnlEquity,
-      carryApyDecayExitRatio,
-      carryMaxHoldMin,
-      carryEntryTrendEnabled,
-      carryEntryTrendLookbackMin,
-      carryEntryTrendAdversePct,
-      carryLongEnabled,
       marketRegimeVelocityEnabled,
       marketRegimeCoinPumpPct,
       marketRegimeLookbackMin,
