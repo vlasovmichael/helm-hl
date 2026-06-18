@@ -1,4 +1,43 @@
 @use "../core/breakpoints" as *;
+/* ──────────────────────── Hot Movers — radio Trend/Fade в шапке */
+.hm-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.hm-view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg);
+}
+.hm-vt-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  padding: 3px 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  line-height: 1.4;
+  transition: background 0.12s, color 0.12s;
+
+  & + .hm-vt-btn {
+    border-left: 1px solid var(--border);
+  }
+  &:hover {
+    color: var(--text-primary);
+  }
+  &.is-active {
+    background: var(--accent-soft);
+    color: var(--accent-strong);
+  }
+}
+
 /* ──────────────────────── Hunter Signals */
 .signals-meta {
   font-family: var(--font-mono);

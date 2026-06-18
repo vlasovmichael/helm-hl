@@ -26,6 +26,21 @@ import {
 
 const _hmPrevPrices = new Map();
 
+// Режим вердикта карточки: 'trend' (сторона по движению цены — дефолт) либо
+// 'fade' (классический контртренд по OI). Radio в шапке, выбор персистится.
+// Влияет ТОЛЬКО на отображение карточки; серверный бот торгует своей логикой.
+const HM_VIEW_KEY = "hmViewMode";
+let _hmViewMode = "trend";
+try {
+  const saved = localStorage.getItem(HM_VIEW_KEY);
+  if (saved === "trend" || saved === "fade") _hmViewMode = saved;
+} catch { /* localStorage недоступен — дефолт trend */ }
+
+// Последний payload/fmtTime — чтобы перерисовать карточку мгновенно при смене
+// режима, не дожидаясь следующего скан-тика.
+let _hmLastPayload = null;
+let _hmLastFmtTime = null;
+
 // Line-SVG иконки колонки Enter (вместо emoji 🎯/⏳/⛔). stroke=currentColor →
 // цвет наследуется от .hm-entry-${state} (зелёный/янтарный/красный/серый).
 //  · zone     — мишень/прицел: цена у базы, вход рядом (pulse привлекает взгляд).
@@ -63,13 +78,16 @@ function openTradingView(coin) {
 
 // Сколько монет максимум в таблице (открытые позиции — сверх лимита, всегда).
 const HM_MAX_ROWS = 8;
-// momScore ниже порога = WAIT (хода нет) — такие строки прячем, кроме открытых.
-const HM_WAIT_SCORE = 1.5;
 
 export function renderHotMovers(payload, fmtTime) {
   const tbody = document.getElementById("hot-movers-tbody");
   const meta = document.getElementById("hot-movers-meta");
   if (!tbody || !meta) return;
+
+  // Запоминаем последний снапшот — чтобы radio перерисовал карточку сразу.
+  _hmLastPayload = payload;
+  _hmLastFmtTime = fmtTime;
+  bindViewToggle();
 
   // Делегированный клик по строке монеты → TradingView (вешаем один раз).
   if (!tbody.dataset.tvBound) {
@@ -103,6 +121,7 @@ export function renderHotMovers(payload, fmtTime) {
         deriveVolKind(s.volMult),
         s,
         flush,
+        _hmViewMode,
       );
       return { s, windows, maxAbs, momScore: mom.score };
     })
@@ -127,19 +146,15 @@ export function renderHotMovers(payload, fmtTime) {
       momScore: 0,
     });
   }
-  // Остальные строки: режем до лимита и ПРЯЧЕМ WAIT — но только пока есть что
-  // показывать. WAIT-порог по momScore высокий (нужен ~1%+ ход), поэтому в
-  // тихом рынке под него не проходит почти никто. Чтобы карточка не пустела
-  // (оставались одни активные), при нехватке не-WAIT добиваем сильнейшими
-  // движущимися монетами. dead-flat (|ход|<0.2% по всем окнам) прячем всегда.
+  // Остальные строки: всегда добиваем таблицу до HM_MAX_ROWS топом по momentum,
+  // БЕЗ отсечки по ходу. Раньше прятали WAIT/dead-flat (|ход|<0.2%) — но в тихом
+  // рынке под порог проходило 3-4 монеты, и таблица показывала «top 4» + пустые
+  // плейсхолдеры. Юзер хочет видеть 8 реальных монет (сильнейшие сверху, тихие
+  // снизу с WAIT/—), а не 4 + дырки. sorted уже по momScore↓ (2026-06-18).
   const slots = Math.max(0, HM_MAX_ROWS - activeRows.length);
-  const movingRest = sorted.filter(
-    (x) => !isActiveCoin(x.s.coin) && x.maxAbs >= 0.2,
-  );
-  const nonWait = movingRest.filter((x) => x.momScore >= HM_WAIT_SCORE);
-  const restRows = (
-    nonWait.length >= Math.min(4, slots) ? nonWait : movingRest
-  ).slice(0, slots);
+  const restRows = sorted
+    .filter((x) => !isActiveCoin(x.s.coin))
+    .slice(0, slots);
   const enriched = [...activeRows, ...restRows];
 
   const activeShown = activeRows.length;
@@ -349,7 +364,7 @@ export function renderHotMovers(payload, fmtTime) {
 
     // Setup: ОДИН сетап + причина. Режим выбирает OI (trend/fade), сила по
     // взвешенному ходу окон с подтверждением accel/vol.
-    const setup = computeMomentum(x.windows, accelKind, volKind, x.s, flush);
+    const setup = computeMomentum(x.windows, accelKind, volKind, x.s, flush, _hmViewMode);
     const entry = hmEntryBadge(x.windows, setup.side, setup.score, setup.mode);
 
     // Chase-gate: actionable Setup-пилл (trend/fade score≥3), но цена уже ⛔
@@ -467,6 +482,33 @@ export function renderHotMovers(payload, fmtTime) {
 
   reconcileRows(tbody, items);
   mountDirArrows(tbody);
+}
+
+// Radio «Trend / Fade» в шапке карточки. Вешаем обработчик один раз; при смене
+// режима персистим выбор и сразу перерисовываем карточку из последнего снапшота.
+function bindViewToggle() {
+  const tog = document.getElementById("hm-view-toggle");
+  if (!tog) return;
+  const sync = () => {
+    for (const btn of tog.querySelectorAll(".hm-vt-btn")) {
+      const on = btn.dataset.mode === _hmViewMode;
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-checked", on ? "true" : "false");
+    }
+  };
+  if (!tog.dataset.bound) {
+    tog.dataset.bound = "1";
+    tog.addEventListener("click", (e) => {
+      const btn = e.target.closest(".hm-vt-btn");
+      const mode = btn?.dataset.mode;
+      if (!mode || mode === _hmViewMode) return;
+      _hmViewMode = mode;
+      try { localStorage.setItem(HM_VIEW_KEY, mode); } catch { /* noop */ }
+      sync();
+      if (_hmLastPayload) renderHotMovers(_hmLastPayload, _hmLastFmtTime);
+    });
+  }
+  sync();
 }
 
 // Персистентные стрелки активной монеты: строки перестраиваются (innerHTML)

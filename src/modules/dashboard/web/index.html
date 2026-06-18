@@ -91,18 +91,45 @@
           <div
             class="card-title"
             data-num="01.5"
-            title="Монеты с наибольшими ценовыми движениями. Setup: режим выбирает OI — цена↑+OI↑ = TREND LONG (по движению), цена↑+OI↓ = FADE SHORT (выдох/short-covering), зеркально вниз. Без OI-подтверждения — приглушённый вердикт. Причина — в tooltip ячейки Setup."
+            title="Монеты с наибольшими ценовыми движениями. Переключатель Trend/Fade в шапке: Trend — сторона по движению цены (слив → SHORT, памп → LONG), OI помечает качество хода (trend / fade?); Fade — классический контртренд по OI (цена↓+OI↓ = ставка на отскок). Причина вердикта — в tooltip ячейки Setup."
           >
             Hot Movers
           </div>
-          <span
-            id="hot-movers-meta"
-            style="
-              font-size: 11px;
-              font-family: var(--font-mono);
-              color: var(--text-muted);
-            "
-          ></span>
+          <div class="hm-header-right">
+            <div
+              class="hm-view-toggle"
+              id="hm-view-toggle"
+              role="radiogroup"
+              aria-label="Режим вердикта: Trend (сторона по движению) или Fade (контртренд по OI)"
+            >
+              <button
+                type="button"
+                class="hm-vt-btn"
+                data-mode="trend"
+                role="radio"
+                title="Сторона по движению цены: слив → SHORT, памп → LONG. OI лишь помечает качество хода (trend / fade?)."
+              >
+                Trend
+              </button>
+              <button
+                type="button"
+                class="hm-vt-btn"
+                data-mode="fade"
+                role="radio"
+                title="Классический контртренд по OI: цена↓+OI↓ = ставка на отскок (LONG), цена↑+OI↓ = выдох (SHORT)."
+              >
+                Fade
+              </button>
+            </div>
+            <span
+              id="hot-movers-meta"
+              style="
+                font-size: 11px;
+                font-family: var(--font-mono);
+                color: var(--text-muted);
+              "
+            ></span>
+          </div>
         </div>
         <div class="u-scroll-x">
           <table class="data-table signals-table hm-table">

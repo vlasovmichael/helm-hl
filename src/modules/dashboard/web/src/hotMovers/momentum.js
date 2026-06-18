@@ -68,7 +68,13 @@ function fadeMutedByFlush(side, mode, flush) {
   );
 }
 
-export function computeMomentum(windows, accelKind, volKind, signal, flush) {
+// viewMode:
+//   'trend' (дефолт) — сторона ВСЕГДА по движению цены (слив = SHORT, памп =
+//     LONG); OI не переворачивает сторону, а лишь помечает качество хода (tag
+//     trend = OI подтверждает / fade? = ход на делевередже, может выдохнуться).
+//   'fade'  — классический контртренд по OI (OI↓ ⇒ ставка на выдох/отскок).
+// Переключатель на карточке (radio) — оператор сравнивает оба вживую (2026-06-18).
+export function computeMomentum(windows, accelKind, volKind, signal, flush, viewMode = "trend") {
   let weighted = 0;
   let haveData = false;
   for (const w of windows) {
@@ -102,7 +108,28 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush) {
   const oiKind = deriveOiKind(signal);
   const oiStr = oiDeltaStr(signal);
   let side, mode, why;
-  if (oiKind === "up") {
+  // tagText — что писать в пилле после стороны. В fade-режиме = mode (trend/fade),
+  // в trend-режиме = качество хода по OI (trend подтверждён / fade? на делевередже).
+  let tagText = null;
+  if (viewMode === "trend") {
+    // Trend-following: сторона ВСЕГДА по цене, OI сторону не переворачивает.
+    side = priceUp ? "LONG" : "SHORT";
+    mode = "trend"; // entry-бейдж/чейз ждут mode; сторона честно по движению
+    if (oiKind === "up") {
+      tagText = "trend";
+      why = priceUp
+        ? `цена↑ + OI↑ (${oiStr}) = тренд вверх, новые лонги подтверждают`
+        : `цена↓ + OI↑ (${oiStr}) = тренд вниз, новые шорты давят`;
+    } else if (oiKind === "down") {
+      tagText = "fade?";
+      why = priceUp
+        ? `цена↑ + OI↓ (${oiStr}) = ⚠ рост на short-covering, импульс может выдохнуться`
+        : `цена↓ + OI↓ (${oiStr}) = ⚠ падение на делевередже, возможен отскок`;
+    } else {
+      tagText = "trend";
+      why = oiKind === "flat" ? `OI флэт (${oiStr}) — OI хода не подтверждает` : "OI: нет данных";
+    }
+  } else if (oiKind === "up") {
     mode = "trend";
     side = priceUp ? "LONG" : "SHORT";
     why = priceUp
@@ -172,7 +199,7 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush) {
   // «LONG TREND» с «LONG FADE».
   const isFade = mode === "fade";
   const icon = isFade ? _SVG_FADE : sideUp ? _SVG_ARROW_UP : _SVG_ARROW_DOWN;
-  const modeTag = `<span style="opacity:.65;font-size:9px;font-weight:600"> ${mode.toUpperCase()}</span>`;
+  const modeTag = `<span style="opacity:.65;font-size:9px;font-weight:600"> ${(tagText ?? mode).toUpperCase()}</span>`;
   const strongCls = isFade
     ? sideUp
       ? "setup-fade-long"
