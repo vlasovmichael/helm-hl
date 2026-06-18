@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 process.env.TRADING_MODE          = 'PAPER';
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-const { reconstructManualTrades } = await import('../src/modules/userFills.js');
+const { reconstructManualTrades, findRoundTripForPosition } = await import('../src/modules/userFills.js');
 
 // ── Хелпер: fill в normalize'd-форме (как отдаёт normalizeFill) ──
 function makeFill({ coin = 'X', px = 100, sz = 1, time, dir, oid = null, closedPnl = 0, fee = 0 }) {
@@ -131,4 +131,45 @@ test('adopt-поза (entry матчит bot-history) НЕ дублируетс�
 
   const trades = reconstructManualTrades(fills, botTrades, botOidSet).filter((t) => t.coin === 'X');
   assert.equal(trades.length, 0, 'adopt уже в history → как ручная не эмитится');
+});
+
+// ═══════════════════════════════════════════════
+//  findRoundTripForPosition: анти-мердж при флипе (LIT-инцидент 2026-06-18)
+// ═══════════════════════════════════════════════
+// Юзер: Short @1.5821→1.6034 (−1.04), флип в Long @1.6042→1.6445 (+1.89).
+// classifyClose складывал обе ноги в +0.85 под шортом → минус пропадал.
+// findRoundTripForPosition должен вернуть РОВНО шорт-ногу (−1.04).
+test('флип short→long: для adopted-шорта берётся его нога, не сумма', () => {
+  const fills = [
+    makeFill({ coin: 'LIT', time: 1000,  dir: 'Open Short',  px: 1.5821, sz: 49 }),
+    makeFill({ coin: 'LIT', time: 2000,  dir: 'Close Short', px: 1.6034, sz: 49, closedPnl: -1.0437 }),
+    makeFill({ coin: 'LIT', time: 3000,  dir: 'Open Long',   px: 1.6042, sz: 47 }),
+    makeFill({ coin: 'LIT', time: 99000, dir: 'Close Long',  px: 1.6445, sz: 47, closedPnl: 1.8941 }),
+  ];
+  // DB-поза = усыновлённый шорт (entry≈время open-fill шорта).
+  const shortPos = { coin: 'LIT', side: 'short', entry_time: 1000 };
+  const leg = findRoundTripForPosition(shortPos, fills);
+  assert.ok(leg, 'нога найдена');
+  assert.equal(leg.side, 'short');
+  assert.ok(Math.abs(leg.pnl - (-1.0437)) < 1e-9, `pnl шорта = -1.0437, got ${leg.pnl}`);
+  assert.ok(Math.abs(leg.closePx - 1.6034) < 1e-9);
+  assert.equal(leg.closedAt, 2000);
+});
+
+test('флип: для лонг-ноги берётся её pnl (+1.89), не сумма', () => {
+  const fills = [
+    makeFill({ coin: 'LIT', time: 1000,  dir: 'Open Short',  px: 1.5821, sz: 49 }),
+    makeFill({ coin: 'LIT', time: 2000,  dir: 'Close Short', px: 1.6034, sz: 49, closedPnl: -1.0437 }),
+    makeFill({ coin: 'LIT', time: 3000,  dir: 'Open Long',   px: 1.6042, sz: 47 }),
+    makeFill({ coin: 'LIT', time: 99000, dir: 'Close Long',  px: 1.6445, sz: 47, closedPnl: 1.8941 }),
+  ];
+  const longPos = { coin: 'LIT', side: 'long', entry_time: 3000 };
+  const leg = findRoundTripForPosition(longPos, fills);
+  assert.ok(leg);
+  assert.equal(leg.side, 'long');
+  assert.ok(Math.abs(leg.pnl - 1.8941) < 1e-9);
+});
+
+test('findRoundTripForPosition: нет fills → null (фолбэк на classifyClose)', () => {
+  assert.equal(findRoundTripForPosition({ coin: 'LIT', side: 'short', entry_time: 0 }, []), null);
 });

@@ -302,6 +302,53 @@ export function reconstructRoundTrips(fills, botTrades, botOidSet = null) {
 }
 
 /**
+ * Находит ОДНУ закрытую round-trip-ногу из fills, соответствующую DB-позиции
+ * (та же монета + сторона + ближайшее время входа). Нужно при external-close,
+ * чтобы записать РЕАЛЬНУЮ ногу, а не сумму всех fills с момента входа: при флипе
+ * (short→long той же монеты) classifyClose складывал обе ноги в одну цифру, и
+ * минусовая нога пропадала из history (см. adopt flip-merge баг 2026-06-18).
+ *
+ * Классификация source здесь не нужна — берём чистое net-zero разбиение, поэтому
+ * botTrades/botOidSet можно не передавать.
+ *
+ * @param {Object} position — row из positions (coin, side, entry_time)
+ * @param {Array}  fills    — fills (любой порядок; группировка внутри)
+ * @returns {{ pnl:number, fee:number, closePx:number|null, closedAt:number|null,
+ *             entryPrice:number, side:string }|null}
+ */
+export function findRoundTripForPosition(position, fills) {
+  if (!position?.coin || !Array.isArray(fills) || fills.length === 0) return null;
+  const wantCoin = String(position.coin).toUpperCase();
+  const wantSide = (position.side || 'short').toLowerCase();
+  const legs = reconstructRoundTrips(fills, [], null).filter(
+    (t) =>
+      t.status === 'closed' &&
+      String(t.coin).toUpperCase() === wantCoin &&
+      t.side === wantSide,
+  );
+  if (legs.length === 0) return null;
+
+  // Ближайшая по времени входа нога (флип может дать несколько ног той же
+  // стороны — берём ту, чей вход совпадает с adopt-входом). Терпимость широкая
+  // (entry_time усыновления лагает на ~секунды-минуты от фактического fill).
+  let best = null;
+  let bestDelta = Infinity;
+  for (const leg of legs) {
+    const delta = Math.abs((leg.entryTime ?? 0) - (position.entry_time ?? 0));
+    if (delta < bestDelta) { bestDelta = delta; best = leg; }
+  }
+  if (!best) return null;
+  return {
+    pnl:       best.pnl,
+    fee:       best.fee,
+    closePx:   best.closePrice ?? null,
+    closedAt:  best.closeTime ?? null,
+    entryPrice: best.entryPrice,
+    side:      best.side,
+  };
+}
+
+/**
  * Ручные трейды (source='manual') — тонкая обёртка над reconstructRoundTrips.
  * Adopt-позы и бот-сделки отфильтрованы (они уже в bot history). Сохраняет
  * прежний контракт для /api/activity, /api/pnl-summary, /api/trade-markers.

@@ -525,7 +525,10 @@ export function closePosition(id, data) {
       realized_pnl: data.realized_pnl,
       fee_paid:     data.fee_paid,
       mode:         position.mode,
-      closed_at:    Date.now(),
+      // Реальное время закрытия ноги (из fills) если передано — иначе момент
+      // детекта. Важно для флипов: external-close ловит позу позже фактического
+      // закрытия, и без этого сделка встаёт в activity не на своё время.
+      closed_at:    Number.isFinite(data.closed_at) ? data.closed_at : Date.now(),
       reason:       data.reason,
       strategy_id:  position.strategy_id || 'carry',
       side:         position.side || 'short',

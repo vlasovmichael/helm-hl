@@ -11,7 +11,7 @@ import { getActivePosition, getActiveAdoptPositions, closePosition as dbClosePos
 import { getPositionsCached, getAccountSummary } from '../modules/exchange.js';
 import { sendMessage } from '../modules/reporter.js';
 import { fetchExchangePositions } from '../modules/sync.js';
-import { fetchUserFills, classifyClose } from '../modules/userFills.js';
+import { fetchUserFills, classifyClose, findRoundTripForPosition } from '../modules/userFills.js';
 import { maybeAdoptManualPosition, reconcileProvisionalAdoptEntries } from './adoptReconcile.js';
 import { clearAdoptState } from '../modules/strategistAdopt.js';
 import {
@@ -32,6 +32,23 @@ function isSameCoin(apiCoin, targetCoin) {
 }
 
 /**
+ * Жива ли НА БИРЖЕ позиция той же монеты И ТОЙ ЖЕ СТОРОНЫ, что DB-поза.
+ * false → поза либо исчезла, либо флипнулась (на бирже противоположная сторона) →
+ * наша DB-поза фактически закрыта и подлежит закрытию/перезаписи. Side-aware:
+ * без сверки стороны флип short→long не детектился (adopt flip-merge баг 2026-06-18).
+ * @returns {boolean}
+ */
+export function liveMatchesPosition(dbPosition, exchangePositions) {
+  const dbSide = (dbPosition?.side || 'short').toLowerCase();
+  return (exchangePositions || []).some((ap) => {
+    const pos = ap?.position ?? ap;
+    const szi = parseFloat(pos?.szi ?? '0');
+    if (!isSameCoin(pos?.coin, dbPosition?.coin) || szi === 0) return false;
+    return (szi < 0 ? 'short' : 'long') === dbSide;
+  });
+}
+
+/**
  * Проверяет ОДНУ позицию: если её нет на бирже — закрывает в БД с классификацией
  * причины и шлёт уведомление. exchangePositions/equity/withdrawable передаются
  * сверху (один fetch на весь проход, multi-position).
@@ -43,11 +60,10 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
   // Grace period после ОТКРЫТИЯ позиции (даём 10с на индексацию API)
   if (now - dbPosition.entry_time < 10_000) return false;
 
-  const found = exchangePositions.find((ap) => {
-    const pos = ap?.position ?? ap;
-    return isSameCoin(pos?.coin, dbPosition.coin) && parseFloat(pos?.szi ?? '0') !== 0;
-  });
-  if (found) return false; // позиция на месте
+  // «На месте» = живая поза той же монеты И ТОЙ ЖЕ СТОРОНЫ. Поза противоположной
+  // стороны на бирже = ФЛИП (оператор закрыл и развернулся) → наша DB-поза закрыта →
+  // проваливаемся в закрытие (fix #1 запишет реальную ногу, adopt усыновит новую).
+  if (liveMatchesPosition(dbPosition, exchangePositions)) return false;
 
   // ── Позиция исчезла ──────────────
   // PnL = equity_now − equity_at_open (приблизительно при нескольких открытых
@@ -71,6 +87,7 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
   // manual_close). Дефолт 'external_close' если fills не дали ответа.
   let closeReason = 'external_close';
   let closePx = 0;
+  let closedAtOverride = null;
   try {
     const fills = await fetchUserFills(dbPosition.entry_time - 60_000);
     const coinFills = fills.filter(
@@ -83,9 +100,29 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
       pnlAccurate  = true;  // fills дают точное число
     }
     if (Number.isFinite(c.closePx)) closePx = c.closePx;
+
+    // ── Анти-мердж при флипе ──────────────────────────────────────────────
+    // classifyClose суммирует ВСЕ close-fills с момента входа. Если оператор флипнул
+    // монету (short→long) до того, как integrity поймал исчезновение, сумма
+    // схлопывала обе ноги в одну цифру, и минусовая нога пропадала из history
+    // (adopt flip-merge баг 2026-06-18). Берём конкретную ногу по стороне+входу.
+    const leg = findRoundTripForPosition(dbPosition, coinFills);
+    if (leg && Number.isFinite(leg.pnl)) {
+      if (Math.abs((leg.pnl ?? 0) - (c.pnl ?? 0)) > 1e-6) {
+        logger.warn(
+          `[Integrity] #${dbPosition.coin} FLIP detected: merged pnl=$${(c.pnl ?? 0).toFixed(4)} ` +
+            `→ real ${dbPosition.side}-leg pnl=$${leg.pnl.toFixed(4)} (остальные ноги учтутся отдельно)`,
+        );
+      }
+      estimatedPnl = leg.pnl;
+      pnlAccurate  = true;
+      if (Number.isFinite(leg.closePx)) closePx = leg.closePx;
+      if (Number.isFinite(leg.closedAt)) closedAtOverride = leg.closedAt;
+    }
+
     logger.info(
       `[Integrity] #${dbPosition.coin} classified as '${closeReason}' | ` +
-        `pnl(fills)=${Number.isFinite(c.pnl) ? '$' + c.pnl.toFixed(4) : 'n/a'} | ` +
+        `pnl=${Number.isFinite(estimatedPnl) ? '$' + estimatedPnl.toFixed(4) : 'n/a'} | ` +
         `closePx=${closePx ? '$' + closePx : 'n/a'}`,
     );
   } catch (clsErr) {
@@ -97,6 +134,7 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
     realized_pnl: estimatedPnl,
     fee_paid:     0,
     reason:       closeReason,
+    closed_at:    closedAtOverride,  // реальное время ноги (флип) — иначе Date.now()
   });
 
   // Adopt: внешнее/ручное закрытие — частый путь выхода для adopted-позы.
@@ -183,11 +221,10 @@ export async function integrityCheck() {
     const liveOnExchange = exchangePositions.filter(
       (ap) => parseFloat((ap?.position ?? ap)?.szi ?? '0') !== 0,
     );
+    // Поза «исчезла», если на бирже нет живой позы той же монеты И ТОЙ ЖЕ
+    // СТОРОНЫ (флип противоположной стороны тоже = исчезла).
     const vanished = positionsToCheck.filter(
-      (db) =>
-        !liveOnExchange.some((ap) =>
-          isSameCoin((ap?.position ?? ap)?.coin, db.coin),
-        ),
+      (db) => !liveMatchesPosition(db, liveOnExchange),
     );
 
     // Всё на месте → расхождения нет. Это НОРМА, пока открыты позиции — раньше

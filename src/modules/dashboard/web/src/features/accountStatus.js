@@ -281,7 +281,7 @@ export function renderManualPositions(list) {
   // обновляет только uPnL, но не бейдж (SPX висел «HANDS-OFF · MANUAL» без
   // зелёного ADOPTED, хотя нянька уже повесила стоп — 2026-06-18).
   const keys = list
-    .map((p) => `${p.coin}:${p.adopted ? 1 : 0}:${p.adoptSkipReason ?? ""}`)
+    .map((p) => `${p.coin}:${p.adopted ? 1 : 0}:${p.adoptResyncing ? 1 : 0}:${p.adoptSkipReason ?? ""}`)
     .join("|");
   if (keys === _manualKeys) {
     for (const p of list) {
@@ -327,7 +327,9 @@ export function renderManualPositions(list) {
       // на нём уже висит стоп+трейл няньки. Не подхватил → чистый HANDS-OFF.
       // Не усыновлена → показываем ПОЧЕМУ (если бэк знает причину), чтобы не
       // лезть в логи на сервере. Усыновлена → зелёный ADOPTED.
-      const manualBadge = p.adopted
+      const manualBadge = p.adoptResyncing
+        ? `HANDS-OFF · MANUAL · <span style="color:var(--orange,#f59e0b)" title="Сторона позиции сменилась (флип) — бот закрывает старую DB-строку и переусыновляет живую. Управление обновится в течение ~минуты.">RE-SYNCING ⟳</span>`
+        : p.adopted
         ? `HANDS-OFF · MANUAL · <span style="color:var(--green,#22c55e)">ADOPTED</span>`
         : p.adoptSkipReason
           ? `HANDS-OFF · MANUAL · <span style="color:var(--red,#cf222e)">без стопа: ${escapeHtml(p.adoptSkipReason)}</span>`

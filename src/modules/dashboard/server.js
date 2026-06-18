@@ -364,6 +364,14 @@ async function getStatusData() {
         } catch {
           /* ignore */
         }
+        // Расхождение DB-строки adopt с ЖИВОЙ позой по стороне = оператор флипнул
+        // (short→long), а integrity ещё не переусыновил. Старое управление
+        // (стоп/пик) от мёртвой стороны показывать НЕЛЬЗЯ — иначе карточка врёт
+        // (LIT-инцидент 2026-06-18: лонг с ярлыком ADOPTED вёл стоп от шорта).
+        const adoptPos = adoptByCoin.get(normCoin(p.coin));
+        const liveSideLower = szi < 0 ? "short" : "long";
+        const adoptResyncing =
+          !!adoptPos && (adoptPos.side || "short").toLowerCase() !== liveSideLower;
         manualPositions.push({
           coin: p.coin,
           side: szi < 0 ? "SHORT" : "LONG",
@@ -376,12 +384,15 @@ async function getStatusData() {
           currentPrice: livePrice,
           // Бот уже подхватил этот ручной вход (adopt-нянька повесила стоп+трейл)?
           adopted: adoptedCoins.has(normCoin(p.coin)),
+          // Флип: DB-строка отстала от живой стороны → бот пере-усыновляет.
+          adoptResyncing,
           // Если НЕ подхватил — почему (виден на дашборде, без лазанья в логи).
           adoptSkipReason: adoptedCoins.has(normCoin(p.coin))
             ? null
             : getAdoptSkipReason(p.coin),
-          // Живой пол adopt-няньки — тот же форвард, что у бот-сделки.
-          bot: buildAdoptManagement(adoptByCoin.get(normCoin(p.coin))),
+          // Живой пол adopt-няньки — тот же форвард, что у бот-сделки. При
+          // рассинхроне стороны (флип) НЕ отдаём — управление от мёртвой ноги.
+          bot: adoptResyncing ? null : buildAdoptManagement(adoptPos),
         });
       }
     } catch (err) {
