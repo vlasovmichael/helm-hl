@@ -116,7 +116,7 @@ function stratTradesBlock(s) {
   }
   const rows = trades
     .map((t) => {
-      const net = (t.realized_pnl || 0) - (t.fee_paid || 0);
+      const net = (t.realized_pnl || 0); // realized_pnl уже net of fees (fee_paid справочно)
       const cls = net > 0 ? "strat-pos" : net < 0 ? "strat-neg" : "strat-dim";
       const side = (t.side || "").toUpperCase();
       const held = t.hold_seconds ? stratHold(t.hold_seconds) : "";

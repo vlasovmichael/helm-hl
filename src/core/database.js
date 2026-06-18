@@ -729,7 +729,10 @@ export function getStrategyStats(strategyId, mode, side = null) {
   let sumNet = 0, wins = 0, losses = 0, sumWin = 0, sumLoss = 0;
   let worstNet = Infinity, bestNet = -Infinity, lastClosedAt = 0;
   for (const r of rows) {
-    const net = (r.realized_pnl || 0) - (r.fee_paid || 0);
+    // realized_pnl УЖЕ net of fees (calcPnl/calcPaperClose: realizedPnl =
+    // pricePnl + fundingPnl − totalFee). fee_paid лежит рядом справочно — вычитать
+    // его повторно нельзя, иначе комиссия учитывается дважды (фикс 2026-06-19).
+    const net = (r.realized_pnl || 0);
     sumNet += net;
     if (net > 0) { wins++; sumWin += net; } else { losses++; sumLoss += net; }
     if (net < worstNet) worstNet = net;
@@ -759,7 +762,7 @@ export function getStrategyStats(strategyId, mode, side = null) {
 export function getStrategyNetSeries(strategyId, mode, limit = 100, side = null) {
   const rows = getStrategyHistoryMerged(strategyId, mode, side); // ASC
   // последние `limit` по времени, в хронологическом порядке
-  return rows.slice(-limit).map((r) => (r.realized_pnl || 0) - (r.fee_paid || 0));
+  return rows.slice(-limit).map((r) => (r.realized_pnl || 0)); // realized_pnl уже net of fees
 }
 
 /**
@@ -772,7 +775,7 @@ export function getStrategyPnlSince(strategyId, mode, sinceMs, side = null) {
   const rows = getStrategyHistoryMerged(strategyId, mode, side).filter(
     (r) => (r.closed_at || 0) >= sinceMs,
   );
-  const net = rows.reduce((s, r) => s + (r.realized_pnl || 0) - (r.fee_paid || 0), 0);
+  const net = rows.reduce((s, r) => s + (r.realized_pnl || 0), 0); // realized_pnl уже net of fees
   return { n: rows.length, net };
 }
 
