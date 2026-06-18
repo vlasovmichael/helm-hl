@@ -242,7 +242,13 @@ export function renderManualPositions(list) {
 
   // ── Патч НА МЕСТЕ: тот же набор монет → двигаем uPnL/цвет/ползунок на
   // существующих узлах (плавный transition ползунка), а не рвём innerHTML.
-  const keys = list.map((p) => p.coin).join("|");
+  // Ключ включает статус усыновления: иначе при adopt-флипе (false→true) или
+  // смене причины «без стопа» бейдж застывал на до-adopt тексте — in-place ветка
+  // обновляет только uPnL, но не бейдж (SPX висел «HANDS-OFF · MANUAL» без
+  // зелёного ADOPTED, хотя нянька уже повесила стоп — 2026-06-18).
+  const keys = list
+    .map((p) => `${p.coin}:${p.adopted ? 1 : 0}:${p.adoptSkipReason ?? ""}`)
+    .join("|");
   if (keys === _manualKeys) {
     for (const p of list) {
       const card = container.querySelector(
