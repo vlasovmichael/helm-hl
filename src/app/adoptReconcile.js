@@ -17,7 +17,7 @@
 
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
-import { savePosition } from '../core/database.js';
+import { savePosition, updatePositionEntryTime } from '../core/database.js';
 import { getAccountSummary } from '../modules/exchange.js';
 import {
   placeHunterTrigger,
@@ -40,6 +40,64 @@ const _adoptSkipReason = new Map();
 export function getAdoptSkipReason(coin) {
   return _adoptSkipReason.get(coin) || null;
 }
+
+const up = (c) => String(c).toUpperCase();
+
+// ── First-seen трекинг ручных поз ──────────────────────────────────────────
+// КОРЕНЬ глюка «без стопа: возраст входа неизвестен» (повторялся 5 раз): возраст
+// входа берётся ТОЛЬКО из HL-fills (fetchUserFills), а userFillsByTime отдаёт твой
+// open-fill с лагом ~30с после входа (+30с кэш). В это окно openTime=null → нянька
+// консервативно НЕ усыновляла (защита от старых orphan'ов — XPL) → ~30с поза без
+// стопа + красный бейдж, потом fill долетал → ADOPTED. null сваливал в кучу два
+// разных случая: «свежак, fill не проиндексирован» и «реально старый orphan».
+//
+// Различаем по тому, ВИДЕЛ ли бот рождение позы: появилась absent→present при
+// живом боте → заведомо свежая → усыновляем сразу (entry≈first-seen). Висела уже
+// на старте (рождение не видели) → возможен старый orphan → остаёмся осторожны.
+const _firstSeen = new Map();   // coinUpper → { ts, atStartup }
+let _bootObserved = false;       // наблюдён ли хоть один цикл (для atStartup-метки)
+
+// Чистая (для теста): обновляет first-seen карту по текущему набору монет.
+// Первый цикл (bootObserved=false) метит все наличные позы atStartup=true. Новые
+// монеты последующих циклов → atStartup=false (рождение увидели). Возвращает
+// новое значение bootObserved.
+export function updateFirstSeen(map, presentCoins, now, bootObserved) {
+  const present = new Set(presentCoins.map(up));
+  for (const c of present) {
+    if (!map.has(c)) map.set(c, { ts: now, atStartup: !bootObserved });
+  }
+  for (const c of [...map.keys()]) if (!present.has(c)) map.delete(c);
+  return true;
+}
+
+// Чистое (для теста) решение по возрасту входа для adopt.
+//  openTime  — реальное время входа из fills (unix ms) | null (не проиндексирован)
+//  firstSeen — { ts, atStartup } | null — когда бот ВПЕРВЫЕ увидел позу
+//  → { decision: 'adopt'|'too-old'|'unknown-age', entryTime, ageMin, provisional }
+export function decideAdoptByAge({ openTime, firstSeen, now, maxAgeMs }) {
+  // 1. fills знают точное время входа → авторитетно.
+  if (openTime != null) {
+    const ageMin = (now - openTime) / 60_000;
+    const decision = now - openTime > maxAgeMs ? 'too-old' : 'adopt';
+    return { decision, entryTime: openTime, ageMin, provisional: false };
+  }
+  // 2. fill ещё не проиндексирован, но позу бот увидел РОДившейся при себе →
+  //    заведомо свежая → усыновляем сразу, entry≈first-seen (уточним бэкфиллом).
+  if (firstSeen && !firstSeen.atStartup) {
+    const ageMin = (now - firstSeen.ts) / 60_000;
+    // first-seen старше max-age, а fill так и не пришёл → дальше не рискуем.
+    const decision = now - firstSeen.ts > maxAgeMs ? 'too-old' : 'adopt';
+    return { decision, entryTime: firstSeen.ts, ageMin, provisional: decision === 'adopt' };
+  }
+  // 3. Поза висела уже на старте (рождение не видели) или first-seen неизвестен →
+  //    возможен старый orphan → консервативно НЕ трогаем (защита XPL).
+  return { decision: 'unknown-age', entryTime: null, ageMin: null, provisional: false };
+}
+
+// Усыновлённые с провизорным entry_time (fill ещё не был проиндексирован на момент
+// adopt). coinUpper → { id, since }. Бэкфиллим реальное время, когда fill долетит.
+const _provisionalAdopt = new Map();
+const BACKFILL_GIVEUP_MS = 15 * 60_000; // fill не пришёл за 15м → бросаем уточнение
 
 /**
  * Дистанция жёсткого стопа в % от входа.
@@ -172,13 +230,18 @@ async function fireAdoptNtfy(title, message, tags) {
 export async function maybeAdoptManualPosition(manualPositions) {
   if (!config.trading.adoptEnabled) return [];
   if (!config.isProduction) return [];
-  if (!Array.isArray(manualPositions) || manualPositions.length === 0) return [];
+  const list = Array.isArray(manualPositions) ? manualPositions : [];
 
   const now = Date.now();
+  // First-seen учёт ДО early-return на пустом списке: иначе ушедшие монеты копились
+  // бы в карте, а первый цикл с 0 поз не пометил бы boot (atStartup съехал бы).
+  _bootObserved = updateFirstSeen(_firstSeen, list.map((p) => p.coin), now, _bootObserved);
+  if (list.length === 0) return [];
+
   const maxAgeMs = config.trading.adoptMaxAgeMin * 60_000;
   const adopted = [];
 
-  for (const ex of manualPositions) {
+  for (const ex of list) {
     const coin    = ex.coin;
     const side    = ex.szi < 0 ? 'short' : 'long';
     const entry   = ex.entryPx;
@@ -191,18 +254,27 @@ export async function maybeAdoptManualPosition(manualPositions) {
     // гард оставлял такие позы вообще без стопа (cooldown 60м + max-age 10м = монета,
     // которую бот только что торговал, не усыновлялась никогда). Убрано 2026-06-16.
 
-    // Гард: возраст. null → возраст неизвестен → не рискуем (возможно старый orphan).
+    // Гард: возраст. fills знают точное время входа → авторитетно. fills ещё нет
+    // (лаг индексатора ~30с), но позу бот увидел РОДившейся при себе → свежак,
+    // усыновляем сразу (entry≈first-seen, уточним бэкфиллом). Поза висела на старте
+    // и fills молчат → возможен старый orphan → не трогаем (защита XPL).
     const openTime = await getManualOpenTime(coin);
-    if (openTime == null) {
-      logger.info(`[Adopt] skip #${coin} — open time undetermined (not adopting unknown-age orphan)`);
+    const firstSeen = _firstSeen.get(up(coin)) || null;
+    const { decision, entryTime, ageMin, provisional } = decideAdoptByAge({
+      openTime, firstSeen, now, maxAgeMs,
+    });
+    if (decision === 'unknown-age') {
+      logger.info(`[Adopt] skip #${coin} — open time undetermined (старый orphan со старта, fills молчат)`);
       _adoptSkipReason.set(coin, 'возраст входа неизвестен');
       continue;
     }
-    const ageMin = (now - openTime) / 60_000;
-    if (now - openTime > maxAgeMs) {
+    if (decision === 'too-old') {
       logger.info(`[Adopt] skip #${coin} — too old (${ageMin.toFixed(1)}min > ${config.trading.adoptMaxAgeMin}min)`);
       _adoptSkipReason.set(coin, `слишком старая (${ageMin.toFixed(0)}м > ${config.trading.adoptMaxAgeMin}м)`);
       continue;
+    }
+    if (provisional) {
+      logger.info(`[Adopt] #${coin} — fill ещё не проиндексирован, усыновляю сразу как свежий (увидел рождение, age≈${ageMin.toFixed(1)}min); entry_time уточню бэкфиллом`);
     }
 
     // ── Жёсткий стоп (reduce-only) ──────────────
@@ -252,7 +324,7 @@ export async function maybeAdoptManualPosition(manualPositions) {
         size_usd:      sizeUsd,
         entry_price:   entry,
         entry_apy:     0,            // adopt не carry — APY неприменим
-        entry_time:    openTime,     // фактическое время ручного входа
+        entry_time:    entryTime,    // время входа из fills, либо провизорное first-seen
         mode:          'PRODUCTION',
         strategy_id:   'adopt',
         side,
@@ -268,6 +340,11 @@ export async function maybeAdoptManualPosition(manualPositions) {
       logger.error(`[Adopt] savePosition #${coin} failed ПОСЛЕ постановки стопа (oid=${slOid}): ${err.message}`);
       break;
     }
+
+    // Усыновлено по провизорному (first-seen) времени — fill ещё не был
+    // проиндексирован. Запоминаем, чтобы бэкфиллить реальный entry_time, когда
+    // fill долетит (точная классификация 'adopted' в ленте/леджере).
+    if (provisional) _provisionalAdopt.set(up(coin), { id, since: now });
 
     const distLabel = `−${distPct.toFixed(2)}% ${basis === 'atr' ? 'ATR' : 'фикс'}`;
     logger.info(
@@ -289,4 +366,38 @@ export async function maybeAdoptManualPosition(manualPositions) {
   }
 
   return adopted;
+}
+
+/**
+ * Бэкфилл реального entry_time для поз, усыновлённых по провизорному (first-seen)
+ * времени (fill ещё не был проиндексирован на момент adopt). Когда HL наконец
+ * отдаёт open-fill — записываем точное время входа, чтобы лента/леджер
+ * классифицировали позу как 'adopted' по точному entry-матчу (ENTRY_MATCH_MS=3с),
+ * а не как 'manual'. Дёшево: fills уже в 30с-кэше. Вызывается каждый цикл
+ * orphanCheck. Если fill не пришёл за BACKFILL_GIVEUP_MS — бросаем (оставляем
+ * провизорный entry_time, бот-закрытие всё равно классифицирует 'adopted' по oid).
+ */
+export async function reconcileProvisionalAdoptEntries() {
+  if (_provisionalAdopt.size === 0) return;
+  const now = Date.now();
+  for (const [coin, info] of [..._provisionalAdopt]) {
+    let realOpen = null;
+    try {
+      realOpen = await getManualOpenTime(coin);
+    } catch {
+      /* транзиент — попробуем в следующий цикл */
+    }
+    if (realOpen != null) {
+      try {
+        updatePositionEntryTime(info.id, realOpen);
+        logger.info(`[Adopt] backfill entry_time #${coin} (id=${info.id}) → ${new Date(realOpen).toISOString()} (fill долетел)`);
+      } catch (err) {
+        logger.warn(`[Adopt] backfill entry_time #${coin} failed: ${err.message}`);
+      }
+      _provisionalAdopt.delete(coin);
+    } else if (now - info.since > BACKFILL_GIVEUP_MS) {
+      logger.debug(`[Adopt] entry_time backfill #${coin} — fill не появился за ${(BACKFILL_GIVEUP_MS / 60_000)}м, оставляю провизорное время`);
+      _provisionalAdopt.delete(coin);
+    }
+  }
 }

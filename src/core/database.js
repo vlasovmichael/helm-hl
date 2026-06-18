@@ -465,6 +465,19 @@ export function updateHunterTriggerOids(id, { hunter_sl_oid, hunter_tp_oid }) {
 }
 
 /**
+ * Уточняет entry_time позиции (unix ms). Нужен adopt-няньке: свежую ручную позу
+ * усыновляем СРАЗУ (стоп ставится мгновенно), ещё до того как HL проиндексирует
+ * open-fill, c провизорным entry_time = first-seen. Когда fill долетает —
+ * бэкфиллим реальное время входа, чтобы лента/леджер классифицировали позу как
+ * 'adopted' по точному entry-матчу (см. adoptReconcile.reconcileProvisionalAdoptEntries).
+ */
+export function updatePositionEntryTime(id, entryTime) {
+  getDb()
+    .prepare('UPDATE positions SET entry_time = ? WHERE id = ?')
+    .run(entryTime, id);
+}
+
+/**
  * Закрывает позицию и переносит запись в history.
  * @param {number} id - id записи в positions
  * @param {{ close_price, realized_pnl, fee_paid, reason }} data

@@ -12,7 +12,7 @@ import { getPositionsCached, getAccountSummary } from '../modules/exchange.js';
 import { sendMessage } from '../modules/reporter.js';
 import { fetchExchangePositions } from '../modules/sync.js';
 import { fetchUserFills, classifyClose } from '../modules/userFills.js';
-import { maybeAdoptManualPosition } from './adoptReconcile.js';
+import { maybeAdoptManualPosition, reconcileProvisionalAdoptEntries } from './adoptReconcile.js';
 import { clearAdoptState } from '../modules/strategistAdopt.js';
 import {
   state,
@@ -320,6 +320,13 @@ export async function orphanCheck() {
       // Видимый лог: раньше debug → при LOG_LEVEL=info провал adopt был невидим
       // и диагностировался только лазаньем в БД (incident 2026-06-14).
       logger.warn(`[Manual] adopt attempt failed: ${err.message}`);
+    }
+    // Бэкфилл реального entry_time для поз, усыновлённых по провизорному first-seen
+    // (fill долетел спустя ~30с после adopt) — точная классификация 'adopted'.
+    try {
+      await reconcileProvisionalAdoptEntries();
+    } catch (err) {
+      logger.debug(`[Adopt] provisional entry backfill failed: ${err.message}`);
     }
   }
 
