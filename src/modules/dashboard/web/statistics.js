@@ -25,7 +25,6 @@ import {
   showChartLoader,
   hideChartLoader,
 } from "./src/charts/equityChart.js";
-import { renderStrategies } from "./src/features/strategies.js";
 import {
   setPnlSummary,
   setInsights,
@@ -37,20 +36,13 @@ import {
   fetchInitialLogs,
 } from "./src/features/logs.js";
 
-function onStatus(data) {
-  renderStrategies(data.strategies);
-}
-
 async function tick() {
-  const [historyR, pnlR, insightsR, stratR] = await Promise.allSettled([
+  // Strategies переехала на Lab — здесь её больше не грузим (/api/strategies).
+  const [historyR, pnlR, insightsR] = await Promise.allSettled([
     fetchJson(`/api/history?hours=${getRangeHours()}`),
     fetchJson("/api/pnl-summary"),
     fetchJson("/api/insights"),
-    fetchJson("/api/strategies"),
   ]);
-  if (stratR.status === "fulfilled" && stratR.value) {
-    renderStrategies(stratR.value);
-  }
   if (pnlR.status === "fulfilled") setPnlSummary(pnlR.value);
   if (insightsR.status === "fulfilled") setInsights(insightsR.value);
   if (historyR.status === "fulfilled" && historyR.value?.points) {
@@ -79,7 +71,6 @@ bindRange(() => {
   tick();
 });
 initWebSocket({
-  onStatus,
   onLogsInit: (entries) => ingestLogs(entries, true),
   onLog: (entry) => ingestLogs([entry], false),
 });

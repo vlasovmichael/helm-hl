@@ -53,6 +53,30 @@ function buildStatus() {
     },
     bot,
   };
+  // Усыновлённая (ADOPTED) ручная LONG по SOL — чтобы вживую видеть заливку
+  // uPnL-карточки и у adopted-блока. Цена идёт зеркально UNI: когда UNI падает
+  // (short в плюсе), SOL «растёт» в нашу сторону (long в плюсе) тем же ходом.
+  const solEntry = 150;
+  const solPrice = solEntry * (1 + (POS.entry - price) / POS.entry); // тот же ход
+  const solSize = 90;
+  const solUpnl = ((solPrice - solEntry) / solEntry) * solSize;
+  const manualAdopted = {
+    coin: "SOL",
+    side: "LONG",
+    sizeUsd: solSize,
+    leverage: 3,
+    entryPrice: solEntry,
+    currentPrice: solPrice,
+    unrealizedPnl: solUpnl,
+    liquidationPrice: solEntry * 0.7,
+    adopted: true,
+    bot: {
+      stopPrice: solEntry * 0.98, // −2% (long стоп ниже входа)
+      tpPrice: solEntry * 1.04,
+      beArmPct: 1.5,
+      beArmed: (solPrice - solEntry) / solEntry >= 0.015,
+    },
+  };
   return {
     equity: 120 + uPnL,
     sessionProfit: uPnL,
@@ -60,7 +84,7 @@ function buildStatus() {
     uptimeMin: 42,
     available: 60,
     activePosition,
-    manualPositions: [],
+    manualPositions: [manualAdopted],
     runtimeBans: [],
     // пустые signals → renderHotMovers синтезирует строку активной монеты
     // (с настоящим arrow-узлом), а updateHotMoversLiveArrow гоняет ракету.

@@ -8,6 +8,7 @@ import "./src/styles/index.scss";
 import {
   REFRESH_MS,
   fmtTime,
+  getRangeHours,
   bindTheme,
   bindRange,
   initWebSocket,
@@ -28,7 +29,7 @@ import {
   updateHotMoversLiveArrow,
 } from "./src/hotMovers/render.js";
 import { renderMarketContext } from "./src/features/marketContext.js";
-import { initModals } from "./src/features/modals.js";
+import { initModals, renderActivity } from "./src/features/modals.js";
 import {
   initSetupScanner,
   renderSmartSignals,
@@ -67,12 +68,15 @@ function onStatus(data) {
 async function tick() {
   // Фолбэк /api/signals только если WS не присылал hotMovers недавно.
   const wsHotFresh = Date.now() - lastWsHotMoversAt < WS_HOTMOVERS_FRESH_MS;
-  const [hmR, btcR, mcR] = await Promise.allSettled([
+  const [hmR, btcR, mcR, actR] = await Promise.allSettled([
     wsHotFresh ? Promise.resolve(null) : fetchJson("/api/signals?limit=30"),
     fetchJson("/api/candles?coin=BTC&interval=1m"),
     fetchJson("/api/market-context"),
+    // Recent Activity — локальный эндпоинт (своя БД, без HL-веса), к 429 не причастен.
+    fetchJson(`/api/activity?hours=${getRangeHours()}&limit=10`),
   ]);
   if (mcR.status === "fulfilled") renderMarketContext(mcR.value);
+  if (actR.status === "fulfilled") renderActivity(actR.value);
   if (hmR.status === "fulfilled" && hmR.value?.signals) {
     setHmSignals(hmR.value.signals);
     renderHotMovers(hmR.value, fmtTime);

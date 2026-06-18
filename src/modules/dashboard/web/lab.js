@@ -22,13 +22,17 @@ import {
   renderBtcDivergence,
   initDivergenceUi,
 } from "./src/features/divergence.js";
+import { renderStrategies } from "./src/features/strategies.js";
 
 // ── Bootstrap ──
 mountTopnav("lab");
 bindTheme();
-// WS нужен только ради push-сигнала btc-divergence (свежий снапшот). onStatus —
-// no-op: equity/позиции Lab не показывает.
-initWebSocket({ onStatus: () => {}, onDivergence: () => divRefresh() });
+// WS: push-сигнал btc-divergence (свежий снапшот) + таблица Strategies (перенесена
+// со statistics) — данные приходят в status-payload (data.strategies).
+initWebSocket({
+  onStatus: (data) => renderStrategies(data.strategies),
+  onDivergence: () => divRefresh(),
+});
 initDivergenceUi();
 divRefresh();
 // Whale-bias подмешивается в таблицу divergence → при обновлении китов

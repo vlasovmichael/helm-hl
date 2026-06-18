@@ -69,6 +69,34 @@ function setUsd(el, v) {
   el.classList.toggle("negative", v < 0);
 }
 
+// Двухслойная начинка PnL-карточки (uPnL/Net) под сплошную заливку temp/1.html:
+//  · .pnl-base — нижний слой, цветной текст (несёт id/знаковый класс для патча);
+//  · .pnl-fill — верхний слой, белый текст в сплошной заливке (обрезается CSS по
+//    --rb-now). Виден только при rb-depth (есть стоп) — иначе CSS его прячет.
+function pnlLayers({ label, valueId = "", valueCls = "", valueText }) {
+  const idAttr = valueId ? ` id="${valueId}"` : "";
+  return (
+    `<div class="pnl-base">` +
+    `<div class="item-label">${label}</div>` +
+    `<div${idAttr} class="item-value ${valueCls}">${valueText}</div>` +
+    `</div>` +
+    `<div class="pnl-fill" aria-hidden="true">` +
+    `<div class="item-label">${label}</div>` +
+    `<div class="item-value">${valueText}</div>` +
+    `</div>`
+  );
+}
+
+// Обновить $-значение в ОБОИХ слоях двухслойной PnL-карточки (нижний цветной +
+// верхний белый), чтобы текст под заливкой совпадал с текстом снаружи.
+function setPnlUsd(cell, v) {
+  if (!cell) return;
+  const base = cell.querySelector(".pnl-base .item-value");
+  setUsd(base, v);
+  const fill = cell.querySelector(".pnl-fill .item-value");
+  if (fill && base) fill.textContent = base.textContent;
+}
+
 // Текущая монета бот-позиции — чтобы понимать, патчить на месте или пере-строить.
 let _posCoin = null;
 let _lastNetVal = null;
@@ -186,7 +214,7 @@ export function renderPosition(pos) {
   if (pnl && _posCoin === pos.coin && primaryEl) {
     const flip = _lastNetSign && _lastNetSign !== netSign;
     applyTint(primaryEl, tint, netSign);
-    setUsd(document.getElementById("pos-net"), pnl.netMarket);
+    setPnlUsd(primaryEl, pnl.netMarket);
     setUsd(document.getElementById("pos-netmkr"), pnl.netMaker);
     setUsd(document.getElementById("pos-price"), pnl.price);
     setUsd(document.getElementById("pos-funding"), pnl.funding);
@@ -207,9 +235,15 @@ export function renderPosition(pos) {
     const cls = (v) => (v >= 0 ? "positive" : "negative");
     const sgn = (v) => (v >= 0 ? "+" : "−");
     const primaryCls = `grid-item grid-item-primary pnl-tint pnl-${netSign}${rbCls}`;
+    const netInner = pnlLayers({
+      label: `Net (Mkt) <span class="primary-tag">total</span>`,
+      valueId: "pos-net",
+      valueCls: cls(pnl.netMarket),
+      valueText: `${sgn(pnl.netMarket)}$${Math.abs(pnl.netMarket).toFixed(4)}`,
+    });
     pnlBlock = `
       <div class="data-grid" style="margin-top:0.75rem">
-        <div id="pos-primary" class="${primaryCls}"${rbAttr}><div class="item-label">Net (Mkt) <span class="primary-tag">total</span></div><div id="pos-net" class="item-value ${cls(pnl.netMarket)}">${sgn(pnl.netMarket)}$${Math.abs(pnl.netMarket).toFixed(4)}</div></div>
+        <div id="pos-primary" class="${primaryCls}"${rbAttr}>${netInner}</div>
         <div class="grid-item"><div class="item-label">Net (Mkr)</div><div id="pos-netmkr" class="item-value ${cls(pnl.netMaker)}">${sgn(pnl.netMaker)}$${Math.abs(pnl.netMaker).toFixed(4)}</div></div>
         <div class="grid-item"><div class="item-label">Price PnL</div><div id="pos-price" class="item-value ${cls(pnl.price)}">${sgn(pnl.price)}$${Math.abs(pnl.price).toFixed(4)}</div></div>
         <div class="grid-item"><div class="item-label">Funding</div><div id="pos-funding" class="item-value ${cls(pnl.funding)}">${sgn(pnl.funding)}$${Math.abs(pnl.funding).toFixed(4)}</div></div>
@@ -268,7 +302,7 @@ export function renderManualPositions(list) {
       const sign = p.unrealizedPnl >= 0 ? "pos" : "neg";
       const cell = card.querySelector(".pnl-tint");
       applyTint(cell, tint, sign);
-      setUsd(cell?.querySelector(".item-value"), p.unrealizedPnl);
+      setPnlUsd(cell, p.unrealizedPnl);
       const nowEl = card.querySelector("[data-mnow]");
       if (nowEl)
         nowEl.textContent = `${fmtPrice(p.entryPrice)} · ${p.currentPrice != null ? fmtPrice(p.currentPrice) : "—"}`;
@@ -322,7 +356,7 @@ export function renderManualPositions(list) {
         <div class="data-grid">
           <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}</div></div>
           <div class="grid-item"><div class="item-label">Entry · Now</div><div class="item-value" data-mnow>${fmtPrice(p.entryPrice)} · ${cur}</div></div>
-          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}><div class="item-label">uPnL</div><div class="item-value ${cls(p.unrealizedPnl)}">${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}</div></div>
+          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}` })}</div>
           <div class="grid-item"><div class="item-label">Liq</div><div class="item-value">${liq}</div></div>
         </div>
       </div>`;

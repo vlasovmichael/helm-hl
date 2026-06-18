@@ -7,7 +7,11 @@
 @include until($bp-lg) {
   .bottom-nav {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    /* Кнопок ровно 3 (Pos/Movers/Setup) — divergence/whale уехали на Lab.
+       auto-flow column + auto-columns:1fr → грид сам подгоняется под число
+       кнопок (раньше было жёстко 5 → 2 пустые колонки, кнопки жались влево). */
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
     position: fixed;
     bottom: 0;
     left: 0;

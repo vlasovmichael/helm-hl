@@ -251,6 +251,24 @@
         </div>
       </section>
 
+      <!-- Recent Activity — лента open/close (рендерит index.js через /api/activity).
+           /api/activity = локальный эндпоинт (своя БД сделок, без вызовов HL) →
+           веса Hyperliquid не тратит, к 429 отношения не имеет. -->
+      <section class="card" id="sec-activity">
+        <div class="card-header">
+          <div class="card-title" data-num="">Recent Activity</div>
+        </div>
+        <div id="bans-strip"></div>
+        <div id="activity-container">
+          <div class="activity-skeleton">
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+          </div>
+        </div>
+      </section>
+
 
       <footer id="footer-status">
         <span>Connecting to core…</span>

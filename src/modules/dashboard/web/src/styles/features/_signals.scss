@@ -56,9 +56,10 @@
 /* Hot Movers: фиксируем ширины колонок, чтобы таблица не «прыгала» при смене
    цены (у разных монет разное число знаков: $0.00001 vs $104k, % меняет знак/
    разряд). table-layout:fixed → ширина колонки не зависит от контента. Шрифт уже
-   моноширинный (tabular). Только desktop: на ≤720px ниже включается card-вёрстка
-   (@media), где фикс-ширины и nowrap не нужны и обрезали бы карточки. */
-@include from(721px) {
+   моноширинный (tabular). card-вёрстка ниже включается раньше — на ≤$bp-lg (там же,
+   где мобильная нижняя навигация): на узком дашборде (рядом с графиком) 11 колонок
+   не влезали и резались в «+0…». Десктоп-таблица — только выше $bp-lg. */
+@include from($bp-lg + 1) {
   .hm-table {
     table-layout: fixed;
   }
@@ -341,7 +342,7 @@
     height: 18px;
   }
 }
-@include until($bp-md) {
+@include until($bp-lg) {
   .hm-entry-icon {
     width: 26px;
     height: 24px;
@@ -814,7 +815,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
    строка 3 = окна 2m/5m/15m; строка 4 = Acc / OI / Trend.
    Лейблы (2M, ACC…) — через td[data-w]::before только на метрик-ячейках.
    Хот-муверс — единственная таблица с .signals-table+data-w. */
-@include until($bp-md) {
+@include until($bp-lg) {
   .hm-table,
   .hm-table tbody {
     display: block;
@@ -1215,7 +1216,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
 
 /* Hot Movers под-строка подсказок (colspan) на мобильной card-вёрстке (≤720px):
    рендерим обычным блоком на всю ширину, без per-cell ::before лейблов. */
-@include until($bp-md) {
+@include until($bp-lg) {
   .signals-table tr.hm-pos-row td {
     display: block;
     width: 100%;

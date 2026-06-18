@@ -80,69 +80,94 @@
   .primary-tag {
     color: inherit;
   }
+  /* Двухслойная начинка (см. temp/1.html → accountStatus.js):
+     · .pnl-base — нижний слой в потоке (несёт высоту ячейки), ЦВЕТНОЙ текст.
+     · .pnl-fill — верхний слой-оверлей, СПЛОШНАЯ яркая заливка + БЕЛЫЙ текст,
+       обрезан по ширине прогресса (clip-path по --rb-now). Виден только при
+       rb-depth (есть стоп) — иначе скрыт, карточка как обычная знаковая. */
+  .pnl-base {
+    display: block;
+  }
+  .pnl-fill {
+    display: none;
+  }
 }
-/* Registered custom-props — без них градиент-ползунок и цвет «телепортируются»:
-   браузер интерполирует @property-значения, поэтому --rb-now едет плавно, а
-   --pnl-c кроссфейдит зелёный↔красный. Карточку при этом нельзя пересоздавать
-   каждый тик (JS патчит DOM на месте — иначе transition не запустится). */
+/* Registered custom-prop — без него край заливки «телепортируется»: браузер
+   интерполирует @property-число, поэтому --rb-now едет плавно (clip-path .pnl-fill
+   пересчитывается покадрово). Карточку при этом нельзя пересоздавать каждый тик
+   (JS патчит DOM на месте — иначе transition не запустится). */
 @property --rb-now {
   syntax: "<number>";
-  inherits: true; /* ::before-«вода» читает то же значение, что и карточка */
+  inherits: true; /* .pnl-fill (потомок) читает то же значение, что и ячейка */
   initial-value: 0;
 }
-@property --pnl-c {
-  syntax: "<color>";
-  inherits: false;
-  initial-value: transparent;
-}
 
-/* Risk-bar как «вода» в карточке: заливка слева на --rb-now (0..1) — прогресс до
-   ближайшей вехи (стоп / храповик / профит, выставляет JS). Сам столб воды —
-   псевдо-слой ::before ПОВЕРХ текста с mix-blend-mode: screen, поэтому цифры/
-   буквы, на которые наезжает край, подсвечиваются в цвет PnL (= «символы меняют
-   цвет»). Край размыт на ~8px → мениск, как у жидкости. --rb-now едет с упругим
-   overshoot-easing → ползунок не телепортируется, а мягко переливается-оседает
-   («желе/вода»). Цвет перетекает через @property --pnl-c. Карточку при этом
-   нельзя пересоздавать каждый тик — JS патчит DOM на месте. */
+/* Сплошная заливка-прогресс (temp/1.html): столб яркого биржевого цвета слева до
+   --rb-now (0..1) — прогресс до ближайшей вехи (стоп / храповик / профит,
+   выставляет JS). Заливка — отдельный СЛОЙ .pnl-fill поверх цветного текста, с
+   БЕЛЫМ текстом внутри, обрезанный по ширине через clip-path. Так символы, на
+   которые наезжает край заливки, становятся белыми (как «обрезка белого текста по
+   ширине заливки» в образце). --rb-now едет с упругим overshoot-easing → край
+   заливки мягко пружинит-оседает («желе»). Карточку при этом нельзя пересоздавать
+   каждый тик — JS патчит DOM на месте. */
 .grid-item.pnl-tint.rb-depth {
   position: relative;
   overflow: hidden;
-  --pnl-c: var(--red);
-  /* Сам прогресс-бар: видимый столб слева до --rb-now (behind text) + faint
-     base-tint. Край размыт на ~8px → мягкий «мениск», а не резкая граница. */
-  background:
-    linear-gradient(
-        90deg,
-        color-mix(in srgb, var(--pnl-c) 34%, transparent) 0,
-        color-mix(in srgb, var(--pnl-c) 34%, transparent)
-          calc(var(--rb-now) * 100% - 8px),
-        color-mix(in srgb, var(--pnl-c) 20%, transparent)
-          calc(var(--rb-now) * 100% - 1px),
-        transparent calc(var(--rb-now) * 100%)
-      )
-      no-repeat,
-    color-mix(in srgb, var(--pnl-c) 13%, transparent);
-  border-color: color-mix(in srgb, var(--pnl-c) 42%, var(--border));
-  /* Сильный упругий overshoot-easing → ползунок мягко пружинит-оседает
-     («желе/вода»), но без рывка. Цвет перетекает через @property --pnl-c. */
+  /* --rb-now транзишним ЗДЕСЬ (inline-значение меняется на ячейке); упругий
+     overshoot-easing → край заливки .pnl-fill мягко пружинит-оседает.
+     Цвета задаём ЯВНО по знаку (--pnl-up/down), а не через наследуемый --pnl-c:
+     display-слои + некоторые движки роняют наследование registered-проперти в
+     transparent (текст/заливка пропадали на тёмной теме). */
   transition:
     --rb-now 0.85s cubic-bezier(0.22, 1.7, 0.36, 1),
-    --pnl-c 0.5s ease,
+    background 0.5s ease,
     border-color 0.5s ease;
 
-  .item-label,
-  .item-value {
-    position: relative;
-    z-index: 1;
-    text-shadow:
-      0 0 2px var(--card-bg),
-      0 1px 2px var(--card-bg);
+  /* Верхний слой — сплошная заливка + белый текст, обрезан по --rb-now.
+     padding дублирует grid-item (14px 16px) → текст идеально совпадает с нижним. */
+  .pnl-fill {
+    display: block;
+    position: absolute;
+    inset: 0;
+    padding: 14px 16px;
+    clip-path: inset(0 calc((1 - var(--rb-now)) * 100%) 0 0);
+    pointer-events: none;
+    transition: background 0.5s ease;
+
+    .item-label {
+      color: rgba(255, 255, 255, 0.82);
+    }
+    .item-value {
+      color: #fff;
+    }
+    .primary-tag {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.18);
+      box-shadow: none;
+    }
   }
+
+  /* Зелёный (в плюсе): незалитый фон/рамка, цветной текст низа, сплошная заливка. */
   &.pnl-pos {
-    --pnl-c: var(--green);
+    background: color-mix(in srgb, var(--pnl-up) 12%, var(--canvas-subtle));
+    border-color: color-mix(in srgb, var(--pnl-up) 42%, var(--border));
+    .pnl-base .item-value {
+      color: var(--pnl-up);
+    }
+    .pnl-fill {
+      background: var(--pnl-up);
+    }
   }
+  /* Красный (в минусе). */
   &.pnl-neg {
-    --pnl-c: var(--red);
+    background: color-mix(in srgb, var(--pnl-down) 12%, var(--canvas-subtle));
+    border-color: color-mix(in srgb, var(--pnl-down) 42%, var(--border));
+    .pnl-base .item-value {
+      color: var(--pnl-down);
+    }
+    .pnl-fill {
+      background: var(--pnl-down);
+    }
   }
 }
 /* У краёв (depth≥0.75) — мягкий пульс яркости: близко к цели или к стопу.

@@ -7,7 +7,6 @@ import "./src/styles/ledger.scss";
 
 import {
   REFRESH_MS,
-  getRangeHours,
   initWebSocket,
   markSuccess,
   startFooterTimer,
@@ -15,7 +14,7 @@ import {
 } from "./src/core/shell.js";
 import { mountTopnav } from "./src/core/topnav.js";
 import { fetchJson } from "./src/net/api.js";
-import { initModals, renderActivity } from "./src/features/modals.js";
+import { initModals } from "./src/features/modals.js";
 import { renderTax } from "./src/features/pnlInsights.js";
 import { renderBans } from "./src/features/accountStatus.js";
 
@@ -24,11 +23,8 @@ function onStatus(data) {
 }
 
 async function tick() {
-  const [activityR, taxR] = await Promise.allSettled([
-    fetchJson(`/api/activity?hours=${getRangeHours()}&limit=10`),
-    fetchJson("/api/tax-summary"),
-  ]);
-  if (activityR.status === "fulfilled") renderActivity(activityR.value);
+  // Recent Activity переехала на главную (index) — здесь остаётся только Tax Summary.
+  const [taxR] = await Promise.allSettled([fetchJson("/api/tax-summary")]);
   if (taxR.status === "fulfilled") renderTax(taxR.value);
   markSuccess();
 }
