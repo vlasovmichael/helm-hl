@@ -830,6 +830,10 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     gap: 7px 10px;
     padding: 11px 12px 12px;
     border-bottom: 1px solid var(--border);
+    /* Единая высота карточки → 8 рядов (реальные + добивочные) стабильны, секция
+       не прыгает при смене числа монет (как ряды на десктопе). */
+    min-height: var(--hm-card-min-h, 150px);
+    box-sizing: border-box;
   }
   .hm-table tbody tr.hm-main td {
     display: block;
@@ -946,10 +950,17 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   .hm-table tbody tr:not(.hm-main):not(.hm-pos-row) {
     display: block;
   }
-  /* Добивочные строки (резерв высоты до HM_MAX_ROWS) на мобиле не нужны —
-     карточки в потоке. Иначе .signals-table tr (border+radius+bg) рисует их
-     как пустые рамки-боксы (ячейка visibility:hidden, но строка с рамкой). */
+  /* Добивочные карточки до HM_MAX_ROWS на мобиле ТОЖЕ резервируют высоту — всегда
+     8 рядов, чтобы секция не прыгала при смене числа монет (просьба оператора). Пустой
+     слот высотой с карточку, тот же border-bottom, без контента/тинта/ховера. */
   .hm-table tbody tr.hm-placeholder-row {
+    display: block;
+    min-height: var(--hm-card-min-h, 150px);
+    box-sizing: border-box;
+    background: transparent;
+    border-bottom: 1px solid var(--border);
+  }
+  .hm-table tbody tr.hm-placeholder-row .hm-ph-cell {
     display: none;
   }
   .hm-table tbody tr .empty-state {

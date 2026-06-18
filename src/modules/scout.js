@@ -4,7 +4,7 @@ import { setUniverse, getTradeableSet } from '../core/universe.js';
 import { getRuntimeBlacklist, getOiCapBans } from './executor/index.js';
 import { push as pushPriceHistory } from '../core/priceHistory.js';
 import { comparePoll } from '../core/priceFeed.js';
-import { getActivePosition, getActivePaperCoins, recordSetupSnapshots } from '../core/database.js';
+import { getActivePosition, getActivePaperCoins, getActiveAdoptPositions, recordSetupSnapshots } from '../core/database.js';
 import { hlInfo, HL_PRIORITY } from '../core/hlClient.js';
 import { state } from '../app/state.js';
 
@@ -360,6 +360,12 @@ export async function scan() {
   const heldLiveCoins = new Set();
   if (activeCoin) heldLiveCoins.add(activeCoin);
   for (const c of state.manualPositionCoins) heldLiveCoins.add(String(c).toUpperCase());
+  // Усыновлённые позы (adopt) — отдельный мульти-слот, и при adopt монета
+  // УДАЛЯЕТСЯ из state.manualPositionCoins (integrity), и не является main-slot
+  // getActivePosition. Без явного пина их priceHistory переставал наполняться →
+  // окна Hot Movers усыновлённой монеты вечно «—». Это и есть «пропадающие цифры
+  // активной монеты» — теперь чиним в КОРНЕ скана, а не в фолбэке вывода (2026-06-18).
+  for (const p of getActiveAdoptPositions()) heldLiveCoins.add(String(p.coin).toUpperCase());
 
   const results       = [];  // для carry/fade (узкая liquid-вселенная)
   const hunterResults = [];  // для Hunter (шире — по hunterSet)

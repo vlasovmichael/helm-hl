@@ -10,7 +10,7 @@ import { config } from "../../../core/config.js";
 import { logger } from "../../../core/logger.js";
 import { hlInfo, HL_PRIORITY } from "../../../core/hlClient.js";
 import { getPriceNMinAgo, getBufferLength, getLatestPrice } from "../../../core/priceHistory.js";
-import { getActivePosition } from "../../../core/database.js";
+import { getActivePosition, getActiveAdoptPositions } from "../../../core/database.js";
 import { TICK_INTERVAL_MS, state } from "../../../app/state.js";
 import {
   HUNTER_SPIKE_PCT,
@@ -183,6 +183,10 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
     const activeCoin = getActivePosition()?.coin ?? null;
     const activeCoins = new Set(state.manualPositionCoins);
     if (activeCoin) activeCoins.add(activeCoin);
+    // Усыновлённые (adopt) позы — отдельный мульти-слот, при adopt монета уходит
+    // из manualPositionCoins и не равна main-slot. Без явного пина её строка
+    // приходила пустой («—») и не дотягивалась окнами (2026-06-18, см. scout.js).
+    for (const p of getActiveAdoptPositions()) activeCoins.add(p.coin);
 
     const ticksNeeded = Math.max(
       2,
