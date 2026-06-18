@@ -25,7 +25,8 @@ import {
   getStrategyPnlSince,
   getSetupScannerRows,
 } from "../../core/database.js";
-import { getAccountSummary, getPositionsCached, getLivePrice, getFrontendOpenOrders } from "../exchange.js";
+import { getAccountSummary, getPositionsCached, getFrontendOpenOrders, getLivePriceMap } from "../exchange.js";
+import { getLivePrice as feedLivePrice, isFeedFresh } from "../../core/priceFeed.js";
 import { fetchUserFills } from "../userFills.js";
 import { getMonthlyLedger } from "../ledger.js";
 import { FEE_RATE, MAKER_FEE_RATE } from "../executor/math.js";
@@ -299,14 +300,22 @@ async function getStatusData() {
     // fine
   }
 
+  // Цены для дашборда (чистый display, broadcast крутится каждые 2с). Раньше
+  // тут вызывался exchange.getLivePrice() по разу на КАЖДУЮ ручную позицию
+  // (цикл ниже) — при протухшем/выключенном WS-фиде каждый вызов летел тяжёлым
+  // metaAndAssetCtxs (весь universe) → N последовательных REST за тик → 429.
+  // Теперь: свежий фид → mid из WS-кэша (0 HTTP); иначе ОДИН батч-map за тик.
+  const feedFresh = isFeedFresh();
+  const priceMap = feedFresh ? null : await getLivePriceMap();
+  const wsPrice = (coin) =>
+    feedFresh
+      ? (feedLivePrice(coin)?.price ?? null)
+      : (priceMap.get(String(coin).toUpperCase()) ?? null);
+
   let currentPnl = null;
   let currentPrice = null;
   if (position) {
-    try {
-      currentPrice = await getLivePrice(position.coin);
-    } catch {
-      // оставляем null, фронт фолбэкнется на entry или pnl-derived
-    }
+    currentPrice = wsPrice(position.coin);
   }
 
   let manualPositions = [];
@@ -358,12 +367,7 @@ async function getStatusData() {
           p.liquidationPx != null ? parseFloat(p.liquidationPx) : null;
         const lev =
           p.leverage?.value != null ? parseFloat(p.leverage.value) : null;
-        let livePrice = null;
-        try {
-          livePrice = await getLivePrice(p.coin);
-        } catch {
-          /* ignore */
-        }
+        const livePrice = wsPrice(p.coin);
         // Расхождение DB-строки adopt с ЖИВОЙ позой по стороне = оператор флипнул
         // (short→long), а integrity ещё не переусыновил. Старое управление
         // (стоп/пик) от мёртвой стороны показывать НЕЛЬЗЯ — иначе карточка врёт

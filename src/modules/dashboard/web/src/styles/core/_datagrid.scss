@@ -59,6 +59,7 @@
 /* Заливка PnL-карточки по знаку (зелёный/красный). Перебивает accent-soft у
    grid-item-primary, чтобы главная Net-цифра читалась как «в плюсе/минусе». */
 .grid-item.pnl-tint {
+  position: relative; /* контекст для absolute .pnl-base/.pnl-fill (см. ниже) */
   transition:
     background 0.45s ease,
     border-color 0.45s ease,
@@ -80,13 +81,21 @@
   .primary-tag {
     color: inherit;
   }
-  /* Двухслойная начинка (см. temp/1.html → accountStatus.js):
-     · .pnl-base — нижний слой в потоке (несёт высоту ячейки), ЦВЕТНОЙ текст.
-     · .pnl-fill — верхний слой-оверлей, СПЛОШНАЯ яркая заливка + БЕЛЫЙ текст,
-       обрезан по ширине прогресса (clip-path по --rb-now). Виден только при
-       rb-depth (есть стоп) — иначе скрыт, карточка как обычная знаковая. */
+  /* Трёхслойная начинка (см. accountStatus.js → pnlLayers):
+     · .pnl-spacer — невидимый клон В ПОТОКЕ, несёт высоту ячейки.
+     · .pnl-base   — ЦВЕТНОЙ текст, absolute поверх spacer.
+     · .pnl-fill   — СПЛОШНАЯ яркая заливка + БЕЛЫЙ текст, absolute, обрезан по
+       ширине прогресса (clip-path по --rb-now). Виден только при rb-depth.
+     base и fill ОБА absolute с одинаковым inset/padding → делят один контекст и
+     не разъезжаются на сабпиксель (раньше base был в потоке, fill — absolute, и
+     при дробной высоте ячейки базовые линии расходились на ~1px). */
+  .pnl-spacer {
+    visibility: hidden;
+  }
   .pnl-base {
-    display: block;
+    position: absolute;
+    inset: 0;
+    padding: 14px 16px; /* = grid-item padding → совпасть со spacer/fill */
   }
   .pnl-fill {
     display: none;

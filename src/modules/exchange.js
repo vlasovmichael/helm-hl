@@ -454,6 +454,42 @@ export async function getMarkPrice(coin) {
   }
 }
 
+// ── Батч-цены для дашборда ───────────────────────
+// metaAndAssetCtxs всё равно отдаёт ВЕСЬ universe (~760 монет) одним ответом,
+// поэтому дёргать его по разу на каждую монету (как делал getLivePrice в цикле
+// дашборда) — это N одинаковых тяжёлых запросов за тик → шторм rate-limit (429).
+// Фетчим один раз через coalesce и раскладываем в Map: UPPERCASE coin → mid.
+const ACCT_PRICES_TTL_MS = parseInt(process.env.HL_PRICES_TTL_MS || "2500", 10);
+
+async function fetchLivePriceMap() {
+  const data = await hlInfo(
+    { type: "metaAndAssetCtxs" },
+    { label: "exchange/livePriceMap", timeoutMs: 10_000 },
+  );
+  const [meta, ctxs] = data ?? [];
+  const universe = meta?.universe;
+  const map = new Map();
+  if (!Array.isArray(universe) || !Array.isArray(ctxs)) return map;
+  for (let i = 0; i < universe.length; i++) {
+    const name = (universe[i]?.name ?? "").toUpperCase();
+    if (!name) continue;
+    const px = parseFloat(ctxs[i]?.midPx ?? ctxs[i]?.markPx ?? "0");
+    if (px > 0) map.set(name, px);
+  }
+  return map;
+}
+
+/**
+ * Карта живых mid-цен (UPPERCASE coin → number) одним HTTP на тик (coalesce).
+ * Для дашборда: фолбэк, когда WS-фид выключен/протух. Когда фид свежий —
+ * используйте getLivePrice()/priceFeed напрямую, без HTTP.
+ *
+ * @returns {Promise<Map<string, number>>}
+ */
+export async function getLivePriceMap(maxAgeMs = ACCT_PRICES_TTL_MS) {
+  return coalesce("livePrices", fetchLivePriceMap, maxAgeMs);
+}
+
 /**
  * Live trade-side price для дашборда. Используется только для отображения
  * "Now" линии на графике, чтобы цена совпадала с close последней свечи.

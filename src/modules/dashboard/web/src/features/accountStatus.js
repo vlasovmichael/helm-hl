@@ -76,6 +76,13 @@ function setUsd(el, v) {
 function pnlLayers({ label, valueId = "", valueCls = "", valueText }) {
   const idAttr = valueId ? ` id="${valueId}"` : "";
   return (
+    // Скрытый клон В ПОТОКЕ несёт высоту ячейки; base/fill оба absolute поверх,
+    // чтобы делить один layout-контекст и не разъезжаться на сабпиксель (см.
+    // _datagrid.scss). Все три — идентичная структура label+value.
+    `<div class="pnl-spacer" aria-hidden="true">` +
+    `<div class="item-label">${label}</div>` +
+    `<div class="item-value">${valueText}</div>` +
+    `</div>` +
     `<div class="pnl-base">` +
     `<div class="item-label">${label}</div>` +
     `<div${idAttr} class="item-value ${valueCls}">${valueText}</div>` +
@@ -93,8 +100,13 @@ function setPnlUsd(cell, v) {
   if (!cell) return;
   const base = cell.querySelector(".pnl-base .item-value");
   setUsd(base, v);
+  if (!base) return;
+  const txt = base.textContent;
+  // fill (видимый верх) и spacer (несёт высоту) держим в синхроне с base.
   const fill = cell.querySelector(".pnl-fill .item-value");
-  if (fill && base) fill.textContent = base.textContent;
+  if (fill) fill.textContent = txt;
+  const spacer = cell.querySelector(".pnl-spacer .item-value");
+  if (spacer) spacer.textContent = txt;
 }
 
 // Текущая монета бот-позиции — чтобы понимать, патчить на месте или пере-строить.
