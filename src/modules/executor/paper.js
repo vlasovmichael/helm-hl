@@ -444,7 +444,14 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
     pricePnl = (position.size_usd * (position.entry_price - closePrice)) / position.entry_price;
   } else if (position.strategy_id === 'hunter_long') {
     pricePnl = (position.size_usd * (closePrice - position.entry_price)) / position.entry_price;
-  } else if (position.strategy_id === 'vapor') {
+  } else if (
+    position.strategy_id === 'vapor' ||
+    position.strategy_id === 'hotmovers' ||
+    position.strategy_id === 'swing'
+  ) {
+    // Закрытие по реальному SL/TP-уровню (или time-stop по текущей цене) — closePrice
+    // имеет смысл fill'а, как у hunter/vapor. Без этой ветки pricePnl=0 и в history
+    // писалась ровно −комиссия, что давало фейковый 0% win rate (инцидент 2026-06-19).
     const isLong = (position.side || '').toLowerCase() === 'long';
     pricePnl = isLong
       ? (position.size_usd * (closePrice - position.entry_price)) / position.entry_price
@@ -483,8 +490,12 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
       exitFeatures.trail_give_back_pct = signal.giveBackPct ?? null;
     }
     clearHunterLongTrailState(position.id);
-  } else if (position.strategy_id === 'vapor') {
-    // Iter 1: MFE/MAE-трекинг не делаем, но hold_seconds полезен для оценки.
+  } else if (
+    position.strategy_id === 'vapor' ||
+    position.strategy_id === 'hotmovers' ||
+    position.strategy_id === 'swing'
+  ) {
+    // MFE/MAE-трекинг по тикам не делаем, но hold_seconds полезен для оценки.
     exitFeatures = { hold_seconds: Math.round(holdMs / 1000) };
   }
 
