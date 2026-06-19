@@ -319,6 +319,17 @@ function loadConfig() {
   if (isNaN(vaporPaperLeverage) || vaporPaperLeverage < 1 || vaporPaperLeverage > 20) {
     throw new Error(`VAPOR_PAPER_LEVERAGE must be in [1, 20], got ${process.env.VAPOR_PAPER_LEVERAGE}`);
   }
+  // Hunter SHORT +OI (A/B paper-двойник, 2026-06-19) — точная копия боевого
+  // Hunter SHORT, отличие РОВНО одно: OI-divergence ворота на входе. Шортит памп,
+  // только если рост OI за 15м ≤ HUNTER_OI_DIV_MAX_PCT (большой рост OI = свежие
+  // лонги = пробой, не выдох → не шортим). PAPER-only, независимый слот
+  // strategy_id='hunter_oi'. Своё cooldown-состояние живёт в hunterOiPaperTick —
+  // НЕ пишет в боевые cooldown'ы Hunter (бумага не блокирует живые входы).
+  const hunterOiPaperEnabled  = (process.env.HUNTER_OI_PAPER_ENABLED || 'false').toLowerCase() === 'true';
+  const hunterOiDivMaxPct     = parseFloat(process.env.HUNTER_OI_DIV_MAX_PCT || '3');
+  if (isNaN(hunterOiDivMaxPct)) {
+    throw new Error(`HUNTER_OI_DIV_MAX_PCT must be a number. Got: "${process.env.HUNTER_OI_DIV_MAX_PCT}"`);
+  }
   // Hot Movers paper — PAPER-only shadow-слот, торгует вердикт карточки 1:1.
   const hotMoversPaperEnabled = (process.env.HOT_MOVERS_PAPER_ENABLED || 'false').toLowerCase() === 'true';
   const hotMoversPaperBalanceUtil = parseFloat(process.env.HOT_MOVERS_PAPER_BALANCE_UTILIZATION || '0.5');
@@ -643,6 +654,8 @@ function loadConfig() {
       vaporEnabled,
       vaporBalanceUtil,
       vaporPaperLeverage,
+      hunterOiPaperEnabled,
+      hunterOiDivMaxPct,
       hotMoversPaperEnabled,
       hotMoversPaperBalanceUtil,
       hotMoversPaperLeverage,

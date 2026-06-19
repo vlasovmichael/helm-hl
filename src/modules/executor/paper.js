@@ -84,7 +84,7 @@ function resolvePaperSzDecimals(coin) {
  * @param {boolean} [silent=false]
  * @returns {Promise<{ ok: boolean, positionId?: number, sizeUsd?: number }>}
  */
-export async function hunterPaperOpen(coin, price, spikePct, sl, tp, silent = false, entryFeatures = null) {
+export async function hunterPaperOpen(coin, price, spikePct, sl, tp, silent = false, entryFeatures = null, strategyId = 'hunter') {
   const balance = await getPaperBalance();
 
   if (balance <= 0) {
@@ -119,14 +119,14 @@ export async function hunterPaperOpen(coin, price, spikePct, sl, tp, silent = fa
     entry_apy:   0,                // Hunter не funding-based
     entry_time:  Date.now(),
     mode:        "PAPER",
-    strategy_id: 'hunter',
+    strategy_id: strategyId,
     sl_price:    sl,
     tp_price:    tp,
     ...(entryFeatures || {}),
   });
 
   logger.info(
-    `[Executor] 🎯 HUNTER OPEN SHORT #${coin} | $${sizeUsd.toFixed(2)} (of $${balance.toFixed(2)}) @ $${price} ` +
+    `[Executor] 🎯 ${strategyId === 'hunter' ? 'HUNTER' : strategyId.toUpperCase()} OPEN SHORT #${coin} | $${sizeUsd.toFixed(2)} (of $${balance.toFixed(2)}) @ $${price} ` +
       `| spike +${spikePct.toFixed(2)}% | SL $${sl.toFixed(4)} / TP $${tp.toFixed(4)} | fee $${fee.toFixed(4)} | id: ${id}`,
   );
 
@@ -135,7 +135,7 @@ export async function hunterPaperOpen(coin, price, spikePct, sl, tp, silent = fa
   }
 
   notify('afterOpen', {
-    coin, price, sizeUsd, positionId: Number(id), mode: 'PAPER', strategy: 'hunter',
+    coin, price, sizeUsd, positionId: Number(id), mode: 'PAPER', strategy: strategyId,
   });
 
   return { ok: true, positionId: Number(id), sizeUsd };
@@ -504,7 +504,7 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
   // Hunter SHORT: pricePnl = (entry − close)/entry × size.
   // Hunter LONG  (Iter E.1): pricePnl = (close − entry)/entry × size (зеркально).
   let pricePnl = 0;
-  if (position.strategy_id === 'hunter') {
+  if (position.strategy_id === 'hunter' || position.strategy_id === 'hunter_oi') {
     pricePnl = (position.size_usd * (position.entry_price - closePrice)) / position.entry_price;
   } else if (position.strategy_id === 'hunter_long') {
     pricePnl = (position.size_usd * (closePrice - position.entry_price)) / position.entry_price;
@@ -527,7 +527,7 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
   // Hunter / Hunter Long: подмешиваем MFE/MAE из tick-трекера + hold_seconds.
   // Для carry/fade — exitFeatures null (поля в history останутся NULL).
   let exitFeatures = null;
-  if (position.strategy_id === 'hunter') {
+  if (position.strategy_id === 'hunter' || position.strategy_id === 'hunter_oi') {
     const mm = consumeHunterMfeMae(position.id);
     exitFeatures = {
       mfe_usd:      mm?.mfeUsd ?? null,

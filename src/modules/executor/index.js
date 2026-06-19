@@ -193,6 +193,20 @@ async function handleOpen(signal) {
     );
   }
 
+  // Hunter SHORT +OI route (A/B paper-двойник): PAPER-only. Та же механика, что
+  // и hunter (тот же размер/SL/TP), отличие — OI-ворота на входе (в analyzeHunter).
+  // PROD-пути нет, всегда виртуально. Тихий TG (silent=true) — paper не пингует.
+  if (strategyId === 'hunter_oi') {
+    const pre = await preflightChecks(signal.coin, null);
+    if (!pre.allowed) {
+      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
+      return { ok: false };
+    }
+    return hunterPaperOpen(
+      signal.coin, signal.price, signal.spikePct, signal.sl, signal.tp, true, signal.entryFeatures, 'hunter_oi',
+    );
+  }
+
   // Vapor (Exhaustion Short, Трек A) route: PAPER-only shadow-слот. PROD-пути нет —
   // open всегда виртуальный. Carry-guard'ы (CB/drawdown/OI) применяем.
   if (strategyId === 'vapor') {

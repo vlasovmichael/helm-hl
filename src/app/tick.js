@@ -16,6 +16,7 @@ import { hunterReconcile } from './hunterReconcile.js';
 import { hunterLongReconcile } from './hunterLongReconcile.js';
 import { processHunterTrailArm } from './hunterTrailArm.js';
 import { tickHunterPaper } from './hunterPaperTick.js';
+import { tickHunterOiPaper } from './hunterOiPaperTick.js';
 import { tickVaporPaper } from './vaporPaperTick.js';
 import { tickHotMoversPaper } from './hotMoversPaperTick.js';
 import { tickSwingPaper } from './swingPaperTick.js';
@@ -85,6 +86,7 @@ export async function tick() {
         // Hunter SHORT/Long shadow paper-слоты (Этап 2): независимы от
         // реального слота, копят статистику даже в HANDS-OFF.
         await tickHunterPaper(handsOffHunter);
+        await tickHunterOiPaper(handsOffHunter);
         await tickHunterLongPaper(handsOffHunter);
         await tickVaporPaper(handsOffHunter);
         await tickHotMoversPaper(handsOffHunter);
@@ -159,6 +161,7 @@ export async function tick() {
     // статистику в своём независимом paper-слоте, пока её PROD-гейт выключен.
     // Hunter SHORT live (HUNTER_PROD_ENABLED=true) → tickHunterPaper сам no-op.
     await tickHunterPaper(hunterData);
+    await tickHunterOiPaper(hunterData);
     await tickHunterLongPaper(hunterData);
     await tickVaporPaper(hunterData);
     await tickHotMoversPaper(hunterData);

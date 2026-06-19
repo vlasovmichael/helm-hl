@@ -241,10 +241,29 @@ export function recordHunterSlExternal(coin, now = Date.now()) {
  *   { action: 'OPEN',  strategy_id: 'hunter', coin, price, direction: 'SHORT', sl, tp, spikePct }
  *   { action: 'CLOSE', coin, price, reason: 'hunter_sl' | 'hunter_tp' }
  */
-export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
+export function analyzeHunter(scoutData, activePosition, now = Date.now(), opts = {}) {
+  // opts: A/B paper-двойник (hunter_oi) переопределяет ровно нужное; дефолты =
+  // боевой Hunter байт-в-байт (существующие тесты не затрагиваются).
+  //   strategyId    — какой strategy_id ведём/открываем ('hunter' | 'hunter_oi')
+  //   oiDivMaxPct   — OI-divergence ворота: skip если ΔOI15м > порога (Infinity=нет ворот)
+  //   cooldownMap   — re-detect cooldown (свой у двойника → не душит боевой)
+  //   postSlMap     — post-SL cooldown (свой у двойника → не блокирует живые входы)
+  //   persistPostSl — писать post-SL на диск (только боевой; двойник нет)
+  //   crossCooldown — писать cross-cooldown vs hunter_long (только боевой)
+  //   updateSnapshot— обновлять snapshot/heartbeat дашборда (только боевой)
+  const {
+    strategyId     = 'hunter',
+    oiDivMaxPct    = Infinity,
+    cooldownMap    = hunterCooldownMap,
+    postSlMap      = hunterPostSlCooldown,
+    persistPostSl  = true,
+    crossCooldown  = true,
+    updateSnapshot = true,
+  } = opts;
+
   // ── Выход: hunter-позиция → проверяем SL/TP ──
-  if (activePosition?.strategy_id === 'hunter') {
-    return checkHunterExit(activePosition, scoutData);
+  if (activePosition?.strategy_id === strategyId) {
+    return checkHunterExit(activePosition, scoutData, { postSlMap, persistPostSl, crossCooldown });
   }
 
   // ── Детекция спайка: проходим весь список, считаем best-кандидата ──
@@ -266,18 +285,18 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
 
     if (pct < HUNTER_SPIKE_PCT) continue;  // pump слабый или dump (short-only → игнор)
 
-    const lastFired = hunterCooldownMap.get(item.coin) ?? 0;
+    const lastFired = cooldownMap.get(item.coin) ?? 0;
     if (now - lastFired < HUNTER_COOLDOWN_MS) {
       const remain = Math.ceil((HUNTER_COOLDOWN_MS - (now - lastFired)) / 1000);
-      recordNearMiss({ ts: now, strategy: 'hunter', coin: item.coin, side: 'SHORT', spikePct: pct, reason: 'cooldown', detail: `re-detect cooldown ${remain}s` });
+      recordNearMiss({ ts: now, strategy: strategyId, coin: item.coin, side: 'SHORT', spikePct: pct, reason: 'cooldown', detail: `re-detect cooldown ${remain}s` });
       continue;
     }
 
     // Post-SL cooldown: после SL не возвращаемся к этой монете N минут (default 30).
-    const lastSl = hunterPostSlCooldown.get(item.coin) ?? 0;
+    const lastSl = postSlMap.get(item.coin) ?? 0;
     if (now - lastSl < HUNTER_POST_SL_COOLDOWN_MS) {
       const remain = Math.ceil((HUNTER_POST_SL_COOLDOWN_MS - (now - lastSl)) / 60_000);
-      recordNearMiss({ ts: now, strategy: 'hunter', coin: item.coin, side: 'SHORT', spikePct: pct, reason: 'post_sl', detail: `post-SL cooldown ${remain}min` });
+      recordNearMiss({ ts: now, strategy: strategyId, coin: item.coin, side: 'SHORT', spikePct: pct, reason: 'post_sl', detail: `post-SL cooldown ${remain}min` });
       continue;
     }
 
@@ -286,7 +305,7 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
     if (isHunterCrossCooldownActive(item.coin, now)) {
       const remain = Math.ceil(getHunterCrossCooldownRemainMs(item.coin, now) / 60_000);
       logger.info(`[Hunter] ⛔ #${item.coin} cross-cooldown active (${remain}min remaining)`);
-      recordNearMiss({ ts: now, strategy: 'hunter', coin: item.coin, side: 'SHORT', spikePct: pct, reason: 'cross_cooldown', detail: `cross-cooldown ${remain}min` });
+      recordNearMiss({ ts: now, strategy: strategyId, coin: item.coin, side: 'SHORT', spikePct: pct, reason: 'cross_cooldown', detail: `cross-cooldown ${remain}min` });
       continue;
     }
 
@@ -302,8 +321,24 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
           `[Hunter] ⛔ #${item.coin} спайк +${pct.toFixed(2)}%/2мин ` +
             `пропущен: тренд +${trend15mPct.toFixed(2)}% за ${HUNTER_TREND_LOOKBACK_MIN}мин ≥ ${HUNTER_TREND_MAX_RISE_PCT}%`,
         );
-        recordNearMiss({ ts: now, strategy: 'hunter', coin: item.coin, side: 'SHORT', spikePct: pct, reason: 'trend', detail: `trend +${trend15mPct.toFixed(1)}%/${HUNTER_TREND_LOOKBACK_MIN}min ≥ ${HUNTER_TREND_MAX_RISE_PCT}%` });
+        recordNearMiss({ ts: now, strategy: strategyId, coin: item.coin, side: 'SHORT', spikePct: pct, reason: 'trend', detail: `trend +${trend15mPct.toFixed(1)}%/${HUNTER_TREND_LOOKBACK_MIN}min ≥ ${HUNTER_TREND_MAX_RISE_PCT}%` });
         continue;
+      }
+    }
+
+    // OI-divergence ворота (вариант hunter_oi). Большой рост открытого интереса
+    // за 15м = свежие лонги залезли в памп = это пробой/продолжение, а не выдох →
+    // фейдить опасно. Боевой Hunter ворота НЕ ставит (oiDivMaxPct=Infinity). Нет
+    // истории OI → пропускаем фильтр (как anti-trend), не блокируем сигнал.
+    if (Number.isFinite(oiDivMaxPct)) {
+      const oiNowGate = item.oiUsd ?? null;
+      const oi15Gate  = getOiNMinAgo(item.coin, 15, now);
+      if (oiNowGate != null && oi15Gate != null && oi15Gate > 0) {
+        const oiDelta15 = ((oiNowGate - oi15Gate) / oi15Gate) * 100;
+        if (oiDelta15 > oiDivMaxPct) {
+          recordNearMiss({ ts: now, strategy: strategyId, coin: item.coin, side: 'SHORT', spikePct: pct, reason: 'oi_confirms', detail: `ΔOI +${oiDelta15.toFixed(2)}% > ${oiDivMaxPct}% (свежие лонги — пробой, не выдох)` });
+          continue;
+        }
       }
     }
 
@@ -312,27 +347,30 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
     }
   }
 
-  // ── Snapshot top-N pump spikes для дашборда (всегда обновляем) ──
-  allSpikes.sort((a, b) => b.pct - a.pct);
-  lastShortSpikesSnapshot = { ts: now, items: allSpikes.slice(0, SPIKE_SNAPSHOT_LIMIT) };
+  // ── Snapshot top-N pump spikes для дашборда (только боевой Hunter; двойник
+  // hunter_oi не перетирает карточку и не дублирует heartbeat) ──
+  if (updateSnapshot) {
+    allSpikes.sort((a, b) => b.pct - a.pct);
+    lastShortSpikesSnapshot = { ts: now, items: allSpikes.slice(0, SPIKE_SNAPSHOT_LIMIT) };
 
-  // ── Heartbeat: раз в 5 мин показываем что Hunter жив + ближайший к порогу ──
-  if (now - lastHeartbeatAt >= HUNTER_HEARTBEAT_MS) {
-    emitHeartbeat(data, activePosition, bestUnqualified, now);
-    lastHeartbeatAt = now;
+    // ── Heartbeat: раз в 5 мин показываем что Hunter жив + ближайший к порогу ──
+    if (now - lastHeartbeatAt >= HUNTER_HEARTBEAT_MS) {
+      emitHeartbeat(data, activePosition, bestUnqualified, now);
+      lastHeartbeatAt = now;
+    }
   }
 
   // ── Вход невозможен если slot занят другой стратегией (Iter A без эвикшена) ──
   if (activePosition) {
     if (best) {
-      recordNearMiss({ ts: now, strategy: 'hunter', coin: best.coin, side: 'SHORT', spikePct: best.pct, reason: 'slot_busy', detail: `slot occupied by #${activePosition.coin} (${activePosition.strategy_id || 'carry'})` });
+      recordNearMiss({ ts: now, strategy: strategyId, coin: best.coin, side: 'SHORT', spikePct: best.pct, reason: 'slot_busy', detail: `slot occupied by #${activePosition.coin} (${activePosition.strategy_id || 'carry'})` });
     }
     return { action: 'HOLD' };
   }
 
   if (!best) return { action: 'HOLD' };
 
-  hunterCooldownMap.set(best.coin, now);
+  cooldownMap.set(best.coin, now);
 
   // SHORT: SL выше цены входа (loss при росте), TP ниже (profit при падении).
   const sl = best.price * (1 + HUNTER_SL_PCT / 100);
@@ -371,7 +409,7 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now()) {
 
   return {
     action:      'OPEN',
-    strategy_id: 'hunter',
+    strategy_id: strategyId,
     coin:        best.coin,
     price:       best.price,
     direction:   'SHORT',
@@ -423,17 +461,33 @@ function emitHeartbeat(data, activePosition, bestUnqualified, now) {
  * Если оба пересекаются в одном тике — SL приоритет (консервативно).
  * Цена закрытия — уровень триггера (оптимистичная симуляция в paper).
  */
-function checkHunterExit(position, scoutData) {
+function checkHunterExit(position, scoutData, exitOpts = {}) {
   const item = scoutData?.find((x) => x.coin === position.coin);
   // Shadow exits: учитываем тик и финализируем сравнение на close. Полностью
   // measurement-only — реальное решение ниже не зависит от этого.
   if (item) trackShadowTick(position, item.price);
-  const result = checkHunterExitCore(position, scoutData, item);
+  const result = checkHunterExitCore(position, scoutData, item, exitOpts);
   if (result.action === 'CLOSE') finalizeShadow(position, result.price);
   return result;
 }
 
-function checkHunterExitCore(position, scoutData, item) {
+function checkHunterExitCore(position, scoutData, item, exitOpts = {}) {
+  // exitOpts (paper-двойник): postSlMap/persistPostSl/crossCooldown изолируют
+  // запись cooldown'ов — бумажный стоп НЕ блокирует боевые входы Hunter.
+  const {
+    postSlMap     = hunterPostSlCooldown,
+    persistPostSl = true,
+    crossCooldown = true,
+  } = exitOpts;
+  // Записи cooldown через хелперы — двойник пишет в СВОЙ postSlMap и не трогает
+  // диск/cross-cooldown боевого Hunter.
+  const writePostSl = (coin, ts) => {
+    postSlMap.set(coin, ts);
+    if (persistPostSl) setShortPostSl(coin, ts);
+  };
+  const writeCrossCooldown = (coin) => {
+    if (crossCooldown) setHunterCrossCooldown(coin);
+  };
   if (!item) return { action: 'HOLD' };  // нет свежей цены — ждём следующий тик
 
   // Обновляем MFE/MAE на каждом тике (до проверки SL/TP — захватываем краевые
@@ -478,7 +532,7 @@ function checkHunterExitCore(position, scoutData, item) {
           `[Hunter] 🎯 TRAIL CLOSE #${position.coin}: peak +${peak.toFixed(2)}% → now +${unrealizedPct.toFixed(2)}% ` +
             `(gave back ${(giveBack / peak * 100).toFixed(0)}% ≥ ${HUNTER_TRAIL_GIVE_BACK_PCT}%)`,
         );
-        setHunterCrossCooldown(position.coin);
+        writeCrossCooldown(position.coin);
         return {
           action: 'CLOSE',
           coin:   position.coin,
@@ -528,7 +582,7 @@ function checkHunterExitCore(position, scoutData, item) {
         `now ${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(2)}% ≤ floor ${HUNTER_BE_FLOOR_PCT}% — ` +
         `закрываем в безубыток, не отдаём подарок в минус`,
     );
-    setHunterCrossCooldown(position.coin);
+    writeCrossCooldown(position.coin);
     return {
       action:  'CLOSE',
       coin:    position.coin,
@@ -541,9 +595,8 @@ function checkHunterExitCore(position, scoutData, item) {
   if (position.sl_price != null && item.price >= position.sl_price) {
     // Регистрируем post-SL cooldown — Hunter не вернётся к этой монете N мин.
     const slTs = Date.now();
-    hunterPostSlCooldown.set(position.coin, slTs);
-    setShortPostSl(position.coin, slTs);
-    setHunterCrossCooldown(position.coin);
+    writePostSl(position.coin, slTs);
+    writeCrossCooldown(position.coin);
     return {
       action: 'CLOSE',
       coin:   position.coin,
@@ -567,7 +620,7 @@ function checkHunterExitCore(position, scoutData, item) {
             `(peak +${peak.toFixed(2)}%) — HUNTER_TRAIL_UNCAP_TP=true дал бы ехать дальше на трейле.`,
         );
       }
-      setHunterCrossCooldown(position.coin);
+      writeCrossCooldown(position.coin);
       return {
         action: 'CLOSE',
         coin:   position.coin,
@@ -582,9 +635,8 @@ function checkHunterExitCore(position, scoutData, item) {
   // Регистрируем cooldown как при SL: монета "не отыгрывает", не лезем обратно.
   if (position.entry_time && Date.now() - position.entry_time >= HUNTER_TIME_STOP_MS) {
     const tsNow = Date.now();
-    hunterPostSlCooldown.set(position.coin, tsNow);
-    setShortPostSl(position.coin, tsNow);
-    setHunterCrossCooldown(position.coin);
+    writePostSl(position.coin, tsNow);
+    writeCrossCooldown(position.coin);
     const heldMin = Math.round((Date.now() - position.entry_time) / 60_000);
     // Observability: peak% vs current% при time-stop. Помогает решить, нужен ли
     // в будущем "ARM trail при time-stop если peak >0" или достаточно текущей логики.
