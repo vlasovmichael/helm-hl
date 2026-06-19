@@ -477,8 +477,8 @@ export function renderHotMovers(payload, fmtTime) {
     // (enrichFadeHot) ставит s.fadeHot когда |ход 30м|≥3% И Kaufman ER 4ч≥0.47.
     // Это РЕДКИЙ событийный пилл (≈0.3% баров): монета+сторона+зона+стоп+выход.
     // Рядом тихо меряет paper-слот strategy_id='fadehot'. Показываем всегда (и в
-    // открытой монете — это контр-сигнал к её позиции).
-    const fh = s.fadeHot;
+    // открытой монете — это контр-сигнал к её позиции). `fh` объявлен выше
+    // (честный-вердикт блок) — переиспользуем, не редекларируем.
     if (fh?.fired) {
       const sideCls = fh.side === "SHORT" ? "fh-short" : "fh-long";
       const zone =
