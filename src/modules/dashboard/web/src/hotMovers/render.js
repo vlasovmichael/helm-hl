@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────
 //  Hot Movers — DOM-рендер таблицы (momentum + OI-режим + Setup-вердикт).
-//  Чистая логика (computeMomentum/hmEntryBadge/derive*) живёт в ./momentum.js.
+//  Чистая логика (computeMomentum/derive*) живёт в ./momentum.js.
 //  fmtTime передаётся параметром — он зависит от currentRangeHours в main.js.
 //
 //  Рендер идёт через keyed-реконсилер (reconcileRows): строки переживают тики,
@@ -13,7 +13,6 @@ import { escapeHtml } from "../utils/format.js";
 import { popArrow, bindArrowPopEnd, initChevronArrow } from "../utils/arrowPop.js";
 import {
   computeMomentum,
-  hmEntryBadge,
   deriveAccelKind,
   deriveVolKind,
 } from "./momentum.js";
@@ -26,39 +25,22 @@ import {
 
 const _hmPrevPrices = new Map();
 
-// Режим вердикта карточки: 'trend' (сторона по движению цены — дефолт) либо
-// 'fade' (классический контртренд по OI). Radio в шапке, выбор персистится.
-// Влияет ТОЛЬКО на отображение карточки; серверный бот торгует своей логикой.
-const HM_VIEW_KEY = "hmViewMode";
-let _hmViewMode = "trend";
-try {
-  const saved = localStorage.getItem(HM_VIEW_KEY);
-  if (saved === "trend" || saved === "fade") _hmViewMode = saved;
-} catch { /* localStorage недоступен — дефолт trend */ }
+// Setup-вердикт карточки = контекст-направление по движению (computeMomentum в
+// режиме 'trend'). Continuation НЕ actionable (бэктест в минус) — единственный
+// вход = под-строка fade-high-ER. Radio Trend/Fade убран 2026-06-19 (он не флипал
+// ничего торгуемого после честного вердикта — см. memory smart_signals_removed).
 
-// Последний payload/fmtTime — чтобы перерисовать карточку мгновенно при смене
-// режима, не дожидаясь следующего скан-тика.
-let _hmLastPayload = null;
-let _hmLastFmtTime = null;
 
-// Line-SVG иконки колонки Enter (вместо emoji 🎯/⏳/⛔). stroke=currentColor →
-// цвет наследуется от .hm-entry-${state} (зелёный/янтарный/красный/серый).
-//  · zone     — мишень/прицел: цена у базы, вход рядом (pulse привлекает взгляд).
-//  · mid      — песочные часы: растянулась, дай откатить.
-//  · extended — знак «нельзя»: уехала, поздно.
-//  · none     — тире: сетапа нет.
+// Line-SVG иконки колонки Enter. stroke=currentColor → цвет от .hm-entry-${state}.
+// После честного вердикта (2026-06-19) для незанятой монеты состояний всего два:
+//  · zone — мишень/прицел: сработал fade-high-ER, вход рядом (pulse, зелёный).
+//  · none — тире: эджа нет (continuation = контекст, не сделка).
 const ENTRY_ICON_SVG = {
   zone:
     '<svg class="hm-eico hm-eico-zone" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
     '<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3.4"/>' +
     '<circle class="hm-eico-dot" cx="12" cy="12" r="1.1"/>' +
     '<path d="M12 1.6v2.8M12 19.6v2.8M1.6 12h2.8M19.6 12h2.8"/></svg>',
-  mid:
-    '<svg class="hm-eico" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
-    '<path d="M6 3.2h12M6 20.8h12M6 3.2l6 8.8 6-8.8M6 20.8l6-8.8 6 8.8"/></svg>',
-  extended:
-    '<svg class="hm-eico" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
-    '<circle cx="12" cy="12" r="8.4"/><path d="M6.6 6.6l10.8 10.8"/></svg>',
   none:
     '<svg class="hm-eico" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
     '<path d="M8 12h8"/></svg>',
@@ -83,11 +65,6 @@ export function renderHotMovers(payload, fmtTime) {
   const tbody = document.getElementById("hot-movers-tbody");
   const meta = document.getElementById("hot-movers-meta");
   if (!tbody || !meta) return;
-
-  // Запоминаем последний снапшот — чтобы radio перерисовал карточку сразу.
-  _hmLastPayload = payload;
-  _hmLastFmtTime = fmtTime;
-  bindViewToggle();
 
   // Делегированный клик по строке монеты → TradingView (вешаем один раз).
   if (!tbody.dataset.tvBound) {
@@ -121,7 +98,6 @@ export function renderHotMovers(payload, fmtTime) {
         deriveVolKind(s.volMult),
         s,
         flush,
-        _hmViewMode,
       );
       return { s, windows, maxAbs, momScore: mom.score };
     })
@@ -364,8 +340,7 @@ export function renderHotMovers(payload, fmtTime) {
 
     // Setup: ОДИН сетап + причина. Режим выбирает OI (trend/fade), сила по
     // взвешенному ходу окон с подтверждением accel/vol.
-    const setup = computeMomentum(x.windows, accelKind, volKind, x.s, flush, _hmViewMode);
-    const entry = hmEntryBadge(x.windows, setup.side, setup.score, setup.mode);
+    const setup = computeMomentum(x.windows, accelKind, volKind, x.s, flush);
 
     // ── Честный вердикт (2026-06-19) ─────────────────────────────────────────
     // Actionable «🎯 вход» загорается ТОЛЬКО на подтверждённом эдже fade-high-ER
@@ -378,8 +353,8 @@ export function renderHotMovers(payload, fmtTime) {
     let setupCls = setup.cls;
     let setupLabel = setup.label;
     let setupTitle = setup.title;
-    let entryState = entry.state;
-    let entryTitle = entry.title;
+    let entryState = "none"; // для незанятой монеты переопределяется ниже (zone при fade-high-ER)
+    let entryTitle = "";
     const fh = s.fadeHot;
     if (!isOpen) {
       if (fh?.fired) {
@@ -448,7 +423,7 @@ export function renderHotMovers(payload, fmtTime) {
         dir === "up" ? "цена в твою сторону" : dir === "down" ? "цена против тебя" : "движения почти нет";
       entryCell = `<td class="hm-entry hm-dir" data-w="Dir" title="в позиции — ${tip}"><span class="hm-entry-icon"><span class="hm-dir-mount" data-dir="${dir}"></span></span></td>`;
     } else {
-      const eico = ENTRY_ICON_SVG[entryState] || entry.icon;
+      const eico = ENTRY_ICON_SVG[entryState] || ENTRY_ICON_SVG.none;
       entryCell = `<td class="hm-entry hm-entry-${entryState}" data-w="Enter" title="${entryTitle}"><span class="hm-entry-icon">${eico}</span></td>`;
     }
 
@@ -537,33 +512,6 @@ export function renderHotMovers(payload, fmtTime) {
 
   reconcileRows(tbody, items);
   mountDirArrows(tbody);
-}
-
-// Radio «Trend / Fade» в шапке карточки. Вешаем обработчик один раз; при смене
-// режима персистим выбор и сразу перерисовываем карточку из последнего снапшота.
-function bindViewToggle() {
-  const tog = document.getElementById("hm-view-toggle");
-  if (!tog) return;
-  const sync = () => {
-    for (const btn of tog.querySelectorAll(".hm-vt-btn")) {
-      const on = btn.dataset.mode === _hmViewMode;
-      btn.classList.toggle("is-active", on);
-      btn.setAttribute("aria-checked", on ? "true" : "false");
-    }
-  };
-  if (!tog.dataset.bound) {
-    tog.dataset.bound = "1";
-    tog.addEventListener("click", (e) => {
-      const btn = e.target.closest(".hm-vt-btn");
-      const mode = btn?.dataset.mode;
-      if (!mode || mode === _hmViewMode) return;
-      _hmViewMode = mode;
-      try { localStorage.setItem(HM_VIEW_KEY, mode); } catch { /* noop */ }
-      sync();
-      if (_hmLastPayload) renderHotMovers(_hmLastPayload, _hmLastFmtTime);
-    });
-  }
-  sync();
 }
 
 // Персистентные стрелки активной монеты: строки перестраиваются (innerHTML)

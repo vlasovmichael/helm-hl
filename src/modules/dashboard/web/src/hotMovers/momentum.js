@@ -14,10 +14,6 @@ const _SVG_FADE = `<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="
 
 const _MOM_WEIGHTS = { 2: 0.2, 5: 0.4, 15: 0.8, 60: 1.2 };
 
-const HM_ENTRY_ZONE_PCT = 0.5;
-const HM_ENTRY_EXT_PCT = 2.5;
-const HM_ENTRY_MIN_SCORE = 3; // = порог рамки Setup (score≥3 + mode)
-
 export function deriveOiKind(s) {
   const d15 = s?.oiDelta15m, d5 = s?.oiDelta5m;
   if (typeof d15 === "number" && isFinite(d15)) {
@@ -189,7 +185,7 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
       cls: "setup-wait",
       title: `Нет подтверждённого сетапа · ${why}`,
       score, // величину хода сохраняем — для сортировки муверов
-      side: null, // hmEntryBadge → none (вход не таймим)
+      side: null, // нет направления — Enter='—' (вход не таймим)
       mode: null,
     };
   }
@@ -249,37 +245,5 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
     score,
     side,
     mode,
-  };
-}
-
-export function hmEntryBadge(windows, side, score, mode) {
-  if (!side || !mode || !(score >= HM_ENTRY_MIN_SCORE))
-    return { icon: "·", state: "none", title: "нет подтверждённого сетапа — таймить нечего" };
-  const pick = (mins, lbl) =>
-    windows.find((w) => w.mins === mins) || windows.find((w) => w.label === lbl);
-  const w15 = pick(15, "15m");
-  const w5 = pick(5, "5m");
-  const ref =
-    w15 && w15.spikePct != null ? w15 : w5 && w5.spikePct != null ? w5 : null;
-  if (!ref) return { icon: "·", state: "none", title: "недостаточно истории" };
-  const win = ref.label || `${ref.mins}m`;
-  const extDir = side === "LONG" ? ref.spikePct : -ref.spikePct;
-  const m = Math.abs(extDir).toFixed(1);
-  if (extDir <= HM_ENTRY_ZONE_PCT)
-    return {
-      icon: "🎯",
-      state: "zone",
-      title: `${side}: у базы (${extDir >= 0 ? "+" : ""}${extDir.toFixed(1)}% в сторону сделки за ${win}) — вход рядом, чейза нет`,
-    };
-  if (extDir >= HM_ENTRY_EXT_PCT)
-    return {
-      icon: "⛔",
-      state: "extended",
-      title: `${side}: уже ушла +${m}% в твою сторону за ${win} — поздно, жди отката`,
-    };
-  return {
-    icon: "⏳",
-    state: "mid",
-    title: `${side}: растянута +${m}% в сторону сделки за ${win} — дай откатить`,
   };
 }
