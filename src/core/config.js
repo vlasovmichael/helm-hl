@@ -329,6 +329,17 @@ function loadConfig() {
   if (isNaN(hotMoversPaperLeverage) || hotMoversPaperLeverage < 1 || hotMoversPaperLeverage > 20) {
     throw new Error(`HOT_MOVERS_PAPER_LEVERAGE must be in [1, 20], got ${process.env.HOT_MOVERS_PAPER_LEVERAGE}`);
   }
+  // Fade-high-ER paper — PAPER-only shadow-слот, forward-валидация правила
+  // fade выдохшегося хвоста (см. fadeHotSignal.js / memory fadehot_build_plan).
+  const fadehotPaperEnabled = (process.env.FADEHOT_PAPER_ENABLED || 'false').toLowerCase() === 'true';
+  const fadehotPaperBalanceUtil = parseFloat(process.env.FADEHOT_PAPER_BALANCE_UTILIZATION || '0.5');
+  if (isNaN(fadehotPaperBalanceUtil) || fadehotPaperBalanceUtil <= 0 || fadehotPaperBalanceUtil > 0.95) {
+    throw new Error(`FADEHOT_PAPER_BALANCE_UTILIZATION must be in (0, 0.95], got ${process.env.FADEHOT_PAPER_BALANCE_UTILIZATION}`);
+  }
+  const fadehotPaperLeverage = parseFloat(process.env.FADEHOT_PAPER_LEVERAGE || '3');
+  if (isNaN(fadehotPaperLeverage) || fadehotPaperLeverage < 1 || fadehotPaperLeverage > 20) {
+    throw new Error(`FADEHOT_PAPER_LEVERAGE must be in [1, 20], got ${process.env.FADEHOT_PAPER_LEVERAGE}`);
+  }
   // Setup Swing paper — PAPER-only shadow-слот, торгует вердикт карточки Swing 1:1.
   const swingPaperEnabled     = (process.env.SWING_PAPER_ENABLED || 'false').toLowerCase() === 'true';
   const swingPaperBalanceUtil = parseFloat(process.env.SWING_PAPER_BALANCE_UTILIZATION || '0.5');
@@ -635,6 +646,9 @@ function loadConfig() {
       hotMoversPaperEnabled,
       hotMoversPaperBalanceUtil,
       hotMoversPaperLeverage,
+      fadehotPaperEnabled,
+      fadehotPaperBalanceUtil,
+      fadehotPaperLeverage,
       swingPaperEnabled,
       swingPaperBalanceUtil,
       swingPaperLeverage,

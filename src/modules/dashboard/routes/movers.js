@@ -19,8 +19,17 @@ import {
   HUNTER_TP_PCT,
 } from "../../strategistHunter.js";
 import { computeBreadthFlush } from "../../hotMoversSetup.js";
-import { getHourlyCandles } from "../../candleCache.js";
+import { getHourlyCandles, getFifteenMinCandles } from "../../candleCache.js";
 import { classifyTrend } from "../../candyGirlEma.js";
+import {
+  evaluateFadeHot,
+  fadeHotZone,
+  FADEHOT_MOVE_LB,
+  FADEHOT_ER_WIN,
+  FADEHOT_MOVE_THR,
+  FADEHOT_STOP_PCT,
+  FADEHOT_TIME_STOP_MIN,
+} from "../../fadeHotSignal.js";
 
 // ─────────────────────────────────────────────────
 //  OI history — буфер вынесен в core/oiHistory.js (2026-06-15)
@@ -162,6 +171,54 @@ async function enrichHtfTrend(items, now) {
   results.forEach((r, i) => {
     items[i].htfTrend = r.status === "fulfilled" ? r.value : "none";
   });
+  return items;
+}
+
+// ─── Fade-high-ER forward-вердикт («fade выдохшегося хвоста») ─────────────────
+// Правило из бэктестов (fadeHotSignal.js): |ход 30м|≥3% И Kaufman ER 4ч≥0.47 →
+// fade против хода. Это человеко-видимый forward-вход на карточке (рядом тихо
+// меряет paper-слот strategy_id='fadehot'). Тяжёлый 15m-fetch гейтим дешёвым
+// пре-фильтром по priceHistory (ход 30м): в спокойном рынке НИ ОДНА монета не
+// проходит → 0 запросов даже в always-on WS-броадкасте (2с). Вердикт кэшируем
+// 60с per-coin — повторные броадкасты переиспользуют без пересчёта/fetch.
+const FADEHOT_PREGATE_MIN     = FADEHOT_MOVE_LB * 15;                 // 30м = 2×15m
+const FADEHOT_LOOKBACK_MIN    = (FADEHOT_ER_WIN + FADEHOT_MOVE_LB + 4) * 15; // ≈5ч запас
+const FADEHOT_VERDICT_TTL_MS  = 60_000;
+const _fadeHotCache = new Map(); // coin → { ts, verdict|null }
+
+async function enrichFadeHot(items, now) {
+  await Promise.allSettled(
+    items.map(async (it) => {
+      // Дешёвый пре-гейт: |ход 30м| ≥ порога по priceHistory (без HL-запросов).
+      const past = getPriceNMinAgo(it.coin, FADEHOT_PREGATE_MIN, now);
+      if (past == null || !(past > 0)) { it.fadeHot = null; return; }
+      const move30 = ((it.price - past) / past) * 100;
+      if (Math.abs(move30) < FADEHOT_MOVE_THR) { it.fadeHot = null; return; }
+
+      const cached = _fadeHotCache.get(it.coin);
+      if (cached && now - cached.ts < FADEHOT_VERDICT_TTL_MS) {
+        it.fadeHot = cached.verdict;
+        return;
+      }
+
+      let candles = null;
+      try {
+        candles = await getFifteenMinCandles(it.coin, FADEHOT_LOOKBACK_MIN, now);
+      } catch { candles = null; }
+      const v = candles ? evaluateFadeHot(candles) : { fired: false };
+
+      let verdict = null;
+      if (v.fired && it.price != null) {
+        const { zoneLo, zoneHi, stop, stopPct } = fadeHotZone(v.side, it.price, FADEHOT_STOP_PCT);
+        verdict = {
+          fired: true, side: v.side, move: v.move, er: v.er,
+          zoneLo, zoneHi, stop, stopPct, timeStopMin: FADEHOT_TIME_STOP_MIN,
+        };
+      }
+      _fadeHotCache.set(it.coin, { ts: now, verdict });
+      it.fadeHot = verdict;
+    }),
+  );
   return items;
 }
 
@@ -362,6 +419,7 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
         oiDelta5m,
         oiDelta15m,
         htfTrend: null, // заполняется enrichHtfTrend (1h EMA-тренд) для fade-гейта
+        fadeHot: null,  // заполняется enrichFadeHot (forward-вердикт fade-high-ER)
       };
     });
 
@@ -380,6 +438,12 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
       await enrichVolMult(toEnrich);
       await enrichHtfTrend(toEnrich, now);
     }
+
+    // Fade-high-ER forward-вердикт: считаем ВСЕГДА (и в cheap WS-броадкасте) —
+    // дешёвый пре-гейт по ходу 30м делает его near-zero-cost в спокойном рынке
+    // (0 монет проходят → 0 fetch), а сам сигнал нужен на always-on карточке, не
+    // только на /api/signals. Кап = ENRICH_CAP видимых строк.
+    await enrichFadeHot(top.slice(0, ENRICH_CAP), now);
 
     // Breadth-слив: синхронный делевередж лидеров движения (OI↓ у многих) →
     // fade против движения = лов ножа. Клиент гасит actionable у таких вердиктов.

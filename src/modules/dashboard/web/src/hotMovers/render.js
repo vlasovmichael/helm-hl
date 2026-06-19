@@ -445,6 +445,34 @@ export function renderHotMovers(payload, fmtTime) {
       if (posInner)
         items.push({ key: `pos:${s.coin}`, cls: "hm-pos-row", html: posInner });
     }
+
+    // Под-строка forward-сигнала «fade выдохшегося хвоста» (high-ER). Сервер
+    // (enrichFadeHot) ставит s.fadeHot когда |ход 30м|≥3% И Kaufman ER 4ч≥0.47.
+    // Это РЕДКИЙ событийный пилл (≈0.3% баров): монета+сторона+зона+стоп+выход.
+    // Рядом тихо меряет paper-слот strategy_id='fadehot'. Показываем всегда (и в
+    // открытой монете — это контр-сигнал к её позиции).
+    const fh = s.fadeHot;
+    if (fh?.fired) {
+      const sideCls = fh.side === "SHORT" ? "fh-short" : "fh-long";
+      const zone =
+        fh.zoneLo != null && fh.zoneHi != null
+          ? `$${fmtPrice(fh.zoneLo)}–$${fmtPrice(fh.zoneHi)}`
+          : fmtPrice(s.price);
+      const erTxt = fh.er != null ? fh.er.toFixed(2) : "—";
+      const moveTxt = fh.move != null ? fmtPct(fh.move) : "—";
+      const stopTxt = fh.stop != null ? `$${fmtPrice(fh.stop)}` : "—";
+      const stopPct = fh.stopPct != null ? `${fh.stopPct}%` : "";
+      const exitTxt = fh.timeStopMin != null ? `~${Math.round(fh.timeStopMin / 60)}ч` : "~2ч";
+      const tip =
+        `Fade выдохшегося хвоста: ход 30м ${moveTxt} при Kaufman ER 4ч ${erTxt} (≥0.47). ` +
+        `Фейдим ПРОТИВ хода. Выход по времени ${exitTxt} + широкий стоп ${stopPct}. ` +
+        `Маргинальный forward-кандидат — рядом меряет paper-слот.`;
+      const inner = `<td colspan="11">
+        <span class="hm-fh-tag ${sideCls}" title="${tip}">🔥 fade хвоста ${fh.side}</span>
+        <span class="hm-fh-meta">зона ${zone} · стоп ${stopTxt} (${stopPct}) · выход ${exitTxt} · ER ${erTxt}</span>
+      </td>`;
+      items.push({ key: `fh:${s.coin}`, cls: "hm-fadehot-row", html: inner });
+    }
   });
 
   // Добиваем таблицу пустыми строками до HM_MAX_ROWS, чтобы высота не прыгала

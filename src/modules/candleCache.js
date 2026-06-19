@@ -140,6 +140,63 @@ export function clearFiveMinCache() {
   cache5m.clear();
 }
 
+// ── 15-минутные свечи (для fade-high-ER сигнала, см. fadeHotSignal.js) ───────
+// Сигнал считает ход за 30м (2×15m) и Kaufman ER за 4ч (16×15m) → нужна 15m-
+// история. 15m-свеча закрывается раз в 15 мин → TTL 90с: свежесть последнего
+// бара без шторма candleSnapshot (тяжёлый запрос, см. 429-заметки выше).
+const FIFTEEN_MIN_TTL_MS   = 90_000;
+const FIFTEEN_MIN_INTERVAL = '15m';
+const cache15m = new Map();   // coin → { fetchedAt, candles, inflight }
+
+/**
+ * Получает 15m свечи для монеты. Зеркало getFiveMinCandles, свой кэш + interval.
+ *
+ * @param {string} coin
+ * @param {number} lookbackMinutes — сколько минут истории нужно
+ * @param {number} [now=Date.now()]
+ * @param {number} [priority=HL_PRIORITY.LOW] — косметика/paper, не торговое чтение
+ * @returns {Promise<Array<{open,high,low,close,time}>|null>}
+ */
+export async function getFifteenMinCandles(coin, lookbackMinutes, now = Date.now(), priority = HL_PRIORITY.LOW) {
+  const cached = cache15m.get(coin);
+  if (cached && now - cached.fetchedAt < FIFTEEN_MIN_TTL_MS) {
+    return cached.candles;
+  }
+  if (cached?.inflight) {
+    try { return await cached.inflight; } catch { return null; }
+  }
+
+  const startTime = now - lookbackMinutes * 60_000;
+  const promise = hlInfo(
+    {
+      type: 'candleSnapshot',
+      req:  { coin: resolveApiCoin(coin), interval: FIFTEEN_MIN_INTERVAL, startTime, endTime: now },
+    },
+    { label: `candleCache15m/${coin}`, priority },
+  ).then((data) => {
+    const candles = parseCandles(data);
+    cache15m.set(coin, { fetchedAt: Date.now(), candles, inflight: null });
+    return candles;
+  }).catch((err) => {
+    cache15m.set(coin, { ...(cache15m.get(coin) || {}), inflight: null });
+    logger.warn(`[CandleCache15m] #${coin} fetch failed: ${err.message}`);
+    return null;
+  });
+
+  cache15m.set(coin, { ...(cached || {}), inflight: promise });
+  return promise;
+}
+
+/** Прямая инжекция 15m-свечей (тесты). */
+export function seedFifteenMinCache(coin, candles, now = Date.now()) {
+  cache15m.set(coin, { fetchedAt: now, candles, inflight: null });
+}
+
+/** Очистить 15m-кэш (тесты). */
+export function clearFifteenMinCache() {
+  cache15m.clear();
+}
+
 // ── 4-часовые свечи (для Candy Girl 4h HTF-confluence) ──────────────────────
 // 4h-свеча закрывается раз в 4 часа → TTL 15 мин (тренд старшего ТФ медленный,
 // частый refetch смысла не имеет). Своя карта, свой interval.

@@ -27,3 +27,9 @@ data/tax/
 diag/
 temp/
 plaintext.txt
+
+# backtest data snapshot (not tracked)
+hl_snapshot.db
+hl_snapshot.db-*
+candles.db
+candles.db-*

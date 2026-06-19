@@ -409,6 +409,70 @@ export async function swingPaperOpen(coin, price, direction, sl, tp, silent = fa
 }
 
 /**
+ * Открывает виртуальную позицию для Fade-high-ER paper (fade выдохшегося хвоста).
+ * LONG или SHORT (side из direction), risk-based размер от реального paper-баланса
+ * (util из config). Только защитный SL (tp=null — выход по времени/стопу).
+ * strategy_id='fadehot'. PAPER-only.
+ *
+ * @param {string} coin
+ * @param {number} price
+ * @param {'LONG'|'SHORT'} direction
+ * @param {number} sl
+ * @param {boolean} [silent=false]
+ * @param {Object} [entryFeatures=null]
+ */
+export async function fadeHotPaperOpen(coin, price, direction, sl, silent = false, entryFeatures = null) {
+  const balance = await getPaperBalance();
+  if (balance <= 0) {
+    logger.warn(`[Executor] [FadeHot] Cannot open — balance is $${balance.toFixed(2)}`);
+    return { ok: false };
+  }
+  const utilization = config.trading.fadehotPaperBalanceUtil;
+  const leverage = config.trading.fadehotPaperLeverage;
+  const szDecimals = resolvePaperSzDecimals(coin);
+  if (szDecimals == null) return { ok: false };
+  const { sizeUsd, sz, tooSmall } = resolveEntrySize({
+    coin, tag: 'FadeHot', equity: balance, capBase: balance * leverage,
+    capUtil: utilization, price, sl, szDecimals,
+  });
+  if (tooSmall) {
+    const why = sizeUsd < MIN_ORDER_USD
+      ? `size $${sizeUsd.toFixed(2)} < $${MIN_ORDER_USD} min`
+      : `sz=${sz} rounds to 0 (szDecimals=${szDecimals}, price $${price})`;
+    logger.warn(`[Executor] [FadeHot SKIP] #${coin} — ${why} (${(utilization * 100).toFixed(0)}% real $${balance.toFixed(2)})`);
+    return { ok: false };
+  }
+
+  const fee  = sizeUsd * ONE_LEG;
+  const side = direction === 'LONG' ? 'long' : 'short';
+
+  const id = savePosition({
+    coin,
+    size_usd:    sizeUsd,
+    entry_price: price,
+    entry_apy:   0,
+    entry_time:  Date.now(),
+    mode:        'PAPER',
+    strategy_id: 'fadehot',
+    side,
+    sl_price:    sl,
+    tp_price:    null,
+    ...(entryFeatures || {}),
+  });
+
+  logger.info(
+    `[Executor] 🔥 FadeHot OPEN ${direction} #${coin} | $${sizeUsd.toFixed(2)} (${leverage}x of real $${balance.toFixed(2)}) @ $${price} ` +
+      `| SL $${sl.toFixed(6)} (time-stop only) | fee $${fee.toFixed(4)} | id: ${id}`,
+  );
+
+  notify('afterOpen', {
+    coin, price, sizeUsd, positionId: Number(id), mode: 'PAPER', strategy: 'fadehot',
+  });
+
+  return { ok: true, positionId: Number(id), sizeUsd };
+}
+
+/**
  * Закрывает виртуальную позицию.
  *
  * Paper PnL = fundingPnl − fees (без pricePnl, т.к. нет реального fill).
@@ -447,7 +511,8 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
   } else if (
     position.strategy_id === 'vapor' ||
     position.strategy_id === 'hotmovers' ||
-    position.strategy_id === 'swing'
+    position.strategy_id === 'swing' ||
+    position.strategy_id === 'fadehot'
   ) {
     // Закрытие по реальному SL/TP-уровню (или time-stop по текущей цене) — closePrice
     // имеет смысл fill'а, как у hunter/vapor. Без этой ветки pricePnl=0 и в history
@@ -493,7 +558,8 @@ export async function paperClose(signal, position, silent = false, opts = {}) {
   } else if (
     position.strategy_id === 'vapor' ||
     position.strategy_id === 'hotmovers' ||
-    position.strategy_id === 'swing'
+    position.strategy_id === 'swing' ||
+    position.strategy_id === 'fadehot'
   ) {
     // MFE/MAE-трекинг по тикам не делаем, но hold_seconds полезен для оценки.
     exitFeatures = { hold_seconds: Math.round(holdMs / 1000) };

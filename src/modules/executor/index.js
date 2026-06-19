@@ -12,7 +12,7 @@ import { getAccountEquity } from '../wallet.js';
 import { checkVolatility } from '../volatility.js';
 import {
   paperClose, hunterPaperOpen, hunterLongPaperOpen,
-  vaporPaperOpen, hotMoversPaperOpen, swingPaperOpen,
+  vaporPaperOpen, hotMoversPaperOpen, swingPaperOpen, fadeHotPaperOpen,
 } from './paper.js';
 import { productionClose } from './close.js';
 import {
@@ -230,6 +230,19 @@ async function handleOpen(signal) {
     }
     return swingPaperOpen(
       signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
+    );
+  }
+
+  // Fade-high-ER paper route: PAPER-only shadow-слот, fade выдохшегося хвоста.
+  // PROD-пути нет — open всегда виртуальный. Только защитный SL (tp=null).
+  if (strategyId === 'fadehot') {
+    const pre = await preflightChecks(signal.coin, null);
+    if (!pre.allowed) {
+      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
+      return { ok: false };
+    }
+    return fadeHotPaperOpen(
+      signal.coin, signal.price, signal.direction, signal.sl, false, signal.entryFeatures,
     );
   }
 
