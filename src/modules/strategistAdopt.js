@@ -16,8 +16,9 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 
-const peakPctMap = new Map(); // positionId → peak unrealized%
-const beArmedMap = new Map(); // positionId → true, как только peak ≥ BE_ARM
+const peakPctMap   = new Map(); // positionId → peak unrealized% (MFE)
+const troughPctMap = new Map(); // positionId → min unrealized% (MAE, ≤0 обычно)
+const beArmedMap   = new Map(); // positionId → true, как только peak ≥ BE_ARM
 
 const BE_ARM    = config.trading.adoptBeArmPct;
 const BE_FLOOR  = config.trading.adoptBeFloorPct;
@@ -28,6 +29,7 @@ const TRAIL_GB  = config.trading.adoptTrailGiveBackPct;
 export function clearAdoptState(positionId) {
   if (positionId == null) return;
   peakPctMap.delete(positionId);
+  troughPctMap.delete(positionId);
   beArmedMap.delete(positionId);
 }
 
@@ -36,9 +38,23 @@ export function getAdoptPeakPct(positionId) {
   return peakPctMap.get(positionId) ?? 0;
 }
 
+/**
+ * MFE/MAE по % (peak/trough unrealized) для exitFeatures при закрытии.
+ * НЕ чистит state — cleanup делает clearAdoptState после консьюма.
+ * @returns {{ mfePct: number|null, maePct: number|null }}
+ */
+export function consumeAdoptMfeMae(positionId) {
+  if (positionId == null) return { mfePct: null, maePct: null };
+  return {
+    mfePct: peakPctMap.has(positionId)   ? peakPctMap.get(positionId)   : null,
+    maePct: troughPctMap.has(positionId) ? troughPctMap.get(positionId) : null,
+  };
+}
+
 /** Сброс всего state (тесты). */
 export function resetAdoptState() {
   peakPctMap.clear();
+  troughPctMap.clear();
   beArmedMap.clear();
 }
 
@@ -60,6 +76,11 @@ export function analyzeAdopt(position, price) {
   const prevPeak = peakPctMap.get(position.id) ?? 0;
   if (unrealizedPct > prevPeak) peakPctMap.set(position.id, unrealizedPct);
   const peak = peakPctMap.get(position.id) ?? 0;
+
+  // MAE: худшая просадка против позы (для exitFeatures — анализ «ушло ли в плюс
+  // перед стопом»). Старт 0: если поза не была в минусе, MAE остаётся 0.
+  const prevTrough = troughPctMap.get(position.id) ?? 0;
+  if (unrealizedPct < prevTrough) troughPctMap.set(position.id, unrealizedPct);
 
   // ── Трейл: даём тянуться, фиксируем на откате ──
   if (peak >= TRAIL_ARM && unrealizedPct > 0) {

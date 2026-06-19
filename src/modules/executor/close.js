@@ -32,7 +32,7 @@ import {
   recordHunterLongLossEvent,
 } from '../strategistHunterLong.js';
 import { setHunterCrossCooldown } from '../hunterCrossCooldown.js';
-import { clearAdoptState, getAdoptPeakPct } from '../strategistAdopt.js';
+import { clearAdoptState, getAdoptPeakPct, consumeAdoptMfeMae } from '../strategistAdopt.js';
 import {
   notifySlippageBan,
   notifyProductionClose, notifyCloseRejected, notifyCloseFailed,
@@ -294,7 +294,15 @@ export async function productionClose(signal, position, silent = false) {
     }
     clearHunterLongTrailState(position.id);
   } else if (position.strategy_id === 'adopt') {
-    exitFeatures = { hold_seconds: Math.round(holdMs / 1000) };
+    const mm = consumeAdoptMfeMae(position.id);
+    const sz = position.size_usd || 0;
+    exitFeatures = {
+      mfe_pct:      mm.mfePct,
+      mae_pct:      mm.maePct,
+      mfe_usd:      mm.mfePct != null ? (mm.mfePct / 100) * sz : null,
+      mae_usd:      mm.maePct != null ? (mm.maePct / 100) * sz : null,
+      hold_seconds: Math.round(holdMs / 1000),
+    };
     if (signal.reason === 'adopt_trail_tp' || signal.reason === 'adopt_breakeven_ratchet') {
       exitFeatures.trail_peak_pct      = signal.peakPct ?? getAdoptPeakPct(position.id);
       exitFeatures.trail_give_back_pct = signal.giveBackPct ?? null;

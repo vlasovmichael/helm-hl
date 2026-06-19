@@ -13,7 +13,7 @@ import { sendMessage } from '../modules/reporter.js';
 import { fetchExchangePositions } from '../modules/sync.js';
 import { fetchUserFills, classifyClose, findRoundTripForPosition } from '../modules/userFills.js';
 import { maybeAdoptManualPosition, reconcileProvisionalAdoptEntries } from './adoptReconcile.js';
-import { clearAdoptState } from '../modules/strategistAdopt.js';
+import { clearAdoptState, consumeAdoptMfeMae } from '../modules/strategistAdopt.js';
 import {
   state,
   INTEGRITY_CHECK_INTERVAL_MS,
@@ -129,12 +129,30 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
     logger.debug(`[Integrity] classifyClose failed: ${clsErr.message}`);
   }
 
+  // Adopt: подмешиваем MFE/MAE (peak/trough unrealized% за время ведения) +
+  // hold_seconds ДО clearAdoptState. Внешний путь (sl_trigger/manual_close) —
+  // основной для adopt, поэтому без этого mfe/mae для стопов не записывались.
+  let exitFeatures = null;
+  if (dbPosition.strategy_id === 'adopt') {
+    const mm = consumeAdoptMfeMae(dbPosition.id);
+    const sz = dbPosition.size_usd || 0;
+    const closeTs = Number.isFinite(closedAtOverride) ? closedAtOverride : Date.now();
+    exitFeatures = {
+      mfe_pct:      mm.mfePct,
+      mae_pct:      mm.maePct,
+      mfe_usd:      mm.mfePct != null ? (mm.mfePct / 100) * sz : null,
+      mae_usd:      mm.maePct != null ? (mm.maePct / 100) * sz : null,
+      hold_seconds: Math.round((closeTs - dbPosition.entry_time) / 1000),
+    };
+  }
+
   dbClosePosition(dbPosition.id, {
     close_price:  closePx,
     realized_pnl: estimatedPnl,
     fee_paid:     0,
     reason:       closeReason,
     closed_at:    closedAtOverride,  // реальное время ноги (флип) — иначе Date.now()
+    exitFeatures,
   });
 
   // Adopt: внешнее/ручное закрытие — частый путь выхода для adopted-позы.
