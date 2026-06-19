@@ -99,6 +99,7 @@ const HUNTER_TRAIL_UNCAP_TP     = config.trading.hunterTrailUncapTp;
 const HUNTER_BE_RATCHET_ENABLED = config.trading.hunterBeRatchetEnabled;
 const HUNTER_BE_ARM_PCT         = config.trading.hunterBeArmPct;
 const HUNTER_BE_FLOOR_PCT       = config.trading.hunterBeFloorPct;
+const HUNTER_SL_SAFETY_BUFFER_PCT = config.trading.hunterSlSafetyBufferPct;
 
 /** Чистит весь trail-state для позиции (вызывается из close-handler'ов). */
 export function clearHunterTrailState(positionId) {
@@ -592,17 +593,37 @@ function checkHunterExitCore(position, scoutData, item, exitOpts = {}) {
     };
   }
 
-  if (position.sl_price != null && item.price >= position.sl_price) {
-    // Регистрируем post-SL cooldown — Hunter не вернётся к этой монете N мин.
-    const slTs = Date.now();
-    writePostSl(position.coin, slTs);
-    writeCrossCooldown(position.coin);
-    return {
-      action: 'CLOSE',
-      coin:   position.coin,
-      price:  position.sl_price,
-      reason: 'hunter_sl',
-    };
+  if (position.sl_price != null) {
+    // SL safety-buffer: если на бирже висит живой SL-триггер (hunter_sl_oid),
+    // софтверный стоп — лишь страховка. Срабатывает, только когда цена ушла ЗА
+    // sl_price на буфер (= биржевой триггер НЕ исполнился). Нормальный стоп
+    // отдаём resting-триггеру: он закрывает на ~0.37 лучше market-close на тике
+    // (живые данные 2026-06-19). В paper триггера нет → буфер 0, как раньше.
+    const hasExchangeStop = position.hunter_sl_oid != null;
+    const slBufPct = hasExchangeStop ? HUNTER_SL_SAFETY_BUFFER_PCT : 0;
+    const slLevel = position.sl_price * (1 + slBufPct / 100);
+
+    // Shadow: цена пробила sl_price, но ещё не дошла до буфера — раньше тут
+    // софт-стоп бы выстрелил и обогнал биржевой триггер. Лог для оценки эффекта.
+    if (hasExchangeStop && slBufPct > 0 && item.price >= position.sl_price && item.price < slLevel) {
+      logger.info(
+        `[Hunter SL-BUFFER] #${position.coin} (id=${position.id}): цена $${item.price} ≥ SL $${position.sl_price} ` +
+          `но < буфер $${slLevel.toFixed(6)} (+${slBufPct}%) — отдаём биржевому триггеру, софт-стоп ждёт`,
+      );
+    }
+
+    if (item.price >= slLevel) {
+      // Регистрируем post-SL cooldown — Hunter не вернётся к этой монете N мин.
+      const slTs = Date.now();
+      writePostSl(position.coin, slTs);
+      writeCrossCooldown(position.coin);
+      return {
+        action: 'CLOSE',
+        coin:   position.coin,
+        price:  position.sl_price,
+        reason: 'hunter_sl',
+      };
+    }
   }
   if (position.tp_price != null && item.price <= position.tp_price) {
     const armed = isHunterArmed(position.id);

@@ -258,6 +258,17 @@ function loadConfig() {
     throw new Error(`HUNTER_BE_FLOOR_PCT must be in [0, HUNTER_BE_ARM_PCT). Got: "${process.env.HUNTER_BE_FLOOR_PCT}"`);
   }
 
+  // SL safety-buffer (2026-06-19): софтверный hunter_sl при ЖИВОМ биржевом
+  // триггере (hunter_sl_oid) — страховка, а не дублёр. Живые данные: софт-стоп
+  // закрывает в среднем хуже биржевого (−1.61 vs −1.24, n=7+13), т.к. market-close
+  // на тике медленнее resting-триггера. Буфер заставляет софт-стоп ждать, пока
+  // цена уйдёт ЗА sl_price на N% (= признак, что биржевой триггер не исполнился).
+  // В paper триггера нет → буфер игнорируется (см. strategistHunter checkHunterExit).
+  const hunterSlSafetyBufferPct = parseFloat(process.env.HUNTER_SL_SAFETY_BUFFER_PCT || '0.5');
+  if (isNaN(hunterSlSafetyBufferPct) || hunterSlSafetyBufferPct < 0 || hunterSlSafetyBufferPct >= 2) {
+    throw new Error(`HUNTER_SL_SAFETY_BUFFER_PCT must be in [0, 2). Got: "${process.env.HUNTER_SL_SAFETY_BUFFER_PCT}"`);
+  }
+
   // Shadow exits (2026-06-14): measurement-only. Мерим would-be P&L альтернативных
   // выходов (time-decay TP + chandelier ATR-trail) и пишем в shadow_exits на каждом
   // close, НЕ трогая реальные выходы. Агрегат в /strategies. Default on — это лог.
@@ -630,6 +641,7 @@ function loadConfig() {
       hunterBeRatchetEnabled,
       hunterBeArmPct,
       hunterBeFloorPct,
+      hunterSlSafetyBufferPct,
       hunterShadowExitsEnabled,
       hunterLongEnabled,
       hunterLongProdEnabled,

@@ -201,6 +201,29 @@ test('hunter-позиция, цена ≥ SL → CLOSE hunter_sl', () => {
   assert.equal(r.price, 51000);  // закрываем по уровню SL
 });
 
+test('SL safety-buffer: прод (hunter_sl_oid) + цена чуть ЗА SL, но < буфера → HOLD (отдаём биржевому триггеру)', () => {
+  reset();
+  // sl_price 51000, буфер 0.5% → уровень софт-стопа 51255. Цена 51100 между ними.
+  const pos = hunterPos({ hunter_sl_oid: 12345 });
+  const r = analyzeHunter([{ coin: 'BTC', price: 51100 }], pos);
+  assert.equal(r.action, 'HOLD', 'софт-стоп не дублирует биржевой триггер на том же уровне');
+});
+
+test('SL safety-buffer: прод (hunter_sl_oid) + цена ушла ЗА буфер → CLOSE hunter_sl (страховка сработала)', () => {
+  reset();
+  const pos = hunterPos({ hunter_sl_oid: 12345 });
+  const r = analyzeHunter([{ coin: 'BTC', price: 51300 }], pos); // > 51255
+  assert.equal(r.action, 'CLOSE');
+  assert.equal(r.reason, 'hunter_sl');
+});
+
+test('SL safety-buffer: paper (нет hunter_sl_oid) → буфер игнорируется, CLOSE ровно по SL', () => {
+  reset();
+  const r = analyzeHunter([{ coin: 'BTC', price: 51100 }], hunterPos()); // hunter_sl_oid null
+  assert.equal(r.action, 'CLOSE');
+  assert.equal(r.reason, 'hunter_sl');
+});
+
 test('hunter-позиция, цена ≤ TP → CLOSE hunter_tp', () => {
   reset();
   const r = analyzeHunter([{ coin: 'BTC', price: 48000 }], hunterPos());
