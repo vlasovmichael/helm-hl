@@ -25,8 +25,13 @@ import {
   deriveOiKind,
 } from './hotMoversSetup.js';
 
+// Дефолт OFF (2026-06-19): этот воркер пушил continuation-вердикт карточки, а он
+// бэктестится в МИНУС (−0.16%/30м, win 42%, 1752 сигн — см. memory
+// darkknight_backtest). Карточка теперь не выдаёт continuation как сделку
+// (честный вердикт) → и на телефон его слать нельзя, иначе пуш противоречит
+// карточке. fade-high-ER-пуш = чистый follow-up. Вернуть: HOT_MOVERS_ALERT_ENABLED=true.
 const ENABLED =
-  (process.env.HOT_MOVERS_ALERT_ENABLED || 'true').toLowerCase() === 'true';
+  (process.env.HOT_MOVERS_ALERT_ENABLED || 'false').toLowerCase() === 'true';
 const INTERVAL_MS =
   parseFloat(process.env.HOT_MOVERS_ALERT_INTERVAL_MIN || '2') * 60_000;
 // Порог силы для пуша (визуальный бейдж активен с 1.5; пуш строже, чтобы не

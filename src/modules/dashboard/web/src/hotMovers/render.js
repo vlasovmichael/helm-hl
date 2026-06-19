@@ -367,21 +367,48 @@ export function renderHotMovers(payload, fmtTime) {
     const setup = computeMomentum(x.windows, accelKind, volKind, x.s, flush, _hmViewMode);
     const entry = hmEntryBadge(x.windows, setup.side, setup.score, setup.mode);
 
-    // Chase-gate: actionable Setup-пилл (trend/fade score≥3), но цена уже ⛔
-    // растянута в сторону сделки (entry.state==='extended') — вход проехал.
-    // Гасим яркий пилл до wait-вида (как fade-mute при flush), чтобы «LONG
-    // TREND» на хае не выглядел кнопкой «вход». Колонка Enter и так показывает
-    // ⛔, но яркий пилл перетягивал глаз и провоцировал вход на топе.
-    // Презентационно: actionable-решение ntfy (evaluateCoinAlert) уже требует
-    // chase==='zone', так что пуши на extended и не приходят — синхронизируем
-    // лишь визуал таблицы. (entry.state==='extended' ⇒ side+mode+score≥3.)
+    // ── Честный вердикт (2026-06-19) ─────────────────────────────────────────
+    // Actionable «🎯 вход» загорается ТОЛЬКО на подтверждённом эдже fade-high-ER
+    // (s.fadeHot — единственное правило, пережившее OOS, см. memory
+    // darkknight_backtest). Постоянный continuation-вердикт карточки бэктестился
+    // в МИНУС (−0.16%/30м, win 42%, 1752 сигн) → его НЕ выдаём как сделку:
+    // показываем приглушённым контекст-направлением (momentum), Enter='—'.
+    // Карточка перестаёт «продавать» проигрышный continuation как вход.
+    // Презентация-only: computeMomentum/серверный двойник/ntfy не трогаем.
     let setupCls = setup.cls;
     let setupLabel = setup.label;
     let setupTitle = setup.title;
-    if (!isOpen && entry.state === "extended") {
-      setupCls = setup.side === "LONG" ? "setup-wait-long" : "setup-wait-short";
-      setupLabel = setupLabel.replace(" ●", ""); // снять STRONG-точку «вход»
-      setupTitle = `⛔ ПОЗДНО — ${entry.title}. Сетап есть, но вход проехал — жди отката (🎯). · ${setup.title}`;
+    let entryState = entry.state;
+    let entryTitle = entry.title;
+    const fh = s.fadeHot;
+    if (!isOpen) {
+      if (fh?.fired) {
+        // Эдж: яркий fade-пилл (сторона ПЕРЕБИВАЕТ continuation) + 🎯 вход.
+        // План (зона/стоп/выход) — в под-строке fh:COIN ниже.
+        const up = fh.side === "LONG";
+        const moveTxt = fh.move != null ? fmtPct(fh.move) : "—";
+        const erTxt = fh.er != null ? fh.er.toFixed(2) : "—";
+        setupCls = up ? "setup-fade-long" : "setup-fade-short";
+        setupLabel = `<span class="setup-pill">🔥 ${fh.side} FADE</span>`;
+        setupTitle =
+          `🎯 ЭДЖ: fade выдохшегося хвоста — ход 30м ${moveTxt} при Kaufman ER 4ч ${erTxt}. ` +
+          `Единственное правило, пережившее OOS. План входа — в строке ниже.`;
+        entryState = "zone";
+        entryTitle = `${fh.side} FADE — вход у текущей цены (выдохшийся хвост). План в строке ниже.`;
+      } else {
+        // Нет эджа: continuation = контекст, не сделка. Гасим до wait-вида,
+        // Enter='—'. Сторона/тинт строки и %-ячейки всё ещё показывают движение.
+        setupCls =
+          setup.side === "LONG" ? "setup-wait-long"
+          : setup.side === "SHORT" ? "setup-wait-short"
+          : "setup-none";
+        setupLabel = setupLabel.replace(" ●", ""); // снять STRONG-точку «вход»
+        setupTitle =
+          `Контекст-направление (momentum), НЕ сделка — continuation в минус по бэктесту. ` +
+          `Жди 🔥 fade-high-ER. · ${setup.title}`;
+        entryState = "none";
+        entryTitle = "эджа нет — continuation бэктестится в минус, ждём fade-high-ER (🔥)";
+      }
     }
 
     // OI delta 5m — нейтральная раскраска: OI сам по себе не хорош/плох.
@@ -421,8 +448,8 @@ export function renderHotMovers(payload, fmtTime) {
         dir === "up" ? "цена в твою сторону" : dir === "down" ? "цена против тебя" : "движения почти нет";
       entryCell = `<td class="hm-entry hm-dir" data-w="Dir" title="в позиции — ${tip}"><span class="hm-entry-icon"><span class="hm-dir-mount" data-dir="${dir}"></span></span></td>`;
     } else {
-      const eico = ENTRY_ICON_SVG[entry.state] || entry.icon;
-      entryCell = `<td class="hm-entry hm-entry-${entry.state}" data-w="Enter" title="${entry.title}"><span class="hm-entry-icon">${eico}</span></td>`;
+      const eico = ENTRY_ICON_SVG[entryState] || entry.icon;
+      entryCell = `<td class="hm-entry hm-entry-${entryState}" data-w="Enter" title="${entryTitle}"><span class="hm-entry-icon">${eico}</span></td>`;
     }
 
     const rowHtml = `
