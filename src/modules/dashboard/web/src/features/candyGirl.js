@@ -1,8 +1,8 @@
 // ─────────────────────────────────────────────────
 //  Candy Girl — signal-only радар (1h EMA-тренд + 5m pullback-reclaim).
-//  Приватный кэш сигналов; renderSmartSignals (main) читает его через
-//  getCandySignals(). Обновление Smart Signals дёргаем через колбэк
-//  setOnCandyUpdate (main вешает gated-renderSmartSignals) — без цикла.
+//  Приватный кэш сигналов (getCandySignals) + колбэк setOnCandyUpdate на свежие
+//  сигналы. Бывший потребитель (Smart Signals) удалён 2026-06-19 — колбэк сейчас
+//  не вешается (no-op), оставлен как точка расширения.
 // ─────────────────────────────────────────────────
 
 import { isActiveCoin } from "../state/activeCoins.js";

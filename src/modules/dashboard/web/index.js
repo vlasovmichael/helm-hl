@@ -32,12 +32,7 @@ import { renderMarketContext } from "./src/features/marketContext.js";
 import { initModals, renderActivity } from "./src/features/modals.js";
 import {
   initSetupScanner,
-  renderSmartSignals,
-  fetchMacroIfStale,
   setSwingEquity,
-  setHmSignals,
-  setBtcMomentum1m,
-  markTickReady,
   updateSetupLivePrice,
 } from "./src/features/setupScanner.js";
 
@@ -56,7 +51,6 @@ function onStatus(data) {
   renderBans(data);
   // Hot Movers из WS (≤2с) вместо 10с-поллинга; HTTP /api/signals в tick() = фолбэк.
   if (data.hotMovers?.signals) {
-    setHmSignals(data.hotMovers.signals);
     renderHotMovers(data.hotMovers, fmtTime);
     lastWsHotMoversAt = Date.now();
   }
@@ -68,9 +62,8 @@ function onStatus(data) {
 async function tick() {
   // Фолбэк /api/signals только если WS не присылал hotMovers недавно.
   const wsHotFresh = Date.now() - lastWsHotMoversAt < WS_HOTMOVERS_FRESH_MS;
-  const [hmR, btcR, mcR, actR] = await Promise.allSettled([
+  const [hmR, mcR, actR] = await Promise.allSettled([
     wsHotFresh ? Promise.resolve(null) : fetchJson("/api/signals?limit=30"),
-    fetchJson("/api/candles?coin=BTC&interval=1m"),
     fetchJson("/api/market-context"),
     // Recent Activity — локальный эндпоинт (своя БД, без HL-веса), к 429 не причастен.
     fetchJson(`/api/activity?hours=${getRangeHours()}&limit=10`),
@@ -78,26 +71,8 @@ async function tick() {
   if (mcR.status === "fulfilled") renderMarketContext(mcR.value);
   if (actR.status === "fulfilled") renderActivity(actR.value);
   if (hmR.status === "fulfilled" && hmR.value?.signals) {
-    setHmSignals(hmR.value.signals);
     renderHotMovers(hmR.value, fmtTime);
   }
-  if (
-    btcR.status === "fulfilled" &&
-    Array.isArray(btcR.value) &&
-    btcR.value.length >= 2
-  ) {
-    const candles = btcR.value;
-    const prev = candles[candles.length - 2];
-    const last = candles[candles.length - 1];
-    const prevClose = prev?.c ?? prev?.close;
-    const lastClose = last?.c ?? last?.close;
-    if (prevClose && lastClose) {
-      setBtcMomentum1m(((lastClose - prevClose) / prevClose) * 100);
-    }
-  }
-  await fetchMacroIfStale();
-  markTickReady();
-  renderSmartSignals();
   markSuccess();
 }
 
