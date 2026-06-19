@@ -43,7 +43,7 @@ test('runOnce: пустой снапшот → no-op без fetch', async () => 
   assert.equal(fetched, 0);
 });
 
-test('runOnce: рынок ХОЛОДНЫЙ (BTC пилит) → монеты не дёргаем (только BTC)', async () => {
+test('runOnce: рынок ХОЛОДНЫЙ (BTC пилит) → сетап подтверждаем и шлём eyes-only (cold-топик)', async () => {
   state.latestHunter = [{ coin: 'TEST', price: 130 }];
   seedPump('TEST', 130);
   const calls = [];
@@ -52,7 +52,8 @@ test('runOnce: рынок ХОЛОДНЫЙ (BTC пилит) → монеты н�
     return coin === 'BTC' ? chopCandles() : pumpCandles();
   };
   await runOnce(NOW, fetchCandles);
-  assert.deepEqual(calls, ['BTC'], 'после холодного гейта свечи монет не тянем');
+  assert.ok(calls.includes('BTC'), 'режим проверён по BTC');
+  assert.ok(calls.includes('TEST'), 'в холодном рынке сетап всё равно подтверждаем для cold-ленты');
 });
 
 test('runOnce: ГОРЯЧИЙ рынок + fade-сетап → дёргаем свечи монеты (проход гейта)', async () => {
