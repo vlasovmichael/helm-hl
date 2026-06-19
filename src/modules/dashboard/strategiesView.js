@@ -56,6 +56,16 @@ const REGISTRY = [
       return { enabled, status: !enabled ? 'off' : live ? 'live' : 'paper' };
     },
   },
+  {
+    id: 'hunter_oi',
+    label: 'Hunter SHORT +OI',
+    kind: 'momentum · short · OI-gate',
+    resolve: () => {
+      // PAPER-only A/B-двойник Hunter с OI-divergence воротами на входе.
+      const enabled = config.trading.hunterOiPaperEnabled;
+      return { enabled, status: enabled ? 'paper' : 'off' };
+    },
+  },
   // Carry / Chill Boy / Candy Girl / Fader удалены как торговые стратегии
   // (убыточный трек, см. memory/strategy_cull_2026_06_15.md + cull-рефактор
   // 2026-06-17). Candy Girl остаётся radar-only (5m-сигналы для Setup Scanner ·
