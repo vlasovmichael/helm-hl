@@ -109,6 +109,7 @@ export function strategyDisplayName(sid) {
   if (sid === "fader") return "Fader";
   if (sid === "candy_girl") return "Candy Girl";
   if (sid === "vapor") return "Vapor";
+  if (sid === "fadehot") return "Fade-high-ER";
   if (sid === "adopt") return "🤲 Adopted";
   if (sid === "manual") return "🖐 Manual";
   return sid || "Unknown";

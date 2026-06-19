@@ -93,6 +93,17 @@ const REGISTRY = [
     },
   },
   {
+    id: 'fadehot',
+    label: 'Fade-high-ER',
+    kind: 'exhausted-tail · fade',
+    split: true,                              // fade бывает и SHORT (памп), и LONG (дамп)
+    resolve: () => {
+      // PAPER-only (PROD-пути нет): enabled → paper, иначе off.
+      const enabled = config.trading.fadehotPaperEnabled;
+      return { enabled, status: enabled ? 'paper' : 'off' };
+    },
+  },
+  {
     id: 'darkknight',
     label: 'Dark Knight (TG)',
     kind: 'copy-signal · paper',
