@@ -14,6 +14,9 @@ import { getActivePaperPositionByStrategy } from '../core/database.js';
 import { analyzeFadeHot } from '../modules/strategistFadeHot.js';
 import { execute } from '../modules/executor/index.js';
 
+// ntfy-пуши fade-сигналов шлёт отдельный alert-feed (modules/fadeHotAlerts.js) —
+// он пушит ВСЕ гейтованные сетапы, включая взятый этим слотом. Поэтому сам paper-слот
+// остаётся тихим (без дубля пуша), как и прочие сделки ([[feedback_quiet_tg]]).
 export async function tickFadeHotPaper(hunterData) {
   if (!config.trading.fadehotPaperEnabled) return;
 

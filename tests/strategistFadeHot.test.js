@@ -73,6 +73,33 @@ test('analyzeFadeHot: пре-гейт прошёл, но ER низкий → HOL
   assert.equal(sig.action, 'HOLD');
 });
 
+test('analyzeFadeHot: сигнал есть, но рынок ХОЛОДНЫЙ (BTC пилит) → HOLD (гейт режима)', async () => {
+  const coin = 'TEST';
+  const price = 130;
+  seedPump(coin, price);
+  // монета трендит (fire fade), но BTC пилит → ER рынка низкий → гейт не пускает
+  const chopBtc = [];
+  for (let i = 0; i < 17; i++) chopBtc.push({ close: i % 2 === 0 ? 100 : 101 });
+  const fetchCandles = async (c) => (c === 'BTC' ? chopBtc : pumpCandles());
+
+  const sig = await analyzeFadeHot([{ coin, price }], null, NOW, fetchCandles);
+  assert.equal(sig.action, 'HOLD', 'в холодном рынке fade не открывается');
+});
+
+test('analyzeFadeHot: горячий рынок → OPEN с фичами режима (btcER, breadth)', async () => {
+  const coin = 'TEST';
+  const price = 130;
+  seedPump(coin, price);
+  const fetchCandles = async () => pumpCandles(); // и монета, и BTC трендят → горячо
+  const sig = await analyzeFadeHot([{ coin, price }], null, NOW, fetchCandles);
+
+  assert.equal(sig.action, 'OPEN');
+  assert.ok(sig.btcER >= 0.55, 'btcER прошёл гейт');
+  assert.equal(sig.breadth, 1, 'одна монета в ходе → breadth=1');
+  assert.equal(sig.entryFeatures.entry_oi_delta_2m, 1, 'breadth записан в фичу');
+  assert.ok(sig.entryFeatures.entry_trend_1h_pct > 0, 'btcER записан в фичу режима');
+});
+
 test('analyzeFadeHot: своя SHORT-поза, цена ≥ SL → CLOSE fadehot_sl', async () => {
   const pos = { strategy_id: 'fadehot', coin: 'TEST', side: 'short', sl_price: 103, entry_time: NOW };
   const sig = await analyzeFadeHot([{ coin: 'TEST', price: 104 }], pos, NOW + 60_000);

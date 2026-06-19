@@ -21,6 +21,7 @@ import { startWsExitLoop } from './app/wsExitTick.js';
 import { startWsEntryLoop } from './app/wsEntryTick.js';
 import { startSetupSwingAlerts } from './modules/setupScannerAlerts.js';
 import { startHotMoversAlerts } from './modules/hotMoversAlerts.js';
+import { startFadeHotAlerts } from './modules/fadeHotAlerts.js';
 import { shutdown } from './app/lifecycle.js';
 import { createStatusCollector } from './app/status.js';
 
@@ -88,6 +89,10 @@ async function main() {
   // Пуш «мувер стал enterable»: направленный Setup перешёл в чейз-зону 🎯
   // (улетел → откатился). Не торгует. Gated на HOT_MOVERS_ALERT_ENABLED. Fail-soft.
   startHotMoversAlerts();
+
+  // Fade-high-ER feed: ВСЕ гейтованные fade-сетапы (выдохшийся хвост в горячем рынке)
+  // в ntfy — премиум-сигналы, не сделки. Независим от paper-слота. FADEHOT_ALERT_FEED_ENABLED.
+  startFadeHotAlerts();
 
   // ── Tax Collector — ежедневный сбор PIT-38 в 03:00 (Europe/Warsaw) ──
   // Fail-soft: модуль сам отключается, если BINANCE_API_KEY не задан.

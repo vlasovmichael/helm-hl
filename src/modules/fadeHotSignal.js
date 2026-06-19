@@ -23,6 +23,15 @@ export const FADEHOT_ER_MIN        = parseFloat(process.env.FADEHOT_ER_MIN || '0
 export const FADEHOT_STOP_PCT      = parseFloat(process.env.FADEHOT_STOP_PCT || '3');         // широкий защитный стоп
 export const FADEHOT_TIME_STOP_MIN = parseInt(process.env.FADEHOT_TIME_STOP_MIN || '120', 10); // выход по времени ~2ч
 
+// ── Классификатор режима «рынок горячий» (общий для paper-слота и alert-feed) ──
+// Бэктест scripts/backtestMarketRegime.js (см. memory darkknight_backtest): fade-high-ER
+// прибылен НЕ всегда, а когда рынок энергичен. Самый OOS-устойчивый признак — Kaufman ER
+// самого BTC за 4ч (bounded [0,1]; высокий ER → +1.42%/74% vs низкий +0.27%/58%; разделение
+// пережило old/fresh-split). Гейтим на нём. Порог ≈ p66 теста (0.57), чуть ниже для запаса.
+export const FADEHOT_REGIME_GATE = (process.env.FADEHOT_REGIME_GATE || 'true').toLowerCase() === 'true';
+export const FADEHOT_BTC_ER_MIN  = parseFloat(process.env.FADEHOT_BTC_ER_MIN || '0.55'); // BTC 4ч ER ≥ → «горячо»
+export const FADEHOT_BTC_COIN    = process.env.FADEHOT_BTC_COIN || 'BTC';
+
 /**
  * Kaufman Efficiency Ratio по закрытиям: |net change| / Σ|bar change| на окне win.
  * 1 = идеально-направленное движение, ~0 = чоп. Зеркало er() в backtestExits.js.
@@ -80,6 +89,22 @@ export function evaluateFadeHot(candles, opts = {}) {
   // Fade против хода: памп (move>0) → SHORT, дамп (move<0) → LONG.
   const side = move > 0 ? 'SHORT' : 'LONG';
   return { fired: true, side, move, er, reason: null };
+}
+
+/**
+ * Режим рынка по свечам BTC: «горячо», когда Kaufman ER BTC за erWin баров ≥ порога.
+ * Общий гейт для fade-high-ER (открываем/алертим только в горячем рынке).
+ *
+ * @param {Array<{close:number}>} btcCandles — 15m свечи BTC oldest→newest
+ * @param {{erWin?:number, erMin?:number}} [opts]
+ * @returns {{btcER:number|null, hot:boolean}}
+ */
+export function btcRegimeFromCandles(btcCandles, opts = {}) {
+  const erWin = opts.erWin ?? FADEHOT_ER_WIN;
+  const erMin = opts.erMin ?? FADEHOT_BTC_ER_MIN;
+  const closes = (btcCandles ?? []).map((c) => c?.close).filter((c) => Number.isFinite(c) && c > 0);
+  const btcER = kaufmanER(closes, erWin);
+  return { btcER, hot: btcER != null && btcER >= erMin };
 }
 
 /**

@@ -21,11 +21,15 @@ import { getFifteenMinCandles } from './candleCache.js';
 import {
   evaluateFadeHot,
   fadeHotZone,
+  btcRegimeFromCandles,
   FADEHOT_MOVE_LB,
   FADEHOT_ER_WIN,
   FADEHOT_MOVE_THR,
   FADEHOT_STOP_PCT,
   FADEHOT_TIME_STOP_MIN,
+  FADEHOT_REGIME_GATE,
+  FADEHOT_BTC_ER_MIN,
+  FADEHOT_BTC_COIN,
 } from './fadeHotSignal.js';
 
 // ── Параметры слота (env-overrideable) ──
@@ -36,6 +40,11 @@ const FH_COOLDOWN_MS           = 2 * 60_000;                        // re-detect
 const FH_POST_EXIT_COOLDOWN_MS = parseInt(process.env.FADEHOT_POST_EXIT_COOLDOWN_MIN || '60', 10) * 60_000;
 const FH_MAX_CANDIDATES        = parseInt(process.env.FADEHOT_MAX_CANDIDATES || '8', 10); // кап тяжёлых fetch/тик
 const FH_HEARTBEAT_MS          = 5 * 60_000;
+
+// Гейт «рынок горячий» (классификатор режима) — определение в fadeHotSignal.js
+// (btcRegimeFromCandles / FADEHOT_BTC_ER_MIN), общее со слотом и alert-feed'ом.
+// breadth (=кол-во монет в ходе ≥порога) пишем в фичи для форвард-анализа, но НЕ
+// гейтим им (порог нестабилен в абсолюте: 7 в старой половине теста против 32 в свежей).
 
 // Per-coin state (in-memory; paper-эксперимент, без disk-persist в v1).
 const fhCooldownMap      = new Map(); // coin → last-signal ts (re-detect)
@@ -116,6 +125,25 @@ export async function analyzeFadeHot(hunterData, activePosition, now = Date.now(
   if (activePosition) return { action: 'HOLD' };
   if (!best) return { action: 'HOLD' };
 
+  // ── Гейт режима: открываем fade только когда рынок «горячий» (BTC трендит) ──
+  const breadth = candidates.length; // монет с ходом ≥порога за 30м = массовость движа
+  let btcER = null;
+  if (FADEHOT_REGIME_GATE) {
+    let regime = { btcER: null, hot: false };
+    try {
+      const btcCandles = await fetchCandles(FADEHOT_BTC_COIN, FH_CANDLE_LOOKBACK_MIN, now);
+      regime = btcRegimeFromCandles(btcCandles);
+    } catch { /* нет свечей BTC — считаем рынок не подтверждённым */ }
+    btcER = regime.btcER;
+    if (!regime.hot) {
+      logger.info(
+        `[FadeHot] ⏸ сигнал FADE ${best.side} #${best.coin} (ER ${best.er.toFixed(2)}) — рынок ХОЛОДНЫЙ ` +
+          `(BTC ER ${btcER == null ? 'n/a' : btcER.toFixed(2)} < ${FADEHOT_BTC_ER_MIN}, breadth ${breadth}) → пропуск`,
+      );
+      return { action: 'HOLD' };
+    }
+  }
+
   fhCooldownMap.set(best.coin, now);
 
   const price = best.item.price;
@@ -123,16 +151,19 @@ export async function analyzeFadeHot(hunterData, activePosition, now = Date.now(
 
   const entryFeatures = {
     entry_spike_pct:      best.move,                          // ход 30м, % (со знаком)
-    entry_trend_15m_pct:  best.er * 100,                      // Kaufman ER 4ч ×100 (переиспуск колонки)
+    entry_trend_15m_pct:  best.er * 100,                      // Kaufman ER 4ч монеты ×100 (переиспуск колонки)
+    entry_trend_1h_pct:   btcER == null ? null : btcER * 100, // BTC 4ч ER ×100 — гейт режима (переиспуск колонки)
     entry_funding_rate:   best.item.fundingRate  ?? null,
     entry_volume_24h_usd: best.item.volume24hUsd ?? null,
     entry_oi_usd:         best.item.oiUsd        ?? null,
+    entry_oi_delta_2m:    breadth,                            // breadth: монет в ходе ≥порога (переиспуск колонки)
     entry_hour_utc:       new Date(now).getUTCHours(),
   };
 
   logger.info(
     `[FadeHot] 🔥 OPEN FADE ${best.side} #${best.coin} @ $${price} ` +
       `| ход30м ${best.move.toFixed(2)}%, ER ${best.er.toFixed(2)} ` +
+      `| режим: BTC ER ${btcER == null ? 'n/a' : btcER.toFixed(2)}, breadth ${breadth} ` +
       `| SL $${stop.toFixed(6)} (${FADEHOT_STOP_PCT}%) / time-stop ${FADEHOT_TIME_STOP_MIN}м`,
   );
 
@@ -146,6 +177,8 @@ export async function analyzeFadeHot(hunterData, activePosition, now = Date.now(
     tp:          null,   // фикс-TP нет — выход по времени/стопу
     move:        best.move,
     er:          best.er,
+    btcER,
+    breadth,
     entryFeatures,
   };
 }
