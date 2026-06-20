@@ -93,9 +93,9 @@ export function initDB() {
   }
 
   // Migration: side — направление позиции ('short' | 'long').
-  // Carry исторически шортил всегда (положительный funding); default 'short'
-  // сохраняет совместимость со всеми существующими записями.
-  // Long-сторона активируется через CARRY_LONG_ENABLED (см. config.js).
+  // Carry (удалён 2026-06-17) исторически шортил всегда; default 'short'
+  // сохраняет совместимость со всеми существующими записями. Текущие стратегии
+  // задают side явно при открытии.
   if (!posColumns.find(c => c.name === 'side')) {
     db.exec("ALTER TABLE positions ADD COLUMN side TEXT NOT NULL DEFAULT 'short' CHECK (side IN ('short', 'long'))");
     logger.info('[DB] Migration: added side to positions');
