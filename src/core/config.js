@@ -39,16 +39,9 @@ function loadConfig() {
 
   const walletAddress = requireEnv('PUBLIC_WALLET_ADDRESS');
 
-  // ── Mode presets ──
-  // AGGRESSIVE_MODE=true uses AGG_* defaults. Individual env vars override if set.
-  const aggressive = (process.env.AGGRESSIVE_MODE || 'false').toLowerCase() === 'true';
-
-  const aggMinApy    = parseFloat(process.env.AGG_MIN_APY            || '15');
-  const aggEntryApy  = parseFloat(process.env.AGG_ENTRY_APY         || '25');
-  const aggRoundTrip = parseFloat(process.env.AGG_ROUND_TRIP        || '0.0006');
-
-  const minApy   = parseFloat(process.env.MIN_APY_THRESHOLD   || String(aggressive ? aggMinApy   : 30));
-  const entryApy = parseFloat(process.env.ENTRY_APY_THRESHOLD || String(aggressive ? aggEntryApy : 60));
+  // AGGRESSIVE_MODE/AGG_* preset удалён 2026-06-20 (carry-эпоха, не потреблялся).
+  const minApy   = parseFloat(process.env.MIN_APY_THRESHOLD   || '30');
+  const entryApy = parseFloat(process.env.ENTRY_APY_THRESHOLD || '60');
   const leverage = parseFloat(process.env.LEVERAGE             || '1');
 
   if (isNaN(minApy) || isNaN(entryApy) || isNaN(leverage)) {
@@ -78,15 +71,9 @@ function loadConfig() {
   }
 
   // ── Strategy constants (funding / exit math, shared) ──
-  const roundTrip             = parseFloat(process.env.ROUND_TRIP              || String(aggressive ? aggRoundTrip : 0.001));
-  const maxPaybackHours       = parseFloat(process.env.MAX_PAYBACK_HOURS       || '24');
-  const maxBreakevenHours     = parseFloat(process.env.MAX_BREAKEVEN_HOURS     || '24');
-  const negativeFundingTicks  = parseInt(process.env.NEGATIVE_FUNDING_TICKS    || '2',  10);
-  const delistConfirmTicks    = parseInt(process.env.DELIST_CONFIRM_TICKS      || '3',  10);
-  const delistCooldownMinutes = parseInt(process.env.DELIST_COOLDOWN_MINUTES   || '30', 10);
-  const minEntryApyFloor      = parseFloat(process.env.MIN_ENTRY_APY_FLOOR    || '10');
-  const predictedDropThreshold = parseFloat(process.env.PREDICTED_DROP_THRESHOLD || '30') / 100;
-  const fundingGateMinutes    = parseInt(process.env.FUNDING_GATE_MINUTES      || '10', 10);
+  const roundTrip             = parseFloat(process.env.ROUND_TRIP              || '0.001');
+  // carry-эпоха (maxPayback/maxBreakeven/negativeFunding/delist*/minEntryApyFloor/
+  // predictedDrop/fundingGate) удалена 2026-06-20 — поля не потреблялись живым кодом.
 
   // Fade strategy удалена 2026-06-15 (0 сделок за трек, deprecated с 12 мая).
 
@@ -589,18 +576,12 @@ function loadConfig() {
       address:         walletAddress,
       privateKey,                                        // основной ключ (fallback)
       agentPrivateKey: process.env.HL_AGENT_PRIVATE_KEY || null,  // ключ агента для торговли
-      rpcUrl: process.env.RPC_URL || 'https://mainnet.base.org',
     },
-
-    aggressive,
 
     trading: {
       minApy,
       entryApy,
-      exitBuffer:        parseFloat(process.env.EXIT_BUFFER           || '5'),
       leverage,
-      minHoldMinutes:    parseInt(process.env.MIN_HOLD_TIME_MINUTES   || '60',  10),
-      breathingMinutes:  parseInt(process.env.BREATHING_MINUTES       || '30',  10),
       fakeBalance:       process.env.FAKE_BALANCE ? parseFloat(process.env.FAKE_BALANCE) : null,
       // Монеты, которые нельзя торговать (HLP-индексы, деривативы и т.п.)
       coinBlacklist:     new Set(
@@ -610,14 +591,6 @@ function loadConfig() {
           .filter(Boolean),
       ),
       roundTrip,
-      maxPaybackHours,
-      maxBreakevenHours,
-      negativeFundingTicks,
-      delistConfirmTicks,
-      delistCooldownMinutes,
-      minEntryApyFloor,
-      predictedDropThreshold,
-      fundingGateMinutes,
       liquidTopN,
       liquidMinVolume,
       liquidCacheMs: liquidCacheHours * 3_600_000,
