@@ -482,8 +482,8 @@ export function renderManualPositions(list) {
         s.riskUsd != null
           ? ` <span class="grid-inline negative">risk −$${s.riskUsd.toFixed(2)}</span>`
           : "";
-      // Entry·Now → дистанция к входу (со знаком моей стороны) инлайном рядом с
-      // текущей ценой, той же строкой; цвет по знаку хода.
+      // Entry·Now → дистанция к входу в СТРОКЕ ЛЕЙБЛА (две цены sub-cent монеты
+      // длинные → инлайн у значения переносился на 3-ю строку). Цвет по знаку хода.
       const moveInline =
         s.movePct != null
           ? ` <span class="grid-inline ${s.movePct >= 0 ? "positive" : "negative"}" data-mmove>${fmtMove(s.movePct)}</span>`
@@ -507,7 +507,7 @@ export function renderManualPositions(list) {
         </div>
         <div class="data-grid">
           <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}${riskInline}</div></div>
-          <div class="grid-item"><div class="item-label">Entry · Now</div><div class="item-value">${fmtPrice(p.entryPrice)} · <span data-mnow>${cur}</span>${moveInline}</div></div>
+          <div class="grid-item"><div class="item-label">Entry · Now${moveInline}</div><div class="item-value">${fmtPrice(p.entryPrice)} · <span data-mnow>${cur}</span></div></div>
           <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}`, subText: upnlSubTxt(s) })}</div>
           ${floorCell}
         </div>
