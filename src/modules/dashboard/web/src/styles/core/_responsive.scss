@@ -128,7 +128,7 @@
   }
 
   .data-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 10px;
   }
 
@@ -189,6 +189,17 @@
     gap: 8px;
     margin-top: 24px;
     padding-top: 14px;
+  }
+}
+
+// Ручные (HANDS-OFF) карточки несут инлайн-метрики (risk / move% / R·peak) на
+// строке значения. На телефоне в 2 колонки ширины не хватает → большое значение
+// переносится, а R·peak обрезается overflow:hidden заливки uPnL. Даём им полную
+// ширину (1 колонка), чтобы «значение + метрика» влезали в 2 строки. Планшет
+// (640–880) остаётся 2-колоночным — там ширины достаточно.
+@include until($bp-nav) {
+  [data-mcard] .data-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
