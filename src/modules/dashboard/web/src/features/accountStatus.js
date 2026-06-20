@@ -85,34 +85,33 @@ function setUsd(el, v) {
 //    --rb-now). Виден только при rb-depth (есть стоп) — иначе CSS его прячет.
 function pnlLayers({ label, valueId = "", valueCls = "", valueText, subText }) {
   const idAttr = valueId ? ` id="${valueId}"` : "";
-  // subText задан → под-строка (R + пик) лежит ВНУТРИ всех трёх слоёв, поэтому
-  // её накрывает тот же clip-path заливки, что и значение: символы под ярким
-  // краем становятся белыми (R «переливается» вместе с числом). undefined →
-  // под-строки нет (карточка Net (Mkt) её не несёт).
-  const subRow = (extra = "") =>
-    subText !== undefined ? `<div class="pnl-sub"${extra}>${subText}</div>` : "";
+  // subText (R + peak) уезжает В СТРОКУ ЛЕЙБЛА справа — "uPnL ........ +2.28R",
+  // а не третьей строкой. Лежит ВНУТРИ всех трёх слоёв, поэтому её накрывает тот
+  // же clip-path заливки, что и значение: символы под ярким краем белеют (R
+  // «переливается» вместе с числом). undefined → лейбл как есть (карточка Net).
+  const labelRow =
+    subText !== undefined
+      ? `<div class="item-label pnl-toprow"><span>${label}</span><span class="pnl-sub">${subText}</span></div>`
+      : `<div class="item-label">${label}</div>`;
   return (
     // Скрытый клон В ПОТОКЕ несёт высоту ячейки; base/fill оба absolute поверх,
     // чтобы делить один layout-контекст и не разъезжаться на сабпиксель (см.
-    // _datagrid.scss). Все три — идентичная структура label+value(+sub).
+    // _datagrid.scss). Все три — идентичная структура labelRow+value.
     `<div class="pnl-spacer" aria-hidden="true">` +
-    `<div class="item-label">${label}</div>` +
+    labelRow +
     `<div class="item-value">${valueText}</div>` +
-    subRow() +
     `</div>` +
     `<div class="pnl-base">` +
-    `<div class="item-label">${label}</div>` +
+    labelRow +
     `<div${idAttr} class="item-value ${valueCls}">${valueText}</div>` +
-    subRow(" data-mr") +
     `</div>` +
     // Призрак отката: тусклая заливка до пика (MFE), обрезана по --rb-peak. Лежит
     // под ярким .pnl-fill (тот до --rb-now), поэтому виден только участок «текущий
     // → пик» — то, что цена прошла в плюс и сдала. Только фон, без текста.
     `<div class="pnl-peak" aria-hidden="true"></div>` +
     `<div class="pnl-fill" aria-hidden="true">` +
-    `<div class="item-label">${label}</div>` +
+    labelRow +
     `<div class="item-value">${valueText}</div>` +
-    subRow() +
     `</div>`
   );
 }
@@ -186,7 +185,7 @@ const fmtMove = (m) =>
 const upnlSubTxt = (s) =>
   [
     s.rMult != null ? fmtR(s.rMult) : "",
-    s.peakPct != null ? `пик +${s.peakPct.toFixed(2)}%` : "",
+    s.peakPct != null ? `peak +${s.peakPct.toFixed(2)}%` : "",
   ]
     .filter(Boolean)
     .join(" · ");

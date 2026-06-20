@@ -165,19 +165,25 @@
   .pnl-peak {
     display: none;
   }
-  /* Под-строка uPnL (R + пик): в потоке под слоями. base/fill — absolute
-     inset:0 с пустым низом, поэтому под-строка сквозит; relative+z-index
-     гарантирует, что её не перекроет прозрачный base. */
+  /* Метрики R + peak: уезжают в строку лейбла справа (см. pnlLayers → labelRow),
+     поэтому НЕ нужен z-index — sub лежит ВНУТРИ каждого слоя, и белая копия в
+     .pnl-fill штатно перекрывает цветную из .pnl-base (R «переливается» под
+     краем заливки). Раньше sub была отдельной строкой-сиблингом и z-index:1
+     поднимал ЦВЕТНУЮ копию над белой → R не белел. */
+  .pnl-toprow {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+  }
   .pnl-sub {
-    position: relative;
-    z-index: 1;
-    margin-top: 6px;
     font-family: var(--font-mono);
     font-size: 12px;
     font-weight: 500;
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.01em;
     color: var(--text-muted);
+    white-space: nowrap;
   }
 }
 /* Registered custom-prop — без него край заливки «телепортируется»: браузер
