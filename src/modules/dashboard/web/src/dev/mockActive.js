@@ -20,6 +20,7 @@ const POS = {
 };
 
 let price = 3.66; // старт чуть в убытке (цена выше входа у short)
+let solPeakMax = 0; // бегущий пик SOL-хода (%) — для «призрака» отката
 let raf = null;
 let target = POS.tp; // куда плавно идём
 let phaseDir = -1; // −1 вниз (в прибыль), +1 вверх (в убыток)
@@ -63,7 +64,10 @@ function buildStatus() {
   // Живой пол выхода (зеркало buildAdoptManagement): трейл при пике ≥3%, BE при
   // ≥1.5%, иначе жёсткий −2%. Даёт dev-превью настоящие Floor/R/peak-метрики.
   const solMovePct = ((solPrice - solEntry) / solEntry) * 100; // long: + при росте
-  const solPeakPct = Math.max(0, solMovePct); // в моке пик ≈ текущий плюс
+  // Пик = бегущий максимум хода (high-water mark), как у настоящей няньки. На
+  // спуске тура пик остаётся выше текущего → виден «призрак» отката на заливке.
+  solPeakMax = Math.max(solPeakMax, solMovePct);
+  const solPeakPct = Math.max(0, solPeakMax);
   let solFloorPct, solFloorKind;
   if (solPeakPct >= 3) {
     solFloorPct = solPeakPct * 0.5; // trail: пик − giveback
@@ -199,6 +203,9 @@ export function startMock({ onStatus }) {
   onStatusRef = onStatus;
   panel();
   push(); // первый кадр сразу
+  // ?mock=1&tour → сразу гоняем авто-тур фаз (без клика): цена ходит
+  // вход→цель→вход, пик SOL уходит выше текущего → виден «призрак» отката.
+  if (/[?&]tour\b/.test(location.search)) raf = setInterval(step, 700);
   // eslint-disable-next-line no-console
   console.log("[mock] активная монета засимулирована — панель справа снизу");
 }
