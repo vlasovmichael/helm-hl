@@ -65,6 +65,7 @@ import {
   takeOiSnapshot,
   getMoversPayloadCached,
   handleSignals,
+  handleWhatIf,
   OI_SNAPSHOT_MS,
 } from "./routes/movers.js";
 import { getManualTrades } from "./routes/manualTrades.js";
@@ -911,6 +912,7 @@ export function startDashboard() {
   app.get("/api/activity", handleActivity);
   app.get("/api/logs", handleLogs);
   app.get("/api/signals", handleSignals);
+  app.get("/api/whatif", handleWhatIf);
   app.get("/api/near-misses", handleNearMisses);
   app.get("/api/trade/:id", handleTradeDetail);
   app.get("/api/tax-summary", handleTaxSummary);

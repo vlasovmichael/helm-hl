@@ -24,11 +24,16 @@ import { classifyTrend } from "../../candyGirlEma.js";
 import {
   evaluateFadeHot,
   fadeHotZone,
+  btcRegimeFromCandles,
+  classifyWhatIf,
   FADEHOT_MOVE_LB,
   FADEHOT_ER_WIN,
   FADEHOT_MOVE_THR,
+  FADEHOT_ER_MIN,
   FADEHOT_STOP_PCT,
   FADEHOT_TIME_STOP_MIN,
+  FADEHOT_BTC_ER_MIN,
+  FADEHOT_BTC_COIN,
 } from "../../fadeHotSignal.js";
 
 // ─────────────────────────────────────────────────
@@ -504,6 +509,74 @@ export async function getMoversPayloadCached(limit = 12, enrich = true) {
     slot.payload = payload;
   }
   return payload;
+}
+
+// ─── /api/whatif — кнопка-тормоз «а что если» по одной монете ────────────────
+// Юзер вводит монету (+опц. направление) → применяем боевое правило fade-high-ER
+// + гейт режима к ней по запросу и говорим: гладит эдж задуманный вход или по
+// шапке. НЕ генератор сигналов — дисциплинарный чек против существующего эджа.
+// Дефолт (нет fired-сетапа) = «сиди на руках». Read-only, тяжёлый 15m-fetch
+// только на явный запрос (не в броадкасте), поэтому без пре-гейта.
+export async function handleWhatIf(req, res) {
+  try {
+    const coin = String(req.query.coin || "")
+      .trim().toUpperCase()
+      .replace(/-PERP$/i, "").replace(/USDT$|USDC$/i, "").replace(/^@/, "");
+    if (!coin) return res.status(400).json({ error: "coin required" });
+
+    let userSide = req.query.side ? String(req.query.side).trim().toUpperCase() : null;
+    if (userSide !== "LONG" && userSide !== "SHORT") userSide = null;
+
+    const now = Date.now();
+    let candles = null;
+    try {
+      candles = await getFifteenMinCandles(coin, FADEHOT_LOOKBACK_MIN, now);
+    } catch { candles = null; }
+    if (!candles || candles.length < FADEHOT_ER_WIN + 2) {
+      return res.status(404).json({
+        error: `нет 15m-свечей для #${coin} — её, скорее всего, нет на Hyperliquid`,
+        coin,
+      });
+    }
+
+    const v = evaluateFadeHot(candles);
+
+    // Режим рынка (горячий/холодный) — тот же гейт, что у боевого слота.
+    let regime = { btcER: null, hot: false };
+    try {
+      const btc = await getFifteenMinCandles(FADEHOT_BTC_COIN, FADEHOT_LOOKBACK_MIN, now);
+      regime = btcRegimeFromCandles(btc);
+    } catch { /* нет BTC-свечей → рынок считаем не подтверждённым */ }
+
+    const price = getLatestPrice(coin) ?? candles[candles.length - 1]?.close ?? null;
+    const verdict = classifyWhatIf({
+      fired: v.fired, fadeSide: v.side, hot: regime.hot, userSide,
+    });
+
+    let plan = null;
+    if (v.fired && price != null) {
+      const { zoneLo, zoneHi, stop, stopPct } = fadeHotZone(v.side, price, FADEHOT_STOP_PCT);
+      plan = { zoneLo, zoneHi, stop, stopPct, timeStopMin: FADEHOT_TIME_STOP_MIN };
+    }
+
+    res.json({
+      coin, price, userSide,
+      fired: v.fired,
+      fadeSide: v.side,
+      move: v.move ?? null,   // ход 30м, % (сырой — показываем всегда)
+      er: v.er ?? null,       // Kaufman ER 4ч монеты (сырой)
+      btcER: regime.btcER,    // Kaufman ER 4ч BTC (режим)
+      regimeHot: regime.hot,
+      thresholds: {
+        moveThr: FADEHOT_MOVE_THR, erMin: FADEHOT_ER_MIN, btcErMin: FADEHOT_BTC_ER_MIN,
+      },
+      ...verdict,
+      plan,
+    });
+  } catch (err) {
+    logger.warn(`[Dashboard] /api/whatif error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
 }
 
 export async function handleSignals(req, res) {

@@ -108,6 +108,56 @@ export function btcRegimeFromCandles(btcCandles, opts = {}) {
 }
 
 /**
+ * «А что если» — вердикт по монете+направлению для кнопки-тормоза в Hot Movers.
+ * Не генератор сигналов: применяет уже-боевое правило fade-high-ER + гейт режима
+ * к одной монете по запросу и говорит, гладит эдж задуманный вход или даёт по шапке.
+ * По умолчанию (нет fired-сетапа) ответ = «сиди на руках» — это и есть дисциплина.
+ *
+ * @param {{fired:boolean, fadeSide:('SHORT'|'LONG'|null), hot:boolean, userSide?:('SHORT'|'LONG'|null)}} p
+ * @returns {{verdict:string, tone:('pat'|'smack'|'neutral'), headline:string, detail:string}}
+ *   verdict: 'no-signal' | 'cold' | 'aligned' | 'against' | 'edge'
+ *   tone: 'pat' (погладить) | 'smack' (по шапке) | 'neutral' (информативно)
+ */
+export function classifyWhatIf({ fired, fadeSide, hot, userSide = null }) {
+  // Нет выдохшегося хвоста → эджа нет. Дефолт = сиди на руках (мягко по шапке).
+  if (!fired || !fadeSide) {
+    return {
+      verdict: 'no-signal', tone: 'neutral',
+      headline: 'Сигнала нет — сиди на руках',
+      detail: 'Ход слишком мал или движение нечистое (низкий ER). Это НЕ выдохшийся хвост — fade-эджа здесь нет. Лучшее действие — пропустить.',
+    };
+  }
+  // Сетап есть, но рынок холодный (BTC не трендит) → боевой fadehot пропустил бы.
+  if (!hot) {
+    return {
+      verdict: 'cold', tone: 'smack',
+      headline: 'Хвост есть, но рынок ХОЛОДНЫЙ',
+      detail: `Fade выдохшегося хвоста (${fadeSide}) сработал бы, но BTC сейчас не трендит — в таком режиме fade теряет (regime gate закрыт). Боевой fadehot пропустил бы. Не лезь.`,
+    };
+  }
+  // Сетап + горячий рынок → эдж есть. Сверяем с задуманным направлением.
+  if (!userSide) {
+    return {
+      verdict: 'edge', tone: 'neutral',
+      headline: `Эдж: fade ${fadeSide}`,
+      detail: `Выдохшийся хвост + горячий рынок — боевой fadehot вошёл бы в ${fadeSide} (против хода). Если думал в ту же сторону — это совпадение с эджем.`,
+    };
+  }
+  if (userSide === fadeSide) {
+    return {
+      verdict: 'aligned', tone: 'pat',
+      headline: `✅ Эдж за тебя — fade ${fadeSide}`,
+      detail: `Твоё направление совпало с fade выдохшегося хвоста, и рынок горячий. Это ровно то, что берёт боевой fadehot. Помни про широкий стоп и выход по времени.`,
+    };
+  }
+  return {
+    verdict: 'against', tone: 'smack',
+    headline: `❌ Против эджа — ты в догон`,
+    detail: `Эдж говорит fade ${fadeSide} (против выдохшегося хода), а ты собрался ${userSide} — это вход в догон/нож. Ровно тот FOMO-вход, что сливает. Остановись.`,
+  };
+}
+
+/**
  * Зона входа / защитный стоп от текущей цены для fade-вердикта. Зона = у текущей
  * цены (fade — вход против выдохшегося хвоста сразу), стоп — широкий ПРОТИВ нас.
  *

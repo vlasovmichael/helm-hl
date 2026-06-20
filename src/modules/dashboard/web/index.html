@@ -96,6 +96,14 @@
             Hot Movers
           </div>
           <div class="hm-header-right">
+            <button
+              id="whatif-btn"
+              class="whatif-btn"
+              type="button"
+              title="Руки чешутся? Введи монету и сторону — бот сверит с эджем fade-high-ER и погладит или даст по шапке"
+            >
+              🤔 А что если…
+            </button>
             <span
               id="hot-movers-meta"
               style="
@@ -438,6 +446,15 @@
           ×
         </button>
         <div id="trade-modal-body"></div>
+      </div>
+    </div>
+    <div id="whatif-modal" class="trade-modal" hidden>
+      <div class="trade-modal__backdrop" data-close="1"></div>
+      <div class="trade-modal__panel" role="dialog" aria-modal="true">
+        <button class="trade-modal__close" data-close="1" aria-label="Close">
+          ×
+        </button>
+        <div id="whatif-modal-body"></div>
       </div>
     </div>
     <script>

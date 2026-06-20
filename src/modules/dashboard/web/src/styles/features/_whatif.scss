@@ -1,0 +1,241 @@
+/* ──────────────────────── «А что если…» — кнопка-тормоз + модалка */
+
+.whatif-btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--card-bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+
+  &:hover {
+    color: var(--text-primary);
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+  }
+}
+
+#whatif-modal {
+  .wi-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+
+    .wi-px {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-left: 4px;
+    }
+    .wi-userside {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-left: 6px;
+    }
+  }
+
+  .wi-lead {
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  /* ── Форма ── */
+  .wi-form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .wi-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-top: 6px;
+  }
+  .wi-input {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    text-transform: uppercase;
+    color: var(--text-primary);
+    background: var(--canvas-inset);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    outline: none;
+
+    &:focus {
+      border-color: var(--accent-line);
+    }
+  }
+  .wi-sides {
+    display: flex;
+    gap: 6px;
+  }
+  .wi-side-btn {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background: var(--canvas-inset);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 4px;
+    cursor: pointer;
+
+    &.is-on {
+      color: var(--text-primary);
+      border-color: var(--accent-line);
+      background: var(--accent-soft);
+    }
+  }
+  .wi-submit {
+    margin-top: 14px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+    border-radius: 6px;
+    padding: 9px;
+    cursor: pointer;
+
+    &:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+  }
+  .wi-error {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--red);
+  }
+
+  /* ── Карточка вердикта ── */
+  .wi-verdict {
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    margin-bottom: 14px;
+
+    &.wi-pat {
+      border-color: var(--green-line);
+      background: var(--green-soft);
+    }
+    &.wi-smack {
+      border-color: var(--red-line);
+      background: var(--red-soft);
+    }
+    &.wi-neutral {
+      border-color: var(--border);
+      background: var(--canvas-subtle);
+    }
+  }
+  .wi-verdict-icon {
+    font-size: 26px;
+    line-height: 1;
+  }
+  .wi-verdict-head {
+    font-size: 14.5px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 5px;
+  }
+  .wi-verdict-detail {
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+  }
+
+  /* ── Сырые метрики (показываем всегда) ── */
+  .wi-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .wi-metric {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px;
+    text-align: center;
+
+    &.ok {
+      border-color: var(--green-line);
+      background: var(--green-soft);
+    }
+    &.off {
+      opacity: 0.7;
+    }
+  }
+  .wi-metric-label {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-bottom: 3px;
+  }
+  .wi-metric-val {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  /* ── План (только когда сетап fired) ── */
+  .wi-plan {
+    border-top: 1px solid var(--hairline);
+    padding-top: 12px;
+    margin-bottom: 14px;
+  }
+  .wi-plan-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+  }
+  .wi-plan-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+
+    > div {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+
+      span {
+        display: block;
+        font-family: inherit;
+        font-size: 10px;
+        font-weight: 400;
+        color: var(--text-muted);
+        margin-bottom: 2px;
+      }
+    }
+  }
+
+  .wi-again {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px 0;
+
+    &:hover {
+      color: var(--text-primary);
+    }
+  }
+}

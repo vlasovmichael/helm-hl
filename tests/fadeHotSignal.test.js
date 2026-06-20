@@ -4,6 +4,7 @@ import {
   kaufmanER,
   evaluateFadeHot,
   fadeHotZone,
+  classifyWhatIf,
 } from '../src/modules/fadeHotSignal.js';
 
 // Хелпер: массив closes → массив свечей {close}.
@@ -113,4 +114,37 @@ test('fadeHotZone: SHORT стоп выше цены, LONG ниже', () => {
 
   const l = fadeHotZone('LONG', 100, 3);
   assert.equal(l.stop, 97);
+});
+
+// ── classifyWhatIf (кнопка-тормоз «а что если») ──────────────────────────────
+
+test('classifyWhatIf: нет сетапа → сиди на руках (neutral)', () => {
+  const r = classifyWhatIf({ fired: false, fadeSide: null, hot: true, userSide: 'LONG' });
+  assert.equal(r.verdict, 'no-signal');
+  assert.equal(r.tone, 'neutral');
+});
+
+test('classifyWhatIf: сетап есть, но рынок холодный → по шапке (cold/smack)', () => {
+  const r = classifyWhatIf({ fired: true, fadeSide: 'SHORT', hot: false, userSide: 'SHORT' });
+  assert.equal(r.verdict, 'cold');
+  assert.equal(r.tone, 'smack');
+});
+
+test('classifyWhatIf: направление совпало с fade + горячо → погладить (aligned/pat)', () => {
+  const r = classifyWhatIf({ fired: true, fadeSide: 'SHORT', hot: true, userSide: 'SHORT' });
+  assert.equal(r.verdict, 'aligned');
+  assert.equal(r.tone, 'pat');
+});
+
+test('classifyWhatIf: направление против fade + горячо → по шапке (against/smack)', () => {
+  const r = classifyWhatIf({ fired: true, fadeSide: 'SHORT', hot: true, userSide: 'LONG' });
+  assert.equal(r.verdict, 'against');
+  assert.equal(r.tone, 'smack');
+});
+
+test('classifyWhatIf: сетап без указанной стороны → информативный edge (neutral)', () => {
+  const r = classifyWhatIf({ fired: true, fadeSide: 'LONG', hot: true, userSide: null });
+  assert.equal(r.verdict, 'edge');
+  assert.equal(r.tone, 'neutral');
+  assert.match(r.headline, /LONG/);
 });
