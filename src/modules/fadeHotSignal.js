@@ -123,37 +123,37 @@ export function classifyWhatIf({ fired, fadeSide, hot, userSide = null }) {
   if (!fired || !fadeSide) {
     return {
       verdict: 'no-signal', tone: 'neutral',
-      headline: 'Сигнала нет — сиди на руках',
-      detail: 'Ход слишком мал или движение нечистое (низкий ER). Это НЕ выдохшийся хвост — fade-эджа здесь нет. Лучшее действие — пропустить.',
+      headline: 'No signal — sit on your hands',
+      detail: 'The move is too small or too choppy (low ER). This is not an exhausted tail, so there is no fade edge here. Best action: skip it.',
     };
   }
   // Сетап есть, но рынок холодный (BTC не трендит) → боевой fadehot пропустил бы.
   if (!hot) {
     return {
       verdict: 'cold', tone: 'smack',
-      headline: 'Хвост есть, но рынок ХОЛОДНЫЙ',
-      detail: `Fade выдохшегося хвоста (${fadeSide}) сработал бы, но BTC сейчас не трендит — в таком режиме fade теряет (regime gate закрыт). Боевой fadehot пропустил бы. Не лезь.`,
+      headline: 'Tail is there, but the market is COLD',
+      detail: `An exhausted-tail fade (${fadeSide}) would qualify, but BTC isn't trending right now — fade loses in this regime (the live regime gate is shut). The live fadehot slot would skip this. Stay out.`,
     };
   }
   // Сетап + горячий рынок → эдж есть. Сверяем с задуманным направлением.
   if (!userSide) {
     return {
       verdict: 'edge', tone: 'neutral',
-      headline: `Эдж: fade ${fadeSide}`,
-      detail: `Выдохшийся хвост + горячий рынок — боевой fadehot вошёл бы в ${fadeSide} (против хода). Если думал в ту же сторону — это совпадение с эджем.`,
+      headline: `Edge: fade ${fadeSide}`,
+      detail: `Exhausted tail + hot market — the live fadehot slot would enter ${fadeSide} (against the move). If you were thinking the same side, you're aligned with the edge.`,
     };
   }
   if (userSide === fadeSide) {
     return {
       verdict: 'aligned', tone: 'pat',
-      headline: `✅ Эдж за тебя — fade ${fadeSide}`,
-      detail: `Твоё направление совпало с fade выдохшегося хвоста, и рынок горячий. Это ровно то, что берёт боевой fadehot. Помни про широкий стоп и выход по времени.`,
+      headline: `Edge is with you — fade ${fadeSide}`,
+      detail: `Your side matches the exhausted-tail fade and the market is hot. This is exactly what the live fadehot slot takes. Remember the wide stop and the time-based exit.`,
     };
   }
   return {
     verdict: 'against', tone: 'smack',
-    headline: `❌ Против эджа — ты в догон`,
-    detail: `Эдж говорит fade ${fadeSide} (против выдохшегося хода), а ты собрался ${userSide} — это вход в догон/нож. Ровно тот FOMO-вход, что сливает. Остановись.`,
+    headline: `Against the edge — you're chasing`,
+    detail: `The edge says fade ${fadeSide} (against the exhausted move), but you want to go ${userSide} — that's chasing into a knife. Exactly the FOMO entry that bleeds. Stop.`,
   };
 }
 

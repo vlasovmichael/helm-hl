@@ -1,18 +1,44 @@
 // ─────────────────────────────────────────────────
-//  «А что если…» — кнопка-тормоз в Hot Movers.
-//  Руки чешутся → вводишь монету (+опц. сторону) → бэкенд (/api/whatif)
-//  применяет боевое правило fade-high-ER + гейт режима к этой монете и говорит:
-//  погладить (эдж за тебя), по шапке (против эджа / рынок холодный) или
-//  «сиди на руках» (сигнала нет). НЕ генератор сигналов — дисциплинарный чек.
+//  "What if…" — discipline brake button in Hot Movers.
+//  Itchy hands, no signals → type a coin (+optional side) → backend (/api/whatif)
+//  applies the LIVE fade-high-ER rule + regime gate to that coin and answers:
+//  edge is with you / against the edge / sit on your hands. NOT a signal generator —
+//  a discipline check against the existing edge.
 //
-//  Переиспользует модальный паттерн help/trade-modal (#whatif-modal в index.html):
-//  тот же бэкдроп/закрытие. initWhatIf() вешает делегированные listener'ы.
+//  Reuses the help/trade-modal markup pattern (#whatif-modal in index.html) but its
+//  panel is theme-aware (see _whatif.scss override). initWhatIf() wires delegated
+//  listeners. Copy is English; verdict icons are inline SVG (no emoji).
 // ─────────────────────────────────────────────────
 
 import { escapeHtml } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 
 let busy = false;
+
+// ── Inline line-SVG icons (stroke=currentColor → colored by verdict class) ──
+const SVG = {
+  check:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>',
+  ban:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg>',
+  snow:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/><line x1="18.4" y1="5.6" x2="5.6" y2="18.4"/></svg>',
+  wait:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="10" y1="9" x2="10" y2="15"/><line x1="14" y1="9" x2="14" y2="15"/></svg>',
+  target:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.7" fill="currentColor" stroke="none"/></svg>',
+};
+
+// verdict → icon. tone (pat/smack/neutral) drives the card tint via class.
+const VERDICT_ICON = {
+  aligned: SVG.check,
+  against: SVG.ban,
+  cold: SVG.snow,
+  "no-signal": SVG.wait,
+  edge: SVG.target,
+};
+
+const TONE_CLS = { pat: "wi-pat", smack: "wi-smack", neutral: "wi-neutral" };
 
 function openModal(html) {
   const modal = document.getElementById("whatif-modal");
@@ -30,27 +56,44 @@ function closeModal() {
   document.body.style.overflow = "";
 }
 
-// Стартовая форма: поле монеты + выбор стороны (необязательный) + кнопка.
+// ── Start form: coin field + optional side toggle + submit ──
 function formHtml(coin = "", side = "") {
   const sideBtn = (val, label) =>
     `<button type="button" class="wi-side-btn ${side === val ? "is-on" : ""}" data-side="${val}">${label}</button>`;
   return `
-    <div class="wi-title">🤔 А что если…</div>
-    <div class="wi-lead">Сверка задуманного входа с эджем fade-high-ER (то же правило, что у боевого слота). По умолчанию ответ — «сиди на руках». Это фича, не баг.</div>
+    <div class="wi-title">What if…</div>
+    <div class="wi-lead">Sanity-check an entry against the fade-high-ER edge (the same rule the live slot trades). The default answer is "sit on your hands" — that's a feature, not a bug.</div>
     <form id="wi-form" class="wi-form" autocomplete="off">
-      <label class="wi-label">Монета (тикер Hyperliquid)</label>
-      <input id="wi-coin" class="wi-input" type="text" placeholder="напр. BTC, SOL, kBONK" value="${escapeHtml(coin)}" />
-      <label class="wi-label">Сторона (необязательно)</label>
+      <label class="wi-label">Coin (Hyperliquid ticker)</label>
+      <input id="wi-coin" class="wi-input" type="text" placeholder="e.g. BTC, SOL, kBONK" value="${escapeHtml(coin)}" />
+      <label class="wi-label">Side (optional)</label>
       <div class="wi-sides">
-        ${sideBtn("LONG", "▲ LONG")}
-        ${sideBtn("SHORT", "▼ SHORT")}
-        ${sideBtn("", "— не указывать")}
+        ${sideBtn("LONG", "Long")}
+        ${sideBtn("SHORT", "Short")}
+        ${sideBtn("", "Either")}
       </div>
       <input type="hidden" id="wi-side" value="${escapeHtml(side)}" />
-      <button type="submit" class="wi-submit">Проверить</button>
+      <button type="submit" class="wi-submit">Check</button>
       <div id="wi-error" class="wi-error" hidden></div>
     </form>`;
 }
+
+// ── Loader: spinner + staged "scanning" steps ──
+function loaderHtml(coin) {
+  return `
+    <div class="wi-title">Scanning #${escapeHtml(coin.toUpperCase())}…</div>
+    <div class="wi-loader">
+      <span class="wi-spinner" aria-hidden="true"></span>
+      <span id="wi-loader-step" class="wi-loader-step">Fetching 15m candles…</span>
+    </div>`;
+}
+
+const LOADER_STEPS = [
+  "Fetching 15m candles…",
+  "Computing 30m move & 4h Kaufman ER…",
+  "Checking BTC market regime…",
+  "Weighing the edge…",
+];
 
 function fmtPrice(p) {
   if (p == null || !Number.isFinite(p)) return "—";
@@ -63,19 +106,12 @@ function fmtPct(v) {
   return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
 }
 
-// tone → класс/эмодзи карточки вердикта.
-const TONE = {
-  pat: { cls: "wi-pat", icon: "🫶" },
-  smack: { cls: "wi-smack", icon: "🫳" },
-  neutral: { cls: "wi-neutral", icon: "✋" },
-};
-
 function resultHtml(r) {
-  const t = TONE[r.tone] || TONE.neutral;
+  const toneCls = TONE_CLS[r.tone] || TONE_CLS.neutral;
+  const icon = VERDICT_ICON[r.verdict] || SVG.wait;
   const th = r.thresholds || {};
 
-  // Сырые цифры — показываем ВСЕГДА (выбор оператора 1.2), даже когда сигнала нет:
-  // видно ПОЧЕМУ вердикт такой.
+  // Raw numbers — always shown, even when there is no signal: you see WHY.
   const moveOk = r.move != null && Math.abs(r.move) >= (th.moveThr ?? 3);
   const erOk = r.er != null && r.er >= (th.erMin ?? 0.47);
   const btcOk = !!r.regimeHot;
@@ -87,9 +123,9 @@ function resultHtml(r) {
 
   const metrics = `
     <div class="wi-metrics">
-      ${chip("Ход 30м", fmtPct(r.move), moveOk, `Нужен |ход| ≥ ${th.moveThr ?? 3}% за 30м`)}
-      ${chip("ER 4ч монеты", r.er != null ? r.er.toFixed(2) : "—", erOk, `Kaufman ER ≥ ${th.erMin ?? 0.47} = чистый направленный ход (выдохшийся хвост)`)}
-      ${chip("BTC ER 4ч", r.btcER != null ? r.btcER.toFixed(2) : "—", btcOk, `Рынок «горячий» при BTC ER ≥ ${th.btcErMin ?? 0.55}; иначе fade теряет`)}
+      ${chip("30m move", fmtPct(r.move), moveOk, `Needs |move| ≥ ${th.moveThr ?? 3}% over 30m`)}
+      ${chip("Coin 4h ER", r.er != null ? r.er.toFixed(2) : "—", erOk, `Kaufman ER ≥ ${th.erMin ?? 0.47} = clean directional move (exhausted tail)`)}
+      ${chip("BTC 4h ER", r.btcER != null ? r.btcER.toFixed(2) : "—", btcOk, `Market is "hot" when BTC ER ≥ ${th.btcErMin ?? 0.55}; otherwise fade loses`)}
     </div>`;
 
   let plan = "";
@@ -99,26 +135,26 @@ function resultHtml(r) {
         ? `$${fmtPrice(r.plan.zoneLo)}–$${fmtPrice(r.plan.zoneHi)}`
         : fmtPrice(r.price);
     const stop = r.plan.stop != null ? `$${fmtPrice(r.plan.stop)}` : "—";
-    const exitH = r.plan.timeStopMin != null ? `~${Math.round(r.plan.timeStopMin / 60)}ч` : "~2ч";
+    const exitH = r.plan.timeStopMin != null ? `~${Math.round(r.plan.timeStopMin / 60)}h` : "~2h";
     plan = `
       <div class="wi-plan">
-        <div class="wi-plan-title">Если уж берёшь fade ${escapeHtml(r.fadeSide || "")}:</div>
+        <div class="wi-plan-title">If you do take the fade ${escapeHtml(r.fadeSide || "")}:</div>
         <div class="wi-plan-grid">
-          <div><span>Зона</span>${zone}</div>
-          <div><span>Стоп (${r.plan.stopPct}%)</span>${stop}</div>
-          <div><span>Выход по времени</span>${exitH}</div>
+          <div><span>Zone</span>${zone}</div>
+          <div><span>Stop (${r.plan.stopPct}%)</span>${stop}</div>
+          <div><span>Time exit</span>${exitH}</div>
         </div>
       </div>`;
   }
 
   const sideLine = r.userSide
-    ? `<span class="wi-userside">твоё: ${r.userSide === "LONG" ? "▲ LONG" : "▼ SHORT"}</span>`
+    ? `<span class="wi-userside">your side: ${r.userSide}</span>`
     : "";
 
   return `
     <div class="wi-title">#${escapeHtml(r.coin)} <span class="wi-px">$${fmtPrice(r.price)}</span> ${sideLine}</div>
-    <div class="wi-verdict ${t.cls}">
-      <div class="wi-verdict-icon">${t.icon}</div>
+    <div class="wi-verdict ${toneCls}">
+      <div class="wi-verdict-icon">${icon}</div>
       <div class="wi-verdict-text">
         <div class="wi-verdict-head">${escapeHtml(r.headline)}</div>
         <div class="wi-verdict-detail">${escapeHtml(r.detail)}</div>
@@ -126,33 +162,42 @@ function resultHtml(r) {
     </div>
     ${metrics}
     ${plan}
-    <button type="button" class="wi-again" id="wi-again">← Другая монета</button>`;
+    <button type="button" class="wi-again" id="wi-again">← Check another coin</button>`;
 }
 
 async function runCheck(coin, side) {
   if (busy) return;
   busy = true;
+
+  openModal(loaderHtml(coin));
+  // Staged "scanning" feel: cycle step text while the real fetch runs.
+  let stepIdx = 0;
+  const stepTimer = setInterval(() => {
+    stepIdx = Math.min(stepIdx + 1, LOADER_STEPS.length - 1);
+    const el = document.getElementById("wi-loader-step");
+    if (el) el.textContent = LOADER_STEPS[stepIdx];
+  }, 480);
+  // Minimum dwell so the verdict doesn't flash instantly (deliberate, considered).
+  const minDwell = new Promise((res) => setTimeout(res, 1500));
+
   try {
     const q = new URLSearchParams({ coin });
     if (side) q.set("side", side);
-    const r = await fetchJson(`/api/whatif?${q.toString()}`);
+    const [r] = await Promise.all([fetchJson(`/api/whatif?${q.toString()}`), minDwell]);
+    clearInterval(stepTimer);
+
     if (r?.error) {
+      openModal(formHtml(coin, side));
       const errEl = document.getElementById("wi-error");
-      if (errEl) {
-        errEl.textContent = r.error;
-        errEl.hidden = false;
-      } else {
-        openModal(formHtml(coin, side));
-        const e2 = document.getElementById("wi-error");
-        if (e2) { e2.textContent = r.error; e2.hidden = false; }
-      }
+      if (errEl) { errEl.textContent = r.error; errEl.hidden = false; }
       return;
     }
     openModal(resultHtml(r));
   } catch (err) {
+    clearInterval(stepTimer);
     openModal(formHtml(coin, side));
     const errEl = document.getElementById("wi-error");
-    if (errEl) { errEl.textContent = "Не удалось проверить — попробуй ещё раз"; errEl.hidden = false; }
+    if (errEl) { errEl.textContent = "Check failed — try again"; errEl.hidden = false; }
   } finally {
     busy = false;
   }
@@ -160,24 +205,24 @@ async function runCheck(coin, side) {
 
 export function initWhatIf() {
   document.addEventListener("click", (e) => {
-    // Открыть форму.
+    // Open the form.
     if (e.target.closest("#whatif-btn")) {
       openModal(formHtml());
       setTimeout(() => document.getElementById("wi-coin")?.focus(), 0);
       return;
     }
-    // Закрытие (бэкдроп / ×).
+    // Close (backdrop / ×).
     if (e.target.closest("#whatif-modal [data-close]")) {
       closeModal();
       return;
     }
-    // Назад к форме.
+    // Back to the form.
     if (e.target.closest("#wi-again")) {
       openModal(formHtml());
       setTimeout(() => document.getElementById("wi-coin")?.focus(), 0);
       return;
     }
-    // Выбор стороны (тоггл-кнопки).
+    // Side toggle.
     const sideBtn = e.target.closest(".wi-side-btn");
     if (sideBtn) {
       const val = sideBtn.dataset.side ?? "";
@@ -196,7 +241,7 @@ export function initWhatIf() {
     const side = (document.getElementById("wi-side")?.value || "").trim();
     if (!coin) {
       const errEl = document.getElementById("wi-error");
-      if (errEl) { errEl.textContent = "Введи тикер монеты"; errEl.hidden = false; }
+      if (errEl) { errEl.textContent = "Enter a coin ticker"; errEl.hidden = false; }
       return;
     }
     runCheck(coin, side);

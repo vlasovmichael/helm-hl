@@ -1,4 +1,4 @@
-/* ──────────────────────── «А что если…» — кнопка-тормоз + модалка */
+/* ──────────────────────── "What if…" — discipline brake button + modal */
 
 .whatif-btn {
   font-family: var(--font-mono);
@@ -20,6 +20,25 @@
 }
 
 #whatif-modal {
+  /* Theme-aware panel override: the shared .trade-modal__panel is hardcoded dark,
+     which made theme-token text invisible in light mode. Here we follow the theme. */
+  .trade-modal__panel {
+    background: var(--card-bg-elev);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    box-shadow: var(--shadow);
+  }
+  .trade-modal__close {
+    background: var(--canvas-inset);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+
+    &:hover {
+      background: var(--card-bg-hover);
+      color: var(--text-primary);
+    }
+  }
+
   .wi-title {
     font-size: 16px;
     font-weight: 700;
@@ -47,7 +66,7 @@
     margin-bottom: 16px;
   }
 
-  /* ── Форма ── */
+  /* ── Form ── */
   .wi-form {
     display: flex;
     flex-direction: column;
@@ -70,6 +89,10 @@
     padding: 8px 10px;
     outline: none;
 
+    &::placeholder {
+      color: var(--text-faint);
+      text-transform: none;
+    }
     &:focus {
       border-color: var(--accent-line);
     }
@@ -101,16 +124,15 @@
     font-family: var(--font-mono);
     font-size: 13px;
     font-weight: 700;
-    color: var(--text-primary);
-    background: var(--accent-soft);
+    color: #fff;
+    background: var(--accent);
     border: 1px solid var(--accent-line);
     border-radius: 6px;
     padding: 9px;
     cursor: pointer;
 
     &:hover {
-      background: var(--accent);
-      color: #fff;
+      background: var(--accent-strong);
     }
   }
   .wi-error {
@@ -119,7 +141,29 @@
     color: var(--red);
   }
 
-  /* ── Карточка вердикта ── */
+  /* ── Loader (scanning) ── */
+  .wi-loader {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 2px 8px;
+  }
+  .wi-spinner {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 auto;
+    border: 2.5px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: wi-spin 0.7s linear infinite;
+  }
+  .wi-loader-step {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--text-secondary);
+  }
+
+  /* ── Verdict card ── */
   .wi-verdict {
     display: flex;
     gap: 12px;
@@ -132,19 +176,25 @@
     &.wi-pat {
       border-color: var(--green-line);
       background: var(--green-soft);
+      .wi-verdict-icon { color: var(--green); }
     }
     &.wi-smack {
       border-color: var(--red-line);
       background: var(--red-soft);
+      .wi-verdict-icon { color: var(--red); }
     }
     &.wi-neutral {
       border-color: var(--border);
       background: var(--canvas-subtle);
+      .wi-verdict-icon { color: var(--text-muted); }
     }
   }
   .wi-verdict-icon {
-    font-size: 26px;
-    line-height: 1;
+    flex: 0 0 auto;
+    width: 30px;
+    height: 30px;
+
+    svg { width: 100%; height: 100%; display: block; }
   }
   .wi-verdict-head {
     font-size: 14.5px;
@@ -158,7 +208,7 @@
     color: var(--text-secondary);
   }
 
-  /* ── Сырые метрики (показываем всегда) ── */
+  /* ── Raw metrics (always shown) ── */
   .wi-metrics {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -170,13 +220,11 @@
     border-radius: 6px;
     padding: 8px;
     text-align: center;
+    background: var(--canvas-inset);
 
     &.ok {
       border-color: var(--green-line);
       background: var(--green-soft);
-    }
-    &.off {
-      opacity: 0.7;
     }
   }
   .wi-metric-label {
@@ -191,7 +239,7 @@
     color: var(--text-primary);
   }
 
-  /* ── План (только когда сетап fired) ── */
+  /* ── Plan (only when the setup fired) ── */
   .wi-plan {
     border-top: 1px solid var(--hairline);
     padding-top: 12px;
@@ -238,4 +286,8 @@
       color: var(--text-primary);
     }
   }
+}
+
+@keyframes wi-spin {
+  to { transform: rotate(360deg); }
 }
