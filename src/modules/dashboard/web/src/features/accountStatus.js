@@ -179,8 +179,9 @@ const FLOOR_BADGE = {
 
 const fmtR = (r) => `${r >= 0 ? "+" : "−"}${Math.abs(r).toFixed(2)}R`;
 const fmtSignedUsd2 = (v) => `${v >= 0 ? "+" : "−"}$${Math.abs(v).toFixed(2)}`;
-const fmtMove = (m) =>
-  `${m >= 0 ? "+" : "−"}${Math.abs(m).toFixed(2)}%${m < 0 ? " против" : ""}`;
+// Знак + цвет (red = против позиции) уже несут направление хода, поэтому слова
+// «против» не пишем — оно по-русски и распирало Entry·Now на третью строку.
+const fmtMove = (m) => `${m >= 0 ? "+" : "−"}${Math.abs(m).toFixed(2)}%`;
 // Текст под-строки uPnL: R-кратность + пик (MFE), если был плюс.
 const upnlSubTxt = (s) =>
   [
