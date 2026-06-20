@@ -6,6 +6,10 @@
   border-radius: var(--radius);
   overflow: hidden;
 }
+/* Price Chart на дашборде — вдвое выше equity-графика: свечи читаем глазами. */
+#price-chart-container {
+  height: 560px;
+}
 #price-chart,
 #equity-chart {
   width: 100%;
