@@ -1,7 +1,5 @@
 import 'dotenv/config';
 
-const VALID_MODES = ['PAPER', 'PRODUCTION'];
-
 function requireEnv(key) {
   const value = process.env[key];
   if (!value) {
@@ -11,24 +9,27 @@ function requireEnv(key) {
 }
 
 function loadConfig() {
-  const mode = (process.env.TRADING_MODE || 'PAPER').toUpperCase();
-
-  if (!VALID_MODES.includes(mode)) {
-    throw new Error(`TRADING_MODE must be one of: ${VALID_MODES.join(', ')}. Got: "${mode}"`);
-  }
+  // Глобальный paper-режим (TRADING_MODE=PAPER|PRODUCTION) удалён 2026-06-20.
+  // Прод всегда живой. «Paper» осталось только в двух местах: (а) тест-харнесс
+  // под NODE_ENV=test (симуляция без реальных ордеров), (б) per-position
+  // shadow-слоты A/B (mode='PAPER', напр. hunter_oi/fadehot). Поэтому isProduction
+  // теперь = «не тестовый прогон». Реальные ордера дополнительно гейтятся
+  // *_PROD_ENABLED-флагами, так что локальный запуск без них ордеров не шлёт.
+  const isProduction = process.env.NODE_ENV !== 'test';
+  const mode = isProduction ? 'PRODUCTION' : 'PAPER';
 
   const privateKey = process.env.HL_PRIVATE_KEY || null;
 
   const agentPrivateKey = process.env.HL_AGENT_PRIVATE_KEY || null;
 
-  if (mode === 'PRODUCTION' && !agentPrivateKey && !privateKey) {
+  if (isProduction && !agentPrivateKey && !privateKey) {
     throw new Error(
-      'TRADING_MODE is PRODUCTION but neither HL_AGENT_PRIVATE_KEY nor HL_PRIVATE_KEY is set. ' +
+      'PRODUCTION run but neither HL_AGENT_PRIVATE_KEY nor HL_PRIVATE_KEY is set. ' +
       'Set HL_AGENT_PRIVATE_KEY (recommended) or HL_PRIVATE_KEY. Refusing to start.',
     );
   }
 
-  if (mode === 'PRODUCTION' && !agentPrivateKey) {
+  if (isProduction && !agentPrivateKey) {
     // eslint-disable-next-line no-console
     console.warn(
       '⚠️  WARNING: Using HL_PRIVATE_KEY (main wallet) instead of HL_AGENT_PRIVATE_KEY (agent). ' +
@@ -582,7 +583,7 @@ function loadConfig() {
 
   return {
     mode,
-    isProduction: mode === 'PRODUCTION',
+    isProduction,
 
     wallet: {
       address:         walletAddress,
