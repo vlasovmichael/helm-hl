@@ -11,6 +11,7 @@ import { logger } from "../../../core/logger.js";
 import { hlInfo, HL_PRIORITY } from "../../../core/hlClient.js";
 import { getPriceNMinAgo, getBufferLength, getLatestPrice } from "../../../core/priceHistory.js";
 import { getActivePosition, getActiveAdoptPositions } from "../../../core/database.js";
+import { findAsset, getUniverse } from "../../../core/universe.js";
 import { TICK_INTERVAL_MS, state } from "../../../app/state.js";
 import {
   HUNTER_SPIKE_PCT,
@@ -527,6 +528,14 @@ export async function handleWhatIf(req, res) {
     let userSide = req.query.side ? String(req.query.side).trim().toUpperCase() : null;
     if (userSide !== "LONG" && userSide !== "SHORT") userSide = null;
 
+    // Validate against the loaded universe BEFORE any HL fetch — fail fast on a
+    // typo / non-existent coin instead of spending a candleSnapshot on it. Guard
+    // on getUniverse().length so a not-yet-loaded universe (cold start) falls
+    // through to the fetch path rather than rejecting every coin.
+    if (getUniverse().length > 0 && !findAsset(coin)) {
+      return res.status(404).json({ error: `No Hyperliquid market for #${coin}`, coin });
+    }
+
     const now = Date.now();
     let candles = null;
     try {
@@ -534,7 +543,7 @@ export async function handleWhatIf(req, res) {
     } catch { candles = null; }
     if (!candles || candles.length < FADEHOT_ER_WIN + 2) {
       return res.status(404).json({
-        error: `нет 15m-свечей для #${coin} — её, скорее всего, нет на Hyperliquid`,
+        error: `No 15m candles for #${coin} — it may not be listed on Hyperliquid`,
         coin,
       });
     }
