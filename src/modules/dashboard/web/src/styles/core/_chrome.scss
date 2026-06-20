@@ -455,3 +455,17 @@ header {
     margin: -1px;
   }
 }
+
+// Coach-оверлей графика: тумблер «Разбор» + Long/Short.
+.coach-overlay-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.coach-overlay-sides {
+  display: inline-flex;
+  gap: 2px;
+
+  &[hidden] { display: none; }
+  .range-btn { padding: 4px 8px; }
+}

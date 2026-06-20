@@ -16,6 +16,15 @@ let currentCoin = "BTC";
 let pollTimer = null;
 let chartViewKey = null; // coin+interval — fitContent только при смене
 
+// ── Coach-оверлей: уровни разбора прямо на холсте (обучающе) ──
+// Линии создаются через priceSeries.createPriceLine и хранятся, чтобы снимать
+// при смене монеты/стороны. Данные — из /api/whatif (тот же расчёт, что в
+// модалке коуча). HL-свечи и в графике, и в коуче → цены совпадают.
+let overlayOn = false;
+let overlaySide = ""; // '', 'LONG', 'SHORT'
+let overlayLines = [];
+let overlayReqId = 0; // защита от гонки (быстрое переключение монет)
+
 // Цены идут с биржи реже, чем interval; 15s-поллинг дёргает /api/candles,
 // который кэширует ответ (TTL по interval) → HL не штормит.
 const POLL_MS = 15_000;
@@ -117,6 +126,83 @@ function startPoll() {
   pollTimer = setInterval(loadCandles, POLL_MS);
 }
 
+// ── Coach-оверлей ───────────────────────────────────────────────────────────
+function clearOverlay() {
+  if (!priceSeries) return;
+  for (const ln of overlayLines) {
+    try { priceSeries.removePriceLine(ln); } catch { /* уже снята */ }
+  }
+  overlayLines = [];
+}
+
+function fmtSignPct(v) {
+  return v == null || !Number.isFinite(v) ? "" : ` ${v >= 0 ? "+" : ""}${v.toFixed(1)}%`;
+}
+
+function addLine(price, color, style, title) {
+  if (price == null || !Number.isFinite(price)) return;
+  // LineStyle: 0 solid, 2 dashed, 3 large-dashed (lightweight-charts enum).
+  const ln = priceSeries.createPriceLine({
+    price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title,
+  });
+  overlayLines.push(ln);
+}
+
+async function drawCoachOverlay() {
+  if (!overlayOn || !priceSeries || !currentCoin) return;
+  const myReq = ++overlayReqId;
+  try {
+    const q = new URLSearchParams({ coin: currentCoin });
+    if (overlaySide) q.set("side", overlaySide);
+    const r = await fetchJson(`/api/whatif?${q.toString()}`);
+    // Устарело (успели переключить монету/выключить) — не рисуем.
+    if (myReq !== overlayReqId || !overlayOn) return;
+    const c = r?.coach;
+    if (!c || !c.ok) return;
+    clearOverlay();
+    // Структура (всегда): поддержка/сопротивление — синие пунктиры.
+    const blue = cssVar("--brand") || "#3b82f6";
+    addLine(c.resistance, blue, 2, `Сопрот${fmtSignPct(c.distToResistance != null ? Math.abs(c.distToResistance) : null)}`);
+    addLine(c.support, blue, 2, `Поддержка${fmtSignPct(c.distToSupport != null ? -Math.abs(c.distToSupport) : null)}`);
+    // План под сторону: стоп (красный) / цель (зелёный) / инвалидация.
+    if (c.plan) {
+      const green = cssVar("--pos") || "#22C55E";
+      const red = cssVar("--neg") || "#EF4444";
+      const rr = c.plan.rr != null ? ` ${c.plan.rr.toFixed(2)}R` : "";
+      addLine(c.plan.stop, red, 0, `Стоп${fmtSignPct(c.plan.riskPct != null ? -Math.abs(c.plan.riskPct) : null)}`);
+      addLine(c.plan.target, green, 0, `Цель${fmtSignPct(c.plan.rewardPct != null ? Math.abs(c.plan.rewardPct) : null)}${rr}`);
+    }
+  } catch (err) {
+    console.debug("[PriceChart] coach overlay error:", err.message);
+  }
+}
+
+function bindCoachOverlay() {
+  const toggle = document.getElementById("coach-overlay-toggle");
+  const sides = document.getElementById("coach-overlay-sides");
+  toggle?.addEventListener("click", () => {
+    overlayOn = !overlayOn;
+    toggle.classList.toggle("active", overlayOn);
+    if (sides) sides.hidden = !overlayOn;
+    if (overlayOn) drawCoachOverlay();
+    else { clearOverlay(); overlaySide = ""; syncSideBtns(); }
+  });
+  sides?.querySelectorAll("[data-cside]").forEach((b) =>
+    b.addEventListener("click", () => {
+      // Повторный клик по активной стороне — снять (только структура).
+      overlaySide = overlaySide === b.dataset.cside ? "" : b.dataset.cside;
+      syncSideBtns();
+      drawCoachOverlay();
+    }),
+  );
+}
+
+function syncSideBtns() {
+  document.querySelectorAll("#coach-overlay-sides [data-cside]").forEach((b) =>
+    b.classList.toggle("active", b.dataset.cside === overlaySide),
+  );
+}
+
 // Переключить монету графика (зовёт Hot Movers по клику + setup-scanner и т.д.).
 export function setChartCoin(coin) {
   const clean = String(coin || "")
@@ -134,6 +220,12 @@ export function setChartCoin(coin) {
   syncBtcBtn();
   showLoader();
   loadCandles();
+  // Смена монеты → снять старые линии и (если оверлей включён) перерисовать под
+  // новую монету. Сторона сбрасывается — план у каждой монеты свой.
+  clearOverlay();
+  overlaySide = "";
+  syncSideBtns();
+  if (overlayOn) drawCoachOverlay();
 }
 
 export function applyPriceChartTheme() {
@@ -259,6 +351,7 @@ export async function initPriceChart() {
     tv.href = `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSymbol(currentCoin))}`;
 
   bindIntervalButtons();
+  bindCoachOverlay();
   document
     .getElementById("price-chart-btc")
     ?.addEventListener("click", () => setChartCoin("BTC"));

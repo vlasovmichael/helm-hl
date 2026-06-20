@@ -197,6 +197,20 @@
             >
               ⌂ BTC
             </button>
+            <div class="coach-overlay-ctl" id="coach-overlay-ctl">
+              <button
+                id="coach-overlay-toggle"
+                class="range-btn"
+                type="button"
+                title="Нарисовать разбор коуча на графике: поддержка/сопротивление, и стоп/цель/зона входа под выбранную сторону"
+              >
+                📐 Разбор
+              </button>
+              <div class="coach-overlay-sides" id="coach-overlay-sides" hidden>
+                <button class="range-btn" type="button" data-cside="LONG">Long</button>
+                <button class="range-btn" type="button" data-cside="SHORT">Short</button>
+              </div>
+            </div>
             <div class="time-ranges" id="price-intervals">
               <button class="range-btn" data-iv="1m">1m</button>
               <button class="range-btn active" data-iv="5m">5m</button>
