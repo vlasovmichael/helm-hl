@@ -83,19 +83,27 @@ function setUsd(el, v) {
 //  · .pnl-base — нижний слой, цветной текст (несёт id/знаковый класс для патча);
 //  · .pnl-fill — верхний слой, белый текст в сплошной заливке (обрезается CSS по
 //    --rb-now). Виден только при rb-depth (есть стоп) — иначе CSS его прячет.
-function pnlLayers({ label, valueId = "", valueCls = "", valueText }) {
+function pnlLayers({ label, valueId = "", valueCls = "", valueText, subText }) {
   const idAttr = valueId ? ` id="${valueId}"` : "";
+  // subText задан → под-строка (R + пик) лежит ВНУТРИ всех трёх слоёв, поэтому
+  // её накрывает тот же clip-path заливки, что и значение: символы под ярким
+  // краем становятся белыми (R «переливается» вместе с числом). undefined →
+  // под-строки нет (карточка Net (Mkt) её не несёт).
+  const subRow = (extra = "") =>
+    subText !== undefined ? `<div class="pnl-sub"${extra}>${subText}</div>` : "";
   return (
     // Скрытый клон В ПОТОКЕ несёт высоту ячейки; base/fill оба absolute поверх,
     // чтобы делить один layout-контекст и не разъезжаться на сабпиксель (см.
-    // _datagrid.scss). Все три — идентичная структура label+value.
+    // _datagrid.scss). Все три — идентичная структура label+value(+sub).
     `<div class="pnl-spacer" aria-hidden="true">` +
     `<div class="item-label">${label}</div>` +
     `<div class="item-value">${valueText}</div>` +
+    subRow() +
     `</div>` +
     `<div class="pnl-base">` +
     `<div class="item-label">${label}</div>` +
     `<div${idAttr} class="item-value ${valueCls}">${valueText}</div>` +
+    subRow(" data-mr") +
     `</div>` +
     // Призрак отката: тусклая заливка до пика (MFE), обрезана по --rb-peak. Лежит
     // под ярким .pnl-fill (тот до --rb-now), поэтому виден только участок «текущий
@@ -104,6 +112,7 @@ function pnlLayers({ label, valueId = "", valueCls = "", valueText }) {
     `<div class="pnl-fill" aria-hidden="true">` +
     `<div class="item-label">${label}</div>` +
     `<div class="item-value">${valueText}</div>` +
+    subRow() +
     `</div>`
   );
 }
@@ -392,13 +401,21 @@ export function renderManualPositions(list) {
       setPnlUsd(cell, p.unrealizedPnl);
       const nowEl = card.querySelector("[data-mnow]");
       if (nowEl)
-        nowEl.textContent = `${fmtPrice(p.entryPrice)} · ${p.currentPrice != null ? fmtPrice(p.currentPrice) : "—"}`;
+        nowEl.textContent = p.currentPrice != null ? fmtPrice(p.currentPrice) : "—";
       // Производные метрики двигаются каждый тик (now/peak/трейл) → патчим их же.
       const s = manualStats(p);
       const moveEl = card.querySelector("[data-mmove]");
-      if (moveEl) moveEl.textContent = s.movePct != null ? fmtMove(s.movePct) : "—";
-      const rEl = card.querySelector("[data-mr]");
-      if (rEl) rEl.textContent = upnlSubTxt(s);
+      if (moveEl) {
+        moveEl.textContent = s.movePct != null ? fmtMove(s.movePct) : "—";
+        moveEl.classList.toggle("positive", s.movePct != null && s.movePct >= 0);
+        moveEl.classList.toggle("negative", s.movePct != null && s.movePct < 0);
+      }
+      // R-под-строка живёт во всех трёх слоях (spacer/base/fill) → синхроним все,
+      // чтобы бело-залитая копия не отставала от цветной (R «переливается»).
+      const subTxt = upnlSubTxt(s);
+      card.querySelectorAll(".pnl-sub").forEach((el) => {
+        el.textContent = subTxt;
+      });
       const flEl = card.querySelector("[data-mfloor]");
       if (flEl && s.floorPrice != null) flEl.textContent = fmtPrice(s.floorPrice);
       const flPnlEl = card.querySelector("[data-mfloorpnl]");
@@ -465,8 +482,12 @@ export function renderManualPositions(list) {
         s.riskUsd != null
           ? ` <span class="grid-inline negative">risk −$${s.riskUsd.toFixed(2)}</span>`
           : "";
-      // Entry·Now → + дистанция к входу со знаком моей стороны.
-      const moveSub = s.movePct != null ? fmtMove(s.movePct) : "—";
+      // Entry·Now → дистанция к входу (со знаком моей стороны) инлайном рядом с
+      // текущей ценой, той же строкой; цвет по знаку хода.
+      const moveInline =
+        s.movePct != null
+          ? ` <span class="grid-inline ${s.movePct >= 0 ? "positive" : "negative"}" data-mmove>${fmtMove(s.movePct)}</span>`
+          : "";
       // Floor (живой пол выхода) вместо Liq — нянька закроет тут задолго до ликв.
       // Ликвидацию уводим в title. Нет пола (не усыновлена) → fallback на Liq.
       const fb = FLOOR_BADGE[s.floorKind] || null;
@@ -486,8 +507,8 @@ export function renderManualPositions(list) {
         </div>
         <div class="data-grid">
           <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}${riskInline}</div></div>
-          <div class="grid-item"><div class="item-label">Entry · Now</div><div class="item-value" data-mnow>${fmtPrice(p.entryPrice)} · ${cur}</div><div class="grid-sub" data-mmove>${moveSub}</div></div>
-          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}` })}<div class="pnl-sub" data-mr>${upnlSubTxt(s)}</div></div>
+          <div class="grid-item"><div class="item-label">Entry · Now</div><div class="item-value">${fmtPrice(p.entryPrice)} · <span data-mnow>${cur}</span>${moveInline}</div></div>
+          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}`, subText: upnlSubTxt(s) })}</div>
           ${floorCell}
         </div>
       </div>`;
