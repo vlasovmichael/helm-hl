@@ -273,6 +273,67 @@
     }
   }
 
+  // Маленький курсив в плане (дистанция до уровня).
+  .wi-plan-grid > div em {
+    font-style: normal;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+
+  // Сценарии «за вход» / «против».
+  .wi-cases {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 14px;
+
+    @media (max-width: 460px) {
+      grid-template-columns: 1fr;
+    }
+  }
+  .wi-case {
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    padding: 8px 10px;
+
+    ul {
+      margin: 0;
+      padding-left: 16px;
+    }
+    li {
+      font-size: 12px;
+      line-height: 1.4;
+      color: var(--text-primary);
+      margin-bottom: 3px;
+    }
+  }
+  .wi-case-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .wi-case-bull {
+    border-color: color-mix(in srgb, var(--green, #30a46c) 35%, transparent);
+    .wi-case-title { color: var(--green, #30a46c); }
+  }
+  .wi-case-bear {
+    border-color: color-mix(in srgb, var(--red, #e5484d) 35%, transparent);
+    .wi-case-title { color: var(--red, #e5484d); }
+  }
+
+  // Честная вторичная строка про проверенный эдж.
+  .wi-edge-note {
+    font-size: 11.5px;
+    line-height: 1.45;
+    color: var(--text-muted);
+    border-top: 1px solid var(--hairline);
+    padding-top: 10px;
+    margin-bottom: 14px;
+  }
+
   .wi-again {
     font-family: var(--font-mono);
     font-size: 12px;

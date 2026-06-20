@@ -22,6 +22,7 @@ import {
 import { computeBreadthFlush } from "../../hotMoversSetup.js";
 import { getHourlyCandles, getFifteenMinCandles } from "../../candleCache.js";
 import { classifyTrend } from "../../candyGirlEma.js";
+import { analyzeChart } from "../../chartCoach.js";
 import {
   evaluateFadeHot,
   fadeHotZone,
@@ -568,6 +569,17 @@ export async function handleWhatIf(req, res) {
       plan = { zoneLo, zoneHi, stop, stopPct, timeStopMin: FADEHOT_TIME_STOP_MIN };
     }
 
+    // Coach: честный РАЗБОР графика (тренд/уровни/RSI/план), независимо от
+    // fade-эджа. 1h-свечи для старшего тренда (ema 20/50 → нужно ≥51). Падение
+    // тут не критично — coach просто будет null, остальной вердикт остаётся.
+    let coach = null;
+    try {
+      const candles1h = await getHourlyCandles(coin, 60, now, HL_PRIORITY.LOW);
+      coach = analyzeChart({ candles15m: candles, candles1h, price, userSide });
+    } catch (e) {
+      logger.debug(`[Dashboard] coach analyze failed #${coin}: ${e.message}`);
+    }
+
     res.json({
       coin, price, userSide,
       fired: v.fired,
@@ -581,6 +593,7 @@ export async function handleWhatIf(req, res) {
       },
       ...verdict,
       plan,
+      coach,   // разбор графика (см. chartCoach.js) — главное наполнение модалки
     });
   } catch (err) {
     logger.warn(`[Dashboard] /api/whatif error: ${err.message}`);

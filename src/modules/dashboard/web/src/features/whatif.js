@@ -61,19 +61,19 @@ function formHtml(coin = "", side = "") {
   const sideBtn = (val, label) =>
     `<button type="button" class="wi-side-btn ${side === val ? "is-on" : ""}" data-side="${val}">${label}</button>`;
   return `
-    <div class="wi-title">What if…</div>
-    <div class="wi-lead">Sanity-check an entry against the fade-high-ER edge (the same rule the live slot trades). The default answer is "sit on your hands" — that's a feature, not a bug.</div>
+    <div class="wi-title">Разбор графика</div>
+    <div class="wi-lead">Монета + сторона → коуч разложит тренд, уровни, RSI, план со стопом/целью и где ты неправ. Это разбор структуры, <strong>не сигнал с доказанным эджем</strong> — решение и риск на тебе.</div>
     <form id="wi-form" class="wi-form" autocomplete="off">
-      <label class="wi-label">Coin (Hyperliquid ticker)</label>
-      <input id="wi-coin" class="wi-input" type="text" placeholder="e.g. BTC, SOL, kBONK" value="${escapeHtml(coin)}" />
-      <label class="wi-label">Side (optional)</label>
+      <label class="wi-label">Монета (тикер Hyperliquid)</label>
+      <input id="wi-coin" class="wi-input" type="text" placeholder="напр. BTC, SOL, kBONK" value="${escapeHtml(coin)}" />
+      <label class="wi-label">Сторона (для плана входа)</label>
       <div class="wi-sides">
         ${sideBtn("LONG", "Long")}
         ${sideBtn("SHORT", "Short")}
-        ${sideBtn("", "Either")}
+        ${sideBtn("", "Без стороны")}
       </div>
       <input type="hidden" id="wi-side" value="${escapeHtml(side)}" />
-      <button type="submit" class="wi-submit">Check</button>
+      <button type="submit" class="wi-submit">Разобрать</button>
       <div id="wi-error" class="wi-error" hidden></div>
     </form>`;
 }
@@ -81,18 +81,18 @@ function formHtml(coin = "", side = "") {
 // ── Loader: spinner + staged "scanning" steps ──
 function loaderHtml(coin) {
   return `
-    <div class="wi-title">Scanning #${escapeHtml(coin.toUpperCase())}…</div>
+    <div class="wi-title">Разбираю #${escapeHtml(coin.toUpperCase())}…</div>
     <div class="wi-loader">
       <span class="wi-spinner" aria-hidden="true"></span>
-      <span id="wi-loader-step" class="wi-loader-step">Fetching 15m candles…</span>
+      <span id="wi-loader-step" class="wi-loader-step">Тяну 15m-свечи…</span>
     </div>`;
 }
 
 const LOADER_STEPS = [
-  "Fetching 15m candles…",
-  "Computing 30m move & 4h Kaufman ER…",
-  "Checking BTC market regime…",
-  "Weighing the edge…",
+  "Тяну 15m и 1h свечи…",
+  "Считаю тренд, RSI, ATR…",
+  "Ищу поддержку/сопротивление…",
+  "Складываю разбор…",
 ];
 
 function fmtPrice(p) {
@@ -106,63 +106,111 @@ function fmtPct(v) {
   return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
 }
 
+// tone коуча → класс тона карточки + иконка.
+const COACH_TONE_CLS = {
+  reasonable: "wi-pat",
+  knife: "wi-smack",
+  counter: "wi-neutral",
+  neutral: "wi-neutral",
+};
+const COACH_TONE_ICON = {
+  reasonable: SVG.check,
+  knife: SVG.ban,
+  counter: SVG.target,
+  neutral: SVG.wait,
+};
+const TREND_WORD = { up: "вверх ▲", down: "вниз ▼", flat: "флэт →" };
+
 function resultHtml(r) {
-  const toneCls = TONE_CLS[r.tone] || TONE_CLS.neutral;
-  const icon = VERDICT_ICON[r.verdict] || SVG.wait;
-  const th = r.thresholds || {};
+  const sideLine = r.userSide
+    ? `<span class="wi-userside">твоя сторона: ${r.userSide}</span>`
+    : "";
+  const head = `<div class="wi-title">#${escapeHtml(r.coin)} <span class="wi-px">$${fmtPrice(r.price)}</span> ${sideLine}</div>`;
 
-  // Raw numbers — always shown, even when there is no signal: you see WHY.
-  const moveOk = r.move != null && Math.abs(r.move) >= (th.moveThr ?? 3);
-  const erOk = r.er != null && r.er >= (th.erMin ?? 0.47);
-  const btcOk = !!r.regimeHot;
-  const chip = (label, val, ok, hint) =>
-    `<div class="wi-metric ${ok ? "ok" : "off"}" title="${escapeHtml(hint)}">
-      <div class="wi-metric-label">${label}</div>
-      <div class="wi-metric-val">${val}</div>
-    </div>`;
+  const c = r.coach;
+  // Фолбэк: если coach не построился (нет свечей) — старый fade-вердикт.
+  if (!c || !c.ok) return head + legacyEdgeBlock(r) +
+    `<button type="button" class="wi-again" id="wi-again">← Другая монета</button>`;
 
-  const metrics = `
+  // ── Коуч-вердикт (ведущий блок) ──
+  let verdictBlock = "";
+  if (c.verdict) {
+    const toneCls = COACH_TONE_CLS[c.verdict.tone] || "wi-neutral";
+    const icon = COACH_TONE_ICON[c.verdict.tone] || SVG.wait;
+    verdictBlock = `
+      <div class="wi-verdict ${toneCls}">
+        <div class="wi-verdict-icon">${icon}</div>
+        <div class="wi-verdict-text">
+          <div class="wi-verdict-head">${escapeHtml(c.verdict.headline)}</div>
+          <div class="wi-verdict-detail">${escapeHtml(c.verdict.detail)}</div>
+        </div>
+      </div>`;
+  } else {
+    verdictBlock = `<div class="wi-lead">Выбери сторону (Long/Short) для разбора входа со стопом и целью. Ниже — структура графика.</div>`;
+  }
+
+  // ── Структура: тренды / RSI / ATR ──
+  const rsiCls = c.rsi14 == null ? "" : c.rsi14 >= 70 ? "off" : c.rsi14 <= 30 ? "off" : "ok";
+  const structure = `
     <div class="wi-metrics">
-      ${chip("30m move", fmtPct(r.move), moveOk, `Needs |move| ≥ ${th.moveThr ?? 3}% over 30m`)}
-      ${chip("Coin 4h ER", r.er != null ? r.er.toFixed(2) : "—", erOk, `Kaufman ER ≥ ${th.erMin ?? 0.47} = clean directional move (exhausted tail)`)}
-      ${chip("BTC 4h ER", r.btcER != null ? r.btcER.toFixed(2) : "—", btcOk, `Market is "hot" when BTC ER ≥ ${th.btcErMin ?? 0.55}; otherwise fade loses`)}
+      <div class="wi-metric ok"><div class="wi-metric-label">Тренд 1h</div><div class="wi-metric-val">${TREND_WORD[c.htfTrend] || "—"}</div></div>
+      <div class="wi-metric ok"><div class="wi-metric-label">Тренд 15m</div><div class="wi-metric-val">${TREND_WORD[c.ltfTrend] || "—"}</div></div>
+      <div class="wi-metric ${rsiCls}"><div class="wi-metric-label">RSI 14</div><div class="wi-metric-val">${c.rsi14 != null ? c.rsi14.toFixed(0) : "—"}</div></div>
     </div>`;
 
+  // ── Уровни ──
+  const supLine = c.support != null
+    ? `<div><span>Поддержка</span>$${fmtPrice(c.support)} <em>(${fmtPct(-Math.abs(c.distToSupport))})</em></div>` : "";
+  const resLine = c.resistance != null
+    ? `<div><span>Сопротивление</span>$${fmtPrice(c.resistance)} <em>(${fmtPct(Math.abs(c.distToResistance))})</em></div>` : "";
+  const levels = (supLine || resLine)
+    ? `<div class="wi-plan"><div class="wi-plan-title">Ближайшие уровни</div><div class="wi-plan-grid">${supLine}${resLine}</div></div>` : "";
+
+  // ── План под сторону ──
   let plan = "";
-  if (r.plan) {
-    const zone =
-      r.plan.zoneLo != null && r.plan.zoneHi != null
-        ? `$${fmtPrice(r.plan.zoneLo)}–$${fmtPrice(r.plan.zoneHi)}`
-        : fmtPrice(r.price);
-    const stop = r.plan.stop != null ? `$${fmtPrice(r.plan.stop)}` : "—";
-    const exitH = r.plan.timeStopMin != null ? `~${Math.round(r.plan.timeStopMin / 60)}h` : "~2h";
+  if (c.plan) {
+    const rr = c.plan.rr != null ? `${c.plan.rr.toFixed(2)}R` : "—";
+    const stop = c.plan.stop != null ? `$${fmtPrice(c.plan.stop)}` : "—";
+    const target = c.plan.target != null ? `$${fmtPrice(c.plan.target)}` : "—";
+    const inval = c.plan.invalidation != null ? `$${fmtPrice(c.plan.invalidation)}` : "—";
     plan = `
       <div class="wi-plan">
-        <div class="wi-plan-title">If you do take the fade ${escapeHtml(r.fadeSide || "")}:</div>
+        <div class="wi-plan-title">План для ${escapeHtml(c.plan.side)}</div>
         <div class="wi-plan-grid">
-          <div><span>Zone</span>${zone}</div>
-          <div><span>Stop (${r.plan.stopPct}%)</span>${stop}</div>
-          <div><span>Time exit</span>${exitH}</div>
+          <div><span>Стоп (${fmtPct(-Math.abs(c.plan.riskPct))})</span>${stop}</div>
+          <div><span>Цель (${c.plan.rewardPct != null ? fmtPct(Math.abs(c.plan.rewardPct)) : "—"})</span>${target}</div>
+          <div><span>R:R</span>${rr}</div>
+          <div><span>Неправ если ниже/выше</span>${inval}</div>
         </div>
       </div>`;
   }
 
-  const sideLine = r.userSide
-    ? `<span class="wi-userside">your side: ${r.userSide}</span>`
-    : "";
+  // ── Сценарии ──
+  const caseList = (title, arr, cls) => arr && arr.length
+    ? `<div class="wi-case ${cls}"><div class="wi-case-title">${title}</div><ul>${arr.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>` : "";
+  const cases = `<div class="wi-cases">${caseList("За вход", c.bull, "wi-case-bull")}${caseList("Против", c.bear, "wi-case-bear")}</div>`;
 
+  // ── Вторичная честная строка: проверенный fade-эдж ──
+  const edgeNote = `<div class="wi-edge-note">${r.fired
+    ? `⚡ Бонус: тут совпал и проверенный fade-эдж (${escapeHtml(r.fadeSide || "")}).`
+    : `Проверенного fade-эджа здесь нет — это разбор, не сигнал. ${escapeHtml(c.disclaimer)}`}</div>`;
+
+  return head + verdictBlock + structure + levels + plan + cases + edgeNote +
+    `<button type="button" class="wi-again" id="wi-again">← Другая монета</button>`;
+}
+
+// Старый fade-вердикт как фолбэк, если coach не построился.
+function legacyEdgeBlock(r) {
+  const toneCls = TONE_CLS[r.tone] || TONE_CLS.neutral;
+  const icon = VERDICT_ICON[r.verdict] || SVG.wait;
   return `
-    <div class="wi-title">#${escapeHtml(r.coin)} <span class="wi-px">$${fmtPrice(r.price)}</span> ${sideLine}</div>
     <div class="wi-verdict ${toneCls}">
       <div class="wi-verdict-icon">${icon}</div>
       <div class="wi-verdict-text">
-        <div class="wi-verdict-head">${escapeHtml(r.headline)}</div>
-        <div class="wi-verdict-detail">${escapeHtml(r.detail)}</div>
+        <div class="wi-verdict-head">${escapeHtml(r.headline || "Нет данных для разбора")}</div>
+        <div class="wi-verdict-detail">${escapeHtml(r.detail || "Не удалось получить свечи для этой монеты.")}</div>
       </div>
-    </div>
-    ${metrics}
-    ${plan}
-    <button type="button" class="wi-again" id="wi-again">← Check another coin</button>`;
+    </div>`;
 }
 
 async function runCheck(coin, side) {
