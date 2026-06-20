@@ -99,6 +99,18 @@ test('analyzeChart: с equity/flow отдаёт sizing, stopSanity, orderFlow', 
   assert.ok(Array.isArray(out.orderFlow) && out.orderFlow.length > 0);
 });
 
+test('analyzeChart: LONG у вершины (нет сопрот) → проектируемая цель + RR есть', () => {
+  const candles1h = Array.from({ length: 60 }, (_, i) => c(80 + i * 0.5));
+  // Монотонный рост 15m → текущая цена = новый хай, пивот-хая выше нет.
+  const candles15m = Array.from({ length: 45 }, (_, i) => c(100 + i * 0.4));
+  const price = candles15m.at(-1).close;
+  const out = analyzeChart({ candles15m, candles1h, price, userSide: 'LONG' });
+  assert.strictEqual(out.resistance, null, 'сопротивления выше нет');
+  assert.ok(out.plan.target > price, 'цель спроектирована выше цены');
+  assert.strictEqual(out.plan.targetProjected, true, 'помечена как проекция');
+  assert.ok(out.plan.rr != null && out.plan.rr > 0, 'RR посчитан');
+});
+
 test('analyzeChart: план содержит стоп/цель/RR и инвалидацию', () => {
   const candles1h = Array.from({ length: 60 }, (_, i) => c(80 + i * 0.5));
   const candles15m = Array.from({ length: 45 }, (_, i) => c(100 + Math.sin(i / 3) * 3 + i * 0.1));

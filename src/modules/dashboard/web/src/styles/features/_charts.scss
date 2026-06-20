@@ -56,3 +56,30 @@
     }
   }
 }
+
+// Coach-readout: строка-вердикт над графиком (часть оверлея «Разбор»).
+.coach-readout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  background: var(--canvas-inset, rgba(127, 127, 127, 0.06));
+  font-size: 12px;
+  line-height: 1.4;
+
+  &[hidden] { display: none; }
+
+  .cr-head { font-weight: 700; }
+  .cr-good { color: var(--pos, #22c55e); }
+  .cr-warn { color: var(--amber, #f59e0b); }
+  .cr-bad { color: var(--neg, #ef4444); }
+  .cr-neutral { color: var(--text-secondary); }
+  .cr-meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+}

@@ -128,11 +128,45 @@ function startPoll() {
 
 // ── Coach-оверлей ───────────────────────────────────────────────────────────
 function clearOverlay() {
-  if (!priceSeries) return;
-  for (const ln of overlayLines) {
-    try { priceSeries.removePriceLine(ln); } catch { /* уже снята */ }
+  if (priceSeries) {
+    for (const ln of overlayLines) {
+      try { priceSeries.removePriceLine(ln); } catch { /* уже снята */ }
+    }
   }
   overlayLines = [];
+  renderReadout(null);
+}
+
+const TREND_WORD = { up: "↑", down: "↓", flat: "→" };
+const READOUT_TONE = {
+  reasonable: "cr-good", counter: "cr-warn", knife: "cr-bad", neutral: "cr-neutral",
+};
+
+// Текстовая строка-вердикт прямо на карточке графика (холст не «молчит»).
+function renderReadout(c) {
+  const el = document.getElementById("coach-readout");
+  if (!el) return;
+  if (!c || !c.ok) { el.hidden = true; el.innerHTML = ""; return; }
+  const t1 = TREND_WORD[c.htfTrend] || "—";
+  const t15 = TREND_WORD[c.ltfTrend] || "—";
+  const rsi = c.rsi14 != null ? c.rsi14.toFixed(0) : "—";
+  const meta = `<span class="cr-meta">1h ${t1} · 15m ${t15} · RSI ${rsi}</span>`;
+  let head;
+  if (c.verdict) {
+    const tone = READOUT_TONE[c.verdict.tone] || "cr-neutral";
+    const rr = c.plan?.rr != null ? ` · ${c.plan.rr.toFixed(2)}R` : "";
+    head = `<span class="cr-head ${tone}">${escapeText(c.verdict.headline)}${rr}</span>`;
+  } else {
+    head = `<span class="cr-head cr-neutral">Выбери Long/Short — добавлю стоп/цель и вердикт</span>`;
+  }
+  el.innerHTML = head + meta;
+  el.hidden = false;
+}
+
+function escapeText(s) {
+  const d = document.createElement("div");
+  d.textContent = String(s ?? "");
+  return d.innerHTML;
 }
 
 function fmtSignPct(v) {
@@ -158,20 +192,23 @@ async function drawCoachOverlay() {
     // Устарело (успели переключить монету/выключить) — не рисуем.
     if (myReq !== overlayReqId || !overlayOn) return;
     const c = r?.coach;
-    if (!c || !c.ok) return;
+    if (!c || !c.ok) { renderReadout(null); return; }
     clearOverlay();
     // Структура (всегда): поддержка/сопротивление — синие пунктиры.
     const blue = cssVar("--brand") || "#3b82f6";
     addLine(c.resistance, blue, 2, `Сопрот${fmtSignPct(c.distToResistance != null ? Math.abs(c.distToResistance) : null)}`);
     addLine(c.support, blue, 2, `Поддержка${fmtSignPct(c.distToSupport != null ? -Math.abs(c.distToSupport) : null)}`);
-    // План под сторону: стоп (красный) / цель (зелёный) / инвалидация.
+    // План под сторону: стоп (красный) / цель (зелёный, пунктир если проекция).
     if (c.plan) {
       const green = cssVar("--pos") || "#22C55E";
       const red = cssVar("--neg") || "#EF4444";
       const rr = c.plan.rr != null ? ` ${c.plan.rr.toFixed(2)}R` : "";
+      const tgtMark = c.plan.targetProjected ? "≈" : "";
       addLine(c.plan.stop, red, 0, `Стоп${fmtSignPct(c.plan.riskPct != null ? -Math.abs(c.plan.riskPct) : null)}`);
-      addLine(c.plan.target, green, 0, `Цель${fmtSignPct(c.plan.rewardPct != null ? Math.abs(c.plan.rewardPct) : null)}${rr}`);
+      addLine(c.plan.target, green, c.plan.targetProjected ? 3 : 0,
+        `Цель ${tgtMark}${fmtSignPct(c.plan.rewardPct != null ? Math.abs(c.plan.rewardPct) : null)}${rr}`);
     }
+    renderReadout(c);
   } catch (err) {
     console.debug("[PriceChart] coach overlay error:", err.message);
   }

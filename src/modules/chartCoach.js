@@ -224,21 +224,33 @@ export function analyzeChart({
 function buildPlan({ userSide, price, support, resistance, resistances, supports, atr14 }) {
   const atrStop = atr14 != null ? atr14 : price * 0.01;
   if (userSide === "LONG") {
-    // Стоп под ближайшую поддержку (или −1 ATR), цель — ближайшее сопротивление.
+    // Стоп под ближайшую поддержку (или −1 ATR).
     const stop = support != null ? support - 0.25 * atrStop : price - 1.5 * atrStop;
-    const target = resistance ?? (resistances?.[0] ?? null);
+    // Цель — ближайшее сопротивление. Если выше нет (цена у вершины) — проекция:
+    // measured-move от стопа (1:1) или ≥1.5 ATR, помечаем targetProjected.
+    let target = resistance ?? (resistances?.[0] ?? null);
+    let targetProjected = false;
+    if (target == null) {
+      target = price + Math.max(price - stop, 1.5 * atrStop);
+      targetProjected = true;
+    }
     const riskPct = pct(price, stop);                       // >0
-    const rewardPct = target != null ? pct(target, price) : null; // >0
-    const rr = rewardPct != null && riskPct > 0 ? rewardPct / riskPct : null;
-    return { side: "LONG", stop, target, riskPct, rewardPct, rr, invalidation: support };
+    const rewardPct = pct(target, price);                  // >0
+    const rr = riskPct > 0 ? rewardPct / riskPct : null;
+    return { side: "LONG", stop, target, targetProjected, riskPct, rewardPct, rr, invalidation: support };
   }
   // SHORT: стоп над ближайшим сопротивлением, цель — ближайшая поддержка.
   const stop = resistance != null ? resistance + 0.25 * atrStop : price + 1.5 * atrStop;
-  const target = support ?? (supports?.[0] ?? null);
+  let target = support ?? (supports?.[0] ?? null);
+  let targetProjected = false;
+  if (target == null) {
+    target = price - Math.max(stop - price, 1.5 * atrStop);
+    targetProjected = true;
+  }
   const riskPct = pct(stop, price);                         // >0
-  const rewardPct = target != null ? pct(price, target) : null;
-  const rr = rewardPct != null && riskPct > 0 ? rewardPct / riskPct : null;
-  return { side: "SHORT", stop, target, riskPct, rewardPct, rr, invalidation: resistance };
+  const rewardPct = pct(price, target);
+  const rr = riskPct > 0 ? rewardPct / riskPct : null;
+  return { side: "SHORT", stop, target, targetProjected, riskPct, rewardPct, rr, invalidation: resistance };
 }
 
 function verdictFor({ userSide, htfTrend, ltfTrend, nearSupport, nearResistance, rsi14, plan }) {
