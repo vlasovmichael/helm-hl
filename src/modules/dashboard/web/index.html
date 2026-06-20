@@ -178,6 +178,59 @@
         </div>
       </section>
 
+      <!-- 01.6 / Price Chart — дефолт BTC, клик по Hot Mover переключает монету -->
+      <section class="card" id="sec-chart">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-num="01.6"
+            title="Свечной график. По умолчанию BTC (фон рынка). Клик по строке Hot Movers переключает график на эту монету. TV — открыть текущую монету в TradingView для глубокого анализа."
+          >
+            Chart: <span id="price-chart-coin">BTC</span>
+          </div>
+          <div class="hm-header-right">
+            <button
+              id="price-chart-btc"
+              class="range-btn"
+              type="button"
+              title="Вернуться к графику BTC (дефолт)"
+            >
+              ⌂ BTC
+            </button>
+            <div class="time-ranges" id="price-intervals">
+              <button class="range-btn" data-iv="1m">1m</button>
+              <button class="range-btn active" data-iv="5m">5m</button>
+              <button class="range-btn" data-iv="15m">15m</button>
+              <button class="range-btn" data-iv="1h">1h</button>
+              <button class="range-btn" data-iv="4h">4h</button>
+            </div>
+            <a
+              id="price-chart-tv"
+              class="range-btn"
+              href="https://www.tradingview.com/chart/?symbol=BINANCE:BTCUSDT"
+              target="_blank"
+              rel="noopener"
+              title="Открыть текущую монету в TradingView"
+              >TV ↗</a
+            >
+            <span
+              id="price-chart-meta"
+              style="
+                font-size: 11px;
+                font-family: var(--font-mono);
+                color: var(--text-muted);
+              "
+            ></span>
+          </div>
+        </div>
+        <div class="chart-container" id="price-chart-container">
+          <div id="price-chart"></div>
+          <div class="local-loader" id="price-chart-loader">
+            <div class="loader-spinner"></div>
+          </div>
+        </div>
+      </section>
+
       <!-- 02.2 / Setup Scanner — Swing -->
       <section class="card" id="sec-setup-scanner">
         <div class="card-header">

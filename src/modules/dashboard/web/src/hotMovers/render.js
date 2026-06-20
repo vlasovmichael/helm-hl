@@ -22,6 +22,7 @@ import {
   getActiveCoins,
   getActivePos,
 } from "../state/activeCoins.js";
+import { setChartCoin } from "../charts/priceChart.js";
 
 const _hmPrevPrices = new Map();
 
@@ -46,16 +47,15 @@ const ENTRY_ICON_SVG = {
     '<path d="M8 12h8"/></svg>',
 };
 
-// Клик по строке Hot Movers → открыть монету в TradingView (новая вкладка).
-// Если задать ID сохранённого TV-лэйаута — откроется он (с твоими EMA20/200);
-// пусто → дефолтный график. Символ по умолчанию Binance perp (как у оператора в TV).
-const TV_LAYOUT_ID = ""; // напр. "abcd1234" из https://tradingview.com/chart/abcd1234/
-function openTradingView(coin) {
-  const sym = `BINANCE:${String(coin).toUpperCase().replace(/[^A-Z0-9]/g, "")}USDT`;
-  const base = TV_LAYOUT_ID
-    ? `https://www.tradingview.com/chart/${TV_LAYOUT_ID}/`
-    : "https://www.tradingview.com/chart/";
-  window.open(`${base}?symbol=${encodeURIComponent(sym)}`, "_blank", "noopener");
+// Клик по строке Hot Movers → переключить встроенный график на эту монету.
+// Глубокий анализ (TV) — иконка «TV ↗» в шапке карты Chart (на текущую монету).
+function showCoinChart(coin) {
+  setChartCoin(coin);
+  // Подскролить к графику, чтобы переключение было видно (особенно на мобиле).
+  document.getElementById("sec-chart")?.scrollIntoView({
+    behavior: "smooth",
+    block: "nearest",
+  });
 }
 
 // Сколько монет максимум в таблице (открытые позиции — сверх лимита, всегда).
@@ -66,13 +66,13 @@ export function renderHotMovers(payload, fmtTime) {
   const meta = document.getElementById("hot-movers-meta");
   if (!tbody || !meta) return;
 
-  // Делегированный клик по строке монеты → TradingView (вешаем один раз).
-  if (!tbody.dataset.tvBound) {
-    tbody.dataset.tvBound = "1";
+  // Делегированный клик по строке монеты → встроенный график (вешаем один раз).
+  if (!tbody.dataset.chartBound) {
+    tbody.dataset.chartBound = "1";
     tbody.addEventListener("click", (e) => {
       const row = e.target.closest("tr[data-hmkey]");
       const m = /^(?:m|pos):(.+)$/.exec(row?.dataset.hmkey || "");
-      if (m) openTradingView(m[1]);
+      if (m) showCoinChart(m[1]);
     });
   }
   const signals = Array.isArray(payload?.signals) ? payload.signals : [];

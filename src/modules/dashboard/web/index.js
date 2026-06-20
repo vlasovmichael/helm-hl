@@ -36,6 +36,10 @@ import {
   setSwingEquity,
   updateSetupLivePrice,
 } from "./src/features/setupScanner.js";
+import {
+  initPriceChart,
+  applyPriceChartTheme,
+} from "./src/charts/priceChart.js";
 
 // WS шлёт hotMovers каждые ~2с. Пока поток живой — HTTP-фолбэк /api/signals
 // в tick() не дёргаем (был бы дубликат тех же данных).
@@ -79,7 +83,7 @@ async function tick() {
 
 // ── Bootstrap ──
 mountTopnav("dashboard");
-bindTheme();
+bindTheme([applyPriceChartTheme]);
 bindRange(() => tick());
 initModals();
 initWhatIf();
@@ -91,6 +95,7 @@ tick();
 setInterval(tick, REFRESH_MS);
 startFooterTimer();
 initSetupScanner({ fmtTime });
+initPriceChart();
 
 // DEV: ?mock=1 → засимулировать активную монету (risk-bar + ракета) без бэка.
 // Динамический импорт → в обычной сборке/проде модуль даже не грузится.
