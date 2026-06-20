@@ -15,8 +15,9 @@ import { riskTint } from "../utils/riskBar.js";
 // tint = riskTint(...) | null. Возвращает { cls, attr } для подстановки в HTML.
 function tintAttrs(tint) {
   if (!tint) return { cls: "", attr: "" };
-  const cls = ` rb-depth rb-${tint.phase}${tint.hot ? " rb-hot" : ""}`;
-  const attr = ` style="--rb-now:${tint.now.toFixed(3)}"${tint.tip ? ` title="${tint.tip}"` : ""}`;
+  const cls = ` rb-depth rb-${tint.phase}${tint.peak != null ? " rb-ghost" : ""}${tint.hot ? " rb-hot" : ""}`;
+  const peakVar = tint.peak != null ? `;--rb-peak:${tint.peak.toFixed(3)}` : "";
+  const attr = ` style="--rb-now:${tint.now.toFixed(3)}${peakVar}"${tint.tip ? ` title="${tint.tip}"` : ""}`;
   return { cls, attr };
 }
 
@@ -48,15 +49,24 @@ function applyTint(el, tint, sign) {
   if (!el) return;
   el.classList.toggle("pnl-pos", sign === "pos");
   el.classList.toggle("pnl-neg", sign === "neg");
-  el.classList.remove("rb-depth", "rb-stop", "rb-arm", "rb-profit", "rb-hot");
+  el.classList.remove(
+    "rb-depth", "rb-stop", "rb-arm", "rb-profit", "rb-hot", "rb-ghost",
+  );
   if (tint) {
     el.classList.add("rb-depth", `rb-${tint.phase}`);
     if (tint.hot) el.classList.add("rb-hot");
     el.style.setProperty("--rb-now", tint.now.toFixed(3));
+    if (tint.peak != null) {
+      el.classList.add("rb-ghost");
+      el.style.setProperty("--rb-peak", tint.peak.toFixed(3));
+    } else {
+      el.style.removeProperty("--rb-peak");
+    }
     if (tint.tip) el.title = tint.tip;
     else el.removeAttribute("title");
   } else {
     el.style.removeProperty("--rb-now");
+    el.style.removeProperty("--rb-peak");
     el.removeAttribute("title");
   }
 }
@@ -87,6 +97,10 @@ function pnlLayers({ label, valueId = "", valueCls = "", valueText }) {
     `<div class="item-label">${label}</div>` +
     `<div${idAttr} class="item-value ${valueCls}">${valueText}</div>` +
     `</div>` +
+    // Призрак отката: тусклая заливка до пика (MFE), обрезана по --rb-peak. Лежит
+    // под ярким .pnl-fill (тот до --rb-now), поэтому виден только участок «текущий
+    // → пик» — то, что цена прошла в плюс и сдала. Только фон, без текста.
+    `<div class="pnl-peak" aria-hidden="true"></div>` +
     `<div class="pnl-fill" aria-hidden="true">` +
     `<div class="item-label">${label}</div>` +
     `<div class="item-value">${valueText}</div>` +
@@ -274,6 +288,7 @@ export function renderPosition(pos) {
     beArmPct: pos.bot?.beArmPct,
     beArmed: pos.bot?.beArmed,
     tpPrice: pos.bot?.tpPrice,
+    peakPct: pos.bot?.peakPct,
   });
   const pnl = pos.currentPnl;
   const netSign = pnl && pnl.netMarket >= 0 ? "pos" : "neg";
@@ -369,6 +384,7 @@ export function renderManualPositions(list) {
         beArmPct: p.bot?.beArmPct,
         beArmed: p.bot?.beArmed,
         tpPrice: p.bot?.tpPrice,
+        peakPct: p.bot?.peakPct,
       });
       const sign = p.unrealizedPnl >= 0 ? "pos" : "neg";
       const cell = card.querySelector(".pnl-tint");
@@ -392,8 +408,8 @@ export function renderManualPositions(list) {
         flPnlEl.classList.toggle("negative", s.floorPnl < 0);
       }
       // Тип пола меняется на лету (stop→BE→trail, когда взводится храповик).
-      const flBadge = card.querySelector("[data-mfloor]")?.parentElement
-        ?.querySelector(".fl-badge");
+      const flBadge = card.querySelector("[data-mfloor]")
+        ?.closest(".grid-item")?.querySelector(".fl-badge");
       const fb = FLOOR_BADGE[s.floorKind] || null;
       if (flBadge && fb) {
         flBadge.textContent = fb.txt;
@@ -439,12 +455,16 @@ export function renderManualPositions(list) {
         beArmPct: p.bot?.beArmPct,
         beArmed: p.bot?.beArmed,
         tpPrice: p.bot?.tpPrice,
+        peakPct: p.bot?.peakPct,
       });
       const { cls: rbCls, attr: rbAttr } = tintAttrs(tint);
       const s = manualStats(p);
-      // Size → + риск на кону до жёсткого стопа ($). Нет стопа → «—» (само
-      // сигналит, что риск не ограничен).
-      const riskSub = s.riskUsd != null ? `риск −$${s.riskUsd.toFixed(2)}` : "—";
+      // Size → риск на кону до жёсткого стопа ($), инлайном на той же строке.
+      // Нет стопа → ничего (риск не ограничен; само-сигналит отсутствием цифры).
+      const riskInline =
+        s.riskUsd != null
+          ? ` <span class="grid-inline negative">risk −$${s.riskUsd.toFixed(2)}</span>`
+          : "";
       // Entry·Now → + дистанция к входу со знаком моей стороны.
       const moveSub = s.movePct != null ? fmtMove(s.movePct) : "—";
       // Floor (живой пол выхода) вместо Liq — нянька закроет тут задолго до ликв.
@@ -454,8 +474,7 @@ export function renderManualPositions(list) {
         s.floorPrice != null
           ? `<div class="grid-item" title="Ликвидация: ${liq}">
                <div class="item-label">Floor${fb ? ` <span class="fl-badge ${fb.cls}">${fb.txt}</span>` : ""}</div>
-               <div class="item-value" data-mfloor>${fmtPrice(s.floorPrice)}</div>
-               <div class="grid-sub ${s.floorPnl >= 0 ? "positive" : "negative"}" data-mfloorpnl>${s.floorPnl != null ? fmtSignedUsd2(s.floorPnl) : ""}</div>
+               <div class="item-value"><span data-mfloor>${fmtPrice(s.floorPrice)}</span><span class="grid-inline ${s.floorPnl >= 0 ? "positive" : "negative"}" data-mfloorpnl>${s.floorPnl != null ? fmtSignedUsd2(s.floorPnl) : ""}</span></div>
              </div>`
           : `<div class="grid-item"><div class="item-label">Liq</div><div class="item-value">${liq}</div></div>`;
       return `
@@ -466,7 +485,7 @@ export function renderManualPositions(list) {
           <span class="item-value ${sideCls}">${p.side}</span>
         </div>
         <div class="data-grid">
-          <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}</div><div class="grid-sub negative">${riskSub}</div></div>
+          <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}${riskInline}</div></div>
           <div class="grid-item"><div class="item-label">Entry · Now</div><div class="item-value" data-mnow>${fmtPrice(p.entryPrice)} · ${cur}</div><div class="grid-sub" data-mmove>${moveSub}</div></div>
           <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}` })}<div class="pnl-sub" data-mr>${upnlSubTxt(s)}</div></div>
           ${floorCell}

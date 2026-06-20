@@ -74,6 +74,24 @@
   }
 }
 
+/* Инлайн-приписка к значению (risk-$ у Size, $-на-полу у Floor): на ТОЙ ЖЕ
+   строке, мельче основной цифры и приглушённая — чтобы не плодить отдельную
+   под-строку и не растягивать карточку по высоте. */
+.grid-inline {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--text-muted);
+  &.positive {
+    color: var(--green);
+  }
+  &.negative {
+    color: var(--red);
+  }
+}
+
 /* Floor-чип: единственное цветное «пятно» вне uPnL — тип защиты няньки
    (HARD stop / BE безубыток / TRAIL). */
 .fl-badge {
@@ -144,6 +162,9 @@
   .pnl-fill {
     display: none;
   }
+  .pnl-peak {
+    display: none;
+  }
   /* Под-строка uPnL (R + пик): в потоке под слоями. base/fill — absolute
      inset:0 с пустым низом, поэтому под-строка сквозит; relative+z-index
      гарантирует, что её не перекроет прозрачный base. */
@@ -168,6 +189,12 @@
   inherits: true; /* .pnl-fill (потомок) читает то же значение, что и ячейка */
   initial-value: 0;
 }
+/* Граница «призрака» отката (MFE): дальний край тусклой заливки = пик. */
+@property --rb-peak {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
 
 /* Сплошная заливка-прогресс (temp/1.html): столб яркого биржевого цвета слева до
    --rb-now (0..1) — прогресс до ближайшей вехи (стоп / храповик / профит,
@@ -187,8 +214,25 @@
      transparent (текст/заливка пропадали на тёмной теме). */
   transition:
     --rb-now 0.85s cubic-bezier(0.22, 1.7, 0.36, 1),
+    --rb-peak 0.85s cubic-bezier(0.22, 1.7, 0.36, 1),
     background 0.5s ease,
     border-color 0.5s ease;
+
+  /* «Призрак» отката: тусклая заливка от 0 до пика (--rb-peak), ПОД ярким
+     .pnl-fill (тот до --rb-now). Виден только хвост «текущий→пик» — сколько
+     цена прошла в плюс и сдала обратно. Только фон, без текста. Включается
+     классом .rb-ghost (его ставит JS, когда пик реально впереди текущего). */
+  .pnl-peak {
+    display: none;
+    position: absolute;
+    inset: 0;
+    clip-path: inset(0 calc((1 - var(--rb-peak)) * 100%) 0 0);
+    pointer-events: none;
+    transition: background 0.5s ease;
+  }
+  &.rb-ghost .pnl-peak {
+    display: block;
+  }
 
   /* Верхний слой — сплошная заливка + белый текст, обрезан по --rb-now.
      padding дублирует grid-item (14px 16px) → текст идеально совпадает с нижним. */
@@ -224,6 +268,9 @@
     .pnl-fill {
       background: var(--pnl-up);
     }
+    .pnl-peak {
+      background: color-mix(in srgb, var(--pnl-up) 38%, transparent);
+    }
   }
   /* Красный (в минусе). */
   &.pnl-neg {
@@ -234,6 +281,9 @@
     }
     .pnl-fill {
       background: var(--pnl-down);
+    }
+    .pnl-peak {
+      background: color-mix(in srgb, var(--pnl-down) 38%, transparent);
     }
   }
 }

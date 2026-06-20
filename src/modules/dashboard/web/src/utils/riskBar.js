@@ -26,6 +26,7 @@ export function riskTint({
   beArmPct,
   beArmed,
   tpPrice,
+  peakPct,
 } = {}) {
   if (![entry, now, stopPrice].every((v) => v != null && v > 0)) return null;
   const isShort = String(side || "").toUpperCase() === "SHORT";
@@ -41,26 +42,41 @@ export function riskTint({
   const targetDist = tpPrice != null ? Math.abs(entry - tpPrice) : 2 * risk;
   const armed = beArmed === true || (armDist != null && move >= armDist);
 
-  // Выбор фазы: что меряем прямо сейчас.
-  let phase, frac, label, milestonePx;
+  // Пиковый ход в мою сторону (MFE) в цене — для «призрака» отката на заливке.
+  // peakPct хранит бэк как favorable %, всегда ≥0. null → призрака нет.
+  const peakMove = peakPct != null && peakPct > 0 ? entry * (peakPct / 100) : null;
+
+  // Выбор фазы: что меряем прямо сейчас. fracOf(m) — доля той же фазы для
+  // произвольного favorable-хода m (используем и для текущего, и для пика).
+  let phase, label, milestonePx, fracOf;
   if (!inProfit) {
     phase = "stop";
     label = "до стопа";
-    frac = Math.min(1, -move / risk);
     milestonePx = stopPrice;
+    fracOf = (m) => Math.min(1, -m / risk);
   } else if (armDist != null && !armed) {
     phase = "arm";
     label = "до храповика";
-    frac = Math.min(1, move / armDist);
     milestonePx = isShort ? entry - armDist : entry + armDist;
+    fracOf = (m) => Math.min(1, Math.max(0, m / armDist));
   } else {
     // Храповик взят (или его нет) → меряем отрезок до цели прибыли.
     const base = armed && armDist != null ? armDist : 0; // старт отрезка
     const span = Math.max(targetDist - base, 1e-9);
     phase = "profit";
     label = "до профита";
-    frac = Math.min(1, Math.max(0, (move - base) / span));
     milestonePx = isShort ? entry - targetDist : entry + targetDist;
+    fracOf = (m) => Math.min(1, Math.max(0, (m - base) / span));
+  }
+  const frac = fracOf(move);
+
+  // «Призрак» отката: дальняя граница = пик (MFE), ближняя = текущий. Показываем
+  // только в прибыльных фазах (на красной «до стопа» полосе favorable-пик не
+  // ложится на ту же ось) и только если пик реально впереди текущего.
+  let peak = null;
+  if (inProfit && peakMove != null && peakMove > move) {
+    peak = fracOf(peakMove);
+    if (!(peak > frac)) peak = null; // в одну точку схлопнулось — нечего рисовать
   }
 
   // Tooltip: сколько ещё ($ + %) до вехи текущей фазы.
@@ -74,5 +90,5 @@ export function riskTint({
     tip += ` (${fmtUsd(remUsd)})`;
   }
 
-  return { inProfit, now: frac, phase, label, hot: frac >= 0.85, tip };
+  return { inProfit, now: frac, peak, phase, label, hot: frac >= 0.85, tip };
 }
