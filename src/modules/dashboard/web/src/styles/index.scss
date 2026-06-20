@@ -3,6 +3,7 @@
 //  lab.html тоже грузит этот бандл → сюда же strategies (карточка переехала
 //  на Lab). На index таблицы стратегий нет — стили мёртвые, но безвредные.
 @use "core";
+@use "features/charts";
 @use "features/signals";
 @use "features/marketcontext";
 @use "features/setupscanner";
