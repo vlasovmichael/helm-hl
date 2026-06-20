@@ -12,7 +12,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-process.env.TRADING_MODE          = 'PAPER';
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 const { decideAdoptByAge, updateFirstSeen } = await import('../src/app/adoptReconcile.js');

@@ -1,7 +1,6 @@
 import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
-process.env.TRADING_MODE          = 'PAPER';
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 process.env.HL_PRIVATE_KEY        = '0x0000000000000000000000000000000000000000000000000000000000000001';
 process.env.TELEGRAM_BOT_TOKEN    = '';

@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-process.env.TRADING_MODE          = 'PAPER';
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 // Дефолты: ADOPT_STOP_MODE=atr, ATR_MULT=1.5, MIN=2, MAX=8, STOP_PCT=5.
 

@@ -5,7 +5,6 @@ import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 // ── ENV до импорта модуля (config читается один раз) ─────────────────────
-process.env.TRADING_MODE          = 'PAPER';
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 process.env.ENTRY_APY_THRESHOLD   = '40';
 process.env.MIN_APY_THRESHOLD     = '20';
