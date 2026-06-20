@@ -574,8 +574,15 @@ export async function handleWhatIf(req, res) {
     // тут не критично — coach просто будет null, остальной вердикт остаётся.
     let coach = null;
     try {
-      const candles1h = await getHourlyCandles(coin, 60, now, HL_PRIORITY.LOW);
-      coach = analyzeChart({ candles15m: candles, candles1h, price, userSide });
+      // Своя 15m-серия (~100 свечей) — fadehot-фетч выше слишком короткий для
+      // свинг-уровней/RSI. + 1h для старшего тренда (ema 20/50 → нужно ≥51).
+      const [coach15m, candles1h] = await Promise.all([
+        getFifteenMinCandles(coin, 100 * 15, now),
+        getHourlyCandles(coin, 60, now, HL_PRIORITY.LOW),
+      ]);
+      coach = analyzeChart({
+        candles15m: coach15m || candles, candles1h, price, userSide,
+      });
     } catch (e) {
       logger.debug(`[Dashboard] coach analyze failed #${coin}: ${e.message}`);
     }
