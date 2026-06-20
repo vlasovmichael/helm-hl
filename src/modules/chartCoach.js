@@ -88,12 +88,79 @@ export function findLevels(candles, k = 2, price) {
 
 const pct = (a, b) => ((a - b) / b) * 100;
 
+// ── Риск-калькулятор размера ────────────────────────────────────────────────
+// Из дистанции до стопа (riskPct) и риск-бюджета (% от депо) считает, каким
+// ДОЛЖЕН быть размер позиции, чтобы потеря на стопе = бюджету. Учит «сначала
+// риск, потом размер» (антидот к $70-номиналу на $48-депо).
+export function sizeForRisk({ equity, riskBudgetPct, riskPct }) {
+  if (!(equity > 0) || !(riskBudgetPct > 0) || !(riskPct > 0)) return null;
+  const riskUsd = equity * (riskBudgetPct / 100);
+  const suggestedSizeUsd = riskUsd / (riskPct / 100); // номинал, теряющий riskUsd на стопе
+  return {
+    equity,
+    riskBudgetPct,
+    riskUsd: Math.round(riskUsd * 100) / 100,
+    suggestedSizeUsd: Math.round(suggestedSizeUsd * 100) / 100,
+  };
+}
+
+// ── Санити стопа против ATR ─────────────────────────────────────────────────
+// Стоп ближе ~1 ATR = внутри обычного шума свечей → выбьет на ровном месте.
+export function stopSanity({ stop, price, atr }) {
+  if (!(atr > 0) || stop == null || !(price > 0)) return null;
+  const dist = Math.abs(price - stop);
+  const mult = dist / atr;
+  let level, note;
+  if (mult < 0.8) {
+    level = "tight";
+    note = `Стоп ${mult.toFixed(1)}×ATR — внутри шума, выбьет на ровном месте. Минимум ~1 ATR.`;
+  } else if (mult > 3) {
+    level = "wide";
+    note = `Стоп ${mult.toFixed(1)}×ATR — очень широкий: либо мельче размер, либо ближе уровень.`;
+  } else {
+    level = "ok";
+    note = `Стоп ${mult.toFixed(1)}×ATR — за пределами шума, разумно.`;
+  }
+  return { mult: Math.round(mult * 10) / 10, level, note };
+}
+
+// ── Order-flow: что под движением (OI / объём / funding) ────────────────────
+// HL-native чтение потока. priceUp + OI up = новые позиции (реальный ход);
+// priceUp + OI down = закрытие противоположных (слабее, топливо иссякает).
+export function readOrderFlow({ priceMovePct, oiDeltaPct, volMult, funding }) {
+  const lines = [];
+  if (oiDeltaPct != null && priceMovePct != null && Math.abs(priceMovePct) >= 0.2) {
+    const up = priceMovePct > 0;
+    const oiUp = oiDeltaPct > 0.3;
+    const oiDn = oiDeltaPct < -0.3;
+    if (up && oiUp) lines.push(`Цена ↑ + OI ↑ ${fmtSigned(oiDeltaPct)}% — заходят новые лонги, ход подтверждён позициями.`);
+    else if (up && oiDn) lines.push(`Цена ↑ + OI ↓ ${fmtSigned(oiDeltaPct)}% — это шорты крывают (squeeze), топливо иссякает.`);
+    else if (!up && oiUp) lines.push(`Цена ↓ + OI ↑ ${fmtSigned(oiDeltaPct)}% — заходят новые шорты, давление реально.`);
+    else if (!up && oiDn) lines.push(`Цена ↓ + OI ↓ ${fmtSigned(oiDeltaPct)}% — лонги выходят/ликвидируются (капитуляция, может развернуть).`);
+  }
+  if (volMult != null) {
+    if (volMult >= 1.5) lines.push(`Объём ${volMult.toFixed(1)}× среднего — есть конвикция.`);
+    else if (volMult <= 0.7) lines.push(`Объём ${volMult.toFixed(1)}× среднего — тонко, движению не верь.`);
+  }
+  if (funding != null && Math.abs(funding) >= 0.0002) {
+    const apr = funding * 24 * 365 * 100; // часовая ставка → ~годовых, грубо
+    if (funding > 0) lines.push(`Funding +${(funding * 100).toFixed(3)}% (~${apr.toFixed(0)}% годовых) — лонги платят, толпа в лонге (риск для лонга).`);
+    else lines.push(`Funding ${(funding * 100).toFixed(3)}% — шорты платят, толпа в шорте (риск для шорта).`);
+  }
+  return lines;
+}
+
+function fmtSigned(v) { return `${v >= 0 ? "+" : ""}${v.toFixed(1)}`; }
+
 /**
  * Главный разбор. Чистая функция (никаких сетевых вызовов).
  * @param {{candles15m:Array, candles1h:Array, price:number, userSide?:('LONG'|'SHORT'|null)}} p
  * @returns {Object} разбор для модалки
  */
-export function analyzeChart({ candles15m, candles1h, price, userSide = null }) {
+export function analyzeChart({
+  candles15m, candles1h, price, userSide = null,
+  equity = null, riskBudgetPct = 1, flow = null,
+}) {
   if (!Array.isArray(candles15m) || candles15m.length < 20 || !(price > 0)) {
     return { ok: false, reason: "not_enough_data" };
   }
@@ -125,11 +192,18 @@ export function analyzeChart({ candles15m, candles1h, price, userSide = null }) 
 
   // План под сторону оператора: стоп за ближайший защищающий уровень, цель — следующий
   // встречный уровень, R = reward/risk. Если уровня нет — стоп по ATR.
-  let plan = null, verdict = null;
+  let plan = null, verdict = null, sizing = null, stop = null;
   if (userSide === "LONG" || userSide === "SHORT") {
     plan = buildPlan({ userSide, price, support, resistance, resistances, supports, atr14 });
     verdict = verdictFor({ userSide, htfTrend, ltfTrend, nearSupport, nearResistance, rsi14, plan });
+    // Риск-калькулятор размера (если знаем депо).
+    sizing = sizeForRisk({ equity, riskBudgetPct, riskPct: plan?.riskPct });
+    // Санити стопа против ATR.
+    stop = stopSanity({ stop: plan?.stop, price, atr: atr14 });
   }
+
+  // Order-flow (OI/объём/funding) — независимо от стороны.
+  const orderFlow = flow ? readOrderFlow(flow) : [];
 
   return {
     ok: true,
@@ -141,6 +215,7 @@ export function analyzeChart({ candles15m, candles1h, price, userSide = null }) 
     nearSupport, nearResistance,
     bull, bear,
     userSide, plan, verdict,
+    sizing, stopSanity: stop, orderFlow,
     disclaimer:
       "Это разбор структуры, не сигнал с доказанным эджем. Решение и риск — на тебе.",
   };

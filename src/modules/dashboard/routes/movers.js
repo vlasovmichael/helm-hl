@@ -10,8 +10,9 @@ import { config } from "../../../core/config.js";
 import { logger } from "../../../core/logger.js";
 import { hlInfo, HL_PRIORITY } from "../../../core/hlClient.js";
 import { getPriceNMinAgo, getBufferLength, getLatestPrice } from "../../../core/priceHistory.js";
-import { getActivePosition, getActiveAdoptPositions } from "../../../core/database.js";
+import { getActivePosition, getActiveAdoptPositions, getHistory } from "../../../core/database.js";
 import { findAsset, getUniverse } from "../../../core/universe.js";
+import { getCachedAccountValueSync } from "../../../core/balanceCache.js";
 import { TICK_INTERVAL_MS, state } from "../../../app/state.js";
 import {
   HUNTER_SPIKE_PCT,
@@ -519,6 +520,47 @@ export async function getMoversPayloadCached(limit = 12, enrich = true) {
 // шапке. НЕ генератор сигналов — дисциплинарный чек против существующего эджа.
 // Дефолт (нет fired-сетапа) = «сиди на руках». Read-only, тяжёлый 15m-fetch
 // только на явный запрос (не в броадкасте), поэтому без пре-гейта.
+// Учёба на ТВОЕЙ истории: из последних закрытых сделок считаем, насколько
+// глубоко уходят в минус убыточные трипы (avg |MAE|) и payoff (avg win / avg
+// loss). Большой MAE у лузеров = «стопа не было». Это не про монету — это
+// зеркало привычки (главный леак, см. trading_coaching_payoff_leak в памяти).
+function computeSelfLeak(limit = 60) {
+  try {
+    const rows = getHistory(limit);
+    if (!Array.isArray(rows) || rows.length < 5) return null;
+    const losers = rows.filter((r) => r.realized_pnl < 0);
+    const winners = rows.filter((r) => r.realized_pnl > 0);
+    if (losers.length === 0) return null;
+    const maeVals = losers.map((r) => r.mae_pct).filter((v) => v != null && Number.isFinite(v));
+    const avgLoserMae = maeVals.length
+      ? maeVals.reduce((a, b) => a + Math.abs(b), 0) / maeVals.length : null;
+    const avgWin = winners.length
+      ? winners.reduce((a, b) => a + b.realized_pnl, 0) / winners.length : null;
+    const avgLoss = losers.length
+      ? losers.reduce((a, b) => a + Math.abs(b.realized_pnl), 0) / losers.length : null;
+    const payoff = avgWin != null && avgLoss > 0 ? avgWin / avgLoss : null;
+    const winRate = (winners.length / rows.length) * 100;
+
+    let note;
+    if (avgLoserMae != null && avgLoserMae >= 6)
+      note = `Твои минусовые трипы в среднем доходят до −${avgLoserMae.toFixed(1)}% (MAE) — это «стоп не стоял». Поставь стоп ДО входа.`;
+    else if (payoff != null && payoff < 1)
+      note = `Payoff ${payoff.toFixed(2)}× — средний плюс меньше среднего минуса. Тяни прибыль / режь убыток быстрее.`;
+    else
+      note = `Дисциплина по истории в норме: payoff ${payoff != null ? payoff.toFixed(2) + "×" : "—"}, MAE лузеров −${avgLoserMae != null ? avgLoserMae.toFixed(1) : "—"}%.`;
+
+    return {
+      n: rows.length,
+      winRate: Math.round(winRate),
+      avgLoserMaePct: avgLoserMae != null ? Math.round(avgLoserMae * 10) / 10 : null,
+      payoff: payoff != null ? Math.round(payoff * 100) / 100 : null,
+      note,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function handleWhatIf(req, res) {
   try {
     const coin = String(req.query.coin || "")
@@ -576,13 +618,30 @@ export async function handleWhatIf(req, res) {
     try {
       // Своя 15m-серия (~100 свечей) — fadehot-фетч выше слишком короткий для
       // свинг-уровней/RSI. + 1h для старшего тренда (ema 20/50 → нужно ≥51).
-      const [coach15m, candles1h] = await Promise.all([
+      const [coach15m, candles1h, volMult] = await Promise.all([
         getFifteenMinCandles(coin, 100 * 15, now),
         getHourlyCandles(coin, 60, now, HL_PRIORITY.LOW),
+        fetchVolMult(coin),
       ]);
+
+      // Order-flow вход: OI-дельта 15м, объём, funding — из живого state/буфера.
+      const liveItem = (Array.isArray(state.latestHunter) ? state.latestHunter : [])
+        .find((it) => it.coin === coin);
+      const curOi = liveItem?.oiUsd ?? null;
+      const oiAgo = getOiNMinAgo(coin, 15, now);
+      const oiDeltaPct = curOi != null && oiAgo != null && oiAgo > 0
+        ? ((curOi - oiAgo) / oiAgo) * 100 : null;
+      const past30 = getPriceNMinAgo(coin, 30, now);
+      const priceMovePct = past30 != null && past30 > 0 ? ((price - past30) / past30) * 100 : null;
+      const flow = { oiDeltaPct, volMult, funding: liveItem?.fundingRate ?? null, priceMovePct };
+
       coach = analyzeChart({
         candles15m: coach15m || candles, candles1h, price, userSide,
+        equity: getCachedAccountValueSync(),
+        riskBudgetPct: 1, // 1% депо на сделку — учим риск-сначала
+        flow,
       });
+      if (coach?.ok) coach.learn = computeSelfLeak(); // учёба на твоей истории
     } catch (e) {
       logger.debug(`[Dashboard] coach analyze failed #${coin}: ${e.message}`);
     }

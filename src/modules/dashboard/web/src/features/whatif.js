@@ -105,6 +105,10 @@ function fmtPct(v) {
   if (v == null || !Number.isFinite(v)) return "—";
   return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
 }
+function fmtNum(v) {
+  if (v == null || !Number.isFinite(v)) return "—";
+  return v >= 100 ? v.toFixed(0) : v.toFixed(2);
+}
 
 // tone коуча → класс тона карточки + иконка.
 const COACH_TONE_CLS = {
@@ -173,6 +177,14 @@ function resultHtml(r) {
     const stop = c.plan.stop != null ? `$${fmtPrice(c.plan.stop)}` : "—";
     const target = c.plan.target != null ? `$${fmtPrice(c.plan.target)}` : "—";
     const inval = c.plan.invalidation != null ? `$${fmtPrice(c.plan.invalidation)}` : "—";
+    // Санити стопа vs ATR — подсветка под строкой стопа.
+    const ss = c.stopSanity;
+    const ssNote = ss
+      ? `<div class="wi-subnote wi-ss-${ss.level}">🛡 ${escapeHtml(ss.note)}</div>` : "";
+    // Риск-калькулятор размера.
+    const sz = c.sizing;
+    const szNote = sz
+      ? `<div class="wi-subnote wi-size">📏 При риске ${sz.riskBudgetPct}% депо ($${fmtNum(sz.riskUsd)}) и этом стопе размер должен быть <strong>$${fmtNum(sz.suggestedSizeUsd)}</strong> (депо $${fmtNum(sz.equity)}).</div>` : "";
     plan = `
       <div class="wi-plan">
         <div class="wi-plan-title">План для ${escapeHtml(c.plan.side)}</div>
@@ -182,20 +194,32 @@ function resultHtml(r) {
           <div><span>R:R</span>${rr}</div>
           <div><span>Неправ если ниже/выше</span>${inval}</div>
         </div>
+        ${ssNote}
+        ${szNote}
       </div>`;
   }
+
+  // Order-flow «под капотом» (OI / объём / funding).
+  const flow = (c.orderFlow && c.orderFlow.length)
+    ? `<div class="wi-flow"><div class="wi-flow-title">⚙️ Под капотом (поток)</div><ul>${c.orderFlow.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>`
+    : "";
 
   // ── Сценарии ──
   const caseList = (title, arr, cls) => arr && arr.length
     ? `<div class="wi-case ${cls}"><div class="wi-case-title">${title}</div><ul>${arr.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>` : "";
   const cases = `<div class="wi-cases">${caseList("За вход", c.bull, "wi-case-bull")}${caseList("Против", c.bear, "wi-case-bear")}</div>`;
 
+  // ── Учёба на твоей истории (зеркало привычки) ──
+  const learn = c.learn
+    ? `<div class="wi-learn"><span class="wi-learn-tag">🪞 Твоя история (${c.learn.n})</span> ${escapeHtml(c.learn.note)}<span class="wi-learn-meta">winrate ${c.learn.winRate}% · payoff ${c.learn.payoff != null ? c.learn.payoff + "×" : "—"}</span></div>`
+    : "";
+
   // ── Вторичная честная строка: проверенный fade-эдж ──
   const edgeNote = `<div class="wi-edge-note">${r.fired
     ? `⚡ Бонус: тут совпал и проверенный fade-эдж (${escapeHtml(r.fadeSide || "")}).`
     : `Проверенного fade-эджа здесь нет — это разбор, не сигнал. ${escapeHtml(c.disclaimer)}`}</div>`;
 
-  return head + verdictBlock + structure + levels + plan + cases + edgeNote +
+  return head + verdictBlock + structure + flow + levels + plan + cases + learn + edgeNote +
     `<button type="button" class="wi-again" id="wi-again">← Другая монета</button>`;
 }
 
