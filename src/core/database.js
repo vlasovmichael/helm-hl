@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { mkdirSync, readFileSync, writeFileSync, renameSync } from 'fs';
+import { mkdirSync, readFileSync, writeFileSync, renameSync, statSync } from 'fs';
 import { logger } from './logger.js';
 import { config } from './config.js';
 
@@ -1066,8 +1066,11 @@ export function archiveAndClearHistory() {
   // Прямой writeFileSync открывал бы существующий файл на запись и падал с
   // EACCES, если владелец файла (opc) ≠ UID процесса в контейнере (node).
   // rename требует прав только на директорию data/ (она 777).
+  // Минифицированный JSON (без отступов): архив — машинный append-only лог,
+  // pretty-print раздувал его в ~2× (12k строк → 236 КБ). compactHistoryArchive
+  // переписывает существующий файл в тот же формат.
   const tmpPath = `${ARCHIVE_PATH}.${process.pid}.tmp`;
-  writeFileSync(tmpPath, JSON.stringify(merged, null, 2), 'utf-8');
+  writeFileSync(tmpPath, JSON.stringify(merged), 'utf-8');
   renameSync(tmpPath, ARCHIVE_PATH);
 
   // Очищаем таблицу history
@@ -1078,4 +1081,94 @@ export function archiveAndClearHistory() {
   );
 
   return newRows.length;
+}
+
+/**
+ * Переписывает data/history_archive.json в минифицированном виде (без отступов).
+ * Идемпотентно: если файл уже компактный — экономия ~0. Атомарно (tmp + rename),
+ * по тем же причинам прав, что и archiveAndClearHistory. Возвращает байты экономии.
+ */
+export function compactHistoryArchive() {
+  const ARCHIVE_PATH = 'data/history_archive.json';
+  let before;
+  try {
+    before = statSync(ARCHIVE_PATH).size;
+  } catch {
+    return 0; // файла нет — нечего сжимать
+  }
+  let archive;
+  try {
+    archive = JSON.parse(readFileSync(ARCHIVE_PATH, 'utf-8'));
+  } catch {
+    logger.warn('[DB] compactHistoryArchive: архив не парсится — пропуск');
+    return 0;
+  }
+  if (!Array.isArray(archive)) return 0;
+
+  const tmpPath = `${ARCHIVE_PATH}.${process.pid}.compact.tmp`;
+  writeFileSync(tmpPath, JSON.stringify(archive), 'utf-8');
+  renameSync(tmpPath, ARCHIVE_PATH);
+
+  let after = before;
+  try {
+    after = statSync(ARCHIVE_PATH).size;
+  } catch { /* noop */ }
+
+  const saved = before - after;
+  if (saved > 1024) {
+    logger.info(
+      `[DB] history_archive сжат: ${(before / 1024).toFixed(0)}→${(after / 1024).toFixed(0)} КиБ ` +
+      `(${archive.length} записей)`,
+    );
+  }
+  return saved;
+}
+
+/**
+ * Периодическое обслуживание trades.db. Вызывается из cron (см. index.js).
+ *
+ *  - wal_checkpoint(TRUNCATE): сливает WAL в основной файл и зануляет .wal, чтобы
+ *    он не рос неограниченно при долгом аптайме (на проде доходил до 4 МБ).
+ *  - integrity_check: при повреждении возвращает текст ошибки (вызывающий код
+ *    шлёт критический риск-алерт). 'ok' — БД здорова.
+ *  - VACUUM (только weekly): возвращает ОС страницы, освобождённые ретеншеном
+ *    setup_snapshots (90д) и архивацией history. Без него файл держит high-water
+ *    mark. VACUUM синхронный и блокирующий, но trades.db мал (≈2 МБ → <1с) и
+ *    better-sqlite3 синхронна — гонок с tick() нет (один event-loop).
+ *  - PRAGMA optimize (daily): дёшево обновляет статистику планировщика.
+ *
+ * @param {{ vacuum?: boolean }} opts
+ * @returns {{ ok: boolean, integrity: string, sizeBefore: number, sizeAfter: number }}
+ */
+export function runDbMaintenance({ vacuum = false } = {}) {
+  const d = getDb();
+
+  let sizeBefore = 0;
+  try { sizeBefore = statSync(DB_PATH).size; } catch { /* noop */ }
+
+  d.pragma('wal_checkpoint(TRUNCATE)');
+
+  const integrity = d.pragma('integrity_check', { simple: true });
+  if (integrity !== 'ok') {
+    logger.error(`[DB] 🚨 integrity_check FAILED: ${integrity}`);
+  }
+
+  if (vacuum) {
+    d.exec('VACUUM');
+  } else {
+    d.pragma('optimize');
+  }
+
+  let sizeAfter = sizeBefore;
+  try { sizeAfter = statSync(DB_PATH).size; } catch { /* noop */ }
+
+  const freed = sizeBefore - sizeAfter;
+  logger.info(
+    `[DB] Maintenance (${vacuum ? 'VACUUM' : 'optimize'}) | ` +
+    `${(sizeBefore / 1024).toFixed(0)}→${(sizeAfter / 1024).toFixed(0)} КиБ` +
+    (freed > 1024 ? ` (освобождено ${(freed / 1024).toFixed(0)} КиБ)` : '') +
+    ` | integrity=${integrity}`,
+  );
+
+  return { ok: integrity === 'ok', integrity, sizeBefore, sizeAfter };
 }

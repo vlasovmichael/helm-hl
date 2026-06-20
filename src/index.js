@@ -5,10 +5,10 @@
 import cron from 'node-cron';
 import { config } from './core/config.js';
 import { logger } from './core/logger.js';
-import { initDB, getActivePosition } from './core/database.js';
+import { initDB, getActivePosition, runDbMaintenance, compactHistoryArchive } from './core/database.js';
 import { initExchange, getAccountSummary } from './modules/exchange.js';
 import { getAccountEquity } from './modules/wallet.js';
-import { sendStartupNotification, setStatusCollector, startCallbackPolling } from './modules/reporter.js';
+import { sendStartupNotification, setStatusCollector, startCallbackPolling, sendMessage } from './modules/reporter.js';
 import { syncWithExchange } from './modules/sync.js';
 import { startDashboard } from './modules/dashboard/server.js';
 import { dailyJob as taxDailyJob } from './modules/taxCollector/index.js';
@@ -121,6 +121,32 @@ async function main() {
     });
   });
   logger.info('[System] Tax outbox pusher scheduled: every 15 min');
+
+  // ── DB maintenance — ежедневно 04:00 (перед borg-бэкапом 04:30) ──
+  // checkpoint WAL + integrity + optimize + сжатие архива. VACUUM по воскресеньям
+  // (возврат страниц от ретеншена setup_snapshots / архивации). integrity-фейл →
+  // критический риск-алерт в TG (см. feedback: риск-алерты всегда звучат).
+  cron.schedule(
+    '0 4 * * *',
+    () => {
+      try {
+        const isWeekly = new Date().getDay() === 0; // воскресенье → VACUUM
+        const res = runDbMaintenance({ vacuum: isWeekly });
+        compactHistoryArchive();
+        if (!res.ok) {
+          sendMessage(
+            `🚨 DB integrity_check FAILED:\n<code>${res.integrity}</code>`,
+            true,
+          ).catch(() => {});
+        }
+      } catch (err) {
+        logger.error(`[System] DB maintenance crashed: ${err.message}`);
+        sendMessage(`🚨 DB maintenance crashed: ${err.message}`, true).catch(() => {});
+      }
+    },
+    { timezone: 'Europe/Warsaw' },
+  );
+  logger.info('[System] DB maintenance cron scheduled: 04:00 Europe/Warsaw daily (VACUUM weekly Sun)');
 
   // Grace period для integrityCheck
   state.botStartedAt = Date.now();
