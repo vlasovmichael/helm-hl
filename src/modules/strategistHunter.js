@@ -22,6 +22,9 @@ import { trackShadowTick, finalizeShadow } from './hunterShadowExits.js';
 import {
   loadHunterCooldowns,
   setShortPostSl,
+  setHunterTrail,
+  getHunterTrailAll,
+  clearHunterTrail,
   _resetForTest as resetCooldownStore,
 } from './hunterCooldownStore.js';
 
@@ -58,8 +61,18 @@ function restoreFromDiskOnce() {
   for (const [coin, lastSlAt] of Object.entries(snap.short.postSlCooldown)) {
     hunterPostSlCooldown.set(coin, lastSlAt);
   }
+  // Soft-состояние трейла/BE по открытым позициям — чтобы рестарт не сбрасывал
+  // пик в 0 (иначе бот отдаёт больше прибыли, а "locked" уезжает вниз). Ключи в
+  // JSON — строки, мапы — по числовому position.id, поэтому Number().
+  for (const [pid, v] of Object.entries(getHunterTrailAll())) {
+    const id = Number(pid);
+    if (!Number.isFinite(id)) continue;
+    if (typeof v.peak === 'number' && v.peak > 0) peakUnrealizedPct.set(id, v.peak);
+    if (v.beArmed === true) hunterBeArmedMap.set(id, true);
+  }
 }
-restoreFromDiskOnce();
+// Вызов перенесён ниже — после объявления peakUnrealizedPct/hunterBeArmedMap
+// (иначе TDZ: restore трогает эти мапы).
 
 // Снимок последних подсчитанных спайков (для дашборд-карточки Hunter Watchlist).
 // Обновляется каждый тик внутри analyzeHunter, [{coin, pct}], отсортирован по pct desc.
@@ -91,6 +104,9 @@ const hunterBeArmedMap    = new Map();
 // при armed-трейле» (отдельно от hunterArmedMap, чтобы не ломать arm-state).
 const hunterUncapShadowLogged = new Set();
 
+// Восстановление soft-состояния трейла/BE с диска — ПОСЛЕ объявления мап выше.
+restoreFromDiskOnce();
+
 const HUNTER_TRAIL_ENABLED      = config.trading.hunterTrailEnabled;
 const HUNTER_TRAIL_SHADOW_LOG   = config.trading.hunterTrailShadowLog;
 const HUNTER_TRAIL_ARM_PCT      = config.trading.hunterTrailArmPct;
@@ -109,6 +125,7 @@ export function clearHunterTrailState(positionId) {
   hunterArmRequestMap.delete(positionId);
   hunterBeArmedMap.delete(positionId);
   hunterUncapShadowLogged.delete(positionId);
+  clearHunterTrail(positionId); // снять персист (иначе орфан до TTL)
 }
 
 /** tick.js: проверить и забрать pending ARM request (one-shot). */
@@ -503,6 +520,11 @@ function checkHunterExitCore(position, scoutData, item, exitOpts = {}) {
   const prevPeak = peakUnrealizedPct.get(position.id) ?? 0;
   if (unrealizedPct > prevPeak) {
     peakUnrealizedPct.set(position.id, unrealizedPct);
+    // Персист нового пика для PROD-позы, но только когда он уже влияет на защиту
+    // (≥ BE-arm) — мелкие пики восстанавливать незачем, экономим запись на диск.
+    if (position.mode === 'PRODUCTION' && unrealizedPct >= HUNTER_BE_ARM_PCT) {
+      setHunterTrail(position.id, { peak: unrealizedPct });
+    }
   }
   const peak = peakUnrealizedPct.get(position.id) ?? 0;
 
@@ -574,6 +596,9 @@ function checkHunterExitCore(position, scoutData, item, exitOpts = {}) {
         `[Hunter] 🛡 BREAKEVEN RATCHET ARMED #${position.coin} (id=${position.id}): peak +${peak.toFixed(2)}% ≥ ${HUNTER_BE_ARM_PCT}% — ` +
           `floor ${HUNTER_BE_FLOOR_PCT}%, теперь не отдадим в минус`,
       );
+      // Персист взвода для PROD-позы — рестарт не снимет храповик и не зальёт
+      // дубль-лог "ARMED" (restore поднимет флаг).
+      if (position.mode === 'PRODUCTION') setHunterTrail(position.id, { beArmed: true });
     }
     hunterBeArmedMap.set(position.id, true);
   }

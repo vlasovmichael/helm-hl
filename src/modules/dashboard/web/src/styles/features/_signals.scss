@@ -28,6 +28,19 @@
   margin: 0 -8px;
   padding: 0 8px;
 }
+/* Hot Movers: фиксируем высоту обёртки (выставляет JS = thead + HM_MAX_ROWS
+   строк), лишние под-строки (pos/fade) скроллятся внутри — карточка не прыгает
+   при смене монет. Заголовок sticky внутри скролла. height ставится в JS, т.к.
+   высота строки зависит от иконок Enter (26px) и шрифта — мерить надёжнее, чем
+   хардкодить. */
+.hm-scroll-wrap {
+  overflow-y: auto;
+}
+.hm-scroll-wrap .hm-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
 .signals-table {
   width: 100%;
   border-collapse: collapse;

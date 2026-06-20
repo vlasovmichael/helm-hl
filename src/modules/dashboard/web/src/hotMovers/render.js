@@ -515,52 +515,31 @@ export function renderHotMovers(payload, fmtTime) {
   stabilizeHeight(tbody);
 }
 
+let _hmFixedH = 0; // последняя выставленная высота обёртки (анти-трэшинг layout)
+
 // Гасим прыжок высоты карточки при смене монет. Основные строки уже добиты
-// плейсхолдерами до HM_MAX_ROWS (высота их области = const), но под-строки
-// (`pos:` позиция, `fh:` fade-хвоста) — внеплановая высота: появляются/исчезают
-// вместе с набором топ-монет и дёргают карточку. Бюджет высоты: меряем живьём
-// суммарную высоту под-строк и ровно на столько ужимаем пустые плейсхолдеры
-// СНИЗУ вверх (сначала схлопываем нижний целиком, потом подрезаем следующий на
-// остаток). Меряем offsetHeight, а не хардкодим — многострочный контент учтётся.
-// Каждый тик сперва СБРАСываем прошлые подрезки (строки переживают тик по ключу),
-// потом считаем заново. Если плейсхолдеров не хватает (карточка забита реальными
-// монетами) — поглощаем сколько есть, остаток роста допустим (busy-режим).
+// плейсхолдерами до HM_MAX_ROWS, но под-строки (`pos:` позиция, `fh:` fade-хвоста)
+// — внеплановая высота, и в горячем рынке (8 реальных монет → 0 плейсхолдеров)
+// гасить их нечем. Поэтому фиксируем высоту ОБЁРТКИ = thead + HM_MAX_ROWS строк:
+// лишние под-строки скроллятся внутри, внешний размер карточки = const всегда.
+// Высоту меряем (иконки Enter 26px / шрифт делают строку выше хардкода), кэшируем.
 function stabilizeHeight(tbody) {
-  const phRows = Array.from(tbody.querySelectorAll("tr.hm-placeholder-row"));
-  // Сброс прошлых подрезок до натуральной высоты (из CSS).
-  for (const tr of phRows) {
-    const td = tr.firstElementChild;
-    if (!td) continue;
-    td.style.height = "";
-    td.style.padding = "";
-    td.style.border = "";
-    td.style.overflow = "";
-  }
-  if (phRows.length === 0) return;
-  // Суммарная высота внеплановых под-строк — источник прыжка.
-  let overflow = 0;
-  for (const tr of tbody.querySelectorAll(
-    'tr[data-hmkey^="pos:"], tr[data-hmkey^="fh:"]',
-  ))
-    overflow += tr.offsetHeight;
-  if (overflow <= 0) return;
-  // Схлопываем плейсхолдеры снизу вверх ровно на `overflow` px.
-  for (let i = phRows.length - 1; i >= 0 && overflow > 0; i--) {
-    const td = phRows[i].firstElementChild;
-    if (!td) continue;
-    const h = phRows[i].offsetHeight;
-    if (overflow >= h) {
-      td.style.height = "0";
-      td.style.padding = "0";
-      td.style.border = "0";
-      td.style.overflow = "hidden";
-      overflow -= h;
-    } else {
-      td.style.height = `${h - overflow}px`;
-      td.style.padding = "0";
-      td.style.overflow = "hidden";
-      overflow = 0;
-    }
+  const wrap = tbody.closest(".hm-scroll-wrap");
+  if (!wrap) return;
+  const table = tbody.parentElement; // <table>, внутри thead+tbody
+  const thead = table?.querySelector("thead");
+  // Эталон высоты строки: первая основная (m:) или пустышка (ph:) — у них
+  // постоянная высота. Под-строки (pos/fh) ниже и для эталона не годятся.
+  const sample =
+    tbody.querySelector('tr[data-hmkey^="m:"]') ||
+    tbody.querySelector("tr.hm-placeholder-row");
+  const rowH = sample?.offsetHeight || 0;
+  const headH = thead?.offsetHeight || 0;
+  if (rowH <= 0) return; // пустое состояние (статус-строка) — высоту не трогаем
+  const target = headH + rowH * HM_MAX_ROWS;
+  if (Math.abs(target - _hmFixedH) > 1) {
+    wrap.style.height = `${target}px`;
+    _hmFixedH = target;
   }
 }
 

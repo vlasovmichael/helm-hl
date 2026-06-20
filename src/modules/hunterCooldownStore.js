@@ -45,8 +45,16 @@ function emptyCache() {
     version: VERSION,
     short: { postSlCooldown: {} },                  // { coin: unbanAtMs }
     long:  { postSlCooldown: {}, slStreak: {} },    // streak: { coin: { count, lastSlAt } }
+    // trail: per-position мягкое состояние Hunter (peak unrealized% + взвод BE-
+    // храповика), чтобы рестарт НЕ сбрасывал трейл/BE-пол в 0 (иначе после
+    // рестарта бот отдаёт больше прибыли, а "locked" в дашборде уезжает вниз).
+    // Жёсткий SL/TP лежат на бирже и так переживают рестарт — здесь только soft.
+    trail: {},  // { [positionId]: { peak, beArmed, updatedAt } }
   };
 }
+
+// Орфаны (позиция закрылась пока бот лежал → clear не вызвался) чистим по TTL.
+const TRAIL_HARD_TTL_MS = 24 * 60 * 60_000;
 
 /**
  * Ленивая загрузка. Первый вызов читает файл, валидирует, фильтрует просроченные
@@ -105,16 +113,31 @@ export function loadHunterCooldowns(now = Date.now()) {
       }
     }
 
+    // trail: фильтр орфанов по hard-TTL от updatedAt.
+    const trailIn = data.trail;
+    const trail = {};
+    let trailExpired = 0;
+    if (trailIn && typeof trailIn === 'object') {
+      for (const [pid, v] of Object.entries(trailIn)) {
+        if (v && typeof v.peak === 'number' && typeof v.updatedAt === 'number' &&
+            now - v.updatedAt < TRAIL_HARD_TTL_MS) {
+          trail[pid] = { peak: v.peak, beArmed: v.beArmed === true, updatedAt: v.updatedAt };
+        } else trailExpired++;
+      }
+    }
+
     cache = {
       version: VERSION,
       short: { postSlCooldown: sho.out },
       long:  { postSlCooldown: lon.out, slStreak: streak },
+      trail,
     };
 
     logger.info(
       `[HunterCooldownStore] Loaded: SHORT post-SL=${Object.keys(sho.out).length} ` +
       `(${sho.expired} expired), LONG post-SL=${Object.keys(lon.out).length} ` +
-      `(${lon.expired} expired), LONG streak=${Object.keys(streak).length}`,
+      `(${lon.expired} expired), LONG streak=${Object.keys(streak).length}, ` +
+      `trail=${Object.keys(trail).length} (${trailExpired} expired)`,
     );
   } catch (err) {
     if (err.code !== 'ENOENT') {
@@ -147,6 +170,42 @@ export function setShortPostSl(coin, lastSlAt) {
   loadHunterCooldowns();
   cache.short.postSlCooldown[coin] = lastSlAt;
   persist();
+}
+
+// ── TRAIL helpers (per-position soft state) ─────────────────────────────────
+/** Мердж soft-состояния позиции (peak растёт монотонно, beArmed взводится).
+ *  Вызывать только для PROD-позиции — paper-двойник свой трейл не персистит. */
+export function setHunterTrail(positionId, patch) {
+  if (positionId == null) return;
+  loadHunterCooldowns();
+  const key = String(positionId);
+  const prev = cache.trail[key] || { peak: 0, beArmed: false };
+  const next = {
+    peak:     patch.peak     != null ? patch.peak     : prev.peak,
+    beArmed:  patch.beArmed  != null ? patch.beArmed  : prev.beArmed,
+    updatedAt: Date.now(),
+  };
+  // Без изменений (тот же пик, тот же флаг) — не пишем диск зря.
+  if (prev.peak === next.peak && prev.beArmed === next.beArmed) return;
+  cache.trail[key] = next;
+  persist();
+}
+
+/** Снимок trail-состояния для восстановления после рестарта. */
+export function getHunterTrailAll() {
+  loadHunterCooldowns();
+  return cache.trail;
+}
+
+/** Удаление при закрытии позиции. */
+export function clearHunterTrail(positionId) {
+  if (positionId == null) return;
+  loadHunterCooldowns();
+  const key = String(positionId);
+  if (cache.trail[key] !== undefined) {
+    delete cache.trail[key];
+    persist();
+  }
 }
 
 // ── LONG helpers ──────────────────────────────────────────────────────────
