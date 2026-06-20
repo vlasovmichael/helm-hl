@@ -60,6 +60,21 @@ function buildStatus() {
   const solPrice = solEntry * (1 + (POS.entry - price) / POS.entry); // тот же ход
   const solSize = 90;
   const solUpnl = ((solPrice - solEntry) / solEntry) * solSize;
+  // Живой пол выхода (зеркало buildAdoptManagement): трейл при пике ≥3%, BE при
+  // ≥1.5%, иначе жёсткий −2%. Даёт dev-превью настоящие Floor/R/peak-метрики.
+  const solMovePct = ((solPrice - solEntry) / solEntry) * 100; // long: + при росте
+  const solPeakPct = Math.max(0, solMovePct); // в моке пик ≈ текущий плюс
+  let solFloorPct, solFloorKind;
+  if (solPeakPct >= 3) {
+    solFloorPct = solPeakPct * 0.5; // trail: пик − giveback
+    solFloorKind = "trail";
+  } else if (solPeakPct >= 1.5) {
+    solFloorPct = 0.1;
+    solFloorKind = "be";
+  } else {
+    solFloorPct = -2;
+    solFloorKind = "stop";
+  }
   const manualAdopted = {
     coin: "SOL",
     side: "LONG",
@@ -74,7 +89,12 @@ function buildStatus() {
       stopPrice: solEntry * 0.98, // −2% (long стоп ниже входа)
       tpPrice: solEntry * 1.04,
       beArmPct: 1.5,
-      beArmed: (solPrice - solEntry) / solEntry >= 0.015,
+      beArmed: solPeakPct >= 1.5,
+      initialRiskPct: 2,
+      peakPct: solPeakPct,
+      floorPct: solFloorPct,
+      floorKind: solFloorKind,
+      floorPrice: solEntry * (1 + solFloorPct / 100), // long: пол выше/ниже входа
     },
   };
   return {

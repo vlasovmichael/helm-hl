@@ -109,6 +109,65 @@ function setPnlUsd(cell, v) {
   if (spacer) spacer.textContent = txt;
 }
 
+// ── Производные метрики ручной (HANDS-OFF/ADOPTED) позиции для карточек. Один
+// источник правды и для сборки HTML, и для патча-на-месте, чтобы цифры не
+// разъезжались. Всё считаем из payload: бэк трогать не надо (2026-06-20).
+//   · riskUsd  — $ на кону до жёсткого стопа (initialRiskPct·size). null без стопа.
+//   · rMult    — uPnL / riskUsd: насколько сделка прошла в R (честнее доллара).
+//   · movePct  — ход цены к ВХОДУ со знаком МОЕЙ стороны (+ в мою пользу).
+//   · floor*   — живой пол выхода няньки: цена / тип (stop|be|trail) / $ на полу.
+//   · peakPct  — MFE: как далеко ушло в плюс (MAE бэк не хранит — откат не покажем).
+function manualStats(p) {
+  const entry = p.entryPrice;
+  const now = p.currentPrice;
+  const isShort = String(p.side || "").toUpperCase() === "SHORT";
+  const bot = p.bot || null;
+  const riskPct =
+    bot?.initialRiskPct != null
+      ? bot.initialRiskPct
+      : bot?.stopPrice && entry
+        ? (Math.abs(entry - bot.stopPrice) / entry) * 100
+        : null;
+  const riskUsd =
+    riskPct != null && p.sizeUsd != null ? (riskPct / 100) * p.sizeUsd : null;
+  const rMult =
+    riskUsd && riskUsd > 0 && p.unrealizedPnl != null
+      ? p.unrealizedPnl / riskUsd
+      : null;
+  const movePct =
+    entry && now ? ((isShort ? entry - now : now - entry) / entry) * 100 : null;
+  const floorPrice = bot?.floorPrice ?? bot?.stopPrice ?? null;
+  const floorKind = bot?.floorKind ?? (bot?.stopPrice ? "stop" : null);
+  const floorPnl =
+    bot?.floorPct != null && p.sizeUsd != null
+      ? (bot.floorPct / 100) * p.sizeUsd
+      : null;
+  const peakPct = bot?.peakPct != null && bot.peakPct > 0 ? bot.peakPct : null;
+  return { riskUsd, rMult, movePct, floorPrice, floorKind, floorPnl, peakPct };
+}
+
+// Floor-бейдж: тип защиты, который УЖЕ повесила нянька. Цветим только маленький
+// чип (HARD/BE/TRAIL), чтобы не плодить второе «пятно» — глубинная заливка
+// живёт только на uPnL.
+const FLOOR_BADGE = {
+  stop: { txt: "HARD", cls: "fl-hard" },
+  be: { txt: "BE", cls: "fl-be" },
+  trail: { txt: "TRAIL", cls: "fl-trail" },
+};
+
+const fmtR = (r) => `${r >= 0 ? "+" : "−"}${Math.abs(r).toFixed(2)}R`;
+const fmtSignedUsd2 = (v) => `${v >= 0 ? "+" : "−"}$${Math.abs(v).toFixed(2)}`;
+const fmtMove = (m) =>
+  `${m >= 0 ? "+" : "−"}${Math.abs(m).toFixed(2)}%${m < 0 ? " против" : ""}`;
+// Текст под-строки uPnL: R-кратность + пик (MFE), если был плюс.
+const upnlSubTxt = (s) =>
+  [
+    s.rMult != null ? fmtR(s.rMult) : "",
+    s.peakPct != null ? `пик +${s.peakPct.toFixed(2)}%` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
 // Текущая монета бот-позиции — чтобы понимать, патчить на месте или пере-строить.
 let _posCoin = null;
 let _lastNetVal = null;
@@ -318,6 +377,28 @@ export function renderManualPositions(list) {
       const nowEl = card.querySelector("[data-mnow]");
       if (nowEl)
         nowEl.textContent = `${fmtPrice(p.entryPrice)} · ${p.currentPrice != null ? fmtPrice(p.currentPrice) : "—"}`;
+      // Производные метрики двигаются каждый тик (now/peak/трейл) → патчим их же.
+      const s = manualStats(p);
+      const moveEl = card.querySelector("[data-mmove]");
+      if (moveEl) moveEl.textContent = s.movePct != null ? fmtMove(s.movePct) : "—";
+      const rEl = card.querySelector("[data-mr]");
+      if (rEl) rEl.textContent = upnlSubTxt(s);
+      const flEl = card.querySelector("[data-mfloor]");
+      if (flEl && s.floorPrice != null) flEl.textContent = fmtPrice(s.floorPrice);
+      const flPnlEl = card.querySelector("[data-mfloorpnl]");
+      if (flPnlEl && s.floorPnl != null) {
+        flPnlEl.textContent = fmtSignedUsd2(s.floorPnl);
+        flPnlEl.classList.toggle("positive", s.floorPnl >= 0);
+        flPnlEl.classList.toggle("negative", s.floorPnl < 0);
+      }
+      // Тип пола меняется на лету (stop→BE→trail, когда взводится храповик).
+      const flBadge = card.querySelector("[data-mfloor]")?.parentElement
+        ?.querySelector(".fl-badge");
+      const fb = FLOOR_BADGE[s.floorKind] || null;
+      if (flBadge && fb) {
+        flBadge.textContent = fb.txt;
+        flBadge.className = `fl-badge ${fb.cls}`;
+      }
       const prev = _manualLastUpnl.get(p.coin);
       const crossed =
         prev != null && prev >= 0 !== p.unrealizedPnl >= 0;
@@ -360,6 +441,23 @@ export function renderManualPositions(list) {
         tpPrice: p.bot?.tpPrice,
       });
       const { cls: rbCls, attr: rbAttr } = tintAttrs(tint);
+      const s = manualStats(p);
+      // Size → + риск на кону до жёсткого стопа ($). Нет стопа → «—» (само
+      // сигналит, что риск не ограничен).
+      const riskSub = s.riskUsd != null ? `риск −$${s.riskUsd.toFixed(2)}` : "—";
+      // Entry·Now → + дистанция к входу со знаком моей стороны.
+      const moveSub = s.movePct != null ? fmtMove(s.movePct) : "—";
+      // Floor (живой пол выхода) вместо Liq — нянька закроет тут задолго до ликв.
+      // Ликвидацию уводим в title. Нет пола (не усыновлена) → fallback на Liq.
+      const fb = FLOOR_BADGE[s.floorKind] || null;
+      const floorCell =
+        s.floorPrice != null
+          ? `<div class="grid-item" title="Ликвидация: ${liq}">
+               <div class="item-label">Floor${fb ? ` <span class="fl-badge ${fb.cls}">${fb.txt}</span>` : ""}</div>
+               <div class="item-value" data-mfloor>${fmtPrice(s.floorPrice)}</div>
+               <div class="grid-sub ${s.floorPnl >= 0 ? "positive" : "negative"}" data-mfloorpnl>${s.floorPnl != null ? fmtSignedUsd2(s.floorPnl) : ""}</div>
+             </div>`
+          : `<div class="grid-item"><div class="item-label">Liq</div><div class="item-value">${liq}</div></div>`;
       return `
       <div data-mcard="${escapeHtml(p.coin)}" style="margin-top:0.75rem; padding:0.75rem; border:1px dashed var(--border); border-radius:8px;">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:0.5rem;">
@@ -368,10 +466,10 @@ export function renderManualPositions(list) {
           <span class="item-value ${sideCls}">${p.side}</span>
         </div>
         <div class="data-grid">
-          <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}</div></div>
-          <div class="grid-item"><div class="item-label">Entry · Now</div><div class="item-value" data-mnow>${fmtPrice(p.entryPrice)} · ${cur}</div></div>
-          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}` })}</div>
-          <div class="grid-item"><div class="item-label">Liq</div><div class="item-value">${liq}</div></div>
+          <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}</div><div class="grid-sub negative">${riskSub}</div></div>
+          <div class="grid-item"><div class="item-label">Entry · Now</div><div class="item-value" data-mnow>${fmtPrice(p.entryPrice)} · ${cur}</div><div class="grid-sub" data-mmove>${moveSub}</div></div>
+          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}` })}<div class="pnl-sub" data-mr>${upnlSubTxt(s)}</div></div>
+          ${floorCell}
         </div>
       </div>`;
     })

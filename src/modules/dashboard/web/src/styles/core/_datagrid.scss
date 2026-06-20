@@ -56,6 +56,50 @@
   }
 }
 
+/* Вторичная под-строка карточки (риск-$, дистанция, R, $ на полу): мелкая,
+   приглушённая, моноширинная — НЕ перетягивает внимание с главной цифры. */
+.grid-sub {
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--text-muted);
+  &.positive {
+    color: var(--green);
+  }
+  &.negative {
+    color: var(--red);
+  }
+}
+
+/* Floor-чип: единственное цветное «пятно» вне uPnL — тип защиты няньки
+   (HARD stop / BE безубыток / TRAIL). */
+.fl-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  vertical-align: middle;
+  &.fl-hard {
+    color: var(--red);
+    background: var(--red-soft);
+    border: 1px solid var(--red-line);
+  }
+  &.fl-be {
+    color: var(--text-secondary);
+    background: var(--canvas-subtle);
+    border: 1px solid var(--border);
+  }
+  &.fl-trail {
+    color: var(--green);
+    background: var(--green-soft);
+    border: 1px solid var(--green-line);
+  }
+}
+
 /* Заливка PnL-карточки по знаку (зелёный/красный). Перебивает accent-soft у
    grid-item-primary, чтобы главная Net-цифра читалась как «в плюсе/минусе». */
 .grid-item.pnl-tint {
@@ -99,6 +143,20 @@
   }
   .pnl-fill {
     display: none;
+  }
+  /* Под-строка uPnL (R + пик): в потоке под слоями. base/fill — absolute
+     inset:0 с пустым низом, поэтому под-строка сквозит; relative+z-index
+     гарантирует, что её не перекроет прозрачный base. */
+  .pnl-sub {
+    position: relative;
+    z-index: 1;
+    margin-top: 6px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+    color: var(--text-muted);
   }
 }
 /* Registered custom-prop — без него край заливки «телепортируется»: браузер
