@@ -512,6 +512,56 @@ export function renderHotMovers(payload, fmtTime) {
 
   reconcileRows(tbody, items);
   mountDirArrows(tbody);
+  stabilizeHeight(tbody);
+}
+
+// Гасим прыжок высоты карточки при смене монет. Основные строки уже добиты
+// плейсхолдерами до HM_MAX_ROWS (высота их области = const), но под-строки
+// (`pos:` позиция, `fh:` fade-хвоста) — внеплановая высота: появляются/исчезают
+// вместе с набором топ-монет и дёргают карточку. Бюджет высоты: меряем живьём
+// суммарную высоту под-строк и ровно на столько ужимаем пустые плейсхолдеры
+// СНИЗУ вверх (сначала схлопываем нижний целиком, потом подрезаем следующий на
+// остаток). Меряем offsetHeight, а не хардкодим — многострочный контент учтётся.
+// Каждый тик сперва СБРАСываем прошлые подрезки (строки переживают тик по ключу),
+// потом считаем заново. Если плейсхолдеров не хватает (карточка забита реальными
+// монетами) — поглощаем сколько есть, остаток роста допустим (busy-режим).
+function stabilizeHeight(tbody) {
+  const phRows = Array.from(tbody.querySelectorAll("tr.hm-placeholder-row"));
+  // Сброс прошлых подрезок до натуральной высоты (из CSS).
+  for (const tr of phRows) {
+    const td = tr.firstElementChild;
+    if (!td) continue;
+    td.style.height = "";
+    td.style.padding = "";
+    td.style.border = "";
+    td.style.overflow = "";
+  }
+  if (phRows.length === 0) return;
+  // Суммарная высота внеплановых под-строк — источник прыжка.
+  let overflow = 0;
+  for (const tr of tbody.querySelectorAll(
+    'tr[data-hmkey^="pos:"], tr[data-hmkey^="fh:"]',
+  ))
+    overflow += tr.offsetHeight;
+  if (overflow <= 0) return;
+  // Схлопываем плейсхолдеры снизу вверх ровно на `overflow` px.
+  for (let i = phRows.length - 1; i >= 0 && overflow > 0; i--) {
+    const td = phRows[i].firstElementChild;
+    if (!td) continue;
+    const h = phRows[i].offsetHeight;
+    if (overflow >= h) {
+      td.style.height = "0";
+      td.style.padding = "0";
+      td.style.border = "0";
+      td.style.overflow = "hidden";
+      overflow -= h;
+    } else {
+      td.style.height = `${h - overflow}px`;
+      td.style.padding = "0";
+      td.style.overflow = "hidden";
+      overflow = 0;
+    }
+  }
 }
 
 // Персистентные стрелки активной монеты: строки перестраиваются (innerHTML)
