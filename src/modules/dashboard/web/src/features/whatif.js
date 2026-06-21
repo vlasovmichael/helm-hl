@@ -283,6 +283,14 @@ export function initWhatIf() {
       setTimeout(() => document.getElementById("wi-coin")?.focus(), 0);
       return;
     }
+    // Fade-лист «Разбор» → сразу разбор по монете+стороне (минуя форму ввода).
+    const fadeBtn = e.target.closest("[data-fade-coach]");
+    if (fadeBtn) {
+      const coin = (fadeBtn.dataset.coin || "").trim();
+      const side = (fadeBtn.dataset.side || "").trim();
+      if (coin) runCheck(coin, side);
+      return;
+    }
     // Close (backdrop / ×).
     if (e.target.closest("#whatif-modal [data-close]")) {
       closeModal();

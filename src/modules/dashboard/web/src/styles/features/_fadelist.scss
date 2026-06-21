@@ -1,0 +1,37 @@
+// ─────────────────────────────────────────────────
+//  Fade-лист — отдельная карточка выдохшихся хвостов (см. fadeList.js)
+// ─────────────────────────────────────────────────
+
+#sec-fade-list {
+  .fade-plan {
+    line-height: 1.35;
+  }
+  .fade-zone {
+    font-family: var(--font-mono);
+    font-weight: 600;
+  }
+  .fade-stop {
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+  }
+  .fade-coach-btn {
+    font: inherit;
+    font-size: 12px;
+    padding: 3px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--accent, #3b82f6);
+    background: transparent;
+    color: var(--accent, #3b82f6);
+    cursor: pointer;
+    transition:
+      background 0.15s ease,
+      color 0.15s ease;
+
+    &:hover {
+      background: var(--accent, #3b82f6);
+      color: #fff;
+    }
+  }
+}

@@ -178,6 +178,46 @@
         </div>
       </section>
 
+      <!-- 01.55 / Fade-лист — выдохшиеся хвосты (forward-вход), отдельно от Hot Movers -->
+      <section class="card" id="sec-fade-list">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-num="01.55"
+            title="Выдохшиеся хвосты протяжённого движения (fade-high-ER) — единственный forward-вход, переживший OOS. Почти всегда SHORT (фейдим памп). Это watchlist, НЕ Hot Movers: тут показаны только сетапы с проверенным правилом (ход 30м≥3% при Kaufman ER 4ч≥0.47). «Разбор» открывает коуч графика — между сигналом и входом всегда стоит разбор + стоп."
+          >
+            Fade-лист
+          </div>
+          <span
+            id="fade-list-meta"
+            style="
+              font-size: 11px;
+              font-family: var(--font-mono);
+              color: var(--text-muted);
+            "
+          ></span>
+        </div>
+        <div class="u-scroll-x">
+          <table class="data-table signals-table">
+            <thead>
+              <tr>
+                <th>Монета</th>
+                <th class="c">Сторона</th>
+                <th class="r" title="Ход цены за 30 минут (2×15m)">Ход 30м</th>
+                <th class="r" title="Kaufman Efficiency Ratio за 4ч — насколько движение направленное (≥0.47 = выдохшийся протяжённый ход, а не чоп)">ER 4ч</th>
+                <th>Зона / стоп</th>
+                <th class="c">Разбор</th>
+              </tr>
+            </thead>
+            <tbody id="fade-list-tbody">
+              <tr>
+                <td colspan="6" class="empty-state">Загрузка…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- 01.6 / Price Chart — дефолт BTC, клик по Hot Mover переключает монету -->
       <section class="card" id="sec-chart">
         <div class="card-header">
