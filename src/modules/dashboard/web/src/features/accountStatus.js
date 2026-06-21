@@ -26,32 +26,9 @@ function tintAttrs(tint) {
 // через CSS (.idle-radar в _datagrid.scss).
 const IDLE_RADAR_HTML = `
 <div class="idle-radar">
-  <svg viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Bot idle — scanning markets">
-    <defs>
-      <radialGradient id="ir-glow" cx="50%" cy="50%" r="50%">
-        <stop offset="0%" stop-color="currentColor" stop-opacity="0.35"/>
-        <stop offset="100%" stop-color="currentColor" stop-opacity="0"/>
-      </radialGradient>
-      <linearGradient id="ir-sweep" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0%" stop-color="currentColor" stop-opacity="0"/>
-        <stop offset="100%" stop-color="currentColor" stop-opacity="0.45"/>
-      </linearGradient>
-    </defs>
-    <circle cx="60" cy="60" r="50" fill="url(#ir-glow)"/>
-    <g fill="none" stroke="currentColor" stroke-opacity="0.16">
-      <circle cx="60" cy="60" r="50"/>
-      <circle cx="60" cy="60" r="33"/>
-      <circle cx="60" cy="60" r="16"/>
-      <line x1="60" y1="10" x2="60" y2="110"/>
-      <line x1="10" y1="60" x2="110" y2="60"/>
-    </g>
-    <g class="ir-sweep">
-      <path d="M60 60 L60 10 A50 50 0 0 1 95 25 Z" fill="url(#ir-sweep)"/>
-      <line x1="60" y1="60" x2="60" y2="10" stroke="currentColor" stroke-opacity="0.55"/>
-      <animateTransform attributeName="transform" type="rotate" from="0 60 60" to="360 60 60" dur="9s" repeatCount="indefinite"/>
-    </g>
-    <circle cx="60" cy="60" r="3" fill="currentColor"/>
-  </svg>
+  <div class="idle-radar-dish">
+    <div class="idle-radar-sweep"></div>
+  </div>
   <div class="idle-radar-text">Scanning markets</div>
 </div>`;
 
