@@ -21,10 +21,16 @@ function tintAttrs(tint) {
   return { cls, attr };
 }
 
-// IDLE-плейсхолдер: как было (текст), но с мягким «дыханием» прозрачности —
-// анимируется только opacity (компоновщик GPU, без дёрганья).
-const IDLE_RADAR_HTML =
-  '<div class="empty-state idle-breathe">No active positions — bot is IDLE</div>';
+// IDLE-плейсхолдер: радар-свип в духе «Hunter сканирует рынок». Самодостаточный
+// SVG со SMIL-анимацией (rotate + pulse). prefers-reduced-motion гасит движение
+// через CSS (.idle-radar в _datagrid.scss).
+const IDLE_RADAR_HTML = `
+<div class="idle-radar">
+  <div class="idle-radar-dish">
+    <div class="idle-radar-sweep"></div>
+  </div>
+  <div class="idle-radar-text">Scanning markets</div>
+</div>`;
 
 const lastAnimatedValues = new Map();
 // Знак прошлого Net(Mkt) бот-позиции — чтобы пыхнуть карточкой при переходе
