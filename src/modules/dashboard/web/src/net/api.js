@@ -7,3 +7,8 @@ export async function fetchJson(path) {
   if (r.status === 401) window.location.href = "/login";
   return r.json();
 }
+
+/** Последние ушедшие ntfy-пуши (для колокольчика). */
+export function getNotifications(limit = 50) {
+  return fetchJson(`/api/notifications?limit=${limit}`);
+}

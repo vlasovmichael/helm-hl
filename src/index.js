@@ -22,6 +22,7 @@ import { startWsEntryLoop } from './app/wsEntryTick.js';
 import { startSetupSwingAlerts } from './modules/setupScannerAlerts.js';
 import { startHotMoversAlerts } from './modules/hotMoversAlerts.js';
 import { startFadeHotAlerts } from './modules/fadeHotAlerts.js';
+import { sendDailyDigest } from './modules/mailDigest.js';
 import { shutdown } from './app/lifecycle.js';
 import { createStatusCollector } from './app/status.js';
 
@@ -93,6 +94,20 @@ async function main() {
   // Fade-high-ER feed: ВСЕ гейтованные fade-сетапы (выдохшийся хвост в горячем рынке)
   // в ntfy — премиум-сигналы, не сделки. Независим от paper-слота. FADEHOT_ALERT_FEED_ENABLED.
   startFadeHotAlerts();
+
+  // ── Ежедневный почтовый дайджест — 21:05 (Europe/Warsaw), после Daily Recap ──
+  // Отчёт за сутки (пуши + сводка стратегий) на self-hosted Listmonk. Fail-soft:
+  // тихо no-op, если почта (LISTMONK_*/MAIL_TO) не настроена.
+  cron.schedule(
+    '5 21 * * *',
+    () => {
+      sendDailyDigest().catch((err) => {
+        logger.warn(`[mailDigest] cron crashed: ${err.message}`);
+      });
+    },
+    { timezone: 'Europe/Warsaw' },
+  );
+  logger.info('[System] Mail digest cron scheduled: 21:05 Europe/Warsaw daily');
 
   // ── Tax Collector — ежедневный сбор PIT-38 в 03:00 (Europe/Warsaw) ──
   // Fail-soft: модуль сам отключается, если BINANCE_API_KEY не задан.

@@ -16,6 +16,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
+import { fireNtfy as fireNtfyCore } from '../core/ntfy.js';
 import { state } from '../app/state.js';
 import { getPriceNMinAgo } from '../core/priceHistory.js';
 import {
@@ -56,34 +57,16 @@ export function isQuietHour(now = Date.now()) {
     : hour >= QUIET_FROM || hour < QUIET_TO;
 }
 
+// Делегат в core fireNtfy (priority + тихий час + журнал колокольчика + почта
+// считаются там). Свой топик NTFY_TOPIC_MOVERS. Локальный isQuietHour оставлен
+// (тесты), боевое решение по priority принимает core.
 async function fireNtfy(title, message, tags) {
-  const { url, token } = config.ntfy;
-  const topic = process.env.NTFY_TOPIC_MOVERS || config.ntfy.topic;
-  if (!url || !topic) return;
-  try {
-    const { default: https } = await import('node:https');
-    const { default: http } = await import('node:http');
-    const priority = isQuietHour() ? 1 : (config.ntfy.priority ?? 3);
-    const body = JSON.stringify({ topic, title, message, priority, tags });
-    const u = new URL(`${url}/`);
-    const lib = u.protocol === 'https:' ? https : http;
-    const headers = {
-      'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(body),
-    };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    await new Promise((resolve, reject) => {
-      const req = lib.request(
-        { hostname: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80), path: '/', method: 'POST', headers },
-        (res) => { res.resume(); res.on('end', resolve); },
-      );
-      req.on('error', reject);
-      req.write(body);
-      req.end();
-    });
-  } catch (err) {
-    logger.warn(`[MoversAlerts] ntfy failed: ${err.message}`);
-  }
+  await fireNtfyCore({
+    topic: process.env.NTFY_TOPIC_MOVERS || config.ntfy.topic,
+    title,
+    message,
+    tags,
+  });
 }
 
 // ── Worker ───────────────────────────────────────────────────────────────────

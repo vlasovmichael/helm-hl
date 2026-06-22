@@ -737,6 +737,22 @@ function loadConfig() {
       priority: Math.min(5, Math.max(1, parseInt(process.env.NTFY_PRIORITY || '3', 10) || 3)),
     },
 
+    // ── Почта (self-hosted Listmonk /api/tx) ──
+    // Зеркалит горячие ntfy-пуши в письмо + ежедневный дайджест. Fail-soft:
+    // если url/creds/template/to не заданы — mail.js тихо no-op (как ntfy).
+    // Тот же Listmonk, что у atlas / appointment_tg_bot (example.com).
+    mail: {
+      listmonkUrl: process.env.LISTMONK_URL || '',
+      user:        process.env.LISTMONK_USER || '',
+      pass:        process.env.LISTMONK_PASS || '',
+      // ID транзакционного шаблона Listmonk (содержит {{ .Tx.Data.body_html | Safe }}).
+      templateId:  parseInt(process.env.LISTMONK_TX_TEMPLATE_ID || '0', 10) || null,
+      from:        process.env.LISTMONK_FROM_EMAIL || '',
+      to:          process.env.MAIL_TO || '',
+      // Мгновенное письмо на каждый горячий пуш (priority ≥ 3). Дайджест — отдельно (cron).
+      instant:     (process.env.MAIL_INSTANT || 'true').toLowerCase() === 'true',
+    },
+
     // ── Binance (read-only, для Tax Collector) ──
     // Модуль taxCollector сам проверяет наличие ключей через isConfigured()
     // и тихо отключается, если их нет. Не блокируем старт бота.

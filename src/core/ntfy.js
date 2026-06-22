@@ -7,6 +7,8 @@
 
 import { config } from './config.js';
 import { logger } from './logger.js';
+import { recordNotification } from './notifyLog.js';
+import { sendMail, isMailEnabled } from './mail.js';
 
 const QUIET_FROM = parseInt(process.env.NTFY_QUIET_FROM ?? '0', 10);
 const QUIET_TO = parseInt(process.env.NTFY_QUIET_TO ?? '8', 10);
@@ -48,9 +50,30 @@ export async function fireNtfy({ topic, title, message, tags = [], priority, now
       req.write(body);
       req.end();
     });
+    // Журнал для колокольчика + (опц.) мгновенное письмо. Письмо шлём только на
+    // «горячие» пуши (effective priority ≥ 3) — холодные/тихие (cold-fades,
+    // тихий час) копятся в дайджесте, но почту не дёргают. Fail-soft: не ждём
+    // и не валим основной путь, если письмо не ушло.
+    const hot = prio >= 3;
+    const emailed = hot && config.mail.instant && isMailEnabled();
+    recordNotification({ title, message, topic: t, tags, priority: prio, emailed, ts: now });
+    if (emailed) {
+      sendMail({
+        subject: title,
+        html: `<h2 style="margin:0 0 8px">${escapeHtml(title)}</h2>` +
+          `<pre style="font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;white-space:pre-wrap;margin:0">${escapeHtml(message)}</pre>`,
+      }).catch(() => {});
+    }
     return true;
   } catch (err) {
     logger.warn(`[ntfy] post failed: ${err.message}`);
     return false;
   }
+}
+
+function escapeHtml(s = '') {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }

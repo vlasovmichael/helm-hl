@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { config } from "../../core/config.js";
 import { logger, getLogBuffer, subscribeLogs } from "../../core/logger.js";
 import { hlInfo, HL_PRIORITY } from "../../core/hlClient.js";
+import { getNotifications } from "../../core/notifyLog.js";
 import {
   getActivePosition,
   getActiveAdoptPositions,
@@ -940,6 +941,16 @@ export function startDashboard() {
     } catch (err) {
       logger.warn(`[Dashboard] /api/strategy-trades failed: ${err.message}`);
       res.status(500).json({ error: true });
+    }
+  });
+  // Журнал ушедших ntfy-пушей для колокольчика. ?limit (≤100).
+  app.get("/api/notifications", (req, res) => {
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    try {
+      res.json({ items: getNotifications(limit), generatedAt: Date.now() });
+    } catch (err) {
+      logger.warn(`[Dashboard] /api/notifications failed: ${err.message}`);
+      res.status(500).json({ items: [], error: true });
     }
   });
   app.get("/api/insights", handleInsights);
