@@ -30,16 +30,26 @@ const MAX_LEVERAGE = 50;
 /** Свежая цена монеты: WS-фид → fallback на кэш price-map. null если нет. */
 async function resolvePrice(coin) {
   const c = String(coin || "").toUpperCase();
-  const live = getLivePrice(c);
-  if (Number.isFinite(live) && live > 0) return live;
+  const live = getLivePrice(c); // {price, ts} | null
+  if (live && Number.isFinite(live.price) && live.price > 0) return live.price;
   try {
-    const map = await getLivePriceMap();
-    const p = map?.[c];
+    const map = await getLivePriceMap(); // Map<coin, px>
+    const p = map?.get?.(c);
     if (Number.isFinite(p) && p > 0) return p;
   } catch {
     /* price-map недоступен — вернём null, вызывающий решит */
   }
   return null;
+}
+
+/** Список торгуемых монет (с живой ценой) для дропдауна. [] при ошибке. */
+async function availableCoins() {
+  try {
+    const map = await getLivePriceMap(); // Map<coin, px>
+    return [...map.keys()].sort();
+  } catch {
+    return [];
+  }
 }
 
 /** Доступное депо (equity) для слайдера. 0 при ошибке. */
@@ -94,7 +104,8 @@ export async function handleList(_req, res) {
         margin: mtm?.margin ?? null,
       });
     }
-    res.json({ positions, equity, slots: { used: open.length, max: MAX_SLOTS }, generatedAt: Date.now() });
+    const coins = await availableCoins();
+    res.json({ positions, equity, coins, slots: { used: open.length, max: MAX_SLOTS }, generatedAt: Date.now() });
   } catch (err) {
     logger.warn(`[manualPaper] list failed: ${err.message}`);
     res.status(500).json({ positions: [], equity: 0, error: true });

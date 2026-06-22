@@ -71,8 +71,10 @@ function formHtml(prefill = {}) {
     <div class="mp-title">Новая бумажная сделка</div>
     <div class="mp-lead">Как в Rabbit, только на бумаге. Бот не вмешивается — ведёшь и закрываешь руками. Вход по текущей цене.</div>
     <form id="mp-form" autocomplete="off">
-      <label class="mp-label">Монета (тикер Hyperliquid)</label>
-      <input id="mp-coin" class="mp-input" type="text" placeholder="напр. BTC, SOL, kBONK" value="${escapeHtml(coin)}" />
+      <label class="mp-label">Монета</label>
+      <select id="mp-coin" class="mp-input mp-select" data-prefill="${escapeHtml(coin)}">
+        <option value="">загрузка списка…</option>
+      </select>
 
       <label class="mp-label">Сторона</label>
       <div class="mp-sides">${sideBtn("long", "▲ Long")}${sideBtn("short", "▼ Short")}</div>
@@ -107,18 +109,38 @@ function recalc() {
   return { lev, notional, margin };
 }
 
+function populateCoins(coins) {
+  const sel = document.getElementById("mp-coin");
+  if (!sel) return;
+  const prefill = (sel.dataset.prefill || "").toUpperCase();
+  if (!coins.length) {
+    sel.innerHTML = '<option value="">список недоступен</option>';
+    return;
+  }
+  const opts = ['<option value="" disabled>— выбери монету —</option>'].concat(
+    coins.map(
+      (c) => `<option value="${escapeHtml(c)}"${c === prefill ? " selected" : ""}>${escapeHtml(c)}</option>`,
+    ),
+  );
+  sel.innerHTML = opts.join("");
+  // Если префилла нет/не нашёлся — оставляем плейсхолдер активным.
+  if (!prefill || !coins.includes(prefill)) sel.value = "";
+}
+
 async function openModal(prefill = {}) {
   const modal = ensureModal();
   document.getElementById("mp-body").innerHTML = formHtml(prefill);
   modal.hidden = false;
   document.body.style.overflow = "hidden";
 
-  // Депо для слайдера.
+  // Депо для слайдера + список монет для дропдауна.
   try {
     const data = await fetchJson("/api/manual-paper");
     lastEquity = pickNum(data?.equity, 0);
+    populateCoins(Array.isArray(data?.coins) ? data.coins : []);
   } catch {
     lastEquity = 0;
+    populateCoins([]);
   }
   recalc();
 
@@ -145,7 +167,7 @@ async function onSubmit(e) {
   const coin = (document.getElementById("mp-coin").value || "").trim().toUpperCase();
   const side = document.querySelector(".mp-side-btn.is-on")?.dataset.side || "long";
   const { lev, notional } = recalc();
-  if (!coin) return showErr("Введи тикер монеты.");
+  if (!coin) return showErr("Выбери монету из списка.");
   if (!(notional > 0)) return showErr("Размер позы 0 — двинь слайдер маржи (или депо недоступно).");
 
   busy = true;
