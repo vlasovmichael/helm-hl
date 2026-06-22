@@ -23,6 +23,7 @@ import {
   initDivergenceUi,
 } from "./src/features/divergence.js";
 import { renderStrategies } from "./src/features/strategies.js";
+import { initManualPaperCard } from "./src/features/manualPaper.js";
 
 // ── Bootstrap ──
 mountTopnav("lab");
@@ -39,4 +40,5 @@ divRefresh();
 // пере-рендерим divergence (как было на главной).
 setOnPositionsUpdated(() => renderBtcDivergence(null));
 initWhaleWatch();
+initManualPaperCard();
 startFooterTimer();

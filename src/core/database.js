@@ -92,6 +92,13 @@ export function initDB() {
     logger.info('[DB] Migration: added entry_equity to positions');
   }
 
+  // Migration: leverage — плечо позиции (для личного paper-журнала manual_paper:
+  // ROE% = price-move% × leverage). Nullable: бот-стратегии его не задают.
+  if (!posColumns.find(c => c.name === 'leverage')) {
+    db.exec('ALTER TABLE positions ADD COLUMN leverage REAL');
+    logger.info('[DB] Migration: added leverage to positions');
+  }
+
   // Migration: side — направление позиции ('short' | 'long').
   // Carry (удалён 2026-06-17) исторически шортил всегда; default 'short'
   // сохраняет совместимость со всеми существующими записями. Текущие стратегии
@@ -417,6 +424,7 @@ export function savePosition(data) {
     sl_price:      null,
     tp_price:      null,
     entry_equity:  null,
+    leverage:      null,
     side:          'short',
     hunter_sl_oid: null,
     hunter_tp_oid: null,
@@ -435,7 +443,7 @@ export function savePosition(data) {
   const stmt = getDb().prepare(`
     INSERT INTO positions (
       coin, size_usd, entry_price, entry_apy, entry_time, mode,
-      strategy_id, sl_price, tp_price, entry_equity, side,
+      strategy_id, sl_price, tp_price, entry_equity, leverage, side,
       hunter_sl_oid, hunter_tp_oid,
       entry_spike_pct, entry_trend_15m_pct, entry_trend_1h_pct,
       entry_funding_rate, entry_volume_24h_usd, entry_oi_usd,
@@ -443,7 +451,7 @@ export function savePosition(data) {
     )
     VALUES (
       @coin, @size_usd, @entry_price, @entry_apy, @entry_time, @mode,
-      @strategy_id, @sl_price, @tp_price, @entry_equity, @side,
+      @strategy_id, @sl_price, @tp_price, @entry_equity, @leverage, @side,
       @hunter_sl_oid, @hunter_tp_oid,
       @entry_spike_pct, @entry_trend_15m_pct, @entry_trend_1h_pct,
       @entry_funding_rate, @entry_volume_24h_usd, @entry_oi_usd,
@@ -593,6 +601,18 @@ export function getActivePosition() {
 export function getActiveAdoptPositions() {
   return getDb()
     .prepare("SELECT * FROM positions WHERE status = 'OPEN' AND mode = 'PRODUCTION' AND strategy_id = 'adopt' ORDER BY id ASC")
+    .all();
+}
+
+/**
+ * Все активные (OPEN) позиции личного paper-журнала (strategy_id='manual_paper',
+ * mode='PAPER'). Multi-slot, как adopt: оператор открывает несколько ручных бумажных
+ * входов руками (модалка на дашборде), бот их не торгует — только держит цену
+ * свежей (getActivePaperCoins пиннит) и считает mark-to-market. Возвращает массив.
+ */
+export function getActiveManualPaperPositions() {
+  return getDb()
+    .prepare("SELECT * FROM positions WHERE status = 'OPEN' AND mode = 'PAPER' AND strategy_id = 'manual_paper' ORDER BY id ASC")
     .all();
 }
 

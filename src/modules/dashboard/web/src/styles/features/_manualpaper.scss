@@ -1,0 +1,159 @@
+// ── Мой папер (Rabbit-style) — модалка входа + элементы карточки управления ──
+
+.mp-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &[hidden] { display: none; }
+}
+.mp-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+.mp-panel {
+  position: relative;
+  width: 360px;
+  max-width: 92vw;
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--bg, #14110f);
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius) * 1.5);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  padding: 20px;
+}
+.mp-x {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: var(--radius);
+
+  &:hover { color: var(--text-primary); background: var(--card-bg-hover); }
+}
+.mp-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.mp-lead {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin-bottom: 14px;
+}
+.mp-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 12px 0 5px;
+}
+.mp-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg, var(--bg));
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  text-transform: uppercase;
+
+  &:focus { outline: none; border-color: var(--accent); }
+}
+.mp-sides {
+  display: flex;
+  gap: 8px;
+}
+.mp-side-btn {
+  flex: 1;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg, var(--bg));
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s var(--ease);
+
+  &:hover { color: var(--text-primary); }
+  &.is-on {
+    color: var(--text-primary);
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+}
+.mp-range {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.mp-calc {
+  margin: 14px 0 6px;
+  padding: 9px 11px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+
+  strong { color: var(--text-primary); }
+}
+.mp-err {
+  margin: 6px 0;
+  font-size: 12px;
+  color: var(--num-neg, #e5484d);
+
+  &[hidden] { display: none; }
+}
+.mp-submit {
+  width: 100%;
+  margin-top: 12px;
+  padding: 11px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--grad-brand, var(--accent));
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:disabled { opacity: 0.6; cursor: default; }
+}
+
+// ── элементы карточки управления ──
+.mp-roe {
+  display: block;
+  font-size: 11px;
+  opacity: 0.8;
+}
+.mp-close-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg, var(--bg));
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.12s var(--ease);
+
+  &:hover { color: var(--text-primary); border-color: var(--num-neg, #e5484d); }
+  &:disabled { opacity: 0.5; cursor: default; }
+}

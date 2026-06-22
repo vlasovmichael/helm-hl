@@ -58,6 +58,11 @@ import {
 } from "./auth.js";
 import { handleMarketContext } from "./routes/marketContext.js";
 import {
+  handleList as handleManualPaperList,
+  handleOpen as handleManualPaperOpen,
+  handleClose as handleManualPaperClose,
+} from "./routes/manualPaper.js";
+import {
   handleWhaleWatch,
   handleWhaleWatchBatch,
   handleWhaleLeaderboard,
@@ -883,6 +888,7 @@ export function startDashboard() {
 
   const app = express();
   app.use(express.urlencoded({ extended: false, limit: "4kb" }));
+  app.use(express.json({ limit: "4kb" }));
 
   // /api/health — публичный, до authGate, чтобы Docker HEALTHCHECK из контейнера
   // мог опрашивать без креденшалов. Возвращает 503 если tick молчит >2 мин или
@@ -953,6 +959,11 @@ export function startDashboard() {
       res.status(500).json({ items: [], error: true });
     }
   });
+  // Личный paper-журнал (Rabbit-style): открыть/закрыть/список бумажных сделок.
+  app.get("/api/manual-paper", handleManualPaperList);
+  app.post("/api/manual-paper/open", handleManualPaperOpen);
+  app.post("/api/manual-paper/close", handleManualPaperClose);
+
   app.get("/api/insights", handleInsights);
   app.get("/api/setup-scanner", handleSetupScanner);
   app.get("/api/trade-markers", handleTradeMarkers);

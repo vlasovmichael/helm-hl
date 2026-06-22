@@ -127,6 +127,17 @@ const REGISTRY = [
     },
   },
   {
+    id: 'manual_paper',
+    label: 'Мой папер',
+    kind: 'manual · paper journal',
+    split: true,                              // ручные бумажные входы бывают и long, и short
+    resolve: () => {
+      // Всегда «живой» бумажный журнал: открывается руками из модалки на дашборде,
+      // бот не торгует. Статус paper (mode='PAPER'), активные позы — multi-slot.
+      return { enabled: true, status: 'paper' };
+    },
+  },
+  {
     id: 'adopt',
     label: 'Adopt',
     kind: 'manual-entry · babysit',

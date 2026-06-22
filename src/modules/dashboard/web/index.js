@@ -31,6 +31,7 @@ import {
 import { renderMarketContext } from "./src/features/marketContext.js";
 import { initModals, renderActivity } from "./src/features/modals.js";
 import { initWhatIf } from "./src/features/whatif.js";
+import { initManualPaperTrigger } from "./src/features/manualPaper.js";
 import {
   initSetupScanner,
   setSwingEquity,
@@ -87,6 +88,7 @@ bindTheme([applyPriceChartTheme]);
 bindRange(() => tick());
 initModals();
 initWhatIf();
+initManualPaperTrigger("mp-paper-btn");
 // BTC Divergence + Whale Watch вынесены на /lab.html — их HL-поллинг
 // (candleSnapshot/metaAndAssetCtxs) грузится только когда открыта Lab, а не на
 // торговом дашборде (разгрузка весового бюджета HL, защита от 429). 2026-06-17.
