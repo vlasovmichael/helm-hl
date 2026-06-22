@@ -1,0 +1,64 @@
+<!--
+  Helm — транзакционный шаблон-обёртка для Listmonk.
+
+  Куда вставлять: Listmonk admin → Campaigns → Templates → New template →
+  Type: «Transactional» → вставить весь HTML ниже → Save. Запомнить id шаблона
+  (виден в URL/списке) → положить в .env как LISTMONK_TX_TEMPLATE_ID=<id>.
+
+  Контракт: код шлёт data.body_html (см. src/core/mail.js, src/modules/mailDigest.js),
+  шаблон выводит его через {{ .Tx.Data.body_html | Safe }}. Заголовок письма —
+  data.subject ({{ .Tx.Data.subject }}). Если уже есть generic-обёртка
+  (atlas/billing/discovery, id по умолчанию 17) — можно переиспользовать её id и
+  этот файл не нужен.
+
+  Email-safe: таблицы + inline-стили, без внешнего CSS (Gmail режет <style>).
+-->
+<!doctype html>
+<html lang="ru" xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <title>Helm</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#0c0a09;-webkit-text-size-adjust:100%;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+      style="background-color:#0c0a09;padding:32px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
+            style="width:600px;max-width:92%;background-color:#14110f;border:1px solid #2a2522;border-radius:14px;overflow:hidden;">
+            <!-- header -->
+            <tr>
+              <td style="padding:20px 28px;border-bottom:1px solid #2a2522;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td style="font:700 18px/1 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#f5f1ea;letter-spacing:0.02em;">
+                      ⎈ Helm
+                    </td>
+                    <td align="right" style="font:500 12px/1 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#8a817a;">
+                      {{ .Tx.Data.subject }}
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- body (контент собирается в коде) -->
+            <tr>
+              <td style="padding:24px 28px;font:14px/1.55 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#d8d1c8;">
+                {{ .Tx.Data.body_html | Safe }}
+              </td>
+            </tr>
+            <!-- footer -->
+            <tr>
+              <td style="padding:16px 28px;border-top:1px solid #2a2522;font:400 11px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#6b635c;">
+                Helm · авто-отчёт торгового бота. Сигнал/контекст, не приказ — решение и риск на тебе.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

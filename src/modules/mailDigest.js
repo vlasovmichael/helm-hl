@@ -77,8 +77,10 @@ export function buildDigestHtml(now = Date.now()) {
     day: '2-digit', month: 'long', timeZone: 'Europe/Warsaw',
   }).format(now);
 
+  // Цвет текста НЕ форсим — наследуем от шаблона-обёртки Listmonk (светлая id-17
+  // → тёмный текст; тёмная Helm-обёртка → светлый). Муты #888 читаемы на обоих.
   return (
-    `<div style="font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;color:#222">` +
+    `<div style="font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif">` +
     `<h2 style="margin:0 0 4px">Helm · дайджест за ${date}</h2>` +
     `<p style="margin:0 0 16px;color:#888">Пушей за сутки: ${notes.length}</p>` +
     `<h3 style="margin:16px 0 4px">Стратегии</h3>` +
