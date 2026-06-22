@@ -69,7 +69,7 @@ function formHtml(prefill = {}) {
     `<button type="button" class="mp-side-btn ${side === val ? "is-on" : ""}" data-side="${val}">${label}</button>`;
   return `
     <div class="mp-title">Новая бумажная сделка</div>
-    <div class="mp-lead">Как в Rabbit, только на бумаге. Бот не вмешивается — ведёшь и закрываешь руками. Вход по текущей цене.</div>
+    <div class="mp-lead">Как в Rabbit, только на бумаге. Вход по текущей цене. Бот ведёт выход (ATR-стоп + безубыток-храповик + трейл), как у adopt — можешь и сам закрыть в любой момент.</div>
     <form id="mp-form" autocomplete="off">
       <label class="mp-label">Монета</label>
       <select id="mp-coin" class="mp-input mp-select" data-prefill="${escapeHtml(coin)}">
@@ -216,6 +216,13 @@ function rowHtml(p) {
   const pnl = p.unrealized;
   const pnlCls = pnl == null ? "" : pnl >= 0 ? "num-pos" : "num-neg";
   const roe = p.roePct;
+  // Если бот ведёт выход — под uPnL показываем пик (MFE) и виртуальный стоп.
+  const sub =
+    p.managed && (p.stopPrice != null || p.peakPct)
+      ? `<span class="mp-sub">пик ${p.peakPct ? fmtPct(p.peakPct) : "0%"}${
+          p.stopPrice != null ? ` · стоп $${fmtPrice(p.stopPrice)}` : ""
+        }</span>`
+      : "";
   return `
     <tr>
       <td><span class="signals-price">#${escapeHtml(p.coin)}</span></td>
@@ -226,7 +233,7 @@ function rowHtml(p) {
       <td class="r" data-mp-mark>${p.markPrice != null ? "$" + fmtPrice(p.markPrice) : "—"}</td>
       <td class="r ${pnlCls}"><strong>${pnl == null ? "—" : fmtUsd(pnl)}</strong>${
         roe == null ? "" : `<span class="mp-roe">${fmtPct(roe)}</span>`
-      }</td>
+      }${sub}</td>
       <td class="c"><button type="button" class="mp-close-btn" data-mp-close-id="${p.id}" data-mp-coin="${escapeHtml(p.coin)}">Закрыть</button></td>
     </tr>`;
 }
@@ -243,11 +250,12 @@ async function refreshActive() {
     }
     const used = data?.slots?.used ?? positions.length;
     const max = data?.slots?.max ?? 8;
+    const managed = positions.some((p) => p.managed);
     container.innerHTML = `
       <div class="mp-active">
         <div class="mp-active-head">
           <span>Бумажные позы · paper</span>
-          <span class="mp-active-meta">${used}/${max} · бот не вмешивается</span>
+          <span class="mp-active-meta">${used}/${max} · ${managed ? "🤖 бот ведёт выход" : "бот не вмешивается"}</span>
         </div>
         <div class="u-scroll-x">
           <table class="data-table mp-active-table">

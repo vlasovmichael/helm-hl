@@ -181,6 +181,13 @@
   font-size: 11px;
   opacity: 0.8;
 }
+.mp-sub {
+  display: block;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--text-muted, var(--text-secondary));
+  opacity: 0.85;
+}
 .mp-close-btn {
   padding: 4px 10px;
   border: 1px solid var(--border);

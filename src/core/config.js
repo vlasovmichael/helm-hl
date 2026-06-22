@@ -305,6 +305,10 @@ function loadConfig() {
   // strategy_id='adopt' и СРАЗУ ставит реальный reduce-only стоп на бирже
   // (чинит главный леак: держал лузеров до нуля). Храповик/трейл — следующим шагом.
   const adoptEnabled          = (process.env.ADOPT_ENABLED || 'false').toLowerCase() === 'true';
+  // «Бумажный adopt»: бот ведёт ВЫХОД личных бумажных поз (manual_paper) той же
+  // механикой, что реальный adopt (ATR-стоп при открытии + BE-храповик + трейл,
+  // analyzeAdopt). Без реальных денег — тренировка выходной логики на своих входах.
+  const manualPaperAdoptEnabled = (process.env.MANUAL_PAPER_ADOPT_ENABLED || 'true').toLowerCase() === 'true';
   // Vapor (Exhaustion Short, Трек A) — PAPER-only shadow-слот, OI-дивергенция.
   const vaporEnabled          = (process.env.VAPOR_ENABLED || 'false').toLowerCase() === 'true';
   const vaporBalanceUtil      = parseFloat(process.env.VAPOR_BALANCE_UTILIZATION || '0.5');
@@ -637,6 +641,7 @@ function loadConfig() {
       hunterLongTrailGiveBackPct,
       hunterCrossCooldownMin,
       adoptEnabled,
+      manualPaperAdoptEnabled,
       vaporEnabled,
       vaporBalanceUtil,
       vaporPaperLeverage,

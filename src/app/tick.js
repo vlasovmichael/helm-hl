@@ -12,6 +12,7 @@ import { execute } from '../modules/executor/index.js';
 import { runSmartAlerts } from './alerts.js';
 import { integrityCheck, orphanCheck } from './integrity.js';
 import { superviseAdoptPositions } from './adoptSupervise.js';
+import { superviseManualPaperPositions } from './manualPaperSupervise.js';
 import { hunterReconcile } from './hunterReconcile.js';
 import { hunterLongReconcile } from './hunterLongReconcile.js';
 import { processHunterTrailArm } from './hunterTrailArm.js';
@@ -64,6 +65,10 @@ export async function tick() {
     // независимо от hands-off: даже если рядом висит неусыновлённая ручная поза
     // (→ manualState='paused'), уже усыновлённые должны продолжать вестись.
     await superviseAdoptPositions();
+
+    // «Бумажный adopt»: ведём выход личных бумажных поз (manual_paper) той же
+    // механикой. Независимо от hands-off и режима бота. Fail-soft внутри.
+    await superviseManualPaperPositions();
 
     if (manualState === 'paused') {
       logger.debug('[Tick] HANDS-OFF: manual position active, scan-only refresh');

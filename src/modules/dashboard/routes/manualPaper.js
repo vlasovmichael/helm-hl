@@ -12,6 +12,7 @@
 //
 // Multi-slot (как adopt): можно держать несколько бумажных входов разом.
 
+import { config } from "../../../core/config.js";
 import { logger } from "../../../core/logger.js";
 import {
   savePosition,
@@ -22,6 +23,8 @@ import { getLivePrice } from "../../../core/priceFeed.js";
 import { getLivePriceMap } from "../../exchange.js";
 import { getAccountEquity } from "../../wallet.js";
 import { calcPnl, FEE_RATE } from "../../executor/math.js";
+import { computeStopDistPct } from "../../../app/adoptReconcile.js";
+import { getAdoptPeakPct } from "../../strategistAdopt.js";
 
 const STRATEGY_ID = "manual_paper";
 const MAX_SLOTS = 8;          // потолок одновременных бумажных входов
@@ -89,6 +92,10 @@ export async function handleList(_req, res) {
     for (const pos of open) {
       const price = await resolvePrice(pos.coin);
       const mtm = price != null ? markToMarket(pos, price) : null;
+      const stopPct =
+        Number.isFinite(pos.sl_price) && pos.sl_price > 0 && pos.entry_price > 0
+          ? Math.abs((pos.sl_price - pos.entry_price) / pos.entry_price) * 100
+          : null;
       positions.push({
         id: pos.id,
         coin: pos.coin,
@@ -102,6 +109,11 @@ export async function handleList(_req, res) {
         roePct: mtm?.roePct ?? null,
         unrealized: mtm?.unrealized ?? null,
         margin: mtm?.margin ?? null,
+        // «Бумажный adopt»: бот ведёт выход. Стоп + текущий пик (MFE) для UI.
+        managed: config.trading.manualPaperAdoptEnabled,
+        stopPrice: Number.isFinite(pos.sl_price) ? pos.sl_price : null,
+        stopPct,
+        peakPct: getAdoptPeakPct(pos.id) || 0,
       });
     }
     const coins = await availableCoins();
@@ -138,6 +150,23 @@ export async function handleOpen(req, res) {
     if (price == null) return res.status(422).json({ error: `no live price for ${coin}` });
 
     const equity = await safeEquity();
+
+    // «Бумажный adopt» включён → ставим виртуальный жёсткий стоп ATR-ом (как
+    // реальный adopt). Дальше выход ведёт superviseManualPaperPositions
+    // (BE-храповик + трейл). Fail-soft: не смогли посчитать стоп — открываем без
+    // него (мягкий выход всё равно отработает).
+    let slPrice = null;
+    let slLabel = "без стопа";
+    if (config.trading.manualPaperAdoptEnabled) {
+      try {
+        const { distPct, basis } = await computeStopDistPct(coin);
+        slPrice = side === "short" ? price * (1 + distPct / 100) : price * (1 - distPct / 100);
+        slLabel = `SL @ ${slPrice.toPrecision(6)} (−${distPct.toFixed(2)}% ${basis === "atr" ? "ATR" : "фикс"})`;
+      } catch (e) {
+        logger.warn(`[manualPaper] stop calc #${coin} failed: ${e.message} — открываю без жёсткого стопа`);
+      }
+    }
+
     const id = savePosition({
       coin,
       size_usd: sizeUsd,
@@ -149,9 +178,10 @@ export async function handleOpen(req, res) {
       side,
       leverage,
       entry_equity: equity || null,
+      sl_price: slPrice,
     });
-    logger.info(`[manualPaper] OPEN ${side} #${coin} ${leverage}x $${sizeUsd.toFixed(2)} @ ${price}`);
-    res.json({ ok: true, id, coin, side, leverage, sizeUsd, entryPrice: price });
+    logger.info(`[manualPaper] OPEN ${side} #${coin} ${leverage}x $${sizeUsd.toFixed(2)} @ ${price} · ${slLabel}`);
+    res.json({ ok: true, id, coin, side, leverage, sizeUsd, entryPrice: price, slPrice });
   } catch (err) {
     logger.warn(`[manualPaper] open failed: ${err.message}`);
     res.status(500).json({ error: true });
