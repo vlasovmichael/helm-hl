@@ -28,7 +28,6 @@ import {
   renderHotMovers,
   updateHotMoversLiveArrow,
 } from "./src/hotMovers/render.js";
-import { renderFadeList } from "./src/features/fadeList.js";
 import { renderMarketContext } from "./src/features/marketContext.js";
 import { initModals, renderActivity } from "./src/features/modals.js";
 import { initWhatIf } from "./src/features/whatif.js";
@@ -58,7 +57,6 @@ function onStatus(data) {
   // Hot Movers из WS (≤2с) вместо 10с-поллинга; HTTP /api/signals в tick() = фолбэк.
   if (data.hotMovers?.signals) {
     renderHotMovers(data.hotMovers, fmtTime);
-    renderFadeList(data.hotMovers, fmtTime); // выносит fadeHot-сетапы в свою карточку
     lastWsHotMoversAt = Date.now();
   }
   // Живой спин стрелки активной монеты в Hot Movers (≤2с) — после рендера, чтобы
@@ -79,7 +77,6 @@ async function tick() {
   if (actR.status === "fulfilled") renderActivity(actR.value);
   if (hmR.status === "fulfilled" && hmR.value?.signals) {
     renderHotMovers(hmR.value, fmtTime);
-    renderFadeList(hmR.value, fmtTime);
   }
   markSuccess();
 }
