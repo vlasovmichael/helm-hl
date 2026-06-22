@@ -466,12 +466,12 @@ export function renderHotMovers(payload, fmtTime) {
       const stopPct = fh.stopPct != null ? `${fh.stopPct}%` : "";
       const exitTxt = fh.timeStopMin != null ? `~${Math.round(fh.timeStopMin / 60)}ч` : "~2ч";
       const tip =
-        `Fade выдохшегося хвоста: ход 30м ${moveTxt} при Kaufman ER 4ч ${erTxt} (≥0.47). ` +
-        `Фейдим ПРОТИВ хода. Выход по времени ${exitTxt} + широкий стоп ${stopPct}. ` +
-        `Маргинальный forward-кандидат — рядом меряет paper-слот.`;
+        `Fade an exhausted tail: 30m move ${moveTxt} at Kaufman ER 4h ${erTxt} (≥0.47). ` +
+        `Fade AGAINST the move. Time-stop exit ${exitTxt} + wide stop ${stopPct}. ` +
+        `Marginal forward candidate — a paper slot measures it alongside.`;
       const inner = `<td colspan="11">
-        <span class="hm-fh-tag ${sideCls}" title="${tip}">🔥 fade хвоста ${fh.side}</span>
-        <span class="hm-fh-meta">зона ${zone} · стоп ${stopTxt} (${stopPct}) · выход ${exitTxt} · ER ${erTxt}</span>
+        <span class="hm-fh-tag ${sideCls}" title="${tip}">🔥 tail fade ${fh.side}</span>
+        <span class="hm-fh-meta">zone ${zone} · stop ${stopTxt} (${stopPct}) · exit ${exitTxt} · ER ${erTxt}</span>
       </td>`;
       items.push({ key: `fh:${s.coin}`, cls: "hm-fadehot-row", html: inner });
     }

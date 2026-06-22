@@ -292,6 +292,16 @@
 .hm-fh-meta {
   color: var(--text-secondary);
 }
+/* On phones the tag + meta don't fit one line → stack the meta below the tag
+   and tighten the left indent so it doesn't overflow the row. */
+@include until($bp-sm) {
+  .hm-fadehot-row td {
+    padding-left: 14px !important;
+    white-space: normal;
+  }
+  .hm-fh-tag { margin-bottom: 3px; }
+  .hm-fh-meta { display: block; }
+}
 /* Hot Movers — чейз-метр (🎯 можно / ⏳ жди / ⛔ нельзя). Эмодзи крупнее,
    чип берёт *-soft/*-line из активной темы → корректно в любой палитре. */
 .signals-table td.hm-entry {

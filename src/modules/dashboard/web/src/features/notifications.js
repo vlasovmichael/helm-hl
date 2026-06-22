@@ -1,10 +1,10 @@
 // ─────────────────────────────────────────────────
-//  Колокольчик уведомлений — выпадашка с ушедшими ntfy-пушами
+//  Notification bell — dropdown of the ntfy pushes that went out
 // ─────────────────────────────────────────────────
-// Разметка живёт в topnav (на всех страницах). Здесь — поведение: фетч
-// /api/notifications, рендер списка, бейдж непрочитанных (по lastRead в
-// localStorage), открытие/закрытие панели. Лёгкий поллинг раз в 60с, пока
-// вкладка видима. Бэкенд только читает журнал — «прочитано» чисто клиентское.
+// Markup lives in topnav (all pages). Here is the behavior: fetch
+// /api/notifications, render the list, unread badge (vs lastRead in
+// localStorage), open/close the panel. Light 60s polling while the tab is
+// visible. The backend only reads the log — "read" is purely client-side.
 
 import { getNotifications } from "../net/api.js";
 import { escapeHtml, fmtSince } from "../utils/format.js";
@@ -14,6 +14,7 @@ const POLL_MS = 60_000;
 
 let items = [];
 let timer = null;
+let lastUnread = 0; // to detect a freshly-arrived push → ring the bell
 
 function lastRead() {
   return Number(localStorage.getItem(LS_KEY) || 0);
@@ -29,6 +30,7 @@ function unreadCount() {
 
 function renderBadge() {
   const badge = document.getElementById("notif-badge");
+  const btn = document.getElementById("notif-btn");
   if (!badge) return;
   const n = unreadCount();
   if (n > 0) {
@@ -37,20 +39,29 @@ function renderBadge() {
   } else {
     badge.hidden = true;
   }
+  // Ring the bell once when the unread count grows (new push landed). Re-trigger
+  // the CSS animation by toggling the class off→reflow→on.
+  if (btn && n > lastUnread) {
+    btn.classList.remove("is-ringing");
+    void btn.offsetWidth; // force reflow so the animation restarts
+    btn.classList.add("is-ringing");
+  }
+  if (btn && n === 0) btn.classList.remove("is-ringing");
+  lastUnread = n;
 }
 
 function renderList() {
   const list = document.getElementById("notif-list");
   if (!list) return;
   if (!items.length) {
-    list.innerHTML = '<div class="notif-empty">Пока тихо — пушей не было.</div>';
+    list.innerHTML = '<div class="notif-empty">All quiet — no pushes yet.</div>';
     return;
   }
   const lr = lastRead();
   list.innerHTML = items
     .map((n) => {
       const fresh = n.ts > lr ? " notif-item--fresh" : "";
-      const mail = n.emailed ? '<span class="notif-mail" title="Продублировано письмом">✉</span>' : "";
+      const mail = n.emailed ? '<span class="notif-mail" title="Also sent by email">✉</span>' : "";
       const body = (n.message || "").split("\n")[0]; // первая строка — суть
       return `
         <div class="notif-item${fresh}">

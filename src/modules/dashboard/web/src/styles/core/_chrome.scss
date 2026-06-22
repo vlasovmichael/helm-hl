@@ -498,6 +498,26 @@ header {
     background: var(--card-bg-hover);
   }
   .nav-ico { opacity: 0.9; }
+
+  // Bell swing when a fresh push lands (toggled via .is-ringing from JS).
+  .notif-bell {
+    transform-origin: 50% 3px; // pivot at the top of the bell
+  }
+  &.is-ringing .notif-bell {
+    animation: notif-ring 0.9s var(--ease, ease) 1;
+  }
+}
+@keyframes notif-ring {
+  0%   { transform: rotate(0); }
+  15%  { transform: rotate(13deg); }
+  30%  { transform: rotate(-11deg); }
+  45%  { transform: rotate(8deg); }
+  60%  { transform: rotate(-6deg); }
+  75%  { transform: rotate(3deg); }
+  100% { transform: rotate(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .notif-btn.is-ringing .notif-bell { animation: none; }
 }
 .notif-badge {
   position: absolute;
@@ -521,7 +541,7 @@ header {
   top: calc(100% + 8px);
   right: 0;
   width: 340px;
-  max-width: 90vw;
+  max-width: calc(100vw - 24px);
   max-height: 70vh;
   overflow: hidden;
   display: flex;

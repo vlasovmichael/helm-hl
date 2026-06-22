@@ -1,19 +1,26 @@
 // ─────────────────────────────────────────────────
-//  Мой папер (Rabbit-style) — модалка входа + карточка управления
+//  My paper (Rabbit-style) — entry modal + management card
 // ─────────────────────────────────────────────────
-// «Вижу движуху в Hot Movers → жму кнопку → попап: монета, сторона, плечо,
-//  слайдер от реального депо → открываю бумажную сделку.» Бот её не торгует —
-//  держу/закрываю руками. Открытые позы + live mark-to-market показываются на
-//  Lab (карточка «Мой папер»), архив — в таблице Strategies (manual_paper).
+// "See movement in Hot Movers → hit the button → popup: coin, side, leverage,
+//  slider off the real equity → open a paper trade." The bot doesn't trade it —
+//  I hold/close by hand. Open positions + live mark-to-market show up in the
+//  Active Position card (index); the archive lands in the Strategies table.
 //
-// Модалка инжектит свой DOM в body (работает и на index, и на lab без правки
-// HTML). REST: GET/POST /api/manual-paper(/open|/close).
+// The modal injects its own DOM into body (works on both index and lab without
+// touching HTML) and reuses the shared .trade-modal shell — flat, theme-aware
+// panel like "What if…". REST: GET/POST /api/manual-paper(/open|/close).
 
 import { escapeHtml, fmtUsd, fmtPct, fmtPrice } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 
 let busy = false;
 let lastEquity = 0;
+// coin (UPPERCASE) → max leverage allowed (from HL universe). Used to clamp the
+// leverage slider after a coin is picked — most coins on the wallet cap at 3–10×.
+let coinLeverage = {};
+
+const WALLET_LEV_CAP = 10; // practical cap on the wallet; never offer more
+const DEFAULT_LEV = 3;     // most positions ride 3×
 
 // ── helpers ──
 function pickNum(v, d) {
@@ -37,12 +44,12 @@ function ensureModal() {
   if (modal) return modal;
   modal = document.createElement("div");
   modal.id = "mp-modal";
-  modal.className = "mp-modal";
+  modal.className = "trade-modal";
   modal.hidden = true;
   modal.innerHTML = `
-    <div class="mp-backdrop" data-mp-close></div>
-    <div class="mp-panel" role="dialog" aria-label="Новая бумажная сделка">
-      <button class="mp-x" type="button" data-mp-close aria-label="Закрыть">×</button>
+    <div class="trade-modal__backdrop" data-mp-close></div>
+    <div class="trade-modal__panel" role="dialog" aria-modal="true" aria-label="New paper trade">
+      <button class="trade-modal__close" type="button" data-mp-close aria-label="Close">×</button>
       <div class="mp-body" id="mp-body"></div>
     </div>`;
   document.body.appendChild(modal);
@@ -66,29 +73,50 @@ function formHtml(prefill = {}) {
   const coin = prefill.coin || "";
   const side = prefill.side === "short" ? "short" : "long";
   const sideBtn = (val, label) =>
-    `<button type="button" class="mp-side-btn ${side === val ? "is-on" : ""}" data-side="${val}">${label}</button>`;
+    `<button type="button" class="mp-side-btn mp-side-${val} ${side === val ? "is-on" : ""}" data-side="${val}">${label}</button>`;
   return `
-    <div class="mp-title">Новая бумажная сделка</div>
-    <div class="mp-lead">Как в Rabbit, только на бумаге. Вход по текущей цене. Бот ведёт выход (ATR-стоп + безубыток-храповик + трейл), как у adopt — можешь и сам закрыть в любой момент.</div>
+    <div class="mp-title">New paper trade</div>
+    <div class="mp-lead">Like Rabbit, but on paper. Entry at the current price. The bot manages the exit (ATR stop + breakeven ratchet + trail), same as adopt — you can also close it yourself anytime.</div>
     <form id="mp-form" autocomplete="off">
-      <label class="mp-label">Монета</label>
-      <select id="mp-coin" class="mp-input mp-select" data-prefill="${escapeHtml(coin)}">
-        <option value="">загрузка списка…</option>
-      </select>
+      <label class="mp-label">Coin</label>
+      <input id="mp-coin" class="mp-input" type="text" list="mp-coin-list" placeholder="e.g. BTC, SOL, kBONK" value="${escapeHtml(coin.toUpperCase())}" autocomplete="off" spellcheck="false" />
+      <datalist id="mp-coin-list"></datalist>
 
-      <label class="mp-label">Сторона</label>
+      <label class="mp-label">Side</label>
       <div class="mp-sides">${sideBtn("long", "▲ Long")}${sideBtn("short", "▼ Short")}</div>
 
-      <label class="mp-label">Плечо: <span id="mp-lev-val">3×</span></label>
-      <input id="mp-lev" class="mp-range" type="range" min="1" max="50" step="1" value="3" />
+      <label class="mp-label">Leverage: <span id="mp-lev-val">${DEFAULT_LEV}×</span> <span class="mp-lev-hint" id="mp-lev-hint"></span></label>
+      <input id="mp-lev" class="mp-range" type="range" min="1" max="${WALLET_LEV_CAP}" step="1" value="${DEFAULT_LEV}" />
 
-      <label class="mp-label">Маржа от депо: <span id="mp-margin-val">10%</span></label>
+      <label class="mp-label">Margin of equity: <span id="mp-margin-val">10%</span></label>
       <input id="mp-size" class="mp-range" type="range" min="1" max="100" step="1" value="10" />
 
       <div class="mp-calc" id="mp-calc"></div>
       <div class="mp-err" id="mp-err" hidden></div>
-      <button type="submit" class="mp-submit" id="mp-submit">Открыть бумажную позу</button>
+      <button type="submit" class="mp-submit" id="mp-submit">Open paper position</button>
     </form>`;
+}
+
+// Clamp the leverage slider to what the picked coin allows (HL max, capped at
+// the wallet's practical WALLET_LEV_CAP). Shows a hint when the coin caps lower.
+function applyCoinLeverageCap() {
+  const coin = (document.getElementById("mp-coin")?.value || "").trim().toUpperCase();
+  const lev = document.getElementById("mp-lev");
+  const hint = document.getElementById("mp-lev-hint");
+  if (!lev) return;
+  const coinMax = coinLeverage[coin];
+  const cap = Math.min(WALLET_LEV_CAP, Number.isFinite(coinMax) && coinMax > 0 ? coinMax : WALLET_LEV_CAP);
+  lev.max = String(cap);
+  if (Number(lev.value) > cap) lev.value = String(cap);
+  if (hint) {
+    // Show the binding constraint: the coin's HL cap when it's the lower one,
+    // otherwise the wallet's practical cap.
+    if (coin && Number.isFinite(coinMax) && coinMax < WALLET_LEV_CAP)
+      hint.textContent = `· ${coin} caps at ${coinMax}×`;
+    else if (coin) hint.textContent = `· cap ${cap}×`;
+    else hint.textContent = "";
+  }
+  recalc();
 }
 
 function recalc() {
@@ -103,28 +131,17 @@ function recalc() {
   if (mVal) mVal.textContent = `${pct}%`;
   if (calc) {
     calc.innerHTML = lastEquity > 0
-      ? `Депо <strong>${fmtUsd(lastEquity)}</strong> · маржа <strong>${fmtUsd(margin)}</strong> · размер позы <strong>${fmtUsd(notional)}</strong>`
-      : `Депо недоступно — задай размер позиции вручную плечом × %.`;
+      ? `Equity <strong>${fmtUsd(lastEquity)}</strong> · margin <strong>${fmtUsd(margin)}</strong> · position size <strong>${fmtUsd(notional)}</strong>`
+      : `Equity unavailable — set the size manually with leverage × %.`;
   }
   return { lev, notional, margin };
 }
 
+// Fill the <datalist> for the coin autocomplete (typed input, not a long list).
 function populateCoins(coins) {
-  const sel = document.getElementById("mp-coin");
-  if (!sel) return;
-  const prefill = (sel.dataset.prefill || "").toUpperCase();
-  if (!coins.length) {
-    sel.innerHTML = '<option value="">список недоступен</option>';
-    return;
-  }
-  const opts = ['<option value="" disabled>— выбери монету —</option>'].concat(
-    coins.map(
-      (c) => `<option value="${escapeHtml(c)}"${c === prefill ? " selected" : ""}>${escapeHtml(c)}</option>`,
-    ),
-  );
-  sel.innerHTML = opts.join("");
-  // Если префилла нет/не нашёлся — оставляем плейсхолдер активным.
-  if (!prefill || !coins.includes(prefill)) sel.value = "";
+  const list = document.getElementById("mp-coin-list");
+  if (!list) return;
+  list.innerHTML = coins.map((c) => `<option value="${escapeHtml(c)}"></option>`).join("");
 }
 
 async function openModal(prefill = {}) {
@@ -133,16 +150,18 @@ async function openModal(prefill = {}) {
   modal.hidden = false;
   document.body.style.overflow = "hidden";
 
-  // Депо для слайдера + список монет для дропдауна.
+  // Equity for the slider + coin list (autocomplete) + per-coin max leverage.
   try {
     const data = await fetchJson("/api/manual-paper");
     lastEquity = pickNum(data?.equity, 0);
+    coinLeverage = data?.leverage && typeof data.leverage === "object" ? data.leverage : {};
     populateCoins(Array.isArray(data?.coins) ? data.coins : []);
   } catch {
     lastEquity = 0;
+    coinLeverage = {};
     populateCoins([]);
   }
-  recalc();
+  applyCoinLeverageCap(); // honors prefill coin + refreshes the calc line
 
   const form = document.getElementById("mp-form");
   form.querySelectorAll(".mp-side-btn").forEach((b) =>
@@ -151,6 +170,9 @@ async function openModal(prefill = {}) {
       b.classList.add("is-on");
     }),
   );
+  // Re-check the coin's leverage cap whenever the typed coin changes.
+  document.getElementById("mp-coin").addEventListener("change", applyCoinLeverageCap);
+  document.getElementById("mp-coin").addEventListener("input", applyCoinLeverageCap);
   document.getElementById("mp-lev").addEventListener("input", recalc);
   document.getElementById("mp-size").addEventListener("input", recalc);
   form.addEventListener("submit", onSubmit);
@@ -167,29 +189,29 @@ async function onSubmit(e) {
   const coin = (document.getElementById("mp-coin").value || "").trim().toUpperCase();
   const side = document.querySelector(".mp-side-btn.is-on")?.dataset.side || "long";
   const { lev, notional } = recalc();
-  if (!coin) return showErr("Выбери монету из списка.");
-  if (!(notional > 0)) return showErr("Размер позы 0 — двинь слайдер маржи (или депо недоступно).");
+  if (!coin) return showErr("Pick a coin from the list.");
+  if (!(notional > 0)) return showErr("Position size is 0 — move the margin slider (or equity is unavailable).");
 
   busy = true;
   const submit = document.getElementById("mp-submit");
   submit.disabled = true;
-  submit.textContent = "Открываю…";
+  submit.textContent = "Opening…";
   try {
     const res = await postJson("/api/manual-paper/open", {
       coin, side, leverage: lev, sizeUsd: notional,
     });
     if (res?.ok) {
       closeModal();
-      refreshActive(); // обновить блок бумажных поз, если он на странице
+      refreshActive(); // refresh the paper-positions block if it's on this page
     } else {
-      showErr(res?.error || "Не удалось открыть.");
+      showErr(res?.error || "Couldn't open.");
     }
   } catch (e2) {
-    showErr(e2.message || "Сетевая ошибка.");
+    showErr(e2.message || "Network error.");
   } finally {
     busy = false;
     submit.disabled = false;
-    submit.textContent = "Открыть бумажную позу";
+    submit.textContent = "Open paper position";
   }
 }
 
@@ -219,8 +241,8 @@ function rowHtml(p) {
   // Если бот ведёт выход — под uPnL показываем пик (MFE) и виртуальный стоп.
   const sub =
     p.managed && (p.stopPrice != null || p.peakPct)
-      ? `<span class="mp-sub">пик ${p.peakPct ? fmtPct(p.peakPct) : "0%"}${
-          p.stopPrice != null ? ` · стоп $${fmtPrice(p.stopPrice)}` : ""
+      ? `<span class="mp-sub">peak ${p.peakPct ? fmtPct(p.peakPct) : "0%"}${
+          p.stopPrice != null ? ` · stop $${fmtPrice(p.stopPrice)}` : ""
         }</span>`
       : "";
   return `
@@ -234,7 +256,7 @@ function rowHtml(p) {
       <td class="r ${pnlCls}"><strong>${pnl == null ? "—" : fmtUsd(pnl)}</strong>${
         roe == null ? "" : `<span class="mp-roe">${fmtPct(roe)}</span>`
       }${sub}</td>
-      <td class="c"><button type="button" class="mp-close-btn" data-mp-close-id="${p.id}" data-mp-coin="${escapeHtml(p.coin)}">Закрыть</button></td>
+      <td class="c"><button type="button" class="mp-close-btn" data-mp-close-id="${p.id}" data-mp-coin="${escapeHtml(p.coin)}">Close</button></td>
     </tr>`;
 }
 
@@ -254,16 +276,16 @@ async function refreshActive() {
     container.innerHTML = `
       <div class="mp-active">
         <div class="mp-active-head">
-          <span>Бумажные позы · paper</span>
-          <span class="mp-active-meta">${used}/${max} · ${managed ? "🤖 бот ведёт выход" : "бот не вмешивается"}</span>
+          <span>Paper positions · paper</span>
+          <span class="mp-active-meta">${used}/${max} · ${managed ? "🤖 bot manages exit" : "bot hands-off"}</span>
         </div>
         <div class="u-scroll-x">
           <table class="data-table mp-active-table">
             <thead>
               <tr>
-                <th>Coin</th><th class="c">Сторона</th><th class="r">Плечо</th>
-                <th class="r">Размер</th><th class="r">Вход</th><th class="r">Цена</th>
-                <th class="r" title="Нереализованный P&L (нетто) + ROE на маржу">uPnL</th>
+                <th>Coin</th><th class="c">Side</th><th class="r">Lev</th>
+                <th class="r">Size</th><th class="r">Entry</th><th class="r">Price</th>
+                <th class="r" title="Unrealized P&L (net) + ROE on margin">uPnL</th>
                 <th class="c"></th>
               </tr>
             </thead>
@@ -281,21 +303,21 @@ async function onCloseClick(e) {
   if (!btn) return;
   const id = Number(btn.dataset.mpCloseId);
   if (!Number.isFinite(id)) return;
-  if (!window.confirm(`Закрыть бумажную позу #${btn.dataset.mpCoin} по текущей цене?`)) return;
+  if (!window.confirm(`Close paper position #${btn.dataset.mpCoin} at the current price?`)) return;
   btn.disabled = true;
   btn.textContent = "…";
   try {
     const res = await postJson("/api/manual-paper/close", { id });
     if (!res?.ok) {
       btn.disabled = false;
-      btn.textContent = "Закрыть";
-      window.alert(res?.error || "Не удалось закрыть.");
+      btn.textContent = "Close";
+      window.alert(res?.error || "Couldn't close.");
       return;
     }
     refreshActive();
   } catch {
     btn.disabled = false;
-    btn.textContent = "Закрыть";
+    btn.textContent = "Close";
   }
 }
 

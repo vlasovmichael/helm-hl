@@ -62,17 +62,17 @@ export function mountTopnav(active) {
     <div class="topnav-links">${LINKS.map((l) => navLink(l, active)).join("")}</div>
     <div class="topnav-right">
       <div class="notif" id="notif">
-        <button class="notif-btn" id="notif-btn" type="button" aria-label="Уведомления" aria-expanded="false" title="Уведомления">
-          <svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true">
+        <button class="notif-btn" id="notif-btn" type="button" aria-label="Notifications" aria-expanded="false" title="Notifications">
+          <svg class="nav-ico notif-bell" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
             <path d="M13.7 21a2 2 0 0 1-3.4 0" />
           </svg>
           <span class="notif-badge" id="notif-badge" hidden></span>
         </button>
-        <div class="notif-panel" id="notif-panel" hidden role="dialog" aria-label="Уведомления">
+        <div class="notif-panel" id="notif-panel" hidden role="dialog" aria-label="Notifications">
           <div class="notif-panel-head">
-            <span>Уведомления</span>
-            <button class="notif-clear" id="notif-mark-read" type="button">Прочитано</button>
+            <span>Notifications</span>
+            <button class="notif-clear" id="notif-mark-read" type="button">Mark read</button>
           </div>
           <div class="notif-list" id="notif-list"></div>
         </div>

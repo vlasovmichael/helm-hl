@@ -25,6 +25,7 @@ import { getAccountEquity } from "../../wallet.js";
 import { calcPnl, FEE_RATE } from "../../executor/math.js";
 import { computeStopDistPct } from "../../../app/adoptReconcile.js";
 import { getAdoptPeakPct } from "../../strategistAdopt.js";
+import { getUniverse } from "../../../core/universe.js";
 
 const STRATEGY_ID = "manual_paper";
 const MAX_SLOTS = 8;          // потолок одновременных бумажных входов
@@ -45,7 +46,7 @@ async function resolvePrice(coin) {
   return null;
 }
 
-/** Список торгуемых монет (с живой ценой) для дропдауна. [] при ошибке. */
+/** Список торгуемых монет (с живой ценой) для автоподстановки. [] при ошибке. */
 async function availableCoins() {
   try {
     const map = await getLivePriceMap(); // Map<coin, px>
@@ -53,6 +54,16 @@ async function availableCoins() {
   } catch {
     return [];
   }
+}
+
+/** Карта COIN(UPPERCASE) → maxLeverage из universe (HL meta). {} если пусто. */
+function leverageByCoin() {
+  const out = {};
+  for (const a of getUniverse()) {
+    const lev = Number(a?.maxLeverage);
+    if (a?.name && Number.isFinite(lev) && lev > 0) out[a.name.toUpperCase()] = lev;
+  }
+  return out;
 }
 
 /** Доступное депо (equity) для слайдера. 0 при ошибке. */
@@ -117,7 +128,7 @@ export async function handleList(_req, res) {
       });
     }
     const coins = await availableCoins();
-    res.json({ positions, equity, coins, slots: { used: open.length, max: MAX_SLOTS }, generatedAt: Date.now() });
+    res.json({ positions, equity, coins, leverage: leverageByCoin(), slots: { used: open.length, max: MAX_SLOTS }, generatedAt: Date.now() });
   } catch (err) {
     logger.warn(`[manualPaper] list failed: ${err.message}`);
     res.status(500).json({ positions: [], equity: 0, error: true });
