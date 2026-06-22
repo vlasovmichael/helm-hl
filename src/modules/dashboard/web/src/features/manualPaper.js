@@ -180,7 +180,7 @@ async function onSubmit(e) {
     });
     if (res?.ok) {
       closeModal();
-      refreshList(); // если карточка на странице — обновить
+      refreshActive(); // обновить блок бумажных поз, если он на странице
     } else {
       showErr(res?.error || "Не удалось открыть.");
     }
@@ -206,7 +206,7 @@ export function initManualPaperTrigger(btnId) {
   btn.addEventListener("click", () => openModal());
 }
 
-// ── Карточка управления (Lab): список открытых поз + Close ──
+// ── Бумажные позы в карточке Active Position (главная): live-PnL + Close ──
 let listTimer = null;
 
 function rowHtml(p) {
@@ -223,7 +223,7 @@ function rowHtml(p) {
       <td class="r">${p.leverage}×</td>
       <td class="r">${fmtUsd(p.sizeUsd)}</td>
       <td class="r">$${fmtPrice(p.entryPrice)}</td>
-      <td class="r">${p.markPrice != null ? "$" + fmtPrice(p.markPrice) : "—"}</td>
+      <td class="r" data-mp-mark>${p.markPrice != null ? "$" + fmtPrice(p.markPrice) : "—"}</td>
       <td class="r ${pnlCls}"><strong>${pnl == null ? "—" : fmtUsd(pnl)}</strong>${
         roe == null ? "" : `<span class="mp-roe">${fmtPct(roe)}</span>`
       }</td>
@@ -231,21 +231,40 @@ function rowHtml(p) {
     </tr>`;
 }
 
-async function refreshList() {
-  const tbody = document.getElementById("mp-list-tbody");
-  if (!tbody) return; // карточки нет на этой странице
+async function refreshActive() {
+  const container = document.getElementById("mp-active-container");
+  if (!container) return; // не на этой странице
   try {
     const data = await fetchJson("/api/manual-paper");
     const positions = Array.isArray(data?.positions) ? data.positions : [];
-    const meta = document.getElementById("mp-list-meta");
-    if (meta) {
-      meta.textContent = `${data?.slots?.used ?? positions.length}/${data?.slots?.max ?? 8} слотов · депо ${fmtUsd(pickNum(data?.equity, 0))}`;
+    if (!positions.length) {
+      container.innerHTML = ""; // нет бумажных поз — блок не мозолит глаза
+      return;
     }
-    tbody.innerHTML = positions.length
-      ? positions.map(rowHtml).join("")
-      : '<tr><td colspan="8" class="empty-state">Открытых бумажных поз нет. «+ Новая сделка» — открыть.</td></tr>';
+    const used = data?.slots?.used ?? positions.length;
+    const max = data?.slots?.max ?? 8;
+    container.innerHTML = `
+      <div class="mp-active">
+        <div class="mp-active-head">
+          <span>Бумажные позы · paper</span>
+          <span class="mp-active-meta">${used}/${max} · бот не вмешивается</span>
+        </div>
+        <div class="u-scroll-x">
+          <table class="data-table mp-active-table">
+            <thead>
+              <tr>
+                <th>Coin</th><th class="c">Сторона</th><th class="r">Плечо</th>
+                <th class="r">Размер</th><th class="r">Вход</th><th class="r">Цена</th>
+                <th class="r" title="Нереализованный P&L (нетто) + ROE на маржу">uPnL</th>
+                <th class="c"></th>
+              </tr>
+            </thead>
+            <tbody>${positions.map(rowHtml).join("")}</tbody>
+          </table>
+        </div>
+      </div>`;
   } catch {
-    /* fail-soft */
+    /* fail-soft — блок не критичен */
   }
 }
 
@@ -265,23 +284,25 @@ async function onCloseClick(e) {
       window.alert(res?.error || "Не удалось закрыть.");
       return;
     }
-    refreshList();
+    refreshActive();
   } catch {
     btn.disabled = false;
     btn.textContent = "Закрыть";
   }
 }
 
-/** Инициализирует карточку «Мой папер» (Lab): список + кнопка + поллинг. */
-export function initManualPaperCard() {
-  const card = document.getElementById("mp-card");
-  if (!card || card.dataset.bound) return;
-  card.dataset.bound = "1";
-  initManualPaperTrigger("mp-new-btn");
-  card.addEventListener("click", onCloseClick);
-  refreshList();
+/**
+ * Бумажные позы в карточке Active Position (главная): рендер + Close + поллинг 15с.
+ * Вызывать из index.js (контейнер #mp-active-container в секции Active Position).
+ */
+export function initManualPaperActive() {
+  const container = document.getElementById("mp-active-container");
+  if (!container || container.dataset.bound) return;
+  container.dataset.bound = "1";
+  container.addEventListener("click", onCloseClick);
+  refreshActive();
   if (listTimer) clearInterval(listTimer);
   listTimer = setInterval(() => {
-    if (!document.hidden) refreshList();
-  }, 20_000);
+    if (!document.hidden) refreshActive();
+  }, 15_000);
 }

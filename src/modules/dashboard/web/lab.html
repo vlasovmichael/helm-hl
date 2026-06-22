@@ -101,44 +101,6 @@
         </div>
       </section>
 
-      <!-- 01.5 / Мой папер — личный бумажный журнал (Rabbit-style). Открытые позы
-           с live mark-to-market + ручное закрытие. Бот не торгует. Архив закрытых
-           поднимается в таблицу Strategies (manual_paper). -->
-      <section class="card" id="mp-card">
-        <div class="card-header">
-          <div
-            class="card-title"
-            data-num="01.5"
-            title="Свой папер как в Rabbit, только на бумаге: монета, сторона, плечо, размер от реального депо. Бот не вмешивается — ведёшь и закрываешь руками. Закрытые сделки идут в Strategies → «Мой папер»."
-          >
-            Мой папер
-          </div>
-          <div class="hm-header-right">
-            <button id="mp-new-btn" class="whatif-btn" type="button" title="Открыть новую бумажную сделку">+ Новая сделка</button>
-            <span id="mp-list-meta" style="font-size: 11px; font-family: var(--font-mono); color: var(--text-muted)"></span>
-          </div>
-        </div>
-        <div class="u-scroll-x">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>Coin</th>
-                <th class="c">Сторона</th>
-                <th class="r">Плечо</th>
-                <th class="r">Размер</th>
-                <th class="r">Вход</th>
-                <th class="r">Цена</th>
-                <th class="r" title="Нереализованный P&L (нетто, оценка комиссии) + ROE на маржу">uPnL</th>
-                <th class="c"></th>
-              </tr>
-            </thead>
-            <tbody id="mp-list-tbody">
-              <tr><td colspan="8" class="empty-state">загружаем…</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
       <!-- 02 / BTC Divergence -->
       <section class="card" id="sec-divergence">
         <div class="card-header">
