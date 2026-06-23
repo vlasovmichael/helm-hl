@@ -43,6 +43,32 @@ test('ручной вход + бот-выход → source=adopted', () => {
   assert.equal(trades[0].source, 'adopted');
 });
 
+// ── source: adopted (ручной вход + РУЧНОЙ выход, протухший entry_time) ──
+// Корневой кейс DYDX 2026-06-23: вход ручной (нет бот-OID), выход ручной/external
+// (нет бот-OID), а entry_time в history бэкфилнут с лагом → промахивается мимо
+// ±3с. Спасает матч по времени ЗАКРЫТИЯ (history.closed_at = реальная нога).
+test('ручной вход + ручной выход, но history знает закрытие → source=adopted', () => {
+  const fills = [
+    makeFill({ time: 1_000_000, dir: 'Open Short',  oid: 100, px: 100, sz: 1 }),   // ручной open
+    makeFill({ time: 1_300_000, dir: 'Close Short', oid: 101, px: 99,  sz: 1, closedPnl: 1 }), // ручной close
+  ];
+  // entry_time в history протух (отстаёт на 2 мин), но closed_at = реальная нога.
+  const botTrades = [{ coin: 'X', entry_time: 1_000_000 - 120_000, closed_at: 1_300_000 }];
+  const trades = reconstructRoundTrips(fills, botTrades, new Set([999]));
+  assert.equal(trades.length, 1);
+  assert.equal(trades[0].source, 'adopted', 'матч по времени закрытия, не по entry_time');
+});
+
+test('close-матч в пределах допуска (±5с округление индексации) → adopted', () => {
+  const fills = [
+    makeFill({ time: 1_000_000, dir: 'Open Short',  oid: 100, px: 100, sz: 1 }),
+    makeFill({ time: 1_300_000, dir: 'Close Short', oid: 101, px: 99,  sz: 1, closedPnl: 1 }),
+  ];
+  const botTrades = [{ coin: 'X', entry_time: 0, closed_at: 1_300_000 + 4000 }]; // +4с
+  const trades = reconstructRoundTrips(fills, botTrades, new Set([999]));
+  assert.equal(trades[0].source, 'adopted');
+});
+
 // ── source: manual (я открыл и закрыл) ────────────
 test('ручной вход + ручной выход → source=manual', () => {
   const fills = [
@@ -53,6 +79,17 @@ test('ручной вход + ручной выход → source=manual', () => 
   assert.equal(trades.length, 1);
   assert.equal(trades[0].source, 'manual');
   assert.equal(trades[0].status, 'closed');
+});
+
+test('чужое закрытие той же монеты в истории (далеко по времени) → остаётся manual', () => {
+  const fills = [
+    makeFill({ time: 5_000_000, dir: 'Open Long',  oid: 100, px: 10, sz: 5 }),
+    makeFill({ time: 5_030_000, dir: 'Close Long', oid: 101, px: 11, sz: 5, closedPnl: 5 }),
+  ];
+  // history знает ДРУГУЮ сделку по X, закрытую на час раньше — не должна матчить.
+  const botTrades = [{ coin: 'X', entry_time: 1_000_000, closed_at: 1_300_000 }];
+  const trades = reconstructRoundTrips(fills, botTrades, new Set([999]));
+  assert.equal(trades[0].source, 'manual', 'close-матч не должен ловить чужую ногу');
 });
 
 // ── startPosition-якорь: поза открыта ДО окна ─────

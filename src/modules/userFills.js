@@ -178,6 +178,9 @@ export function reconstructRoundTrips(fills, botTrades, botOidSet = null) {
     botByCoin.get(c).push({
       entry: bt.entry_time,
       close: bt.closed_at || (bt.status === 'OPEN' ? Number.POSITIVE_INFINITY : bt.entry_time),
+      // Реальное время закрытия ноги (или null для открытых/без даты) —
+      // надёжный ключ матча adopted (см. isBotRecordedClose).
+      closedAt: Number.isFinite(bt.closed_at) ? bt.closed_at : null,
     });
   }
 
@@ -208,6 +211,22 @@ export function reconstructRoundTrips(fills, botTrades, botOidSet = null) {
     return ranges.some((r) => Math.abs(r.entry - entryTime) <= ENTRY_MATCH_MS);
   }
 
+  // Матч adopted по ВРЕМЕНИ ЗАКРЫТИЯ. entry_time усыновлённой позы в history
+  // приблизителен и бэкфилится с лагом (fill ещё не проиндексирован в момент
+  // adopt), поэтому isBotOwnedEntry мог промахнуться → ручной выход adopted-позы
+  // классифицировался как 'manual' и задваивался в лентах (инцидент DYDX
+  // 2026-06-23). Но closed_at в history для adopt/external = реальное время ноги
+  // из тех же fills (integrity: leg.closedAt), значит совпадает с lastCloseTime
+  // round-trip'а с точностью до округления. Это надёжный ключ.
+  const CLOSE_MATCH_MS = 5000;
+  function isBotRecordedClose(coin, closeTime) {
+    if (!Number.isFinite(closeTime)) return false;
+    const ranges = botByCoin.get(coin.toUpperCase()) || [];
+    return ranges.some(
+      (r) => r.closedAt != null && Math.abs(r.closedAt - closeTime) <= CLOSE_MATCH_MS,
+    );
+  }
+
   function isBotFill(f) {
     // OID присутствует и фильтр активен → oid решает ОДНОЗНАЧНО (и для bot,
     // и для НЕ-bot fills). Time-fallback ТОЛЬКО для fills без oid (legacy):
@@ -232,7 +251,12 @@ export function reconstructRoundTrips(fills, botTrades, botOidSet = null) {
 
   function classify(cur) {
     if (cur.openIsBot) return 'bot';
-    if (cur.closeIsBot || isBotOwnedEntry(cur.coin, cur.entryTime)) return 'adopted';
+    if (
+      cur.closeIsBot ||
+      isBotOwnedEntry(cur.coin, cur.entryTime) ||
+      isBotRecordedClose(cur.coin, cur.lastCloseTime)
+    )
+      return 'adopted';
     return 'manual';
   }
   function emit(out, cur, closed) {
