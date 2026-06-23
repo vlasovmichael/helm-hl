@@ -191,10 +191,41 @@ tfoot td {
   font-size: 13px;
 }
 @include until($bp-md) {
+  // На телефоне прячем второстепенные колонки (# сделок, Funding), но даже
+  // оставшиеся 7 колонок с nowrap шире экрана. .table-card был overflow:hidden
+  // (ради скругления углов) → правые колонки Net/Cumulative обрезались БЕЗ
+  // скролла. Включаем горизонтальный скролл по карточке.
   .col-opt {
     display: none;
   }
-  .ledger-wrap {
-    padding: 18px 12px 60px;
+  .table-card {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  table.ledger {
+    font-size: 12px;
+
+    th,
+    td {
+      padding: 9px 10px;
+    }
+  }
+}
+
+@include until($bp-sm) {
+  .stat-card {
+    padding: 12px 13px;
+
+    .v {
+      font-size: 18px;
+    }
+  }
+  table.ledger {
+    font-size: 11.5px;
+
+    th,
+    td {
+      padding: 8px 9px;
+    }
   }
 }

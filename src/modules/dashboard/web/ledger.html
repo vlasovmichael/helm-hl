@@ -184,7 +184,7 @@
             k: "Funding",
             v: fmt(t.funding),
             c: cls(t.funding),
-            sub: "carry accrual",
+            sub: "funding accrual",
           },
         ];
         document.getElementById("summary").innerHTML = cards
@@ -263,7 +263,6 @@
 
       function renderFootnote(data) {
         const t = data.totals;
-        const gross = t.botNet + t.manualNet + t.fees; // net + fees = gross price pnl (+funding rolled in net)
         document.getElementById("footnote").innerHTML = `
           <b>Bot</b> = бот открыл и закрыл сам. <b>Adopted</b> = я вошёл руками, бот подхватил и закрыл (adopt-нянька). <b>Manual</b> = и вход, и выход мои.
           Net = price&nbsp;P&L − комиссии + funding. Прошлые месяцы заморожены в снапшоте, текущий считается вживую из fills.
