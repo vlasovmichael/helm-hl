@@ -80,10 +80,6 @@
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
-    /* Floor-резерв. Точную высоту под самый «высокий» период выставляет JS
-       (renderPnlSummary) — иначе при переключении дней число строк-стратегий
-       меняется, карточка скачет и тянет за собой график ниже. */
-    min-height: 110px;
   }
   .strategy-row {
     display: grid;

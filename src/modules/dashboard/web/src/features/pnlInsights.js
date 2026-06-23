@@ -150,21 +150,10 @@ function renderPnlSummary() {
       .join("");
   }
 
-  // Резерв высоты под самый «высокий» период: замеряем реальную строку и
-  // считаем max число стратегий по всем периодам. Без этого блок стратегий
-  // меняет высоту при переключении дней и карточка (с графиком ниже) скачет.
-  let maxRows = 1;
-  for (const per of Object.values(lastPnlSummary.periods)) {
-    const n = Object.keys(per.byStrategy || {}).length;
-    if (n > maxRows) maxRows = n;
-  }
-  const sampleRow = stratContainer.querySelector(".strategy-row");
-  if (sampleRow) {
-    const rowH = sampleRow.getBoundingClientRect().height;
-    const gap =
-      0.4 * parseFloat(getComputedStyle(document.documentElement).fontSize);
-    stratContainer.style.minHeight = `${Math.round(maxRows * rowH + (maxRows - 1) * gap)}px`;
-  }
+  // Блок стратегий занимает высоту под реальное число строк текущего периода.
+  // (Раньше резервировали max по всем периодам, чтобы карточка не «прыгала» при
+  // переключении дней — но это давало постоянную дыру на дефолтном Today с одной
+  // стратегией. Лёгкий рефлоу при ручном переключении периода предпочтительнее.)
 
   // Данные отрендерены — убираем скелетон-оверлей.
   document.getElementById("pnl-skeleton")?.classList.add("hidden");
