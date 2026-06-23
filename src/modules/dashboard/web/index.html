@@ -66,11 +66,21 @@
       <!-- Market Context — живая статистика по BTC; цвет рамки = фон (risk-on/off) -->
       <div
         id="market-context"
-        class="market-context unknown"
+        class="market-context unknown mc-loading"
         title="Живая статистика BTC. Зелёная рамка = чёткий тренд (RISK-ON/OFF), вход по фону. Жёлтая = боковик, вход против структуры рискован."
       >
-        <span class="mc-head" id="mc-head"></span>
-        <span class="mc-stats" id="mc-stats"></span>
+        <span class="mc-head" id="mc-head">
+          <span class="mc-skel mc-skel-px"></span>
+          <span class="mc-skel mc-skel-24h"></span>
+        </span>
+        <span class="mc-stats" id="mc-stats">
+          <span class="mc-skel mc-skel-cell"></span>
+          <span class="mc-skel mc-skel-cell"></span>
+          <span class="mc-skel mc-skel-cell"></span>
+          <span class="mc-skel mc-skel-cell"></span>
+          <span class="mc-skel mc-skel-cell"></span>
+          <span class="mc-skel mc-skel-cell"></span>
+        </span>
       </div>
 
       <!-- 01 / Active Position -->

@@ -1,44 +1,50 @@
 /* ───────────────────────────────────────────────
-   Market Context bar — вердикт по фону (risk-on/off)
+   Market Context bar — живая расширенная статистика BTC
    ─────────────────────────────────────────────── */
 .market-context {
   display: flex;
   align-items: center;
-  gap: 16px;
+  justify-content: space-between; /* растягиваем на всю строку */
+  gap: 20px 32px;
   flex-wrap: wrap;
-  padding: 10px 16px;
+  padding: 14px 22px;
+  min-height: 56px;
   margin: 0 0 14px;
   border: 1px solid var(--border);
   border-left: 3px solid var(--border-strong);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--card-bg-elev);
-  font-size: 14px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.2px;
+  transition:
+    background 0.4s ease,
+    border-color 0.4s ease;
 
   /* Шапка: BTC цена + 24h */
   .mc-head {
     display: flex;
     align-items: baseline;
-    gap: 8px;
+    gap: 10px;
 
     .mc-sym {
       font-weight: 700;
-      font-size: 13px;
-      letter-spacing: 0.6px;
+      font-size: 14px;
+      letter-spacing: 0.8px;
       color: var(--text-muted);
     }
     .mc-px {
       font-weight: 700;
-      font-size: 18px;
+      font-size: 23px;
       color: var(--text-primary);
     }
     .mc-24h {
-      font-size: 13px;
+      font-size: 15px;
+      font-weight: 600;
       i {
         color: var(--text-muted);
         font-style: normal;
         font-size: 11px;
+        font-weight: 500;
       }
       &.up {
         color: var(--green);
@@ -49,30 +55,31 @@
     }
   }
 
-  /* Расширенная статистика: ячейки label/value */
+  /* Расширенная статистика: ячейки label/value, равномерно по строке */
   .mc-stats {
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 30px;
     flex-wrap: wrap;
-    margin-left: 4px;
 
     .mc-cell {
       display: flex;
       flex-direction: column;
-      line-height: 1.25;
+      gap: 2px;
+      line-height: 1.2;
 
       i {
         font-style: normal;
-        font-size: 10px;
-        letter-spacing: 0.4px;
+        font-size: 10.5px;
+        letter-spacing: 0.5px;
         text-transform: uppercase;
         color: var(--text-muted);
       }
       b {
         font-weight: 600;
-        font-size: 13.5px;
+        font-size: 16px;
         color: var(--text-secondary);
+        border-radius: 4px;
 
         &.up {
           color: var(--green);
@@ -84,7 +91,7 @@
     }
   }
 
-  /* Светофор «можно/нельзя»: зелёный = чёткий фонд (RISK-ON/OFF), жёлтый = MIXED. */
+  /* Светофор: зелёный = чёткий фонд (RISK-ON/OFF), жёлтый = MIXED. */
   &.go {
     border-left-color: var(--green-line);
     background: var(--green-soft);
@@ -92,5 +99,85 @@
   &.wait {
     border-left-color: var(--warn);
     background: var(--warn-soft);
+  }
+
+  /* ── Вход (один раз при монтировании): стаггер fade-up, пружинный easing ── */
+  &.mc-enter {
+    .mc-head,
+    .mc-stats .mc-cell {
+      animation: mc-fade-up 0.55s cubic-bezier(0.34, 1.4, 0.5, 1) backwards;
+    }
+    .mc-head {
+      animation-delay: 0.02s;
+    }
+    @for $i from 1 through 6 {
+      .mc-stats .mc-cell:nth-child(#{$i}) {
+        animation-delay: #{0.06 + $i * 0.05}s;
+      }
+    }
+  }
+
+  /* ── Скелетон-прелоадер (shimmer), пока нет данных ── */
+  &.mc-loading {
+    .mc-skel {
+      display: inline-block;
+      height: 16px;
+      border-radius: 5px;
+      background: linear-gradient(
+        100deg,
+        var(--border) 30%,
+        var(--border-strong) 50%,
+        var(--border) 70%
+      );
+      background-size: 200% 100%;
+      animation: mc-shimmer 1.3s ease-in-out infinite;
+    }
+    .mc-skel-px {
+      width: 120px;
+      height: 22px;
+    }
+    .mc-skel-24h {
+      width: 64px;
+      margin-left: 8px;
+    }
+    .mc-stats {
+      gap: 30px;
+    }
+    .mc-skel-cell {
+      width: 54px;
+      height: 30px;
+    }
+  }
+}
+
+@keyframes mc-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes mc-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Уважаем prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .market-context {
+    &.mc-enter .mc-head,
+    &.mc-enter .mc-stats .mc-cell {
+      animation: none;
+    }
+    .mc-skel {
+      animation: none;
+    }
   }
 }
