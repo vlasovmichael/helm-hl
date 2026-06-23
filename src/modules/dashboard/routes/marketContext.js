@@ -2,46 +2,19 @@
 //  Market Context — «вердикт по фону» (risk-on/off)
 // ─────────────────────────────────────────────────
 // Отвечает на один вопрос: вход сейчас идёт ПО фону рынка или ПРОТИВ.
-// Источник тренда — 15m-свечи BTC с HL. Sentiment — Fear & Greed Index
-// (alternative.me, бесплатно, кэш 30 мин). Это НЕ новостная лента (commodity),
-// а сжатый вердикт для ручного трейда.
+// Источник тренда — 15m-свечи BTC с HL; они же питают мини-график цены.
 
-import axios from "axios";
 import { hlInfo, HL_PRIORITY } from "../../../core/hlClient.js";
-
-const FNG_TTL_MS = 30 * 60_000;
-let fngCache = { value: null, label: null, ts: 0 };
-
-async function getFearGreed() {
-  if (fngCache.value != null && Date.now() - fngCache.ts < FNG_TTL_MS) {
-    return { value: fngCache.value, label: fngCache.label };
-  }
-  try {
-    const { data } = await axios.get("https://api.alternative.me/fng/?limit=1", {
-      timeout: 4000,
-    });
-    const row = data?.data?.[0];
-    if (row) {
-      fngCache = {
-        value: Number(row.value),
-        label: row.value_classification || null,
-        ts: Date.now(),
-      };
-    }
-  } catch {
-    /* сеть упала — отдаём stale (или null), полоса деградирует тихо */
-  }
-  return { value: fngCache.value, label: fngCache.label };
-}
 
 // BTC % за 15m/1h/4h из 15m-свечей HL (не priceHistory — тот пуст первые 4ч
 // после рестарта). Кэш 60с, чтобы не дёргать HL на каждый поллинг дашборды.
 const BTC_CANDLES_TTL_MS = 60_000;
-let btcMovesCache = { moves: null, ts: 0 };
+const BTC_CHART_BARS = 30; // сколько последних 15m-свечей отдаём на мини-график
+let btcCache = { moves: null, candles: null, price: null, ts: 0 };
 
-async function getBtcMoves() {
-  if (btcMovesCache.moves && Date.now() - btcMovesCache.ts < BTC_CANDLES_TTL_MS) {
-    return btcMovesCache.moves;
+async function getBtc() {
+  if (btcCache.moves && Date.now() - btcCache.ts < BTC_CANDLES_TTL_MS) {
+    return btcCache;
   }
   const now = Date.now();
   let candles;
@@ -49,14 +22,15 @@ async function getBtcMoves() {
     candles = await hlInfo(
       {
         type: "candleSnapshot",
-        req: { coin: "BTC", interval: "15m", startTime: now - 5 * 3600_000, endTime: now },
+        // ~8ч 15m-свечей: хватает и на мини-график (30 баров), и на m4h (16 баров)
+        req: { coin: "BTC", interval: "15m", startTime: now - 8 * 3600_000, endTime: now },
       },
       { label: "dash/market-context", timeoutMs: 5000, maxRetries: 1, priority: HL_PRIORITY.LOW },
     );
   } catch {
-    return btcMovesCache.moves; // stale (или null) — полоса деградирует тихо
+    return btcCache; // stale (или null) — полоса деградирует тихо
   }
-  if (!Array.isArray(candles) || candles.length < 2) return btcMovesCache.moves;
+  if (!Array.isArray(candles) || candles.length < 2) return btcCache;
 
   const closes = candles.map((c) => Number(c.c)).filter((n) => Number.isFinite(n));
   const last = closes[closes.length - 1];
@@ -69,8 +43,14 @@ async function getBtcMoves() {
     m1h: pct(back(4)),   // 4×15m
     m4h: pct(back(16)),  // 16×15m
   };
-  btcMovesCache = { moves, ts: Date.now() };
-  return moves;
+  // Компактные OHLC последних N свечей для мини-графика: [o,h,l,c].
+  const series = candles
+    .slice(-BTC_CHART_BARS)
+    .map((c) => [Number(c.o), Number(c.h), Number(c.l), Number(c.c)])
+    .filter((a) => a.every((n) => Number.isFinite(n)));
+
+  btcCache = { moves, candles: series, price: last, ts: Date.now() };
+  return btcCache;
 }
 
 // Вердикт по фону. 1h = главный тренд, 15m = подтверждение моментума.
@@ -87,14 +67,15 @@ function classifyRegime(m15, m1h) {
 }
 
 export async function handleMarketContext(_req, res) {
-  const [moves, fng] = await Promise.all([getBtcMoves(), getFearGreed()]);
-  const btc = moves || { m15: null, m1h: null, m4h: null };
+  const data = await getBtc();
+  const btc = data.moves || { m15: null, m1h: null, m4h: null };
   const { verdict, arrow } = classifyRegime(btc.m15, btc.m1h);
   res.json({
     verdict,
     arrow,
     btc,
-    fearGreed: fng.value != null ? { value: fng.value, label: fng.label } : null,
+    btcPrice: data.price ?? null,
+    btcCandles: data.candles || [],
     ts: Date.now(),
   });
 }

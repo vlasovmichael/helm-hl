@@ -63,15 +63,14 @@
         </div>
       </header>
 
-      <!-- Market Context — вердикт по фону (risk-on/off) -->
+      <!-- Market Context — живой мини-график BTC; цвет рамки = фон (risk-on/off) -->
       <div
         id="market-context"
         class="market-context unknown"
-        title="Фон рынка по BTC. RISK-ON = тренд вверх, лонги по фону. RISK-OFF = тренд вниз, шорты по фону. MIXED = боковик, вход против структуры рискован."
+        title="Фон рынка по BTC (15m свечи). Зелёная рамка = чёткий тренд (RISK-ON/OFF), вход по фону. Жёлтая = боковик, вход против структуры рискован."
       >
-        <span class="mc-verdict" id="mc-verdict">MARKET: …</span>
-        <span class="mc-btc" id="mc-btc"></span>
-        <span class="mc-fng" id="mc-fng"></span>
+        <span class="mc-price" id="mc-price"></span>
+        <span class="mc-chart" id="mc-chart"></span>
       </div>
 
       <!-- 01 / Active Position -->
