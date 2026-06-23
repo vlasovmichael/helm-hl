@@ -398,6 +398,10 @@ function renderHeatmap() {
 export function renderTax(tax) {
   if (!tax) return;
   if (!document.getElementById("tax-costs")) return; // нет секции (/strategies.html)
+  // Год — из payload (/api/tax-summary), а не зашитый в HTML: иначе врёт после
+  // смены календарного года.
+  const yearEl = document.getElementById("tax-year");
+  if (yearEl && tax.year) yearEl.textContent = tax.year;
   document.getElementById("tax-costs").textContent =
     `${(tax.totalCostsPLN || 0).toLocaleString()} PLN`;
   document.getElementById("tax-revenue").textContent =
