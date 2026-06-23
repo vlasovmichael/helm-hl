@@ -315,6 +315,99 @@ export async function handlePnlSummary(_req, res) {
 // ─────────────────────────────────────────────────
 //  Insights — per-coin lifetime + daily P&L heatmap (90d)
 // ─────────────────────────────────────────────────
+// Pure-агрегация Insights. Вход — закрытые round-trip'ы в shape computeStats
+// (+ coin, side). Выход: perCoin (lifetime), daily (хитмап), bySide (long/short),
+// byStrategy (bot/adopted/manual). Вынесено отдельно и экспортировано для теста.
+export function buildInsights(combined) {
+  // ── Per-coin aggregation (lifetime, all periods) ──
+  const byCoin = new Map();
+  for (const t of combined) {
+    const c = (t.coin || "?").toUpperCase();
+    if (!byCoin.has(c)) {
+      byCoin.set(c, {
+        coin: c,
+        trades: 0,
+        pnl: 0,
+        wins: 0,
+        losses: 0,
+        fees: 0,
+        lastClosedAt: 0,
+      });
+    }
+    const row = byCoin.get(c);
+    row.trades += 1;
+    const pnl = t.realized_pnl || 0;
+    row.pnl += pnl;
+    row.fees += t.fee_paid || 0;
+    if (pnl > 0) row.wins += 1;
+    else if (pnl < 0) row.losses += 1;
+    if ((t.closed_at || 0) > row.lastClosedAt) row.lastClosedAt = t.closed_at;
+  }
+  const perCoin = [...byCoin.values()]
+    .map((r) => ({
+      ...r,
+      avg: r.trades > 0 ? r.pnl / r.trades : 0,
+      winRate: r.trades > 0 ? (r.wins / r.trades) * 100 : 0,
+    }))
+    .sort((a, b) => b.pnl - a.pnl);
+
+  // ── Daily P&L across full history (heatmap, в UI сгруппирован по месяцам/годам) ──
+  // Возвращаем ТОЛЬКО дни с торговлей (без заливки пустых) — фронт сам строит
+  // календарную сетку по месяцам и подставляет дни по date-ключу. Окно не
+  // ограничено 90 днями: фронт листает года. День в локальной зоне: YYYY-MM-DD.
+  const localDayKey = (ts) => {
+    const d = new Date(ts);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
+  };
+  const dailyMap = new Map();
+  for (const t of combined) {
+    if (!t.closed_at) continue;
+    const key = localDayKey(t.closed_at);
+    if (!dailyMap.has(key)) dailyMap.set(key, { date: key, pnl: 0, trades: 0 });
+    const row = dailyMap.get(key);
+    row.pnl += t.realized_pnl || 0;
+    row.trades += 1;
+  }
+  const daily = [...dailyMap.values()].sort((a, b) =>
+    a.date.localeCompare(b.date),
+  );
+
+  // ── Срезы LONG/SHORT и по стратегии с expectancy/payoff ──
+  // Проект: эдж = шорты (лонги хрупкие), главный леак = payoff → выносим эти
+  // метрики на страницу. computeStats даёт expectancy/payoff на любой подвыборке.
+  const summarize = (subset) => {
+    const s = computeStats(subset);
+    return {
+      trades: s.count,
+      pnl: s.totalPnl,
+      winRate: s.winRate,
+      avgPnl: s.avgPnl,
+      expectancy: s.expectancy,
+      payoffRatio: s.payoffRatio,
+    };
+  };
+  const bucket = (keyFn) => {
+    const m = new Map();
+    for (const t of combined) {
+      const k = keyFn(t);
+      if (!m.has(k)) m.set(k, []);
+      m.get(k).push(t);
+    }
+    return m;
+  };
+  const bySide = [...bucket((t) => (t.side || "?").toLowerCase()).entries()]
+    .map(([side, arr]) => ({ side, ...summarize(arr) }))
+    .sort((a, b) => b.trades - a.trades);
+  const byStrategy = [...bucket((t) => t.strategy_id || "?").entries()]
+    .map(([strategy, arr]) => ({ strategy, ...summarize(arr) }))
+    .sort((a, b) => b.pnl - a.pnl);
+
+  return { perCoin, daily, bySide, byStrategy };
+}
+
 export async function handleInsights(_req, res) {
   try {
     const now = Date.now();
@@ -332,68 +425,12 @@ export async function handleInsights(_req, res) {
         realized_pnl: t.pnl || 0,
         fee_paid: t.fee || 0,
         strategy_id: t.source, // bot | adopted | manual
+        side: t.side, // long | short
         entry_time: t.entryTime,
         closed_at: t.closeTime,
       }));
 
-    // ── Per-coin aggregation (lifetime, all periods) ──
-    const byCoin = new Map();
-    for (const t of combined) {
-      const c = (t.coin || "?").toUpperCase();
-      if (!byCoin.has(c)) {
-        byCoin.set(c, {
-          coin: c,
-          trades: 0,
-          pnl: 0,
-          wins: 0,
-          losses: 0,
-          fees: 0,
-          lastClosedAt: 0,
-        });
-      }
-      const row = byCoin.get(c);
-      row.trades += 1;
-      const pnl = t.realized_pnl || 0;
-      row.pnl += pnl;
-      row.fees += t.fee_paid || 0;
-      if (pnl > 0) row.wins += 1;
-      else if (pnl < 0) row.losses += 1;
-      if ((t.closed_at || 0) > row.lastClosedAt) row.lastClosedAt = t.closed_at;
-    }
-    const perCoin = [...byCoin.values()]
-      .map((r) => ({
-        ...r,
-        avg: r.trades > 0 ? r.pnl / r.trades : 0,
-        winRate: r.trades > 0 ? (r.wins / r.trades) * 100 : 0,
-      }))
-      .sort((a, b) => b.pnl - a.pnl);
-
-    // ── Daily P&L across full history (heatmap, в UI сгруппирован по месяцам/годам) ──
-    // Возвращаем ТОЛЬКО дни с торговлей (без заливки пустых) — фронт сам строит
-    // календарную сетку по месяцам и подставляет дни по date-ключу. Окно не
-    // ограничено 90 днями: фронт листает года.
-    // День в локальной зоне сервера: YYYY-MM-DD.
-    const localDayKey = (ts) => {
-      const d = new Date(ts);
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const dd = String(d.getDate()).padStart(2, "0");
-      return `${y}-${m}-${dd}`;
-    };
-    const dailyMap = new Map();
-    for (const t of combined) {
-      if (!t.closed_at) continue;
-      const key = localDayKey(t.closed_at);
-      if (!dailyMap.has(key)) dailyMap.set(key, { date: key, pnl: 0, trades: 0 });
-      const row = dailyMap.get(key);
-      row.pnl += t.realized_pnl || 0;
-      row.trades += 1;
-    }
-    const daily = [...dailyMap.values()].sort((a, b) =>
-      a.date.localeCompare(b.date),
-    );
-
-    res.json({ now, perCoin, daily });
+    res.json({ now, ...buildInsights(combined) });
   } catch (err) {
     logger.warn(`[Dashboard] /api/insights error: ${err.message}`);
     res.status(500).json({ error: err.message });

@@ -176,8 +176,53 @@ function renderPnlSummary() {
 function renderInsights() {
   if (!lastInsights) return;
   if (currentInsightsTab === "per-coin") renderPerCoin();
+  else if (currentInsightsTab === "breakdown") renderBreakdown();
   else renderHeatmap();
   document.getElementById("insights-skeleton")?.classList.add("hidden");
+}
+
+// ── Breakdown: long/short + по стратегии (lifetime, с expectancy/payoff) ──
+function sideLabel(side) {
+  if (side === "short") return "🔴 SHORT";
+  if (side === "long") return "🟢 LONG";
+  return escapeHtml(side || "?");
+}
+
+function breakdownRow(label, r) {
+  const pnlCls = r.pnl > 0 ? "num-pos" : r.pnl < 0 ? "num-neg" : "";
+  const expCls = r.expectancy > 0 ? "num-pos" : r.expectancy < 0 ? "num-neg" : "";
+  const wrCls = r.winRate >= 60 ? "num-pos" : r.winRate < 40 ? "num-neg" : "";
+  // payoff < 1 = леак (средний выигрыш меньше среднего проигрыша).
+  const payoff = r.payoffRatio == null ? "—" : `${r.payoffRatio.toFixed(2)}×`;
+  const payoffCls =
+    r.payoffRatio == null ? "" : r.payoffRatio >= 1 ? "num-pos" : "num-neg";
+  return `
+    <tr>
+      <td>${label}</td>
+      <td class="num">${r.trades}</td>
+      <td class="num ${wrCls}">${r.winRate.toFixed(0)}%</td>
+      <td class="num ${pnlCls}">${fmtMoney(r.pnl)}</td>
+      <td class="num ${expCls}">${fmtMoney(r.expectancy)}</td>
+      <td class="num ${payoffCls}">${payoff}</td>
+    </tr>`;
+}
+
+function renderBreakdown() {
+  const empty = '<tr><td colspan="6" class="empty-state">No trades yet</td></tr>';
+  const sideTbody = document.getElementById("breakdown-side-tbody");
+  if (sideTbody) {
+    const rows = lastInsights.bySide || [];
+    sideTbody.innerHTML = rows.length
+      ? rows.map((r) => breakdownRow(sideLabel(r.side), r)).join("")
+      : empty;
+  }
+  const stratTbody = document.getElementById("breakdown-strategy-tbody");
+  if (stratTbody) {
+    const rows = lastInsights.byStrategy || [];
+    stratTbody.innerHTML = rows.length
+      ? rows.map((r) => breakdownRow(strategyDisplayName(r.strategy), r)).join("")
+      : empty;
+  }
 }
 
 function renderPerCoin() {
@@ -389,10 +434,12 @@ export function initPnlInsights({ fmtTime } = {}) {
         .forEach((r) => r.classList.remove("active"));
       b.classList.add("active");
       currentInsightsTab = b.dataset.tab;
-      document.getElementById("insights-pane-per-coin").style.display =
-        currentInsightsTab === "per-coin" ? "" : "none";
-      document.getElementById("insights-pane-heatmap").style.display =
-        currentInsightsTab === "heatmap" ? "" : "none";
+      document
+        .querySelectorAll("#insights-container .insights-pane")
+        .forEach((pane) => {
+          pane.style.display =
+            pane.id === `insights-pane-${currentInsightsTab}` ? "" : "none";
+        });
       renderInsights();
     }),
   );

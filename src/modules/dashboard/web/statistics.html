@@ -70,10 +70,6 @@
             </div>
             <div class="pnl-hero-side">
               <div class="pnl-mini">
-                <div class="item-label">Funding</div>
-                <div class="pnl-mini-value" id="pnl-funding">$0.00</div>
-              </div>
-              <div class="pnl-mini">
                 <div class="item-label">Unrealized (now)</div>
                 <div class="pnl-mini-value" id="pnl-unrealized">$0.00</div>
               </div>
@@ -116,6 +112,10 @@
               <div class="item-label">Fees paid</div>
               <div class="item-value" id="pnl-fees">—</div>
             </div>
+            <div class="grid-item">
+              <div class="item-label">Funding</div>
+              <div class="item-value" id="pnl-funding">—</div>
+            </div>
           </div>
           <div class="pnl-strategy" id="pnl-strategy">
             <div class="empty-state">No trades in this period</div>
@@ -129,7 +129,7 @@
           <div
             class="card-title"
             data-num="06+"
-            title="Lifetime per-coin breakdown + 90-day daily P&amp;L heatmap. Independent of P&amp;L period selector — always shows all-time / 90d."
+            title="Lifetime срезы: per-coin, long/short и по стратегии (с expectancy/payoff), плюс многолетний daily P&amp;L heatmap (листается по годам). Не зависит от селектора периода P&amp;L — всегда all-time."
           >
             Insights
           </div>
@@ -137,6 +137,7 @@
             <button class="range-btn active" data-tab="per-coin">
               Per-coin
             </button>
+            <button class="range-btn" data-tab="breakdown">Breakdown</button>
             <button class="range-btn" data-tab="heatmap">Heatmap</button>
           </div>
         </div>
@@ -166,6 +167,44 @@
                   </tr>
                 </thead>
                 <tbody id="per-coin-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div
+            class="insights-pane"
+            id="insights-pane-breakdown"
+            style="display: none"
+          >
+            <div class="breakdown-block">
+              <div class="breakdown-title">Long vs Short</div>
+              <table class="breakdown-table">
+                <thead>
+                  <tr>
+                    <th>Side</th>
+                    <th class="num">Trades</th>
+                    <th class="num">Win%</th>
+                    <th class="num">P&amp;L</th>
+                    <th class="num">Expectancy</th>
+                    <th class="num">Payoff</th>
+                  </tr>
+                </thead>
+                <tbody id="breakdown-side-tbody"></tbody>
+              </table>
+            </div>
+            <div class="breakdown-block">
+              <div class="breakdown-title">По стратегии</div>
+              <table class="breakdown-table">
+                <thead>
+                  <tr>
+                    <th>Strategy</th>
+                    <th class="num">Trades</th>
+                    <th class="num">Win%</th>
+                    <th class="num">P&amp;L</th>
+                    <th class="num">Expectancy</th>
+                    <th class="num">Payoff</th>
+                  </tr>
+                </thead>
+                <tbody id="breakdown-strategy-tbody"></tbody>
               </table>
             </div>
           </div>

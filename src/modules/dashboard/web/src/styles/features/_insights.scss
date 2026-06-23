@@ -87,6 +87,65 @@
   }
 }
 
+/* Breakdown (long/short + по стратегии) */
+.breakdown-block {
+  & + & {
+    margin-top: 18px;
+  }
+}
+.breakdown-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+.breakdown-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-family: var(--font-mono);
+
+  th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border-muted);
+    white-space: nowrap;
+
+    &.num {
+      text-align: right;
+    }
+  }
+  td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--hairline);
+    white-space: nowrap;
+
+    &.num {
+      text-align: right;
+    }
+    &.num-pos,
+    &.num-pos * {
+      color: var(--green);
+      font-weight: 600;
+    }
+    &.num-neg,
+    &.num-neg * {
+      color: var(--red);
+      font-weight: 600;
+    }
+  }
+  tr:hover td {
+    background: var(--card-bg-hover);
+  }
+}
+
 /* Heatmap */
 .heatmap-meta {
   font-size: 11px;
