@@ -565,6 +565,39 @@ async function handleHistory(req, res) {
   }
 }
 
+// Дедуп display-лент против БД-истории. ЕДИНЫЙ источник правды для всего, что
+// бот записал (bot + adopted), — таблица `history`. Реконструкция из fills нужна
+// только чтобы показать ЧИСТО ручные трейды, которых в истории нет. Проблема: у
+// adopted-позы вход — ручной fill, поэтому она живёт И в history, И в fills; если
+// reconstruct не успел пометить ногу `adopted` (entry_time ещё не бэкфилнут / нет
+// бот-OID), та же сделка задваивалась в ленте — один раз из history (`close`),
+// второй как `manual_close`. Поэтому из fills-ветки выкидываем round-trip'ы,
+// которые история уже покрывает: закрытые — по coin + времени закрытия (надёжное,
+// обе стороны берут время того же fill); открытые — по coin активного слота
+// (архитектура single-slot). closed_at adopt-флипа = реальное время ноги, так что
+// допуска в несколько секунд хватает с запасом на округления/индексацию.
+const DEDUP_TS_TOLERANCE_MS = 5_000;
+export function makeHistoryCoverage(historyRows, activePos) {
+  const closesByCoin = new Map();
+  for (const t of historyRows || []) {
+    if (!t?.coin || !Number.isFinite(t.closed_at)) continue;
+    const c = t.coin.toUpperCase();
+    if (!closesByCoin.has(c)) closesByCoin.set(c, []);
+    closesByCoin.get(c).push(t.closed_at);
+  }
+  const openCoin = activePos?.coin ? activePos.coin.toUpperCase() : null;
+  return {
+    // Закрытая ручная нога уже записана ботом (adopted/bot) → не дублируем.
+    closedCovered: (coin, closeTs) => {
+      if (!coin || !Number.isFinite(closeTs)) return false;
+      const arr = closesByCoin.get(coin.toUpperCase());
+      return Array.isArray(arr) && arr.some((t) => Math.abs(t - closeTs) <= DEDUP_TS_TOLERANCE_MS);
+    },
+    // Открытая ручная нога = текущая активная поза (single-slot) → не дублируем.
+    openCovered: (coin) => openCoin != null && !!coin && coin.toUpperCase() === openCoin,
+  };
+}
+
 async function handleActivity(req, res) {
   try {
     const hours = req.query.hours ? parseInt(req.query.hours, 10) : 24;
@@ -596,11 +629,14 @@ async function handleActivity(req, res) {
         source: sourceOf(sid),
       });
     };
-    for (const t of realTradesForDisplay(getHistorySince(since))) pushClose(t);
-    for (const t of realTradesForDisplay(getArchivedHistorySince(since)))
-      pushClose(t);
+    const histRows = [
+      ...realTradesForDisplay(getHistorySince(since)),
+      ...realTradesForDisplay(getArchivedHistorySince(since)),
+    ];
+    for (const t of histRows) pushClose(t);
 
     const open = getActivePosition();
+    const coverage = makeHistoryCoverage(histRows, open);
     if (open && open.coin && open.entry_time >= since) {
       const sid = open.strategy_id || "carry";
       events.push({
@@ -625,6 +661,8 @@ async function handleActivity(req, res) {
       for (const m of manualTrades) {
         if (m.status !== "closed") continue;
         if (m.closeTime < since) continue;
+        // Уже записана ботом как adopted/bot — не дублируем (см. makeHistoryCoverage).
+        if (coverage.closedCovered(m.coin, m.closeTime)) continue;
         events.push({
           kind: "manual_close",
           ts: m.closeTime,
@@ -747,10 +785,18 @@ async function handleTradeMarkers(req, res) {
       });
     }
     // Manual trades по этой монете — отдельный strategy='manual' маркер.
+    // Покрытые историей ноги (adopted/bot) пропускаем целиком — entry и close
+    // уже добавлены из БД выше (см. makeHistoryCoverage).
+    const coverage = makeHistoryCoverage(closes, getActivePosition());
     try {
       const manualTrades = await getManualTrades();
       for (const m of manualTrades) {
         if (m.coin.toUpperCase() !== coin) continue;
+        const covered =
+          m.status === "closed"
+            ? coverage.closedCovered(m.coin, m.closeTime)
+            : coverage.openCovered(m.coin);
+        if (covered) continue;
         if (m.entryTime >= since) {
           events.push({
             kind: "entry",
