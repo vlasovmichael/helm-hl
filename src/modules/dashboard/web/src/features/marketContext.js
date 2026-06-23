@@ -1,75 +1,74 @@
 // ─────────────────────────────────────────────────
-//  Market Context bar — живой мини-график BTC + цена.
-//  Цвет рамки = светофор по фону (risk-on/off), текст-вердикт убран.
-//  Полностью самодостаточный (DOM + Math). renderMarketContext зовёт tick.
+//  Market Context bar — живая расширенная статистика по BTC.
+//  Цена + 24h + движения 15m/1h/4h + объём + OI + funding.
+//  Цвет рамки = светофор по фону (risk-on/off). renderMarketContext зовёт tick.
 // ─────────────────────────────────────────────────
 
-// Формат цены BTC: без копеек на десятках тысяч, читаемо.
 function fmtPrice(p) {
   if (p == null || !Number.isFinite(p)) return "—";
   return "$" + Math.round(p).toLocaleString("en-US");
 }
 
-// ── Мини-свечи из OHLC ([o,h,l,c][]) в компактный SVG ──
-const MC_CH = { h: 100, slot: 5, body: 3, pad: 6 }; // высота, ширина слота, тело, отступ
-function renderMiniCandles(series) {
-  if (!Array.isArray(series) || series.length === 0) return "";
-  const lows = series.map((c) => c[2]);
-  const highs = series.map((c) => c[1]);
-  const lo = Math.min(...lows);
-  const hi = Math.max(...highs);
-  const span = hi - lo || 1;
-  const { h, slot, body, pad } = MC_CH;
-  const usable = h - pad * 2;
-  const y = (price) => pad + (1 - (price - lo) / span) * usable;
-  const w = series.length * slot;
+// Компактный USD: $1.24B / $850M / $12K
+function fmtUsd(n) {
+  if (n == null || !Number.isFinite(n)) return "—";
+  const a = Math.abs(n);
+  if (a >= 1e9) return "$" + (n / 1e9).toFixed(2) + "B";
+  if (a >= 1e6) return "$" + (n / 1e6).toFixed(0) + "M";
+  if (a >= 1e3) return "$" + (n / 1e3).toFixed(0) + "K";
+  return "$" + Math.round(n);
+}
 
-  const bars = series
-    .map((c, i) => {
-      const [o, hh, ll, cc] = c;
-      const up = cc >= o;
-      const cls = up ? "up" : "down";
-      const x = i * slot;
-      const cx = x + slot / 2;
-      const yH = y(hh), yL = y(ll);
-      const yO = y(o), yC = y(cc);
-      const top = Math.min(yO, yC);
-      const bh = Math.max(1, Math.abs(yC - yO)); // тело минимум 1px (дожи)
-      const bx = x + (slot - body) / 2;
-      return (
-        `<line class="mc-cw ${cls}" x1="${cx.toFixed(1)}" y1="${yH.toFixed(1)}" x2="${cx.toFixed(1)}" y2="${yL.toFixed(1)}" />` +
-        `<rect class="mc-cb ${cls}" x="${bx.toFixed(1)}" y="${top.toFixed(1)}" width="${body}" height="${bh.toFixed(1)}" />`
-      );
-    })
-    .join("");
+function pctCls(v) {
+  return v == null ? "" : v >= 0 ? "up" : "down";
+}
+function fmtPct(v, digits = 2) {
+  if (v == null || !Number.isFinite(v)) return "—";
+  return (v >= 0 ? "+" : "") + v.toFixed(digits) + "%";
+}
 
-  return `<svg class="mc-candles" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" preserveAspectRatio="none" role="img" aria-label="BTC 15m мини-график">${bars}</svg>`;
+// label + value «ячейка»
+function cell(label, valueHtml) {
+  return `<span class="mc-cell"><i>${label}</i><b>${valueHtml}</b></span>`;
 }
 
 export function renderMarketContext(d) {
   const el = document.getElementById("market-context");
   if (!el || !d) return;
-  // Светофор «можно/нельзя»: чёткий фонд (RISK-ON/OFF) = go (зелёный),
-  // MIXED = wait (жёлтый), всё прочее = unknown (серый). Текста-вердикта нет —
-  // сигнал остаётся в цвете левой рамки.
+  // Светофор: чёткий фонд (RISK-ON/OFF) = go (зелёный), MIXED = wait (жёлтый),
+  // прочее = unknown (серый). Сигнал — в цвете левой рамки.
   const cls =
     d.verdict === "RISK_ON" || d.verdict === "RISK_OFF"
       ? "go"
       : d.verdict === "MIXED"
         ? "wait"
         : "unknown";
-  // classList, не className — иначе затираем класс is-revealed от reveal-on-scroll.
   el.classList.remove("go", "wait", "unknown");
   el.classList.add(cls);
 
-  const chartEl = document.getElementById("mc-chart");
-  const priceEl = document.getElementById("mc-price");
-  if (chartEl) chartEl.innerHTML = renderMiniCandles(d.btcCandles);
-  if (priceEl) {
-    const m4h = d.btc && d.btc.m4h != null ? d.btc.m4h : null;
-    const pcls = m4h == null ? "" : m4h >= 0 ? "up" : "down";
-    const psign = m4h == null ? "" : m4h >= 0 ? "▲ +" : "▼ ";
-    const pct = m4h == null ? "" : `<span class="mc-4h ${pcls}">${psign}${m4h.toFixed(2)}% 4h</span>`;
-    priceEl.innerHTML = `<span class="mc-sym">BTC</span><span class="mc-px">${fmtPrice(d.btcPrice)}</span>${pct}`;
+  const b = d.btc || {};
+  const headEl = document.getElementById("mc-head");
+  const statsEl = document.getElementById("mc-stats");
+
+  if (headEl) {
+    const c24 = b.change24h;
+    headEl.innerHTML =
+      `<span class="mc-sym">BTC</span>` +
+      `<span class="mc-px">${fmtPrice(b.price)}</span>` +
+      `<span class="mc-24h ${pctCls(c24)}">${fmtPct(c24)} <i>24h</i></span>`;
+  }
+
+  if (statsEl) {
+    const tf = (label, v) =>
+      `<span class="mc-cell"><i>${label}</i><b class="${pctCls(v)}">${fmtPct(v)}</b></span>`;
+    // funding: часовая доля → % с 4 знаками
+    const fund = b.funding == null ? null : b.funding * 100;
+    statsEl.innerHTML =
+      tf("15m", b.m15) +
+      tf("1h", b.m1h) +
+      tf("4h", b.m4h) +
+      cell("Vol 24h", fmtUsd(b.volUsd)) +
+      cell("OI", fmtUsd(b.oiUsd)) +
+      `<span class="mc-cell"><i>Funding 1h</i><b class="${pctCls(fund)}">${fund == null ? "—" : fmtPct(fund, 4)}</b></span>`;
   }
 }

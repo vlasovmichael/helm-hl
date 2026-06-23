@@ -1,81 +1,107 @@
 // ─────────────────────────────────────────────────
-//  Market Context — «вердикт по фону» (risk-on/off)
+//  Market Context — живая расширенная статистика по BTC
 // ─────────────────────────────────────────────────
-// Отвечает на один вопрос: вход сейчас идёт ПО фону рынка или ПРОТИВ.
-// Источник тренда — 15m-свечи BTC с HL; они же питают мини-график цены.
+// Цена + движения по таймфреймам (15m/1h/4h/24h) + объём 24h + OI + funding.
+// Цвет рамки = «светофор» по фону (risk-on/off). Источники:
+//   • 15m-свечи HL → движения 15m/1h/4h;
+//   • metaAndAssetCtxs → markPx, prevDayPx (24h), dayNtlVlm, openInterest, funding.
 
 import { hlInfo, HL_PRIORITY } from "../../../core/hlClient.js";
 
-// BTC % за 15m/1h/4h из 15m-свечей HL (не priceHistory — тот пуст первые 4ч
-// после рестарта). Кэш 60с, чтобы не дёргать HL на каждый поллинг дашборды.
-const BTC_CANDLES_TTL_MS = 60_000;
-const BTC_CHART_BARS = 30; // сколько последних 15m-свечей отдаём на мини-график
-let btcCache = { moves: null, candles: null, price: null, ts: 0 };
+const TTL_MS = 60_000; // кэш, чтобы не дёргать HL на каждый поллинг дашборды
+let cache = { payload: null, ts: 0 };
 
-async function getBtc() {
-  if (btcCache.moves && Date.now() - btcCache.ts < BTC_CANDLES_TTL_MS) {
-    return btcCache;
-  }
+// Движения BTC за 15m/1h/4h из 15m-свечей HL (priceHistory пуст первые 4ч после
+// рестарта, поэтому считаем прямо из свечей).
+async function getMoves() {
   const now = Date.now();
   let candles;
   try {
     candles = await hlInfo(
       {
         type: "candleSnapshot",
-        // ~8ч 15m-свечей: хватает и на мини-график (30 баров), и на m4h (16 баров)
-        req: { coin: "BTC", interval: "15m", startTime: now - 8 * 3600_000, endTime: now },
+        req: { coin: "BTC", interval: "15m", startTime: now - 5 * 3600_000, endTime: now },
       },
-      { label: "dash/market-context", timeoutMs: 5000, maxRetries: 1, priority: HL_PRIORITY.LOW },
+      { label: "dash/mc-moves", timeoutMs: 5000, maxRetries: 1, priority: HL_PRIORITY.LOW },
     );
   } catch {
-    return btcCache; // stale (или null) — полоса деградирует тихо
+    return null;
   }
-  if (!Array.isArray(candles) || candles.length < 2) return btcCache;
-
+  if (!Array.isArray(candles) || candles.length < 2) return null;
   const closes = candles.map((c) => Number(c.c)).filter((n) => Number.isFinite(n));
   const last = closes[closes.length - 1];
-  // back(n) = close n свечей назад (1 свеча 15m). null если не накопилось.
   const back = (n) => (closes.length > n ? closes[closes.length - 1 - n] : null);
   const pct = (prev) => (prev != null && prev !== 0 ? ((last - prev) / prev) * 100 : null);
+  return { m15: pct(back(1)), m1h: pct(back(4)), m4h: pct(back(16)) };
+}
 
-  const moves = {
-    m15: pct(back(1)),   // 1×15m
-    m1h: pct(back(4)),   // 4×15m
-    m4h: pct(back(16)),  // 16×15m
+// Расширенная статистика BTC из assetCtx: цена, 24h %, объём, OI, funding.
+async function getStats() {
+  let data;
+  try {
+    data = await hlInfo(
+      { type: "metaAndAssetCtxs" },
+      { label: "dash/mc-stats", timeoutMs: 5000, maxRetries: 1, priority: HL_PRIORITY.LOW },
+    );
+  } catch {
+    return null;
+  }
+  const [meta, ctxs] = data ?? [];
+  if (!Array.isArray(meta?.universe) || !Array.isArray(ctxs)) return null;
+  const idx = meta.universe.findIndex((a) => (a.name ?? "").toUpperCase() === "BTC");
+  if (idx === -1 || !ctxs[idx]) return null;
+  const c = ctxs[idx];
+  const mark = parseFloat(c.markPx ?? c.midPx ?? NaN);
+  const prevDay = parseFloat(c.prevDayPx ?? NaN);
+  const oiCoin = parseFloat(c.openInterest ?? NaN);
+  const vol = parseFloat(c.dayNtlVlm ?? NaN);
+  const funding = parseFloat(c.funding ?? NaN);
+  const fin = (n) => (Number.isFinite(n) ? n : null);
+  return {
+    price: fin(mark),
+    change24h:
+      Number.isFinite(mark) && Number.isFinite(prevDay) && prevDay !== 0
+        ? ((mark - prevDay) / prevDay) * 100
+        : null,
+    volUsd: fin(vol),
+    oiUsd: Number.isFinite(oiCoin) && Number.isFinite(mark) ? oiCoin * mark : null,
+    funding: fin(funding), // часовая ставка (доля, напр. 0.0000125 = 0.00125%)
   };
-  // Компактные OHLC последних N свечей для мини-графика: [o,h,l,c].
-  const series = candles
-    .slice(-BTC_CHART_BARS)
-    .map((c) => [Number(c.o), Number(c.h), Number(c.l), Number(c.c)])
-    .filter((a) => a.every((n) => Number.isFinite(n)));
-
-  btcCache = { moves, candles: series, price: last, ts: Date.now() };
-  return btcCache;
 }
 
 // Вердикт по фону. 1h = главный тренд, 15m = подтверждение моментума.
-// Порог ±0.5% по 1h отсекает боковик-шум (BTC «дышит» в этих пределах).
 function classifyRegime(m15, m1h) {
   if (m1h == null) return { verdict: "UNKNOWN", arrow: "•" };
-  if (m1h > 0.5 && (m15 == null || m15 >= -0.1)) {
-    return { verdict: "RISK_ON", arrow: "▲" };
-  }
-  if (m1h < -0.5 && (m15 == null || m15 <= 0.1)) {
-    return { verdict: "RISK_OFF", arrow: "▼" };
-  }
+  if (m1h > 0.5 && (m15 == null || m15 >= -0.1)) return { verdict: "RISK_ON", arrow: "▲" };
+  if (m1h < -0.5 && (m15 == null || m15 <= 0.1)) return { verdict: "RISK_OFF", arrow: "▼" };
   return { verdict: "MIXED", arrow: "≈" };
 }
 
 export async function handleMarketContext(_req, res) {
-  const data = await getBtc();
-  const btc = data.moves || { m15: null, m1h: null, m4h: null };
-  const { verdict, arrow } = classifyRegime(btc.m15, btc.m1h);
-  res.json({
+  if (cache.payload && Date.now() - cache.ts < TTL_MS) {
+    return res.json(cache.payload);
+  }
+  const [moves, stats] = await Promise.all([getMoves(), getStats()]);
+  // Если оба источника отвалились — отдаём прошлый кэш (тихая деградация).
+  if (!moves && !stats && cache.payload) return res.json(cache.payload);
+
+  const m = moves || { m15: null, m1h: null, m4h: null };
+  const { verdict, arrow } = classifyRegime(m.m15, m.m1h);
+  const payload = {
     verdict,
     arrow,
-    btc,
-    btcPrice: data.price ?? null,
-    btcCandles: data.candles || [],
+    btc: {
+      price: stats?.price ?? null,
+      m15: m.m15,
+      m1h: m.m1h,
+      m4h: m.m4h,
+      change24h: stats?.change24h ?? null,
+      volUsd: stats?.volUsd ?? null,
+      oiUsd: stats?.oiUsd ?? null,
+      funding: stats?.funding ?? null,
+    },
     ts: Date.now(),
-  });
+  };
+  cache = { payload, ts: Date.now() };
+  res.json(payload);
 }

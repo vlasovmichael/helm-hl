@@ -16,8 +16,8 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.2px;
 
-  /* Цена + 4h-дельта */
-  .mc-price {
+  /* Шапка: BTC цена + 24h */
+  .mc-head {
     display: flex;
     align-items: baseline;
     gap: 8px;
@@ -30,11 +30,16 @@
     }
     .mc-px {
       font-weight: 700;
-      font-size: 17px;
+      font-size: 18px;
       color: var(--text-primary);
     }
-    .mc-4h {
+    .mc-24h {
       font-size: 13px;
+      i {
+        color: var(--text-muted);
+        font-style: normal;
+        font-size: 11px;
+      }
       &.up {
         color: var(--green);
       }
@@ -44,41 +49,42 @@
     }
   }
 
-  /* Живой мини-график 15m-свечей */
-  .mc-chart {
-    flex: 1 1 140px;
-    min-width: 120px;
+  /* Расширенная статистика: ячейки label/value */
+  .mc-stats {
     display: flex;
     align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-left: 4px;
 
-    .mc-candles {
-      width: 100%;
-      height: 100px;
-      display: block;
+    .mc-cell {
+      display: flex;
+      flex-direction: column;
+      line-height: 1.25;
 
-      .mc-cw {
-        stroke-width: 1;
-        &.up {
-          stroke: var(--green);
-        }
-        &.down {
-          stroke: var(--red);
-        }
+      i {
+        font-style: normal;
+        font-size: 10px;
+        letter-spacing: 0.4px;
+        text-transform: uppercase;
+        color: var(--text-muted);
       }
-      .mc-cb {
+      b {
+        font-weight: 600;
+        font-size: 13.5px;
+        color: var(--text-secondary);
+
         &.up {
-          fill: var(--green);
+          color: var(--green);
         }
         &.down {
-          fill: var(--red);
+          color: var(--red);
         }
       }
     }
   }
 
-  /* Светофор «можно/нельзя»: зелёный = есть чёткий фонд (RISK-ON или RISK-OFF),
-     можно входить по нему; жёлтый = MIXED, жди; серый = нет данных.
-     Направление читается из самого графика. */
+  /* Светофор «можно/нельзя»: зелёный = чёткий фонд (RISK-ON/OFF), жёлтый = MIXED. */
   &.go {
     border-left-color: var(--green-line);
     background: var(--green-soft);
