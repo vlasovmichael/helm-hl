@@ -72,7 +72,7 @@ export function mountTopnav(active) {
         <div class="notif-panel" id="notif-panel" hidden role="dialog" aria-label="Notifications">
           <div class="notif-panel-head">
             <span>Notifications</span>
-            <button class="notif-clear" id="notif-mark-read" type="button">Mark read</button>
+            <span class="notif-head-hint">Last 24h</span>
           </div>
           <div class="notif-list" id="notif-list"></div>
         </div>

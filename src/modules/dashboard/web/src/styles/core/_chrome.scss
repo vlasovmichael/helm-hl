@@ -527,7 +527,7 @@ header {
   height: 16px;
   padding: 0 4px;
   border-radius: 8px;
-  background: var(--grad-brand, var(--accent));
+  background: var(--red);
   color: #fff;
   font-size: 10px;
   font-weight: 700;
@@ -552,7 +552,37 @@ header {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
   z-index: 60;
 
+  // Анимация открытия/закрытия. Состояние видимости — класс .is-open (его
+  // ставит/снимает JS), а атрибут [hidden] лишь убирает из потока после выезда.
+  transform-origin: top right;
+  opacity: 0;
+  transform: translateY(-6px) scale(0.98);
+  transition:
+    opacity 0.16s var(--ease, ease),
+    transform 0.16s var(--ease, ease);
+  pointer-events: none;
+
+  &.is-open {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
   &[hidden] { display: none; }
+
+  // Мобайл: панель во всю ширину под топбаром, а не узкий ярлык у иконки.
+  @include until($bp-sm) {
+    position: fixed;
+    top: 52px;
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-width: none;
+    max-height: 75vh;
+    transform-origin: top center;
+  }
+}
+@include reduced-motion {
+  .notif-panel { transition: none; }
 }
 .notif-panel-head {
   display: flex;
@@ -566,16 +596,13 @@ header {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
-.notif-clear {
-  border: none;
-  background: none;
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  padding: 0;
-
-  &:hover { text-decoration: underline; }
+.notif-head-hint {
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-secondary);
+  opacity: 0.7;
 }
 .notif-list {
   overflow-y: auto;

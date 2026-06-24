@@ -11,6 +11,8 @@ import { escapeHtml, fmtSince } from "../utils/format.js";
 
 const LS_KEY = "helm.notif.lastRead";
 const POLL_MS = 60_000;
+const WINDOW_MS = 24 * 60 * 60 * 1000; // показываем только последние сутки
+const ANIM_MS = 180; // длительность open/close анимации панели (см. _chrome.scss)
 
 let items = [];
 let timer = null;
@@ -54,7 +56,7 @@ function renderList() {
   const list = document.getElementById("notif-list");
   if (!list) return;
   if (!items.length) {
-    list.innerHTML = '<div class="notif-empty">All quiet — no pushes yet.</div>';
+    list.innerHTML = '<div class="notif-empty">All quiet — nothing in the last 24h.</div>';
     return;
   }
   const lr = lastRead();
@@ -78,7 +80,9 @@ function renderList() {
 async function refresh() {
   try {
     const data = await getNotifications(50);
-    items = Array.isArray(data?.items) ? data.items : [];
+    const raw = Array.isArray(data?.items) ? data.items : [];
+    const cutoff = Date.now() - WINDOW_MS;
+    items = raw.filter((n) => n.ts >= cutoff);
     renderBadge();
     if (!document.getElementById("notif-panel")?.hidden) renderList();
   } catch {
@@ -86,28 +90,47 @@ async function refresh() {
   }
 }
 
+let closeTimer = null;
+
 function openPanel() {
   const panel = document.getElementById("notif-panel");
   const btn = document.getElementById("notif-btn");
   if (!panel) return;
+  if (closeTimer) {
+    clearTimeout(closeTimer);
+    closeTimer = null;
+  }
+  renderList(); // рендерим со старым lastRead → свежие подсветятся в этом показе
   panel.hidden = false;
+  // Следующий кадр → добавляем .is-open, чтобы сработал CSS-переход (анимация
+  // въезда). Без rAF браузер применит оба состояния разом и анимации не будет.
+  requestAnimationFrame(() => panel.classList.add("is-open"));
   btn?.setAttribute("aria-expanded", "true");
-  renderList();
+  // Авто-прочтение: гасим бейдж сразу при открытии (кнопки «Mark read» больше
+  // нет). Список не перерисовываем — подсветка свежих остаётся видна, пока
+  // панель открыта; при следующем открытии они уже не «fresh».
+  markRead({ keepList: true });
 }
 
 function closePanel() {
   const panel = document.getElementById("notif-panel");
   const btn = document.getElementById("notif-btn");
-  if (!panel) return;
-  panel.hidden = true;
+  if (!panel || panel.hidden) return;
+  panel.classList.remove("is-open");
   btn?.setAttribute("aria-expanded", "false");
+  // Прячем из потока только после того, как отыграет анимация выезда.
+  if (closeTimer) clearTimeout(closeTimer);
+  closeTimer = setTimeout(() => {
+    if (!panel.classList.contains("is-open")) panel.hidden = true;
+    closeTimer = null;
+  }, ANIM_MS);
 }
 
-function markRead() {
+function markRead({ keepList = false } = {}) {
   const newest = items.length ? Math.max(...items.map((n) => n.ts)) : Date.now();
   setLastRead(newest);
   renderBadge();
-  renderList();
+  if (!keepList) renderList();
 }
 
 export function initNotifications() {
@@ -119,13 +142,8 @@ export function initNotifications() {
   btn.addEventListener("click", (e) => {
     e.stopPropagation();
     const panel = document.getElementById("notif-panel");
-    if (panel?.hidden) openPanel();
-    else closePanel();
-  });
-
-  document.getElementById("notif-mark-read")?.addEventListener("click", (e) => {
-    e.stopPropagation();
-    markRead();
+    if (panel?.classList.contains("is-open")) closePanel();
+    else openPanel();
   });
 
   // Клик вне панели / Esc — закрыть.

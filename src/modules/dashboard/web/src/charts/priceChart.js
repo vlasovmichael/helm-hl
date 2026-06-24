@@ -30,8 +30,14 @@ let overlayReqId = 0; // защита от гонки (быстрое перек
 const POLL_MS = 15_000;
 
 function tvSymbol(coin) {
-  const sym = String(coin).toUpperCase().replace(/[^A-Z0-9]/g, "");
-  return `BINANCE:${sym}USDT`;
+  let raw = String(coin).trim();
+  // HL k-монеты (kPEPE, kBONK, kSHIB…) на Binance называются 1000-префиксом
+  // (1000PEPE). Без маппинга TV не находит символ.
+  if (/^k[A-Z0-9]/.test(raw)) raw = `1000${raw.slice(1)}`;
+  const sym = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  // .P = бессрочный фьючерс Binance — это тот же инструмент, что торгует бот,
+  // и перп-листинг покрывает больше монет HL, чем спот.
+  return `BINANCE:${sym}USDT.P`;
 }
 
 function buildCandleData(candles) {
