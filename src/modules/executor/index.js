@@ -11,8 +11,7 @@ import { invalidateAccountState } from '../../core/accountState.js';
 import { getAccountEquity } from '../wallet.js';
 import { checkVolatility } from '../volatility.js';
 import {
-  paperClose, hunterPaperOpen, hunterLongPaperOpen,
-  vaporPaperOpen, hotMoversPaperOpen, swingPaperOpen, fadeHotPaperOpen,
+  paperClose, hunterPaperOpen, hunterLongPaperOpen, fadeHotPaperOpen,
 } from './paper.js';
 import { productionClose } from './close.js';
 import {
@@ -204,46 +203,6 @@ async function handleOpen(signal) {
     }
     return hunterPaperOpen(
       signal.coin, signal.price, signal.spikePct, signal.sl, signal.tp, true, signal.entryFeatures, 'hunter_oi',
-    );
-  }
-
-  // Vapor (Exhaustion Short, Трек A) route: PAPER-only shadow-слот. PROD-пути нет —
-  // open всегда виртуальный. Carry-guard'ы (CB/drawdown/OI) применяем.
-  if (strategyId === 'vapor') {
-    const pre = await preflightChecks(signal.coin, null);
-    if (!pre.allowed) {
-      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
-      return { ok: false };
-    }
-    return vaporPaperOpen(
-      signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
-    );
-  }
-
-  // Hot Movers paper route: PAPER-only shadow-слот, торгует вердикт карточки 1:1
-  // (LONG/SHORT). PROD-пути нет — open всегда виртуальный. Carry-guard'ы (CB/
-  // drawdown/OI) применяем, как у vapor.
-  if (strategyId === 'hotmovers') {
-    const pre = await preflightChecks(signal.coin, null);
-    if (!pre.allowed) {
-      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
-      return { ok: false };
-    }
-    return hotMoversPaperOpen(
-      signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
-    );
-  }
-
-  // Setup Swing paper route: PAPER-only shadow-слот, вердикт карточки Swing 1:1
-  // (LONG/SHORT, план SL/TP от карточки). PROD-пути нет. Carry-guard'ы применяем.
-  if (strategyId === 'swing') {
-    const pre = await preflightChecks(signal.coin, null);
-    if (!pre.allowed) {
-      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
-      return { ok: false };
-    }
-    return swingPaperOpen(
-      signal.coin, signal.price, signal.direction, signal.sl, signal.tp, false, signal.entryFeatures,
     );
   }
 

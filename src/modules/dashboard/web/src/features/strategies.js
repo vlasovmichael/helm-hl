@@ -30,7 +30,6 @@ const STRAT_FAMILY_HUE = {
   candy_girl:  328,   // pink
   fader:        45,   // amber
   adopt:       178,   // teal
-  darkknight:  270,   // violet — external TG copy-signal track
 };
 function familyHue(id) {
   if (id in STRAT_FAMILY_HUE) return STRAT_FAMILY_HUE[id];

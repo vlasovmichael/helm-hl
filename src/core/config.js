@@ -309,19 +309,6 @@ function loadConfig() {
   // механикой, что реальный adopt (ATR-стоп при открытии + BE-храповик + трейл,
   // analyzeAdopt). Без реальных денег — тренировка выходной логики на своих входах.
   const manualPaperAdoptEnabled = (process.env.MANUAL_PAPER_ADOPT_ENABLED || 'true').toLowerCase() === 'true';
-  // Vapor (Exhaustion Short, Трек A) — PAPER-only shadow-слот, OI-дивергенция.
-  const vaporEnabled          = (process.env.VAPOR_ENABLED || 'false').toLowerCase() === 'true';
-  const vaporBalanceUtil      = parseFloat(process.env.VAPOR_BALANCE_UTILIZATION || '0.5');
-  if (isNaN(vaporBalanceUtil) || vaporBalanceUtil <= 0 || vaporBalanceUtil > 0.95) {
-    throw new Error(`VAPOR_BALANCE_UTILIZATION must be in (0, 0.95], got ${process.env.VAPOR_BALANCE_UTILIZATION}`);
-  }
-  // Плечо paper-слота Vapor — множит нотиональный размер (как hotMovers/swing).
-  // Default 3: у Vapor лучший эдж из paper-стратегий, даём ему вес. Плечо НЕ меняет
-  // win-rate/expectancy — масштабирует и прибыль, и убыток (и комиссию) пропорц.
-  const vaporPaperLeverage    = parseFloat(process.env.VAPOR_PAPER_LEVERAGE || '3');
-  if (isNaN(vaporPaperLeverage) || vaporPaperLeverage < 1 || vaporPaperLeverage > 20) {
-    throw new Error(`VAPOR_PAPER_LEVERAGE must be in [1, 20], got ${process.env.VAPOR_PAPER_LEVERAGE}`);
-  }
   // Hunter SHORT +OI (A/B paper-двойник, 2026-06-19) — точная копия боевого
   // Hunter SHORT, отличие РОВНО одно: OI-divergence ворота на входе. Шортит памп,
   // только если рост OI за 15м ≤ HUNTER_OI_DIV_MAX_PCT (большой рост OI = свежие
@@ -333,16 +320,6 @@ function loadConfig() {
   if (isNaN(hunterOiDivMaxPct)) {
     throw new Error(`HUNTER_OI_DIV_MAX_PCT must be a number. Got: "${process.env.HUNTER_OI_DIV_MAX_PCT}"`);
   }
-  // Hot Movers paper — PAPER-only shadow-слот, торгует вердикт карточки 1:1.
-  const hotMoversPaperEnabled = (process.env.HOT_MOVERS_PAPER_ENABLED || 'false').toLowerCase() === 'true';
-  const hotMoversPaperBalanceUtil = parseFloat(process.env.HOT_MOVERS_PAPER_BALANCE_UTILIZATION || '0.5');
-  if (isNaN(hotMoversPaperBalanceUtil) || hotMoversPaperBalanceUtil <= 0 || hotMoversPaperBalanceUtil > 0.95) {
-    throw new Error(`HOT_MOVERS_PAPER_BALANCE_UTILIZATION must be in (0, 0.95], got ${process.env.HOT_MOVERS_PAPER_BALANCE_UTILIZATION}`);
-  }
-  const hotMoversPaperLeverage = parseFloat(process.env.HOT_MOVERS_PAPER_LEVERAGE || '3');
-  if (isNaN(hotMoversPaperLeverage) || hotMoversPaperLeverage < 1 || hotMoversPaperLeverage > 20) {
-    throw new Error(`HOT_MOVERS_PAPER_LEVERAGE must be in [1, 20], got ${process.env.HOT_MOVERS_PAPER_LEVERAGE}`);
-  }
   // Fade-high-ER paper — PAPER-only shadow-слот, forward-валидация правила
   // fade выдохшегося хвоста (см. fadeHotSignal.js / memory fadehot_build_plan).
   const fadehotPaperEnabled = (process.env.FADEHOT_PAPER_ENABLED || 'false').toLowerCase() === 'true';
@@ -353,16 +330,6 @@ function loadConfig() {
   const fadehotPaperLeverage = parseFloat(process.env.FADEHOT_PAPER_LEVERAGE || '3');
   if (isNaN(fadehotPaperLeverage) || fadehotPaperLeverage < 1 || fadehotPaperLeverage > 20) {
     throw new Error(`FADEHOT_PAPER_LEVERAGE must be in [1, 20], got ${process.env.FADEHOT_PAPER_LEVERAGE}`);
-  }
-  // Setup Swing paper — PAPER-only shadow-слот, торгует вердикт карточки Swing 1:1.
-  const swingPaperEnabled     = (process.env.SWING_PAPER_ENABLED || 'false').toLowerCase() === 'true';
-  const swingPaperBalanceUtil = parseFloat(process.env.SWING_PAPER_BALANCE_UTILIZATION || '0.5');
-  if (isNaN(swingPaperBalanceUtil) || swingPaperBalanceUtil <= 0 || swingPaperBalanceUtil > 0.95) {
-    throw new Error(`SWING_PAPER_BALANCE_UTILIZATION must be in (0, 0.95], got ${process.env.SWING_PAPER_BALANCE_UTILIZATION}`);
-  }
-  const swingPaperLeverage = parseFloat(process.env.SWING_PAPER_LEVERAGE || '3');
-  if (isNaN(swingPaperLeverage) || swingPaperLeverage < 1 || swingPaperLeverage > 20) {
-    throw new Error(`SWING_PAPER_LEVERAGE must be in [1, 20], got ${process.env.SWING_PAPER_LEVERAGE}`);
   }
   // 6ч по умолчанию: ловит нормальные ручные входы (даже если бот заметил их не
   // сразу — был в другой монете или рестартился), но всё ещё отсекает древние
@@ -642,20 +609,11 @@ function loadConfig() {
       hunterCrossCooldownMin,
       adoptEnabled,
       manualPaperAdoptEnabled,
-      vaporEnabled,
-      vaporBalanceUtil,
-      vaporPaperLeverage,
       hunterOiPaperEnabled,
       hunterOiDivMaxPct,
-      hotMoversPaperEnabled,
-      hotMoversPaperBalanceUtil,
-      hotMoversPaperLeverage,
       fadehotPaperEnabled,
       fadehotPaperBalanceUtil,
       fadehotPaperLeverage,
-      swingPaperEnabled,
-      swingPaperBalanceUtil,
-      swingPaperLeverage,
       adoptMaxAgeMin,
       adoptStopMode,
       adoptStopPct,

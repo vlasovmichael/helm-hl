@@ -70,38 +70,9 @@ const REGISTRY = [
   // (убыточный трек, см. memory/strategy_cull_2026_06_15.md + cull-рефактор
   // 2026-06-17). Candy Girl остаётся radar-only (5m-сигналы для Setup Scanner ·
   // Swing); Fader снесён целиком — его радар фронт уже не рендерил.
-  {
-    id: 'vapor',
-    label: 'Vapor',
-    kind: 'exhaustion · short',
-    resolve: () => {
-      // PAPER-only (PROD-пути нет): enabled → paper, иначе off.
-      const enabled = config.trading.vaporEnabled;
-      return { enabled, status: enabled ? 'paper' : 'off' };
-    },
-  },
-  {
-    id: 'hotmovers',
-    label: 'Hot Movers',
-    kind: 'card-mirror · scalp',
-    split: true,                              // вердикт карточки бывает long и short
-    resolve: () => {
-      // PAPER-only (PROD-пути нет): enabled → paper, иначе off.
-      const enabled = config.trading.hotMoversPaperEnabled;
-      return { enabled, status: enabled ? 'paper' : 'off' };
-    },
-  },
-  {
-    id: 'swing',
-    label: 'Setup Swing',
-    kind: 'HL-structure · swing',
-    split: true,                              // карточка даёт и LONG, и SHORT
-    resolve: () => {
-      // PAPER-only (PROD-пути нет): enabled → paper, иначе off.
-      const enabled = config.trading.swingPaperEnabled;
-      return { enabled, status: enabled ? 'paper' : 'off' };
-    },
-  },
+  // Vapor / Hot Movers (paper) / Setup Swing (paper) / Dark Knight (TG) сняты
+  // 2026-06-24 (эджа нет за достаточную выборку — см. memory). Их история остаётся
+  // в архиве для чтения; strategistSwing/HotMovers живут как карточки/Setup Scanner.
   {
     id: 'fadehot',
     label: 'Fade-high-ER',
@@ -110,19 +81,6 @@ const REGISTRY = [
     resolve: () => {
       // PAPER-only (PROD-пути нет): enabled → paper, иначе off.
       const enabled = config.trading.fadehotPaperEnabled;
-      return { enabled, status: enabled ? 'paper' : 'off' };
-    },
-  },
-  {
-    id: 'darkknight',
-    label: 'Dark Knight (TG)',
-    kind: 'copy-signal · paper',
-    // Внешний канал-сигнал (TG): входы парсятся, исходы РЕЗОЛВИМ САМИ по свечам
-    // (их скрин-прибыль не используем). Чистая измерительная paper-карточка —
-    // бэкфилл строк через temp/signals_paper.py (WRITE_DB=1). Логики в боте нет,
-    // поэтому статус data-driven, гейт только на скрытие: DARKKNIGHT_ENABLED=false.
-    resolve: () => {
-      const enabled = process.env.DARKKNIGHT_ENABLED !== 'false';
       return { enabled, status: enabled ? 'paper' : 'off' };
     },
   },
