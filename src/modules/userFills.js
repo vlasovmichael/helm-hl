@@ -27,9 +27,12 @@ let cache = { ts: 0, startTime: 0, fills: [] };
 
 /**
  * @param {number} startTime — unix ms. Если 0/undefined — последние 60d.
+ * @param {{force?: boolean}} [opts] — force:true обходит 30с-кэш (нужно когда
+ *   ждём только что появившийся close-fill: индексатор HL лагает на 10-30с, и
+ *   stale-кэш заставлял integrity писать мусорный equity-diff PnL вместо реального).
  * @returns {Promise<Array>} массив fills (newest last по time)
  */
-export async function fetchUserFills(startTime = 0) {
+export async function fetchUserFills(startTime = 0, { force = false } = {}) {
   if (!config.isProduction) return [];
 
   const now = Date.now();
@@ -37,6 +40,7 @@ export async function fetchUserFills(startTime = 0) {
 
   // Кеш валиден если: TTL не истёк И запрашиваемое окно не шире кешированного.
   if (
+    !force &&
     now - cache.ts < CACHE_TTL_MS &&
     cache.fills.length >= 0 &&
     cache.startTime <= effectiveStart

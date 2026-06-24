@@ -18,6 +18,7 @@ import {
   state,
   INTEGRITY_CHECK_INTERVAL_MS,
   INTEGRITY_GRACE_PERIOD_MS,
+  INTEGRITY_VANISH_DEFER_MS,
 } from './state.js';
 
 /**
@@ -63,33 +64,33 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
   // «На месте» = живая поза той же монеты И ТОЙ ЖЕ СТОРОНЫ. Поза противоположной
   // стороны на бирже = ФЛИП (оператор закрыл и развернулся) → наша DB-поза закрыта →
   // проваливаемся в закрытие (fix #1 запишет реальную ногу, adopt усыновит новую).
-  if (liveMatchesPosition(dbPosition, exchangePositions)) return false;
-
-  // ── Позиция исчезла ──────────────
-  // PnL = equity_now − equity_at_open (приблизительно при нескольких открытых
-  // позах — точное число даёт classifyClose по fills ниже и перетирает это).
-  let estimatedPnl = 0;
-  let pnlAccurate = false;
-  if (Number.isFinite(dbPosition.entry_equity) && dbPosition.entry_equity > 0) {
-    estimatedPnl = equity - dbPosition.entry_equity;
-    pnlAccurate = true;
+  if (liveMatchesPosition(dbPosition, exchangePositions)) {
+    // Поза снова на месте (был лаг API) — сбрасываем defer-метку, чтобы реальное
+    // исчезновение позже получило свежее окно ожидания close-fill.
+    state.vanishedSince.delete(dbPosition.id);
+    return false;
   }
 
-  logger.error(
-    `[Integrity] ⚠️ EXTERNAL CLOSE detected: #${dbPosition.coin} is OPEN in DB ` +
-      `but ABSENT on exchange! withdrawable=$${withdrawable.toFixed(2)}, equity=$${equity.toFixed(2)} ` +
-      `(margin freed → position is genuinely gone)`,
-  );
-
+  // ── Позиция исчезла ──────────────
+  // Точный PnL/цену даёт close-fill (classifyClose ниже). Equity-diff
+  // (equity_now − equity_at_open) — лишь грубый fallback: он загрязнён плавающим
+  // PnL других открытых поз и фандингом с момента входа, поэтому используем его
+  // ТОЛЬКО когда fills так и не показали закрытие после defer-окна (RESOLV-
+  // инцидент 2026-06-24: equity-diff записал +$1.22 вместо реальных +$0.46).
   const holdHours = (Date.now() - dbPosition.entry_time) / 3_600_000;
 
-  // Classify cause через userFills (TP-trigger / SL-trigger / liquidation /
-  // manual_close). Дефолт 'external_close' если fills не дали ответа.
-  let closeReason = 'external_close';
-  let closePx = 0;
+  let estimatedPnl  = 0;
+  let pnlAccurate   = false;
+  let pnlFromFills  = false;   // true → PnL взят из реального close-fill
+  let closeReason   = 'external_close';
+  let closePx       = 0;
   let closedAtOverride = null;
+
+  // Classify cause через userFills. force:true — обходим 30с-кэш: close-fill мог
+  // проиндексироваться только что (лаг HL 10-30с), а stale-кэш раньше отдавал
+  // пустоту и ронял нас в мусорный equity-diff.
   try {
-    const fills = await fetchUserFills(dbPosition.entry_time - 60_000);
+    const fills = await fetchUserFills(dbPosition.entry_time - 60_000, { force: true });
     const coinFills = fills.filter(
       (f) => f.coin.toUpperCase() === dbPosition.coin.toUpperCase(),
     );
@@ -98,6 +99,7 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
     if (Number.isFinite(c.pnl)) {
       estimatedPnl = c.pnl;
       pnlAccurate  = true;  // fills дают точное число
+      pnlFromFills = true;
     }
     if (Number.isFinite(c.closePx)) closePx = c.closePx;
 
@@ -116,6 +118,7 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
       }
       estimatedPnl = leg.pnl;
       pnlAccurate  = true;
+      pnlFromFills = true;
       if (Number.isFinite(leg.closePx)) closePx = leg.closePx;
       if (Number.isFinite(leg.closedAt)) closedAtOverride = leg.closedAt;
     }
@@ -128,6 +131,49 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
   } catch (clsErr) {
     logger.debug(`[Integrity] classifyClose failed: ${clsErr.message}`);
   }
+
+  // ── Defer: close-fill ещё не проиндексирован ──────────────────────────────
+  // Поза исчезла, но fills так и не показали закрытие → реального PnL у нас нет,
+  // а equity-diff наврёт. Откладываем запись на следующие проходы integrity (60с),
+  // пока индексатор HL не догонит. Но не дольше INTEGRITY_VANISH_DEFER_MS — иначе
+  // слот завис бы навсегда (напр. если fill реально потерян).
+  if (!pnlFromFills) {
+    const firstSeen = state.vanishedSince.get(dbPosition.id);
+    if (!firstSeen) {
+      state.vanishedSince.set(dbPosition.id, now);
+      logger.warn(
+        `[Integrity] #${dbPosition.coin} исчез с биржи, но close-fill ещё не виден — ` +
+          `откладываю запись закрытия (жду индексации реального PnL).`,
+      );
+      return false;
+    }
+    if (now - firstSeen < INTEGRITY_VANISH_DEFER_MS) {
+      logger.debug(
+        `[Integrity] #${dbPosition.coin} всё ещё без close-fill ` +
+          `(${Math.round((now - firstSeen) / 1000)}с в ожидании) — продолжаю ждать.`,
+      );
+      return false;
+    }
+    // Defer-окно вышло — закрываем по equity-diff, но честно помечаем неточным
+    // (pnlAccurate=false) и НЕ пишем close_price (его у нас нет).
+    if (Number.isFinite(dbPosition.entry_equity) && dbPosition.entry_equity > 0) {
+      estimatedPnl = equity - dbPosition.entry_equity;
+    }
+    pnlAccurate = false;
+    logger.warn(
+      `[Integrity] #${dbPosition.coin} close-fill не появился за ` +
+        `${Math.round(INTEGRITY_VANISH_DEFER_MS / 60_000)}мин — закрываю по equity-diff ` +
+        `(PnL≈$${estimatedPnl.toFixed(4)}, НЕточный, close_price не записан).`,
+    );
+  }
+  // Дошли до записи закрытия — defer-метка больше не нужна.
+  state.vanishedSince.delete(dbPosition.id);
+
+  logger.error(
+    `[Integrity] ⚠️ EXTERNAL CLOSE: #${dbPosition.coin} был OPEN в БД, но ОТСУТСТВУЕТ ` +
+      `на бирже. withdrawable=$${withdrawable.toFixed(2)}, equity=$${equity.toFixed(2)} ` +
+      `| reason=${closeReason} | pnl=$${estimatedPnl.toFixed(4)}${pnlFromFills ? ' (fills)' : ' (equity-diff)'}`,
+  );
 
   // Adopt: подмешиваем MFE/MAE (peak/trough unrealized% за время ведения) +
   // hold_seconds ДО clearAdoptState. Внешний путь (sl_trigger/manual_close) —
