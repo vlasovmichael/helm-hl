@@ -93,10 +93,14 @@ export async function hunterPaperOpen(coin, price, spikePct, sl, tp, silent = fa
   }
 
   const util = config.trading.hunterBalanceUtil;
+  // Плечо мирроним с боевым путём (hunterOpen.js): нотионал = balance × lev × util.
+  // Без этого paper-слот сайзился 1x и давал «копеечные» $ — % эдж тот же, но
+  // форвард не отражал реальный размер. equity остаётся реальным балансом (risk-$).
+  const lev = config.trading.hunterLeverage;
   const szDecimals = resolvePaperSzDecimals(coin);
   if (szDecimals == null) return { ok: false };
   const { sizeUsd, sz, tooSmall } = resolveEntrySize({
-    coin, tag: 'Hunter', equity: balance, capBase: balance,
+    coin, tag: 'Hunter', equity: balance, capBase: balance * lev,
     capUtil: util, price, sl, szDecimals,
   });
 

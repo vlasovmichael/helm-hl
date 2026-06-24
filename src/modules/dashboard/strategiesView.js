@@ -24,6 +24,11 @@ import {
 
 const DAY_MS = 86_400_000;
 
+// Стартовый виртуальный банкролл paper-слота для колонки Equity (бот не ведёт
+// per-strategy банкролл — все paper-слоты сайзятся от живого кошелька). Equity =
+// VIRTUAL_PAPER_BASE + накопленный net стратегии.
+const VIRTUAL_PAPER_BASE = 100;
+
 function startOfTodayMs() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -194,8 +199,18 @@ function buildRow(entry, side = null, overrides = {}) {
     }
   }
 
-  // virtual (compound-песочница) — только на основной/long строке, не на short.
-  const vsnap = entry.virtual && side !== 'short' ? entry.virtual() : null;
+  // virtual = бегущий бумажный баланс слота: виртуальный банкролл VIRTUAL_PAPER_BASE
+  // + накопленный net стратегии. Per-strategy реального банкролла у бота нет (все
+  // paper-слоты сайзятся от живого кошелька), поэтому база фиксированная — Equity
+  // читается как «$100 стартовый депозит этого слота → сколько стало». Считаем для
+  // paper/radar (включая short-строки); у live-строк баланс = реальный кошелёк.
+  const vsnap = (status === 'paper' || status === 'radar')
+    ? {
+        equity:   VIRTUAL_PAPER_BASE + edge.sumNet,
+        pnlTotal: edge.sumNet,
+        pnlPct:   VIRTUAL_PAPER_BASE > 0 ? edge.sumNet / VIRTUAL_PAPER_BASE : 0, // дробь: фронт ×100
+      }
+    : null;
 
   // Shadow exits (measurement-only): сравнение реального выхода с time-decay /
   // chandelier. Пока пишется только для Hunter SHORT; для прочих вернёт null.
