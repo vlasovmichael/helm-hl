@@ -118,6 +118,15 @@ test('buildExcursion: capture = realized/MFE на winners', () => {
   assert.ok(Math.abs(r.avgHeat - 2) < 1e-9);
 });
 
+test('buildExcursion: дедуп фантомных дублей (тот же coin/side/pnl, закрытие ~1с)', () => {
+  const a = { ...hrow('GRASS', -0.4859, 0.0975, -0.5907, 'short'), closed_at: 1000000 };
+  const b = { ...hrow('GRASS', -0.4859, 0.0975, -0.5907, 'short'), closed_at: 1005000 }; // +5с
+  const c = { ...hrow('GRASS', -0.4859, 0.0975, -0.5907, 'short'), closed_at: 2000000 }; // +1000с — иная сделка
+  const r = buildExcursion([a, b, c]);
+  assert.equal(r.sample, 2, 'b схлопнут с a, c остаётся');
+  assert.equal(r.dupsRemoved, 1);
+});
+
 test('buildExcursion: round-tripped = был в плюсе, закрылся в минус', () => {
   const r = buildExcursion([
     hrow('A', 5, 10, -1), // winner

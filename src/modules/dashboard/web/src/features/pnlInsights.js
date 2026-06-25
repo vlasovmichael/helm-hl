@@ -242,6 +242,7 @@ function renderExits() {
   const thin = ex.winners < 20;
   meta.innerHTML =
     `${ex.sample} сделок с MFE/MAE · ${ex.winners} winners` +
+    (ex.dupsRemoved ? ` · ${ex.dupsRemoved} дубль(ей) схлопнуто` : "") +
     (thin
       ? ` · <span class="exits-warn">выборка мала (&lt;20) — это диагностика, не эдж</span>`
       : "");

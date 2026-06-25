@@ -426,7 +426,29 @@ export function buildInsights(combined) {
 //   тип выхода (зелёную в красную).
 export function buildExcursion(rows) {
   const ROUNDTRIP_FLOOR = 0.3; // $ — порог «был заметно в плюсе», глушит шум
-  const trades = rows
+
+  // Дедуп фантомных дублей: adopt flip-merge двоит round-trip (тот же coin/side/pnl,
+  // закрытие в пределах пары секунд — см. memory adopt_flip_merge_bug). Оставляем
+  // первый по closed_at, чтобы счёт сделок и средние не двоились.
+  const sorted = [...rows].sort((a, b) => (a.closed_at || 0) - (b.closed_at || 0));
+  const kept = [];
+  let dupsRemoved = 0;
+  for (const t of sorted) {
+    const dup = kept.find(
+      (s) =>
+        s.coin === t.coin &&
+        s.side === t.side &&
+        Math.abs((s.realized_pnl || 0) - (t.realized_pnl || 0)) < 1e-6 &&
+        Math.abs((s.closed_at || 0) - (t.closed_at || 0)) < 60_000,
+    );
+    if (dup) {
+      dupsRemoved++;
+      continue;
+    }
+    kept.push(t);
+  }
+
+  const trades = kept
     .filter((t) => t.mfe_usd != null && t.close_price != null)
     .map((t) => ({
       coin: (t.coin || "?").toUpperCase(),
@@ -452,6 +474,7 @@ export function buildExcursion(rows) {
   return {
     sample: trades.length,
     winners: winners.length,
+    dupsRemoved,
     avgCapturePct: mean(winners, (t) => t.capture * 100),
     avgLeftOnTable: mean(winners, (t) => t.mfeUsd - t.pnl),
     avgHeat: mean(winners, (t) => Math.abs(t.maeUsd ?? 0)),
