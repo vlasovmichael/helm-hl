@@ -427,7 +427,7 @@ export function buildInsights(combined) {
 export function buildExcursion(rows) {
   const ROUNDTRIP_FLOOR = 0.3; // $ — порог «был заметно в плюсе», глушит шум
   const trades = rows
-    .filter((t) => t.mfe_usd != null && t.exit_price != null)
+    .filter((t) => t.mfe_usd != null && t.close_price != null)
     .map((t) => ({
       coin: (t.coin || "?").toUpperCase(),
       side: (t.side || "?").toLowerCase(),

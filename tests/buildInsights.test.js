@@ -97,7 +97,7 @@ function hrow(coin, pnl, mfe, mae, side = 'long') {
     realized_pnl: pnl,
     mfe_usd: mfe,
     mae_usd: mae,
-    exit_price: 1, // помечает сделку закрытой
+    close_price: 1, // помечает сделку закрытой
     closed_at: T,
   };
 }
