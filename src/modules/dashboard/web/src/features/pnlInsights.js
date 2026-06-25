@@ -278,13 +278,11 @@ function renderExits() {
   tbody.innerHTML = ex.rows
     .map((t) => {
       const pnlCls = t.pnl > 0 ? "num-pos" : t.pnl < 0 ? "num-neg" : "";
-      const capPct = t.capture == null ? "—" : `${(t.capture * 100).toFixed(0)}%`;
-      const capCls =
-        t.capture == null || t.pnl <= 0
-          ? ""
-          : t.capture >= 0.5
-            ? "num-pos"
-            : "num-neg";
+      // Capture — метрика только для winners (доля удержанного пика). На лузерах
+      // realized/MFE вырождается в мусор (−4556% при MFE≈0) → показываем «—».
+      const isWinner = t.pnl > 0 && t.capture != null;
+      const capPct = isWinner ? `${(t.capture * 100).toFixed(0)}%` : "—";
+      const capCls = isWinner ? (t.capture >= 0.5 ? "num-pos" : "num-neg") : "";
       return `<tr>
         <td>${escapeHtml(t.coin)}</td>
         <td>${sideLabel(t.side)}</td>
