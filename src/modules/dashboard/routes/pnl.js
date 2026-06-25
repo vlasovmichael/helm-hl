@@ -19,6 +19,7 @@ import {
   getArchivedHistorySince,
   realTradesForDisplay,
   getActivePosition,
+  getHistory,
 } from "../../../core/database.js";
 import { getManualTrades, getAllRoundTrips } from "./manualTrades.js";
 
@@ -408,6 +409,57 @@ export function buildInsights(combined) {
   return { perCoin, daily, bySide, byStrategy };
 }
 
+// ─────────────────────────────────────────────────
+//  Exit quality — MFE/MAE excursion analysis
+// ─────────────────────────────────────────────────
+// Проф-метрика (Tradezella/Edgewise): насколько хорошо мы ВЫХОДИМ. Источник —
+// DB-таблица history (бот трекает intra-trade peak/trough), НЕ fills: из fills
+// excursion не восстановить. Покрывает только сделки с записанным mfe/mae
+// (bot/adopt). Manual-only fills сюда не попадут — это честно отражено в meta.
+//
+// · capture = realized / MFE — какую долю доступного хода забрали (только winners,
+//   MFE>0). Низкий % = выход рано/трейл отдаёт; ~50%+ = крепко. Гнаться за 100%
+//   нельзя — MFE это мгновенный пик, не достижимая цель.
+// · leftOnTable = MFE − realized ($, сколько отдали от пика).
+// · heat (MAE) на winners = сколько «терпели» до разворота (тайминг входа / нож).
+// · roundTripped = был в заметном плюсе (MFE≥floor), закрылся в минус — худший
+//   тип выхода (зелёную в красную).
+export function buildExcursion(rows) {
+  const ROUNDTRIP_FLOOR = 0.3; // $ — порог «был заметно в плюсе», глушит шум
+  const trades = rows
+    .filter((t) => t.mfe_usd != null && t.exit_price != null)
+    .map((t) => ({
+      coin: (t.coin || "?").toUpperCase(),
+      side: (t.side || "?").toLowerCase(),
+      strategy: t.strategy_id || "?",
+      pnl: t.realized_pnl || 0,
+      mfeUsd: t.mfe_usd ?? null,
+      maeUsd: t.mae_usd ?? null,
+      closedAt: t.closed_at || 0,
+      capture:
+        t.mfe_usd > 0 ? (t.realized_pnl || 0) / t.mfe_usd : null,
+    }))
+    .sort((a, b) => b.closedAt - a.closedAt);
+
+  const winners = trades.filter((t) => t.pnl > 0 && t.mfeUsd > 0);
+  const mean = (arr, fn) =>
+    arr.length ? arr.reduce((s, x) => s + fn(x), 0) / arr.length : null;
+
+  const roundTripped = trades.filter(
+    (t) => t.mfeUsd >= ROUNDTRIP_FLOOR && t.pnl < 0,
+  ).length;
+
+  return {
+    sample: trades.length,
+    winners: winners.length,
+    avgCapturePct: mean(winners, (t) => t.capture * 100),
+    avgLeftOnTable: mean(winners, (t) => t.mfeUsd - t.pnl),
+    avgHeat: mean(winners, (t) => Math.abs(t.maeUsd ?? 0)),
+    roundTripped,
+    rows: trades,
+  };
+}
+
 export async function handleInsights(_req, res) {
   try {
     const now = Date.now();
@@ -430,7 +482,16 @@ export async function handleInsights(_req, res) {
         closed_at: t.closeTime,
       }));
 
-    res.json({ now, ...buildInsights(combined) });
+    // Excursion (exit quality) — отдельный источник: DB history с mfe/mae.
+    // Fail-soft: ошибка чтения не валит весь Insights.
+    let excursion = null;
+    try {
+      excursion = buildExcursion(getHistory(500));
+    } catch (e) {
+      logger.warn(`[Dashboard] excursion build failed: ${e.message}`);
+    }
+
+    res.json({ now, ...buildInsights(combined), excursion });
   } catch (err) {
     logger.warn(`[Dashboard] /api/insights error: ${err.message}`);
     res.status(500).json({ error: err.message });

@@ -166,6 +166,7 @@ function renderInsights() {
   if (!lastInsights) return;
   if (currentInsightsTab === "per-coin") renderPerCoin();
   else if (currentInsightsTab === "breakdown") renderBreakdown();
+  else if (currentInsightsTab === "exits") renderExits();
   else renderHeatmap();
   document.getElementById("insights-skeleton")?.classList.add("hidden");
 }
@@ -212,6 +213,88 @@ function renderBreakdown() {
       ? rows.map((r) => breakdownRow(strategyDisplayName(r.strategy), r)).join("")
       : empty;
   }
+}
+
+// ── Exit quality: MFE/MAE excursion (насколько хорошо выходим) ──
+function statCard(label, value, cls, hint) {
+  return `<div class="exits-card ${cls || ""}">
+      <div class="exits-card-val">${value}</div>
+      <div class="exits-card-lbl" title="${hint || ""}">${label}</div>
+    </div>`;
+}
+
+function renderExits() {
+  const ex = lastInsights.excursion;
+  const meta = document.getElementById("exits-meta");
+  const cards = document.getElementById("exits-cards");
+  const tbody = document.getElementById("exits-tbody");
+  if (!meta || !cards || !tbody) return;
+
+  if (!ex || !ex.sample) {
+    meta.textContent = "Нет сделок с трекингом MFE/MAE (bot/adopt)";
+    cards.innerHTML = "";
+    tbody.innerHTML =
+      '<tr><td colspan="6" class="empty-state">No excursion data yet</td></tr>';
+    return;
+  }
+
+  // Малая выборка — честно подсвечиваем, что это линза, а не «доказательство».
+  const thin = ex.winners < 20;
+  meta.innerHTML =
+    `${ex.sample} сделок с MFE/MAE · ${ex.winners} winners` +
+    (thin
+      ? ` · <span class="exits-warn">выборка мала (&lt;20) — это диагностика, не эдж</span>`
+      : "");
+
+  const cap = ex.avgCapturePct;
+  const capCls = cap == null ? "" : cap >= 50 ? "is-good" : cap >= 30 ? "" : "is-bad";
+  cards.innerHTML = [
+    statCard(
+      "Avg capture",
+      cap == null ? "—" : `${cap.toFixed(0)}%`,
+      capCls,
+      "realized ÷ MFE на winners — какую долю доступного хода забираешь. ~50%+ крепко",
+    ),
+    statCard(
+      "Avg на столе",
+      ex.avgLeftOnTable == null ? "—" : fmtMoney(ex.avgLeftOnTable),
+      "",
+      "MFE − realized: сколько в среднем отдаёшь от пика (нормально, пик недостижим)",
+    ),
+    statCard(
+      "Avg heat (MAE)",
+      ex.avgHeat == null ? "—" : fmtMoney(-ex.avgHeat),
+      "",
+      "Средний минус на winners до разворота — тайминг входа / ловля ножа",
+    ),
+    statCard(
+      "Round-tripped",
+      String(ex.roundTripped),
+      ex.roundTripped > 0 ? "is-bad" : "is-good",
+      "Был заметно в плюсе, закрылся в минус — худший тип выхода",
+    ),
+  ].join("");
+
+  tbody.innerHTML = ex.rows
+    .map((t) => {
+      const pnlCls = t.pnl > 0 ? "num-pos" : t.pnl < 0 ? "num-neg" : "";
+      const capPct = t.capture == null ? "—" : `${(t.capture * 100).toFixed(0)}%`;
+      const capCls =
+        t.capture == null || t.pnl <= 0
+          ? ""
+          : t.capture >= 0.5
+            ? "num-pos"
+            : "num-neg";
+      return `<tr>
+        <td>${escapeHtml(t.coin)}</td>
+        <td>${sideLabel(t.side)}</td>
+        <td class="num ${pnlCls}">${fmtMoney(t.pnl)}</td>
+        <td class="num">${t.mfeUsd == null ? "—" : fmtMoney(t.mfeUsd)}</td>
+        <td class="num">${t.maeUsd == null ? "—" : fmtMoney(t.maeUsd)}</td>
+        <td class="num ${capCls}">${capPct}</td>
+      </tr>`;
+    })
+    .join("");
 }
 
 function renderPerCoin() {

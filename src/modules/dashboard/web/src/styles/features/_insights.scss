@@ -292,3 +292,48 @@
     margin-left: 4px;
   }
 }
+
+/* Exit quality (MFE/MAE excursion) */
+.exits-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  font-family: var(--font-mono);
+}
+.exits-warn {
+  color: var(--amber, var(--text-muted));
+}
+.exits-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.exits-card {
+  background: var(--card-bg);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: center;
+}
+.exits-card-val {
+  font-size: 20px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+.exits-card.is-good .exits-card-val {
+  color: var(--green);
+}
+.exits-card.is-bad .exits-card-val {
+  color: var(--red);
+}
+.exits-card-lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-top: 4px;
+  cursor: help;
+}

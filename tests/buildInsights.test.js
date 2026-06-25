@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-const { buildInsights } = await import('../src/modules/dashboard/routes/pnl.js');
+const { buildInsights, buildExcursion } = await import('../src/modules/dashboard/routes/pnl.js');
 
 const T = 1_700_000_000_000;
 const DAY = 86_400_000;
@@ -86,4 +86,44 @@ test('perCoin агрегирует по монете, daily — по дню за
   assert.equal(a.trades, 2);
   assert.ok(Math.abs(a.pnl - 1) < 1e-9);
   assert.equal(r.daily.length, 2, 'два дня с торговлей');
+});
+
+// ── buildExcursion (Exit quality / MFE-MAE) ──
+function hrow(coin, pnl, mfe, mae, side = 'long') {
+  return {
+    coin,
+    side,
+    strategy_id: 'adopt',
+    realized_pnl: pnl,
+    mfe_usd: mfe,
+    mae_usd: mae,
+    exit_price: 1, // помечает сделку закрытой
+    closed_at: T,
+  };
+}
+
+test('buildExcursion: пустой / без mfe — sample 0, не падает', () => {
+  assert.equal(buildExcursion([]).sample, 0);
+  // строка без mfe_usd отфильтровывается
+  assert.equal(buildExcursion([{ coin: 'X', exit_price: 1 }]).sample, 0);
+});
+
+test('buildExcursion: capture = realized/MFE на winners', () => {
+  // POPCAT: realized 6, mfe 12 → capture 50%; heat |mae|=2
+  const r = buildExcursion([hrow('POPCAT', 6, 12, -2, 'short')]);
+  assert.equal(r.sample, 1);
+  assert.equal(r.winners, 1);
+  assert.ok(Math.abs(r.avgCapturePct - 50) < 1e-9);
+  assert.ok(Math.abs(r.avgLeftOnTable - 6) < 1e-9, 'mfe-realized = 6 на столе');
+  assert.ok(Math.abs(r.avgHeat - 2) < 1e-9);
+});
+
+test('buildExcursion: round-tripped = был в плюсе, закрылся в минус', () => {
+  const r = buildExcursion([
+    hrow('A', 5, 10, -1), // winner
+    hrow('B', -1.5, 2, -3), // был +$2, закрылся -$1.5 → round-trip
+    hrow('C', -0.4, 0.1, -0.5), // mfe ниже floor 0.3 → не round-trip
+  ]);
+  assert.equal(r.roundTripped, 1, 'только B считается round-tripped');
+  assert.equal(r.winners, 1, 'только A — winner');
 });

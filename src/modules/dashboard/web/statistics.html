@@ -138,6 +138,7 @@
               Per-coin
             </button>
             <button class="range-btn" data-tab="breakdown">Breakdown</button>
+            <button class="range-btn" data-tab="exits">Exit quality</button>
             <button class="range-btn" data-tab="heatmap">Heatmap</button>
           </div>
         </div>
@@ -205,6 +206,29 @@
                   </tr>
                 </thead>
                 <tbody id="breakdown-strategy-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div
+            class="insights-pane"
+            id="insights-pane-exits"
+            style="display: none"
+          >
+            <div class="exits-meta" id="exits-meta">— · loading</div>
+            <div class="exits-cards" id="exits-cards"></div>
+            <div class="per-coin-table-wrap">
+              <table class="per-coin-table exits-table">
+                <thead>
+                  <tr>
+                    <th>Coin</th>
+                    <th>Side</th>
+                    <th class="num">P&amp;L</th>
+                    <th class="num" title="Max Favorable Excursion — пик в плюс за время сделки">MFE</th>
+                    <th class="num" title="Max Adverse Excursion — пик в минус (сколько терпел)">MAE</th>
+                    <th class="num" title="realized ÷ MFE — какую долю доступного хода забрал">Capture</th>
+                  </tr>
+                </thead>
+                <tbody id="exits-tbody"></tbody>
               </table>
             </div>
           </div>
