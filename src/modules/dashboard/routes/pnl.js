@@ -255,8 +255,11 @@ export async function handlePnlSummary(_req, res) {
       // Normalize manual trades to the shape computeStats() expects so они
       // попадают во все метрики (avg, expectancy, best/worst, wins/losses,
       // payoff, maxDD, fees) единым набором с bot trades.
+      // m.pnl из реконструкции = price PnL ДО комиссий (Σ closedPnl), m.fee отдельно.
+      // DB-сделки в history несут realized_pnl УЖЕ net of fees → приводим manual к
+      // тому же контракту (net), иначе grossPnl = totalPnl + totalFees задвоит комиссию.
       const manualAsBotShape = manualInRange.map((m) => ({
-        realized_pnl: m.pnl || 0,
+        realized_pnl: (m.pnl || 0) - (m.fee || 0),
         fee_paid: m.fee || 0,
         strategy_id: "manual",
         entry_time: m.entryTime,
@@ -276,9 +279,15 @@ export async function handlePnlSummary(_req, res) {
         periodMs > 0 ? Math.min(100, (stats.totalHoldMs / periodMs) * 100) : 0;
       const funding = sumFundingInRange(fundingDeltas, start, end);
 
-      const manualPnl = manualInRange.reduce((s, m) => s + (m.pnl || 0), 0);
+      // net (− fee), консистентно с combined-метриками выше.
+      const manualPnl = manualInRange.reduce(
+        (s, m) => s + (m.pnl || 0) - (m.fee || 0),
+        0,
+      );
       const manualCount = manualInRange.length;
-      const manualWins = manualInRange.filter((m) => (m.pnl || 0) > 0).length;
+      const manualWins = manualInRange.filter(
+        (m) => (m.pnl || 0) - (m.fee || 0) > 0,
+      ).length;
 
       result[key] = {
         ...stats,
@@ -498,14 +507,15 @@ export async function handleInsights(_req, res) {
     // ЕДИНЫЙ источник = HL fills (тот же reconstructRoundTrips, что у Monthly
     // Ledger) → Insights сходится с Ledger. Раньше bot брался из trades.db
     // (теряет историю при порче БД, см. ledger.js), а manual — из fills: две
-    // правды не сходились. pnl = price PnL (как DB realized_pnl, gross),
-    // fee — отдельно; net = pnl − fee.
+    // правды не сходились. reconstructRoundTrips отдаёт pnl = price PnL ДО комиссий
+    // (Σ closedPnl), fee отдельно → приводим к net (pnl − fee), чтобы realized_pnl
+    // совпадал с DB-контрактом и итоги Insights сходились с P&L Summary.
     const roundTrips = await getAllRoundTrips();
     const combined = roundTrips
       .filter((t) => t.status === "closed")
       .map((t) => ({
         coin: t.coin,
-        realized_pnl: t.pnl || 0,
+        realized_pnl: (t.pnl || 0) - (t.fee || 0),
         fee_paid: t.fee || 0,
         strategy_id: t.source, // bot | adopted | manual
         side: t.side, // long | short
@@ -554,7 +564,8 @@ export async function handleDayJournal(req, res) {
         coin: t.coin,
         side: t.side, // long | short
         source: t.source, // bot | adopted | manual
-        pnl: t.pnl || 0,
+        // net (− fee) — совпадает с DB realized_pnl и клеткой хитмапа.
+        pnl: (t.pnl || 0) - (t.fee || 0),
         fee: t.fee || 0,
         entryTime: t.entryTime || null,
         closeTime: t.closeTime,

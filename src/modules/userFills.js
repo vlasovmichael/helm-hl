@@ -99,11 +99,12 @@ function normalizeFill(raw) {
  * Определяет причину закрытия позиции по fills.
  * @param {Object} position — row из positions table
  * @param {Array}  fills    — отфильтрованные fills (по coin), отсортированные по time asc
- * @returns {{ reason: string, pnl: number|null, closePx: number|null, closedAt: number|null }}
+ * @returns {{ reason: string, pnl: number|null, fee: number, closePx: number|null, closedAt: number|null }}
  *   reason ∈ 'tp_trigger' | 'sl_trigger' | 'liquidation' | 'manual_close' | 'external_unknown'
+ *   pnl = price PnL ДО комиссий (Σ closedPnl); fee = Σ комиссий close-fills; net = pnl − fee.
  */
 export function classifyClose(position, fills) {
-  const result = { reason: 'external_unknown', pnl: null, closePx: null, closedAt: null };
+  const result = { reason: 'external_unknown', pnl: null, fee: 0, closePx: null, closedAt: null };
   if (!Array.isArray(fills) || fills.length === 0) return result;
 
   // Берём fills ПОСЛЕ entry_time и проверяем их dir на "Close".
@@ -130,19 +131,23 @@ export function classifyClose(position, fills) {
     result.reason = 'manual_close';
   }
 
-  // Aggregate PnL/price/closedAt по всем closing fills вплоть до нулевой позиции.
-  let totalSz = 0, weightedPx = 0, totalPnl = 0, lastTime = 0;
+  // Aggregate PnL/fee/price/closedAt по всем closing fills вплоть до нулевой
+  // позиции. closedPnl = price PnL ДО комиссий; fee аккумулируем отдельно, чтобы
+  // вызывающий мог посчитать net = pnl − fee (контракт DB realized_pnl = net).
+  let totalSz = 0, weightedPx = 0, totalPnl = 0, totalFee = 0, lastTime = 0;
   for (const f of candidates) {
     const absSz = Math.abs(f.sz);
     totalSz   += absSz;
     weightedPx += absSz * f.px;
     totalPnl  += f.closedPnl;
+    totalFee  += f.fee;
     if (f.time > lastTime) lastTime = f.time;
     // Эвристика остановки: после первого close-fill startPosition должен дойти
     // до 0. Не идеально для re-opens, но для одиночного close работает.
     // Без startPosition tracking просто агрегируем все Close-* после entry_time.
   }
   result.pnl      = totalPnl;
+  result.fee      = totalFee;
   result.closePx  = totalSz > 0 ? weightedPx / totalSz : null;
   result.closedAt = lastTime || null;
   return result;

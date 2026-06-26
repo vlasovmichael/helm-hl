@@ -665,7 +665,7 @@ async function handleActivity(req, res) {
           kind: "manual_close",
           ts: m.closeTime,
           coin: m.coin,
-          pnl: m.pnl,
+          pnl: (m.pnl || 0) - (m.fee || 0), // net, как history-сделки
           side: m.side,
           entryPrice: m.entryPrice,
           closePrice: m.closePrice,
@@ -809,7 +809,7 @@ async function handleTradeMarkers(req, res) {
             kind: "close",
             ts: m.closeTime,
             price: m.closePrice,
-            pnl: m.pnl,
+            pnl: (m.pnl || 0) - (m.fee || 0), // net, как history-сделки
             reason: "manual_close",
             side: m.side,
             strategy: "manual",

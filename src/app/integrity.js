@@ -80,6 +80,7 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
   const holdHours = (Date.now() - dbPosition.entry_time) / 3_600_000;
 
   let estimatedPnl  = 0;
+  let feePaid       = 0;       // комиссия из close-fills (контракт DB: realized_pnl net of fees)
   let pnlAccurate   = false;
   let pnlFromFills  = false;   // true → PnL взят из реального close-fill
   let closeReason   = 'external_close';
@@ -98,6 +99,7 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
     if (c.reason !== 'external_unknown') closeReason = c.reason;
     if (Number.isFinite(c.pnl)) {
       estimatedPnl = c.pnl;
+      feePaid      = Number.isFinite(c.fee) ? c.fee : 0;
       pnlAccurate  = true;  // fills дают точное число
       pnlFromFills = true;
     }
@@ -117,6 +119,7 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
         );
       }
       estimatedPnl = leg.pnl;
+      feePaid      = Number.isFinite(leg.fee) ? leg.fee : feePaid;
       pnlAccurate  = true;
       pnlFromFills = true;
       if (Number.isFinite(leg.closePx)) closePx = leg.closePx;
@@ -169,6 +172,12 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
   // Дошли до записи закрытия — defer-метка больше не нужна.
   state.vanishedSince.delete(dbPosition.id);
 
+  // DB-контракт: realized_pnl = NET of fees (как bot-пути calcPnl/hunterReconcile).
+  // Из fills приходит price PnL ДО комиссий (Σ closedPnl) → вычитаем комиссию.
+  // Equity-diff путь (pnlFromFills=false) уже net (equity отражает fees) и комиссию
+  // отдельно не знает → не трогаем, fee_paid=0.
+  if (pnlFromFills) estimatedPnl -= feePaid;
+
   logger.error(
     `[Integrity] ⚠️ EXTERNAL CLOSE: #${dbPosition.coin} был OPEN в БД, но ОТСУТСТВУЕТ ` +
       `на бирже. withdrawable=$${withdrawable.toFixed(2)}, equity=$${equity.toFixed(2)} ` +
@@ -195,7 +204,7 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
   dbClosePosition(dbPosition.id, {
     close_price:  closePx,
     realized_pnl: estimatedPnl,
-    fee_paid:     0,
+    fee_paid:     pnlFromFills ? feePaid : 0,
     reason:       closeReason,
     closed_at:    closedAtOverride,  // реальное время ноги (флип) — иначе Date.now()
     exitFeatures,

@@ -200,6 +200,7 @@ async function handleMismatch(dbPosition) {
   // на сделках, закрытых пока бот лежал, хотя на бирже PnL реальный. Берём тот
   // же источник истины, что integrity.js/ledger (userFills + classifyClose).
   let realizedPnl = 0;
+  let feePaid = 0;   // комиссия из fills (DB-контракт: realized_pnl net of fees)
   let closePx = 0;
   let closeReason = 'closed_offline';
   let pnlAccurate = false;
@@ -210,7 +211,8 @@ async function handleMismatch(dbPosition) {
     );
     const c = classifyClose(dbPosition, coinFills);
     if (Number.isFinite(c.pnl)) {
-      realizedPnl = c.pnl;
+      feePaid = Number.isFinite(c.fee) ? c.fee : 0;
+      realizedPnl = c.pnl - feePaid;   // gross price PnL − fees = net
       pnlAccurate = true;
     }
     if (Number.isFinite(c.closePx)) closePx = c.closePx;
@@ -234,7 +236,7 @@ async function handleMismatch(dbPosition) {
     dbClosePosition(dbPosition.id, {
       close_price:  closePx,
       realized_pnl: realizedPnl,
-      fee_paid:     0,
+      fee_paid:     pnlAccurate ? feePaid : 0,
       reason:       closeReason,
     });
     dbClosed = true;
