@@ -59,6 +59,55 @@ function tvUrl(coin) {
 // Сколько монет максимум в таблице (открытые позиции — сверх лимита, всегда).
 const HM_MAX_ROWS = 8;
 
+// ── Прогресс загрузки монет: детерминантная полоска «по времени» ──
+// Точного % бэкенд не шлёт (снапшот приходит целиком), поэтому полоску ведём по
+// прошедшему времени относительно ОБЫЧНОЙ длительности загрузки. Длительность
+// замеряем при каждом успешном старте и запоминаем (EMA в localStorage) → оценка
+// уточняется под реальное окружение оператора. Допрыгивает до 100% ровно когда
+// монеты приехали.
+let hmLoadStart = 0;
+let hmProgressRAF = null;
+const HM_LOAD_KEY = "hl-hm-load-ms";
+
+function hmLoadEstimateMs() {
+  const v = parseInt(localStorage.getItem(HM_LOAD_KEY) || "0", 10);
+  return Math.min(20000, Math.max(2000, v || 5000));
+}
+// % к текущему моменту: линейно по времени к оценке, кап 95% (последние 5%
+// держим под «реально готово», чтобы полоска не врала о завершении).
+function hmProgressPct() {
+  if (!hmLoadStart) return 0;
+  const elapsed = performance.now() - hmLoadStart;
+  return Math.min(95, (elapsed / hmLoadEstimateMs()) * 100);
+}
+function startHmProgress() {
+  if (!hmLoadStart) hmLoadStart = performance.now();
+  if (hmProgressRAF) return;
+  const step = () => {
+    const fill = document.querySelector(".hm-status-bar-fill");
+    if (!fill) {
+      hmProgressRAF = null;
+      return; // строка ушла (монеты приехали) — finishHmProgress() уже отработал
+    }
+    fill.style.width = hmProgressPct().toFixed(1) + "%";
+    hmProgressRAF = requestAnimationFrame(step);
+  };
+  hmProgressRAF = requestAnimationFrame(step);
+}
+function finishHmProgress() {
+  if (hmProgressRAF) {
+    cancelAnimationFrame(hmProgressRAF);
+    hmProgressRAF = null;
+  }
+  if (hmLoadStart) {
+    // Запоминаем реальную длительность (EMA) для следующей оценки.
+    const dur = performance.now() - hmLoadStart;
+    const prev = parseInt(localStorage.getItem(HM_LOAD_KEY) || "0", 10) || dur;
+    localStorage.setItem(HM_LOAD_KEY, String(Math.round(prev * 0.6 + dur * 0.4)));
+    hmLoadStart = 0;
+  }
+}
+
 export function renderHotMovers(payload, fmtTime) {
   const tbody = document.getElementById("hot-movers-tbody");
   const meta = document.getElementById("hot-movers-meta");
@@ -482,16 +531,21 @@ export function renderHotMovers(payload, fmtTime) {
     const scope = payload?.universeSize
       ? ` · scanning ${payload.universeSize} coins`
       : "";
+    // Стартовую ширину ставим инлайном = текущий % (RAF продолжит между тиками,
+    // но при пересоздании строки реконсилером ширина не мигает на 0).
+    const startW = hmProgressPct().toFixed(1);
     const statusHtml =
       '<span class="loader-spinner hm-status-spinner"></span>' +
       `<span>Loading movers…${scope}</span>` +
-      '<span class="hm-status-bar" aria-hidden="true"><span class="hm-status-bar-fill"></span></span>';
+      `<span class="hm-status-bar" aria-hidden="true"><span class="hm-status-bar-fill" style="width:${startW}%"></span></span>`;
     items.push({
       key: "ph:status",
       cls: "hm-status-row",
       html: `<td colspan="11" class="hm-status-cell">${statusHtml}</td>`,
     });
+    startHmProgress();
   } else {
+    finishHmProgress();
     // Есть хотя бы одна монета → добиваем пустыми строками до HM_MAX_ROWS,
     // чтобы высота карточки не прыгала при малом числе монет.
     const placeholdersNeeded = Math.max(0, HM_MAX_ROWS - enriched.length);

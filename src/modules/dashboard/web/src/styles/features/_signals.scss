@@ -872,8 +872,9 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   width: 16px;
   height: 16px;
 }
-/* Индетерминантный прогресс-бар под лоадером: «работаем, монеты считаются».
-   Реального % прогресса нет (снапшот приходит целиком), поэтому бегунок ездит. */
+/* Детерминантный прогресс-бар под лоадером: ширину ведёт JS по прошедшему
+   времени относительно обычной длительности загрузки (см. hmProgressPct).
+   Допрыгивает до 100% когда монеты приехали. */
 .hm-status-bar {
   display: block;
   width: min(220px, 60%);
@@ -885,25 +886,15 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
 }
 .hm-status-bar-fill {
   display: block;
-  width: 40%;
+  width: 0;
   height: 100%;
   border-radius: 2px;
   background: var(--accent);
-  animation: hm-status-slide 1.1s ease-in-out infinite;
-}
-@keyframes hm-status-slide {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(250%);
-  }
+  transition: width 0.18s linear;
 }
 @media (prefers-reduced-motion: reduce) {
   .hm-status-bar-fill {
-    animation: none;
-    width: 100%;
-    opacity: 0.5;
+    transition: none;
   }
 }
 
