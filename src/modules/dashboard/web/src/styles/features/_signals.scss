@@ -872,6 +872,40 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   width: 16px;
   height: 16px;
 }
+/* Индетерминантный прогресс-бар под лоадером: «работаем, монеты считаются».
+   Реального % прогресса нет (снапшот приходит целиком), поэтому бегунок ездит. */
+.hm-status-bar {
+  display: block;
+  width: min(220px, 60%);
+  height: 3px;
+  margin: 10px auto 0;
+  border-radius: 2px;
+  background: var(--border);
+  overflow: hidden;
+}
+.hm-status-bar-fill {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: hm-status-slide 1.1s ease-in-out infinite;
+}
+@keyframes hm-status-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hm-status-bar-fill {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+}
 
 /* ── Hot Movers — мобильная card-вёрстка (≤720px) ──
    11 колонок не влезают в телефон → каждая монета становится карточкой:

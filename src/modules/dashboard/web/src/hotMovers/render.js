@@ -473,14 +473,19 @@ export function renderHotMovers(payload, fmtTime) {
   // мельтешат. Считаем по ОСНОВНЫМ строкам (enriched.length), под-строки позиции
   // (pos:) — отдельная намеренная высота, их не компенсируем.
   if (enriched.length === 0) {
-    // Совсем нечего показать (ни позиции, ни прошедших фильтр монет). Раньше
-    // тут выезжало 8 пустых строк — выглядело как «битая таблица». Вместо них
-    // одна статус-строка: лоадер до первого снапшота, текст про WAIT в тишине.
-    // Ключ ph:* → едет по no-animation пути реконсилера (чистый снос при данных).
-    const loading = !payload?.ts;
-    const statusHtml = loading
-      ? '<span class="loader-spinner hm-status-spinner"></span><span>Loading…</span>'
-      : "<span>quiet market — no movers</span>";
+    // Пустой enriched = монеты ещё не посчитаны (universe прогревается). Это НЕ
+    // «тихий рынок»: карточка заполняется топом по momentum БЕЗ отсечки по ходу,
+    // поэтому при загруженном universe строк всегда ≥1. Старый текст «quiet
+    // market — no movers» врал во время загрузки → показываем прелоадер с
+    // индетерминантным прогресс-баром, пока монеты не приедут (= «когда готово»).
+    // Если universe уже известен — поясняем, сколько монет сканируется.
+    const scope = payload?.universeSize
+      ? ` · scanning ${payload.universeSize} coins`
+      : "";
+    const statusHtml =
+      '<span class="loader-spinner hm-status-spinner"></span>' +
+      `<span>Loading movers…${scope}</span>` +
+      '<span class="hm-status-bar" aria-hidden="true"><span class="hm-status-bar-fill"></span></span>';
     items.push({
       key: "ph:status",
       cls: "hm-status-row",
