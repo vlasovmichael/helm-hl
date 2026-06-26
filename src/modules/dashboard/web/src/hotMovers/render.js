@@ -46,7 +46,7 @@ const ENTRY_ICON_SVG = {
     '<path d="M8 12h8"/></svg>',
 };
 
-// TradingView-ссылка по монете (перенесена из удалённого priceChart.js).
+// TradingView-ссылка по монете (клик по тикеру в Hot Movers).
 // HL k-монеты (kPEPE, kBONK…) на Binance = 1000-префикс (1000PEPE). .P =
 // бессрочный перп — тот же инструмент, что торгует бот, и покрытие шире спота.
 function tvUrl(coin) {
@@ -418,7 +418,7 @@ export function renderHotMovers(payload, fmtTime) {
 
     const rowHtml = `
       <td>${isOpen ? "📍" : idx + 1}</td>
-      <td><span class="signals-price">#${escapeHtml(s.coin)}</span>${alignChip}<a class="hm-tv" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" title="Открыть ${escapeHtml(s.coin)} в TradingView" aria-label="TradingView ${escapeHtml(s.coin)}">TV&nbsp;↗</a></td>
+      <td><a class="signals-price hm-coin-link" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" title="Открыть ${escapeHtml(s.coin)} в TradingView">#${escapeHtml(s.coin)}</a>${alignChip}</td>
       ${setupCell}
       ${entryCell}
       <td class="hm-price-cell r ${flashCls}"><span class="signals-price">${fmtPrice(s.price)}</span></td>

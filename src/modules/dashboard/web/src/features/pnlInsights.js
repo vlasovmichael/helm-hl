@@ -425,7 +425,7 @@ function renderHeatmap() {
       }
       const todayCls = key === todayKey ? " is-today" : "";
       const tip = d
-        ? `${key} · ${fmtMoney(d.pnl)} · ${d.trades} trade${d.trades === 1 ? "" : "s"} — клик для разбора`
+        ? `${key} · ${fmtMoney(d.pnl)} · ${d.trades} trade${d.trades === 1 ? "" : "s"} — click to review`
         : key;
       // Дни со сделками кликабельны → модалка разбора дня (сделки + заметка).
       const clickAttr = d ? ` data-date="${key}" role="button" tabindex="0"` : "";
@@ -571,7 +571,7 @@ export function initPnlInsights({ fmtTime } = {}) {
 let dayModalEl = null;
 let dayModalState = { date: null, loadedNote: "" };
 
-const SOURCE_LABEL = { bot: "Бот", adopted: "Adopt", manual: "Рука" };
+const SOURCE_LABEL = { bot: "bot", adopted: "adopt", manual: "manual" };
 
 function ensureDayModal() {
   if (dayModalEl) return dayModalEl;
@@ -580,19 +580,19 @@ function ensureDayModal() {
   el.hidden = true;
   el.innerHTML = `
     <div class="day-modal__backdrop" data-close="1"></div>
-    <div class="day-modal__panel" role="dialog" aria-modal="true" aria-label="Разбор дня">
+    <div class="day-modal__panel" role="dialog" aria-modal="true" aria-label="Day review">
       <div class="day-modal__head">
         <div class="day-modal__title" id="day-modal-title">—</div>
-        <button class="day-modal__close" data-close="1" aria-label="Закрыть">✕</button>
+        <button class="day-modal__close" data-close="1" aria-label="Close">✕</button>
       </div>
       <div class="day-modal__summary" id="day-modal-summary"></div>
       <div class="day-modal__trades" id="day-modal-trades"></div>
-      <label class="day-modal__note-lbl" for="day-modal-note">Заметка дня</label>
+      <label class="day-modal__note-lbl" for="day-modal-note">Day note</label>
       <textarea id="day-modal-note" class="day-modal__note" rows="4"
-        placeholder="Что сегодня сделал хорошо / где ошибся / следовал ли плану…"></textarea>
+        placeholder="What went well / where you slipped / did you follow the plan…"></textarea>
       <div class="day-modal__foot">
         <span class="day-modal__status" id="day-modal-status"></span>
-        <button class="range-btn" id="day-modal-save" type="button">Сохранить</button>
+        <button class="range-btn" id="day-modal-save" type="button">Save</button>
       </div>
     </div>`;
   document.body.appendChild(el);
@@ -613,7 +613,7 @@ async function openDayModal(date) {
   el.querySelector("#day-modal-title").textContent = date;
   el.querySelector("#day-modal-summary").innerHTML = "";
   el.querySelector("#day-modal-trades").innerHTML =
-    '<div class="day-modal__loading">Загрузка…</div>';
+    '<div class="day-modal__loading">Loading…</div>';
   el.querySelector("#day-modal-note").value = "";
   el.querySelector("#day-modal-status").textContent = "";
   el.hidden = false;
@@ -624,7 +624,7 @@ async function openDayModal(date) {
     data = await fetchJson(`/api/day-journal?date=${date}`);
   } catch {
     el.querySelector("#day-modal-trades").innerHTML =
-      '<div class="day-modal__loading">Ошибка загрузки</div>';
+      '<div class="day-modal__loading">Load error</div>';
     return;
   }
   if (dayModalState.date !== date) return; // открыли другой день, пока грузилось
@@ -633,7 +633,7 @@ async function openDayModal(date) {
   const pnlCls = s.pnl > 0 ? "num-pos" : s.pnl < 0 ? "num-neg" : "";
   el.querySelector("#day-modal-summary").innerHTML =
     `<span class="${pnlCls}">${fmtMoney(s.pnl)}</span>` +
-    `<span class="day-modal__sub">${s.trades} сделок · ${s.wins}W/${s.losses}L · fees ${fmtMoney(-Math.abs(s.fees))}</span>`;
+    `<span class="day-modal__sub">${s.trades} trades · ${s.wins}W/${s.losses}L · fees ${fmtMoney(-Math.abs(s.fees))}</span>`;
 
   el.querySelector("#day-modal-trades").innerHTML = renderDayTrades(data.trades || []);
 
@@ -642,7 +642,7 @@ async function openDayModal(date) {
 }
 
 function renderDayTrades(trades) {
-  if (!trades.length) return '<div class="day-modal__loading">Нет сделок</div>';
+  if (!trades.length) return '<div class="day-modal__loading">No trades</div>';
   const rows = trades
     .map((t) => {
       const sideCls = (t.side || "").toLowerCase() === "long" ? "long" : "short";
@@ -658,7 +658,7 @@ function renderDayTrades(trades) {
     })
     .join("");
   return `<table class="day-modal__table"><thead><tr>
-      <th>Coin</th><th>Side</th><th>Источник</th><th class="r">Закрыт</th><th class="r">PnL</th>
+      <th>Coin</th><th>Side</th><th>Source</th><th class="r">Closed</th><th class="r">PnL</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -667,15 +667,15 @@ async function saveDayNote(explicit = false) {
   if (!el || !dayModalState.date) return;
   const note = el.querySelector("#day-modal-note").value;
   if (note === dayModalState.loadedNote) {
-    if (explicit) flashStatus("Без изменений");
+    if (explicit) flashStatus("No changes");
     return;
   }
   try {
     await postJson("/api/day-journal", { date: dayModalState.date, note });
     dayModalState.loadedNote = note;
-    flashStatus("Сохранено ✓");
+    flashStatus("Saved ✓");
   } catch {
-    flashStatus("Ошибка сохранения");
+    flashStatus("Save error");
   }
 }
 

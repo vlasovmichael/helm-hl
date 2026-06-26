@@ -36,6 +36,18 @@
       font-weight: 700;
       font-size: 23px;
       color: var(--text-primary);
+
+      /* TV-style: вспышка только изменившегося разряда, без скейла. */
+      .mc-tick {
+        border-radius: 3px;
+        padding: 0 1px;
+      }
+      .mc-tick-up {
+        animation: mc-tick-up 0.7s ease-out;
+      }
+      .mc-tick-down {
+        animation: mc-tick-down 0.7s ease-out;
+      }
     }
     .mc-24h {
       font-size: 15px;
@@ -117,35 +129,23 @@
     }
   }
 
-  /* ── Скелетон-прелоадер (shimmer), пока нет данных ── */
+  /* ── Лоадер, пока нет данных. Спиннер по центру при стабильной высоте
+       контейнера (min-height 56px) — границы не прыгают на reflow (был баг
+       со скелетоном: его раскладка ≠ реальной → рамка дёргалась). ── */
+  .mc-loader {
+    display: none;
+    width: 100%;
+    justify-content: center;
+    align-items: center;
+  }
   &.mc-loading {
-    .mc-skel {
-      display: inline-block;
-      height: 16px;
-      border-radius: 5px;
-      background: linear-gradient(
-        100deg,
-        var(--border) 30%,
-        var(--border-strong) 50%,
-        var(--border) 70%
-      );
-      background-size: 200% 100%;
-      animation: mc-shimmer 1.3s ease-in-out infinite;
+    justify-content: center;
+    .mc-loader {
+      display: flex;
     }
-    .mc-skel-px {
-      width: 120px;
-      height: 22px;
-    }
-    .mc-skel-24h {
-      width: 64px;
-      margin-left: 8px;
-    }
+    .mc-head,
     .mc-stats {
-      gap: 30px;
-    }
-    .mc-skel-cell {
-      width: 54px;
-      height: 30px;
+      display: none;
     }
   }
 }
@@ -160,12 +160,24 @@
     transform: translateY(0);
   }
 }
-@keyframes mc-shimmer {
-  from {
-    background-position: 200% 0;
+@keyframes mc-tick-up {
+  0% {
+    color: var(--green);
+    background: var(--green-soft);
   }
-  to {
-    background-position: -200% 0;
+  100% {
+    color: var(--text-primary);
+    background: transparent;
+  }
+}
+@keyframes mc-tick-down {
+  0% {
+    color: var(--red);
+    background: var(--red-soft);
+  }
+  100% {
+    color: var(--text-primary);
+    background: transparent;
   }
 }
 
@@ -176,7 +188,8 @@
     &.mc-enter .mc-stats .mc-cell {
       animation: none;
     }
-    .mc-skel {
+    .mc-px .mc-tick-up,
+    .mc-px .mc-tick-down {
       animation: none;
     }
   }

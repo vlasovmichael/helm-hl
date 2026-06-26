@@ -67,6 +67,41 @@ function setVal(el, key, html, cls) {
   }
 }
 
+// Цена BTC как на TradingView: подсвечиваем ТОЛЬКО изменившиеся разряды
+// (зелёным при росте, красным при падении) с коротким флэшем цвета/фона —
+// без скейла. Сравнение посимвольно, выравнивание справа (число растёт влево).
+let lastBtcPrice = null;
+let lastBtcStr = "";
+function renderBtcPrice(el, price) {
+  const node = el.querySelector('[data-k="price"]');
+  if (!node) return;
+  const str = fmtPrice(price);
+
+  // Первый рендер / нет данных / без изменения — просто текст, без флэша.
+  if (price == null || lastBtcPrice == null || price === lastBtcPrice) {
+    node.textContent = str;
+    lastBtcPrice = price;
+    lastBtcStr = str;
+    return;
+  }
+
+  const dir = price > lastBtcPrice ? "up" : "down";
+  // Собираем посимвольно справа налево; новый <span> на изменившемся символе
+  // проигрывает анимацию заново (свежий DOM-узел при innerHTML).
+  let html = "";
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[str.length - 1 - i];
+    const pch = lastBtcStr[lastBtcStr.length - 1 - i];
+    html =
+      ch !== pch
+        ? `<span class="mc-tick mc-tick-${dir}">${ch}</span>${html}`
+        : ch + html;
+  }
+  node.innerHTML = html;
+  lastBtcPrice = price;
+  lastBtcStr = str;
+}
+
 export function renderMarketContext(d) {
   const el = document.getElementById("market-context");
   if (!el || !d) return;
@@ -83,7 +118,7 @@ export function renderMarketContext(d) {
   if (!built && !buildStructure(el)) return;
 
   const b = d.btc || {};
-  setVal(el, "price", fmtPrice(b.price));
+  renderBtcPrice(el, b.price);
   setVal(el, "change24h", `${fmtPct(b.change24h)} <i>24h</i>`, pctCls(b.change24h));
   setVal(el, "m15", fmtPct(b.m15), pctCls(b.m15));
   setVal(el, "m1h", fmtPct(b.m1h), pctCls(b.m1h));
