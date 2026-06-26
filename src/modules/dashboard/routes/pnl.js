@@ -20,6 +20,8 @@ import {
   realTradesForDisplay,
   getActivePosition,
   getHistory,
+  getDayNote,
+  setDayNote,
 } from "../../../core/database.js";
 import { getManualTrades, getAllRoundTrips } from "./manualTrades.js";
 
@@ -414,8 +416,8 @@ export function buildInsights(combined) {
 // ─────────────────────────────────────────────────
 // Проф-метрика (Tradezella/Edgewise): насколько хорошо мы ВЫХОДИМ. Источник —
 // DB-таблица history (бот трекает intra-trade peak/trough), НЕ fills: из fills
-// excursion не восстановить. Покрывает только сделки с записанным mfe/mae
-// (bot/adopt). Manual-only fills сюда не попадут — это честно отражено в meta.
+// excursion не восстановить. Покрывает ТОЛЬКО adopt-сделки (мой ручной вход +
+// выход боту) с записанным mfe/mae — бумажные стратегии бота исключены.
 //
 // · capture = realized / MFE — какую долю доступного хода забрали (только winners,
 //   MFE>0). Низкий % = выход рано/трейл отдаёт; ~50%+ = крепко. Гнаться за 100%
@@ -427,10 +429,16 @@ export function buildInsights(combined) {
 export function buildExcursion(rows) {
   const ROUNDTRIP_FLOOR = 0.3; // $ — порог «был заметно в плюсе», глушит шум
 
+  // «Мои» сделки = adopt (ручной вход, выход боту). Бумажные стратегии бота
+  // (hunter*/fadehot) тоже трекают mfe/mae, но это НЕ мои выходы — они засоряют
+  // статистику качества выходов. Оставляем только рабочий контур оператора (см.
+  // memory working_contour_focus_manual_entry_bot_exit).
+  const mine = (rows || []).filter((t) => t.strategy_id === "adopt");
+
   // Дедуп фантомных дублей: adopt flip-merge двоит round-trip (тот же coin/side/pnl,
   // закрытие в пределах пары секунд — см. memory adopt_flip_merge_bug). Оставляем
   // первый по closed_at, чтобы счёт сделок и средние не двоились.
-  const sorted = [...rows].sort((a, b) => (a.closed_at || 0) - (b.closed_at || 0));
+  const sorted = [...mine].sort((a, b) => (a.closed_at || 0) - (b.closed_at || 0));
   const kept = [];
   let dupsRemoved = 0;
   for (const t of sorted) {
@@ -517,6 +525,69 @@ export async function handleInsights(_req, res) {
     res.json({ now, ...buildInsights(combined), excursion });
   } catch (err) {
     logger.warn(`[Dashboard] /api/insights error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// ─────────────────────────────────────────────────
+//  Day journal — разбор дня по клику в календаре Insights
+// ─────────────────────────────────────────────────
+// GET /api/day-journal?date=YYYY-MM-DD → сделки дня (из тех же round-trip'ов,
+// что Insights/Ledger) + сохранённая заметка. Сделки фильтруем по локальному
+// дню закрытия — ровно как daily-хитмап (localDayKey в buildInsights).
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const localDayKey = (ts) => {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+export async function handleDayJournal(req, res) {
+  try {
+    const date = String(req.query.date || "");
+    if (!DATE_RE.test(date)) {
+      return res.status(400).json({ error: "date must be YYYY-MM-DD" });
+    }
+    const roundTrips = await getAllRoundTrips();
+    const trades = roundTrips
+      .filter((t) => t.status === "closed" && t.closeTime && localDayKey(t.closeTime) === date)
+      .map((t) => ({
+        coin: t.coin,
+        side: t.side, // long | short
+        source: t.source, // bot | adopted | manual
+        pnl: t.pnl || 0,
+        fee: t.fee || 0,
+        entryTime: t.entryTime || null,
+        closeTime: t.closeTime,
+      }))
+      .sort((a, b) => a.closeTime - b.closeTime);
+
+    const pnl = trades.reduce((s, t) => s + t.pnl, 0);
+    const fees = trades.reduce((s, t) => s + t.fee, 0);
+    const wins = trades.filter((t) => t.pnl > 0).length;
+    const losses = trades.filter((t) => t.pnl < 0).length;
+
+    res.json({
+      date,
+      note: getDayNote(date),
+      summary: { trades: trades.length, pnl, fees, wins, losses },
+      trades,
+    });
+  } catch (err) {
+    logger.warn(`[Dashboard] /api/day-journal error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export function handleDayNoteSave(req, res) {
+  try {
+    const date = String(req.body?.date || "");
+    if (!DATE_RE.test(date)) {
+      return res.status(400).json({ error: "date must be YYYY-MM-DD" });
+    }
+    setDayNote(date, req.body?.note ?? "");
+    res.json({ ok: true, date, note: getDayNote(date) });
+  } catch (err) {
+    logger.warn(`[Dashboard] /api/day-journal save error: ${err.message}`);
     res.status(500).json({ error: err.message });
   }
 }

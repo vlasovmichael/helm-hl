@@ -270,6 +270,20 @@
   &.is-today {
     border-color: var(--accent);
   }
+  &.is-clickable {
+    cursor: pointer;
+    transition: transform 0.08s ease, box-shadow 0.08s ease;
+    &:hover {
+      transform: scale(1.25);
+      box-shadow: 0 0 0 1px var(--accent);
+      position: relative;
+      z-index: 1;
+    }
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+  }
 }
 
 .heatmap-legend {
@@ -336,4 +350,159 @@
   color: var(--text-muted);
   margin-top: 4px;
   cursor: help;
+}
+
+/* ──────────────────────── Day modal (разбор дня по клику в календаре) */
+.day-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+
+  &[hidden] {
+    display: none;
+  }
+}
+.day-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+.day-modal__panel {
+  position: relative;
+  z-index: 1;
+  width: min(520px, 100%);
+  max-height: 88vh;
+  overflow-y: auto;
+  background: var(--card-bg);
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+.day-modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.day-modal__title {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 600;
+}
+.day-modal__close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 6px;
+  &:hover {
+    color: var(--text);
+  }
+}
+.day-modal__summary {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 12px;
+
+  .day-modal__sub {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-muted);
+  }
+}
+.day-modal__loading {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 10px 0;
+}
+.day-modal__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-bottom: 14px;
+
+  th {
+    text-align: left;
+    font-weight: 500;
+    color: var(--text-muted);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  td {
+    padding: 5px 6px;
+    border-bottom: 1px solid var(--canvas-subtle);
+    font-family: var(--font-mono);
+  }
+  .r {
+    text-align: right;
+  }
+}
+.day-modal__src {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.day-side {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+
+  &--long {
+    color: var(--green);
+    background: var(--tier-pos-weak);
+  }
+  &--short {
+    color: var(--red);
+    background: var(--tier-neg-weak);
+  }
+}
+.day-modal__note-lbl {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.day-modal__note {
+  width: 100%;
+  resize: vertical;
+  background: var(--canvas-subtle);
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text);
+  &:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+}
+.day-modal__foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 10px;
+}
+.day-modal__status {
+  font-size: 11px;
+  color: var(--text-muted);
 }

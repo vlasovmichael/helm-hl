@@ -1,12 +1,12 @@
 //  index.html — «радар»: hot movers / signals, market context,
-//  setup scanner, divergence, whale watch, orderbook.
+//  divergence, whale watch, orderbook.
 //  lab.html тоже грузит этот бандл → сюда же strategies (карточка переехала
 //  на Lab). На index таблицы стратегий нет — стили мёртвые, но безвредные.
+//  charts оставлен: _charts.scss шарит #equity-chart со statistics.
 @use "core";
 @use "features/charts";
 @use "features/signals";
 @use "features/marketcontext";
-@use "features/setupscanner";
 @use "features/orderbook";
 @use "features/strategies";
 @use "features/whatif";

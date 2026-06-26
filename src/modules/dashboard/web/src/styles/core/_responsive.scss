@@ -62,11 +62,6 @@
     -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M9.53.75c.22 2.39 1.47 3.63 2.66 4.81C13.2 6.5 14 7.5 14 9A6 6 0 1 1 2.76 6.23c.1.28.27.49.5.63.55.35 1.27.22 1.48-.46.3-1.01.38-2.4-.04-4.08a.75.75 0 0 1 .99-.88c.62.23 1.23.63 1.68 1.15.4-.55.85-1.04 1.32-1.53.32-.33.61-.66.86-1.03zM8 14a4 4 0 0 0 1.5-7.71c.14 1.16-.04 2.4-.86 3.16-.5.46-1.18.55-1.7.18a1.6 1.6 0 0 1-.62-1.3A4 4 0 0 0 8 14z'/></svg>");
     mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M9.53.75c.22 2.39 1.47 3.63 2.66 4.81C13.2 6.5 14 7.5 14 9A6 6 0 1 1 2.76 6.23c.1.28.27.49.5.63.55.35 1.27.22 1.48-.46.3-1.01.38-2.4-.04-4.08a.75.75 0 0 1 .99-.88c.62.23 1.23.63 1.68 1.15.4-.55.85-1.04 1.32-1.53.32-.33.61-.66.86-1.03zM8 14a4 4 0 0 0 1.5-7.71c.14 1.16-.04 2.4-.86 3.16-.5.46-1.18.55-1.7.18a1.6 1.6 0 0 1-.62-1.3A4 4 0 0 0 8 14z'/></svg>");
   }
-  /* Setup Scanner — лупа (скан сетапов). */
-  .bottom-nav-btn[data-target="sec-setup-scanner"] .nav-icon {
-    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M10.68 11.74a6 6 0 1 1 1.06-1.06l3.04 3.04a.75.75 0 0 1-1.06 1.06zM12 7a5 5 0 1 0-10 0 5 5 0 0 0 10 0z'/></svg>");
-    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M10.68 11.74a6 6 0 1 1 1.06-1.06l3.04 3.04a.75.75 0 0 1-1.06 1.06zM12 7a5 5 0 1 0-10 0 5 5 0 0 0 10 0z'/></svg>");
-  }
   /* BTC Divergence — две встречные стрелки (расхождение vs BTC). */
   .bottom-nav-btn[data-target="sec-divergence"] .nav-icon {
     -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M4.5 1 1 5h2.25v10h2.5V5H8L4.5 1zm7 14L15 11h-2.25V1h-2.5v10H8l3.5 4z'/></svg>");

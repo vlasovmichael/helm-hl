@@ -281,6 +281,17 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS shadow_exits_closed_idx ON shadow_exits (closed_at);
   `);
 
+  // Day journal (2026-06-26) — заметка дня для разбора по клику в календаре
+  // Insights (Tradezella-style). Одна строка на локальную дату YYYY-MM-DD.
+  // Чисто журнал рефлексии: НЕ влияет на торговлю, сделки берутся из fills.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS day_journal (
+      date       TEXT    PRIMARY KEY,
+      note       TEXT    NOT NULL DEFAULT '',
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+    );
+  `);
+
   logger.info(`[DB] Initialized at ${DB_PATH}`);
   return db;
 }
@@ -701,6 +712,30 @@ export function getHistorySince(sinceMs) {
   return getDb()
     .prepare('SELECT * FROM history WHERE closed_at >= ? ORDER BY closed_at DESC')
     .all(sinceMs);
+}
+
+// ── Day journal — заметка дня для календаря Insights ──
+// date = локальный ключ YYYY-MM-DD (как daily-хитмап в pnl.js).
+export function getDayNote(date) {
+  const row = getDb()
+    .prepare('SELECT note FROM day_journal WHERE date = ?')
+    .get(date);
+  return row?.note ?? '';
+}
+
+// Пустая заметка удаляет строку (чистим, чтобы не копить мусор).
+export function setDayNote(date, note) {
+  const db = getDb();
+  const text = String(note ?? '').trim();
+  if (!text) {
+    db.prepare('DELETE FROM day_journal WHERE date = ?').run(date);
+    return;
+  }
+  db.prepare(
+    `INSERT INTO day_journal (date, note, updated_at)
+     VALUES (?, ?, unixepoch() * 1000)
+     ON CONFLICT(date) DO UPDATE SET note = excluded.note, updated_at = excluded.updated_at`,
+  ).run(date, text);
 }
 
 /**

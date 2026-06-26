@@ -24,9 +24,8 @@ import {
   getRecentStrategyTrades,
   getStrategyTradesPage,
   getStrategyPnlSince,
-  getSetupScannerRows,
 } from "../../core/database.js";
-import { getAccountSummary, getPositionsCached, getFrontendOpenOrders, getLivePriceMap } from "../exchange.js";
+import { getAccountSummary, getPositionsCached, getLivePriceMap } from "../exchange.js";
 import { getLivePrice as feedLivePrice, isFeedFresh } from "../../core/priceFeed.js";
 import { fetchUserFills } from "../userFills.js";
 import { getMonthlyLedger } from "../ledger.js";
@@ -46,8 +45,6 @@ import { getAdoptPeakPct } from "../strategistAdopt.js";
 import { getCandyGirlHeartbeat, getCandyGirlSignals, getCandyGirlStats } from "../strategistCandyGirl.js";
 import { buildStrategiesPayload } from "./strategiesView.js";
 import { getNearMisses } from "../nearMisses.js";
-import { enrichSwingSignals, findCandyConfirm } from "../setupScannerSwing.js";
-import { evaluateExitContext, parseAccountPositions, analyzeSlTp } from "../setupScannerAlerts.js";
 import {
   AUTH_ENABLED,
   isAuthenticated,
@@ -75,7 +72,7 @@ import {
   OI_SNAPSHOT_MS,
 } from "./routes/movers.js";
 import { getManualTrades } from "./routes/manualTrades.js";
-import { handlePnlSummary, handleInsights } from "./routes/pnl.js";
+import { handlePnlSummary, handleInsights, handleDayJournal, handleDayNoteSave } from "./routes/pnl.js";
 import {
   DIVERGENCE_WATCHLIST,
   DIVERGENCE_SNAPSHOT_MS,
@@ -523,8 +520,9 @@ async function handleStatus(_req, res) {
 async function handleHistory(req, res) {
   try {
     const hours = req.query.hours ? parseInt(req.query.hours, 10) : 24;
-    const since = Date.now() - hours * 3_600_000;
     const now = Date.now();
+    // hours<=0 («All») = вся удержанная история снапшотов (retention 35 дней).
+    const since = hours > 0 ? now - hours * 3_600_000 : 0;
 
     // Performance-кривая = ИЗМЕРЕННЫЙ equity (снапшоты пишутся в balanceDiag
     // раз в 5 мин), а не реконструкция из суммы PnL сделок. Старая модель
@@ -842,63 +840,6 @@ async function handleTradeMarkers(req, res) {
   }
 }
 
-async function handleSetupScanner(_req, res) {
-  try {
-    const baseRows = getSetupScannerRows();
-
-    // Открытые позиции счёта (ручные и ботовые): их монеты показываем всегда,
-    // даже если collector их не трекает, + exit-контекст в строке.
-    let positions = [];
-    try {
-      positions = parseAccountPositions(await getPositionsCached());
-    } catch {
-      /* fail-soft: карточка живёт без позиций */
-    }
-    const known = new Set(baseRows.map((r) => r.coin));
-    for (const p of positions) {
-      if (!known.has(p.coin)) baseRows.push({ coin: p.coin });
-    }
-
-    // SL/TP-ордера позиций (один запрос на все монеты, fail-soft)
-    let openOrders = [];
-    if (positions.length) {
-      try {
-        openOrders = await getFrontendOpenOrders();
-      } catch {
-        /* fail-soft */
-      }
-    }
-
-    const rows = enrichSwingSignals(baseRows);
-    const posByCoin = new Map(positions.map((p) => [p.coin, p]));
-    for (const r of rows) {
-      const p = posByCoin.get(r.coin);
-      if (!p) continue;
-      const ev = evaluateExitContext(p.side, r.swing);
-      r.swing.pos = p.side;
-      r.swing.exitLevel = ev.level;   // null | 'ema20' | 'trend'
-      r.swing.exitReason = ev.reason;
-      r.swing.entryPx = p.entryPx;
-      r.swing.slTp = analyzeSlTp(p, openOrders);
-    }
-
-    // Связка с Candy Girl (слой 5m-тайминга): для строк БЕЗ позиции отмечаем,
-    // подтвердил ли Candy Girl 5m-вход по тому же направлению. Тихо пусто, когда
-    // радар выключен (CANDY_GIRL_ENABLED=false) — getCandyGirlSignals() = [].
-    const candySignals = getCandyGirlSignals();
-    const candyNow = Date.now();
-    for (const r of rows) {
-      if (r.swing?.pos) continue; // у позиции колонка = exit-контекст, не вход
-      const c = findCandyConfirm(r.coin, r.swing?.signal, candySignals, candyNow);
-      if (c) r.swing.candy = c;
-    }
-    res.json({ ts: Date.now(), count: rows.length, rows });
-  } catch (err) {
-    logger.warn(`[Dashboard] /api/setup-scanner error: ${err.message}`);
-    res.status(500).json({ error: err.message });
-  }
-}
-
 async function handleTaxSummary(req, res) {
   try {
     const yearParam = req.query.year ? parseInt(req.query.year, 10) : null;
@@ -1011,7 +952,8 @@ export function startDashboard() {
   app.post("/api/manual-paper/close", handleManualPaperClose);
 
   app.get("/api/insights", handleInsights);
-  app.get("/api/setup-scanner", handleSetupScanner);
+  app.get("/api/day-journal", handleDayJournal);
+  app.post("/api/day-journal", handleDayNoteSave);
   app.get("/api/trade-markers", handleTradeMarkers);
   app.get("/api/btc-divergence", handleBtcDivergence);
   app.get("/api/market-context", handleMarketContext);

@@ -1,7 +1,7 @@
 import "./src/styles/index.scss";
 // ─────────────────────────────────────────────────
 //  index.html — «радар»: header/position, hot movers, market context,
-//  setup scanner, trade-модалка.
+//  trade-модалка.
 //  Divergence/whale → /lab.html; графики/strategies/pnl/logs — др. страницы.
 // ─────────────────────────────────────────────────
 
@@ -32,15 +32,6 @@ import { renderMarketContext } from "./src/features/marketContext.js";
 import { initModals, renderActivity } from "./src/features/modals.js";
 import { initWhatIf } from "./src/features/whatif.js";
 import { initManualPaperTrigger, initManualPaperActive } from "./src/features/manualPaper.js";
-import {
-  initSetupScanner,
-  setSwingEquity,
-  updateSetupLivePrice,
-} from "./src/features/setupScanner.js";
-import {
-  initPriceChart,
-  applyPriceChartTheme,
-} from "./src/charts/priceChart.js";
 
 // WS шлёт hotMovers каждые ~2с. Пока поток живой — HTTP-фолбэк /api/signals
 // в tick() не дёргаем (был бы дубликат тех же данных).
@@ -48,10 +39,8 @@ const WS_HOTMOVERS_FRESH_MS = 8000;
 let lastWsHotMoversAt = 0;
 
 function onStatus(data) {
-  if (Number.isFinite(data.equity)) setSwingEquity(data.equity);
   renderHeader(data);
   updateActiveCoinSet(data.activePosition, data.manualPositions);
-  updateSetupLivePrice(); // живая стрелка цены активной монеты в Setup (≤2с)
   renderPosition(data.activePosition);
   renderManualPositions(data.manualPositions);
   renderBans(data);
@@ -84,7 +73,7 @@ async function tick() {
 
 // ── Bootstrap ──
 mountTopnav("dashboard");
-bindTheme([applyPriceChartTheme]);
+bindTheme([]);
 bindRange(() => tick());
 initModals();
 initWhatIf();
@@ -97,8 +86,6 @@ initWebSocket({ onStatus });
 tick();
 setInterval(tick, REFRESH_MS);
 startFooterTimer();
-initSetupScanner({ fmtTime });
-initPriceChart();
 
 // DEV: ?mock=1 → засимулировать активную монету (risk-bar + ракета) без бэка.
 // Динамический импорт → в обычной сборке/проде модуль даже не грузится.

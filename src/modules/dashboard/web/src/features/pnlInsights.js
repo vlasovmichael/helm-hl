@@ -10,6 +10,7 @@
 // ─────────────────────────────────────────────────
 
 import { fmtMoney, escapeHtml, strategyDisplayName } from "../utils/format.js";
+import { fetchJson, postJson } from "../net/api.js";
 
 let currentPnlPeriod = "today";
 let lastPnlSummary = null;
@@ -231,7 +232,7 @@ function renderExits() {
   if (!meta || !cards || !tbody) return;
 
   if (!ex || !ex.sample) {
-    meta.textContent = "Нет сделок с трекингом MFE/MAE (bot/adopt)";
+    meta.textContent = "Нет моих сделок с трекингом MFE/MAE (adopt: ручной вход + выход боту)";
     cards.innerHTML = "";
     tbody.innerHTML =
       '<tr><td colspan="6" class="empty-state">No excursion data yet</td></tr>';
@@ -424,10 +425,13 @@ function renderHeatmap() {
       }
       const todayCls = key === todayKey ? " is-today" : "";
       const tip = d
-        ? `${key} · ${fmtMoney(d.pnl)} · ${d.trades} trade${d.trades === 1 ? "" : "s"}`
+        ? `${key} · ${fmtMoney(d.pnl)} · ${d.trades} trade${d.trades === 1 ? "" : "s"} — клик для разбора`
         : key;
+      // Дни со сделками кликабельны → модалка разбора дня (сделки + заметка).
+      const clickAttr = d ? ` data-date="${key}" role="button" tabindex="0"` : "";
+      const clickCls = d ? " is-clickable" : "";
       cells.push(
-        `<div class="heatmap-cell ${cellClass(d)}${todayCls}" title="${tip}"></div>`,
+        `<div class="heatmap-cell ${cellClass(d)}${todayCls}${clickCls}" title="${tip}"${clickAttr}></div>`,
       );
     }
     const pnlCls = monthPnl > 0 ? "pos" : monthPnl < 0 ? "neg" : "";
@@ -519,12 +523,27 @@ export function initPnlInsights({ fmtTime } = {}) {
     }),
   );
 
-  // Навигация по годам heatmap (делегирование — сетка перерисовывается).
+  // Навигация по годам heatmap + клик по дню → модалка разбора (делегирование,
+  // сетка перерисовывается каждый рендер).
   document.getElementById("heatmap-grid")?.addEventListener("click", (e) => {
     const btn = e.target.closest(".heatmap-year-btn");
-    if (!btn || btn.disabled) return;
-    currentHeatmapYear += parseInt(btn.dataset.dir, 10);
-    renderHeatmap();
+    if (btn) {
+      if (btn.disabled) return;
+      currentHeatmapYear += parseInt(btn.dataset.dir, 10);
+      renderHeatmap();
+      return;
+    }
+    const cell = e.target.closest(".heatmap-cell[data-date]");
+    if (cell) openDayModal(cell.dataset.date);
+  });
+  // Клавиатурная доступность: Enter/Space на клетке-дне.
+  document.getElementById("heatmap-grid")?.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const cell = e.target.closest(".heatmap-cell[data-date]");
+    if (cell) {
+      e.preventDefault();
+      openDayModal(cell.dataset.date);
+    }
   });
 
   document.querySelectorAll(".per-coin-table th[data-sort]").forEach((th) =>
@@ -541,3 +560,144 @@ export function initPnlInsights({ fmtTime } = {}) {
     }),
   );
 }
+
+// ─────────────────────────────────────────────────
+//  Day modal — разбор дня (Tradezella-style): сделки дня + заметка
+// ─────────────────────────────────────────────────
+// Self-contained: statistics.html не тащит index-овую modals.js, поэтому оверлей
+// создаётся здесь лениво и живёт в body. Данные — /api/day-journal (те же
+// round-trip'ы, что хитмап/Ledger → цифры сходятся). Заметка автосейвится при
+// закрытии, если изменилась (плюс кнопка «Сохранить»).
+let dayModalEl = null;
+let dayModalState = { date: null, loadedNote: "" };
+
+const SOURCE_LABEL = { bot: "Бот", adopted: "Adopt", manual: "Рука" };
+
+function ensureDayModal() {
+  if (dayModalEl) return dayModalEl;
+  const el = document.createElement("div");
+  el.className = "day-modal";
+  el.hidden = true;
+  el.innerHTML = `
+    <div class="day-modal__backdrop" data-close="1"></div>
+    <div class="day-modal__panel" role="dialog" aria-modal="true" aria-label="Разбор дня">
+      <div class="day-modal__head">
+        <div class="day-modal__title" id="day-modal-title">—</div>
+        <button class="day-modal__close" data-close="1" aria-label="Закрыть">✕</button>
+      </div>
+      <div class="day-modal__summary" id="day-modal-summary"></div>
+      <div class="day-modal__trades" id="day-modal-trades"></div>
+      <label class="day-modal__note-lbl" for="day-modal-note">Заметка дня</label>
+      <textarea id="day-modal-note" class="day-modal__note" rows="4"
+        placeholder="Что сегодня сделал хорошо / где ошибся / следовал ли плану…"></textarea>
+      <div class="day-modal__foot">
+        <span class="day-modal__status" id="day-modal-status"></span>
+        <button class="range-btn" id="day-modal-save" type="button">Сохранить</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+
+  el.querySelectorAll("[data-close]").forEach((b) =>
+    b.addEventListener("click", closeDayModal),
+  );
+  el.querySelector("#day-modal-save").addEventListener("click", () =>
+    saveDayNote(true),
+  );
+  dayModalEl = el;
+  return el;
+}
+
+async function openDayModal(date) {
+  const el = ensureDayModal();
+  dayModalState = { date, loadedNote: "" };
+  el.querySelector("#day-modal-title").textContent = date;
+  el.querySelector("#day-modal-summary").innerHTML = "";
+  el.querySelector("#day-modal-trades").innerHTML =
+    '<div class="day-modal__loading">Загрузка…</div>';
+  el.querySelector("#day-modal-note").value = "";
+  el.querySelector("#day-modal-status").textContent = "";
+  el.hidden = false;
+  document.body.style.overflow = "hidden";
+
+  let data;
+  try {
+    data = await fetchJson(`/api/day-journal?date=${date}`);
+  } catch {
+    el.querySelector("#day-modal-trades").innerHTML =
+      '<div class="day-modal__loading">Ошибка загрузки</div>';
+    return;
+  }
+  if (dayModalState.date !== date) return; // открыли другой день, пока грузилось
+
+  const s = data.summary || { trades: 0, pnl: 0, fees: 0, wins: 0, losses: 0 };
+  const pnlCls = s.pnl > 0 ? "num-pos" : s.pnl < 0 ? "num-neg" : "";
+  el.querySelector("#day-modal-summary").innerHTML =
+    `<span class="${pnlCls}">${fmtMoney(s.pnl)}</span>` +
+    `<span class="day-modal__sub">${s.trades} сделок · ${s.wins}W/${s.losses}L · fees ${fmtMoney(-Math.abs(s.fees))}</span>`;
+
+  el.querySelector("#day-modal-trades").innerHTML = renderDayTrades(data.trades || []);
+
+  dayModalState.loadedNote = data.note || "";
+  el.querySelector("#day-modal-note").value = data.note || "";
+}
+
+function renderDayTrades(trades) {
+  if (!trades.length) return '<div class="day-modal__loading">Нет сделок</div>';
+  const rows = trades
+    .map((t) => {
+      const sideCls = (t.side || "").toLowerCase() === "long" ? "long" : "short";
+      const pnlCls = t.pnl > 0 ? "num-pos" : t.pnl < 0 ? "num-neg" : "";
+      const src = SOURCE_LABEL[t.source] || t.source || "—";
+      return `<tr>
+        <td>${escapeHtml(t.coin || "?")}</td>
+        <td><span class="day-side day-side--${sideCls}">${sideCls.toUpperCase()}</span></td>
+        <td class="day-modal__src">${escapeHtml(src)}</td>
+        <td class="r">${_fmtTime(t.closeTime)}</td>
+        <td class="r ${pnlCls}">${fmtMoney(t.pnl)}</td>
+      </tr>`;
+    })
+    .join("");
+  return `<table class="day-modal__table"><thead><tr>
+      <th>Coin</th><th>Side</th><th>Источник</th><th class="r">Закрыт</th><th class="r">PnL</th>
+    </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+async function saveDayNote(explicit = false) {
+  const el = dayModalEl;
+  if (!el || !dayModalState.date) return;
+  const note = el.querySelector("#day-modal-note").value;
+  if (note === dayModalState.loadedNote) {
+    if (explicit) flashStatus("Без изменений");
+    return;
+  }
+  try {
+    await postJson("/api/day-journal", { date: dayModalState.date, note });
+    dayModalState.loadedNote = note;
+    flashStatus("Сохранено ✓");
+  } catch {
+    flashStatus("Ошибка сохранения");
+  }
+}
+
+function flashStatus(text) {
+  const st = dayModalEl?.querySelector("#day-modal-status");
+  if (!st) return;
+  st.textContent = text;
+  clearTimeout(flashStatus._t);
+  flashStatus._t = setTimeout(() => {
+    if (st.textContent === text) st.textContent = "";
+  }, 2500);
+}
+
+function closeDayModal() {
+  if (!dayModalEl) return;
+  saveDayNote(false); // автосейв, если заметка изменилась
+  dayModalEl.hidden = true;
+  document.body.style.overflow = "";
+  dayModalState.date = null;
+}
+
+// Esc закрывает модалку дня (один глобальный слушатель).
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && dayModalEl && !dayModalEl.hidden) closeDayModal();
+});
