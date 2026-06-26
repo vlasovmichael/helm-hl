@@ -169,6 +169,28 @@
   vertical-align: middle;
   white-space: nowrap;
 }
+/* TV ↗ — открыть монету в TradingView (перенесено из удалённого Chart).
+   Приглушённая (видна и на тач, где нет hover), ярче при наведении. */
+.hm-tv {
+  margin-left: 6px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  text-decoration: none;
+  vertical-align: middle;
+  white-space: nowrap;
+  opacity: 0.4;
+  transition: opacity 0.12s ease, color 0.12s ease;
+  &:hover {
+    color: var(--accent);
+    text-decoration: underline;
+  }
+}
+.signals-table tr:hover .hm-tv,
+.hm-tv:focus-visible {
+  opacity: 1;
+}
 .hm-align-ok {
   color: var(--green);
   background: var(--green-soft);

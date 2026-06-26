@@ -46,6 +46,16 @@ const ENTRY_ICON_SVG = {
     '<path d="M8 12h8"/></svg>',
 };
 
+// TradingView-ссылка по монете (перенесена из удалённого priceChart.js).
+// HL k-монеты (kPEPE, kBONK…) на Binance = 1000-префикс (1000PEPE). .P =
+// бессрочный перп — тот же инструмент, что торгует бот, и покрытие шире спота.
+function tvUrl(coin) {
+  let raw = String(coin || "").trim();
+  if (/^k[A-Z0-9]/.test(raw)) raw = `1000${raw.slice(1)}`;
+  const sym = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return `https://www.tradingview.com/chart/?symbol=BINANCE:${sym}USDT.P`;
+}
+
 // Сколько монет максимум в таблице (открытые позиции — сверх лимита, всегда).
 const HM_MAX_ROWS = 8;
 
@@ -408,7 +418,7 @@ export function renderHotMovers(payload, fmtTime) {
 
     const rowHtml = `
       <td>${isOpen ? "📍" : idx + 1}</td>
-      <td><span class="signals-price">#${escapeHtml(s.coin)}</span>${alignChip}</td>
+      <td><span class="signals-price">#${escapeHtml(s.coin)}</span>${alignChip}<a class="hm-tv" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" title="Открыть ${escapeHtml(s.coin)} в TradingView" aria-label="TradingView ${escapeHtml(s.coin)}">TV&nbsp;↗</a></td>
       ${setupCell}
       ${entryCell}
       <td class="hm-price-cell r ${flashCls}"><span class="signals-price">${fmtPrice(s.price)}</span></td>
