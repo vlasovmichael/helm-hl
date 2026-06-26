@@ -22,7 +22,13 @@ export function hideChartLoader() {
 // Данные истории equity приходят из tick() страницы (загрузка /api/history).
 export function setEquityData(data) {
   equityData = data;
-  if (equitySeries) equitySeries.setData(data);
+  if (equitySeries) {
+    equitySeries.setData(data);
+    // Перефитим ось времени под новое окно. Без этого при смене диапазона
+    // (24h → 1h) узкая выборка рисуется внутри старого широкого видимого
+    // диапазона и схлопывается в огрызок у правого края (см. баг 1h).
+    if (equityChart) equityChart.timeScale().fitContent();
+  }
 }
 
 export function applyChartTheme() {
@@ -90,8 +96,16 @@ export async function initEquityChart() {
       borderColor: grid,
       timeVisible: true,
       secondsVisible: false,
-      tickMarkFormatter: (time) => {
+      // tickMarkType: 0=Year 1=Month 2=DayOfMonth 3=Time 4=TimeWithSeconds.
+      // На дневных/месячных тиках (7d/30d/All) показываем дату, иначе hh:mm —
+      // иначе длинные окна на оси выглядят одинаково (видны только часы).
+      tickMarkFormatter: (time, tickMarkType) => {
         const d = new Date(time * 1000);
+        if (tickMarkType != null && tickMarkType <= 2) {
+          const dd = String(d.getDate()).padStart(2, "0");
+          const mo = String(d.getMonth() + 1).padStart(2, "0");
+          return `${dd}.${mo}`;
+        }
         const hh = String(d.getHours()).padStart(2, "0");
         const mm = String(d.getMinutes()).padStart(2, "0");
         return `${hh}:${mm}`;
@@ -125,7 +139,10 @@ export async function initEquityChart() {
 
   // Данные могли прийти из tick() ДО резолва async-импорта (setEquityData
   // сохранил их в equityData, но серии ещё не было) — переигрываем.
-  if (equityData.length) equitySeries.setData(equityData);
+  if (equityData.length) {
+    equitySeries.setData(equityData);
+    equityChart.timeScale().fitContent();
+  }
 
   if (!window.__equityChartResizeBound) {
     window.__equityChartResizeBound = true;
