@@ -41,7 +41,10 @@ customEl.addEventListener("keydown", (e) => {
 function setCoin(c) {
   if (c === coin) return;
   coin = c;
+  const preset = COINS.includes(c);
   document.querySelectorAll(".ob-tab").forEach((t) => t.classList.toggle("active", t.dataset.coin === c));
+  customEl.classList.toggle("active", !preset);
+  customEl.value = preset ? "" : c;
   resubscribe();
 }
 

@@ -51,6 +51,7 @@
     background: var(--panel-2); color: var(--txt); font-family: inherit; font-size: 13px;
     text-transform: uppercase;
   }
+  #customCoin.active { color: #fff; border-color: var(--accent); background: rgba(91,157,255,0.18); font-weight: 600; }
   .conn { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--dim); }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--dim); }
   .dot.live { background: var(--bid); box-shadow: 0 0 8px var(--bid); }
@@ -192,7 +193,10 @@ customEl.addEventListener("keydown", e => {
 function setCoin(c) {
   if (c === coin) return;
   coin = c;
+  const preset = COINS.includes(c);
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.coin === c));
+  customEl.classList.toggle("active", !preset);
+  customEl.value = preset ? "" : c;
   resubscribe();
 }
 
