@@ -85,6 +85,9 @@ function buildStatus() {
     sizeUsd: solSize,
     leverage: 3,
     entryPrice: solEntry,
+    // Демо Floor-таймера: открыта 3 мин назад → жёлтый фон бежит (12 мин до конца).
+    // Для состояния «часы MM:SS» поставь смещение > 15 мин, напр. - 16 * 60 * 1000.
+    entryTime: Date.now() - 3 * 60 * 1000,
     currentPrice: solPrice,
     unrealizedPnl: solUpnl,
     liquidationPrice: solEntry * 0.7,

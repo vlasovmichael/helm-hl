@@ -357,6 +357,76 @@ export function renderPosition(pos) {
   _lastNetVal = pnl ? pnl.netMarket : null;
 }
 
+// ── Floor-таймер ─────────────────────────────────────────────────────────────
+// При открытой позиции по Floor-карточке бежит светло-жёлтый фон (15-мин
+// обратный отсчёт), после 15 мин — чип «🔔 открыта X». Привязка к p.entryTime.
+// Наблюдение оператора «ровно 3 свечи 15m» в данных НЕ подтвердилось (бэктест 27.06:
+// после 3 одинаковых разворот лишь 52–58%, «3» не выделена) → таймер = чекпоинт
+// «перечитать график», а НЕ «ход кончился». 2026-06-28.
+const FLOOR_TIMER_SEC = 15 * 60;
+function openedMsOf(p) {
+  const t = p?.entryTime;
+  if (t == null) return null;
+  // Строку без таймзоны (SQLite "YYYY-MM-DD HH:MM:SS") трактуем как UTC.
+  let ms =
+    typeof t === "number"
+      ? t
+      : Date.parse(/[Zz]|[+-]\d\d:?\d\d$/.test(t) ? t : t.replace(" ", "T") + "Z");
+  if (!Number.isFinite(ms)) return null;
+  if (ms < 1e12) ms *= 1000; // epoch-секунды → мс
+  return ms;
+}
+// Часы открытой позиции MM:SS (после часа H:MM:SS). Тикают каждую секунду.
+function fmtClock(sec) {
+  sec = Math.floor(sec);
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const pad = (n) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+function ensureFloorTimerStyle() {
+  if (document.getElementById("floor-timer-style")) return;
+  const st = document.createElement("style");
+  st.id = "floor-timer-style";
+  st.textContent =
+    "@keyframes floorTimerDeplete{from{transform:scaleX(1)}to{transform:scaleX(0)}}" +
+    ".grid-item.floor-timed{position:relative;overflow:hidden}" +
+    ".grid-item.floor-timed>*:not(.floor-timer-bg){position:relative;z-index:1}" +
+    ".floor-timer-bg{position:absolute;inset:0;transform-origin:left center;" +
+    "background:linear-gradient(90deg,rgba(234,179,8,0.22),rgba(234,179,8,0.06));" +
+    "animation:floorTimerDeplete 900s linear forwards;pointer-events:none;z-index:0}" +
+    ".floor-timer-chip{margin-left:6px;font-size:11px;font-family:var(--font-mono);color:var(--yellow,#eab308);font-weight:600}" +
+    ".floor-timer-chip:empty{display:none}";
+  document.head.appendChild(st);
+}
+let _floorTickStarted = false;
+function startFloorTimerTick() {
+  if (_floorTickStarted) return;
+  _floorTickStarted = true;
+  setInterval(() => {
+    document.querySelectorAll(".floor-timer-chip[data-mtimer]").forEach((el) => {
+      const ms = Number(el.getAttribute("data-mtimer"));
+      if (!Number.isFinite(ms)) return;
+      const sec = (Date.now() - ms) / 1000;
+      el.textContent = sec >= FLOOR_TIMER_SEC ? fmtClock(sec) : "";
+    });
+  }, 1000);
+}
+// HTML-части Floor-ячейки для открытой позиции: {cls, bg, chip}.
+function floorTimerParts(p) {
+  const openedMs = openedMsOf(p);
+  if (openedMs == null) return { cls: "", bg: "", chip: "" };
+  const sec = (Date.now() - openedMs) / 1000;
+  if (!(sec >= 0) || sec > 24 * 3600) return { cls: "", bg: "", chip: "" }; // санити
+  const bg =
+    sec < FLOOR_TIMER_SEC
+      ? `<div class="floor-timer-bg" style="animation-delay:-${sec.toFixed(0)}s"></div>`
+      : "";
+  const chipTxt = sec >= FLOOR_TIMER_SEC ? fmtClock(sec) : "";
+  return { cls: " floor-timed", bg, chip: `<span class="floor-timer-chip" data-mtimer="${openedMs}">${chipTxt}</span>` };
+}
+
 export function renderManualPositions(list) {
   const container = document.getElementById("manual-positions-container");
   if (!container) return;
@@ -366,6 +436,8 @@ export function renderManualPositions(list) {
     _manualLastUpnl.clear();
     return;
   }
+  ensureFloorTimerStyle();
+  startFloorTimerTick();
   const cls = (v) => (v >= 0 ? "positive" : "negative");
   const sgn = (v) => (v >= 0 ? "+" : "−");
 
@@ -491,13 +563,14 @@ export function renderManualPositions(list) {
       // Floor (живой пол выхода) вместо Liq — нянька закроет тут задолго до ликв.
       // Ликвидацию уводим в title. Нет пола (не усыновлена) → fallback на Liq.
       const fb = FLOOR_BADGE[s.floorKind] || null;
+      const ft = floorTimerParts(p);
       const floorCell =
         s.floorPrice != null
-          ? `<div class="grid-item" title="Ликвидация: ${liq}">
-               <div class="item-label">Floor${fb ? ` <span class="fl-badge ${fb.cls}">${fb.txt}</span>` : ""}</div>
+          ? `<div class="grid-item${ft.cls}" title="Ликвидация: ${liq}">${ft.bg}
+               <div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>Floor${fb ? ` <span class="fl-badge ${fb.cls}">${fb.txt}</span>` : ""}</span>${ft.chip}</div>
                <div class="item-value"><span data-mfloor>${fmtPrice(s.floorPrice)}</span><span class="grid-inline ${s.floorPnl >= 0 ? "positive" : "negative"}" data-mfloorpnl>${s.floorPnl != null ? fmtSignedUsd2(s.floorPnl) : ""}</span></div>
              </div>`
-          : `<div class="grid-item"><div class="item-label">Liq</div><div class="item-value">${liq}</div></div>`;
+          : `<div class="grid-item${ft.cls}" title="Ликвидация: ${liq}">${ft.bg}<div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>Liq</span>${ft.chip}</div><div class="item-value">${liq}</div></div>`;
       return `
       <div data-mcard="${escapeHtml(p.coin)}" style="margin-top:0.75rem; padding:0.75rem; border:1px dashed var(--border); border-radius:8px;">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:0.5rem;">
