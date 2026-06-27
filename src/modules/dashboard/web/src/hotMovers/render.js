@@ -465,9 +465,19 @@ export function renderHotMovers(payload, fmtTime) {
       entryCell = `<td class="hm-entry hm-entry-${entryState}" data-w="Enter" title="${entryTitle}"><span class="hm-entry-icon">${eico}</span></td>`;
     }
 
+    // Пассивный тег старшего тренда (1h EMA): не входить против него — главный
+    // леак (контр-тренд). s.htfTrend = 'up'|'down'|'flat'|'none' из enrichHtfTrend.
+    let htfChip = "";
+    if (s.htfTrend === "up")
+      htfChip = `<span class="hm-htf num-inline-pos" style="margin-left:6px;font-size:11px;font-weight:600" title="Старший тренд 1h ВВЕРХ — лонг по тренду; шорт против него = ловишь нож">1h ↑</span>`;
+    else if (s.htfTrend === "down")
+      htfChip = `<span class="hm-htf num-inline-neg" style="margin-left:6px;font-size:11px;font-weight:600" title="Старший тренд 1h ВНИЗ — шорт по тренду; лонг против него = ловишь нож">1h ↓</span>`;
+    else if (s.htfTrend === "flat")
+      htfChip = `<span class="hm-htf num-inline-muted" style="margin-left:6px;font-size:11px" title="Старший тренд 1h — флэт/боковик: чёткого попутного ветра нет">1h →</span>`;
+
     const rowHtml = `
       <td>${isOpen ? "📍" : idx + 1}</td>
-      <td><a class="signals-price hm-coin-link" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" title="Открыть ${escapeHtml(s.coin)} в TradingView">#${escapeHtml(s.coin)}</a>${alignChip}</td>
+      <td><a class="signals-price hm-coin-link" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" title="Открыть ${escapeHtml(s.coin)} в TradingView">#${escapeHtml(s.coin)}</a>${alignChip}${htfChip}</td>
       ${setupCell}
       ${entryCell}
       <td class="hm-price-cell r ${flashCls}"><span class="signals-price">${fmtPrice(s.price)}</span></td>

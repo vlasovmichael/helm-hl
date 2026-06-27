@@ -431,9 +431,24 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
       };
     });
 
-    // Обогащаем top vol-мультипликатором (≤ENRICH_CAP монет; per-coin кэш гасит
-    // повторы). + активные монеты, даже если они упали за кап — чтобы Vol×
-    // позиции не висел «…» в самой важной строке.
+    // htfTrend (1h EMA-тренд): ВСЕГДА, и в cheap WS-броадкасте (каждые 2с) —
+    // нужен на карточке пассивным тегом направления, чтобы не входить против
+    // старшего тренда (главный леак). Дёшево: per-coin кэш 60с (HTF_TTL_MS) +
+    // LOW-приоритет, top-N + активные. Тот же приём, что у enrichFadeHot.
+    {
+      const htfTargets = top.slice(0, ENRICH_CAP);
+      const htfSet = new Set(htfTargets.map((m) => m.coin));
+      for (const m of top) {
+        if (m.isActive && !htfSet.has(m.coin)) {
+          htfTargets.push(m);
+          htfSet.add(m.coin);
+        }
+      }
+      await enrichHtfTrend(htfTargets, now);
+    }
+
+    // Vol× тяжелее (нет дешёвого пре-гейта) — только enriched (/api/signals).
+    // + активные монеты, даже если упали за кап — чтобы Vol× позиции не висел «…».
     if (enrich) {
       const toEnrich = top.slice(0, ENRICH_CAP);
       const enrichSet = new Set(toEnrich.map((m) => m.coin));
@@ -444,7 +459,6 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
         }
       }
       await enrichVolMult(toEnrich);
-      await enrichHtfTrend(toEnrich, now);
     }
 
     // Fade-high-ER forward-вердикт: считаем ВСЕГДА (и в cheap WS-броадкасте) —
