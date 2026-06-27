@@ -28,10 +28,16 @@ const ICONS = {
   lab: `
     <path d="M9 3h6M10 3v6.5L5.5 17a2 2 0 0 0 1.8 3h9.4a2 2 0 0 0 1.8-3L14 9.5V3" />
     <line x1="8" y1="14" x2="16" y2="14" />`,
+  orderbook: `
+    <line x1="4" y1="6" x2="13" y2="6" />
+    <line x1="4" y1="10" x2="17" y2="10" />
+    <line x1="4" y1="14" x2="10" y2="14" />
+    <line x1="4" y1="18" x2="15" y2="18" />`,
 };
 
 const LINKS = [
   { key: "dashboard", href: "/", label: "Dashboard" },
+  { key: "orderbook", href: "/orderbook.html", label: "Order Book", title: "Живой стакан Hyperliquid — уровни из лимиток" },
   { key: "statistics", href: "/statistics.html", label: "Statistics" },
   { key: "lab", href: "/lab.html", label: "Lab", title: "Research: BTC Divergence + Whale Watch" },
   { key: "ledger", href: "/ledger.html", label: "Ledger", title: "Monthly P&L ledger" },
