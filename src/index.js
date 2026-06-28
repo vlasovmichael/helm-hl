@@ -22,6 +22,7 @@ import { startWsEntryLoop } from './app/wsEntryTick.js';
 import { startSetupSwingAlerts } from './modules/setupScannerAlerts.js';
 import { startHotMoversAlerts } from './modules/hotMoversAlerts.js';
 import { startFadeHotAlerts } from './modules/fadeHotAlerts.js';
+import { startWatchlistAlerts } from './modules/watchlistAlerts.js';
 import { sendDailyDigest } from './modules/mailDigest.js';
 import { shutdown } from './app/lifecycle.js';
 import { createStatusCollector } from './app/status.js';
@@ -94,6 +95,10 @@ async function main() {
   // Fade-high-ER feed: ВСЕ гейтованные fade-сетапы (выдохшийся хвост в горячем рынке)
   // в ntfy — премиум-сигналы, не сделки. Независим от paper-слота. FADEHOT_ALERT_FEED_ENABLED.
   startFadeHotAlerts();
+
+  // Watchlist-будильник: «моя монета (BTC/HYPE/SOL) задвигалась + OI подтверждает».
+  // Узкий пуш только по ALERT_WATCHLIST, не сделка. WATCHLIST_ALERT_ENABLED (default on). Fail-soft.
+  startWatchlistAlerts();
 
   // ── Ежедневный почтовый дайджест — 21:05 (Europe/Warsaw), после Daily Recap ──
   // Отчёт за сутки (пуши + сводка стратегий) на self-hosted Listmonk. Fail-soft:
