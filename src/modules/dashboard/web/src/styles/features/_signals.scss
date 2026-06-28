@@ -169,17 +169,13 @@
   vertical-align: middle;
   white-space: nowrap;
 }
-/* Клик по тикеру монеты → открыть в TradingView. Выглядит как обычная цена,
-   но даёт сигнал кликабельности (курсор + акцент по hover). */
+/* Тикер монеты → ссылка на TradingView. Кликабельна вся строка (см.
+   ensureRowClick + hover-подсветка строки), поэтому собственный hover тикера
+   (цвет/подчёркивание) убран — не дублируем сигнал. */
 .hm-coin-link {
   color: inherit;
   text-decoration: none;
   cursor: pointer;
-  transition: color 0.12s ease;
-  &:hover {
-    color: var(--accent);
-    text-decoration: underline;
-  }
 }
 /* Инлайн-спарклайн цены (~20 мин) в колонке Price. Внутренний флекс держит
    спарк у ЛЕВОГО края ячейки (все строки → одна вертикальная линия), а число —
