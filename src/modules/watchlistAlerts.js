@@ -27,10 +27,14 @@ const ENABLED =
   (process.env.WATCHLIST_ALERT_ENABLED || 'true').toLowerCase() === 'true';
 
 // Список монет-будильников. Дисциплинарная заметка → теперь явный конфиг.
-const WATCHLIST = (process.env.ALERT_WATCHLIST || 'BTC,HYPE,SOL')
+// `*` = вся вселенная (только для теста «как выглядит»; на проде это спам, см.
+// прибитый hotMoversAlerts). Иначе — явный список BTC,HYPE,SOL.
+const RAW_WATCHLIST = (process.env.ALERT_WATCHLIST || 'BTC,HYPE,SOL').trim();
+const WATCH_ALL = RAW_WATCHLIST === '*';
+const WATCHLIST = RAW_WATCHLIST
   .split(',')
   .map((s) => s.trim().toUpperCase())
-  .filter(Boolean);
+  .filter((s) => s && s !== '*');
 
 const INTERVAL_MS =
   parseFloat(process.env.WATCHLIST_ALERT_INTERVAL_SEC || '60') * 1_000;
@@ -80,7 +84,8 @@ async function runOnce(now = Date.now()) {
 
   const watch = new Set(WATCHLIST);
   for (const item of snap) {
-    if (!item?.coin || !watch.has(item.coin) || item.price == null) continue;
+    if (!item?.coin || item.price == null) continue;
+    if (!WATCH_ALL && !watch.has(item.coin)) continue;
 
     // Δprice за окно
     const pxAgo = getPriceNMinAgo(item.coin, WINDOW_MIN, now);
@@ -118,7 +123,7 @@ export function startWatchlistAlerts() {
     logger.info('[WatchlistAlerts] disabled (WATCHLIST_ALERT_ENABLED=false)');
     return;
   }
-  if (WATCHLIST.length === 0) {
+  if (!WATCH_ALL && WATCHLIST.length === 0) {
     logger.info('[WatchlistAlerts] disabled — ALERT_WATCHLIST пуст');
     return;
   }
@@ -127,8 +132,9 @@ export function startWatchlistAlerts() {
     runOnce().catch((err) => logger.warn(`[WatchlistAlerts] tick failed: ${err.message}`));
   }, INTERVAL_MS);
   timer.unref?.();
+  const coinsLabel = WATCH_ALL ? '* (вся вселенная)' : WATCHLIST.join(',');
   logger.info(
-    `[WatchlistAlerts] started — every ${INTERVAL_MS / 1000}s, coins=[${WATCHLIST.join(',')}], ` +
+    `[WatchlistAlerts] started — every ${INTERVAL_MS / 1000}s, coins=[${coinsLabel}], ` +
       `trigger ±${MOVE_PCT}%/${WINDOW_MIN}m + OI ±${OI_PCT}%, cooldown ${COOLDOWN_MS / 60_000}m`,
   );
 }
