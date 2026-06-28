@@ -27,6 +27,7 @@ export function riskTint({
   beArmed,
   tpPrice,
   peakPct,
+  maePct,
 } = {}) {
   if (![entry, now, stopPrice].every((v) => v != null && v > 0)) return null;
   const isShort = String(side || "").toUpperCase() === "SHORT";
@@ -45,6 +46,9 @@ export function riskTint({
   // Пиковый ход в мою сторону (MFE) в цене — для «призрака» отката на заливке.
   // peakPct хранит бэк как favorable %, всегда ≥0. null → призрака нет.
   const peakMove = peakPct != null && peakPct > 0 ? entry * (peakPct / 100) : null;
+  // Худшая просадка (MAE) в цене — для зеркального «призрака» на красной полосе.
+  // maePct хранит бэк как unrealized %, в минусе ≤0. <0 → было хуже текущего.
+  const maeMove = maePct != null && maePct < 0 ? entry * (maePct / 100) : null;
 
   // Выбор фазы: что меряем прямо сейчас. fracOf(m) — доля той же фазы для
   // произвольного favorable-хода m (используем и для текущего, и для пика).
@@ -70,13 +74,18 @@ export function riskTint({
   }
   const frac = fracOf(move);
 
-  // «Призрак» отката: дальняя граница = пик (MFE), ближняя = текущий. Показываем
-  // только в прибыльных фазах (на красной «до стопа» полосе favorable-пик не
-  // ложится на ту же ось) и только если пик реально впереди текущего.
+  // «Призрак» отката: дальняя граница = экстремум, ближняя = текущий. В плюсе
+  // это MFE (сколько прошёл и сдал), в минусе — MAE (как глубоко просел и отыграл).
+  // Обе величины ложатся на ось текущей фазы; рисуем, только если экстремум
+  // реально дальше текущего (есть что показать «хвостом»).
   let peak = null;
   if (inProfit && peakMove != null && peakMove > move) {
     peak = fracOf(peakMove);
     if (!(peak > frac)) peak = null; // в одну точку схлопнулось — нечего рисовать
+  } else if (!inProfit && maeMove != null && maeMove < move) {
+    // На фазе «до стопа» fracOf(m)=−m/risk: более отрицательный MAE → дальше к стопу.
+    peak = fracOf(maeMove);
+    if (!(peak > frac)) peak = null;
   }
 
   // Tooltip: сколько ещё ($ + %) до вехи текущей фазы.

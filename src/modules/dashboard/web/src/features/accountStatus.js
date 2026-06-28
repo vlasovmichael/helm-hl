@@ -274,6 +274,35 @@ export function renderHeader(status) {
   if (wtEl) wtEl.style.display = "none";
 }
 
+// ── Daily goal / circuit-breaker ──────────────────────────────────────────
+// Бейдж в шапке Active Position: Today's P/L + достигнута ли дневная цель.
+// При дневном минусе ≤ DAILY_STOP вся карточка #sec-position краснеет
+// (.daily-danger). Это не замок (кошелёк не заблокировать) — громкий нудж.
+const DAILY_GOAL_MIN = 2; // цель за день ($); ≥ это → goal reached
+const DAILY_STOP = -5; // дневной стоп-лимит: краснеет вся карточка ($)
+
+// SVG-иконки бейджа (наследуют цвет через currentColor). Без эмодзи.
+const _ICON_GOAL = `<svg viewBox="0 0 16 16" width="12" height="12" style="vertical-align:-2px;margin-right:3px" aria-hidden="true"><circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 8.2l2 2 4-4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const _ICON_STOP = `<svg viewBox="0 0 16 16" width="12" height="12" style="vertical-align:-2px;margin-right:3px" aria-hidden="true"><path d="M5.3 1.8H10.7L14.2 5.3V10.7L10.7 14.2H5.3L1.8 10.7V5.3Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 4.9v3.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="10.9" r=".85" fill="currentColor"/></svg>`;
+
+/** Прокинуть дневной realized-PnL (зовётся из tick). Обновляет бейдж + красит карточку. */
+export function setDailyPnl(realized) {
+  const badge = document.getElementById("daily-goal-badge");
+  const sec = document.getElementById("sec-position");
+  if (!badge || !sec) return; // не на этой странице
+  const v = realized ?? 0;
+  const danger = v <= DAILY_STOP;
+  const reached = v >= DAILY_GOAL_MIN;
+  const valStr = `${v >= 0 ? "+" : "−"}$${Math.abs(v).toFixed(2)}`;
+  const icon = danger ? _ICON_STOP : reached ? _ICON_GOAL : "";
+  const label = danger ? "stop" : reached ? "goal" : "goal $2–3";
+  badge.innerHTML = `Today ${valStr} · ${icon}${label}`;
+  badge.hidden = false;
+  badge.classList.toggle("is-pos", reached && !danger);
+  badge.classList.toggle("is-neg", v < 0);
+  sec.classList.toggle("daily-danger", danger);
+}
+
 export function renderPosition(pos) {
   const container = document.getElementById("position-container");
   if (!container) return; // нет секции (напр. /strategies.html)
@@ -281,8 +310,9 @@ export function renderPosition(pos) {
     _lastNetSign = null; // позиция закрыта — сбрасываем трекеры
     _lastNetVal = null;
     _posCoin = null;
-    container.innerHTML =
-      '<div class="empty-state">No active positions — bot is IDLE</div>';
+    // Бот idle — тело пустое (ручные/adopt позы рендерятся ниже своей секцией).
+    // Дневной статус живёт в бейдже шапки (setDailyPnl), карточка не пустует.
+    container.innerHTML = "";
     return;
   }
   const side = (pos.side || "SHORT").toUpperCase();
@@ -298,6 +328,7 @@ export function renderPosition(pos) {
     beArmed: pos.bot?.beArmed,
     tpPrice: pos.bot?.tpPrice,
     peakPct: pos.bot?.peakPct,
+    maePct: pos.bot?.maePct,
   });
   const pnl = pos.currentPnl;
   const netSign = pnl && pnl.netMarket >= 0 ? "pos" : "neg";
@@ -466,6 +497,7 @@ export function renderManualPositions(list) {
         beArmed: p.bot?.beArmed,
         tpPrice: p.bot?.tpPrice,
         peakPct: p.bot?.peakPct,
+        maePct: p.bot?.maePct,
       });
       const sign = p.unrealizedPnl >= 0 ? "pos" : "neg";
       const cell = card.querySelector(".pnl-tint");
@@ -545,6 +577,7 @@ export function renderManualPositions(list) {
         beArmed: p.bot?.beArmed,
         tpPrice: p.bot?.tpPrice,
         peakPct: p.bot?.peakPct,
+        maePct: p.bot?.maePct,
       });
       const { cls: rbCls, attr: rbAttr } = tintAttrs(tint);
       const s = manualStats(p);

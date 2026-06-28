@@ -39,9 +39,10 @@ import {
   HUNTER_SL_PCT,
   HUNTER_TP_PCT,
   getHunterPeakPct,
+  getHunterMaePct,
   isHunterArmed,
 } from "../strategistHunter.js";
-import { getAdoptPeakPct } from "../strategistAdopt.js";
+import { getAdoptPeakPct, getAdoptMaePct } from "../strategistAdopt.js";
 import { getCandyGirlHeartbeat, getCandyGirlSignals, getCandyGirlStats } from "../strategistCandyGirl.js";
 import { buildStrategiesPayload } from "./strategiesView.js";
 import { getNearMisses } from "../nearMisses.js";
@@ -173,6 +174,7 @@ function buildBotManagement(position) {
       stopPct: HUNTER_SL_PCT,
       initialRiskPct: HUNTER_SL_PCT, // исходный риск (для R-multiple на фронте)
       peakPct,
+      maePct: getHunterMaePct(position.id),
       beArmed,
       beArmPct: config.trading.hunterBeArmPct, // веха храповика (% от входа)
       trailArmed,
@@ -248,6 +250,7 @@ function buildAdoptManagement(adoptPos) {
     stopPrice: adoptPos.sl_price ?? null,
     initialRiskPct,
     peakPct,
+    maePct: getAdoptMaePct(adoptPos.id),
     beArmed,
     beArmPct: t.adoptBeArmPct, // веха храповика (% от входа)
     trailArmed,

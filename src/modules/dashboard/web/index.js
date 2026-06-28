@@ -23,6 +23,7 @@ import {
   renderPosition,
   renderManualPositions,
   renderBans,
+  setDailyPnl,
 } from "./src/features/accountStatus.js";
 import {
   renderHotMovers,
@@ -57,14 +58,19 @@ function onStatus(data) {
 async function tick() {
   // Фолбэк /api/signals только если WS не присылал hotMovers недавно.
   const wsHotFresh = Date.now() - lastWsHotMoversAt < WS_HOTMOVERS_FRESH_MS;
-  const [hmR, mcR, actR] = await Promise.allSettled([
+  const [hmR, mcR, actR, pnlR] = await Promise.allSettled([
     wsHotFresh ? Promise.resolve(null) : fetchJson("/api/signals?limit=30"),
     fetchJson("/api/market-context"),
     // Recent Activity — локальный эндпоинт (своя БД, без HL-веса), к 429 не причастен.
     fetchJson(`/api/activity?hours=${getRangeHours()}&limit=10`),
+    // Дневной счётчик (Today's P/L + цель) в бот-слоте. Funding-часть кэш 5мин.
+    fetchJson("/api/pnl-summary"),
   ]);
   if (mcR.status === "fulfilled") renderMarketContext(mcR.value);
   if (actR.status === "fulfilled") renderActivity(actR.value);
+  if (pnlR.status === "fulfilled" && pnlR.value?.periods?.today) {
+    setDailyPnl(pnlR.value.periods.today.totalPnl ?? 0);
+  }
   if (hmR.status === "fulfilled" && hmR.value?.signals) {
     renderHotMovers(hmR.value, fmtTime);
   }

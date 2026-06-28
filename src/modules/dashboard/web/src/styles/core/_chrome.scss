@@ -307,6 +307,37 @@ header {
 #sec-position {
   background: var(--grad-brand-soft), var(--card-bg);
   border-color: var(--brand-line);
+  transition: background 0.25s, border-color 0.25s;
+}
+
+/* Дневной стоп: весь блок краснеет (circuit-breaker «хватит на сегодня»). */
+#sec-position.daily-danger {
+  background: var(--red-soft);
+  border-color: var(--red-line);
+}
+
+/* Бейдж дневной цели в шапке (справа). Нейтральный → зелёный (цель) / красный. */
+.daily-goal-badge {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--canvas-subtle);
+  color: var(--text-secondary);
+  white-space: nowrap;
+
+  &.is-pos {
+    color: var(--green);
+    border-color: var(--green-line);
+    background: var(--green-soft);
+  }
+  &.is-neg {
+    color: var(--red);
+    border-color: var(--red-line);
+    background: var(--red-soft);
+  }
 }
 
 .card-header {

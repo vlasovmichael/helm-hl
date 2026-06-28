@@ -162,6 +162,11 @@ export function getHunterPeakPct(positionId) {
   return peakUnrealizedPct.get(positionId) ?? 0;
 }
 
+/** Текущий trough unrealized% (MAE, ≤0) — для «призрака просадки» на карточке. */
+export function getHunterMaePct(positionId) {
+  return hunterMfeMaeMap.get(positionId)?.maePct ?? 0;
+}
+
 const HUNTER_TREND_1H_MIN = 60;  // окно для entry_trend_1h_pct (логирование, не фильтр)
 
 /**

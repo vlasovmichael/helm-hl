@@ -38,6 +38,11 @@ export function getAdoptPeakPct(positionId) {
   return peakPctMap.get(positionId) ?? 0;
 }
 
+/** Текущий trough unrealized% (MAE, ≤0) — для «призрака просадки» на карточке. */
+export function getAdoptMaePct(positionId) {
+  return troughPctMap.get(positionId) ?? 0;
+}
+
 /**
  * MFE/MAE по % (peak/trough unrealized) для exitFeatures при закрытии.
  * НЕ чистит state — cleanup делает clearAdoptState после консьюма.
