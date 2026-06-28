@@ -9,7 +9,7 @@
 import { config } from "../../../core/config.js";
 import { logger } from "../../../core/logger.js";
 import { hlInfo, HL_PRIORITY } from "../../../core/hlClient.js";
-import { getPriceNMinAgo, getBufferLength, getLatestPrice } from "../../../core/priceHistory.js";
+import { getPriceNMinAgo, getBufferLength, getLatestPrice, getPriceSpark } from "../../../core/priceHistory.js";
 import { getActivePosition, getActiveAdoptPositions, getHistory } from "../../../core/database.js";
 import { findAsset, getUniverse } from "../../../core/universe.js";
 import { getCachedAccountValueSync } from "../../../core/balanceCache.js";
@@ -426,6 +426,10 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
         isActive: activeCoins.has(m.coin),
         oiDelta5m,
         oiDelta15m,
+        // Спарклайн: даунсэмпл цены за 20 мин в ≤24 точки (last-цена корзины).
+        // Из in-memory буфера — НИ ОДНОГО запроса к HL, поэтому едет и в cheap
+        // WS-броадкасте (каждые 2с). Фронт рисует SVG, если точек ≥2.
+        spark: getPriceSpark(m.coin, 20, 24, now),
         htfTrend: null, // заполняется enrichHtfTrend (1h EMA-тренд) для fade-гейта
         fadeHot: null,  // заполняется enrichFadeHot (forward-вердикт fade-high-ER)
       };

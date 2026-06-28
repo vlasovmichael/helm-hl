@@ -108,8 +108,8 @@
   } /* Enter */
   .hm-table th:nth-child(5),
   .hm-table td:nth-child(5) {
-    width: 96px;
-  } /* Price */
+    width: 120px;
+  } /* Price (+спарклайн слева) */
   .hm-table th:nth-child(6),
   .hm-table td:nth-child(6),
   .hm-table th:nth-child(7),
@@ -179,6 +179,48 @@
   &:hover {
     color: var(--accent);
     text-decoration: underline;
+  }
+}
+/* Инлайн-спарклайн цены (~20 мин) в колонке Price. Внутренний флекс держит
+   спарк у ЛЕВОГО края ячейки (все строки → одна вертикальная линия), а число —
+   справа; оба по центру по вертикали. Флекс на внутреннем span, НЕ на <td>
+   (флекс на ячейке ломает colspan — см. выше). */
+.hm-price-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+}
+.hm-spark-wrap {
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+  flex: 0 0 auto;
+}
+.hm-spark-wrap:empty {
+  display: none;
+}
+.hm-spark {
+  display: block;
+  overflow: visible;
+  polyline {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke; /* линия не толстеет от растяжения бокса */
+  }
+  &.spark-up {
+    color: var(--green);
+  }
+  &.spark-down {
+    color: var(--red);
+  }
+  &.spark-flat {
+    color: var(--text-muted);
+    opacity: 0.7;
   }
 }
 .hm-align-ok {
@@ -951,6 +993,13 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     margin-left: auto;
     font-size: 13.5px;
     text-align: right;
+  }
+  /* В card-вёрстке ячейка ужимается под контент → иннеру не нужна вся ширина
+     (иначе space-between растащил бы спарк и число по краям карточки). Сужаем до
+     контента: спарк + число рядом, прижаты вправо (margin-left:auto у ячейки). */
+  .hm-table tr.hm-main td.hm-price-cell .hm-price-inner {
+    width: auto;
+    justify-content: flex-end;
   }
   .hm-table tr.hm-main td.hm-entry {
     order: 4;

@@ -81,6 +81,31 @@ export function getSamplesSince(coin, minutes, now = Date.now()) {
   return out;
 }
 
+/**
+ * Даунсэмпл серии цен за последние `minutes` мин в `buckets` равных корзин по
+ * времени (last-цена в корзине). Для спарклайна Hot Movers: компактный массив
+ * фиксированной длины, дешёвый в JSON. Пустые корзины НЕ заполняем — фронт сам
+ * решает, рисовать ли (нужно ≥2 точки). Возвращает массив чисел (цены), ASC.
+ * @returns {number[]} — длина ≤ buckets; [] если истории нет.
+ */
+export function getPriceSpark(coin, minutes = 20, buckets = 24, now = Date.now()) {
+  const arr = buffers.get(coin);
+  if (!arr || arr.length === 0) return [];
+  const fromTs = now - minutes * 60_000;
+  const span = now - fromTs;
+  if (span <= 0) return [];
+  const bw = span / buckets;
+  const last = new Array(buckets).fill(null);
+  for (const s of arr) {
+    if (s.ts < fromTs) continue;
+    let bi = Math.floor((s.ts - fromTs) / bw);
+    if (bi < 0) bi = 0;
+    if (bi >= buckets) bi = buckets - 1;
+    last[bi] = s.price; // last-цена в корзине (массив ASC → перезапись = свежее)
+  }
+  return last.filter((v) => v != null);
+}
+
 /** Снимок для дебага/dashboard. */
 export function getBufferLength(coin) {
   return buffers.get(coin)?.length ?? 0;

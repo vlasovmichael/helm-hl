@@ -56,6 +56,60 @@ function tvUrl(coin) {
   return `https://www.tradingview.com/chart/?symbol=BINANCE:${sym}USDT.P`;
 }
 
+// Инлайн-спарклайн цены за ~20 мин (бэк отдаёт s.spark — даунсэмпл из price-
+// буфера, без запросов к HL). Цвет = знак хода (last vs first); почти-флэт →
+// приглушённый. preserveAspectRatio:none — линия растягивается на бокс, форма
+// читается даже на 56×16. Пустой/<2 точек → "" (фронт ничего не рисует).
+const SPARK_W = 44;
+const SPARK_H = 14;
+function sparkSvg(spark) {
+  if (!Array.isArray(spark) || spark.length < 2) return "";
+  let min = Infinity,
+    max = -Infinity;
+  for (const v of spark) {
+    if (!Number.isFinite(v)) continue;
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return "";
+  const span = max - min || 1;
+  const n = spark.length;
+  const dx = (SPARK_W - 2) / (n - 1);
+  const pts = spark
+    .map((v, i) => {
+      const x = 1 + i * dx;
+      const y = 1 + (SPARK_H - 2) * (1 - (v - min) / span);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  const first = spark[0];
+  const last = spark[n - 1];
+  const chg = first ? (last - first) / first : 0;
+  const cls =
+    Math.abs(chg) < 0.0005 ? "spark-flat" : last >= first ? "spark-up" : "spark-down";
+  return (
+    `<svg class="hm-spark ${cls}" viewBox="0 0 ${SPARK_W} ${SPARK_H}" width="${SPARK_W}" height="${SPARK_H}" ` +
+    `preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}"/></svg>`
+  );
+}
+
+// Клик по ВСЕЙ строке монеты → открыть TradingView (раньше кликабельно было
+// только название). Делегируем на tbody один раз. Источник url — существующая
+// .hm-coin-link внутри строки (её native-клик оставляем как есть, иначе откроем
+// дважды). Клики по другим ссылкам/кнопкам не перехватываем. Только строки
+// монет (data-hmkey="m:…"), не под-строки позиции/fade.
+function ensureRowClick(tbody) {
+  if (tbody.__hmRowClick) return;
+  tbody.__hmRowClick = true;
+  tbody.addEventListener("click", (e) => {
+    if (e.target.closest("a, button")) return; // native-элемент сам отработает
+    const row = e.target.closest('tr[data-hmkey^="m:"]');
+    if (!row) return;
+    const link = row.querySelector(".hm-coin-link");
+    if (link?.href) window.open(link.href, "_blank", "noopener");
+  });
+}
+
 // Сколько монет максимум в таблице (открытые позиции — сверх лимита, всегда).
 const HM_MAX_ROWS = 8;
 
@@ -112,6 +166,7 @@ export function renderHotMovers(payload, fmtTime) {
   const tbody = document.getElementById("hot-movers-tbody");
   const meta = document.getElementById("hot-movers-meta");
   if (!tbody || !meta) return;
+  ensureRowClick(tbody);
 
   const signals = Array.isArray(payload?.signals) ? payload.signals : [];
   const th = payload?.thresholds || {};
@@ -470,7 +525,7 @@ export function renderHotMovers(payload, fmtTime) {
       <td><a class="signals-price hm-coin-link" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" title="Открыть ${escapeHtml(s.coin)} в TradingView">#${escapeHtml(s.coin)}</a>${htfChip}</td>
       ${setupCell}
       ${entryCell}
-      <td class="hm-price-cell r ${flashCls}"><span class="signals-price">${fmtPrice(s.price)}</span></td>
+      <td class="hm-price-cell r ${flashCls}"><span class="hm-price-inner"><span class="hm-spark-wrap" title="Цена за ~20 мин (live)">${sparkSvg(s.spark)}</span><span class="signals-price">${fmtPrice(s.price)}</span></span></td>
       ${cells}
       <td class="r ${accelCellCls}" data-w="Acc">${accelInner}</td>
       <td class="r" data-w="OI">${oiInner}</td>

@@ -113,10 +113,66 @@ function buildStatus() {
     activePosition,
     manualPositions: [manualAdopted],
     runtimeBans: [],
-    // пустые signals → renderHotMovers синтезирует строку активной монеты
-    // (с настоящим arrow-узлом), а updateHotMoversLiveArrow гоняет ракету.
-    hotMovers: { ts: Date.now(), universeSize: 50, signals: [] },
+    // Мок-сигналы со спарклайнами (BTC/ETH/HYPE/DOGE) + синтез строки активной
+    // монеты (UNI/SOL пиннятся сверху). Спарклайн в колонке Price едет вживую.
+    hotMovers: { ts: Date.now(), universeSize: 50, signals: mockSignals(Date.now()) },
   };
+}
+
+// ── Мок Hot Movers со спарклайнами ──────────────────────────────────────────
+// Синтетические строки сканера, чтобы вживую увидеть инлайн-спарклайн цены.
+// Каждая монета — своя «форма» хода (тренд вверх/вниз/чоп/флэт), линия едет во
+// времени (фаза от Date.now()), как живой price-буфер. windows нужны, чтобы
+// строка прошла фильтр renderHotMovers (нужен ≥1 spikePct).
+const MOCK_MOVERS = [
+  // UNI/SOL = активные монеты (бот/adopted) → попадают в сигналы со спарком,
+  // чтобы показать: спарклайн + клик по строке работают и для активной монеты
+  // (в проде бэк дотягивает удерживаемую монету в payload с тем же spark).
+  { coin: "UNI", base: 3.64, amp: 0.006, drift: -0.01, freq: 1.1, htf: "down" },
+  { coin: "SOL", base: 149, amp: 0.008, drift: +0.014, freq: 1.6, htf: "up" },
+  { coin: "BTC", base: 109240, amp: 0.004, drift: +0.012, freq: 0.9, htf: "up" },
+  { coin: "ETH", base: 3820, amp: 0.006, drift: -0.018, freq: 1.3, htf: "down" },
+  { coin: "HYPE", base: 38.1, amp: 0.012, drift: +0.004, freq: 2.1, htf: "flat" },
+  { coin: "DOGE", base: 0.162, amp: 0.0015, drift: 0, freq: 0.6, htf: "flat" },
+];
+const SPARK_N = 24;
+// 24-точечный ряд: тренд (drift по индексу) + синус (amp) с бегущей фазой.
+function mkSpark(m, t) {
+  const out = [];
+  const ph = (t / 6000) * m.freq; // фаза едет ~раз в 6с
+  for (let i = 0; i < SPARK_N; i++) {
+    const trend = m.drift * (i / (SPARK_N - 1));
+    const wave = m.amp * Math.sin(ph + (i / SPARK_N) * Math.PI * 2 * m.freq);
+    out.push(m.base * (1 + trend + wave));
+  }
+  return out;
+}
+function mockSignals(t) {
+  return MOCK_MOVERS.map((m, idx) => {
+    const spark = mkSpark(m, t);
+    const price = spark[spark.length - 1];
+    const sp2 = ((spark[SPARK_N - 1] - spark[SPARK_N - 3]) / spark[SPARK_N - 3]) * 100;
+    const sp5 = ((spark[SPARK_N - 1] - spark[SPARK_N - 7]) / spark[SPARK_N - 7]) * 100;
+    const sp15 = ((spark[SPARK_N - 1] - spark[0]) / spark[0]) * 100;
+    return {
+      rank: idx + 1,
+      coin: m.coin,
+      price,
+      spark,
+      windows: [
+        { label: "2m", mins: 2, threshold: 1, spikePct: sp2, tier: null, side: sp2 >= 0 ? "SHORT" : "LONG" },
+        { label: "5m", mins: 5, threshold: 2, spikePct: sp5, tier: null, side: sp5 >= 0 ? "SHORT" : "LONG" },
+        { label: "15m", mins: 15, threshold: 3, spikePct: sp15, tier: null, side: sp15 >= 0 ? "SHORT" : "LONG" },
+      ],
+      trendPct: sp15,
+      volMult: 0.8 + (idx % 3) * 0.6,
+      oiDelta5m: (idx % 2 ? 1 : -1) * (0.5 + idx),
+      oiDelta15m: (idx % 2 ? 1 : -1) * (1 + idx),
+      htfTrend: m.htf,
+      fadeHot: null,
+      isActive: false,
+    };
+  });
 }
 
 let onStatusRef = null;
