@@ -471,21 +471,21 @@ export function renderHotMovers(payload, fmtTime) {
       }
     }
 
-    // У открытой монеты Setup-вердикт неактуален (вход сделан) → показываем
-    // Vol× — единственный посчитанный, но иначе скрытый факт «движ жив объёмом
-    // или дохнет на тонком». Не прогноз: объём 5м против среднего за час.
+    // У открытой монеты Setup-вердикт неактуален (вход сделан) → показываем live
+    // OI-дельту 15м: растёт OI = в позицию заходит новый объём (топливо движа),
+    // падает OI = участники разгружаются (движ выдыхается / шорты крывают). Окно
+    // 15м (а не 5м) — чтобы не дублировать соседнюю колонку OI 5M. Нейтральная
+    // раскраска: OI сам по себе не хорош/плох. Заменил тяжёлый Vol× — он считается
+    // только в /api/signals и в живом WS-броадкасте всегда был «—» (2026-06-28).
     let openSetupHtml = '<span class="num-inline-muted">—</span>';
-    if (typeof s.volMult === "number" && isFinite(s.volMult)) {
-      const v = s.volMult;
-      let color = "var(--text-muted)";
-      let note = "";
-      if (v >= 2) { color = "var(--red)"; note = " hot"; }
-      else if (v >= 1.3) { color = "var(--orange, #f59e0b)"; }
-      else if (v <= 0.5) { color = "var(--green)"; note = " thin"; }
-      openSetupHtml = `<span style="color:${color};font-weight:600">Vol ${v.toFixed(1)}×${note}</span>`;
+    if (typeof s.oiDelta15m === "number" && isFinite(s.oiDelta15m)) {
+      const v = s.oiDelta15m;
+      const arrow = v > 0 ? "▲" : "▼";
+      const color = Math.abs(v) >= 3 ? "var(--accent)" : "var(--text-muted)";
+      openSetupHtml = `<span style="color:${color};font-weight:600">OI 15m ${arrow} ${fmtPct(v)}</span>`;
     }
     const setupCell = isOpen
-      ? `<td class="hm-setup c" data-w="Setup" title="Объём 5м против среднего за час: ≥2× = реальное участие (движ с убеждением), ≤0.5× = пусто (движ дохнет).">${openSetupHtml}</td>`
+      ? `<td class="hm-setup c" data-w="Setup" title="Изменение открытого интереса за 15м: растёт = в движ заходит новый объём (топливо), падает = участники разгружаются (движ выдыхается).">${openSetupHtml}</td>`
       : `<td class="hm-setup c ${setupCls}" data-w="Setup" title="${setupTitle}"><span class="hm-setup-pill">${setupLabel}</span></td>`;
 
     // ENTER: для открытой монеты вход неактуален — вместо таймера ОДНА стрелка,
