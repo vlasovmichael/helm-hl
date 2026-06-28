@@ -238,12 +238,12 @@ export function renderHotMovers(payload, fmtTime) {
     const w2 = findWin(x.windows, 2) || winByLabel(x.windows, "2m");
     const w5 = findWin(x.windows, 5) || winByLabel(x.windows, "5m");
     const w15 = findWin(x.windows, 15) || winByLabel(x.windows, "15m");
-    const trendLbl = th.trendLookbackMin ? `${th.trendLookbackMin}m` : "";
     const trendPct = s.trendPct;
+    // Lookback (напр. 60m) уехал в тултип — суффикс «/ 60m» резался колонкой в «…».
     const trendInner =
       trendPct == null
         ? '<span class="num-inline-muted">—</span>'
-        : `<span class="${trendPct > 0 ? "num-inline-pos" : "num-inline-neg"}">${trendPct > 0 ? "▲" : "▼"} ${fmtPct(trendPct)}</span> <span class="num-inline-muted">/ ${trendLbl}</span>`;
+        : `<span class="${trendPct > 0 ? "num-inline-pos" : "num-inline-neg"}" title="тренд цены за ${th.trendLookbackMin || "?"}m">${trendPct > 0 ? "▲" : "▼"} ${fmtPct(trendPct)}</span>`;
 
     // Living heatmap: тинт строки по доминирующему движению цены (как на бирже —
     // вверх зелёный, вниз красный), интенсивность по |move|. Не зависит от
@@ -271,30 +271,8 @@ export function renderHotMovers(payload, fmtTime) {
       .filter(Boolean)
       .join(" ");
 
-    // Активная монета: вместо бесполезного «поз.» — согласие движа со стороной
-    // позиции. Это единственный exit-сигнал, которого нет в Active Position:
-    // «движ ещё за меня (✓)» vs «развернулся против (✗)». P&L/стоп — там и в
-    // под-строке (2026-06-13).
-    let alignChip = "";
-    if (isOpen) {
-      const pos = getActivePos(s.coin);
-      const side = (pos?.side || "").toUpperCase();
-      const letter = side === "LONG" ? "L" : side === "SHORT" ? "S" : "?";
-      let mark, kind, tip;
-      if (!side || moveAbs < 0.05) {
-        mark = "·";
-        kind = "flat";
-        tip = "движения почти нет — нейтрально";
-      } else {
-        const aligned = side === "SHORT" ? domMove < 0 : domMove > 0;
-        mark = aligned ? "✓" : "✗";
-        kind = aligned ? "ok" : "bad";
-        tip = aligned
-          ? `${side}: движ идёт в твою сторону — позиция в работе`
-          : `${side}: движ развернулся ПРОТИВ — следи за выходом`;
-      }
-      alignChip = `<span class="hm-align hm-align-${kind}" title="${tip}">${letter}&nbsp;${mark}</span>`;
-    }
+    // (Чип «движ за/против позиции» убран 2026-06-28: дубль с направлением хода в
+    // %-ячейках; «with/against» подан криптично. Exit ведёт бот/adopt + под-строка.)
 
     // Биржевая flash-вспышка: цена выросла с прошлого рендера → зелёный,
     // упала → красный. Цена-ячейка пересоздаётся при смене html → анимация
@@ -438,9 +416,21 @@ export function renderHotMovers(payload, fmtTime) {
       }
     }
 
-    // У открытой монеты Setup-вердикт гасим — вход уже сделан, действие в подсказке.
+    // У открытой монеты Setup-вердикт неактуален (вход сделан) → показываем
+    // Vol× — единственный посчитанный, но иначе скрытый факт «движ жив объёмом
+    // или дохнет на тонком». Не прогноз: объём 5м против среднего за час.
+    let openSetupHtml = '<span class="num-inline-muted">—</span>';
+    if (typeof s.volMult === "number" && isFinite(s.volMult)) {
+      const v = s.volMult;
+      let color = "var(--text-muted)";
+      let note = "";
+      if (v >= 2) { color = "var(--red)"; note = " hot"; }
+      else if (v >= 1.3) { color = "var(--orange, #f59e0b)"; }
+      else if (v <= 0.5) { color = "var(--green)"; note = " thin"; }
+      openSetupHtml = `<span style="color:${color};font-weight:600">Vol ${v.toFixed(1)}×${note}</span>`;
+    }
     const setupCell = isOpen
-      ? `<td class="hm-setup c" data-w="Setup"><span class="num-inline-muted">·</span></td>`
+      ? `<td class="hm-setup c" data-w="Setup" title="Объём 5м против среднего за час: ≥2× = реальное участие (движ с убеждением), ≤0.5× = пусто (движ дохнет).">${openSetupHtml}</td>`
       : `<td class="hm-setup c ${setupCls}" data-w="Setup" title="${setupTitle}"><span class="hm-setup-pill">${setupLabel}</span></td>`;
 
     // ENTER: для открытой монеты вход неактуален — вместо таймера ОДНА стрелка,
@@ -477,7 +467,7 @@ export function renderHotMovers(payload, fmtTime) {
 
     const rowHtml = `
       <td>${isOpen ? "📍" : idx + 1}</td>
-      <td><a class="signals-price hm-coin-link" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" title="Открыть ${escapeHtml(s.coin)} в TradingView">#${escapeHtml(s.coin)}</a>${alignChip}${htfChip}</td>
+      <td><a class="signals-price hm-coin-link" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" title="Открыть ${escapeHtml(s.coin)} в TradingView">#${escapeHtml(s.coin)}</a>${htfChip}</td>
       ${setupCell}
       ${entryCell}
       <td class="hm-price-cell r ${flashCls}"><span class="signals-price">${fmtPrice(s.price)}</span></td>
