@@ -263,10 +263,10 @@ export function renderHotMovers(payload, fmtTime) {
   // dir: >0 рост, <0 падение, 0 флэт. (2026-06-28, вместо текстовых ▲/▼/→)
   const arwSvg = (dir) => {
     if (dir > 0)
-      return '<svg class="hm-arw hm-arw--up" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1.6 8.7 8.2 1.3 8.2Z"/></svg>';
+      return '<svg class="hm-arw hm-arw--up" viewBox="0 0 14 16" fill="none" aria-hidden="true"><path d="M7 13 V4 M3.4 7 L7 3.3 L10.6 7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     if (dir < 0)
-      return '<svg class="hm-arw hm-arw--down" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1.6 8.7 8.2 1.3 8.2Z"/></svg>';
-    return '<svg class="hm-arw hm-arw--flat" viewBox="0 0 10 10" aria-hidden="true"><rect x="1.4" y="4.3" width="7.2" height="1.5" rx=".75"/></svg>';
+      return '<svg class="hm-arw hm-arw--down" viewBox="0 0 14 16" fill="none" aria-hidden="true"><path d="M7 13 V4 M3.4 7 L7 3.3 L10.6 7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    return '<svg class="hm-arw hm-arw--flat" viewBox="0 0 14 16" aria-hidden="true"><rect x="3" y="7.15" width="8" height="1.7" rx=".85" fill="currentColor"/></svg>';
   };
   // Tier+sign → CSS-класс ячейки. Использует существующие num-pos/neg-* классы
   // (зелёный/красный тинт + жирность по силе). Hunter-порог визуально виден в

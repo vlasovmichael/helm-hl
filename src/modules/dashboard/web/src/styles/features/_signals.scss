@@ -669,14 +669,13 @@
    обновления», а не строб. (2026-06-28, замена текстовых ▲/▼/→) */
 .hm-arw {
   display: inline-block;
-  width: 0.62em;
-  height: 0.62em;
+  width: 0.78em;
+  height: 0.92em;
   margin-right: 3px;
-  vertical-align: -0.06em;
-  path,
-  rect {
-    fill: currentColor;
-  }
+  vertical-align: -0.16em;
+  /* stroke-стрелка (up/down) — цвет через stroke=currentColor в самом SVG;
+     flat-риска — fill=currentColor inline. CSS заливку НЕ навязывает, иначе
+     замазал бы контур stroke-стрелки. */
   animation: hmArwInUp 0.26s cubic-bezier(0.34, 1.4, 0.64, 1) both;
 }
 .hm-arw--down {
