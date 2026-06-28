@@ -21,6 +21,7 @@ const POS = {
 
 let price = 3.66; // старт чуть в убытке (цена выше входа у short)
 let solPeakMax = 0; // бегущий пик SOL-хода (%) — для «призрака» отката
+let solTroughMin = 0; // бегущий минимум SOL-хода (%) — MAE для «dip −X%» в минусе
 let raf = null;
 let target = POS.tp; // куда плавно идём
 let phaseDir = -1; // −1 вниз (в прибыль), +1 вверх (в убыток)
@@ -68,6 +69,10 @@ function buildStatus() {
   // спуске тура пик остаётся выше текущего → виден «призрак» отката на заливке.
   solPeakMax = Math.max(solPeakMax, solMovePct);
   const solPeakPct = Math.max(0, solPeakMax);
+  // Бегущий минимум хода (MAE, ≤0) — чтобы в минусе под-строка uPnL показала
+  // «dip −X%» вместо peak (см. upnlSubTxt). High-water mark вниз.
+  solTroughMin = Math.min(solTroughMin, solMovePct);
+  const solMaePct = Math.min(0, solTroughMin);
   let solFloorPct, solFloorKind;
   if (solPeakPct >= 3) {
     solFloorPct = solPeakPct * 0.5; // trail: пик − giveback
@@ -99,6 +104,7 @@ function buildStatus() {
       beArmed: solPeakPct >= 1.5,
       initialRiskPct: 2,
       peakPct: solPeakPct,
+      maePct: solMaePct,
       floorPct: solFloorPct,
       floorKind: solFloorKind,
       floorPrice: solEntry * (1 + solFloorPct / 100), // long: пол выше/ниже входа

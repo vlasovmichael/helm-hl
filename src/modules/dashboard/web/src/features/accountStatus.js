@@ -165,7 +165,11 @@ function manualStats(p) {
       ? (bot.floorPct / 100) * p.sizeUsd
       : null;
   const peakPct = bot?.peakPct != null && bot.peakPct > 0 ? bot.peakPct : null;
-  return { riskUsd, rMult, movePct, floorPrice, floorKind, floorPnl, peakPct };
+  // MAE: худшая просадка (unrealized %, ≤0). Бэк хранит как ≤0 (getAdoptMaePct/
+  // getHunterMaePct). В под-строке uPnL показываем ИМЕННО его, когда позиция
+  // сейчас в минусе (peak в плюс там не к месту — см. upnlSubTxt).
+  const maePct = bot?.maePct != null && bot.maePct < 0 ? bot.maePct : null;
+  return { riskUsd, rMult, movePct, floorPrice, floorKind, floorPnl, peakPct, maePct };
 }
 
 // Floor-бейдж: тип защиты, который УЖЕ повесила нянька. Цветим только маленький
@@ -182,14 +186,21 @@ const fmtSignedUsd2 = (v) => `${v >= 0 ? "+" : "−"}$${Math.abs(v).toFixed(2)}`
 // Знак + цвет (red = против позиции) уже несут направление хода, поэтому слова
 // «против» не пишем — оно по-русски и распирало Entry·Now на третью строку.
 const fmtMove = (m) => `${m >= 0 ? "+" : "−"}${Math.abs(m).toFixed(2)}%`;
-// Текст под-строки uPnL: R-кратность + пик (MFE), если был плюс.
-const upnlSubTxt = (s) =>
-  [
-    s.rMult != null ? fmtR(s.rMult) : "",
-    s.peakPct != null ? `peak +${s.peakPct.toFixed(2)}%` : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
+// Текст под-строки uPnL: R-кратность + экстремум хода, ЗЕРКАЛЬНО знаку позиции.
+// В минусе показываем худшую просадку (MAE, «dip −X%») — peak в плюс там сбивал
+// (видел «−0.17R · peak +0.27%», хотя сижу в минусе). В плюсе — свой пик (MFE,
+// «peak +X%»). upnl — текущий uPnL ($), решает какую сторону показать.
+const upnlSubTxt = (s, upnl = 0) => {
+  const extreme =
+    upnl < 0
+      ? s.maePct != null
+        ? `dip −${Math.abs(s.maePct).toFixed(2)}%`
+        : ""
+      : s.peakPct != null
+        ? `peak +${s.peakPct.toFixed(2)}%`
+        : "";
+  return [s.rMult != null ? fmtR(s.rMult) : "", extreme].filter(Boolean).join(" · ");
+};
 
 // Текущая монета бот-позиции — чтобы понимать, патчить на месте или пере-строить.
 let _posCoin = null;
@@ -516,7 +527,7 @@ export function renderManualPositions(list) {
       }
       // R-под-строка живёт во всех трёх слоях (spacer/base/fill) → синхроним все,
       // чтобы бело-залитая копия не отставала от цветной (R «переливается»).
-      const subTxt = upnlSubTxt(s);
+      const subTxt = upnlSubTxt(s, p.unrealizedPnl);
       card.querySelectorAll(".pnl-sub").forEach((el) => {
         el.textContent = subTxt;
       });
@@ -614,7 +625,7 @@ export function renderManualPositions(list) {
         <div class="data-grid">
           <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}${riskInline}</div></div>
           <div class="grid-item"><div class="item-label">Entry · Now${moveInline}</div><div class="item-value">${fmtPrice(p.entryPrice)} · <span data-mnow>${cur}</span></div></div>
-          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}`, subText: upnlSubTxt(s) })}</div>
+          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}`, subText: upnlSubTxt(s, p.unrealizedPnl) })}</div>
           ${floorCell}
         </div>
       </div>`;
