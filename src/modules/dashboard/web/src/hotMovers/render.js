@@ -256,6 +256,18 @@ export function renderHotMovers(payload, fmtTime) {
     const sign = v >= 0 ? "+" : "";
     return `${sign}${v.toFixed(2)}%`;
   };
+  // Единая SVG-стрелка для всех %-колонок (2m/5m/15m/ACC/OI/TREND): треугольник
+  // вверх/вниз + нейтральная риска для флэта. fill=currentColor → цвет берётся от
+  // num-inline-pos/neg (зелёный/красный) или inline-color родителя, ничего не
+  // дублируем. Мягкая анимация появления — в CSS (.hm-arw, уважает reduced-motion).
+  // dir: >0 рост, <0 падение, 0 флэт. (2026-06-28, вместо текстовых ▲/▼/→)
+  const arwSvg = (dir) => {
+    if (dir > 0)
+      return '<svg class="hm-arw hm-arw--up" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1.6 8.7 8.2 1.3 8.2Z"/></svg>';
+    if (dir < 0)
+      return '<svg class="hm-arw hm-arw--down" viewBox="0 0 10 10" aria-hidden="true"><path d="M5 1.6 8.7 8.2 1.3 8.2Z"/></svg>';
+    return '<svg class="hm-arw hm-arw--flat" viewBox="0 0 10 10" aria-hidden="true"><rect x="1.4" y="4.3" width="7.2" height="1.5" rx=".75"/></svg>';
+  };
   // Tier+sign → CSS-класс ячейки. Использует существующие num-pos/neg-* классы
   // (зелёный/красный тинт + жирность по силе). Hunter-порог визуально виден в
   // самой Hot Movers таблице — отдельная карточка не нужна.
@@ -273,11 +285,11 @@ export function renderHotMovers(payload, fmtTime) {
     if (!w || w.spikePct == null)
       return ['<span class="num-inline-muted">—</span>', ""];
     const v = w.spikePct;
-    const arrow = v > 0 ? "▲" : v < 0 ? "▼" : "·";
+    const arrow = arwSvg(v > 0 ? 1 : v < 0 ? -1 : 0);
     const cls = tierCellCls(w);
     const inner = cls
-      ? `${arrow} ${fmtPct(v)}`
-      : `<span class="${v > 0 ? "num-inline-pos" : "num-inline-neg"}">${arrow} ${fmtPct(v)}</span>`;
+      ? `${arrow}${fmtPct(v)}`
+      : `<span class="${v > 0 ? "num-inline-pos" : "num-inline-neg"}">${arrow}${fmtPct(v)}</span>`;
     return [inner, cls];
   };
   const findWin = (windows, mins) => windows.find((w) => w.mins === mins);
@@ -298,7 +310,7 @@ export function renderHotMovers(payload, fmtTime) {
     const trendInner =
       trendPct == null
         ? '<span class="num-inline-muted">—</span>'
-        : `<span class="${trendPct > 0 ? "num-inline-pos" : "num-inline-neg"}" title="тренд цены за ${th.trendLookbackMin || "?"}m">${trendPct > 0 ? "▲" : "▼"} ${fmtPct(trendPct)}</span>`;
+        : `<span class="${trendPct > 0 ? "num-inline-pos" : "num-inline-neg"}" title="тренд цены за ${th.trendLookbackMin || "?"}m">${arwSvg(trendPct > 0 ? 1 : -1)}${fmtPct(trendPct)}</span>`;
 
     // Living heatmap: тинт строки по доминирующему движению цены (как на бирже —
     // вверх зелёный, вниз красный), интенсивность по |move|. Не зависит от
@@ -363,7 +375,7 @@ export function renderHotMovers(payload, fmtTime) {
       const a = w2.spikePct,
         b = w5.spikePct;
       if (Math.abs(b) < 0.05) {
-        accelInner = '<span class="num-inline-muted">→</span>';
+        accelInner = `<span class="num-inline-muted">${arwSvg(0)}</span>`;
         accelKind = "flat";
       } else if (a > 0 !== b > 0 && Math.abs(a) > 0.2) {
         accelInner = '<span style="color:var(--accent)">↻ rev</span>';
@@ -372,15 +384,15 @@ export function renderHotMovers(payload, fmtTime) {
         const expected = b * 0.4;
         const ratio = expected !== 0 ? Math.abs(a) / Math.abs(expected) : 0;
         if (ratio >= 1.2) {
-          accelInner = `<span style="color:var(--red)">▲ ${ratio.toFixed(1)}×</span>`;
+          accelInner = `<span style="color:var(--red)">${arwSvg(1)}${ratio.toFixed(1)}×</span>`;
           accelCellCls = "num-neg-weak";
           accelKind = "up";
         } else if (ratio <= 0.6) {
-          accelInner = `<span style="color:var(--green)">▼ ${ratio.toFixed(1)}×</span>`;
+          accelInner = `<span style="color:var(--green)">${arwSvg(-1)}${ratio.toFixed(1)}×</span>`;
           accelCellCls = "num-pos-weak";
           accelKind = "down";
         } else {
-          accelInner = `<span class="num-inline-muted">→ ${ratio.toFixed(1)}×</span>`;
+          accelInner = `<span class="num-inline-muted">${arwSvg(0)}${ratio.toFixed(1)}×</span>`;
           accelKind = "flat";
         }
       }
@@ -461,11 +473,11 @@ export function renderHotMovers(payload, fmtTime) {
     let oiInner = '<span class="num-inline-muted">—</span>';
     if (typeof s.oiDelta5m === "number" && isFinite(s.oiDelta5m)) {
       const v = s.oiDelta5m;
-      const arrow = v > 0 ? "▲" : "▼";
+      const arrow = arwSvg(v > 0 ? 1 : -1);
       if (Math.abs(v) >= 3) {
-        oiInner = `<span style="color:var(--accent);font-weight:600">${arrow} ${fmtPct(v)}</span>`;
+        oiInner = `<span style="color:var(--accent);font-weight:600">${arrow}${fmtPct(v)}</span>`;
       } else if (Math.abs(v) >= 1) {
-        oiInner = `<span style="color:var(--text-muted)">${arrow} ${fmtPct(v)}</span>`;
+        oiInner = `<span style="color:var(--text-muted)">${arrow}${fmtPct(v)}</span>`;
       } else {
         oiInner = `<span class="num-inline-muted">${fmtPct(v)}</span>`;
       }
@@ -480,9 +492,9 @@ export function renderHotMovers(payload, fmtTime) {
     let openSetupHtml = '<span class="num-inline-muted">—</span>';
     if (typeof s.oiDelta15m === "number" && isFinite(s.oiDelta15m)) {
       const v = s.oiDelta15m;
-      const arrow = v > 0 ? "▲" : "▼";
+      const arrow = arwSvg(v > 0 ? 1 : -1);
       const color = Math.abs(v) >= 3 ? "var(--accent)" : "var(--text-muted)";
-      openSetupHtml = `<span style="color:${color};font-weight:600">OI 15m ${arrow} ${fmtPct(v)}</span>`;
+      openSetupHtml = `<span style="color:${color};font-weight:600">OI 15m ${arrow}${fmtPct(v)}</span>`;
     }
     const setupCell = isOpen
       ? `<td class="hm-setup c" data-w="Setup" title="Изменение открытого интереса за 15м: растёт = в движ заходит новый объём (топливо), падает = участники разгружаются (движ выдыхается).">${openSetupHtml}</td>`
