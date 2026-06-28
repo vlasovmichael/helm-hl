@@ -522,6 +522,47 @@ export function renderHotMovers(payload, fmtTime) {
       entryCell = `<td class="hm-entry hm-entry-${entryState}" data-w="Enter" title="${entryTitle}"><span class="hm-entry-icon">${eico}</span></td>`;
     }
 
+    // ── Nowcast «🔥 разгорается» (coincident, НЕ прогноз) ──────────────────────
+    // Собираем из уже посчитанных признаков притока внимания ПРЯМО СЕЙЧАС: ход 2м
+    // ускоряется (accelKind=up) + реальный объём (volKind high/mid) + приток
+    // позиций (OI↑ = новое топливо) + свежий ход 2м. Сила = сколько совпало
+    // (2 тлеет / 3 разгорается / 4 полыхает). Это БУДИЛЬНИК «глянь график», не
+    // сигнал входа и НЕ прогноз — толпа понимает «горячо» в этот же момент по
+    // цене+объёму, не по OI; ты с ней наравне, не раньше (memory
+    // working_contour_focus / own_dark_knight: вход эджа не несёт, петля входов =
+    // тупик). Презентация-only: ничего не торгуем, paper-слота нет.
+    const w2v = w2?.spikePct;
+    const oi5 = s.oiDelta5m;
+    let igniteScore = 0;
+    if (w2v != null && Math.abs(w2v) >= 0.3) igniteScore++;              // свежий ход 2м
+    if (accelKind === "up") igniteScore++;                              // импульс ускоряется
+    if (volKind === "high" || volKind === "mid") igniteScore++;         // реальный объём
+    if (typeof oi5 === "number" && oi5 >= 1) igniteScore++;             // OI↑ = приток позиций
+    // Шкала-полоски: 3 бара растущей высоты, зажжённых = сила (3+ → все 3). Цвет
+    // amber→оранж→красный по силе, пульс свечения при ≥3. <2 — тихая точка.
+    let igniteCell = `<td class="hm-ignite-cell c" data-w="Ignite"><span class="hm-ig-quiet" title="нет совпадения признаков притока (ход 2м · ускорение · объём · OI↑)">·</span></td>`;
+    if (igniteScore >= 2) {
+      const lvl = igniteScore >= 4 ? "blaze" : igniteScore >= 3 ? "hot" : "warm";
+      const lit = igniteScore >= 3 ? 3 : 2;
+      const parts = [];
+      if (w2v != null && Math.abs(w2v) >= 0.3) parts.push(`ход 2м ${fmtPct(w2v)}`);
+      if (accelKind === "up") parts.push("ускоряется");
+      if (volKind === "high" || volKind === "mid")
+        parts.push(`объём ${typeof s.volMult === "number" ? s.volMult.toFixed(1) + "×" : "↑"}`);
+      if (typeof oi5 === "number" && oi5 >= 1) parts.push(`ΔOI5м ${fmtPct(oi5)}`);
+      const tip =
+        `🔥 Разгорается ПРЯМО СЕЙЧАС (сила ${igniteScore}/4): ${parts.join(" + ")}. ` +
+        `Coincident-будильник «глянь график» — НЕ прогноз и НЕ сигнал входа. ` +
+        `Толпа видит «горячо» в этот же момент; ты с ней наравне, не раньше неё.`;
+      const bar = (i, x, y, h) =>
+        `<rect class="ig-bar ${i < lit ? "on" : "off"}" x="${x}" y="${y}" width="3" height="${h}" rx="1"/>`;
+      const svg =
+        `<svg class="hm-ig-svg" viewBox="0 0 16 14" width="16" height="14" aria-hidden="true">` +
+        bar(0, 1, 8, 5) + bar(1, 6, 4.5, 8.5) + bar(2, 11, 1, 12) +
+        `</svg>`;
+      igniteCell = `<td class="hm-ignite-cell c" data-w="Ignite"><span class="hm-ignite hm-ignite-${lvl}" title="${escapeHtml(tip)}">${svg}</span></td>`;
+    }
+
     // Пассивный тег старшего тренда (1h EMA): не входить против него — главный
     // леак (контр-тренд). s.htfTrend = 'up'|'down'|'flat'|'none' из enrichHtfTrend.
     let htfChip = "";
@@ -537,6 +578,7 @@ export function renderHotMovers(payload, fmtTime) {
       <td><a class="signals-price hm-coin-link" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" title="Открыть ${escapeHtml(s.coin)} в TradingView">#${escapeHtml(s.coin)}</a>${htfChip}</td>
       ${setupCell}
       ${entryCell}
+      ${igniteCell}
       <td class="hm-price-cell r ${flashCls}"><span class="hm-price-inner"><span class="hm-spark-wrap" title="Цена за ~20 мин (live)">${sparkSvg(s.spark)}</span><span class="signals-price">${fmtPrice(s.price)}</span></span></td>
       ${cells}
       <td class="r ${accelCellCls}" data-w="Acc">${accelInner}</td>
@@ -574,7 +616,7 @@ export function renderHotMovers(payload, fmtTime) {
         `Fade an exhausted tail: 30m move ${moveTxt} at Kaufman ER 4h ${erTxt} (≥0.47). ` +
         `Fade AGAINST the move. Time-stop exit ${exitTxt} + wide stop ${stopPct}. ` +
         `Marginal forward candidate — a paper slot measures it alongside.`;
-      const inner = `<td colspan="11">
+      const inner = `<td colspan="12">
         <span class="hm-fh-tag ${sideCls}" title="${tip}">🔥 tail fade ${fh.side}</span>
         <span class="hm-fh-meta">zone ${zone} · stop ${stopTxt} (${stopPct}) · exit ${exitTxt} · ER ${erTxt}</span>
       </td>`;
@@ -608,7 +650,7 @@ export function renderHotMovers(payload, fmtTime) {
     items.push({
       key: "ph:status",
       cls: "hm-status-row",
-      html: `<td colspan="11" class="hm-status-cell">${statusHtml}</td>`,
+      html: `<td colspan="12" class="hm-status-cell">${statusHtml}</td>`,
     });
     startHmProgress();
   } else {
@@ -620,7 +662,7 @@ export function renderHotMovers(payload, fmtTime) {
       items.push({
         key: `ph:${i}`,
         cls: "hm-placeholder-row",
-        html: '<td colspan="11" class="hm-ph-cell"><span class="signals-price">&nbsp;</span></td>',
+        html: '<td colspan="12" class="hm-ph-cell"><span class="signals-price">&nbsp;</span></td>',
       });
     }
   }

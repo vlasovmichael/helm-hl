@@ -169,7 +169,7 @@ export function hmPosHintInner(coin) {
   const chipsHtml = chips
     .map(([k, t]) => `<span class="hm-hint hm-hint-${k}">${escapeHtml(t)}</span>`)
     .join(" ");
-  return `<td colspan="11">
+  return `<td colspan="12">
     <span class="hm-pos-tag hm-pos-${source}">${tag}</span>${chipsHtml}
   </td>`;
 }
