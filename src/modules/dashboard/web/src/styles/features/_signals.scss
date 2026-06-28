@@ -158,29 +158,33 @@
   } /* Enter */
   .hm-table th:nth-child(5),
   .hm-table td:nth-child(5) {
+    width: 46px;
+  } /* Ignite (SVG-метр) */
+  .hm-table th:nth-child(6),
+  .hm-table td:nth-child(6) {
     width: 120px;
   } /* Price (+спарклайн слева) */
-  .hm-table th:nth-child(6),
-  .hm-table td:nth-child(6),
   .hm-table th:nth-child(7),
   .hm-table td:nth-child(7),
   .hm-table th:nth-child(8),
-  .hm-table td:nth-child(8) {
-    width: 58px;
-  } /* 2m/5m/15m % */
+  .hm-table td:nth-child(8),
   .hm-table th:nth-child(9),
   .hm-table td:nth-child(9) {
-    width: 48px;
-  } /* Acc */
+    width: 58px;
+  } /* 2m/5m/15m % */
   .hm-table th:nth-child(10),
   .hm-table td:nth-child(10) {
-    width: 64px;
-  } /* OI 5m */
+    width: 48px;
+  } /* Acc */
   .hm-table th:nth-child(11),
   .hm-table td:nth-child(11) {
+    width: 64px;
+  } /* OI 5m */
+  .hm-table th:nth-child(12),
+  .hm-table td:nth-child(12) {
     width: 52px;
   } /* Trend */
-  /* Под-строка позиции (colspan=11) — не зажимать в 26px nth-child(1), дать всю ширину. */
+  /* Под-строка позиции (colspan=12) — не зажимать в 26px nth-child(1), дать всю ширину. */
   .hm-table .hm-pos-row td {
     width: auto;
     overflow: visible;
