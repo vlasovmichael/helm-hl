@@ -37,7 +37,8 @@ const ICONS = {
 
 const LINKS = [
   { key: "dashboard", href: "/", label: "Dashboard" },
-  { key: "orderbook", href: "/orderbook.html", label: "Order Book", title: "Живой стакан Hyperliquid — уровни из лимиток" },
+  // Order Book остаётся как страница (/orderbook.html), но ссылку из навбара
+  // убрали — стакан оператору тяжело читается, не нужен на видном месте (2026-06-28).
   { key: "statistics", href: "/statistics.html", label: "Statistics" },
   { key: "lab", href: "/lab.html", label: "Lab", title: "Research: BTC Divergence + Whale Watch" },
   { key: "ledger", href: "/ledger.html", label: "Ledger", title: "Monthly P&L ledger" },
