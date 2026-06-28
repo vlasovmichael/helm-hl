@@ -393,6 +393,10 @@ async function getStatusData() {
           liquidationPrice: Number.isFinite(liqPx) ? liqPx : null,
           leverage: Number.isFinite(lev) ? lev : null,
           currentPrice: livePrice,
+          // Время открытия (для Floor-таймера 15-мин чекпоинта). Знаем его только
+          // для усыновлённых поз — из adopt DB-строки; HL live-поза время открытия
+          // не несёт. Голый HANDS-OFF без adopt → null → таймер просто не светится.
+          entryTime: adoptPos?.entry_time ?? null,
           // Бот уже подхватил этот ручной вход (adopt-нянька повесила стоп+трейл)?
           adopted: adoptedCoins.has(normCoin(p.coin)),
           // Флип: DB-строка отстала от живой стороны → бот пере-усыновляет.

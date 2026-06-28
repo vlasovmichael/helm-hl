@@ -10,6 +10,13 @@
   padding: 14px 22px;
   min-height: 56px;
   margin: 0 0 14px;
+  /* Тик-анимация цены подмешивает .mc-tick с боковым padding → контент в моменты
+     вылезает на сабпиксель и даёт «иногда» горизонтальный скролл страницы.
+     Прячем внутреннее переполнение (clip — не режет вертикаль, не плодит свой
+     скролл), детям разрешаем ужиматься. 2026-06-28. */
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
   border: 1px solid var(--border);
   border-left: 3px solid var(--border-strong);
   border-radius: 10px;
@@ -26,6 +33,7 @@
     display: flex;
     align-items: baseline;
     gap: 10px;
+    min-width: 0;
 
     .mc-sym {
       font-weight: 700;
