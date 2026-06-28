@@ -45,13 +45,28 @@ const OI_PCT = parseFloat(process.env.WATCHLIST_ALERT_OI_PCT || '3');
 const COOLDOWN_MS =
   parseFloat(process.env.WATCHLIST_ALERT_COOLDOWN_MIN || '45') * 60_000;
 
+// ── OI-сёрдж: независимый триггер «OI выше обычного» ──
+// Отдельно от ценового будильника. Срабатывает на резкий набор/сброс позиций
+// БЕЗ требования большого хода цены. Порог 3% = «синяя» подсветка OI на
+// дашборде (hotMovers/render.js: var(--accent) при |ΔOI5m|≥3). Но окно тут
+// КОРОЧЕ — 1 минута: ловим именно резкий всплеск (OI ползёт медленнее цены, 3%
+// за 1м — это сильно). Данных хватает: OI снапшотится каждые 30с (oiHistory).
+const OI_SURGE_ENABLED =
+  (process.env.WATCHLIST_OI_SURGE_ENABLED || 'true').toLowerCase() === 'true';
+const OI_SURGE_PCT = parseFloat(process.env.WATCHLIST_OI_SURGE_PCT || '3');
+const OI_SURGE_WINDOW_MIN = parseFloat(process.env.WATCHLIST_OI_SURGE_WINDOW_MIN || '1');
+const OI_SURGE_COOLDOWN_MS =
+  parseFloat(process.env.WATCHLIST_OI_SURGE_COOLDOWN_MIN || '30') * 60_000;
+
 const STATE_FILE = 'data/watchlist_alert_state.json';
-const alertAt = new Map(); // coin → ts последнего пуша (персист переживает рестарт)
+const alertAt = new Map();   // coin → ts последнего ценового пуша (персист)
+const oiAlertAt = new Map(); // coin → ts последнего OI-сёрдж пуша (персист)
 
 function loadAlertState() {
   try {
     const raw = JSON.parse(readFileSync(STATE_FILE, 'utf-8'));
     for (const [k, v] of Object.entries(raw.alertAt ?? {})) alertAt.set(k, v);
+    for (const [k, v] of Object.entries(raw.oiAlertAt ?? {})) oiAlertAt.set(k, v);
   } catch {
     // нет файла / битый — с нуля
   }
@@ -59,7 +74,10 @@ function loadAlertState() {
 
 function saveAlertState() {
   try {
-    writeFileSync(STATE_FILE, JSON.stringify({ alertAt: Object.fromEntries(alertAt) }));
+    writeFileSync(STATE_FILE, JSON.stringify({
+      alertAt: Object.fromEntries(alertAt),
+      oiAlertAt: Object.fromEntries(oiAlertAt),
+    }));
   } catch (err) {
     logger.warn(`[WatchlistAlerts] state save failed: ${err.message}`);
   }
@@ -87,6 +105,33 @@ async function runOnce(now = Date.now()) {
     if (!item?.coin || item.price == null) continue;
     if (!WATCH_ALL && !watch.has(item.coin)) continue;
 
+    // ── OI-сёрдж (1м) — независимый триггер, БЕЗ ценового гейта ──
+    // Резкий набор/сброс позиций сам по себе — повод глянуть. Не делаем
+    // continue: монета может дать и OI-сёрдж, и ниже ценовой будильник.
+    if (OI_SURGE_ENABLED && item.oiUsd != null) {
+      const oiAgoSurge = getOiNMinAgo(item.coin, OI_SURGE_WINDOW_MIN, now);
+      if (oiAgoSurge != null && oiAgoSurge > 0) {
+        const oiSurgePct = ((item.oiUsd - oiAgoSurge) / oiAgoSurge) * 100;
+        if (
+          Math.abs(oiSurgePct) >= OI_SURGE_PCT &&
+          now - (oiAlertAt.get(item.coin) ?? 0) >= OI_SURGE_COOLDOWN_MS
+        ) {
+          oiAlertAt.set(item.coin, now);
+          saveAlertState();
+          const oiUp = oiSurgePct >= 0;
+          logger.info(
+            `[WatchlistAlerts] 📊 OI #${item.coin} ${fmtPct(oiSurgePct)}/${OI_SURGE_WINDOW_MIN}m`,
+          );
+          await fireNtfy(
+            `📊 OI #${item.coin} ${oiUp ? '▲' : '▼'} ${fmtPct(oiSurgePct)}`,
+            `OI ${fmtPct(oiSurgePct)} за ${OI_SURGE_WINDOW_MIN}м — резкий ${oiUp ? 'набор' : 'сброс'} позиций.\n` +
+              `Глянь график. Это будильник, не сделка — вход/стоп твои.`,
+            [oiUp ? 'green_circle' : 'red_circle'],
+          );
+        }
+      }
+    }
+
     // Δprice за окно
     const pxAgo = getPriceNMinAgo(item.coin, WINDOW_MIN, now);
     if (pxAgo == null || pxAgo <= 0) continue;
@@ -112,7 +157,8 @@ async function runOnce(now = Date.now()) {
       `👀 #${item.coin} задвигалась ${fmtPct(movePct)}`,
       `${fmtPct(movePct)} за ${WINDOW_MIN}м, OI ${fmtPct(oiPct)} — набирают позицию.\n` +
         `Глянь график. Это будильник, не сделка — вход/стоп твои.`,
-      [up ? 'green_circle' : 'red_circle', 'eyes'],
+      // 👀 уже в заголовке — тег 'eyes' убран, иначе ntfy рисует двойной 👀.
+      [up ? 'green_circle' : 'red_circle'],
     );
   }
 }
@@ -133,9 +179,12 @@ export function startWatchlistAlerts() {
   }, INTERVAL_MS);
   timer.unref?.();
   const coinsLabel = WATCH_ALL ? '* (вся вселенная)' : WATCHLIST.join(',');
+  const oiSurgeLabel = OI_SURGE_ENABLED
+    ? `OI-surge ±${OI_SURGE_PCT}%/${OI_SURGE_WINDOW_MIN}m (cd ${OI_SURGE_COOLDOWN_MS / 60_000}m)`
+    : 'OI-surge off';
   logger.info(
     `[WatchlistAlerts] started — every ${INTERVAL_MS / 1000}s, coins=[${coinsLabel}], ` +
-      `trigger ±${MOVE_PCT}%/${WINDOW_MIN}m + OI ±${OI_PCT}%, cooldown ${COOLDOWN_MS / 60_000}m`,
+      `trigger ±${MOVE_PCT}%/${WINDOW_MIN}m + OI ±${OI_PCT}%, cooldown ${COOLDOWN_MS / 60_000}m | ${oiSurgeLabel}`,
   );
 }
 
