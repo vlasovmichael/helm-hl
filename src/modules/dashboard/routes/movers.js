@@ -390,7 +390,14 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
         }
       }
 
-      const oiNow  = data.find((d) => d.coin === m.coin)?.oiUsd ?? null;
+      const dItem  = data.find((d) => d.coin === m.coin);
+      const oiNow  = dItem?.oiUsd ?? null;
+      const vol24h = dItem?.volume24hUsd ?? null;
+      // OI / 24h-объём: характер монеты, НЕ таймер. Высокий ратио = позиции
+      // залегли при низком обороте (крауд/неликвид → топливо для сквиза). На HL
+      // OI>Vol — норма (медиана ~3×), значим только верхний хвост (≳9, верхние
+      // 10%). Фронт зажигает пассивный чип по порогу. 2026-06-29.
+      const oiVolRatio = oiNow > 0 && vol24h > 0 ? oiNow / vol24h : null;
       const oiP5   = getOiNMinAgo(m.coin, 5, now);
       const oiP15  = getOiNMinAgo(m.coin, 15, now);
       // Гвард oiNow > 0 (не только базы): при мигающем OI==0 у тонких перпов
@@ -428,6 +435,9 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
         isActive: activeCoins.has(m.coin),
         oiDelta5m,
         oiDelta15m,
+        oiUsd: oiNow,
+        vol24hUsd: vol24h,
+        oiVolRatio,
         // Спарклайн: даунсэмпл цены за 20 мин в ≤24 точки (last-цена корзины).
         // Из in-memory буфера — НИ ОДНОГО запроса к HL, поэтому едет и в cheap
         // WS-броадкасте (каждые 2с). Фронт рисует SVG, если точек ≥2.

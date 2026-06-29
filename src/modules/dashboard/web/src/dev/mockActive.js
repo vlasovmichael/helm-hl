@@ -134,12 +134,12 @@ const MOCK_MOVERS = [
   // UNI/SOL = активные монеты (бот/adopted) → попадают в сигналы со спарком,
   // чтобы показать: спарклайн + клик по строке работают и для активной монеты
   // (в проде бэк дотягивает удерживаемую монету в payload с тем же spark).
-  { coin: "UNI", base: 3.64, amp: 0.006, drift: -0.01, freq: 1.1, htf: "down" },
-  { coin: "SOL", base: 149, amp: 0.008, drift: +0.014, freq: 1.6, htf: "up" },
-  { coin: "BTC", base: 109240, amp: 0.004, drift: +0.012, freq: 0.9, htf: "up" },
-  { coin: "ETH", base: 3820, amp: 0.006, drift: -0.018, freq: 1.3, htf: "down" },
-  { coin: "HYPE", base: 38.1, amp: 0.012, drift: +0.004, freq: 2.1, htf: "flat" },
-  { coin: "DOGE", base: 0.162, amp: 0.0015, drift: 0, freq: 0.6, htf: "flat" },
+  { coin: "UNI", base: 3.64, amp: 0.006, drift: -0.01, freq: 1.1, htf: "down", oivol: 11 },
+  { coin: "SOL", base: 149, amp: 0.008, drift: +0.014, freq: 1.6, htf: "up", oivol: 1.1 },
+  { coin: "BTC", base: 109240, amp: 0.004, drift: +0.012, freq: 0.9, htf: "up", oivol: 0.95 },
+  { coin: "ETH", base: 3820, amp: 0.006, drift: -0.018, freq: 1.3, htf: "down", oivol: 2.6 },
+  { coin: "HYPE", base: 38.1, amp: 0.012, drift: +0.004, freq: 2.1, htf: "flat", oivol: 3.4 },
+  { coin: "DOGE", base: 0.162, amp: 0.0015, drift: 0, freq: 0.6, htf: "flat", oivol: 14 },
 ];
 const SPARK_N = 24;
 // 24-точечный ряд: тренд (drift по индексу) + синус (amp) с бегущей фазой.
@@ -174,6 +174,9 @@ function mockSignals(t) {
       volMult: 0.8 + (idx % 3) * 0.6,
       oiDelta5m: (idx % 2 ? 1 : -1) * (0.5 + idx),
       oiDelta15m: (idx % 2 ? 1 : -1) * (1 + idx),
+      oiVolRatio: m.oivol ?? null,
+      oiUsd: (m.oivol ?? 1) * 20e6,        // синтетика для тултипа
+      vol24hUsd: 20e6,
       htfTrend: m.htf,
       fadeHot: null,
       isActive: false,

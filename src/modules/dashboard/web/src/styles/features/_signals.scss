@@ -96,8 +96,8 @@
   } /* # */
   .hm-table th:nth-child(2),
   .hm-table td:nth-child(2) {
-    width: 64px;
-  } /* Coin */
+    width: 104px;
+  } /* Coin (+ чипы 1h-тренд / OI×V) */
   .hm-table th:nth-child(3),
   .hm-table td:nth-child(3) {
     width: 80px;
@@ -176,6 +176,12 @@
   color: inherit;
   text-decoration: none;
   cursor: pointer;
+}
+/* Чип OI/Vol (крауд/неликвид → топливо для сквиза). Янтарь = «пороховая бочка»,
+   пассивный контекст, не сигнал. Загорается лишь при высоком ратио (см. render). */
+.hm-oivol {
+  color: var(--amber);
+  white-space: nowrap;
 }
 /* Инлайн-спарклайн цены (~20 мин) в колонке Price. Внутренний флекс держит
    спарк у ЛЕВОГО края ячейки (все строки → одна вертикальная линия), а число —

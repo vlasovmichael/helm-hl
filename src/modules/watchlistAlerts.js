@@ -36,8 +36,14 @@ const WATCHLIST = RAW_WATCHLIST
   .map((s) => s.trim().toUpperCase())
   .filter((s) => s && s !== '*');
 
+// Скан каждые 15с (= цикл scout'а, который обновляет OI в state.latestHunter).
+// Был 60с — это и был главный лаг детекта (OI-сёрдж приходил «поздно» не из-за
+// данных, а потому что воркер их лениво опрашивал). Чаще смысла нет: OI в WS не
+// приходит (allMids несёт только цены), свежее 15с он не станет без отдельной
+// HL-подписки activeAssetCtx. Скан дешёвый — читает in-memory state, без HL-вызовов;
+// кулдауны на монету не дают спамить. 2026-06-29.
 const INTERVAL_MS =
-  parseFloat(process.env.WATCHLIST_ALERT_INTERVAL_SEC || '60') * 1_000;
+  parseFloat(process.env.WATCHLIST_ALERT_INTERVAL_SEC || '15') * 1_000;
 const WINDOW_MIN = parseFloat(process.env.WATCHLIST_ALERT_WINDOW_MIN || '5');
 // Средняя чувствительность (2026-06-28): ±2.5%/5м хода + ≥3% OI за то же окно.
 const MOVE_PCT = parseFloat(process.env.WATCHLIST_ALERT_MOVE_PCT || '2.5');
