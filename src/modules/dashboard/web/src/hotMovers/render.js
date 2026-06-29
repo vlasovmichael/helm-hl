@@ -26,9 +26,10 @@ import {
 
 const _hmPrevPrices = new Map();
 
-// Порог чипа OI/Vol (характер монеты): верхние ~10% вселенной по OI/24h-обороту.
-// На HL OI>Vol — норма (медиана ~3×), значим только хвост ≳9 (крауд/неликвид).
-const OI_VOL_HOT = 9;
+// Порог чипа Vol/OI: «вечеринка» = суточный оборот ПРЕВЫШАЕТ открытый интерес.
+// На HL OI>Vol — норма (медиана ~3×), поэтому Vol≥OI (ратио ≥1) уже редкость и
+// значит реальную движуху: монета сегодня крутится, а не залегла.
+const VOL_OI_PARTY = 1;
 // Компактный $ для тултипа чипа: $2.1B / $34M / $880k.
 function fmtUsdShort(v) {
   if (v == null || !isFinite(v)) return "—";
@@ -536,18 +537,18 @@ export function renderHotMovers(payload, fmtTime) {
     else if (s.htfTrend === "flat")
       htfChip = `<span class="hm-htf num-inline-muted" style="margin-left:6px;font-size:11px" title="Старший тренд 1h — флэт/боковик: чёткого попутного ветра нет">1h →</span>`;
 
-    // Пассивный чип OI/Vol: загорается только при ВЫСОКОМ ратио (≳9, верхние ~10%
-    // вселенной). На HL OI>Vol — норма (медиана ~3×), поэтому флажим лишь хвост:
-    // позиции залегли при низком обороте = крауд/неликвид → топливо для сквиза
-    // (рвёт резко/с гэпом при катализаторе). Это ХАРАКТЕР монеты, не «движется
-    // сейчас» и не сигнал входа. 2026-06-29.
+    // Чип Vol/OI: суточный оборот ≥ открытого интереса (Vol ≥ OI). На HL это
+    // редкость (норма OI>Vol, медиана ~3×), поэтому Vol≥OI = монета сегодня реально
+    // крутится: высокий turnover, деньги входят-выходят, а не залегли. 2026-06-29.
     let oiVolChip = "";
-    if (typeof s.oiVolRatio === "number" && isFinite(s.oiVolRatio) && s.oiVolRatio >= OI_VOL_HOT) {
+    const volOi =
+      s.oiUsd > 0 && s.vol24hUsd > 0 ? s.vol24hUsd / s.oiUsd : null;
+    if (typeof volOi === "number" && isFinite(volOi) && volOi >= VOL_OI_PARTY) {
       const tip =
-        `OI в ${s.oiVolRatio.toFixed(0)} раз больше суточного объёма: OI ${fmtUsdShort(s.oiUsd)} ≫ 24h Vol ${fmtUsdShort(s.vol24hUsd)}. ` +
-        `Позиции залегли, оборота мало — крауд/неликвид. Топливо для сквиза: при ` +
-        `катализаторе ходит рвано/с гэпом. Это характер монеты, НЕ «движется сейчас» и НЕ сигнал.`;
-      oiVolChip = `<span class="hm-oivol" style="margin-left:6px;font-size:11px;font-weight:600" title="${escapeHtml(tip)}">OI ${s.oiVolRatio.toFixed(0)}× Vol</span>`;
+        `Суточный оборот в ${volOi.toFixed(1)} раз больше открытого интереса: 24h Vol ${fmtUsdShort(s.vol24hUsd)} ≥ OI ${fmtUsdShort(s.oiUsd)}. ` +
+        `На HL обычно наоборот (OI>Vol), так что это редкость: монета сегодня активно крутится — высокий turnover, ` +
+        `деньги входят-выходят, а не залегли.`;
+      oiVolChip = `<span class="hm-oivol" style="margin-left:6px;font-size:11px;font-weight:600" title="${escapeHtml(tip)}">Vol ${volOi.toFixed(1)}× OI</span>`;
     }
 
     const rowHtml = `
