@@ -8,6 +8,7 @@
 
 import { getNotifications } from "../net/api.js";
 import { escapeHtml, fmtSince } from "../utils/format.js";
+import { linkifyCoins } from "../utils/links.js";
 
 const LS_KEY = "helm.notif.lastRead";
 const POLL_MS = 60_000;
@@ -65,13 +66,14 @@ function renderList() {
       const fresh = n.ts > lr ? " notif-item--fresh" : "";
       const mail = n.emailed ? '<span class="notif-mail" title="Also sent by email">✉</span>' : "";
       const body = (n.message || "").split("\n")[0]; // первая строка — суть
+      // linkifyCoins сам экранирует текст и делает #COIN ссылкой на TradingView.
       return `
         <div class="notif-item${fresh}">
           <div class="notif-item-head">
-            <span class="notif-item-title">${escapeHtml(n.title)}</span>
+            <span class="notif-item-title">${linkifyCoins(n.title)}</span>
             <span class="notif-item-time">${mail}${fmtSince(n.ts)}</span>
           </div>
-          <div class="notif-item-body">${escapeHtml(body)}</div>
+          <div class="notif-item-body">${linkifyCoins(body)}</div>
         </div>`;
     })
     .join("");
@@ -88,6 +90,18 @@ async function refresh() {
   } catch {
     /* fail-soft — колокольчик не критичен */
   }
+}
+
+// Мгновенный приём одного пуша по WS (shell.js → CustomEvent "helm:notification").
+// Телефон (ntfy) и дашборд звонят синхронно, без 60с-лага поллинга. Поллинг
+// остаётся fallback'ом на реконнект / вкладку в фоне. Дедуп по id (poll + WS).
+function ingest(item) {
+  if (!item || typeof item.ts !== "number") return;
+  if (items.some((n) => n.id === item.id)) return;
+  const cutoff = Date.now() - WINDOW_MS;
+  items = [item, ...items].filter((n) => n.ts >= cutoff).slice(0, 50);
+  renderBadge(); // n>lastUnread → звонок (см. renderBadge)
+  if (!document.getElementById("notif-panel")?.hidden) renderList();
 }
 
 let closeTimer = null;
@@ -153,6 +167,9 @@ export function initNotifications() {
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closePanel();
   });
+
+  // Мгновенные пуши по WS (глобально, на всех страницах — топнав один на все).
+  window.addEventListener("helm:notification", (e) => ingest(e.detail));
 
   refresh();
   if (timer) clearInterval(timer);

@@ -676,3 +676,12 @@ header {
   color: var(--text-secondary);
   line-height: 1.4;
 }
+/* Тикер #COIN в уведомлении → ссылка на TradingView. */
+.notif-coin {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  &:hover {
+    text-decoration: underline;
+  }
+}

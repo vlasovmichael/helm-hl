@@ -10,6 +10,7 @@
 // ─────────────────────────────────────────────────
 
 import { escapeHtml } from "../utils/format.js";
+import { tvUrl } from "../utils/links.js";
 import { popArrow, bindArrowPopEnd, initChevronArrow } from "../utils/arrowPop.js";
 import {
   computeMomentum,
@@ -45,16 +46,6 @@ const ENTRY_ICON_SVG = {
     '<svg class="hm-eico" viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
     '<path d="M8 12h8"/></svg>',
 };
-
-// TradingView-ссылка по монете (клик по тикеру в Hot Movers).
-// HL k-монеты (kPEPE, kBONK…) на Binance = 1000-префикс (1000PEPE). .P =
-// бессрочный перп — тот же инструмент, что торгует бот, и покрытие шире спота.
-function tvUrl(coin) {
-  let raw = String(coin || "").trim();
-  if (/^k[A-Z0-9]/.test(raw)) raw = `1000${raw.slice(1)}`;
-  const sym = raw.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  return `https://www.tradingview.com/chart/?symbol=BINANCE:${sym}USDT.P`;
-}
 
 // Инлайн-спарклайн цены за ~20 мин (бэк отдаёт s.spark — даунсэмпл из price-
 // буфера, без запросов к HL). Цвет = знак хода (last vs first); почти-флэт →

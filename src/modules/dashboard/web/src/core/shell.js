@@ -163,6 +163,10 @@ export function initWebSocket(handlers = {}) {
         handlers.onLog?.(msg.entry);
       } else if (msg.type === "btc-divergence") {
         handlers.onDivergence?.();
+      } else if (msg.type === "notification") {
+        // Колокольчик глобален (в топнаве на всех страницах), а shell не тянет
+        // фичи — поэтому отдаём через CustomEvent, notifications.js слушает сам.
+        window.dispatchEvent(new CustomEvent("helm:notification", { detail: msg.item }));
       }
     } catch (err) {
       console.error("[WS] Error:", err);

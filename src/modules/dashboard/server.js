@@ -11,7 +11,7 @@ import { readFileSync } from "node:fs";
 import { config } from "../../core/config.js";
 import { logger, getLogBuffer, subscribeLogs } from "../../core/logger.js";
 import { hlInfo, HL_PRIORITY } from "../../core/hlClient.js";
-import { getNotifications } from "../../core/notifyLog.js";
+import { getNotifications, subscribeNotifications } from "../../core/notifyLog.js";
 import {
   getActivePosition,
   getActiveAdoptPositions,
@@ -112,6 +112,7 @@ let wss = null;
 let broadcastTimer = null;
 let heartbeatTimer = null;
 let unsubscribeLogs = null;
+let unsubscribeNotifications = null;
 let divergenceTimer = null;
 
 // ─────────────────────────────────────────────────
@@ -1135,6 +1136,17 @@ export function startDashboard() {
     }
   });
 
+  // Уведомления (колокольчик) — пушим мгновенно в WS, как только пуш записан в
+  // журнал. Раньше дашборд узнавал о них поллингом /api/notifications (≤60с лаг,
+  // ntfy на телефоне приходил раньше). Теперь телефон и дашборд звонят синхронно.
+  unsubscribeNotifications = subscribeNotifications((item) => {
+    if (!wss || wss.clients.size === 0) return;
+    const msg = JSON.stringify({ type: "notification", item });
+    for (const client of wss.clients) {
+      if (client.readyState === 1) client.send(msg);
+    }
+  });
+
   // Снапшот divergence считается в модуле; broadcast свежего payload
   // подключённым WS-клиентам остаётся здесь (где живёт wss).
   const pumpDivergence = async () => {
@@ -1176,6 +1188,10 @@ export function stopDashboard() {
   if (unsubscribeLogs) {
     unsubscribeLogs();
     unsubscribeLogs = null;
+  }
+  if (unsubscribeNotifications) {
+    unsubscribeNotifications();
+    unsubscribeNotifications = null;
   }
   if (!server) return;
   return new Promise((resolve) => {

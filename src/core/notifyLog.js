@@ -19,6 +19,17 @@ let log = [];
 let nextId = 1;
 let loaded = false;
 
+// Подписчики на новые уведомления (дашборд пушит их в WS мгновенно, без поллинга
+// — тот же паттерн, что subscribeLogs в logger.js). Fail-soft: ошибка подписчика
+// не валит запись в журнал.
+const subscribers = new Set();
+
+/** Подписка на каждое новое уведомление. Возвращает функцию отписки. */
+export function subscribeNotifications(fn) {
+  subscribers.add(fn);
+  return () => subscribers.delete(fn);
+}
+
 function load() {
   if (loaded) return;
   loaded = true;
@@ -59,6 +70,9 @@ export function recordNotification(n = {}) {
   log.push(row);
   if (log.length > CAP) log = log.slice(-CAP);
   persist();
+  for (const fn of subscribers) {
+    try { fn(row); } catch { /* подписчик не должен валить журнал */ }
+  }
   return row;
 }
 
