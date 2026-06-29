@@ -1,3 +1,24 @@
+/* PnL-«настроение» карточки позиции: фон тем зеленее/краснее, чем больше $-uPnL.
+   --mood (0…0.22) и data-mood ставит JS (applyPnlMood в accountStatus.js). Это
+   мягкий glance-фон ПОД содержимым — отдельная ось от риск-полосы (pnl-tint).
+   color-mix с calc(var(--mood)*100%) → доля цвета в прозрачном; плавный переход
+   при росте/падении PnL. 2026-06-29. */
+.pnl-mood {
+  transition: background-color 0.45s ease;
+}
+.pnl-mood[data-mood="pos"] {
+  background-color: color-mix(in srgb, var(--green) calc(var(--mood, 0) * 100%), transparent);
+}
+.pnl-mood[data-mood="neg"] {
+  background-color: color-mix(in srgb, var(--red) calc(var(--mood, 0) * 100%), transparent);
+}
+/* Обёртка bot-позиции: тинт «выпускаем» на ширину секции + скругление. */
+.pnl-mood.pos-mood {
+  margin: 0 -0.6rem;
+  padding: 0.6rem;
+  border-radius: 10px;
+}
+
 /* ──────────────────────── Data grid (Tax) */
 .data-grid {
   display: grid;
