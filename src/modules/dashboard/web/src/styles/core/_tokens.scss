@@ -78,6 +78,9 @@ html[data-theme="light"] {
   --tier-neg-weak: rgba(207, 34, 46, 0.06);
   --warn: #9a6700;
   --warn-soft: #fff8c5;
+  /* --yellow: акцентный текст «ручное/таймер» (HANDS-OFF, floor-timer). На
+     светлой (кремовой) теме чистый #eab308 не читался — берём тёмное золото. */
+  --yellow: #8a6400;
   --info: #0969da;
 
   --grid-line: #eaeef2;
@@ -140,6 +143,7 @@ html[data-theme="dark"] {
   --tier-neg-weak: rgba(248, 81, 73, 0.07);
   --warn: #d29922;
   --warn-soft: rgba(187, 128, 9, 0.15);
+  --yellow: #eab308; /* на тёмной теме яркий жёлтый читается — оставляем */
   --info: #4493f8;
 
   --grid-line: #21262d;

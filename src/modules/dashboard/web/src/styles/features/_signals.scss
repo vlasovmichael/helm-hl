@@ -23,56 +23,6 @@
   background: color-mix(in srgb, var(--neg, #e5484d) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--neg, #e5484d) 35%, transparent);
 }
-/* Nowcast «🔥 разгорается» — колонка Ignite, шкала-полоски (3 бара растущей
-   высоты). Зажжённых баров = сила; цвет amber→оранж→красный, пульс свечения при
-   ≥3. Coincident-будильник «глянь график», НЕ сигнал. Логика — render.js. */
-.hm-ignite-cell {
-  white-space: nowrap;
-}
-.hm-ig-quiet {
-  color: var(--text-muted);
-  opacity: 0.45;
-  font-weight: 700;
-}
-.hm-ignite {
-  display: inline-flex;
-  align-items: center;
-  --ember: #f59e0b;
-}
-.hm-ig-svg .ig-bar.off {
-  fill: var(--text-muted);
-  opacity: 0.28;
-}
-.hm-ig-svg .ig-bar.on {
-  fill: var(--ember);
-}
-.hm-ignite-warm {
-  --ember: #f59e0b;
-}
-.hm-ignite-hot {
-  --ember: #f97316;
-  animation: hmEmberPulse 1.5s ease-in-out infinite;
-}
-.hm-ignite-blaze {
-  --ember: #ef4444;
-  animation: hmEmberPulse 1s ease-in-out infinite;
-}
-@keyframes hmEmberPulse {
-  0%,
-  100% {
-    filter: drop-shadow(0 0 0 transparent);
-  }
-  50% {
-    filter: drop-shadow(0 0 3px var(--ember));
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .hm-ignite-hot,
-  .hm-ignite-blaze {
-    animation: none;
-  }
-}
-
 .signals-table-wrap {
   overflow-x: auto;
   margin: 0 -8px;
@@ -158,33 +108,29 @@
   } /* Enter */
   .hm-table th:nth-child(5),
   .hm-table td:nth-child(5) {
-    width: 46px;
-  } /* Ignite (SVG-метр) */
-  .hm-table th:nth-child(6),
-  .hm-table td:nth-child(6) {
     width: 120px;
   } /* Price (+спарклайн слева) */
+  .hm-table th:nth-child(6),
+  .hm-table td:nth-child(6),
   .hm-table th:nth-child(7),
   .hm-table td:nth-child(7),
   .hm-table th:nth-child(8),
-  .hm-table td:nth-child(8),
-  .hm-table th:nth-child(9),
-  .hm-table td:nth-child(9) {
+  .hm-table td:nth-child(8) {
     width: 58px;
   } /* 2m/5m/15m % */
-  .hm-table th:nth-child(10),
-  .hm-table td:nth-child(10) {
+  .hm-table th:nth-child(9),
+  .hm-table td:nth-child(9) {
     width: 48px;
   } /* Acc */
-  .hm-table th:nth-child(11),
-  .hm-table td:nth-child(11) {
+  .hm-table th:nth-child(10),
+  .hm-table td:nth-child(10) {
     width: 64px;
   } /* OI 5m */
-  .hm-table th:nth-child(12),
-  .hm-table td:nth-child(12) {
+  .hm-table th:nth-child(11),
+  .hm-table td:nth-child(11) {
     width: 52px;
   } /* Trend */
-  /* Под-строка позиции (colspan=12) — не зажимать в 26px nth-child(1), дать всю ширину. */
+  /* Под-строка позиции (colspan=11) — не зажимать в 26px nth-child(1), дать всю ширину. */
   .hm-table .hm-pos-row td {
     width: auto;
     overflow: visible;
