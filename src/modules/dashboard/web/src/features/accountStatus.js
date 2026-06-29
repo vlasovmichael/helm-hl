@@ -71,26 +71,35 @@ function applyTint(el, tint, sign) {
   }
 }
 
-// ── PnL-«настроение» карточки ────────────────────────────────────────────────
-// Фон карточки позиции тем зеленее (или краснее), чем больше $-uPnL. Это НЕ
-// риск-полоса (та меряет ПРОГРЕСС до вехи) — это glance-настроение по МОДУЛЮ
-// прибыли/убытка: $2 → лёгкий тон, $5 → заметнее, $8+ → потолок. Кривая sqrt
-// делает мелкие суммы видимее; MAX_MIX держит подмешивание цвета умеренным,
-// чтобы текст оставался читаемым. Около нуля — нейтрально (deadzone). 2026-06-29.
+// ── «Настроение» секции Active Position ───────────────────────────────────────
+// Фон ВСЕЙ секции #sec-position тем зеленее (или краснее), чем лучше идёт день:
+// настроение = Today (realized) + Σ uPnL открытых монет. Живёт в прямом эфире —
+// uPnL едет по WS (≤2с), Today обновляется поллингом (≤10с). $2 → лёгкий тон,
+// $5 → заметнее, $8+ → потолок; кривая sqrt делает мелкие суммы видимее, MAX_MIX
+// держит подмешивание цвета умеренным (текст читаем). Около нуля — нейтрально.
+// Только эта секция и нигде больше (по просьбе оператора). 2026-06-29.
 const PNL_MOOD_CAP_USD = 8;       // где насыщенность упирается в потолок
-const PNL_MOOD_MAX_MIX = 0.22;    // макс. доля цвета (color-mix), text-safe
+const PNL_MOOD_MAX_MIX = 0.18;    // макс. доля цвета (большая площадь → мягче)
 const PNL_MOOD_DEADZONE_USD = 0.1;
+let _moodToday = 0;   // последний Today (realized), ставит setDailyPnl
+let _moodUpnl = 0;    // Σ uPnL открытых поз, ставит setActivePositionsPnl
 function pnlMoodMix(pnlUsd) {
-  if (pnlUsd == null || !Number.isFinite(pnlUsd)) return 0;
   const a = Math.abs(pnlUsd);
-  if (a < PNL_MOOD_DEADZONE_USD) return 0;
+  if (!(a >= PNL_MOOD_DEADZONE_USD)) return 0;
   return Math.sqrt(Math.min(1, a / PNL_MOOD_CAP_USD)) * PNL_MOOD_MAX_MIX;
 }
-function applyPnlMood(el, pnlUsd) {
-  if (!el) return;
-  el.classList.add("pnl-mood");
-  el.style.setProperty("--mood", pnlMoodMix(pnlUsd).toFixed(3));
-  el.dataset.mood = pnlUsd >= 0 ? "pos" : "neg";
+function refreshSectionMood() {
+  const sec = document.getElementById("sec-position");
+  if (!sec) return; // не на этой странице
+  const v = _moodToday + _moodUpnl;
+  sec.style.setProperty("--mood", pnlMoodMix(v).toFixed(3));
+  sec.dataset.mood = v >= 0 ? "pos" : "neg";
+}
+
+/** Σ uPnL открытых поз (бот + ручные) для фона секции. Зовётся из onStatus (≤2с). */
+export function setActivePositionsPnl(sumUsd) {
+  _moodUpnl = Number.isFinite(sumUsd) ? sumUsd : 0;
+  refreshSectionMood();
 }
 
 // Обновить $-значение + знаковый класс ячейки на месте.
@@ -334,6 +343,8 @@ export function setDailyPnl(realized) {
   badge.classList.toggle("is-pos", reached && !danger);
   badge.classList.toggle("is-neg", v < 0);
   sec.classList.toggle("daily-danger", danger);
+  _moodToday = v;
+  refreshSectionMood();
 }
 
 export function renderPosition(pos) {
@@ -373,7 +384,6 @@ export function renderPosition(pos) {
   if (pnl && _posCoin === pos.coin && primaryEl) {
     const flip = _lastNetSign && _lastNetSign !== netSign;
     applyTint(primaryEl, tint, netSign);
-    applyPnlMood(document.getElementById("pos-card"), pnl.netMarket);
     setPnlUsd(primaryEl, pnl.netMarket);
     setUsd(document.getElementById("pos-netmkr"), pnl.netMaker);
     setUsd(document.getElementById("pos-price"), pnl.price);
@@ -410,18 +420,13 @@ export function renderPosition(pos) {
       </div>`;
   }
   const sideCls = side === "SHORT" ? "negative" : "positive";
-  // Обёртка pnl-mood: фон карточки = настроение по $-uPnL (см. applyPnlMood).
-  // Отрицательные горизонтальные поля «выпускают» тинт на всю ширину секции.
   container.innerHTML = `
-    <div class="pnl-mood pos-mood" id="pos-card">
     <div class="data-grid">
       <div class="grid-item"><div class="item-label">Coin · Side</div><div class="item-value highlight">#${pos.coin} <span class="${sideCls}" style="font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px; margin-left:4px;">${side}</span></div></div>
       <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(pos.sizeUsd)}</div></div>
       <div class="grid-item"><div class="item-label">Entry</div><div class="item-value">${fmtPrice(pos.entryPrice)}</div></div>
       <div class="grid-item"><div class="item-label">APY · Held</div><div id="pos-apyheld" class="item-value">${fmtPct(pos.entryApy)} · ${pos.heldHours.toFixed(1)}h</div></div>
-    </div>${pnlBlock}
-    </div>`;
-  applyPnlMood(document.getElementById("pos-card"), pnl ? pnl.netMarket : 0);
+    </div>${pnlBlock}`;
   _posCoin = pos.coin;
   _lastNetSign = netSign;
   _lastNetVal = pnl ? pnl.netMarket : null;
@@ -541,7 +546,6 @@ export function renderManualPositions(list) {
       const sign = p.unrealizedPnl >= 0 ? "pos" : "neg";
       const cell = card.querySelector(".pnl-tint");
       applyTint(cell, tint, sign);
-      applyPnlMood(card, p.unrealizedPnl);
       setPnlUsd(cell, p.unrealizedPnl);
       const nowEl = card.querySelector("[data-mnow]");
       if (nowEl)
@@ -645,7 +649,7 @@ export function renderManualPositions(list) {
              </div>`
           : `<div class="grid-item${ft.cls}" title="Ликвидация: ${liq}">${ft.bg}<div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>Liq</span>${ft.chip}</div><div class="item-value">${liq}</div></div>`;
       return `
-      <div data-mcard="${escapeHtml(p.coin)}" class="pnl-mood" style="margin-top:0.75rem; padding:0.75rem; border:1px dashed var(--border); border-radius:8px;">
+      <div data-mcard="${escapeHtml(p.coin)}" style="margin-top:0.75rem; padding:0.75rem; border:1px dashed var(--border); border-radius:8px;">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:0.5rem;">
           <span style="background:rgba(234,179,8,0.12); color:var(--yellow,#eab308); border:1px solid rgba(234,179,8,0.3); padding:2px 8px; border-radius:6px; font-size:11px; font-family:var(--font-mono); font-weight:700;">${manualBadge}</span>
           <span class="item-value highlight">#${p.coin}</span>
@@ -661,11 +665,6 @@ export function renderManualPositions(list) {
     })
     .join("");
   container.innerHTML = blocks;
-  // Настроение по $-uPnL на каждую карточку (ребилд-путь; патч-путь — выше).
-  for (const p of list) {
-    const card = container.querySelector(`[data-mcard="${CSS.escape(p.coin)}"]`);
-    applyPnlMood(card, p.unrealizedPnl);
-  }
 }
 
 export function renderBans(status) {

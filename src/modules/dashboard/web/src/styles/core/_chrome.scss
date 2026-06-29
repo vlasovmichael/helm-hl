@@ -307,7 +307,26 @@ header {
 #sec-position {
   background: var(--grad-brand-soft), var(--card-bg);
   border-color: var(--brand-line);
-  transition: background 0.25s, border-color 0.25s;
+  transition: background 0.45s ease, border-color 0.25s;
+}
+
+/* Настроение секции: зелёный/красный wash тем насыщеннее, чем лучше идёт день
+   (Today + Σ uPnL открытых поз). --mood (0…0.18) и data-mood ставит JS
+   (refreshSectionMood в accountStatus.js). Tint-слой кладём ПОВЕРХ brand-градиента
+   через layered background; нейтраль (mood=0) = прозрачный слой = как было.
+   Стоит ВЫШЕ .daily-danger по исходнику → жёсткий дневной стоп (red-soft) важнее
+   и перекрывает мягкое настроение. 2026-06-29. */
+#sec-position[data-mood="pos"] {
+  --mood-tint: color-mix(in srgb, var(--green) calc(var(--mood, 0) * 100%), transparent);
+}
+#sec-position[data-mood="neg"] {
+  --mood-tint: color-mix(in srgb, var(--red) calc(var(--mood, 0) * 100%), transparent);
+}
+#sec-position[data-mood] {
+  background:
+    linear-gradient(var(--mood-tint, transparent), var(--mood-tint, transparent)),
+    var(--grad-brand-soft),
+    var(--card-bg);
 }
 
 /* Дневной стоп: весь блок краснеет (circuit-breaker «хватит на сегодня»). */

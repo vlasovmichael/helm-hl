@@ -24,6 +24,7 @@ import {
   renderManualPositions,
   renderBans,
   setDailyPnl,
+  setActivePositionsPnl,
 } from "./src/features/accountStatus.js";
 import {
   renderHotMovers,
@@ -45,6 +46,14 @@ function onStatus(data) {
   renderPosition(data.activePosition);
   renderManualPositions(data.manualPositions);
   renderBans(data);
+  // Настроение секции Active Position: Σ uPnL открытых поз (бот + ручные) — живёт
+  // по WS (≤2с); Today (realized) добавляет setDailyPnl. См. refreshSectionMood.
+  const upnl =
+    (data.activePosition?.currentPnl?.netMarket ?? 0) +
+    (Array.isArray(data.manualPositions)
+      ? data.manualPositions.reduce((s, p) => s + (p.unrealizedPnl ?? 0), 0)
+      : 0);
+  setActivePositionsPnl(upnl);
   // Hot Movers из WS (≤2с) вместо 10с-поллинга; HTTP /api/signals в tick() = фолбэк.
   if (data.hotMovers?.signals) {
     renderHotMovers(data.hotMovers, fmtTime);
