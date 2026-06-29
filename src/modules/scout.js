@@ -429,7 +429,11 @@ export async function scan() {
       const fundingRate = parseFloat(ctx.funding ?? NaN);
       const dayNtlVlm   = parseFloat(ctx.dayNtlVlm ?? NaN);
       const oiCoin      = parseFloat(ctx.openInterest ?? NaN);
-      const oiUsd       = Number.isFinite(oiCoin) ? oiCoin * price : null;
+      // OI==0 от HL = пустой/мигающий фид (дохлые/тонкие перпы, ~55 монет
+      // отдают openInterest "0.0"). Считаем нулём = «нет данных» → null, иначе
+      // OI-дельта делит против нулевой базы и выдаёт нонсенс типа −200%
+      // (физически OI не падает >100%). 2026-06-29.
+      const oiUsd       = Number.isFinite(oiCoin) && oiCoin > 0 ? oiCoin * price : null;
       hunterResults.push({
         coin,
         price,

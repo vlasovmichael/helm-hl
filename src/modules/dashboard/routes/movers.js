@@ -393,8 +393,10 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
       const oiNow  = data.find((d) => d.coin === m.coin)?.oiUsd ?? null;
       const oiP5   = getOiNMinAgo(m.coin, 5, now);
       const oiP15  = getOiNMinAgo(m.coin, 15, now);
-      const oiDelta5m  = oiNow != null && oiP5  != null && oiP5  > 0 ? ((oiNow - oiP5)  / oiP5)  * 100 : null;
-      const oiDelta15m = oiNow != null && oiP15 != null && oiP15 > 0 ? ((oiNow - oiP15) / oiP15) * 100 : null;
+      // Гвард oiNow > 0 (не только базы): при мигающем OI==0 у тонких перпов
+      // (#IP и ~54 др.) деление выдавало нонсенс −100%/−200%. OI не падает >100%.
+      const oiDelta5m  = oiNow > 0 && oiP5  != null && oiP5  > 0 ? ((oiNow - oiP5)  / oiP5)  * 100 : null;
+      const oiDelta15m = oiNow > 0 && oiP15 != null && oiP15 > 0 ? ((oiNow - oiP15) / oiP15) * 100 : null;
 
       return {
         rank: idx + 1,

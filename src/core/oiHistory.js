@@ -20,7 +20,7 @@ const _oiHistory = new Map(); // coin → [{ts, oiUsd}]
 export function recordOiSnapshot(data, ts = Date.now()) {
   if (!Array.isArray(data) || data.length === 0) return;
   for (const item of data) {
-    if (item.oiUsd == null) continue;
+    if (item.oiUsd == null || !(item.oiUsd > 0)) continue; // 0/мусорный OI не пишем в буфер
     let arr = _oiHistory.get(item.coin);
     if (!arr) { arr = []; _oiHistory.set(item.coin, arr); }
     arr.push({ ts, oiUsd: item.oiUsd });
