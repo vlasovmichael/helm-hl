@@ -30,7 +30,7 @@ import {
   renderHotMovers,
   updateHotMoversLiveArrow,
 } from "./src/hotMovers/render.js";
-import { renderMarketContext } from "./src/features/marketContext.js";
+import { renderMarketContext, updateBtcLivePrice } from "./src/features/marketContext.js";
 import { initModals, renderActivity } from "./src/features/modals.js";
 import { initWhatIf } from "./src/features/whatif.js";
 import { initManualPaperTrigger, initManualPaperActive } from "./src/features/manualPaper.js";
@@ -54,6 +54,8 @@ function onStatus(data) {
       ? data.manualPositions.reduce((s, p) => s + (p.unrealizedPnl ?? 0), 0)
       : 0);
   setActivePositionsPnl(upnl);
+  // Живая цена BTC в плашку Market Context (≤2с, из WS-кадра) — не ждём 10с-поллинг.
+  updateBtcLivePrice(data.btcLivePrice);
   // Hot Movers из WS (≤2с) вместо 10с-поллинга; HTTP /api/signals в tick() = фолбэк.
   if (data.hotMovers?.signals) {
     renderHotMovers(data.hotMovers, fmtTime);

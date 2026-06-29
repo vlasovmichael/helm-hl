@@ -422,9 +422,15 @@ async function getStatusData() {
   // (цена/спайки/окна/OI) считаются локально. Vol×/HTF — по запросу /api/signals.
   const hotMovers = await getMoversPayloadCached(30, false);
 
+  // Живая цена BTC из WS-фида (allMids) — чтобы плашка Market Context обновляла
+  // цену каждые 2с (кадр статуса), а не ждала 10с-поллинг /api/market-context.
+  // null → фронт оставит последнюю из поллинга. 2026-06-29.
+  const btcLivePrice = feedLivePrice("BTC")?.price ?? null;
+
   return {
     mode: config.mode,
     hotMovers,
+    btcLivePrice,
     equity,
     available,
     sessionStartEquity: state.sessionStartEquity,

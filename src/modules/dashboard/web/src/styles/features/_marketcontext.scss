@@ -46,10 +46,14 @@
       font-size: 23px;
       color: var(--text-primary);
 
-      /* TV-style: вспышка только изменившегося разряда, без скейла. */
+      /* TV-style: вспышка только изменившегося разряда, без скейла. Padding для
+         фон-подсветки компенсируем отрицательным margin → НЕТ прироста ширины при
+         тике (иначе при live-обновлении ≤2с цена «дёргалась» и плодила гор.скролл).
+         tabular-nums (на .market-context) держит ширину цифр равной. 2026-06-29. */
       .mc-tick {
         border-radius: 3px;
-        padding: 0 1px;
+        padding: 0 2px;
+        margin: 0 -2px;
       }
       .mc-tick-up {
         animation: mc-tick-up 0.7s ease-out;

@@ -72,6 +72,7 @@ function setVal(el, key, html, cls) {
 // без скейла. Сравнение посимвольно, выравнивание справа (число растёт влево).
 let lastBtcPrice = null;
 let lastBtcStr = "";
+let _lastLiveBtcAt = 0; // когда живая цена (WS, 2с) последний раз вела число
 function renderBtcPrice(el, price) {
   const node = el.querySelector('[data-k="price"]');
   if (!node) return;
@@ -118,7 +119,10 @@ export function renderMarketContext(d) {
   if (!built && !buildStructure(el)) return;
 
   const b = d.btc || {};
-  renderBtcPrice(el, b.price);
+  // Цену ведёт живой WS-кадр (updateBtcLivePrice, ≤2с). 10с-поллинг трогает цену
+  // ТОЛЬКО если живая замолчала >6с (WS умер) — иначе был бы откат назад к более
+  // старому значению каждые 10с. Остальные метрики (15m/1h/4h/vol/oi/fund) — тут.
+  if (Date.now() - _lastLiveBtcAt > 6000) renderBtcPrice(el, b.price);
   setVal(el, "change24h", `${fmtPct(b.change24h)} <i>24h</i>`, pctCls(b.change24h));
   setVal(el, "m15", fmtPct(b.m15), pctCls(b.m15));
   setVal(el, "m1h", fmtPct(b.m1h), pctCls(b.m1h));
@@ -127,4 +131,15 @@ export function renderMarketContext(d) {
   setVal(el, "oiUsd", fmtUsd(b.oiUsd));
   const fund = b.funding == null ? null : b.funding * 100;
   setVal(el, "funding", fund == null ? "—" : fmtPct(fund, 4), pctCls(fund));
+}
+
+// Живая цена BTC из WS-кадра статуса (≤2с) — зовётся из onStatus. Обновляет
+// ТОЛЬКО число цены (с тем же per-digit тиком), без перерисовки остальной плашки.
+// До первого /api/market-context (structure не построена) — тихо no-op.
+export function updateBtcLivePrice(price) {
+  if (price == null || !Number.isFinite(price) || !built) return;
+  const el = document.getElementById("market-context");
+  if (!el) return;
+  _lastLiveBtcAt = Date.now();
+  renderBtcPrice(el, price);
 }
