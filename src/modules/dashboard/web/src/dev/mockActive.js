@@ -7,6 +7,11 @@
 //  Никакого бэка/WS не нужно. Удалить = убрать файл + блок ?mock в index.js.
 // ─────────────────────────────────────────────────
 
+import { renderMarketContext } from "../features/marketContext.js";
+
+// Живая цена BTC для плашки Market Context (random-walk в startMock) — odometer.
+let btcPx = 109240;
+
 // Синтетическая Hunter SHORT по UNI (как на скрине: entry 3.63, short 3x).
 const POS = {
   coin: "UNI",
@@ -119,6 +124,7 @@ function buildStatus() {
     activePosition,
     manualPositions: [manualAdopted],
     runtimeBans: [],
+    btcLivePrice: btcPx, // живая цена BTC → odometer плашки Market Context
     // Мок-сигналы со спарклайнами (BTC/ETH/HYPE/DOGE) + синтез строки активной
     // монеты (UNI/SOL пиннятся сверху). Спарклайн в колонке Price едет вживую.
     hotMovers: { ts: Date.now(), universeSize: 50, signals: mockSignals(Date.now()) },
@@ -267,10 +273,28 @@ function panel() {
   }, 200);
 }
 
+// Фейковые данные плашки Market Context (структура + медленные метрики).
+function mockMcData() {
+  return {
+    verdict: "MIXED",
+    btc: {
+      price: btcPx, change24h: 0.66, m15: 0.08, m1h: -0.21, m4h: 0.44,
+      volUsd: 2.1e9, oiUsd: 2.0e9, funding: 0.000031,
+    },
+  };
+}
+
 export function startMock({ onStatus }) {
   onStatusRef = onStatus;
   panel();
+  renderMarketContext(mockMcData()); // строим плашку BTC (структуру)
   push(); // первый кадр сразу
+  // Random-walk цены BTC каждые 1.5с → видно odometer-анимацию плашки (и тест
+  // горизонтального скролла: ширина не должна меняться).
+  setInterval(() => {
+    btcPx += (Math.random() - 0.5) * 50;
+    push();
+  }, 1500);
   // ?mock=1&tour → сразу гоняем авто-тур фаз (без клика): цена ходит
   // вход→цель→вход, пик SOL уходит выше текущего → виден «призрак» отката.
   if (/[?&]tour\b/.test(location.search)) raf = setInterval(step, 700);

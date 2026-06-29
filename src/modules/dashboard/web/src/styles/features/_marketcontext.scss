@@ -41,26 +41,13 @@
       letter-spacing: 0.8px;
       color: var(--text-muted);
     }
+    /* Цена крутится odometer'ом (.animated-value/.digit-reel — как Total Equity).
+       Барабаны цифр фикс-ширины в overflow:hidden → смена цены НЕ меняет ширину
+       плашки (убрали старый mc-tick padding, плодивший гор.скролл). 2026-06-29. */
     .mc-px {
       font-weight: 700;
       font-size: 23px;
       color: var(--text-primary);
-
-      /* TV-style: вспышка только изменившегося разряда, без скейла. Padding для
-         фон-подсветки компенсируем отрицательным margin → НЕТ прироста ширины при
-         тике (иначе при live-обновлении ≤2с цена «дёргалась» и плодила гор.скролл).
-         tabular-nums (на .market-context) держит ширину цифр равной. 2026-06-29. */
-      .mc-tick {
-        border-radius: 3px;
-        padding: 0 2px;
-        margin: 0 -2px;
-      }
-      .mc-tick-up {
-        animation: mc-tick-up 0.7s ease-out;
-      }
-      .mc-tick-down {
-        animation: mc-tick-down 0.7s ease-out;
-      }
     }
     .mc-24h {
       font-size: 15px;
@@ -173,27 +160,6 @@
     transform: translateY(0);
   }
 }
-@keyframes mc-tick-up {
-  0% {
-    color: var(--green);
-    background: var(--green-soft);
-  }
-  100% {
-    color: var(--text-primary);
-    background: transparent;
-  }
-}
-@keyframes mc-tick-down {
-  0% {
-    color: var(--red);
-    background: var(--red-soft);
-  }
-  100% {
-    color: var(--text-primary);
-    background: transparent;
-  }
-}
-
 /* Уважаем prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   .market-context {
@@ -201,9 +167,8 @@
     &.mc-enter .mc-stats .mc-cell {
       animation: none;
     }
-    .mc-px .mc-tick-up,
-    .mc-px .mc-tick-down {
-      animation: none;
+    .mc-px .digit-reel {
+      transition: none;
     }
   }
 }

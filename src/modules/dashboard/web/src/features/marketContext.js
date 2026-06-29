@@ -6,6 +6,8 @@
 //  Цвет рамки = светофор по фону (risk-on/off).
 // ─────────────────────────────────────────────────
 
+import { updateAnimatedNumber } from "../utils/animatedNumber.js";
+
 function fmtPrice(p) {
   if (p == null || !Number.isFinite(p)) return "—";
   return "$" + Math.round(p).toLocaleString("en-US");
@@ -44,7 +46,7 @@ function buildStructure(el) {
   if (!head || !stats) return false;
   head.innerHTML =
     `<span class="mc-sym">BTC</span>` +
-    `<span class="mc-px" data-k="price"></span>` +
+    `<span class="mc-px animated-value" id="mc-px-val" data-k="price"></span>` +
     `<span class="mc-24h" data-k="change24h"></span>`;
   stats.innerHTML = STAT_CELLS.map(
     ([k, label]) => `<span class="mc-cell"><i>${label}</i><b data-k="${k}"></b></span>`,
@@ -67,40 +69,14 @@ function setVal(el, key, html, cls) {
   }
 }
 
-// Цена BTC как на TradingView: подсвечиваем ТОЛЬКО изменившиеся разряды
-// (зелёным при росте, красным при падении) с коротким флэшем цвета/фона —
-// без скейла. Сравнение посимвольно, выравнивание справа (число растёт влево).
-let lastBtcPrice = null;
-let lastBtcStr = "";
+// Цена BTC крутится тем же odometer'ом, что Total Equity (digit-reel барабаны
+// к новому значению) — без флэша цвета и, главное, БЕЗ изменения ширины: цифры
+// фикс-ширины (tabular-nums) в контейнере overflow:hidden → ноль горизонтального
+// сдвига (старая болячка mc-tick padding'а). 2026-06-29.
 let _lastLiveBtcAt = 0; // когда живая цена (WS, 2с) последний раз вела число
-function renderBtcPrice(el, price) {
-  const node = el.querySelector('[data-k="price"]');
-  if (!node) return;
-  const str = fmtPrice(price);
-
-  // Первый рендер / нет данных / без изменения — просто текст, без флэша.
-  if (price == null || lastBtcPrice == null || price === lastBtcPrice) {
-    node.textContent = str;
-    lastBtcPrice = price;
-    lastBtcStr = str;
-    return;
-  }
-
-  const dir = price > lastBtcPrice ? "up" : "down";
-  // Собираем посимвольно справа налево; новый <span> на изменившемся символе
-  // проигрывает анимацию заново (свежий DOM-узел при innerHTML).
-  let html = "";
-  for (let i = 0; i < str.length; i++) {
-    const ch = str[str.length - 1 - i];
-    const pch = lastBtcStr[lastBtcStr.length - 1 - i];
-    html =
-      ch !== pch
-        ? `<span class="mc-tick mc-tick-${dir}">${ch}</span>${html}`
-        : ch + html;
-  }
-  node.innerHTML = html;
-  lastBtcPrice = price;
-  lastBtcStr = str;
+function renderBtcPrice(_el, price) {
+  if (price == null) return;
+  updateAnimatedNumber("mc-px-val", fmtPrice(price));
 }
 
 export function renderMarketContext(d) {

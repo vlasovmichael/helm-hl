@@ -4,12 +4,13 @@
 //  · renderPosition — активная позиция бота (single slot) + P&L breakdown.
 //  · renderManualPositions — ручные HANDS-OFF позиции (+ ADOPTED-бейдж).
 //  · renderBans — strip активных runtime-банов.
-//  Самодостаточный: только DOM + форматтеры. updateAnimatedNumber (odometer)
-//  приватный, нужен только хедеру.
+//  Odometer-анимация чисел вынесена в utils/animatedNumber.js (общая с плашкой
+//  Market Context — одно место, без дублирования).
 // ─────────────────────────────────────────────────
 
 import { fmtUsd, fmtPrice, fmtPct, formatUptime, escapeHtml } from "../utils/format.js";
 import { riskTint } from "../utils/riskBar.js";
+import { updateAnimatedNumber } from "../utils/animatedNumber.js";
 
 // Доп. классы + inline-стиль для глубинной заливки PnL-карточки.
 // tint = riskTint(...) | null. Возвращает { cls, attr } для подстановки в HTML.
@@ -21,7 +22,6 @@ function tintAttrs(tint) {
   return { cls, attr };
 }
 
-const lastAnimatedValues = new Map();
 // Знак прошлого Net(Mkt) бот-позиции — чтобы пыхнуть карточкой при переходе
 // через ноль (плюс↔минус), а не на каждый ре-рендер.
 let _lastNetSign = null;
@@ -239,57 +239,6 @@ let _lastNetVal = null;
 // coin → последний uPnL ручной позы (для «пыха» при кроссе нуля на месте).
 const _manualLastUpnl = new Map();
 let _manualKeys = "";
-
-// Odometer-анимация числа: крутим только изменившиеся цифры на реальную дельту.
-function updateAnimatedNumber(elId, newValueStr) {
-  const el = document.getElementById(elId);
-  if (!el) return;
-  const prev = lastAnimatedValues.get(elId) || "";
-  if (prev === newValueStr) return;
-
-  const oldStr = prev || newValueStr;
-  lastAnimatedValues.set(elId, newValueStr);
-
-  el.innerHTML = "";
-  const maxLength = Math.max(oldStr.length, newValueStr.length);
-  const oldPadded = oldStr.padStart(maxLength, " ");
-  const newPadded = newValueStr.padStart(maxLength, " ");
-
-  for (let i = 0; i < maxLength; i++) {
-    const charOld = oldPadded[i];
-    const charNew = newPadded[i];
-
-    if (charOld === charNew) {
-      const s = document.createElement("span");
-      s.textContent = charNew;
-      el.appendChild(s);
-    } else if (/[0-9]/.test(charNew)) {
-      const reel = document.createElement("div");
-      reel.className = "digit-reel";
-      const startDigit = /[0-9]/.test(charOld) ? Number(charOld) : 0;
-      const endDigit = Number(charNew);
-      // Odometer: только реальная дельта (1→2 = один шаг, не полный оборот).
-      const totalSteps = (endDigit - startDigit + 10) % 10;
-      const frames = [];
-      for (let k = 0; k <= totalSteps; k++) {
-        frames.push(String((startDigit + k) % 10));
-      }
-      frames.forEach((d) => {
-        const s = document.createElement("span");
-        s.textContent = d;
-        reel.appendChild(s);
-      });
-      el.appendChild(reel);
-      requestAnimationFrame(() => {
-        reel.style.transform = `translateY(-${totalSteps * 1.1}em)`;
-      });
-    } else {
-      const s = document.createElement("span");
-      s.textContent = charNew;
-      el.appendChild(s);
-    }
-  }
-}
 
 export function renderHeader(status) {
   // Секция-хост только на дашборде; на /strategies.html её нет → no-op.
