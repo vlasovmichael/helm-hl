@@ -204,6 +204,18 @@
       .j-log-body { padding: 8px 0 4px 24px; }
 
       .j-footnote { margin: 16px 4px 0; color: var(--text-muted); font-size: 13px; line-height: 1.65; max-width: 72ch; }
+
+      /* калькулятор стопа/размера */
+      .j-calc-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+      @media (max-width: 760px) { .j-calc-grid { grid-template-columns: 1fr 1fr; } }
+      .j-calc-fill { margin-top: 12px; padding: 6px 12px; font-size: 13px; }
+      .j-calc-out { margin-top: 18px; }
+      .j-calc-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; padding: 9px 0; border-top: 1px solid var(--hairline); }
+      .j-calc-row:first-child { border-top: none; }
+      .j-calc-row b { color: var(--text-muted); font-weight: 600; }
+      .j-calc-row .v { font-family: var(--font-mono); font-weight: 700; font-size: 15px; }
+      .j-calc-row .v small { font-family: var(--font-sans); font-weight: 500; font-size: 12px; color: var(--text-muted); margin-left: 8px; }
+      .j-calc-hint { margin-top: 12px; font-size: 12.5px; line-height: 1.55; color: var(--text-muted); }
     </style>
   </head>
   <body>
@@ -280,6 +292,20 @@
             </div>
           </section>
         </div>
+
+        <section class="j-card">
+          <h2 class="j-card-title"><span class="j-idx">считаю</span> Стоп и размер <span class="j-coin-sub" id="calcSide"></span></h2>
+          <div class="j-field j-calc-grid">
+            <div><label class="j-f">Вход $</label><input type="text" id="calcEntry" inputmode="decimal" placeholder="59300"></div>
+            <div><label class="j-f">Стоп $</label><input type="text" id="calcStop" inputmode="decimal" placeholder="61100"></div>
+            <div><label class="j-f">Цель $ (опц.)</label><input type="text" id="calcTarget" inputmode="decimal" placeholder="58300"></div>
+            <div><label class="j-f">Депо $</label><input type="text" id="calcEq" inputmode="decimal" placeholder="50"></div>
+            <div><label class="j-f">Риск % депо</label><input type="text" id="calcRisk" inputmode="decimal" placeholder="2"></div>
+          </div>
+          <button class="j-btn ghost j-calc-fill" id="calcFill" type="button">Вход = текущая цена</button>
+          <div class="j-calc-out" id="calcOut"></div>
+          <p class="j-calc-hint">Сначала уровень стопа (под опорой/над сопротивлением + буфер), потом размер — не наоборот. Размер считается так, чтобы при стопе потерять ровно заданный риск депо.</p>
+        </section>
 
         <section class="j-card">
           <h2 class="j-card-title"><span class="j-idx">журнал</span> История · <span id="histCoin">BTC</span></h2>

@@ -59,7 +59,22 @@ async function hl(body) {
   return r.json();
 }
 let liveTimer = null, lastPx = {};
+let currentAtrPct = null; // ATR(≤7,1D) в % к последней цене — подсказка по ширине стопа
 function dayChg(D) { const c = D[D.length - 1]; return ((c.c - c.o) / c.o) * 100; }
+// Средний истинный диапазон по дневным барам (в % к последнему закрытию). Грубый
+// ориентир «нормального» дневного хода: стоп уже него = высокий шанс выноса фитилём.
+function atrPctOf(D) {
+  if (!D || D.length < 2) return null;
+  const trs = [];
+  for (let i = 1; i < D.length; i++) {
+    const c = D[i], p = D[i - 1];
+    trs.push(Math.max(c.h - c.l, Math.abs(c.h - p.c), Math.abs(c.l - p.c)));
+  }
+  const w = trs.slice(-7);
+  const atr = w.reduce((a, b) => a + b, 0) / w.length;
+  const last = D[D.length - 1].c;
+  return last > 0 ? (atr / last) * 100 : null;
+}
 function setPx(px) {
   const el = G("px"); const prev = lastPx[coin];
   el.textContent = px ? "$" + fmtPx(px) : "—";
@@ -79,6 +94,7 @@ async function loadAnchor() {
     e.textContent = (dchg >= 0 ? "+" : "") + dchg.toFixed(2) + "%"; e.className = "j-daychg " + (dchg >= 0 ? "j-up" : "j-down");
     let hi = -1, lo = 1e12; D.slice(-7).forEach((c) => { hi = Math.max(hi, c.h); lo = Math.min(lo, c.l); });
     renderRail(price, lo, hi, cur);
+    currentAtrPct = atrPctOf(D); renderCalc();
     const first = D[0].c, last = cur.c; const t = G("trend200");
     const dir = last > first * 1.01 ? ["▲ вверх", "j-up"] : last < first * 0.99 ? ["▼ вниз", "j-down"] : ["≈ боковик", ""];
     t.textContent = dir[0]; t.className = "j-v " + dir[1];
@@ -211,6 +227,65 @@ G("tabs").addEventListener("click", (e) => {
   const t = e.target.closest(".j-tab"); if (t && t.dataset.coin) switchCoin(t.dataset.coin);
 });
 
+// ── калькулятор стопа/размера ──
+const CALC_KEY = "helm_cj_calc";
+const num = (id) => { const v = parseFloat((G(id).value || "").replace(/[,\s]/g, "")); return Number.isFinite(v) ? v : null; };
+const WALLET_LEV_CAP = 10; // практический потолок плеча кошелька (как в боте)
+function renderCalc() {
+  const out = G("calcOut"), sideEl = G("calcSide");
+  const entry = num("calcEntry"), stop = num("calcStop"), target = num("calcTarget");
+  const eq = num("calcEq"), risk = num("calcRisk");
+  // запоминаем депо/риск (стабильные)
+  localStorage.setItem(CALC_KEY, JSON.stringify({ eq: G("calcEq").value, risk: G("calcRisk").value }));
+  if (!entry || !stop || entry <= 0 || stop <= 0 || entry === stop) {
+    sideEl.textContent = ""; out.innerHTML = '<div class="j-calc-row"><b>Введи вход и стоп</b><span class="v">—</span></div>'; return;
+  }
+  const long = stop < entry;
+  sideEl.textContent = long ? "LONG" : "SHORT";
+  sideEl.className = "j-coin-sub " + (long ? "j-up" : "j-down");
+  const stopDist = (Math.abs(entry - stop) / entry) * 100;
+  const rows = [];
+  // дистанция стопа + сверка с ATR
+  let atrNote = "";
+  if (currentAtrPct != null) {
+    atrNote = stopDist < currentAtrPct
+      ? `<small style="color:var(--red)">уже ATR(1D)≈${currentAtrPct.toFixed(2)}% — вынесет фитилём</small>`
+      : `<small style="color:var(--green)">шире ATR(1D)≈${currentAtrPct.toFixed(2)}% ✓</small>`;
+  }
+  rows.push(`<div class="j-calc-row"><b>Дистанция до стопа</b><span class="v">${stopDist.toFixed(2)}%${atrNote}</span></div>`);
+  // размер от риска
+  if (eq && risk && eq > 0 && risk > 0) {
+    const riskUsd = (eq * risk) / 100;
+    const sizeUsd = riskUsd / (stopDist / 100);
+    const lev = sizeUsd / eq;
+    const levHot = lev > WALLET_LEV_CAP;
+    rows.push(`<div class="j-calc-row"><b>Риск на сделку</b><span class="v">$${riskUsd.toFixed(2)}<small>${risk}% от $${eq.toFixed(0)}</small></span></div>`);
+    rows.push(`<div class="j-calc-row"><b>Размер позиции</b><span class="v">$${sizeUsd.toFixed(2)}<small style="color:${levHot ? "var(--red)" : "var(--text-muted)"}">плечо ~${lev.toFixed(1)}×${levHot ? ` › потолок ${WALLET_LEV_CAP}×` : ""}</small></span></div>`);
+  } else {
+    rows.push('<div class="j-calc-row"><b>Размер позиции</b><span class="v">—<small>впиши депо и риск %</small></span></div>');
+  }
+  // R:R до цели
+  if (target && target > 0) {
+    const valid = long ? target > entry : target < entry;
+    if (valid) {
+      const rr = Math.abs(target - entry) / Math.abs(entry - stop);
+      const col = rr >= 2 ? "var(--green)" : rr < 1 ? "var(--red)" : "var(--text-secondary)";
+      rows.push(`<div class="j-calc-row"><b>R:R до цели</b><span class="v" style="color:${col}">1 : ${rr.toFixed(2)}</span></div>`);
+    } else {
+      rows.push(`<div class="j-calc-row"><b>R:R до цели</b><span class="v"><small style="color:var(--red)">цель не на стороне ${long ? "лонга (выше входа)" : "шорта (ниже входа)"}</small></span></div>`);
+    }
+  }
+  out.innerHTML = rows.join("");
+}
+function wireCalc() {
+  const saved = JSON.parse(localStorage.getItem(CALC_KEY) || "{}");
+  if (saved.eq) G("calcEq").value = saved.eq;
+  if (saved.risk) G("calcRisk").value = saved.risk;
+  ["calcEntry", "calcStop", "calcTarget", "calcEq", "calcRisk"].forEach((id) => G(id).addEventListener("input", renderCalc));
+  G("calcFill").onclick = () => { if (lastPx[coin]) { G("calcEntry").value = String(lastPx[coin]); renderCalc(); } };
+  renderCalc();
+}
+
 function switchCoin(c) {
   coin = c; renderTabs();
   G("anchorCoin").textContent = c; G("histCoin").textContent = c;
@@ -218,4 +293,5 @@ function switchCoin(c) {
   fillForm(entries(c)[todayKey()] || null); renderYesterday(); renderHist();
   loadAnchor(); if (liveTimer) clearInterval(liveTimer); liveTimer = setInterval(loadAnchor, 20000);
 }
+wireCalc();
 switchCoin("BTC");
