@@ -33,6 +33,10 @@ const ICONS = {
     <line x1="4" y1="10" x2="17" y2="10" />
     <line x1="4" y1="14" x2="10" y2="14" />
     <line x1="4" y1="18" x2="15" y2="18" />`,
+  journal: `
+    <path d="M5 3h11a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+    <line x1="7" y1="7" x2="13" y2="7" />
+    <path d="M7 14l2.5-2.5L12 14l3-3.5" />`,
 };
 
 const LINKS = [
@@ -41,6 +45,7 @@ const LINKS = [
   // убрали — стакан оператору тяжело читается, не нужен на видном месте (2026-06-28).
   { key: "statistics", href: "/statistics.html", label: "Statistics" },
   { key: "lab", href: "/lab.html", label: "Lab", title: "Research: BTC Divergence + Whale Watch" },
+  { key: "journal", href: "/journal.html", label: "Journal", title: "Журнал чтения графика — разметка монеты на сутки вперёд" },
   { key: "ledger", href: "/ledger.html", label: "Ledger", title: "Monthly P&L ledger" },
 ];
 

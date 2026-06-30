@@ -21,6 +21,7 @@ export default defineConfig({
       input: {
         index: resolve(webRoot, "index.html"),
         orderbook: resolve(webRoot, "orderbook.html"),
+        journal: resolve(webRoot, "journal.html"),
         ledger: resolve(webRoot, "ledger.html"),
         statistics: resolve(webRoot, "statistics.html"),
         lab: resolve(webRoot, "lab.html"),
