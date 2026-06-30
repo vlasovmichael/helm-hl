@@ -216,6 +216,31 @@
       .j-calc-row .v { font-family: var(--font-mono); font-weight: 700; font-size: 15px; }
       .j-calc-row .v small { font-family: var(--font-sans); font-weight: 500; font-size: 12px; color: var(--text-muted); margin-left: 8px; }
       .j-calc-hint { margin-top: 12px; font-size: 12.5px; line-height: 1.55; color: var(--text-muted); }
+
+      /* обучающая панель «как пользоваться» */
+      .j-help-btn {
+        display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 999px;
+        border: 1px solid var(--border); background: var(--card-bg); color: var(--text-muted);
+        cursor: pointer; font-family: var(--font-sans); font-weight: 700; font-size: 14px; line-height: 1;
+        transition: color .15s, border-color .15s;
+      }
+      .j-help-btn:hover { color: var(--accent); border-color: var(--accent); }
+      .j-help { border-left: 3px solid var(--accent); }
+      .j-help-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+      .j-help-x {
+        padding: 6px 12px; font-size: 13px; font-family: var(--font-sans); font-weight: 600;
+        color: var(--text-secondary); background: var(--canvas-subtle); border: 1px solid var(--border);
+        border-radius: var(--radius); cursor: pointer; transition: color .15s, border-color .15s;
+      }
+      .j-help-x:hover { color: var(--text-primary); border-color: var(--border-strong); }
+      .j-help-lead { color: var(--text-secondary); font-size: 14px; line-height: 1.6; margin: 12px 0 18px; max-width: 84ch; }
+      .j-help-lead b { color: var(--text-primary); }
+      .j-help-steps { display: grid; gap: 14px; }
+      .j-help-step { display: flex; gap: 12px; align-items: flex-start; font-size: 13.5px; line-height: 1.55; color: var(--text-secondary); }
+      .j-help-step .j-idx { flex: none; margin-top: 1px; }
+      .j-help-step b { color: var(--text-primary); }
+      .j-help-rule { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--hairline); font-size: 13.5px; line-height: 1.6; color: var(--text-secondary); }
+      .j-help-rule b { color: var(--text-primary); }
     </style>
   </head>
   <body>
@@ -225,8 +250,24 @@
       <main class="j-wrap">
         <div class="j-toolbar">
           <nav class="j-nav" id="tabs"></nav>
+          <button class="j-help-btn" id="helpToggle" type="button" title="Как пользоваться журналом" aria-label="Как пользоваться">?</button>
           <span class="j-status" id="conn">…</span>
         </div>
+
+        <!-- Обучающая панель: что это и что делать -->
+        <section class="j-card j-help" id="helpCard">
+          <div class="j-help-head">
+            <h2 class="j-card-title" style="margin:0"><span class="j-idx">зачем</span> Как пользоваться журналом</h2>
+            <button class="j-help-x" id="helpClose" type="button">Понятно, скрыть</button>
+          </div>
+          <p class="j-help-lead">Это тренажёр — научиться читать график <b>на сутки вперёд</b>. Не угадывать цену (это монетка), а размечать местность и держать себя от входа против тренда. Утренний лонг против падающего битка — ровно та ошибка, от которой страница страхует.</p>
+          <div class="j-help-steps">
+            <div class="j-help-step"><span class="j-idx">читаю</span><div><b>Раз в день размечаешь монету.</b> Тренд 1D (куда дует ветер), уровни сверху/снизу (где «стены»), два сценария «если X → A / если Y → B», базовый уклон. 1–2 минуты на монету. Шкала «Пеленг» вверху показывает, где цена в недельном диапазоне — у пола или у потолка.</div></div>
+            <div class="j-help-step"><span class="j-idx">считаю</span><div><b>Перед входом — стоп и размер.</b> Вводишь вход и стоп → размер считается <b>от риска</b> (теряешь ровно заданный % депо при стопе), а не «сколько не жалко». Красное «уже ATR» = стоп слишком тесный, вынесет фитилём.</div></div>
+            <div class="j-help-step"><span class="j-idx">проверяю</span><div><b>На следующий день — разбор.</b> Какой сценарий включился? Верно ли стояли уровни? Пишешь короткий вывод. Вот здесь и копится насмотренность — не от чтения, а от проверки своих же разметок.</div></div>
+          </div>
+          <p class="j-help-rule">Одно правило, которое экономит деньги: <b>не лонгуй против тренда 1D и не шорти против него.</b> Цель дрилла — не угадать направление, а натренировать разметку уровней и выбор режима. 20–30 записей — и структура читается сама.</p>
+        </section>
 
         <!-- HERO · Пеленг -->
         <section class="j-card">

@@ -277,6 +277,15 @@ function renderCalc() {
   }
   out.innerHTML = rows.join("");
 }
+// ── обучающая панель ──
+const HELP_KEY = "helm_cj_help_seen";
+function showHelp(v) { G("helpCard").style.display = v ? "" : "none"; }
+function wireHelp() {
+  showHelp(localStorage.getItem(HELP_KEY) !== "1");
+  G("helpClose").onclick = () => { localStorage.setItem(HELP_KEY, "1"); showHelp(false); };
+  G("helpToggle").onclick = () => showHelp(G("helpCard").style.display === "none");
+}
+
 function wireCalc() {
   const saved = JSON.parse(localStorage.getItem(CALC_KEY) || "{}");
   if (saved.eq) G("calcEq").value = saved.eq;
@@ -293,5 +302,6 @@ function switchCoin(c) {
   fillForm(entries(c)[todayKey()] || null); renderYesterday(); renderHist();
   loadAnchor(); if (liveTimer) clearInterval(liveTimer); liveTimer = setInterval(loadAnchor, 20000);
 }
+wireHelp();
 wireCalc();
 switchCoin("BTC");
