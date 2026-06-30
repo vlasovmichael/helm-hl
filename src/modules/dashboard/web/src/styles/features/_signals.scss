@@ -234,20 +234,38 @@
   color: var(--red);
   background: var(--red-soft);
   border-color: var(--red-line);
+  position: relative;
+}
+/* «Против» мягко пульсирует — сигнал внимания (движ развернулся). Кольцо несёт
+   статичный ::after, пульсируем его opacity (GPU-слой), а НЕ анимируем box-shadow
+   на самом чипе — box-shadow репейнтит каждый кадр. 2026-06-30. */
+.hm-align-bad::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px var(--red-soft);
+  opacity: 0;
+  pointer-events: none;
+  will-change: opacity;
   animation: hmAlignPulse 1.4s ease-in-out infinite;
 }
 .hm-align-flat {
   color: var(--text-muted);
   border-color: var(--border);
 }
-/* «Против» мягко пульсирует — это сигнал внимания (движ развернулся). */
 @keyframes hmAlignPulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 transparent;
+    opacity: 0;
   }
   50% {
-    box-shadow: 0 0 0 2px var(--red-soft);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hm-align-bad::after {
+    animation: none;
   }
 }
 /* Hot Movers — под-строка с данными открытой позиции (пиннутая монета). */
@@ -410,15 +428,15 @@
   animation: hmZonePulse 1.6s ease-in-out infinite;
   transform-origin: 50% 50%;
 }
+/* Только transform:scale (композитно). filter:drop-shadow убран — репейнтил SVG
+   каждый кадр. Прицел и так притягивает взгляд пульсом масштаба. 2026-06-30. */
 @keyframes hmZonePulse {
   0%,
   100% {
     transform: scale(1);
-    filter: none;
   }
   50% {
     transform: scale(1.12);
-    filter: drop-shadow(0 0 2px var(--green-line));
   }
 }
 @media (prefers-reduced-motion: reduce) {

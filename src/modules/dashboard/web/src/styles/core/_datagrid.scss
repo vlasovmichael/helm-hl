@@ -307,22 +307,32 @@
   }
 }
 /* У краёв (depth≥0.75) — мягкий пульс яркости: близко к цели или к стопу.
-   Анимирует filter, поэтому не конфликтует с jelly-wobble (тот гонит transform
-   через WAAPI из JS). */
-.grid-item.pnl-tint.rb-depth.rb-hot {
+   Композитно: пульсируем opacity белого ::after-оверлея, а НЕ filter:brightness —
+   filter репейнтит каждый кадр (роняло dashboard до ~45fps). opacity = отдельный
+   GPU-слой → 60fps. Оверлей pointer-events:none, лежит поверх .pnl-base/.pnl-fill,
+   не конфликтует с jelly-wobble (тот гонит transform через WAAPI из JS). 2026-06-30. */
+.grid-item.pnl-tint.rb-depth.rb-hot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.14);
+  opacity: 0;
+  pointer-events: none;
+  will-change: opacity;
   animation: rbPulse 1.8s ease-in-out infinite;
 }
 @keyframes rbPulse {
   0%,
   100% {
-    filter: brightness(1);
+    opacity: 0;
   }
   50% {
-    filter: brightness(1.18);
+    opacity: 1;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .grid-item.pnl-tint.rb-depth.rb-hot {
+  .grid-item.pnl-tint.rb-depth.rb-hot::after {
     animation: none;
   }
 }
