@@ -28,7 +28,7 @@ async function fireWhaleNtfy(title, message) {
       topic: whaleTopic,
       title,
       message,
-      priority: 4,
+      priority: 3,
       tags: ["whale"],
     });
     const u = new URL(`${url}/`);
