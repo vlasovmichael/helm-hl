@@ -248,6 +248,9 @@ export function renderHeader(status) {
   // wallet-total / perp/spot breakdown — после миграции это один и
   // тот же пул, разбивка потеряла смысл.
   updateAnimatedNumber("equity-value", fmtUsd(status.equity));
+  // Запоминаем equity как базу для относительной дневной цели (setDailyPnl
+  // приходит отдельным поллингом, без equity). Держим последнее известное.
+  if (status.equity > 0) _lastEquity = status.equity;
 
   const profit = status.sessionProfit;
   const deltaEl = document.getElementById("equity-delta");
@@ -267,10 +270,17 @@ export function renderHeader(status) {
 
 // ── Daily goal / circuit-breaker ──────────────────────────────────────────
 // Бейдж в шапке Active Position: Today's P/L + достигнута ли дневная цель.
-// При дневном минусе ≤ DAILY_STOP вся карточка #sec-position краснеет
-// (.daily-danger). Это не замок (кошелёк не заблокировать) — громкий нудж.
-const DAILY_GOAL_MIN = 2; // цель за день ($); ≥ это → goal reached
-const DAILY_STOP = -5; // дневной стоп-лимит: краснеет вся карточка ($)
+// Цель/стоп — ОТНОСИТЕЛЬНЫЕ (% от equity), чтобы масштабироваться с депо: $2
+// на $42 ≈ 5%, но на $100 те же $2 — это лишь 2% (депо мелкое и растёт, см.
+// account_size_vs_influencer). При дневном минусе ≤ DAILY_STOP_PCT вся карточка
+// #sec-position краснеет (.daily-danger). Это не замок (кошелёк не заблокировать)
+// — громкий нудж. $-пороги — фолбэк, пока equity ещё не пришёл (первый кадр WS).
+const DAILY_GOAL_PCT = 5; // ≥ этого % от equity за день → goal reached
+const DAILY_STOP_PCT = -10; // ≤ этого % → circuit-breaker (краснеет карточка)
+const DAILY_GOAL_USD = 2; // фолбэк-порог в $ до прихода equity
+const DAILY_STOP_USD = -5; // фолбэк-порог в $ до прихода equity
+// Последний известный equity (ставит renderHeader по WS) — база для % цели.
+let _lastEquity = null;
 
 // SVG-иконки бейджа (наследуют цвет через currentColor). Без эмодзи.
 const _ICON_GOAL = `<svg viewBox="0 0 16 16" width="12" height="12" style="vertical-align:-2px;margin-right:3px" aria-hidden="true"><circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 8.2l2 2 4-4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
@@ -282,12 +292,18 @@ export function setDailyPnl(realized) {
   const sec = document.getElementById("sec-position");
   if (!badge || !sec) return; // не на этой странице
   const v = realized ?? 0;
-  const danger = v <= DAILY_STOP;
-  const reached = v >= DAILY_GOAL_MIN;
+  // Относительная цель: % дневного realized от equity. Пока equity не пришёл
+  // (первый кадр WS) — фолбэк на $-пороги, чтобы бейдж не врал в первые секунды.
+  const pct = _lastEquity && _lastEquity > 0 ? (v / _lastEquity) * 100 : null;
+  const danger = pct != null ? pct <= DAILY_STOP_PCT : v <= DAILY_STOP_USD;
+  const reached = pct != null ? pct >= DAILY_GOAL_PCT : v >= DAILY_GOAL_USD;
   const valStr = `${v >= 0 ? "+" : "−"}$${Math.abs(v).toFixed(2)}`;
+  // Показываем и $, и % (когда есть база) — $ = факт, % = прогресс к цели.
+  const pctStr =
+    pct != null ? ` · ${pct >= 0 ? "+" : "−"}${Math.abs(pct).toFixed(1)}%` : "";
   const icon = danger ? _ICON_STOP : reached ? _ICON_GOAL : "";
-  const label = danger ? "stop" : reached ? "goal" : "goal $2–3";
-  badge.innerHTML = `Today ${valStr} · ${icon}${label}`;
+  const label = danger ? "stop" : reached ? "goal" : `goal ${DAILY_GOAL_PCT}%`;
+  badge.innerHTML = `Today ${valStr}${pctStr} · ${icon}${label}`;
   badge.hidden = false;
   badge.classList.toggle("is-pos", reached && !danger);
   badge.classList.toggle("is-neg", v < 0);
