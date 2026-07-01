@@ -217,6 +217,32 @@
       .j-calc-row .v small { font-family: var(--font-sans); font-weight: 500; font-size: 12px; color: var(--text-muted); margin-left: 8px; }
       .j-calc-hint { margin-top: 12px; font-size: 12.5px; line-height: 1.55; color: var(--text-muted); }
 
+      /* авто-разбор 4h/1h/5m — «куда и когда» */
+      .j-coach { border-left: 3px solid var(--border-strong); }
+      .j-coach-verdict { padding: 14px 16px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--canvas-subtle); }
+      .j-coach-verdict.reasonable { border-color: var(--green-line); background: var(--green-soft); }
+      .j-coach-verdict.counter    { border-color: var(--warn);      background: var(--warn-soft); }
+      .j-coach-verdict.neutral    { border-color: var(--border-strong); background: var(--canvas-subtle); }
+      .j-coach-verdict .j-vh { font-family: var(--font-sans); font-weight: 700; font-size: 16px; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
+      .j-coach-verdict .j-vd { margin-top: 7px; font-size: 13.5px; line-height: 1.6; color: var(--text-secondary); }
+      .j-bias { font-family: var(--font-mono); font-weight: 700; font-size: 12px; padding: 3px 9px; border-radius: 999px; letter-spacing: .04em; }
+      .j-bias.LONG { color: var(--green); background: var(--green-soft); }
+      .j-bias.SHORT { color: var(--red); background: var(--red-soft); }
+      .j-bias.STAND_ASIDE { color: var(--text-muted); background: var(--canvas-inset); }
+      .j-tf-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; }
+      @media (max-width: 760px) { .j-tf-grid { grid-template-columns: 1fr; } }
+      .j-tf { padding: 13px 15px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--card-bg); }
+      .j-tf-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+      .j-tf-tf { font-family: var(--font-mono); font-weight: 700; font-size: 15px; color: var(--text-primary); }
+      .j-tf-role { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-muted); }
+      .j-tf-trend { font-weight: 600; font-size: 12.5px; padding: 2px 9px; border-radius: 999px; }
+      .j-tf-trend.up { color: var(--green); background: var(--green-soft); }
+      .j-tf-trend.down { color: var(--red); background: var(--red-soft); }
+      .j-tf-trend.flat { color: var(--warn); background: var(--warn-soft); }
+      .j-tf-note { font-size: 12.5px; line-height: 1.55; color: var(--text-secondary); }
+      .j-tf-sub { margin-top: 7px; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted); }
+      .j-coach-note { margin: 16px 0 0; font-size: 12.5px; line-height: 1.6; color: var(--text-muted); max-width: 84ch; }
+
       /* обучающая панель «как пользоваться» */
       .j-help-btn {
         display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 999px;
@@ -300,6 +326,14 @@
           </div>
 
           <p class="j-principle">Сначала ответь «тренд или боковик» — по структуре хаёв/лоёв и EMA200, — и только потом смотри RSI. Не лонгуй против тренда 1D и не шорти против него.</p>
+        </section>
+
+        <!-- Авто-разбор 4h/1h/5m: куда (направление) и когда (тайминг) -->
+        <section class="j-card j-coach" id="coachCard">
+          <h2 class="j-card-title"><span class="j-idx">разбор</span> Куда и когда · 4h → 1h → 5m <span class="j-status" id="coachStatus" style="margin-left:auto"></span></h2>
+          <div class="j-coach-verdict neutral" id="coachVerdict"><div class="j-vh">Читаю рынок…</div></div>
+          <div class="j-tf-grid" id="coachTfs"></div>
+          <p class="j-coach-note" id="coachNote"></p>
         </section>
 
         <div class="j-cols">

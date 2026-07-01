@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { rsi, findLevels, analyzeChart, sizeForRisk, stopSanity, readOrderFlow } from '../src/modules/chartCoach.js';
+import { rsi, findLevels, analyzeChart, sizeForRisk, stopSanity, readOrderFlow, analyzeMultiTF } from '../src/modules/chartCoach.js';
 
 // Хелпер: свеча из close (high/low вокруг close).
 const c = (close, spread = close * 0.005) => ({
@@ -120,4 +120,34 @@ test('analyzeChart: план содержит стоп/цель/RR и инвал
   assert.strictEqual(out.plan.side, 'SHORT');
   assert.ok('rr' in out.plan, 'RR посчитан (или null)');
   assert.ok('invalidation' in out.plan);
+});
+
+// ── analyzeMultiTF (4h/1h/5m разбор «куда и когда») ──
+test('analyzeMultiTF: мало данных 1h → ok:false', () => {
+  const out = analyzeMultiTF({ candles4h: [], candles1h: [c(100)], candles5m: [], price: 100 });
+  assert.strictEqual(out.ok, false);
+});
+
+test('analyzeMultiTF: 4h вниз + 1h вниз → bias SHORT, disclaimer про выход', () => {
+  // Все ТФ падают и заканчиваются на одной цене (в реале цена одна на всех).
+  const P = 150;
+  const downTo = (n, start) => Array.from({ length: n }, (_, i) => c(start - (i * (start - P)) / (n - 1)));
+  const candles4h = downTo(60, 200);
+  const candles1h = downTo(60, 180);
+  const candles5m = downTo(60, 160);
+  const price = P;
+  const out = analyzeMultiTF({ candles4h, candles1h, candles5m, price });
+  assert.strictEqual(out.ok, true);
+  assert.strictEqual(out.bias, 'SHORT', 'оба тренда вниз → шорт-bias');
+  assert.strictEqual(out.tf.h4.trend, 'down');
+  assert.match(out.disclaimer, /выход/i, 'напоминает: эдж в выходе');
+});
+
+test('analyzeMultiTF: 4h и 1h спорят → STAND_ASIDE (не входить)', () => {
+  const up = Array.from({ length: 60 }, (_, i) => c(100 + i * 0.5));   // 4h вверх
+  const down = Array.from({ length: 60 }, (_, i) => c(160 - i * 0.5)); // 1h вниз
+  const price = down.at(-1).close;
+  const out = analyzeMultiTF({ candles4h: up, candles1h: down, candles5m: down, price });
+  assert.strictEqual(out.bias, 'STAND_ASIDE');
+  assert.strictEqual(out.plan, null, 'в стороне → плана нет');
 });

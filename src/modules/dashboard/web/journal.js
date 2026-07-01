@@ -8,6 +8,7 @@ import "./src/styles/index.scss";
 
 import { bindTheme } from "./src/core/shell.js";
 import { mountTopnav } from "./src/core/topnav.js";
+import { analyzeMultiTF } from "../../chartCoach.js";
 
 mountTopnav("journal");
 bindTheme();
@@ -85,10 +86,19 @@ async function loadAnchor() {
   const conn = G("conn"); conn.textContent = "загрузка HL…";
   try {
     const now = Date.now(), day = 864e5;
-    const reqs = [hl({ type: "allMids" }), hl({ type: "candleSnapshot", req: { coin, interval: "1d", startTime: now - 9 * day, endTime: now } })];
-    if (coin !== "BTC") reqs.push(hl({ type: "candleSnapshot", req: { coin: "BTC", interval: "1d", startTime: now - 9 * day, endTime: now } }));
-    const [mids, cd, btcd] = await Promise.all(reqs);
+    const snap = (interval, from) => hl({ type: "candleSnapshot", req: { coin, interval, startTime: now - from, endTime: now } });
+    // Разбор-свечи гасят ошибку в null (429 не должен рушить цену/рельс).
+    const soft = (p) => p.catch(() => null);
+    const [mids, cd, c4r, c1r, c5r, btcd] = await Promise.all([
+      hl({ type: "allMids" }),
+      snap("1d", 9 * day),
+      soft(snap("4h", 15 * day)),   // ~90 баров для EMA20/50
+      soft(snap("1h", 6 * day)),    // ~144 бара
+      soft(snap("5m", 12 * 3600e3)),// ~144 бара
+      coin !== "BTC" ? soft(hl({ type: "candleSnapshot", req: { coin: "BTC", interval: "1d", startTime: now - 9 * day, endTime: now } })) : Promise.resolve(null),
+    ]);
     const price = parseFloat(mids[coin]); setPx(price);
+    renderCoach(price, c4r, c1r, c5r);
     const D = cd.map((c) => ({ o: +c.o, h: +c.h, l: +c.l, c: +c.c })); const cur = D[D.length - 1];
     const dchg = dayChg(D); const e = G("dchg");
     e.textContent = (dchg >= 0 ? "+" : "") + dchg.toFixed(2) + "%"; e.className = "j-daychg " + (dchg >= 0 ? "j-up" : "j-down");
@@ -130,6 +140,36 @@ function renderVsBtc(dchg, btcd) {
   const btcChg = dayChg(btcd.map((c) => ({ o: +c.o, c: +c.c }))); const rel = dchg - btcChg;
   const corr = Math.sign(dchg) === Math.sign(btcChg) && dchg !== 0;
   el.innerHTML = `<span class="j-vschip"><span class="j-num ${rel >= 0 ? "j-up" : "j-down"}">${rel >= 0 ? "+" : ""}${rel.toFixed(1)}%</span><span class="j-badge ${corr ? "corr" : "div"}">${corr ? "следует" : "расходится"}</span></span>`;
+}
+
+// ── авто-разбор 4h/1h/5m «куда и когда» ──
+const mkCandles = (arr) => (Array.isArray(arr) ? arr.map((k) => ({ open: +k.o, high: +k.h, low: +k.l, close: +k.c })) : []);
+const BIAS_TXT = { LONG: "bias: LONG", SHORT: "bias: SHORT", STAND_ASIDE: "в стороне" };
+const TF_TREND = { up: ["↑ вверх", "up"], down: ["↓ вниз", "down"], flat: ["→ боковик", "flat"] };
+function tfCell(tf, role, d) {
+  const tr = TF_TREND[d.trend] || TF_TREND.flat;
+  const bits = [];
+  if (d.rsi != null) bits.push("RSI " + d.rsi);
+  if (d.atrPct != null) bits.push("ATR " + d.atrPct + "%");
+  if (d.triggerReady != null) bits.push(d.triggerReady ? "триггер ✓" : "триггера нет");
+  const sub = bits.length ? `<div class="j-tf-sub">${bits.join(" · ")}</div>` : "";
+  return `<div class="j-tf">
+    <div class="j-tf-head"><span><span class="j-tf-tf">${tf}</span> <span class="j-tf-role">${role}</span></span><span class="j-tf-trend ${tr[1]}">${tr[0]}</span></div>
+    <div class="j-tf-note">${d.note}</div>${sub}</div>`;
+}
+function renderCoach(price, c4r, c1r, c5r) {
+  const vEl = G("coachVerdict"), tEl = G("coachTfs"), nEl = G("coachNote");
+  const out = analyzeMultiTF({ candles4h: mkCandles(c4r), candles1h: mkCandles(c1r), candles5m: mkCandles(c5r), price });
+  if (!out.ok) {
+    vEl.className = "j-coach-verdict neutral";
+    vEl.innerHTML = '<div class="j-vh">Мало данных для разбора — HL не отдал свечи (попробуй обновить)</div>';
+    tEl.innerHTML = ""; nEl.textContent = ""; return;
+  }
+  const v = out.verdict;
+  vEl.className = "j-coach-verdict " + v.tone;
+  vEl.innerHTML = `<div class="j-vh">${v.headline}<span class="j-bias ${out.bias}">${BIAS_TXT[out.bias] || out.bias}</span></div><div class="j-vd">${v.detail}</div>`;
+  tEl.innerHTML = tfCell("4h", "направление", out.tf.h4) + tfCell("1h", "зона + стоп", out.tf.h1) + tfCell("5m", "тайминг", out.tf.m5);
+  nEl.textContent = out.disclaimer;
 }
 
 // ── сегменты ──

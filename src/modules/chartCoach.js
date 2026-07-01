@@ -221,6 +221,127 @@ export function analyzeChart({
   };
 }
 
+/**
+ * Мульти-ТФ разбор «куда и когда» для журнала. Три таймфрейма как РОЛИ, а не
+ * три сигнала (важно — сигнал входа эджа не несёт, эдж в выходе):
+ *   4h — направление: можно ли вообще искать вход в эту сторону (фильтр против
+ *        контр-тренда, главный леак ловли ножей);
+ *   1h — зона входа и где стоп (ближайшие уровни + ATR);
+ *   5m — тайминг: сложился ли триггер в сторону старшего тренда, или ещё рано.
+ * Bias берём из согласия 4h+1h. Если 4h и 1h спорят — лучший вход = не входить.
+ * Чистая функция (никаких сетевых вызовов), детерминированно, без LLM.
+ * @param {{candles4h:Array, candles1h:Array, candles5m:Array, price:number}} p
+ */
+export function analyzeMultiTF({ candles4h, candles1h, candles5m, price }) {
+  if (!(price > 0) || !Array.isArray(candles1h) || candles1h.length < 20) {
+    return { ok: false, reason: "not_enough_data" };
+  }
+  const closes = (arr) => (Array.isArray(arr) ? arr.map((c) => c.close) : []);
+  const c4 = closes(candles4h), c1 = closes(candles1h), c5 = closes(candles5m);
+  // Тренд по EMA: если баров хватает на 20/50 — берём их, иначе 9/21 (короткий 5m).
+  const trend = (cl, px) =>
+    cl.length >= 51 ? trendFromEma(cl, px, 20, 50)
+      : cl.length >= 22 ? trendFromEma(cl, px, 9, 21) : "flat";
+
+  const trend4h = trend(c4, price);
+  const trend1h = trend(c1, price);
+  const trend5m = trend(c5, price);
+  const rsi1h = rsi(c1, 14);
+  const rsi5m = rsi(c5, 14);
+  const atr1h = atr15(candles1h, 14);
+  const atrPct1h = atr1h != null ? (atr1h / price) * 100 : null;
+  const { support, resistance, supports, resistances } = findLevels(candles1h, 2, price);
+  const nearSupport = support != null && atr1h != null && (price - support) <= 0.75 * atr1h;
+  const nearResistance = resistance != null && atr1h != null && (resistance - price) <= 0.75 * atr1h;
+
+  // Bias = согласие старшего (4h) и среднего (1h) тренда. Спорят → в сторону.
+  let bias;
+  if (trend4h === "up" && trend1h !== "down") bias = "LONG";
+  else if (trend4h === "down" && trend1h !== "up") bias = "SHORT";
+  else if (trend4h === "flat" && trend1h === "up") bias = "LONG";
+  else if (trend4h === "flat" && trend1h === "down") bias = "SHORT";
+  else bias = "STAND_ASIDE";
+
+  // 4h — направление (куда смотреть).
+  const note4h =
+    trend4h === "up" ? "тренд вверх — ищи ЛОНГИ, шорт = против ветра"
+      : trend4h === "down" ? "тренд вниз — ищи ШОРТЫ, лонг = против ветра"
+        : "боковик — направления нет, вход без края = лотерея";
+
+  // 1h — зона входа и где стоп.
+  let note1h;
+  if (nearSupport) note1h = `цена у поддержки $${fmt(support)} — зона лонга, стоп ПОД неё`;
+  else if (nearResistance) note1h = `цена у сопротивления $${fmt(resistance)} — зона шорта, стоп НАД неё`;
+  else note1h = `между уровнями (подд. $${fmt(support)} / сопр. $${fmt(resistance)}) — вход в пустоте, жди подхода к краю`;
+
+  // 5m — тайминг: триггер в сторону bias.
+  let triggerReady = false, triggerNote;
+  if (bias === "LONG") {
+    triggerReady = nearSupport && trend5m === "up";
+    triggerNote = triggerReady
+      ? "5m развернулся вверх у поддержки — триггер есть"
+      : nearSupport ? "у поддержки, но 5m ещё не развернулся вверх — рано"
+        : "не на уровне — триггер лонга ждать у поддержки";
+  } else if (bias === "SHORT") {
+    triggerReady = nearResistance && trend5m === "down";
+    triggerNote = triggerReady
+      ? "5m развернулся вниз у сопротивления — триггер есть"
+      : nearResistance ? "у сопротивления, но 5m ещё не развернулся вниз — рано"
+        : "не на уровне — триггер шорта ждать у сопротивления";
+  } else {
+    triggerNote = "направление не определено — тайминг считать не от чего";
+  }
+
+  // Вердикт «куда и когда».
+  let verdict, plan = null;
+  if (bias === "STAND_ASIDE") {
+    verdict = {
+      tone: "neutral",
+      headline: "Стой в стороне — 4h и 1h спорят",
+      detail: `Старший (4h ${trTxt(trend4h)}) и средний (1h ${trTxt(trend1h)}) тренды не согласны. Куда — непонятно; лучший вход здесь = не входить и ждать, пока договорятся.`,
+    };
+  } else {
+    plan = buildPlan({ userSide: bias, price, support, resistance, resistances, supports, atr14: atr1h });
+    const atLevel = bias === "LONG" ? nearSupport : nearResistance;
+    if (triggerReady) {
+      verdict = {
+        tone: "reasonable",
+        headline: `${bias} — условия сложились`,
+        detail: `4h за тебя, цена на уровне 1h, 5m дал триггер. Стоп за уровень ($${fmt(plan.invalidation ?? plan.stop)}), R:R ≈ ${plan.rr != null ? plan.rr.toFixed(2) : "—"}. Дальше — выход отдаём боту (adopt).`,
+      };
+    } else if (atLevel) {
+      verdict = {
+        tone: "counter",
+        headline: `${bias} — жди триггер на 5m`,
+        detail: `Направление (4h) и зона (1h) есть, но 5m ещё не подтвердил. Не лови нож заранее — вход по развороту 5m в сторону ${bias}.`,
+      };
+    } else {
+      verdict = {
+        tone: "neutral",
+        headline: `${bias}, но рано — цена не на уровне`,
+        detail: `Тренд за ${bias}, но цена в пустоте между уровнями 1h. Вход тут = плохой R:R. Жди подхода к ${bias === "LONG" ? "поддержке" : "сопротивлению"}.`,
+      };
+    }
+  }
+
+  const round = (v, d = 1) => (v != null ? Math.round(v * 10 ** d) / 10 ** d : null);
+  return {
+    ok: true,
+    price,
+    bias,
+    tf: {
+      h4: { trend: trend4h, note: note4h },
+      h1: { trend: trend1h, rsi: round(rsi1h), atrPct: round(atrPct1h, 2), support, resistance, nearSupport, nearResistance, note: note1h },
+      m5: { trend: trend5m, rsi: round(rsi5m), triggerReady, note: triggerNote },
+    },
+    verdict,
+    plan,
+    disclaimer: "Разбор структуры, не сигнал с доказанным эджем. Эдж — в выходе (adopt). Вход по 4h→1h→5m, чтобы не ловить нож.",
+  };
+}
+
+function trTxt(t) { return t === "up" ? "вверх" : t === "down" ? "вниз" : "боковик"; }
+
 function buildPlan({ userSide, price, support, resistance, resistances, supports, atr14 }) {
   const atrStop = atr14 != null ? atr14 : price * 0.01;
   if (userSide === "LONG") {
