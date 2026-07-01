@@ -31,12 +31,19 @@ export function recordOiSnapshot(data, ts = Date.now()) {
 /**
  * OI N минут назад (последний снапшот на/до целевой метки). null если истории
  * мало (< 2 снапшотов) или нет дотягивающего по времени снапшота.
+ *
+ * `maxStaleMin` (опц.): базовый снапшот должен быть не старше целевой метки
+ * больше чем на maxStaleMin минут. Защита от «лежалой» точки: при разрежённой
+ * истории ближайший снапшот ≤ target может быть сильно раньше target, и тогда
+ * Δ считается против устаревшего OI → фейковый скачок. По умолчанию (не задан)
+ * — прежнее поведение без проверки.
  * @param {string} coin
  * @param {number} mins
  * @param {number} [now=Date.now()]
+ * @param {{maxStaleMin?: number}} [opts]
  * @returns {number|null}
  */
-export function getOiNMinAgo(coin, mins, now = Date.now()) {
+export function getOiNMinAgo(coin, mins, now = Date.now(), { maxStaleMin } = {}) {
   const arr = _oiHistory.get(coin);
   if (!arr || arr.length < 2) return null;
   const target = now - mins * 60_000;
@@ -45,7 +52,9 @@ export function getOiNMinAgo(coin, mins, now = Date.now()) {
     if (snap.ts <= target) best = snap;
     else break;
   }
-  return best?.oiUsd ?? null;
+  if (!best) return null;
+  if (maxStaleMin != null && target - best.ts > maxStaleMin * 60_000) return null;
+  return best.oiUsd;
 }
 
 /** Тестовый сброс буфера. */

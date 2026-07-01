@@ -52,17 +52,48 @@ const COOLDOWN_MS =
   parseFloat(process.env.WATCHLIST_ALERT_COOLDOWN_MIN || '45') * 60_000;
 
 // ── OI-сёрдж: независимый триггер «OI выше обычного» ──
-// Отдельно от ценового будильника. Срабатывает на резкий набор/сброс позиций
-// БЕЗ требования большого хода цены. Порог 3% = «синяя» подсветка OI на
-// дашборде (hotMovers/render.js: var(--accent) при |ΔOI5m|≥3). Но окно тут
-// КОРОЧЕ — 1 минута: ловим именно резкий всплеск (OI ползёт медленнее цены, 3%
-// за 1м — это сильно). Данных хватает: OI снапшотится каждые 30с (oiHistory).
+// Отдельно от ценового будильника. Срабатывает на набор/сброс позиций БЕЗ
+// требования большого хода цены. Порог 3% = «синяя» подсветка OI на дашборде
+// (hotMovers/render.js: var(--accent) при |ΔOI5m|≥3).
+//
+// Окно 3 минуты (было 1 мин). 1-минутное окно = ~2 снапшота при 30с-cadence,
+// из-за чего одиночный кривой тик OI = фейковый скачок «−6.9%» на плоском
+// графике. 3 мин = ~6 снапшотов → движение подтверждено, а не глитч. Плюс
+// staleness-guard (maxStaleMin) отбрасывает сравнение с лежалой базовой точкой.
+// И главное: в текст кладём Δцены за то же окно и классифицируем режим —
+// алерт объясняет, ЧТО смотреть, а не просто кричит «OI ±X%».
 const OI_SURGE_ENABLED =
   (process.env.WATCHLIST_OI_SURGE_ENABLED || 'true').toLowerCase() === 'true';
 const OI_SURGE_PCT = parseFloat(process.env.WATCHLIST_OI_SURGE_PCT || '3');
-const OI_SURGE_WINDOW_MIN = parseFloat(process.env.WATCHLIST_OI_SURGE_WINDOW_MIN || '1');
+const OI_SURGE_WINDOW_MIN = parseFloat(process.env.WATCHLIST_OI_SURGE_WINDOW_MIN || '3');
 const OI_SURGE_COOLDOWN_MS =
   parseFloat(process.env.WATCHLIST_OI_SURGE_COOLDOWN_MIN || '30') * 60_000;
+// Базовый OI-снапшот должен быть в пределах этого допуска от целевой метки
+// (иначе Δ считается против устаревшей точки). 1.5 мин ≈ 3× cadence — покрывает
+// разрывы снапшотов, но режет реально лежалые базы.
+const OI_SURGE_MAX_STALE_MIN = 1.5;
+// Порог «плоской» цены: ход за окно меньше этого = графика фактически нет.
+const PRICE_FLAT_PCT = 0.3;
+
+// Классификатор «OI × цена» → человекочитаемый режим. Отвечает на «где падение?»:
+// если цена плоская, так и говорит — OI-движение само по себе хода не требует.
+function describeOiPriceRegime(oiUp, pricePct) {
+  if (pricePct == null) {
+    return oiUp ? 'набор позиций (цена: нет данных).' : 'сброс позиций (цена: нет данных).';
+  }
+  const flat = Math.abs(pricePct) < PRICE_FLAT_PCT;
+  const px = `цена ${fmtPct(pricePct)}`;
+  if (oiUp) {
+    if (flat) return `набор позиций при плоской цене (${px}) — копят топливо, хода пока нет.`;
+    return pricePct > 0
+      ? `новые лонги на росте (${px}) — приток, тренд вверх.`
+      : `новые шорты на падении (${px}) — давят вниз.`;
+  }
+  if (flat) return `тихий делеверидж при плоской цене (${px}) — разгружаются, хода на графике может не быть (это норма).`;
+  return pricePct > 0
+    ? `short-covering на росте (${px}) — шорты крывают, рост может выдыхаться.`
+    : `лонгов выносит на падении (${px}) — сброс, возможен отскок.`;
+}
 
 const STATE_FILE = 'data/watchlist_alert_state.json';
 const alertAt = new Map();   // coin → ts последнего ценового пуша (персист)
@@ -115,7 +146,9 @@ async function runOnce(now = Date.now()) {
     // Резкий набор/сброс позиций сам по себе — повод глянуть. Не делаем
     // continue: монета может дать и OI-сёрдж, и ниже ценовой будильник.
     if (OI_SURGE_ENABLED && item.oiUsd != null) {
-      const oiAgoSurge = getOiNMinAgo(item.coin, OI_SURGE_WINDOW_MIN, now);
+      const oiAgoSurge = getOiNMinAgo(item.coin, OI_SURGE_WINDOW_MIN, now, {
+        maxStaleMin: OI_SURGE_MAX_STALE_MIN,
+      });
       if (oiAgoSurge != null && oiAgoSurge > 0) {
         const oiSurgePct = ((item.oiUsd - oiAgoSurge) / oiAgoSurge) * 100;
         if (
@@ -125,13 +158,21 @@ async function runOnce(now = Date.now()) {
           oiAlertAt.set(item.coin, now);
           saveAlertState();
           const oiUp = oiSurgePct >= 0;
+          // Δцены за то же окно — контекст для классификатора режима.
+          const pxAgoSurge = getPriceNMinAgo(item.coin, OI_SURGE_WINDOW_MIN, now);
+          const pricePct =
+            pxAgoSurge != null && pxAgoSurge > 0
+              ? ((item.price - pxAgoSurge) / pxAgoSurge) * 100
+              : null;
+          const regime = describeOiPriceRegime(oiUp, pricePct);
           logger.info(
-            `[WatchlistAlerts] 📊 OI #${item.coin} ${fmtPct(oiSurgePct)}/${OI_SURGE_WINDOW_MIN}m`,
+            `[WatchlistAlerts] 📊 OI #${item.coin} ${fmtPct(oiSurgePct)}/${OI_SURGE_WINDOW_MIN}m, ` +
+              `цена ${pricePct == null ? '—' : fmtPct(pricePct)}`,
           );
           await fireNtfy(
             `📊 OI #${item.coin} ${oiUp ? '▲' : '▼'} ${fmtPct(oiSurgePct)}`,
-            `OI ${fmtPct(oiSurgePct)} за ${OI_SURGE_WINDOW_MIN}м — резкий ${oiUp ? 'набор' : 'сброс'} позиций.\n` +
-              `Глянь график. Это будильник, не сделка — вход/стоп твои.`,
+            `OI ${fmtPct(oiSurgePct)} за ${OI_SURGE_WINDOW_MIN}м — ${regime}\n` +
+              `Будильник, не сделка — вход/стоп твои.`,
             [oiUp ? 'green_circle' : 'red_circle'],
           );
         }
