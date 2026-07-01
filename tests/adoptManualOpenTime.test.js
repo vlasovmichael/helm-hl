@@ -76,3 +76,35 @@ test('обычная свежая ручная поза: возвращает е
   const fills = [makeFill({ time: 10 * MIN, dir: 'Open Short', sz: 700 })];
   assert.equal(resolveManualOpenTime({ coin: 'XPL', fills }), 10 * MIN);
 });
+
+// ── Регресс: усечение окна fills (баг HYPE 2026-07-01) ──────────────────────
+// Позиция открылась ДО начала окна fills, закрылась внутри → окно начинается с
+// Close, replay стартует с ложного net=0 → постоянное смещение, которое никогда
+// не обнуляется. Без якоря к бирже флэт читается как открытая поза (ложное
+// «too old» → поза без стопа). currentNet (истина с биржи) чинит.
+test('усечённое окно: Open обрезан, оператор флэт → null (был ложный age)', () => {
+  const fills = [
+    // Open Short (−1.17) обрезан окном. Первый видимый fill — его закрытие:
+    makeFill({ time: 1 * DAY, dir: 'Close Short', sz: 1.17 }), // replay net → +1.17
+    makeFill({ time: 2 * DAY, dir: 'Open Long',   sz: 2 }),    // replay net → +3.17
+    makeFill({ time: 3 * DAY, dir: 'Close Long',  sz: 2 }),    // replay net → +1.17 (реально флэт)
+  ];
+  // Без якоря (legacy) — баг: смещение +1.17 → «открытая поза».
+  assert.notEqual(resolveManualOpenTime({ coin: 'XPL', fills }), null,
+    'демонстрация бага: без currentNet смещение читается как открытая поза');
+  // С якорем currentNet=0 (биржа: флэт) → корректно null.
+  assert.equal(resolveManualOpenTime({ coin: 'XPL', fills, currentNet: 0 }), null,
+    'якорь к бирже (флэт) убирает ложный возраст');
+});
+
+test('усечённое окно: реально открытая поза → время текущего входа', () => {
+  const fills = [
+    makeFill({ time: 1 * DAY, dir: 'Close Short', sz: 1.17 }), // занос из-за окна
+    makeFill({ time: 2 * DAY, dir: 'Open Long',   sz: 2 }),
+    makeFill({ time: 3 * DAY, dir: 'Close Long',  sz: 2 }),    // флэт
+    makeFill({ time: 4 * DAY, dir: 'Open Short',  sz: 3 }),    // текущий вход
+  ];
+  // Биржа: net = −3 (short 3). Якорь датирует открытие текущей ноги.
+  assert.equal(resolveManualOpenTime({ coin: 'XPL', fills, currentNet: -3 }), 4 * DAY,
+    'открытие текущей позы, а не занесённое смещение');
+});

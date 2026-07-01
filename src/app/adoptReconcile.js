@@ -132,39 +132,67 @@ export async function computeStopDistPct(coin) {
  * Время открытия ТЕКУЩЕЙ непрерывной позиции по монете из сырых HL fills.
  *
  * Берём правду с биржи без реконструкции ручной истории: позиция на бирже =
- * знаковая сумма ВСЕХ fills (и бот, и ручных). Идём по fills во времени, держим
+ * знаковая сумма fills (и бот, и ручных). Идём по fills во времени, держим
  * net-размер; открытие текущей позы = момент, когда |net| ушёл от нуля (или
  * сменил знак). Бот-закрытие усыновлённой позы (Close-fill) при этом естественно
  * обнуляет net → фантомные «висящие» ноги, которые копила фильтрация бот-fills по
  * oid, физически невозможны (XPL incident 2026-06-17: adopt считал свежую позу
  * возрастом 6888мин и отказывал по too-old → поза без стопа → −$7.36).
  *
- * @param {Array} fills — сырые HL fills (как из fetchUserFills), любой порядок.
+ * 🐛 ОКНО FILLS (2026-07-01): fetchUserFills отдаёт ~60д, и если позиция
+ * ПЕРЕСЕКАЛА границу окна (открылась раньше, закрылась внутри), replay стартует с
+ * ложного net=0 → постоянное смещение, которое НИКОГДА не обнуляется. HYPE:
+ * первый fill в окне = Close Short → net поехал в +1.17, и каждый реальный выход
+ * во флэт читался как «лонг 1.17 открыт» → ложное «too old» (175м), поза без
+ * стопа. Фикс: якорим к ИСТИНЕ С БИРЖИ (`currentNet` = знаковый размер позиции
+ * сейчас). offset = replayEndNet − currentNet — это net, занесённый из-за окна;
+ * вычитаем его из всей траектории. Тогда флэт=0 определяется верно. currentNet
+ * null (не передан) → offset 0 = прежнее поведение.
+ *
+ * @param {object}  args
+ * @param {string}  args.coin
+ * @param {Array}   args.fills — сырые HL fills (как из fetchUserFills), любой порядок.
+ * @param {number|null} [args.currentNet] — знаковый размер позиции с биржи
+ *   (>0 long, <0 short, 0 = флэт); null = не якорить (legacy).
  * @returns {number|null} unix ms открытия текущей позы, либо null если по монете
- *   нет открытой позы в пределах загруженного окна fills.
+ *   нет открытой позы / открытие вне окна fills.
  */
-export function resolveManualOpenTime({ coin, fills }) {
+export function resolveManualOpenTime({ coin, fills, currentNet = null }) {
   const C = String(coin).toUpperCase();
   const list = (fills || [])
     .filter((f) => f.coin?.toUpperCase() === C && typeof f.dir === 'string')
     .sort((a, b) => a.time - b.time);
 
-  const EPS = 1e-9;
-  let net = 0;          // знаковый размер: >0 long, <0 short
-  let openTime = null;
+  // 1-й проход: replay + максимальный размер fill (база для относительного EPS).
+  let net = 0;
+  let maxSz = 0;
+  const traj = [];
   for (const f of list) {
     const sz = Math.abs(Number(f.sz) || 0);
+    if (sz > maxSz) maxSz = sz;
     const isOpen = f.dir.startsWith('Open ');
     const isLong = f.dir.includes('Long');
     // long-открытие / short-закрытие → +sz; short-открытие / long-закрытие → −sz
-    const signed = isOpen === isLong ? sz : -sz;
-    const prev = net;
-    net += signed;
-    if (Math.abs(net) < EPS) {
-      openTime = null;                                    // поза схлопнулась
-    } else if (Math.abs(prev) < EPS || (prev > 0) !== (net > 0)) {
-      openTime = f.time;                                  // 0→поза или разворот знака
+    net += isOpen === isLong ? sz : -sz;
+    traj.push({ time: f.time, net });
+  }
+
+  // Смещение из-за окна: чтобы траектория закончилась на истине с биржи.
+  const offset = currentNet != null ? net - currentNet : 0;
+  // Относительный EPS: жёсткий 1e-9 ложно «видел» позу из float-крошки на монетах
+  // с большими размерами (мем-коины в млн единиц). 0.01% от крупнейшего fill.
+  const EPS = Math.max(1e-9, 1e-4 * (maxSz || 1));
+
+  let openTime = null;
+  let cnetPrev = -offset; // истинный net ДО первого fill = −offset (занос из-за окна)
+  for (const p of traj) {
+    const cnet = p.net - offset;
+    if (Math.abs(cnet) < EPS) {
+      openTime = null;                                    // поза схлопнулась (флэт)
+    } else if (Math.abs(cnetPrev) < EPS || (cnetPrev > 0) !== (cnet > 0)) {
+      openTime = p.time;                                  // 0→поза или разворот знака
     }
+    cnetPrev = cnet;
   }
   return openTime;
 }
@@ -173,8 +201,10 @@ export function resolveManualOpenTime({ coin, fills }) {
  * Время открытия текущей ОТКРЫТОЙ ручной позиции по монете (unix ms) или null.
  * Источник — сырые HL fills (правда с биржи), см. resolveManualOpenTime. null →
  * не смогли определить (поза старше окна fills) → из осторожности НЕ подхватываем.
+ * `currentNet` — знаковый размер позиции с биржи: якорит replay, чтобы окно fills
+ * не ломало определение возраста (см. баг с усечением окна в resolveManualOpenTime).
  */
-async function getManualOpenTime(coin) {
+async function getManualOpenTime(coin, currentNet = null) {
   let fills;
   try {
     fills = await fetchUserFills(0); // 60d
@@ -182,7 +212,7 @@ async function getManualOpenTime(coin) {
     logger.debug(`[Adopt] fetchUserFills failed: ${err.message}`);
     return null;
   }
-  return resolveManualOpenTime({ coin, fills });
+  return resolveManualOpenTime({ coin, fills, currentNet });
 }
 
 /** ntfy-пуш (best-effort). Тихий час 00–08 → priority=1 (без звука). */
@@ -258,7 +288,9 @@ export async function maybeAdoptManualPosition(manualPositions) {
     // (лаг индексатора ~30с), но позу бот увидел РОДившейся при себе → свежак,
     // усыновляем сразу (entry≈first-seen, уточним бэкфиллом). Поза висела на старте
     // и fills молчат → возможен старый orphan → не трогаем (защита XPL).
-    const openTime = await getManualOpenTime(coin);
+    // ex.szi — знаковый размер позиции с биржи (истина): якорит replay fills,
+    // чтобы усечение 60д-окна не давало ложный возраст (баг HYPE 2026-07-01).
+    const openTime = await getManualOpenTime(coin, ex.szi);
     const firstSeen = _firstSeen.get(up(coin)) || null;
     const { decision, entryTime, ageMin, provisional } = decideAdoptByAge({
       openTime, firstSeen, now, maxAgeMs,
