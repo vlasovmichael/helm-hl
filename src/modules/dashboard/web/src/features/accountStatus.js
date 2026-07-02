@@ -266,6 +266,14 @@ export function renderHeader(status) {
 
   const wtEl = document.getElementById("wallet-total-val");
   if (wtEl) wtEl.style.display = "none";
+
+  // Дневной стоп-лосс — backend-правда по fills (см. dailyRisk.js). Меняет
+  // бейдж «Today» на «стоп: входы закрыты» и красит карточку.
+  const halted = !!status.dailyRisk?.halted;
+  if (halted !== _dailyRiskHalted) {
+    _dailyRiskHalted = halted;
+    renderDailyBadge();
+  }
 }
 
 // ── Daily goal / circuit-breaker ──────────────────────────────────────────
@@ -286,30 +294,61 @@ let _lastEquity = null;
 const _ICON_GOAL = `<svg viewBox="0 0 16 16" width="12" height="12" style="vertical-align:-2px;margin-right:3px" aria-hidden="true"><circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M5 8.2l2 2 4-4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 const _ICON_STOP = `<svg viewBox="0 0 16 16" width="12" height="12" style="vertical-align:-2px;margin-right:3px" aria-hidden="true"><path d="M5.3 1.8H10.7L14.2 5.3V10.7L10.7 14.2H5.3L1.8 10.7V5.3Z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M8 4.9v3.4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="10.9" r=".85" fill="currentColor"/></svg>`;
 
-/** Прокинуть дневной realized-PnL (зовётся из tick). Обновляет бейдж + красит карточку. */
-export function setDailyPnl(realized) {
+// Последние известные куски дневного бейджа: realized+fees ставит setDailyPnl
+// (поллинг pnl-summary), halted — renderHeader (WS status, backend-правда по
+// fills). Бейдж собирается из всех кусков, кто бы ни обновился последним.
+let _lastDailyPnl = null;
+let _lastFees = null;      // { today, d7 }
+let _dailyRiskHalted = false;
+
+function renderDailyBadge() {
   const badge = document.getElementById("daily-goal-badge");
   const sec = document.getElementById("sec-position");
-  if (!badge || !sec) return; // не на этой странице
-  const v = realized ?? 0;
+  if (!badge || !sec || _lastDailyPnl == null) return; // не на этой странице / рано
+  const v = _lastDailyPnl;
   // Относительная цель: % дневного realized от equity. Пока equity не пришёл
   // (первый кадр WS) — фолбэк на $-пороги, чтобы бейдж не врал в первые секунды.
   const pct = _lastEquity && _lastEquity > 0 ? (v / _lastEquity) * 100 : null;
-  const danger = pct != null ? pct <= DAILY_STOP_PCT : v <= DAILY_STOP_USD;
+  const danger =
+    _dailyRiskHalted ||
+    (pct != null ? pct <= DAILY_STOP_PCT : v <= DAILY_STOP_USD);
   const reached = pct != null ? pct >= DAILY_GOAL_PCT : v >= DAILY_GOAL_USD;
   const valStr = `${v >= 0 ? "+" : "−"}$${Math.abs(v).toFixed(2)}`;
   // Показываем и $, и % (когда есть база) — $ = факт, % = прогресс к цели.
   const pctStr =
     pct != null ? ` · ${pct >= 0 ? "+" : "−"}${Math.abs(pct).toFixed(1)}%` : "";
+  // Комиссии — пожиратель №1 (аудит 02.07: $57 из $83 минуса за 60д). Держим
+  // цену оборота перед глазами: сегодня в бейдже, неделя — в tooltip.
+  const feeStr =
+    _lastFees && _lastFees.today > 0.005
+      ? ` · fees $${_lastFees.today.toFixed(2)}`
+      : "";
   const icon = danger ? _ICON_STOP : reached ? _ICON_GOAL : "";
-  const label = danger ? "stop" : reached ? "goal" : `goal ${DAILY_GOAL_PCT}%`;
-  badge.innerHTML = `Today ${valStr}${pctStr} · ${icon}${label}`;
+  const label = _dailyRiskHalted
+    ? "стоп: входы закрыты"
+    : danger ? "stop" : reached ? "goal" : `goal ${DAILY_GOAL_PCT}%`;
+  badge.innerHTML = `Today ${valStr}${pctStr}${feeStr} · ${icon}${label}`;
+  if (_lastFees != null) {
+    badge.title = `Комиссии: сегодня $${(_lastFees.today ?? 0).toFixed(2)} · за 7д $${(_lastFees.d7 ?? 0).toFixed(2)}`;
+  }
   badge.hidden = false;
   badge.classList.toggle("is-pos", reached && !danger);
   badge.classList.toggle("is-neg", v < 0);
   sec.classList.toggle("daily-danger", danger);
   _moodToday = v;
   refreshSectionMood();
+}
+
+/**
+ * Прокинуть дневной realized-PnL + fees (зовётся из tick, источник
+ * /api/pnl-summary). Обновляет бейдж + красит карточку.
+ * @param {number} realized — net realized PnL за сегодня
+ * @param {{today:number, d7:number}|null} [fees] — комиссии сегодня / за 7д
+ */
+export function setDailyPnl(realized, fees = null) {
+  _lastDailyPnl = realized ?? 0;
+  if (fees) _lastFees = fees;
+  renderDailyBadge();
 }
 
 export function renderPosition(pos) {

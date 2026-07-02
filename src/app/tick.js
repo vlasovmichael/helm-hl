@@ -23,12 +23,31 @@ import { tickHunterLongPaper } from './hunterLongPaperTick.js';
 import { runBalanceDiag } from './balanceDiag.js';
 import { flushBotStatePeriodic } from './lifecycle.js';
 import { state } from './state.js';
+import { refreshDailyRisk } from '../modules/dailyRisk.js';
+import { fireAdoptNtfy } from './adoptReconcile.js';
 
 export async function tick() {
   if (state.tickRunning || state.shuttingDown) return;
   state.tickRunning = true;
 
   try {
+    // ── Дневной стоп-лосс (rail, не замок): net дня по fills ≤ −лимит →
+    // urgent-алерт (1/день) + ниже гейтим новые авто-входы (OPEN → HOLD).
+    // Выходы/сопровождение/нянька работают как обычно. Fail-soft внутри.
+    const dailyRisk = config.isProduction
+      ? await refreshDailyRisk()
+      : { halted: false, crossedNow: false };
+    if (dailyRisk.crossedNow) {
+      await fireAdoptNtfy(
+        `🛑 Дневной стоп-лосс: ${dailyRisk.netUsd.toFixed(2)}$`,
+        `День ушёл ниже −$${dailyRisk.limitUsd} (net по fills, fees $${dailyRisk.feesUsd.toFixed(2)}).\n` +
+        `Новые авто-входы закрыты до полуночи. Открытые позы ведутся как обычно.\n` +
+        `Лучшая сделка сейчас — закрыть терминал.`,
+        ['octagonal_sign'],
+        { urgent: true },
+      );
+    }
+
     // ── Hunter Reconcile: SL/TP trigger fired on exchange? (Iter C) ──
     // Запускается ДО integrityCheck, чтобы штатно закрыть hunter-позицию с
     // правильным reason ('hunter_sl_external' / 'hunter_tp_external'),
@@ -152,7 +171,11 @@ export async function tick() {
     // дважды дёргать cancel.
     await processHunterTrailArm(activePosition);
 
-    if (signal.action !== 'HOLD') {
+    if (signal.action === 'OPEN' && dailyRisk.halted) {
+      // Дневной лимит пробит — новые авто-входы не открываем до полуночи.
+      // CLOSE пропускаем: выход из открытой позы важнее рельсы.
+      logger.warn(`[Tick] 🛑 daily stop-loss: OPEN #${signal.coin || '?'} подавлен (день ${dailyRisk.netUsd?.toFixed(2)}$)`);
+    } else if (signal.action !== 'HOLD') {
       await execute(signal, activePosition);
     }
 

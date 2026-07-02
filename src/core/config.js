@@ -409,6 +409,16 @@ function loadConfig() {
     throw new Error(`ADOPT_PEAK_ALERT_GIVEBACK_PCT must be in (0, ADOPT_TRAIL_GIVE_BACK_PCT). Got: "${process.env.ADOPT_PEAK_ALERT_GIVEBACK_PCT}"`);
   }
 
+  // ── Daily loss limit (2026-07-02) — дневной стоп-лосс по fills ──
+  // Аудит 60д: 8 худших дней = −$130 при общем −$83. День достиг −LIMIT$ net →
+  // urgent-алерт + гейт новых авто-входов + тильт-алерт на усыновления до
+  // полуночи. Няньку/выходы НЕ трогает (вход без стопа хуже лимита).
+  const dailyLossLimitEnabled = (process.env.DAILY_LOSS_LIMIT_ENABLED || 'true').toLowerCase() === 'true';
+  const dailyLossLimitUsd     = parseFloat(process.env.DAILY_LOSS_LIMIT_USD || '5');
+  if (isNaN(dailyLossLimitUsd) || dailyLossLimitUsd <= 0) {
+    throw new Error(`DAILY_LOSS_LIMIT_USD must be > 0. Got: "${process.env.DAILY_LOSS_LIMIT_USD}"`);
+  }
+
   // ── Risk-based position sizing (cross-strategy: Hunter / Hunter Long / ChillBoy) ──
   const riskBasedSizing  = (process.env.RISK_BASED_SIZING  || 'false').toLowerCase() === 'true';
   const riskSizingShadow = (process.env.RISK_SIZING_SHADOW || 'true').toLowerCase() === 'true';
@@ -657,6 +667,8 @@ function loadConfig() {
       adoptPeakAlertEnabled,
       adoptPeakAlertMfePct,
       adoptPeakAlertGiveBackPct,
+      dailyLossLimitEnabled,
+      dailyLossLimitUsd,
       // ── Candy Girl радар (signal-only) ──
       candyGirlEnabled,
       candyGirlAlertEnabled,

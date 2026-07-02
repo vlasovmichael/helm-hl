@@ -43,6 +43,7 @@ import {
   isHunterArmed,
 } from "../strategistHunter.js";
 import { getAdoptPeakPct, getAdoptMaePct } from "../strategistAdopt.js";
+import { getLastDailyRiskStatus } from "../dailyRisk.js";
 import { getCandyGirlHeartbeat, getCandyGirlSignals, getCandyGirlStats } from "../strategistCandyGirl.js";
 import { buildStrategiesPayload } from "./strategiesView.js";
 import { getNearMisses } from "../nearMisses.js";
@@ -455,6 +456,9 @@ async function getStatusData() {
         }
       : null,
     manualPositions,
+    // Дневной стоп-лосс (backend-правда по fills, см. dailyRisk.js): фронт
+    // переключает бейдж «Today» в «стоп: входы закрыты».
+    dailyRisk: getLastDailyRiskStatus(),
     // Единый обзор всех стратегий (реестр-driven) для таблицы на /strategies.
     strategies: buildStrategiesPayload(),
     // Candy Girl — signal-only радар (1h EMA-тренд + 5m pullback-reclaim).

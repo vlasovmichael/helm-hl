@@ -80,7 +80,12 @@ async function tick() {
   if (mcR.status === "fulfilled") renderMarketContext(mcR.value);
   if (actR.status === "fulfilled") renderActivity(actR.value);
   if (pnlR.status === "fulfilled" && pnlR.value?.periods?.today) {
-    setDailyPnl(pnlR.value.periods.today.totalPnl ?? 0);
+    const p = pnlR.value.periods;
+    // fees today/7d — цена оборота перед глазами (пожиратель №1, аудит 02.07).
+    setDailyPnl(p.today.totalPnl ?? 0, {
+      today: p.today.totalFees ?? 0,
+      d7: p.d7?.totalFees ?? 0,
+    });
   }
   if (hmR.status === "fulfilled" && hmR.value?.signals) {
     renderHotMovers(hmR.value, fmtTime);

@@ -26,6 +26,7 @@ import {
 import { resolveAsset } from '../modules/executor/fill-parser.js';
 import { fetchUserFills } from '../modules/userFills.js';
 import { isQuietHour } from '../modules/setupScannerAlerts.js';
+import { getLastDailyRiskStatus, localDayKey } from '../modules/dailyRisk.js';
 import { atr } from '../modules/trendFollowAtr.js';
 import { getHourlyCandles } from '../modules/candleCache.js';
 
@@ -448,6 +449,21 @@ export async function maybeAdoptManualPosition(manualPositions) {
       `Дальше веду сам: храповик + трейл.`,
       ['handshake'],
     );
+
+    // Тильт-алерт: новый ручной вход в день, где дневной стоп-лосс уже пробит.
+    // Няньку НЕ отключаем (вход без стопа хуже), но кричим громко: 8 худших
+    // дней съели −$130 (аудит 2026-07-02), и все они — серии входов в минусе.
+    const dr = getLastDailyRiskStatus();
+    if (dr?.halted && dr.dayKey === localDayKey(now)) {
+      await fireAdoptNtfy(
+        `⚠️ Тильт? Вход при пробитом дневном стопе`,
+        `#${coin} ${side.toUpperCase()} усыновлён и защищён, НО день уже ` +
+        `${dr.netUsd.toFixed(2)}$ (лимит −$${dr.limitUsd}).\n` +
+        `Один тильт-день = две недели работы. Закрой терминал.`,
+        ['warning'],
+        { urgent: true },
+      );
+    }
 
     _adoptSkipReason.delete(coin); // усыновлена — вопрос «почему не adopted» снят
     adopted.push(coin); // multi-slot — продолжаем подхватывать остальные
