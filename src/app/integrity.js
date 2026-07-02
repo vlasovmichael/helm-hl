@@ -14,6 +14,7 @@ import { fetchExchangePositions } from '../modules/sync.js';
 import { fetchUserFills, classifyClose, findRoundTripForPosition } from '../modules/userFills.js';
 import { maybeAdoptManualPosition, reconcileProvisionalAdoptEntries } from './adoptReconcile.js';
 import { clearAdoptState, consumeAdoptMfeMae } from '../modules/strategistAdopt.js';
+import { finalizeAdoptTimeCut } from '../modules/adoptShadowTimeCut.js';
 import {
   state,
   INTEGRITY_CHECK_INTERVAL_MS,
@@ -211,8 +212,12 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
   });
 
   // Adopt: внешнее/ручное закрытие — частый путь выхода для adopted-позы.
-  // Чистим per-position trail-state, иначе peak-Map копит мусор.
-  if (dbPosition.strategy_id === 'adopt') clearAdoptState(dbPosition.id);
+  // Shadow time-cut финализируем ДО clearAdoptState, затем чистим per-position
+  // trail-state, иначе peak-Map копит мусор.
+  if (dbPosition.strategy_id === 'adopt') {
+    finalizeAdoptTimeCut(dbPosition, closePx);
+    clearAdoptState(dbPosition.id);
+  }
 
   logger.info(
     `[Integrity] DB position #${dbPosition.coin} (id=${dbPosition.id}) closed | ` +

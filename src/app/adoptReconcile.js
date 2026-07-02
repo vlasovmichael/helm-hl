@@ -18,7 +18,7 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { savePosition, updatePositionEntryTime } from '../core/database.js';
-import { getAccountSummary } from '../modules/exchange.js';
+import { getAccountSummary, getLivePrice } from '../modules/exchange.js';
 import {
   placeHunterTrigger,
   placeHunterLongTrigger,
@@ -98,6 +98,22 @@ export function decideAdoptByAge({ openTime, firstSeen, now, maxAgeMs }) {
 // adopt). coinUpper → { id, since }. Бэкфиллим реальное время, когда fill долетит.
 const _provisionalAdopt = new Map();
 const BACKFILL_GIVEUP_MS = 15 * 60_000; // fill не пришёл за 15м → бросаем уточнение
+
+// Сирота-алерт: поза уже ГЛУБЖЕ планового стопа на момент усыновления. Ставить
+// стоп нельзя — reduce-only триггер уже in-the-money → мгновенный market-close
+// (так родились худшие хвосты: JTO −6.06%, CHIP −7.65%, DYDX −8.07% при hold=0м,
+// 6 сделок из 23 стопов). Вместо этого: НЕ усыновляем + громкий пуш — «резать или
+// держать» решает оператор в моменте, а не рынок через 0 минут. Пока условие висит —
+// повторяем алерт не чаще раза в 30м (orphanCheck крутится каждый тик).
+const _orphanAlertAt = new Map(); // coinUpper → ts последнего алерта
+const ORPHAN_REALERT_MS = 30 * 60_000;
+
+// Чистая (для теста): цена уже на/за плановым стопом? short: стоп ВЫШЕ входа,
+// пробитие = price ≥ SL; long: стоп НИЖЕ, пробитие = price ≤ SL.
+export function isBeyondPlannedStop({ side, price, plannedSl }) {
+  if (!Number.isFinite(price) || !Number.isFinite(plannedSl)) return false;
+  return side === 'short' ? price >= plannedSl : price <= plannedSl;
+}
 
 /**
  * Дистанция жёсткого стопа в % от входа.
@@ -215,15 +231,20 @@ async function getManualOpenTime(coin, currentNet = null) {
   return resolveManualOpenTime({ coin, fills, currentNet });
 }
 
-/** ntfy-пуш (best-effort). Тихий час 00–08 → priority=1 (без звука). */
-async function fireAdoptNtfy(title, message, tags) {
+/**
+ * ntfy-пуш (best-effort). Тихий час 00–08 → priority=1 (без звука).
+ * urgent=true — риск-алерт (memory feedback_quiet_tg: риск-алерты всегда со
+ * звуком): priority=5, тихий час НЕ глушит. Экспорт: переиспользуется пик-алертом
+ * в adoptSupervise.
+ */
+export async function fireAdoptNtfy(title, message, tags, { urgent = false } = {}) {
   const { url, token, priority: basePriority } = config.ntfy;
   const topic = process.env.NTFY_TOPIC_ADOPT || config.ntfy.topic;
   if (!url || !topic) return;
   try {
     const { default: https } = await import('node:https');
     const { default: http } = await import('node:http');
-    const priority = isQuietHour() ? 1 : (basePriority ?? 3);
+    const priority = urgent ? 5 : (isQuietHour() ? 1 : (basePriority ?? 3));
     const body = JSON.stringify({ topic, title, message, priority, tags });
     const u = new URL(`${url}/`);
     const lib = u.protocol === 'https:' ? https : http;
@@ -315,6 +336,41 @@ export async function maybeAdoptManualPosition(manualPositions) {
     const plannedSl = side === 'short'
       ? entry * (1 + distPct / 100)
       : entry * (1 - distPct / 100);
+
+    // ── Сирота-гард: цена УЖЕ за плановым стопом ────
+    // Стоп ставить нельзя (триггер in-the-money → мгновенный market-close на
+    // −6..−8%). Не усыновляем + громкий пуш: решение «резать/держать» — оператору.
+    let livePrice = null;
+    try {
+      livePrice = await getLivePrice(coin);
+    } catch (err) {
+      logger.debug(`[Adopt] orphan-guard getLivePrice #${coin} failed: ${err.message}`);
+    }
+    if (isBeyondPlannedStop({ side, price: livePrice, plannedSl })) {
+      const lossPct = (side === 'short'
+        ? (livePrice - entry) / entry
+        : (entry - livePrice) / entry) * 100;
+      logger.warn(
+        `[Adopt] 🚨 ОРФАН ГЛУБЖЕ СТОПА #${coin} ${side}: цена $${livePrice.toPrecision(6)} уже за ` +
+          `плановым SL $${plannedSl.toPrecision(6)} (−${lossPct.toFixed(2)}% при стопе ${distPct.toFixed(2)}%). ` +
+          `НЕ усыновляю — стоп сработал бы мгновенно. Решение за оператором.`,
+      );
+      _adoptSkipReason.set(coin, `уже глубже стопа (−${lossPct.toFixed(1)}%) — реши сам`);
+      const lastAlert = _orphanAlertAt.get(up(coin)) || 0;
+      if (now - lastAlert >= ORPHAN_REALERT_MS) {
+        _orphanAlertAt.set(up(coin), now);
+        await fireAdoptNtfy(
+          `🚨 #${coin} ${side.toUpperCase()} уже глубже стопа`,
+          `Поза $${sizeUsd.toFixed(0)} в −${lossPct.toFixed(2)}% — глубже плановой стоп-дистанции ` +
+          `${distPct.toFixed(2)}%.\nБот НЕ ставит стоп (закрылась бы мгновенно по рынку).\n` +
+          `Реши сам: резать или держать. Поза БЕЗ защиты.`,
+          ['rotating_light'],
+          { urgent: true },
+        );
+      }
+      continue;
+    }
+    _orphanAlertAt.delete(up(coin)); // цена вернулась в норму → сможем алертить заново
 
     let szDecimals;
     try {

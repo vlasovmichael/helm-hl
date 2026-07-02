@@ -381,6 +381,33 @@ function loadConfig() {
   if (isNaN(adoptTrailGiveBackPct) || adoptTrailGiveBackPct <= 0 || adoptTrailGiveBackPct >= 100) {
     throw new Error(`ADOPT_TRAIL_GIVE_BACK_PCT must be in (0, 100). Got: "${process.env.ADOPT_TRAIL_GIVE_BACK_PCT}"`);
   }
+  // Time-cut SHADOW (2026-07-02): measurement-only. Анализ 131 adopt-сделки: 23
+  // стопа съели ~$70 при общем +$47, и НИ ОДИН стоп не видел MFE ≥1% — позы
+  // умирали часами, не зеленея. Модель: не показала MFE ≥ GREEN_PCT за MIN минут
+  // → would-be выход по текущей цене. Пишем в shadow_exits, торговлю НЕ трогаем;
+  // решение о живом включении — по месяцу данных. Default on — это лог.
+  const adoptTimecutShadowEnabled = (process.env.ADOPT_TIMECUT_SHADOW_ENABLED || 'true').toLowerCase() === 'true';
+  const adoptTimecutMin           = parseFloat(process.env.ADOPT_TIMECUT_MIN       || '75');
+  const adoptTimecutGreenPct      = parseFloat(process.env.ADOPT_TIMECUT_GREEN_PCT || '0.3');
+  if (isNaN(adoptTimecutMin) || adoptTimecutMin <= 0) {
+    throw new Error(`ADOPT_TIMECUT_MIN must be > 0. Got: "${process.env.ADOPT_TIMECUT_MIN}"`);
+  }
+  if (isNaN(adoptTimecutGreenPct) || adoptTimecutGreenPct <= 0) {
+    throw new Error(`ADOPT_TIMECUT_GREEN_PCT must be > 0. Got: "${process.env.ADOPT_TIMECUT_GREEN_PCT}"`);
+  }
+  // Пик-алерт (2026-07-02): систематизация дискрец-выхода. Юзер закрывает 63%
+  // adopt-поз рукой (capture 68% MFE) — даём звонок в момент решения: пик ≥ MFE_PCT
+  // (p75 его шортов ≈2.5%) и откат ≥ GIVEBACK_PCT от пика. GIVEBACK строго МЕНЬШЕ
+  // ADOPT_TRAIL_GIVE_BACK_PCT (30) — иначе трейл закроет раньше звонка.
+  const adoptPeakAlertEnabled     = (process.env.ADOPT_PEAK_ALERT_ENABLED || 'true').toLowerCase() === 'true';
+  const adoptPeakAlertMfePct      = parseFloat(process.env.ADOPT_PEAK_ALERT_MFE_PCT      || '2.5');
+  const adoptPeakAlertGiveBackPct = parseFloat(process.env.ADOPT_PEAK_ALERT_GIVEBACK_PCT || '15');
+  if (isNaN(adoptPeakAlertMfePct) || adoptPeakAlertMfePct <= 0) {
+    throw new Error(`ADOPT_PEAK_ALERT_MFE_PCT must be > 0. Got: "${process.env.ADOPT_PEAK_ALERT_MFE_PCT}"`);
+  }
+  if (isNaN(adoptPeakAlertGiveBackPct) || adoptPeakAlertGiveBackPct <= 0 || adoptPeakAlertGiveBackPct >= adoptTrailGiveBackPct) {
+    throw new Error(`ADOPT_PEAK_ALERT_GIVEBACK_PCT must be in (0, ADOPT_TRAIL_GIVE_BACK_PCT). Got: "${process.env.ADOPT_PEAK_ALERT_GIVEBACK_PCT}"`);
+  }
 
   // ── Risk-based position sizing (cross-strategy: Hunter / Hunter Long / ChillBoy) ──
   const riskBasedSizing  = (process.env.RISK_BASED_SIZING  || 'false').toLowerCase() === 'true';
@@ -624,6 +651,12 @@ function loadConfig() {
       adoptBeFloorPct,
       adoptTrailArmPct,
       adoptTrailGiveBackPct,
+      adoptTimecutShadowEnabled,
+      adoptTimecutMin,
+      adoptTimecutGreenPct,
+      adoptPeakAlertEnabled,
+      adoptPeakAlertMfePct,
+      adoptPeakAlertGiveBackPct,
       // ── Candy Girl радар (signal-only) ──
       candyGirlEnabled,
       candyGirlAlertEnabled,

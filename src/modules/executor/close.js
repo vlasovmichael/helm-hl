@@ -33,6 +33,7 @@ import {
 } from '../strategistHunterLong.js';
 import { setHunterCrossCooldown } from '../hunterCrossCooldown.js';
 import { clearAdoptState, getAdoptPeakPct, consumeAdoptMfeMae } from '../strategistAdopt.js';
+import { finalizeAdoptTimeCut } from '../adoptShadowTimeCut.js';
 import {
   notifySlippageBan,
   notifyProductionClose, notifyCloseRejected, notifyCloseFailed,
@@ -307,6 +308,7 @@ export async function productionClose(signal, position, silent = false) {
       exitFeatures.trail_peak_pct      = signal.peakPct ?? getAdoptPeakPct(position.id);
       exitFeatures.trail_give_back_pct = signal.giveBackPct ?? null;
     }
+    finalizeAdoptTimeCut(position, fill.avgPx); // shadow time-cut: строка сравнения
     clearAdoptState(position.id);
   }
 
