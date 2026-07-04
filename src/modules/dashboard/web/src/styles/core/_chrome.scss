@@ -307,7 +307,9 @@ header {
 #sec-position {
   background: var(--grad-brand-soft), var(--card-bg);
   border-color: var(--brand-line);
-  transition: background 0.45s ease, border-color 0.25s;
+  transition:
+    background 0.45s ease,
+    border-color 0.25s;
 }
 
 /* Настроение секции: зелёный/красный wash тем насыщеннее, чем лучше идёт день
@@ -317,16 +319,26 @@ header {
    Стоит ВЫШЕ .daily-danger по исходнику → жёсткий дневной стоп (red-soft) важнее
    и перекрывает мягкое настроение. 2026-06-29. */
 #sec-position[data-mood="pos"] {
-  --mood-tint: color-mix(in srgb, var(--green) calc(var(--mood, 0) * 100%), transparent);
+  --mood-tint: color-mix(
+    in srgb,
+    var(--green) calc(var(--mood, 0) * 100%),
+    transparent
+  );
 }
 #sec-position[data-mood="neg"] {
-  --mood-tint: color-mix(in srgb, var(--red) calc(var(--mood, 0) * 100%), transparent);
+  --mood-tint: color-mix(
+    in srgb,
+    var(--red) calc(var(--mood, 0) * 100%),
+    transparent
+  );
 }
 #sec-position[data-mood] {
   background:
-    linear-gradient(var(--mood-tint, transparent), var(--mood-tint, transparent)),
-    var(--grad-brand-soft),
-    var(--card-bg);
+    linear-gradient(
+      var(--mood-tint, transparent),
+      var(--mood-tint, transparent)
+    ),
+    var(--grad-brand-soft), var(--card-bg);
 }
 
 /* Дневной стоп: весь блок краснеет (circuit-breaker «хватит на сегодня»). */
@@ -516,8 +528,12 @@ header {
   display: inline-flex;
   gap: 2px;
 
-  &[hidden] { display: none; }
-  .range-btn { padding: 4px 8px; }
+  &[hidden] {
+    display: none;
+  }
+  .range-btn {
+    padding: 4px 8px;
+  }
 }
 
 // ── Колокольчик уведомлений (topnav-right) ──────────────────────────────────
@@ -547,7 +563,9 @@ header {
     color: var(--text-primary);
     background: var(--card-bg-hover);
   }
-  .nav-ico { opacity: 0.9; }
+  .nav-ico {
+    opacity: 0.9;
+  }
 
   // Bell swing when a fresh push lands (toggled via .is-ringing from JS).
   .notif-bell {
@@ -558,16 +576,32 @@ header {
   }
 }
 @keyframes notif-ring {
-  0%   { transform: rotate(0); }
-  15%  { transform: rotate(13deg); }
-  30%  { transform: rotate(-11deg); }
-  45%  { transform: rotate(8deg); }
-  60%  { transform: rotate(-6deg); }
-  75%  { transform: rotate(3deg); }
-  100% { transform: rotate(0); }
+  0% {
+    transform: rotate(0);
+  }
+  15% {
+    transform: rotate(13deg);
+  }
+  30% {
+    transform: rotate(-11deg);
+  }
+  45% {
+    transform: rotate(8deg);
+  }
+  60% {
+    transform: rotate(-6deg);
+  }
+  75% {
+    transform: rotate(3deg);
+  }
+  100% {
+    transform: rotate(0);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .notif-btn.is-ringing .notif-bell { animation: none; }
+  .notif-btn.is-ringing .notif-bell {
+    animation: none;
+  }
 }
 .notif-badge {
   position: absolute;
@@ -578,13 +612,17 @@ header {
   padding: 0 4px;
   border-radius: 8px;
   background: var(--red);
+  font-family: var(--font-mono);
   color: #fff;
   font-size: 10px;
   font-weight: 700;
   line-height: 16px;
   text-align: center;
+  font-family: var(--font-mono);
 
-  &[hidden] { display: none; }
+  &[hidden] {
+    display: none;
+  }
 }
 .notif-panel {
   position: absolute;
@@ -617,7 +655,9 @@ header {
     transform: none;
     pointer-events: auto;
   }
-  &[hidden] { display: none; }
+  &[hidden] {
+    display: none;
+  }
 
   // Мобайл: панель во всю ширину под топбаром, а не узкий ярлык у иконки.
   @include until($bp-sm) {
@@ -632,7 +672,9 @@ header {
   }
 }
 @include reduced-motion {
-  .notif-panel { transition: none; }
+  .notif-panel {
+    transition: none;
+  }
 }
 .notif-panel-head {
   display: flex;
@@ -668,8 +710,12 @@ header {
   border-bottom: 1px solid var(--border);
   font-size: 13px;
 
-  &:last-child { border-bottom: none; }
-  &--fresh { background: var(--accent-soft); }
+  &:last-child {
+    border-bottom: none;
+  }
+  &--fresh {
+    background: var(--accent-soft);
+  }
 }
 .notif-item-head {
   display: flex;
@@ -685,6 +731,7 @@ header {
   flex-shrink: 0;
   color: var(--text-secondary);
   font-size: 11px;
+  font-family: var(--font-mono);
 }
 .notif-mail {
   margin-right: 4px;
