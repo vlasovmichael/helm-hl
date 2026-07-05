@@ -320,6 +320,11 @@ function loadConfig() {
   if (isNaN(hunterOiDivMaxPct)) {
     throw new Error(`HUNTER_OI_DIV_MAX_PCT must be a number. Got: "${process.env.HUNTER_OI_DIV_MAX_PCT}"`);
   }
+  // OI-ворота на БОЕВОМ Hunter SHORT (2026-07-06, по A/B: 35 сд hunter_oi
+  // +0.73%/сд против 0.30% у hunter без ворот). true → оба live-входных пути
+  // (coordinator 15-сек скан + WS-тик) фильтруют по ΔOI15м ≤ HUNTER_OI_DIV_MAX_PCT.
+  // Paper-слот hunter (без ворот) остаётся A/B-контролем.
+  const hunterOiGateLive = (process.env.HUNTER_OI_GATE_LIVE || 'false').toLowerCase() === 'true';
   // Fade-high-ER paper — PAPER-only shadow-слот, forward-валидация правила
   // fade выдохшегося хвоста (см. fadeHotSignal.js / memory fadehot_build_plan).
   const fadehotPaperEnabled = (process.env.FADEHOT_PAPER_ENABLED || 'false').toLowerCase() === 'true';
@@ -648,6 +653,7 @@ function loadConfig() {
       manualPaperAdoptEnabled,
       hunterOiPaperEnabled,
       hunterOiDivMaxPct,
+      hunterOiGateLive,
       fadehotPaperEnabled,
       fadehotPaperBalanceUtil,
       fadehotPaperLeverage,

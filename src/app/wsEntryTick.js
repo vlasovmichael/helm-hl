@@ -87,7 +87,9 @@ export async function wsFastEntryCheck() {
     // Приоритет как в coordinator: hunter → hunter_long.
     let signal = { action: 'HOLD' };
     if (hunterQueryable()) {
-      const s = analyzeHunter(synth, undefined, now);
+      // HUNTER_OI_GATE_LIVE: те же OI-ворота, что в coordinator-пути (открытие).
+      const s = analyzeHunter(synth, undefined, now,
+        config.trading.hunterOiGateLive ? { oiDivMaxPct: config.trading.hunterOiDivMaxPct } : {});
       if (s.action !== 'HOLD') signal = s;
     }
     if (signal.action === 'HOLD' && hunterLongQueryable()) {

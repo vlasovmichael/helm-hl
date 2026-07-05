@@ -66,7 +66,10 @@ export async function coordinate(scoutData, activePosition, hunterData = scoutDa
   const hunterOpen = excludeCoins.size ? hunterData.filter(notOwned) : hunterData;
 
   if (isEnabled('hunter', config.trading.hunterEnabled) && (!config.isProduction || config.trading.hunterProdEnabled)) {
-    const hunterSignal = analyzeHunter(hunterOpen, undefined);
+    // HUNTER_OI_GATE_LIVE: OI-divergence ворота на боевом входе (ΔOI15м ≤ порога).
+    // Только ветка открытия — сопровождение позы выше идёт без ворот.
+    const hunterSignal = analyzeHunter(hunterOpen, undefined, Date.now(),
+      config.trading.hunterOiGateLive ? { oiDivMaxPct: config.trading.hunterOiDivMaxPct } : {});
     if (hunterSignal.action !== 'HOLD') {
       logger.debug(`[Coordinator] hunter → ${hunterSignal.action} ${hunterSignal.coin}`);
       return hunterSignal;
