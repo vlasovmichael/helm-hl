@@ -270,7 +270,8 @@ export function analyzeMultiTF({ candles4h, candles1h, candles5m, price }) {
 
   // 1h — зона входа и где стоп.
   let note1h;
-  if (nearSupport) note1h = `цена у поддержки $${fmt(support)} — зона лонга, стоп ПОД неё`;
+  if (nearSupport && nearResistance) note1h = `зажата между подд. $${fmt(support)} и сопр. $${fmt(resistance)} — диапазон уже ATR, сделки нет ни туда ни сюда`;
+  else if (nearSupport) note1h = `цена у поддержки $${fmt(support)} — зона лонга, стоп ПОД неё`;
   else if (nearResistance) note1h = `цена у сопротивления $${fmt(resistance)} — зона шорта, стоп НАД неё`;
   else note1h = `между уровнями (подд. $${fmt(support)} / сопр. $${fmt(resistance)}) — вход в пустоте, жди подхода к краю`;
 
@@ -303,11 +304,29 @@ export function analyzeMultiTF({ candles4h, candles1h, candles5m, price }) {
   } else {
     plan = buildPlan({ userSide: bias, price, support, resistance, resistances, supports, atr14: atr1h });
     const atLevel = bias === "LONG" ? nearSupport : nearResistance;
-    if (triggerReady) {
+    // Жёсткие ворота на зелёный вердикт (инцидент kBONK 06.07: зелёный SHORT при
+    // 4h-боковике, цене у поддержки и R:R 0.04). Триггер 5m сам по себе ≠ сделка:
+    //  · 4h flat → направления нет, bias от 1h — это наклон, не тренд;
+    //  · зона-конфликт → шорт прямо над поддержкой / лонг под сопротивлением;
+    //  · R:R < 1.5 → математика против, цель ближе стопа.
+    const flat4h = trend4h === "flat";
+    const zoneConflict = bias === "LONG" ? nearResistance : nearSupport;
+    const rrOk = plan.rr != null && plan.rr >= 1.5;
+    if (triggerReady && !flat4h && !zoneConflict && rrOk) {
       verdict = {
         tone: "reasonable",
         headline: `${bias} — условия сложились`,
-        detail: `4h за тебя, цена на уровне 1h, 5m дал триггер. Стоп за уровень ($${fmt(plan.invalidation ?? plan.stop)}), R:R ≈ ${plan.rr != null ? plan.rr.toFixed(2) : "—"}. Дальше — выход отдаём боту (adopt).`,
+        detail: `4h за тебя, цена на уровне 1h, 5m дал триггер. Стоп за уровень ($${fmt(plan.invalidation ?? plan.stop)}), R:R ≈ ${plan.rr.toFixed(2)}. Дальше — выход отдаём боту (adopt).`,
+      };
+    } else if (triggerReady) {
+      const why = [];
+      if (flat4h) why.push("4h в боковике — направления нет, наклон только от 1h");
+      if (zoneConflict) why.push(bias === "SHORT" ? `цена прямо над поддержкой $${fmt(support)} — шортить некуда` : `цена под сопротивлением $${fmt(resistance)} — лонговать некуда`);
+      if (!rrOk) why.push(`R:R ≈ ${plan.rr != null ? plan.rr.toFixed(2) : "—"} < 1.5 — цель ближе стопа`);
+      verdict = {
+        tone: "counter",
+        headline: `${bias}-триггер есть, но сделки НЕТ`,
+        detail: `${why.join("; ")}. Триггер без места и математики — это не вход, пропускаем.`,
       };
     } else if (atLevel) {
       verdict = {

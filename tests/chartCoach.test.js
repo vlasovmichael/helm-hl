@@ -151,3 +151,37 @@ test('analyzeMultiTF: 4h и 1h спорят → STAND_ASIDE (не входить
   assert.strictEqual(out.bias, 'STAND_ASIDE');
   assert.strictEqual(out.plan, null, 'в стороне → плана нет');
 });
+
+// ── регрессия kBONK 06.07: зелёный вердикт при боковике-4h / R:R 0.04 запрещён ──
+// Инцидент: 4h=flat, цена зажата между уровнями (у поддержки И у сопротивления),
+// R:R 0.04 — а баннер был зелёный «SHORT — условия сложились». Ворота: 4h flat,
+// зона-конфликт или R:R<1.5 → триггер 5m НЕ даёт зелёный тон.
+test('analyzeMultiTF: 4h боковик + 5m триггер → НЕ зелёный вердикт', () => {
+  const P = 100;
+  // 4h: плоская пила вокруг 100 (EMA20≈EMA50 → flat).
+  const flat = Array.from({ length: 60 }, (_, i) => c(100 + (i % 2 ? 0.3 : -0.3)));
+  // 1h: сползание к 100 → тренд down (bias SHORT от 1h при flat 4h) с пивотами
+  // вокруг цены (узкий диапазон — уровни рядом с ценой).
+  const down1h = Array.from({ length: 60 }, (_, i) => c(103 - i * 0.05));
+  // 5m: разворот вниз → триггер шорта.
+  const down5m = Array.from({ length: 60 }, (_, i) => c(101 - i * 0.017));
+  const out = analyzeMultiTF({ candles4h: flat, candles1h: down1h, candles5m: down5m, price: P });
+  assert.strictEqual(out.ok, true);
+  if (out.bias !== 'STAND_ASIDE') {
+    assert.notStrictEqual(out.verdict.tone, 'reasonable',
+      `4h flat → зелёного быть не может (got: ${out.verdict.headline})`);
+  }
+});
+
+test('analyzeMultiTF: зелёный вердикт невозможен при R:R < 1.5', () => {
+  // Перебор сценариев не строим — проверяем инвариант на живом зелёном кейсе:
+  // если analyzeMultiTF вернул tone=reasonable, то в плане обязан быть R:R ≥ 1.5
+  // и 4h не flat. Кейс: чистый даунтренд на всех ТФ (из теста выше он давал план).
+  const P = 150;
+  const downTo = (n, start) => Array.from({ length: n }, (_, i) => c(start - (i * (start - P)) / (n - 1)));
+  const out = analyzeMultiTF({ candles4h: downTo(60, 200), candles1h: downTo(60, 180), candles5m: downTo(60, 160), price: P });
+  if (out.verdict?.tone === 'reasonable') {
+    assert.ok(out.plan.rr >= 1.5, `зелёный при R:R ${out.plan.rr} < 1.5`);
+    assert.notStrictEqual(out.tf.h4.trend, 'flat', 'зелёный при 4h flat');
+  }
+});

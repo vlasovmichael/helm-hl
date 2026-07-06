@@ -60,6 +60,8 @@ async function hl(body) {
   return r.json();
 }
 let liveTimer = null, lastPx = {};
+let lastCandles = null; // свечи последнего loadAnchor — для пересчёта разбора на WS-цене
+let lastRail = null;    // {lo,hi,cur} рельса — для живого пина
 let currentAtrPct = null; // ATR(≤7,1D) в % к последней цене — подсказка по ширине стопа
 function dayChg(D) { const c = D[D.length - 1]; return ((c.c - c.o) / c.o) * 100; }
 // Средний истинный диапазон по дневным барам (в % к последнему закрытию). Грубый
@@ -98,22 +100,50 @@ async function loadAnchor() {
       coin !== "BTC" ? soft(hl({ type: "candleSnapshot", req: { coin: "BTC", interval: "1d", startTime: now - 9 * day, endTime: now } })) : Promise.resolve(null),
     ]);
     const price = parseFloat(mids[coin]); setPx(price);
+    lastCandles = { coin, c4r, c1r, c5r };
     renderCoach(price, c4r, c1r, c5r);
     const D = cd.map((c) => ({ o: +c.o, h: +c.h, l: +c.l, c: +c.c })); const cur = D[D.length - 1];
     const dchg = dayChg(D); const e = G("dchg");
     e.textContent = (dchg >= 0 ? "+" : "") + dchg.toFixed(2) + "%"; e.className = "j-daychg " + (dchg >= 0 ? "j-up" : "j-down");
     let hi = -1, lo = 1e12; D.slice(-7).forEach((c) => { hi = Math.max(hi, c.h); lo = Math.min(lo, c.l); });
+    lastRail = { coin, lo, hi, cur };
     renderRail(price, lo, hi, cur);
     currentAtrPct = atrPctOf(D); renderCalc();
     const first = D[0].c, last = cur.c; const t = G("trend200");
     const dir = last > first * 1.01 ? ["▲ вверх", "j-up"] : last < first * 0.99 ? ["▼ вниз", "j-down"] : ["≈ боковик", ""];
     t.textContent = dir[0]; t.className = "j-v " + dir[1];
     renderVsBtc(dchg, btcd);
-    conn.textContent = "HL · обновлено " + new Date().toLocaleTimeString("ru-RU", { timeZone: "Europe/Warsaw", hour: "2-digit", minute: "2-digit" });
+    conn.textContent = wsAlive ? "HL · live (WS)" : "HL · обновлено " + new Date().toLocaleTimeString("ru-RU", { timeZone: "Europe/Warsaw", hour: "2-digit", minute: "2-digit" });
   } catch (err) {
     conn.textContent = "HL недоступен — цену смотри в TradingView"; setPx(null);
   }
 }
+
+// ── live-цена по WS (allMids): цена/пин/разбор обновляются раз в секунду.
+// Свечи по-прежнему тянет REST-цикл (20с) — WS даёт только свежий mid, и
+// разбор пересчитывается чистой функцией на кэшированных свечах.
+let ws = null, wsAlive = false, lastWsRender = 0;
+function wireWs() {
+  let sock;
+  try { sock = new WebSocket("wss://api.hyperliquid.xyz/ws"); } catch { return; }
+  ws = sock;
+  sock.onopen = () => { wsAlive = true; sock.send(JSON.stringify({ method: "subscribe", subscription: { type: "allMids" } })); };
+  sock.onmessage = (ev) => {
+    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    const mids = m?.data?.mids; if (!mids) return;
+    const px = parseFloat(mids[coin]); if (!(px > 0)) return;
+    const now = Date.now();
+    if (now - lastWsRender < 1000) return; // не чаще 1 Гц — разбор пересчитывать чаще незачем
+    lastWsRender = now;
+    setPx(px);
+    if (lastRail?.coin === coin) renderRail(px, lastRail.lo, lastRail.hi, lastRail.cur);
+    if (lastCandles?.coin === coin) renderCoach(px, lastCandles.c4r, lastCandles.c1r, lastCandles.c5r);
+    G("conn").textContent = "HL · live (WS)";
+  };
+  sock.onclose = () => { wsAlive = false; setTimeout(wireWs, 5000); };
+  sock.onerror = () => { try { sock.close(); } catch { /* уже закрыт */ } };
+}
+wireWs();
 function renderRail(price, lo, hi, cur) {
   const span = (hi - lo) || 1; const pct = (v) => Math.max(2, Math.min(98, ((v - lo) / span) * 100));
   G("pin").style.left = pct(price) + "%"; G("pinPx").textContent = "$" + fmtPx(price);

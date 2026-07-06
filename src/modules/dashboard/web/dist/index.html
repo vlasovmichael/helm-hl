@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta
+      name="theme-color"
+      content="#0c0a09"
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta
+      name="theme-color"
+      content="#f5f1ea"
+      media="(prefers-color-scheme: light)"
+    />
+    <title>Helm</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Mona+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("hl-scanner-theme") || "auto";
+          var theme;
+          if (stored === "auto") {
+            theme = window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light";
+          } else {
+            theme = stored === "light" ? "light" : "dark";
+          }
+          document.documentElement.setAttribute("data-theme", theme);
+        } catch (_) {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-BpvqxP3I.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-La0EYZnu.css">
+  </head>
+  <body>
+    <div class="container">
+      <nav class="topnav" id="topnav" aria-label="Primary"></nav>
+
+      <header data-edition="">
+        <div class="equity-group">
+          <div class="label">Total Equity</div>
+          <div class="value animated-value" id="equity-value">$0.00</div>
+          <div class="delta" id="equity-delta">—</div>
+        </div>
+        <div class="meta-group">
+          <div id="ws-pill" class="status-pill offline">WS connecting…</div>
+          <div class="meta-info">
+            <span id="uptime-val">Uptime: —</span>
+            <span id="available-val">Available: —</span>
+            <span id="wallet-total-val" style="display: none"></span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Market Context — живая статистика по BTC; цвет рамки = фон (risk-on/off) -->
+      <div
+        id="market-context"
+        class="market-context unknown mc-loading"
+        title="Живая статистика BTC. Зелёная рамка = чёткий тренд (RISK-ON/OFF), вход по фону. Жёлтая = боковик, вход против структуры рискован."
+      >
+        <span class="mc-loader" aria-hidden="true"><span class="loader-spinner"></span></span>
+        <span class="mc-head" id="mc-head"></span>
+        <span class="mc-stats" id="mc-stats"></span>
+      </div>
+
+      <!-- 01 / Active Position -->
+      <section class="card" id="sec-position">
+        <div class="card-header">
+          <div class="card-title" data-num="01">Active Position</div>
+          <div id="daily-goal-badge" class="daily-goal-badge" hidden></div>
+        </div>
+        <div id="position-container"></div>
+        <div id="manual-positions-container"></div>
+        <div id="mp-active-container"></div>
+      </section>
+
+      <!-- 01.5 / Hot Movers — live price spikes + OI delta -->
+      <section class="card" id="sec-movers">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-num="01.5"
+            title="Монеты с наибольшими ценовыми движениями. Setup — контекст-направление по движению (слив → SHORT, памп → LONG); это НЕ сделка (continuation в минус по бэктесту). Actionable вход = под-строка 🔥 fade-high-ER. Причина вердикта — в tooltip ячейки Setup."
+          >
+            Hot Movers
+          </div>
+          <div class="hm-header-right">
+            <button
+              id="mp-paper-btn"
+              class="whatif-btn"
+              type="button"
+              title="Open a paper trade (your own paper, Rabbit-style): coin, side, leverage, size off equity. The bot doesn't trade it — you run it by hand."
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="vertical-align: -2px; margin-right: 4px"
+              >
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+              </svg>
+              Paper
+            </button>
+            <button
+              id="whatif-btn"
+              class="whatif-btn"
+              type="button"
+              title="Itchy hands? Type a coin and side — the bot checks it against the fade-high-ER edge and either backs you or stops you"
+            >
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                style="vertical-align: -2px; margin-right: 4px"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              What if…
+            </button>
+            <span
+              id="hot-movers-meta"
+              style="
+                font-size: 11px;
+                font-family: var(--font-mono);
+                color: var(--text-muted);
+              "
+            ></span>
+          </div>
+        </div>
+        <div class="u-scroll-x hm-scroll-wrap">
+          <table class="data-table signals-table hm-table">
+            <thead>
+              <tr>
+                <th style="width: 24px">#</th>
+                <th>Coin</th>
+                <th
+                  class="c"
+                  title="Fade setup: SHORT/LONG = готово к входу против движения; WAIT = ждём выдоха импульса"
+                >
+                  Setup
+                </th>
+                <th
+                  class="c"
+                  title="Чейз-метр: насколько цена уже ушла В СТОРОНУ СДЕЛКИ от короткой средней (15m, fallback 5m). Горит только при подтверждённом сетапе (рамка Setup: score≥3 + режим); иначе нейтральная точка. 🎯 у базы — вход рядом, чейза нет; ⏳ растянута — дай откатить; ⛔ уже ушла в твою сторону — поздно, жди отката. Точку входа (5m) ставишь сам."
+                >
+                  Enter
+                </th>
+                <th class="r">Price</th>
+                <th class="r">2m%</th>
+                <th class="r">5m%</th>
+                <th class="r">15m%</th>
+                <th
+                  class="r"
+                  title="Ускорение: |2m| vs экстраполяция 5m. ▼=выдыхается (fade), ▲=ускоряется (avoid)"
+                >
+                  Acc
+                </th>
+                <th
+                  class="r"
+                  title="OI change за 5 минут. Растёт = новые позиции; падает = закрытия/ликвидации"
+                >
+                  OI 5m
+                </th>
+                <th class="r" title="Тренд за 15m (anti-trend gate Hunter'а)">
+                  Trend
+                </th>
+              </tr>
+            </thead>
+            <tbody id="hot-movers-tbody">
+              <tr>
+                <td colspan="11" class="empty-state">
+                  Waiting for price history…
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Recent Activity — лента open/close (рендерит index.js через /api/activity).
+           /api/activity = локальный эндпоинт (своя БД сделок, без вызовов HL) →
+           веса Hyperliquid не тратит, к 429 отношения не имеет. -->
+      <section class="card" id="sec-activity">
+        <div class="card-header">
+          <div class="card-title" data-num="">Recent Activity</div>
+        </div>
+        <div id="bans-strip"></div>
+        <div id="activity-container">
+          <div class="activity-skeleton">
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+            <div class="skeleton-row"></div>
+          </div>
+        </div>
+      </section>
+
+
+      <footer id="footer-status">
+        <span>Connecting to core…</span>
+        <a
+          href="/logout"
+          class="logout-link"
+          id="logout-link"
+          style="display: none"
+          >Sign out</a
+        >
+      </footer>
+    </div>
+
+    <!-- Mobile bottom navigation: scroll-spy across main sections -->
+    <nav class="bottom-nav" aria-label="Sections">
+      <button
+        class="bottom-nav-btn active"
+        data-target="sec-position"
+        aria-label="Position"
+      >
+        <span class="nav-icon" aria-hidden="true"></span>
+        <span>Pos</span>
+      </button>
+      <button
+        class="bottom-nav-btn"
+        data-target="sec-movers"
+        aria-label="Hot Movers"
+      >
+        <span class="nav-icon" aria-hidden="true"></span>
+        <span>Movers</span>
+      </button>
+    </nav>
+
+    <script>
+      // ── Header edition stamp (date) ──
+      (function () {
+        try {
+          var d = new Date();
+          var ed = d.toISOString().slice(0, 10);
+          var hdr = document.querySelector("header[data-edition]");
+          if (hdr) hdr.setAttribute("data-edition", ed);
+        } catch (_) {}
+      })();
+
+      // ── Mobile tape-bar mirror ──
+      // Keeps the sticky equity bar in sync with the hero values without touching app.js.
+      (function () {
+        var heroValue = document.getElementById("equity-value");
+        var heroDelta = document.getElementById("equity-delta");
+        var modePill = document.getElementById("mode-pill");
+        var tapeValue = document.getElementById("tape-equity");
+        var tapeDelta = document.getElementById("tape-delta");
+        var tapeMode = document.getElementById("tape-mode");
+        if (!heroValue || !tapeValue) return;
+
+        function sync() {
+          if (heroValue && tapeValue)
+            tapeValue.textContent = heroValue.textContent.trim();
+          if (heroDelta && tapeDelta) {
+            tapeDelta.textContent = heroDelta.textContent.trim();
+            tapeDelta.className =
+              "tape-delta " +
+              (heroDelta.classList.contains("positive")
+                ? "positive"
+                : heroDelta.classList.contains("negative")
+                  ? "negative"
+                  : "");
+          }
+          if (modePill && tapeMode)
+            tapeMode.textContent = modePill.textContent.trim();
+        }
+
+        var mo = new MutationObserver(sync);
+        mo.observe(heroValue, {
+          childList: true,
+          characterData: true,
+          subtree: true,
+        });
+        if (heroDelta)
+          mo.observe(heroDelta, {
+            childList: true,
+            characterData: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ["class"],
+          });
+        if (modePill)
+          mo.observe(modePill, {
+            childList: true,
+            characterData: true,
+            subtree: true,
+          });
+        sync();
+      })();
+
+      // ── Bottom-nav scroll-spy ──
+      (function () {
+        var nav = document.querySelector(".bottom-nav");
+        if (!nav) return;
+        var btns = Array.prototype.slice.call(
+          nav.querySelectorAll("[data-target]"),
+        );
+        var sections = btns
+          .map(function (b) {
+            return document.getElementById(b.dataset.target);
+          })
+          .filter(Boolean);
+
+        btns.forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var el = document.getElementById(btn.dataset.target);
+            if (!el) return;
+            var y = el.getBoundingClientRect().top + window.pageYOffset - 70;
+            window.scrollTo({ top: y, behavior: "smooth" });
+          });
+        });
+
+        if (!("IntersectionObserver" in window)) return;
+
+        var observer = new IntersectionObserver(
+          function (entries) {
+            // Pick the entry closest to top of viewport that is currently intersecting.
+            var visible = entries
+              .filter(function (e) {
+                return e.isIntersecting;
+              })
+              .sort(function (a, b) {
+                return a.boundingClientRect.top - b.boundingClientRect.top;
+              })[0];
+            if (!visible) return;
+            var id = visible.target.id;
+            btns.forEach(function (b) {
+              b.classList.toggle("active", b.dataset.target === id);
+            });
+          },
+          { rootMargin: "-30% 0px -55% 0px", threshold: 0 },
+        );
+
+        sections.forEach(function (s) {
+          observer.observe(s);
+        });
+      })();
+    </script>
+    <div id="help-modal" class="trade-modal" hidden>
+      <div class="trade-modal__backdrop" data-close="1"></div>
+      <div class="trade-modal__panel" role="dialog" aria-modal="true">
+        <button class="trade-modal__close" data-close="1" aria-label="Close">
+          ×
+        </button>
+        <div id="help-modal-body"></div>
+      </div>
+    </div>
+    <div id="trade-modal" class="trade-modal" hidden>
+      <div class="trade-modal__backdrop" data-close="1"></div>
+      <div class="trade-modal__panel" role="dialog" aria-modal="true">
+        <button class="trade-modal__close" data-close="1" aria-label="Close">
+          ×
+        </button>
+        <div id="trade-modal-body"></div>
+      </div>
+    </div>
+    <div id="whatif-modal" class="trade-modal" hidden>
+      <div class="trade-modal__backdrop" data-close="1"></div>
+      <div class="trade-modal__panel" role="dialog" aria-modal="true">
+        <button class="trade-modal__close" data-close="1" aria-label="Close">
+          ×
+        </button>
+        <div id="whatif-modal-body"></div>
+      </div>
+    </div>
+    <script>
+      // ── Radar accordions: persist open/closed + collapsed-header badges ──
+      (function () {
+        var accs = Array.prototype.slice.call(
+          document.querySelectorAll("details.radar-acc"),
+        );
+        if (!accs.length) return;
+        var KEY = "hl-radar-acc";
+        var state = {};
+        try {
+          state = JSON.parse(localStorage.getItem(KEY) || "{}");
+        } catch (_) {}
+
+        function updateBadge(d) {
+          var badge = d.querySelector(":scope > summary .radar-badge");
+          if (!badge) return;
+          var rows = d.querySelectorAll("tbody tr");
+          var real = 0,
+            first = "";
+          Array.prototype.forEach.call(rows, function (r) {
+            if (r.querySelector(".empty-state")) return;
+            real++;
+            if (!first) {
+              var pair = r.querySelector("td:nth-child(2)");
+              if (pair) first = pair.textContent.trim();
+            }
+          });
+          badge.textContent = real ? (first ? first + " · " : "") + real : "";
+        }
+
+        accs.forEach(function (d) {
+          var id = d.dataset.acc || d.id;
+          // По умолчанию свёрнуто (declutter); восстанавливаем сохранённое.
+          if (state[id] === true) d.setAttribute("open", "");
+          else d.removeAttribute("open");
+
+          d.addEventListener("toggle", function () {
+            state[id] = d.open;
+            try {
+              localStorage.setItem(KEY, JSON.stringify(state));
+            } catch (_) {}
+            if (!d.open) updateBadge(d);
+          });
+
+          // Клик по «?»-кнопке в шапке не должен сворачивать аккордеон.
+          var help = d.querySelector("summary .help-btn");
+          if (help)
+            help.addEventListener("click", function (e) {
+              e.stopPropagation();
+            });
+        });
+
+        function refresh() {
+          accs.forEach(function (d) {
+            if (!d.open) updateBadge(d);
+          });
+        }
+        setInterval(refresh, 3000);
+        refresh();
+      })();
+    </script>
+
+    <!-- Motion layer: reveal-on-scroll со стаггером. Только transform/opacity,
+         IntersectionObserver (не на каждый кадр) → дёшево и стабильно 60fps.
+         JS сам ставит data-reveal, поэтому без JS контент остаётся видимым. -->
+    <script>
+      (function () {
+        var reduce =
+          window.matchMedia &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        var targets = [].slice.call(
+          document.querySelectorAll("section.card, #market-context")
+        );
+        if (reduce || !("IntersectionObserver" in window) || !targets.length)
+          return;
+
+        targets.forEach(function (el) {
+          el.setAttribute("data-reveal", "");
+        });
+
+        var vh = window.innerHeight || 800;
+        var firstScreen = 0;
+        var io = new IntersectionObserver(
+          function (entries, obs) {
+            entries.forEach(function (entry) {
+              if (!entry.isIntersecting) return;
+              var el = entry.target;
+              // Стаггерим только то, что уже в первом экране на старте;
+              // карточки ниже всплывают по одной по мере доскролла.
+              var rect = el.getBoundingClientRect();
+              if (rect.top < vh) {
+                el.style.setProperty("--reveal-i", firstScreen++);
+              }
+              el.classList.add("is-revealed");
+              obs.unobserve(el);
+            });
+          },
+          { threshold: 0.08, rootMargin: "0px 0px -8% 0px" }
+        );
+
+        targets.forEach(function (el) {
+          io.observe(el);
+        });
+      })();
+    </script>
+
+  </body>
+</html>
