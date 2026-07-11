@@ -109,6 +109,13 @@ const BACKFILL_GIVEUP_MS = 15 * 60_000; // fill не пришёл за 15м → 
 const _orphanAlertAt = new Map(); // coinUpper → ts последнего алерта
 const ORPHAN_REALERT_MS = 30 * 60_000;
 
+// Алерт «стоп не встал на бирже». Инцидент 07–11.07.2026: API-агент протух
+// («User or API Wallet … does not exist»), adopt 4 дня молча скипал все ручные
+// позы, оператор узнал вернувшись из отпуска к слитому депо. Ошибка биржи при
+// постановке SL — всегда риск-алерт, не только строка в логах.
+const _slFailAlertAt = new Map(); // coinUpper → ts последнего алерта
+const SL_FAIL_REALERT_MS = 30 * 60_000;
+
 // Чистая (для теста): цена уже на/за плановым стопом? short: стоп ВЫШЕ входа,
 // пробитие = price ≥ SL; long: стоп НИЖЕ, пробитие = price ≤ SL.
 export function isBeyondPlannedStop({ side, price, plannedSl }) {
@@ -394,6 +401,25 @@ export async function maybeAdoptManualPosition(manualPositions) {
         `NOT adopting — позиция остаётся в обычном hands-off.`,
       );
       _adoptSkipReason.set(coin, 'стоп не встал на бирже');
+      const lastSlFailAlert = _slFailAlertAt.get(up(coin)) || 0;
+      if (now - lastSlFailAlert >= SL_FAIL_REALERT_MS) {
+        _slFailAlertAt.set(up(coin), now);
+        const walletDead = /does not exist/i.test(err.message);
+        await fireAdoptNtfy(
+          walletDead
+            ? `🚨 API-кошелёк бота МЁРТВ — #${coin} без стопа`
+            : `🚨 #${coin}: стоп НЕ встал на бирже`,
+          walletDead
+            ? `Биржа не признаёт агент-ключ («does not exist») — протух или дерегистрирован.\n` +
+              `Бот НЕ может ставить стопы и торговать. Все ручные позы без защиты.\n` +
+              `Перевыпусти API wallet: app.hyperliquid.xyz → More → API.`
+            : `Поза #${coin} ${side.toUpperCase()} НЕ усыновлена: биржа отклонила SL.\n` +
+              `${err.message.slice(0, 200)}\n` +
+              `Поза БЕЗ защиты — поставь стоп руками или закрой.`,
+          ['rotating_light'],
+          { urgent: true },
+        );
+      }
       continue;
     }
 
