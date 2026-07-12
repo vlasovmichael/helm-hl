@@ -13,8 +13,8 @@
 // realized_pnl УЖЕ net of fees (см. database.js); fee_paid лежит отдельно только
 // чтобы показать нагрузку комиссий (gross = net + fees).
 
-import { getAllTradesMerged } from '../../core/database.js';
-import { logger } from '../../core/logger.js';
+import { getAllTradesMerged } from '../../../core/database.js';
+import { logger } from '../../../core/logger.js';
 
 // Правила выведены ИЗ ДАННЫХ, не из мнений. Единый источник: фронт рендерит их
 // отсюда, а docs/TRADING_RULES.md — человекочитаемая копия для чтения без дашборда.
