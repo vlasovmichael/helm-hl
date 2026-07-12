@@ -767,6 +767,30 @@ function getStrategyHistoryMerged(strategyId, mode, side = null) {
 }
 
 /**
+ * ВСЕ закрытые сделки режима из обоих источников (live-таблица + архив), деду́п по
+ * id. Для страницы «Разбор моих сделок» — нужен разрез по стороне/стратегии/монете
+ * сразу, а не по одной стратегии. Archive-aware по той же причине, что и
+ * getStrategyHistoryMerged (Auto-Cleanup чистит live-таблицу при простое).
+ * @param {('PAPER'|'PRODUCTION')} mode
+ * @returns {Array<Object>} сделки, старые → новые
+ */
+export function getAllTradesMerged(mode = 'PRODUCTION') {
+  const live = getDb().prepare('SELECT * FROM history WHERE mode = ?').all(mode);
+  const archived = getArchivedHistorySince(0).filter((r) => r.mode === mode);
+  const seen = new Set();
+  const merged = [];
+  for (const r of [...archived, ...live]) {
+    if (r.id != null) {
+      if (seen.has(r.id)) continue;
+      seen.add(r.id);
+    }
+    merged.push(r);
+  }
+  merged.sort((a, b) => (a.closed_at || 0) - (b.closed_at || 0));
+  return merged;
+}
+
+/**
  * Stats для конкретной стратегии/режима — для dashboard карточки.
  * Возвращает n, sumNet, avgNet, worstNet, bestNet, winRate, lastClosedAt,
  * а также wins/losses/avgWin/avgLoss (для payoff = avgWin/|avgLoss|).

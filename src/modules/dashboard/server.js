@@ -75,6 +75,7 @@ import {
 } from "./routes/movers.js";
 import { getManualTrades } from "./routes/manualTrades.js";
 import { handlePnlSummary, handleInsights, handleDayJournal, handleDayNoteSave } from "./routes/pnl.js";
+import { handleTradeBreakdown } from "./routes/tradeBreakdown.js";
 import {
   DIVERGENCE_WATCHLIST,
   DIVERGENCE_SNAPSHOT_MS,
@@ -970,6 +971,7 @@ export function startDashboard() {
   app.post("/api/manual-paper/close", handleManualPaperClose);
 
   app.get("/api/insights", handleInsights);
+  app.get("/api/my-trades", handleTradeBreakdown);
   app.get("/api/day-journal", handleDayJournal);
   app.post("/api/day-journal", handleDayNoteSave);
   app.get("/api/trade-markers", handleTradeMarkers);

@@ -1,0 +1,189 @@
+// ─────────────────────────────────────────────────
+//  Разбор моих сделок + Мои правила (statistics.html)
+// ─────────────────────────────────────────────────
+
+.mytrades-period {
+  font: 500 12px/1 "JetBrains Mono", monospace;
+  color: var(--text-muted);
+}
+
+.mytrades-body {
+  .positive { color: var(--green); }
+  .negative { color: var(--red); }
+}
+
+// ── Хедлайн-метрики ──
+.mt-headline {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.mt-hl-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  background: var(--card-bg-elev);
+  border: 1px solid var(--border-muted);
+  border-radius: 10px;
+}
+.mt-hl-label {
+  font: 500 11px/1 "Mona Sans", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.mt-hl-value {
+  font: 700 22px/1 "JetBrains Mono", monospace;
+  color: var(--text-primary);
+}
+
+// ── Плашка про комиссии ──
+.mt-fee-note {
+  font: 500 13px/1.5 "Mona Sans", sans-serif;
+  color: var(--text-secondary);
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--card-bg-elev);
+  margin-bottom: 14px;
+  b { color: var(--text-primary); font-weight: 700; }
+  .mt-flag {
+    color: var(--red);
+    font-weight: 600;
+    margin-left: 4px;
+  }
+}
+
+// ── Таблица ──
+.mt-table-wrap { overflow-x: auto; }
+.mt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 500 13px/1 "JetBrains Mono", monospace;
+
+  th {
+    text-align: right;
+    padding: 6px 10px;
+    font: 600 11px/1 "Mona Sans", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+  }
+  th:first-child { text-align: left; }
+
+  td { padding: 8px 10px; border-bottom: 1px solid var(--border-muted); }
+  .mt-label { text-align: left; color: var(--text-primary); font-weight: 600; }
+  .mt-num { text-align: right; color: var(--text-secondary); }
+  .mt-empty { text-align: right; color: var(--text-faint); }
+
+  .mt-strong td { font-weight: 700; background: var(--card-bg-elev); }
+
+  .mt-divider td {
+    padding: 10px 10px 4px;
+    font: 600 10px/1 "Mona Sans", sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-faint);
+    border-bottom: none;
+  }
+
+  .positive { color: var(--green) !important; }
+  .negative { color: var(--red) !important; }
+}
+
+// ── Монеты-чипы ──
+.mt-coins {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 16px;
+}
+.mt-coins-title {
+  font: 600 11px/1 "Mona Sans", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+  &.positive { color: var(--green); }
+  &.negative { color: var(--red); }
+}
+.mt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.mt-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: var(--card-bg-elev);
+  border: 1px solid var(--border-muted);
+  font: 500 12px/1.2 "JetBrains Mono", monospace;
+  color: var(--text-secondary);
+  b { font-weight: 700; }
+  i { font-style: normal; color: var(--text-faint); font-size: 11px; }
+  &.positive b { color: var(--green); }
+  &.negative b { color: var(--red); }
+}
+
+// ── Мои правила ──
+.mytrades-rules {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--border);
+}
+.mt-rules-title {
+  font: 700 15px/1.3 "Mona Sans", sans-serif;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+  span { font-weight: 500; font-size: 13px; color: var(--text-muted); }
+}
+.mt-rule {
+  display: flex;
+  gap: 12px;
+  padding: 10px 0;
+  & + .mt-rule { border-top: 1px solid var(--border-muted); }
+}
+.mt-rule-n {
+  flex: 0 0 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font: 700 14px/1 "JetBrains Mono", monospace;
+}
+.mt-rule-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  font: 700 14px/1.3 "Mona Sans", sans-serif;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+.mt-rule-metric {
+  font: 600 11px/1 "JetBrains Mono", monospace;
+  color: var(--text-muted);
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: var(--card-bg-elev);
+  border: 1px solid var(--border-muted);
+}
+.mt-rule-body {
+  font: 400 13px/1.55 "Mona Sans", sans-serif;
+  color: var(--text-secondary);
+}
+
+.mt-empty-note,
+.mt-empty-note {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font: 500 13px/1.5 "Mona Sans", sans-serif;
+}
+
+@media (max-width: 560px) {
+  .mt-headline { grid-template-columns: repeat(2, 1fr); }
+  .mt-coins { grid-template-columns: 1fr; }
+}
