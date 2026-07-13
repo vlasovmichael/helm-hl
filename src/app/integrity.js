@@ -96,31 +96,28 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
     const coinFills = fills.filter(
       (f) => f.coin.toUpperCase() === dbPosition.coin.toUpperCase(),
     );
+    // Причину закрытия (sl/tp/manual/liq) берём из classifyClose — она смотрит на
+    // первый close-fill и его oid. PnL из неё НЕ берём: она суммирует ВСЕ
+    // close-fills после entry_time и при флипе/повторном заходе мержит чужие ноги.
     const c = classifyClose(dbPosition, coinFills);
     if (c.reason !== 'external_unknown') closeReason = c.reason;
-    if (Number.isFinite(c.pnl)) {
-      estimatedPnl = c.pnl;
-      feePaid      = Number.isFinite(c.fee) ? c.fee : 0;
-      pnlAccurate  = true;  // fills дают точное число
-      pnlFromFills = true;
-    }
-    if (Number.isFinite(c.closePx)) closePx = c.closePx;
 
-    // ── Анти-мердж при флипе ──────────────────────────────────────────────
-    // classifyClose суммирует ВСЕ close-fills с момента входа. Если оператор флипнул
-    // монету (short→long) до того, как integrity поймал исчезновение, сумма
-    // схлопывала обе ноги в одну цифру, и минусовая нога пропадала из history
-    // (adopt flip-merge баг 2026-06-18). Берём конкретную ногу по стороне+входу.
+    // ── PnL/цена — только из конкретной same-side ноги (матч по цене входа) ──
+    // classifyClose при флипе (short→long) или быстром повторном заходе одной
+    // монеты складывал обе ноги в одну цифру, минусовая/победная нога пропадала
+    // (adopt flip-merge 2026-06-18; KAITO double-count 2026-07-13). Если чистой
+    // ноги ещё нет в fills (лаг индексации HL) → leg=null → проваливаемся в defer
+    // ниже и ждём, а НЕ пишем мусорную сумму classifyClose.
     const leg = findRoundTripForPosition(dbPosition, coinFills);
     if (leg && Number.isFinite(leg.pnl)) {
-      if (Math.abs((leg.pnl ?? 0) - (c.pnl ?? 0)) > 1e-6) {
+      if (Number.isFinite(c.pnl) && Math.abs((leg.pnl ?? 0) - (c.pnl ?? 0)) > 1e-6) {
         logger.warn(
-          `[Integrity] #${dbPosition.coin} FLIP detected: merged pnl=$${(c.pnl ?? 0).toFixed(4)} ` +
-            `→ real ${dbPosition.side}-leg pnl=$${leg.pnl.toFixed(4)} (остальные ноги учтутся отдельно)`,
+          `[Integrity] #${dbPosition.coin} FLIP/merge: classifyClose sum=$${(c.pnl ?? 0).toFixed(4)} ` +
+            `→ реальная ${dbPosition.side}-нога (по цене входа) pnl=$${leg.pnl.toFixed(4)}`,
         );
       }
       estimatedPnl = leg.pnl;
-      feePaid      = Number.isFinite(leg.fee) ? leg.fee : feePaid;
+      feePaid      = Number.isFinite(leg.fee) ? leg.fee : 0;
       pnlAccurate  = true;
       pnlFromFills = true;
       if (Number.isFinite(leg.closePx)) closePx = leg.closePx;

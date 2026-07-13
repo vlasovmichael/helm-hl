@@ -172,3 +172,42 @@ test('флип: для лонг-ноги берётся её pnl (+1.89), не �
 test('findRoundTripForPosition: нет fills → null (фолбэк на classifyClose)', () => {
   assert.equal(findRoundTripForPosition({ coin: 'LIT', side: 'short', entry_time: 0 }, []), null);
 });
+
+// ═══════════════════════════════════════════════
+//  KAITO double-count 2026-07-13: два adopt-лонга с ОДНИМ (неверным) entry_time
+// ═══════════════════════════════════════════════
+// Флип short→long, затем второй лонг. Обе adopt-позы получили entry_time =
+// closed_at шорта → матч по времени давал ОБЕИМ первый лонг: он задваивался,
+// второй (победный +0.75) терялся. Матч по entry_price разводит их однозначно.
+const kaitoFlipFills = [
+  makeFill({ coin: 'KAITO', time: 1000,  dir: 'Open Short',  px: 0.67167, sz: 107 }),
+  makeFill({ coin: 'KAITO', time: 2000,  dir: 'Close Short', px: 0.68707, sz: 107, closedPnl: -1.6478 }),
+  makeFill({ coin: 'KAITO', time: 3000,  dir: 'Open Long',   px: 0.68976, sz: 90 }),
+  makeFill({ coin: 'KAITO', time: 4000,  dir: 'Close Long',  px: 0.67357, sz: 90,  closedPnl: -1.4571 }),
+  makeFill({ coin: 'KAITO', time: 5000,  dir: 'Open Long',   px: 0.67191, sz: 87 }),
+  makeFill({ coin: 'KAITO', time: 6000,  dir: 'Close Long',  px: 0.68051, sz: 87,  closedPnl: 0.7482 }),
+];
+const KAITO_BAD_TIME = 2000; // closed_at шорта — обе позы застряли на нём
+
+test('KAITO: первый лонг матчится по entry_price, не по времени', () => {
+  const pos = { coin: 'KAITO', side: 'long', entry_price: 0.68976, entry_time: KAITO_BAD_TIME };
+  const leg = findRoundTripForPosition(pos, kaitoFlipFills);
+  assert.ok(leg, 'нога найдена');
+  assert.ok(Math.abs(leg.closePx - 0.67357) < 1e-9, `close первого лонга, got ${leg.closePx}`);
+  assert.ok(Math.abs(leg.pnl - (-1.4571)) < 1e-9);
+});
+
+test('KAITO: второй (победный) лонг не теряется — матч по entry_price', () => {
+  const pos = { coin: 'KAITO', side: 'long', entry_price: 0.67191, entry_time: KAITO_BAD_TIME };
+  const leg = findRoundTripForPosition(pos, kaitoFlipFills);
+  assert.ok(leg, 'нога найдена (раньше терялась)');
+  assert.ok(Math.abs(leg.closePx - 0.68051) < 1e-9, `close второго лонга, got ${leg.closePx}`);
+  assert.ok(Math.abs(leg.pnl - 0.7482) < 1e-9, `победный pnl +0.7482, got ${leg.pnl}`);
+});
+
+test('KAITO: same-side нога ещё не закрыта в fills → null (integrity сделает defer)', () => {
+  // fills до закрытия первого лонга: short закрыт, long1 открыт но не закрыт.
+  const lagFills = kaitoFlipFills.slice(0, 3);
+  const pos = { coin: 'KAITO', side: 'long', entry_price: 0.68976, entry_time: KAITO_BAD_TIME };
+  assert.equal(findRoundTripForPosition(pos, lagFills), null);
+});

@@ -361,14 +361,37 @@ export function findRoundTripForPosition(position, fills) {
   );
   if (legs.length === 0) return null;
 
-  // Ближайшая по времени входа нога (флип может дать несколько ног той же
-  // стороны — берём ту, чей вход совпадает с adopt-входом). Терпимость широкая
-  // (entry_time усыновления лагает на ~секунды-минуты от фактического fill).
+  // Дизамбигуация ноги. entry_time усыновлённой позы НЕнадёжен: бэкфилится с лагом,
+  // а при флипе/повторном заходе якорится к времени закрытия ПРЕДЫДУЩЕЙ ноги
+  // (инцидент KAITO 2026-07-13: два adopt-лонга получили ОДИН entry_time =
+  // closed_at шорта → оба матчились в первый лонг: первый задвоился, второй
+  // — победный +$0.75 — потерялся). entry_price из DB точный → матчим по ЦЕНЕ
+  // входа; entry_time лишь тай-брейк и единственный ключ для поз, открытых до
+  // 60d-окна HL (там entryPrice реконструированной ноги = 0).
+  const wantPx = Number(position.entry_price);
+  const PX_TOL = 0.005; // 0.5% — покрывает slippage DB entry_price vs avg fill-px
   let best = null;
-  let bestDelta = Infinity;
-  for (const leg of legs) {
-    const delta = Math.abs((leg.entryTime ?? 0) - (position.entry_time ?? 0));
-    if (delta < bestDelta) { bestDelta = delta; best = leg; }
+  if (wantPx > 0) {
+    let bestPxDelta = Infinity;
+    for (const leg of legs) {
+      if (!(leg.entryPrice > 0)) continue;
+      const d = Math.abs(leg.entryPrice - wantPx) / wantPx;
+      if (d <= PX_TOL && d < bestPxDelta) { bestPxDelta = d; best = leg; }
+    }
+  }
+  // Фолбэк по времени — ТОЛЬКО когда цену матчить нечем (поза/ноги до окна HL).
+  // Если цена известна, а совпадений по цене нет → реальная нога ещё не
+  // проиндексирована (лаг fills) → возвращаем null, чтобы integrity сделал defer,
+  // а не записал чужую ногу.
+  if (!best) {
+    const anyPriced = legs.some((l) => l.entryPrice > 0);
+    if (!(wantPx > 0) || !anyPriced) {
+      let bestDelta = Infinity;
+      for (const leg of legs) {
+        const delta = Math.abs((leg.entryTime ?? 0) - (position.entry_time ?? 0));
+        if (delta < bestDelta) { bestDelta = delta; best = leg; }
+      }
+    }
   }
   if (!best) return null;
   return {
