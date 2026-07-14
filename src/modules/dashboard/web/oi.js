@@ -202,11 +202,13 @@ async function selectCoin(coin) {
     last = pts[pts.length - 1];
   const dOi = ((last.oiUsd - first.oiUsd) / first.oiUsd) * 100;
   const dPx = ((last.px - first.px) / first.px) * 100;
+  const bucketH = bucketHoursFor(data.hours ?? detailHours);
   document.getElementById("oi-detail-sub").innerHTML =
     `${data.rawCount} points · OI ${fmtUsd(first.oiUsd)}→${fmtUsd(last.oiUsd)} ` +
-    `(${dOi > 0 ? "+" : ""}${dOi.toFixed(1)}%) · price ${dPx > 0 ? "+" : ""}${dPx.toFixed(1)}%`;
+    `(${dOi > 0 ? "+" : ""}${dOi.toFixed(1)}%) · price ${dPx > 0 ? "+" : ""}${dPx.toFixed(1)}% ` +
+    `· <span class="oi-muted">table avg per ${bucketH}h</span>`;
   drawChart(pts);
-  renderSeries(pts);
+  renderSeries(pts, bucketH);
 }
 
 // Dual-axis спарклайн: OI ($) синим, цена золотым. Каждая серия нормируется по
@@ -238,10 +240,46 @@ function drawChart(pts) {
     );
 }
 
-function renderSeries(pts) {
-  // Таблица — от свежих к старым, чтобы последнее было сверху.
-  document.getElementById("oi-series-body").innerHTML = [...pts]
-    .reverse()
+// Размер бакета таблицы: ~24 строки на любой диапазон, снап к «красивым» часам.
+function bucketHoursFor(hours) {
+  const nice = [1, 2, 3, 4, 6, 8, 12, 24];
+  const target = hours / 24; // часов на бакет, чтобы вышло ~24 строки
+  return nice.find((n) => n >= target) ?? 24;
+}
+
+// Усредняет ряд по бакетам bucketH часов (px/oi/oiUsd/funding/vol — среднее),
+// метка бакета = его начало. Таблица не тонет: 15-мин снимки → ~24 строки.
+function bucketSeries(pts, bucketH) {
+  const bms = bucketH * 3600_000;
+  const map = new Map();
+  for (const p of pts) {
+    const key = Math.floor(p.t / bms) * bms;
+    let b = map.get(key);
+    if (!b) {
+      b = { t: key, px: 0, oi: 0, oiUsd: 0, f: 0, v: 0, n: 0 };
+      map.set(key, b);
+    }
+    b.px += p.px;
+    b.oi += p.oi;
+    b.oiUsd += p.oiUsd;
+    b.f += p.f ?? 0;
+    b.v += p.v ?? 0;
+    b.n++;
+  }
+  return [...map.values()]
+    .map((b) => ({
+      t: b.t,
+      px: b.px / b.n,
+      oi: b.oi / b.n,
+      oiUsd: b.oiUsd / b.n,
+      f: b.f / b.n,
+      v: b.v / b.n,
+    }))
+    .sort((a, b) => b.t - a.t); // от свежих к старым
+}
+
+function renderSeries(pts, bucketH) {
+  document.getElementById("oi-series-body").innerHTML = bucketSeries(pts, bucketH)
     .map(
       (p) => `
       <tr>
