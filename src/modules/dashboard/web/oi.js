@@ -55,10 +55,12 @@ const fmtTime = (t) =>
   new Date(t).toISOString().slice(5, 16).replace("T", " ");
 
 // ── состояние обзора ──
+const PAGE_SIZE = 10;
 let overview = [];
 let sortKey = "oiUsd";
 let sortAsc = false;
 let filter = "";
+let page = 0;
 let activeCoin = null;
 let detailHours = 72;
 
@@ -99,6 +101,7 @@ function sortRows(rows) {
 
 function renderTable() {
   const tbody = document.getElementById("oi-tbody");
+  const pager = document.getElementById("oi-pager");
   let rows = overview;
   if (filter) rows = rows.filter((r) => r.coin.toUpperCase().includes(filter));
   rows = sortRows(rows);
@@ -106,9 +109,16 @@ function renderTable() {
     tbody.innerHTML = `<tr><td colspan="8" class="oi-empty">Ничего не найдено${
       filter ? ` по «${filter}»` : ""
     }</td></tr>`;
+    pager.hidden = true;
     return;
   }
-  tbody.innerHTML = rows
+  // пагинация: клампим страницу в диапазон (после фильтра список короче)
+  const pages = Math.ceil(rows.length / PAGE_SIZE);
+  if (page > pages - 1) page = pages - 1;
+  if (page < 0) page = 0;
+  const start = page * PAGE_SIZE;
+  const pageRows = rows.slice(start, start + PAGE_SIZE);
+  tbody.innerHTML = pageRows
     .map(
       (r) => `
       <tr data-coin="${r.coin}"${r.coin === activeCoin ? ' class="active"' : ""}>
@@ -131,7 +141,24 @@ function renderTable() {
     th.classList.toggle("sorted", th.dataset.key === sortKey);
     th.classList.toggle("asc", th.dataset.key === sortKey && sortAsc);
   });
+  // пейджер
+  pager.hidden = pages <= 1;
+  document.getElementById("oi-pg-info").textContent =
+    `${start + 1}–${Math.min(start + PAGE_SIZE, rows.length)} из ${rows.length} · стр. ${page + 1}/${pages}`;
+  document.getElementById("oi-prev").disabled = page <= 0;
+  document.getElementById("oi-next").disabled = page >= pages - 1;
 }
+
+document.getElementById("oi-prev").addEventListener("click", () => {
+  if (page > 0) {
+    page--;
+    renderTable();
+  }
+});
+document.getElementById("oi-next").addEventListener("click", () => {
+  page++;
+  renderTable();
+});
 
 document.querySelectorAll("#oi-table thead th").forEach((th) =>
   th.addEventListener("click", () => {
@@ -142,12 +169,14 @@ document.querySelectorAll("#oi-table thead th").forEach((th) =>
       sortKey = key;
       sortAsc = key === "coin"; // текст по возрастанию, числа по убыванию
     }
+    page = 0;
     renderTable();
   }),
 );
 
 document.getElementById("oi-search").addEventListener("input", (e) => {
   filter = e.target.value.trim().toUpperCase();
+  page = 0;
   renderTable();
 });
 

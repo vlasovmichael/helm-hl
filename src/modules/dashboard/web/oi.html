@@ -79,6 +79,20 @@
       .oi-neg { color: #f0556b; }
       .oi-muted { color: var(--text-dim, #8a8578); }
 
+      .oi-pager {
+        display: flex; align-items: center; justify-content: center; gap: 14px;
+        padding: 12px 4px 2px; font-size: 13px;
+      }
+      .oi-pager button {
+        padding: 6px 13px; border-radius: 8px; cursor: pointer;
+        border: 1px solid var(--border, #2a2622);
+        background: var(--panel-2, rgba(128,128,128,0.06));
+        color: var(--text, inherit); font-family: inherit; font-size: 13px; font-weight: 600;
+      }
+      .oi-pager button:disabled { opacity: 0.4; cursor: default; }
+      .oi-pager button:not(:disabled):hover { border-color: #5b9dff; }
+      .oi-pager .oi-pg-info { color: var(--text-dim, #8a8578); font-variant-numeric: tabular-nums; min-width: 130px; text-align: center; }
+
       .oi-detail { margin-top: 4px; }
       .oi-detail-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
       .oi-detail-head h3 { margin: 0; font-size: 18px; }
@@ -132,6 +146,11 @@
               <tr><td colspan="8" class="oi-empty">Загрузка…</td></tr>
             </tbody>
           </table>
+        </div>
+        <div class="oi-pager" id="oi-pager" hidden>
+          <button id="oi-prev" type="button">‹ Назад</button>
+          <span class="oi-pg-info" id="oi-pg-info"></span>
+          <button id="oi-next" type="button">Вперёд ›</button>
         </div>
       </section>
 
