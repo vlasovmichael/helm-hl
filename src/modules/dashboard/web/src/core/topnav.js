@@ -37,6 +37,12 @@ const ICONS = {
     <path d="M5 3h11a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
     <line x1="7" y1="7" x2="13" y2="7" />
     <path d="M7 14l2.5-2.5L12 14l3-3.5" />`,
+  oi: `
+    <line x1="3" y1="21" x2="21" y2="21" />
+    <line x1="3" y1="21" x2="3" y2="3" />
+    <rect x="6" y="12" width="3" height="6" rx="0.5" />
+    <rect x="11" y="8" width="3" height="10" rx="0.5" />
+    <rect x="16" y="4" width="3" height="14" rx="0.5" />`,
 };
 
 const LINKS = [
@@ -44,6 +50,7 @@ const LINKS = [
   // Order Book остаётся как страница (/orderbook.html), но ссылку из навбара
   // убрали — стакан оператору тяжело читается, не нужен на видном месте (2026-06-28).
   { key: "statistics", href: "/statistics.html", label: "Statistics" },
+  { key: "oi", href: "/oi.html", label: "OI", title: "История open interest по всем монетам (ΔOI 24ч/1ч)" },
   { key: "lab", href: "/lab.html", label: "Lab", title: "Research: BTC Divergence + Whale Watch" },
   { key: "journal", href: "/journal.html", label: "Journal", title: "Журнал чтения графика — разметка монеты на сутки вперёд" },
   { key: "ledger", href: "/ledger.html", label: "Ledger", title: "Monthly P&L ledger" },

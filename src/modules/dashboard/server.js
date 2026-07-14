@@ -56,6 +56,7 @@ import {
   handleLogout,
 } from "./auth.js";
 import { handleMarketContext } from "./routes/marketContext.js";
+import { handleOiOverview, handleOiCoin } from "./routes/oiCollector.js";
 import {
   handleList as handleManualPaperList,
   handleOpen as handleManualPaperOpen,
@@ -977,6 +978,8 @@ export function startDashboard() {
   app.get("/api/trade-markers", handleTradeMarkers);
   app.get("/api/btc-divergence", handleBtcDivergence);
   app.get("/api/market-context", handleMarketContext);
+  app.get("/api/oi-collector/overview", handleOiOverview);
+  app.get("/api/oi-collector/coin", handleOiCoin);
   app.get("/api/btc-divergence/all", handleBtcDivergenceAll);
   app.get("/api/whale-watch", handleWhaleWatch);
   app.get("/api/whale-watch/batch", handleWhaleWatchBatch);

@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#0c0a09" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f5f1ea" media="(prefers-color-scheme: light)" />
+    <title>OI · Helm</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Mona+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      // Тему ставим до отрисовки, чтобы не мигало (FOUC).
+      (function () {
+        try {
+          var stored = localStorage.getItem("hl-scanner-theme") || "auto";
+          var theme =
+            stored === "auto"
+              ? window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light"
+              : stored === "light"
+                ? "light"
+                : "dark";
+          document.documentElement.setAttribute("data-theme", theme);
+        } catch (_) {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      })();
+    </script>
+    <style>
+      /* ── OI history — витрина (oi- префикс, тема-нейтрально) ── */
+      .oi-note {
+        color: var(--text-dim, #8a8578);
+        font-size: 12.5px;
+        line-height: 1.55;
+        margin: 2px 0 0;
+      }
+      .oi-note b { color: var(--text, inherit); }
+      .oi-span { font-size: 12px; color: var(--text-dim, #8a8578); font-variant-numeric: tabular-nums; }
+
+      .oi-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .oi-search {
+        padding: 7px 11px; border-radius: 8px;
+        border: 1px solid var(--border, #2a2622);
+        background: var(--panel-2, rgba(128,128,128,0.06));
+        color: var(--text, inherit); font-family: inherit; font-size: 13px;
+        text-transform: uppercase; width: 130px;
+      }
+
+      .oi-table-wrap { overflow-x: auto; }
+      table.oi-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+      .oi-table th {
+        text-align: right; padding: 8px 10px; font-size: 11px; font-weight: 600;
+        letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-dim, #8a8578);
+        border-bottom: 1px solid var(--border, #2a2622); cursor: pointer; user-select: none;
+        white-space: nowrap;
+      }
+      .oi-table th:first-child { text-align: left; }
+      .oi-table th.sorted::after { content: " ▾"; }
+      .oi-table th.sorted.asc::after { content: " ▴"; }
+      .oi-table td {
+        text-align: right; padding: 7px 10px; font-size: 13px;
+        border-bottom: 1px solid var(--border-soft, rgba(128,128,128,0.12));
+        white-space: nowrap; font-family: "JetBrains Mono", monospace;
+      }
+      .oi-table td:first-child { text-align: left; font-weight: 600; font-family: inherit; }
+      .oi-table tbody tr { cursor: pointer; }
+      .oi-table tbody tr:hover { background: var(--panel-2, rgba(128,128,128,0.06)); }
+      .oi-table tbody tr.active { background: rgba(91, 157, 255, 0.14); }
+      .oi-pos { color: #2bbf73; }
+      .oi-neg { color: #f0556b; }
+      .oi-muted { color: var(--text-dim, #8a8578); }
+
+      .oi-detail { margin-top: 4px; }
+      .oi-detail-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+      .oi-detail-head h3 { margin: 0; font-size: 18px; }
+      .oi-chart { width: 100%; height: 200px; display: block; }
+      .oi-legend { display: flex; gap: 16px; font-size: 12px; margin: 6px 0 2px; }
+      .oi-legend span { display: inline-flex; align-items: center; gap: 6px; }
+      .oi-legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+      .oi-empty { padding: 30px 10px; text-align: center; color: var(--text-dim, #8a8578); }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <nav class="topnav" id="topnav" aria-label="Primary"></nav>
+
+      <header>
+        <div class="equity-group">
+          <div class="label">Open Interest</div>
+          <div class="value" style="font-size: 20px">История OI по всем монетам</div>
+        </div>
+        <div class="meta-group">
+          <div class="oi-note" style="max-width: 380px; text-align: right">
+            Долгосрочный снимок OI (у HL нет исторического API). Растущий OI при
+            плоской цене = набор плеча. <b>Это показ данных, не сигнал.</b>
+          </div>
+        </div>
+      </header>
+
+      <section class="card">
+        <div class="card-header">
+          <div class="card-title" data-num="01">Обзор · все монеты</div>
+          <div class="oi-toolbar">
+            <input id="oi-search" class="oi-search" placeholder="фильтр" maxlength="12" />
+            <span class="oi-span" id="oi-span">…</span>
+          </div>
+        </div>
+        <div class="oi-table-wrap">
+          <table class="oi-table" id="oi-table">
+            <thead>
+              <tr>
+                <th data-key="coin">Монета</th>
+                <th data-key="oiUsd" class="sorted">OI $</th>
+                <th data-key="dOi24hPct">ΔOI 24ч</th>
+                <th data-key="dOi1hPct">ΔOI 1ч</th>
+                <th data-key="px">Цена</th>
+                <th data-key="dPx24hPct">Δцена 24ч</th>
+                <th data-key="f">Funding/ч</th>
+                <th data-key="v">Объём 24ч</th>
+              </tr>
+            </thead>
+            <tbody id="oi-tbody">
+              <tr><td colspan="8" class="oi-empty">Загрузка…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card oi-detail" id="oi-detail" hidden>
+        <div class="card-header">
+          <div class="card-title" data-num="02">История монеты</div>
+          <div class="time-ranges" id="oi-ranges">
+            <button class="range-btn" data-hours="24">24ч</button>
+            <button class="range-btn active" data-hours="72">3д</button>
+            <button class="range-btn" data-hours="168">7д</button>
+            <button class="range-btn" data-hours="720">30д</button>
+          </div>
+        </div>
+        <div class="oi-detail-head">
+          <h3 id="oi-detail-coin">—</h3>
+          <span class="oi-span" id="oi-detail-sub"></span>
+        </div>
+        <div class="oi-legend">
+          <span><i style="background:#5b9dff"></i> OI ($)</span>
+          <span><i style="background:#e8b84b"></i> Цена</span>
+        </div>
+        <svg class="oi-chart" id="oi-chart" viewBox="0 0 800 200" preserveAspectRatio="none"></svg>
+        <div class="oi-table-wrap" style="margin-top: 14px">
+          <table class="oi-table" id="oi-series">
+            <thead>
+              <tr>
+                <th data-key="t">Время (UTC)</th>
+                <th>Цена</th>
+                <th>OI (токены)</th>
+                <th>OI $</th>
+                <th>Funding/ч</th>
+                <th>Объём 24ч</th>
+              </tr>
+            </thead>
+            <tbody id="oi-series-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer id="footer-status">
+        <span>Источник: OI-коллектор (снимок каждые 15 мин) · только чтение</span>
+      </footer>
+    </div>
+
+    <script type="module" src="/oi.js"></script>
+  </body>
+</html>

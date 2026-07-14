@@ -24,6 +24,7 @@ data/trades_snapshot.db*
 data/_corrupted/
 data/*.json
 data/tax/
+data/oi-collector/
 diag/
 temp/
 plaintext.txt
