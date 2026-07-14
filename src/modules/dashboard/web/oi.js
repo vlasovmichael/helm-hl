@@ -70,15 +70,15 @@ async function loadOverview() {
   const spanEl = document.getElementById("oi-span");
   if (!data.ok) {
     document.getElementById("oi-tbody").innerHTML =
-      '<tr><td colspan="8" class="oi-empty">Нет данных коллектора ещё. Первый снимок появится в течение 15 минут после запуска.</td></tr>';
+      '<tr><td colspan="8" class="oi-empty">No collector data yet. The first snapshot appears within 15 minutes of startup.</td></tr>';
     spanEl.textContent = "";
     return;
   }
   overview = data.coins;
   const s = data.span;
   const dur = ((s.lastT - s.firstT) / 3600_000).toFixed(0);
-  spanEl.textContent = `${data.coins.length} монет · ${s.count} снимков · история ~${dur}ч${
-    data.has24h ? "" : " · Δ24ч пока неполная"
+  spanEl.textContent = `${data.coins.length} coins · ${s.count} snapshots · ~${dur}h history${
+    data.has24h ? "" : " · Δ24h still partial"
   }`;
   renderTable();
 }
@@ -106,8 +106,8 @@ function renderTable() {
   if (filter) rows = rows.filter((r) => r.coin.toUpperCase().includes(filter));
   rows = sortRows(rows);
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="8" class="oi-empty">Ничего не найдено${
-      filter ? ` по «${filter}»` : ""
+    tbody.innerHTML = `<tr><td colspan="8" class="oi-empty">Nothing found${
+      filter ? ` for “${filter}”` : ""
     }</td></tr>`;
     pager.hidden = true;
     return;
@@ -144,7 +144,7 @@ function renderTable() {
   // пейджер
   pager.hidden = pages <= 1;
   document.getElementById("oi-pg-info").textContent =
-    `${start + 1}–${Math.min(start + PAGE_SIZE, rows.length)} из ${rows.length} · стр. ${page + 1}/${pages}`;
+    `${start + 1}–${Math.min(start + PAGE_SIZE, rows.length)} of ${rows.length} · page ${page + 1}/${pages}`;
   document.getElementById("oi-prev").disabled = page <= 0;
   document.getElementById("oi-next").disabled = page >= pages - 1;
 }
@@ -187,13 +187,13 @@ async function selectCoin(coin) {
   const detail = document.getElementById("oi-detail");
   detail.hidden = false;
   document.getElementById("oi-detail-coin").textContent = coin;
-  document.getElementById("oi-detail-sub").textContent = "загрузка…";
+  document.getElementById("oi-detail-sub").textContent = "loading…";
   document.getElementById("oi-series-body").innerHTML = "";
   const data = await fetchJson(
     `/api/oi-collector/coin?coin=${encodeURIComponent(coin)}&hours=${detailHours}`,
   );
   if (!data.ok || !data.points.length) {
-    document.getElementById("oi-detail-sub").textContent = "нет истории за период";
+    document.getElementById("oi-detail-sub").textContent = "no history for this range";
     document.getElementById("oi-chart").innerHTML = "";
     return;
   }
@@ -203,8 +203,8 @@ async function selectCoin(coin) {
   const dOi = ((last.oiUsd - first.oiUsd) / first.oiUsd) * 100;
   const dPx = ((last.px - first.px) / first.px) * 100;
   document.getElementById("oi-detail-sub").innerHTML =
-    `${data.rawCount} точек · OI ${fmtUsd(first.oiUsd)}→${fmtUsd(last.oiUsd)} ` +
-    `(${dOi > 0 ? "+" : ""}${dOi.toFixed(1)}%) · цена ${dPx > 0 ? "+" : ""}${dPx.toFixed(1)}%`;
+    `${data.rawCount} points · OI ${fmtUsd(first.oiUsd)}→${fmtUsd(last.oiUsd)} ` +
+    `(${dOi > 0 ? "+" : ""}${dOi.toFixed(1)}%) · price ${dPx > 0 ? "+" : ""}${dPx.toFixed(1)}%`;
   drawChart(pts);
   renderSeries(pts);
 }
