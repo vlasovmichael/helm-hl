@@ -19,6 +19,31 @@ services:
       - gateway_net
       - tax_net
 
+  # Spike-Fade наблюдатель — бумажный замер «скальпа фитилей». Отдельный
+  # процесс (НЕ трогает торгового бота): свой WS к HL allMids, ноль ордеров,
+  # пишет события в общий data-том (data/spike-fade/events.jsonl), которые
+  # дашборд показывает на /lab (/api/spike-fade). Параметры — через .env
+  # (SPIKE_PCT, SPIKE_TARGET_PCT, SPIKE_STOP_PCT, SPIKE_HORIZON_MS…).
+  spike-fade:
+    build: .
+    container_name: hl-spike-fade
+    restart: unless-stopped
+    command: node tools/spikeFadeMeasure.mjs
+    env_file: .env
+    environment:
+      TZ: ${TZ:-Europe/Warsaw}
+    volumes:
+      - ./data:/app/data
+    # Не веб-сервер → HEALTHCHECK из Dockerfile (пинг :3010) тут не применим.
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - gateway_net
+
   tui:
     profiles: [tui]
     build:

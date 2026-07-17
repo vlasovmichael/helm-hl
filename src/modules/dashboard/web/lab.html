@@ -101,6 +101,64 @@
         </div>
       </section>
 
+      <!-- 01.5 / Spike-Fade — бумажный замер «скальпа фитилей». Данные из
+           /api/spike-fade (tools/spikeFadeMeasure.mjs, отдельный наблюдатель).
+           Forward-замер гипотезы: был бы эдж, если фейдить каждый резкий вик.
+           НЕ сигнал — n<20 = шум. spikeFade.js. -->
+      <section class="card" id="sec-spike-fade">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-num="01.5"
+            title="Замер идеи «скальпить фитили»: на резкий вик (≥3% за 60с) открывается ГИПОТЕТИЧЕСКИЙ фейд (шорт на рост / лонг на падение), цель 1.5% / стоп 1.5% / тайм-стоп 30м, минус комиссии. Копится forward, ордеров нет. Вывод по эджу — на серии 20+ событий."
+          >
+            Spike-Fade (paper)
+          </div>
+          <span
+            id="sf-meta"
+            style="
+              font-size: 11px;
+              font-family: var(--font-mono);
+              color: var(--text-muted);
+            "
+          ></span>
+        </div>
+        <div class="u-scroll-x">
+          <table class="data-table" id="sf-side-table">
+            <thead>
+              <tr>
+                <th>Сторона</th>
+                <th class="r" title="Число гипотетических фейдов">n</th>
+                <th class="r" title="Доля прибыльных (после комиссий)">Win%</th>
+                <th class="r" title="Expectancy — средний net% на сделку">Exp</th>
+                <th class="r" title="Суммарный net% (сумма фейдов по 1 юниту)">Σ</th>
+                <th class="r" title="Средний максимум в пользу фейда">MFE</th>
+                <th class="r" title="Средний максимум против фейда">MAE</th>
+              </tr>
+            </thead>
+            <tbody id="sf-side-tbody">
+              <tr><td colspan="7" class="empty-state">накапливаем события…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="u-scroll-x" style="margin-top: 8px">
+          <table class="data-table" id="sf-coin-table">
+            <thead>
+              <tr>
+                <th title="Монета (топ по числу событий)">Coin</th>
+                <th class="r">n</th>
+                <th class="r">Win%</th>
+                <th class="r">Exp</th>
+                <th class="r">Σ</th>
+              </tr>
+            </thead>
+            <tbody id="sf-coin-tbody">
+              <tr><td colspan="5" class="empty-state">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- 02 / BTC Divergence -->
       <section class="card" id="sec-divergence">
         <div class="card-header">

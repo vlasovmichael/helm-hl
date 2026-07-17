@@ -23,6 +23,7 @@ import {
   initDivergenceUi,
 } from "./src/features/divergence.js";
 import { renderStrategies } from "./src/features/strategies.js";
+import { refreshSpikeFade } from "./src/features/spikeFade.js";
 
 // ── Bootstrap ──
 mountTopnav("lab");
@@ -39,4 +40,8 @@ divRefresh();
 // пере-рендерим divergence (как было на главной).
 setOnPositionsUpdated(() => renderBtcDivergence(null));
 initWhaleWatch();
+// Spike-Fade: forward-замер «скальпа фитилей» (HTTP-поллинг раз в 30с — файл
+// дописывается редко, чаще незачем). Данные из /api/spike-fade.
+refreshSpikeFade();
+setInterval(refreshSpikeFade, 30_000);
 startFooterTimer();

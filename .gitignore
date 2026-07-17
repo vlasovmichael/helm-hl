@@ -25,6 +25,7 @@ data/_corrupted/
 data/*.json
 data/tax/
 data/oi-collector/
+data/spike-fade/
 diag/
 temp/
 plaintext.txt
