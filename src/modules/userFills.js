@@ -23,7 +23,21 @@ import { hlInfo } from '../core/hlClient.js';
 const CACHE_TTL_MS = 30_000;  // 30с: fills меняются редко, без смысла спамить API
 const MAX_LOOKBACK_MS = 60 * 24 * 3_600_000;  // 60d — покрывает 30d period с запасом
 
+// Fail-fast: userFills делит общий HL-пул с торговым путём. Держать слот 10с на
+// сломанном эндпоинте — дорого; 5с достаточно на здоровый ответ, а на 500/зависании
+// освобождает слот вдвое быстрее. Резерв HIGH в hlClient дополнительно страхует.
+const FETCH_TIMEOUT_MS = parseInt(process.env.HL_USERFILLS_TIMEOUT_MS || '5000', 10);
+
+// Circuit breaker: HL-эндпоинт fills периодически отваливается (500 через ~10с)
+// независимо от нашего кода. После порога подряд ошибок перестаём бить HL на
+// кулдаун и отдаём stale-кэш — чтобы не жечь слоты и ретраи вхолостую во время
+// его аутэйджа. Открывается тихо (кэш и так возвращался при ошибке).
+const BREAKER_THRESHOLD    = parseInt(process.env.HL_USERFILLS_BREAKER_FAILS || '3', 10);
+const BREAKER_COOLDOWN_MS  = parseInt(process.env.HL_USERFILLS_BREAKER_COOLDOWN_MS || '60000', 10);
+
 let cache = { ts: 0, startTime: 0, fills: [] };
+let consecutiveFails = 0;
+let breakerOpenUntil = 0;
 
 /**
  * @param {number} startTime — unix ms. Если 0/undefined — последние 60d.
@@ -48,6 +62,13 @@ export async function fetchUserFills(startTime = 0, { force = false } = {}) {
     return cache.fills.filter((f) => f.time >= effectiveStart);
   }
 
+  // Предохранитель открыт → HL-fills сейчас в аутэйдже: не бьём API (не жжём
+  // слоты/ретраи), отдаём stale-кэш. force не обходит — при 500 свежих данных
+  // всё равно нет, а слот нужен торговому пути.
+  if (now < breakerOpenUntil) {
+    return cache.fills.filter((f) => f.time >= effectiveStart);
+  }
+
   try {
     const data = await hlInfo(
       {
@@ -55,7 +76,7 @@ export async function fetchUserFills(startTime = 0, { force = false } = {}) {
         user: config.wallet.address,
         startTime: effectiveStart,
       },
-      { label: 'userFills', timeoutMs: 10_000 },
+      { label: 'userFills', timeoutMs: FETCH_TIMEOUT_MS },
     );
 
     if (!Array.isArray(data)) {
@@ -63,11 +84,21 @@ export async function fetchUserFills(startTime = 0, { force = false } = {}) {
       return cache.fills.filter((f) => f.time >= effectiveStart);
     }
 
+    consecutiveFails = 0;
     const normalized = data.map(normalizeFill).filter(Boolean);
     cache = { ts: now, startTime: effectiveStart, fills: normalized };
     return normalized;
   } catch (err) {
-    logger.debug(`[userFills] fetch failed: ${err.message}`);
+    consecutiveFails++;
+    if (consecutiveFails >= BREAKER_THRESHOLD && breakerOpenUntil <= now) {
+      breakerOpenUntil = now + BREAKER_COOLDOWN_MS;
+      logger.warn(
+        `[userFills] circuit breaker OPEN: ${consecutiveFails} подряд ошибок ` +
+        `(${err.message}) — пауза ${Math.round(BREAKER_COOLDOWN_MS / 1000)}с, отдаём stale-кэш`,
+      );
+    } else {
+      logger.debug(`[userFills] fetch failed (${consecutiveFails}): ${err.message}`);
+    }
     return cache.fills.filter((f) => f.time >= effectiveStart);
   }
 }

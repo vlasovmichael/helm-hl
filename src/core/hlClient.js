@@ -20,6 +20,13 @@ const HL_INFO_URL = 'https://api.hyperliquid.xyz/info';
 // независимо → ещё больший шторм. Жёсткий потолок + min-gap дают serial-rate
 // ≤ ~13 req/sec, с запасом под пиковые случаи (метаданные + bulk-ratch).
 const MAX_CONCURRENT = parseInt(process.env.HL_MAX_CONCURRENT || '2', 10);
+// Слоты, зарезервированные под торговый путь (HIGH): цены/позиции/ордера/scout.
+// NORMAL/LOW не могут занять последние RESERVED_HIGH слотов — иначе один
+// медленный/сломанный эндпоинт (напр. userFills, отдающий 500 через 10с)
+// монополизирует весь пул и ослепляет бота. Приоритет очереди только
+// переупорядочивает ожидающих — он НЕ вытесняет уже занятый слот, поэтому без
+// резерва HIGH всё равно голодает. Здесь HIGH всегда имеет гарантированный слот.
+const RESERVED_HIGH = parseInt(process.env.HL_RESERVED_HIGH || '1', 10);
 const MIN_GAP_MS    = parseInt(process.env.HL_MIN_GAP_MS      || '75', 10);
 const TIMEOUT_MS    = parseInt(process.env.HL_TIMEOUT_MS      || '8000', 10);
 // Глобальная пауза после 429 — пока кулдаун активен, никакие новые запросы
@@ -40,8 +47,16 @@ let cooldownUntil = 0;
 let seq = 0; // монотонный счётчик для FIFO внутри одного приоритета
 const waiters = []; // { priority, seq, resolve }
 
+// Потолок одновременных запросов для данного приоритета. HIGH видит весь пул;
+// NORMAL/LOW — пул минус зарезервированные под HIGH слоты (минимум 1, чтобы
+// низкий приоритет не заблокировался полностью при малом MAX_CONCURRENT).
+function capacityFor(priority) {
+  if (priority >= HL_PRIORITY.HIGH) return MAX_CONCURRENT;
+  return Math.max(1, MAX_CONCURRENT - RESERVED_HIGH);
+}
+
 function acquire(priority = HL_PRIORITY.NORMAL) {
-  if (inFlight < MAX_CONCURRENT) {
+  if (inFlight < capacityFor(priority)) {
     inFlight++;
     return Promise.resolve();
   }
@@ -50,25 +65,32 @@ function acquire(priority = HL_PRIORITY.NORMAL) {
   });
 }
 
-function takeNextWaiter() {
-  if (waiters.length === 0) return null;
-  // Высший приоритет; при равенстве — самый ранний (FIFO, без голодания внутри
-  // приоритета).
-  let bestIdx = 0;
-  for (let i = 1; i < waiters.length; i++) {
+// Берём ожидающего с высшим приоритетом, КОТОРОМУ уже разрешён слот при текущем
+// inFlight (резерв под HIGH соблюдается и на пути release, а не только acquire).
+// При равном приоритете — самый ранний (FIFO, без голодания внутри приоритета).
+function takeEligibleWaiter() {
+  let bestIdx = -1;
+  for (let i = 0; i < waiters.length; i++) {
     const w = waiters[i];
+    if (inFlight >= capacityFor(w.priority)) continue; // резерв не пускает
+    if (bestIdx === -1) {
+      bestIdx = i;
+      continue;
+    }
     const b = waiters[bestIdx];
     if (w.priority > b.priority || (w.priority === b.priority && w.seq < b.seq)) {
       bestIdx = i;
     }
   }
+  if (bestIdx === -1) return null;
   return waiters.splice(bestIdx, 1)[0];
 }
 
 function release() {
   inFlight--;
-  const next = takeNextWaiter();
-  if (next) {
+  // Освободившийся слот может разблокировать несколько ожидающих (обычно 0–1).
+  let next;
+  while ((next = takeEligibleWaiter())) {
     inFlight++;
     next.resolve();
   }
@@ -149,6 +171,7 @@ export function hlClientStats() {
     inFlight,
     queued: waiters.length,
     maxConcurrent: MAX_CONCURRENT,
+    reservedHigh: RESERVED_HIGH,
     minGapMs: MIN_GAP_MS,
     cooldownRemainMs: Math.max(0, cooldownUntil - Date.now()),
   };
@@ -156,6 +179,7 @@ export function hlClientStats() {
 
 logger.info(
   `[HL] info-client: max_concurrent=${MAX_CONCURRENT}, ` +
+  `reserved_high=${RESERVED_HIGH}, ` +
   `min_gap_ms=${MIN_GAP_MS}, timeout_ms=${TIMEOUT_MS}, ` +
   `cooldown_429_ms=${COOLDOWN_429_MS}`,
 );
