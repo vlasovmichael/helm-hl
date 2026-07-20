@@ -78,6 +78,7 @@ import {
 import { getManualTrades } from "./routes/manualTrades.js";
 import { handlePnlSummary, handleInsights, handleDayJournal, handleDayNoteSave } from "./routes/pnl.js";
 import { handleTradeBreakdown } from "./routes/tradeBreakdown.js";
+import { handleScannerApi } from "./routes/setupScanner.js";
 import {
   DIVERGENCE_WATCHLIST,
   DIVERGENCE_SNAPSHOT_MS,
@@ -982,6 +983,7 @@ export function startDashboard() {
   app.get("/api/oi-collector/overview", handleOiOverview);
   app.get("/api/oi-collector/coin", handleOiCoin);
   app.get("/api/spike-fade", handleSpikeFade);
+  app.get("/api/scanner", handleScannerApi);
   app.get("/api/btc-divergence/all", handleBtcDivergenceAll);
   app.get("/api/whale-watch", handleWhaleWatch);
   app.get("/api/whale-watch/batch", handleWhaleWatchBatch);

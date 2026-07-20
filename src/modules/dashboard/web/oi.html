@@ -103,6 +103,29 @@
       .oi-legend span { display: inline-flex; align-items: center; gap: 6px; }
       .oi-legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
       .oi-empty { padding: 30px 10px; text-align: center; color: var(--text-dim, #8a8578); }
+
+      /* ── Setup Scanner card (ss- префикс) ── */
+      .ss-hero {
+        border: 1px solid var(--border, #2a2622); border-radius: 10px;
+        padding: 14px 18px; margin: 4px 0 14px;
+        background: var(--panel-2, rgba(128,128,128,0.05));
+      }
+      .ss-hero .ss-label {
+        font-size: 11px; color: var(--text-dim, #8a8578);
+        text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;
+      }
+      .ss-hero .ss-dir { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+      .ss-hero .ss-sub {
+        font-size: 12.5px; color: var(--text-dim, #8a8578);
+        margin-top: 5px; font-variant-numeric: tabular-nums;
+      }
+      .ss-dots { letter-spacing: 2px; font-size: 13px; color: var(--text-dim, #8a8578); }
+      td.ss-scorecell, th.ss-scorecell { text-align: center; }
+      .ss-warm { color: #5b9dff; }
+      .ss-s3 { color: #0f7a45; font-weight: 700; }
+      :root[data-theme="dark"] .ss-s3 { color: #2f9d63; }
+      .ss-s2 { color: #c98a1a; font-weight: 700; }
+      .ss-s0 { color: var(--text-dim, #8a8578); font-weight: 700; }
     </style>
   </head>
   <body>
@@ -122,9 +145,40 @@
         </div>
       </header>
 
+      <section class="card" id="ss-card">
+        <div class="card-header">
+          <div class="card-title" data-num="01">Setup Scanner · radar</div>
+          <span class="oi-span" id="ss-meta">…</span>
+        </div>
+        <div class="ss-hero" id="ss-hero"></div>
+        <div class="oi-table-wrap">
+          <table class="oi-table" id="ss-table">
+            <thead>
+              <tr>
+                <th>Coin</th>
+                <th class="ss-scorecell">Score</th>
+                <th>Funding</th>
+                <th>OI ramp</th>
+                <th>Basis</th>
+                <th>Vol</th>
+                <th>24h vol</th>
+              </tr>
+            </thead>
+            <tbody id="ss-tbody">
+              <tr><td colspan="7" class="oi-empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="oi-note" style="margin-top: 10px">
+          Score 0–4 = сколько из <b>funding / OI-ramp / basis / vol</b> сошлись
+          одновременно. Направление = фейд толпы по фандингу. <b>Это радар, не сигнал.</b>
+          <span class="ss-warm">warm</span> = окно ещё копит историю (в score не идёт).
+        </p>
+      </section>
+
       <section class="card">
         <div class="card-header">
-          <div class="card-title" data-num="01">Overview · all coins</div>
+          <div class="card-title" data-num="02">Overview · all coins</div>
           <div class="oi-toolbar">
             <input id="oi-search" class="oi-search" placeholder="filter" maxlength="12" />
             <span class="oi-span" id="oi-span">…</span>
@@ -158,7 +212,7 @@
 
       <section class="card oi-detail" id="oi-detail" hidden>
         <div class="card-header">
-          <div class="card-title" data-num="02">Coin history</div>
+          <div class="card-title" data-num="03">Coin history</div>
           <div class="time-ranges" id="oi-ranges">
             <button class="range-btn" data-hours="24">24h</button>
             <button class="range-btn active" data-hours="72">3d</button>

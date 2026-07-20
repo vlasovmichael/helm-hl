@@ -54,6 +54,74 @@ const fmtFunding = (n) => {
 const fmtTime = (t) =>
   new Date(t).toISOString().slice(5, 16).replace("T", " ");
 
+// ── Setup Scanner radar (карточка 01) ──
+// Данные из /api/scanner (score-логика на бэке). Радар, не сигнал.
+const SS_CLS = { hit: "oi-pos", miss: "oi-muted", warm: "ss-warm" };
+const ssCell = (c) =>
+  `<span class="${SS_CLS[c.cls] || "oi-muted"}">${c.text}</span>`;
+const ssScoreCls = (n) => (n >= 3 ? "ss-s3" : n === 2 ? "ss-s2" : "ss-s0");
+const ssDots = (n) => "●".repeat(n) + "○".repeat(Math.max(0, 4 - n));
+
+function renderScannerHero(top) {
+  const hero = document.getElementById("ss-hero");
+  if (!top) {
+    hero.innerHTML =
+      '<div class="oi-muted">Нет заряженных сетапов (score ≥ 1) прямо сейчас.</div>';
+    return;
+  }
+  const isLong = top.dir === "LONG";
+  const arrow = isLong ? "▲" : top.dir === "SHORT" ? "▼" : "■";
+  const dirCls = isLong ? "oi-pos" : top.dir === "SHORT" ? "oi-neg" : "oi-muted";
+  const sub =
+    `funding ${top.funding != null ? `${Math.round(top.funding)}%APR` : "—"} · ` +
+    `basis ${top.basis != null ? `${(top.basis * 100).toFixed(2)}%` : "—"} · ` +
+    `vol ${top.vol != null ? `${top.vol.toFixed(1)}x` : "—"}`;
+  hero.innerHTML =
+    `<div class="ss-label">Top setup — score ${top.score}/4 <span class="ss-dots">${ssDots(top.score)}</span></div>` +
+    `<div class="ss-dir ${dirCls}">${arrow} ${top.dir || "WAIT"} · #${top.coin}</div>` +
+    `<div class="ss-sub">${sub}</div>`;
+}
+
+async function loadScanner() {
+  const tbody = document.getElementById("ss-tbody");
+  const meta = document.getElementById("ss-meta");
+  let data;
+  try {
+    data = await fetchJson("/api/scanner");
+  } catch {
+    tbody.innerHTML =
+      '<tr><td colspan="7" class="oi-empty">Scanner unavailable.</td></tr>';
+    meta.textContent = "";
+    return;
+  }
+  if (data.error || !Array.isArray(data.rows)) {
+    tbody.innerHTML =
+      '<tr><td colspan="7" class="oi-empty">No snapshot data yet.</td></tr>';
+    meta.textContent = "";
+    return;
+  }
+  meta.textContent =
+    `${data.coins} coins · span ${data.dataSpanHours.toFixed(0)}h` +
+    (data.updatedAgoSec != null ? ` · updated ${data.updatedAgoSec}s ago` : "");
+  renderScannerHero(data.top);
+  tbody.innerHTML = data.rows.length
+    ? data.rows
+        .map(
+          (r) => `
+      <tr>
+        <td>${r.coin}</td>
+        <td class="ss-scorecell ${ssScoreCls(r.score)}">${r.score}</td>
+        <td>${ssCell(r.funding)}</td>
+        <td>${ssCell(r.oiRamp)}</td>
+        <td>${ssCell(r.basis)}</td>
+        <td>${ssCell(r.vol)}</td>
+        <td class="oi-muted">${r.vlm}</td>
+      </tr>`,
+        )
+        .join("")
+    : '<tr><td colspan="7" class="oi-empty">No coins.</td></tr>';
+}
+
 // ── состояние обзора ──
 const PAGE_SIZE = 10;
 let overview = [];
@@ -305,4 +373,5 @@ document.querySelectorAll("#oi-ranges .range-btn").forEach((b) =>
   }),
 );
 
+loadScanner();
 loadOverview();

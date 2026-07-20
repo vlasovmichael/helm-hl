@@ -1067,8 +1067,13 @@ export function getSetupScannerRows() {
     const f48 = arr.filter((r) => r.ts >= H48 && r.funding_apy != null);
     const f48Age = f48.length ? (now - f48[0].ts) / 3_600_000 : 0;
     const extreme = f48.filter((r) => Math.abs(r.funding_apy) > 30).length;
+    // avgApy — средний funding-APR за 48ч (в %); порог Setup Scanner |avg|≥50 бьёт
+    // именно по нему (не по last), чтобы разовый спайк не зажигал сигнал.
+    const avgApy = f48.length
+      ? f48.reduce((s, r) => s + r.funding_apy, 0) / f48.length
+      : null;
     const fundingPersist = f48Age >= H48_FULL - 1 && f48.length
-      ? { ageHours: f48Age, fractionExtreme: extreme / f48.length, samples: f48.length }
+      ? { ageHours: f48Age, fractionExtreme: extreme / f48.length, samples: f48.length, avgApy }
       : { ageHours: f48Age, etaHours: Math.max(0, H48_FULL - f48Age) };
 
     // 7d OI/price delta
