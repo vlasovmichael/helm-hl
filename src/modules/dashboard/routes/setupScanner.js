@@ -39,7 +39,10 @@ function toDisplayRow(r) {
     score: s.score,
     dir: s.dir,
     funding: {
-      text: s.warm.funding ? 'warm' : fmtPctInt(s.funding48hApy),
+      // Всегда показываем ТЕКУЩИЙ фандинг (последний снапшот) — чтобы живое
+      // значение было видно сразу, даже пока 48ч-окно ещё копит. Цвет ячейки =
+      // вердикт персистентности за 48ч: hit(зел)/miss(серый)/warm(синий, не в score).
+      text: fmtPctInt(r.fundingApy),
       cls: cls(s.hits.funding, s.warm.funding),
     },
     oiRamp: {
