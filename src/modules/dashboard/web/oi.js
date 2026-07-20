@@ -82,6 +82,48 @@ function renderScannerHero(top) {
     `<div class="ss-sub">${sub}</div>`;
 }
 
+// Score 0 = ничего не сошлось (шум радара) → по умолчанию прячем, тумблер вернёт.
+let ssRows = [];
+let ssShowZero = false;
+
+function rowHtml(r) {
+  return `
+      <tr>
+        <td>${r.coin}</td>
+        <td class="ss-scorecell ${ssScoreCls(r.score)}">${r.score}</td>
+        <td>${ssCell(r.funding)}</td>
+        <td>${ssCell(r.oiRamp)}</td>
+        <td>${ssCell(r.basis)}</td>
+        <td>${ssCell(r.vol)}</td>
+        <td class="oi-muted">${r.vlm}</td>
+      </tr>`;
+}
+
+function renderScannerRows() {
+  const tbody = document.getElementById("ss-tbody");
+  const shown = ssShowZero ? ssRows : ssRows.filter((r) => r.score > 0);
+  const hidden = ssRows.length - shown.length;
+  if (!shown.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="oi-empty">${
+      ssRows.length ? "Нет сетапов со score ≥ 1 (всё score 0)." : "No coins."
+    }</td></tr>`;
+    return;
+  }
+  let html = shown.map(rowHtml).join("");
+  if (!ssShowZero && hidden > 0) {
+    html += `<tr><td colspan="7" class="oi-muted" style="text-align:center;padding:10px">
+      + ${hidden} монет со score 0 скрыто · <span style="text-decoration:underline;cursor:pointer" id="ss-showzero-link">показать все</span></td></tr>`;
+  }
+  tbody.innerHTML = html;
+  const link = document.getElementById("ss-showzero-link");
+  if (link)
+    link.addEventListener("click", () => {
+      ssShowZero = true;
+      document.getElementById("ss-showzero").checked = true;
+      renderScannerRows();
+    });
+}
+
 async function loadScanner() {
   const tbody = document.getElementById("ss-tbody");
   const meta = document.getElementById("ss-meta");
@@ -104,23 +146,14 @@ async function loadScanner() {
     `${data.coins} coins · span ${data.dataSpanHours.toFixed(0)}h` +
     (data.updatedAgoSec != null ? ` · updated ${data.updatedAgoSec}s ago` : "");
   renderScannerHero(data.top);
-  tbody.innerHTML = data.rows.length
-    ? data.rows
-        .map(
-          (r) => `
-      <tr>
-        <td>${r.coin}</td>
-        <td class="ss-scorecell ${ssScoreCls(r.score)}">${r.score}</td>
-        <td>${ssCell(r.funding)}</td>
-        <td>${ssCell(r.oiRamp)}</td>
-        <td>${ssCell(r.basis)}</td>
-        <td>${ssCell(r.vol)}</td>
-        <td class="oi-muted">${r.vlm}</td>
-      </tr>`,
-        )
-        .join("")
-    : '<tr><td colspan="7" class="oi-empty">No coins.</td></tr>';
+  ssRows = data.rows;
+  renderScannerRows();
 }
+
+document.getElementById("ss-showzero").addEventListener("change", (e) => {
+  ssShowZero = e.target.checked;
+  renderScannerRows();
+});
 
 // ── состояние обзора ──
 const PAGE_SIZE = 10;

@@ -126,6 +126,8 @@
       :root[data-theme="dark"] .ss-s3 { color: #2f9d63; }
       .ss-s2 { color: #c98a1a; font-weight: 700; }
       .ss-s0 { color: var(--text-dim, #8a8578); font-weight: 700; }
+      .ss-toggle { cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 5px; }
+      .ss-toggle input { vertical-align: middle; margin: 0; cursor: pointer; }
     </style>
   </head>
   <body>
@@ -148,7 +150,10 @@
       <section class="card" id="ss-card">
         <div class="card-header">
           <div class="card-title" data-num="01">Setup Scanner · radar</div>
-          <span class="oi-span" id="ss-meta">…</span>
+          <div class="oi-toolbar">
+            <label class="oi-span ss-toggle"><input type="checkbox" id="ss-showzero" /> show score 0</label>
+            <span class="oi-span" id="ss-meta">…</span>
+          </div>
         </div>
         <div class="ss-hero" id="ss-hero"></div>
         <div class="oi-table-wrap">
