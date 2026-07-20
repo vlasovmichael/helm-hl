@@ -276,7 +276,10 @@ export async function scan() {
   const predictedFundings = await fetchPredictedFundings();
 
   // Setup Scanner snapshot — manual-helper. Пишем не чаще раз в
-  // setupSnapshotIntervalMin для всех монет из liquidSet за один заход.
+  // setupSnapshotIntervalMin. Юниверс = liquidSet ∪ hunterSet: торговый liquidSet
+  // ($10M floor + top-N) слишком узок для радара — отсекал мид-капы вроде ACE
+  // ($4M), а эдж оператора как раз в шорте мид-кап альтов. hunterSet ($1M floor, без
+  // top-N cap) добирает их, не трогая торговый вход стратегий.
   // Полностью изолирован от торговой логики: ошибка тут только ворнится.
   const setupIntervalMs = (config.trading.setupSnapshotIntervalMin || 60) * 60_000;
   if (Date.now() - lastSetupSnapshotTs >= setupIntervalMs) {
@@ -287,7 +290,7 @@ export async function scan() {
         const coinName = universe[i]?.name;
         if (!coinName) continue;
         const cu = coinName.toUpperCase();
-        if (!liquidSet.has(cu)) continue;
+        if (!liquidSet.has(cu) && !hunterSet.has(cu)) continue;
         const ctx = assetCtxs[i];
         if (!ctx) continue;
         const mark        = parseFloat(ctx.markPx ?? ctx.midPx ?? NaN);
