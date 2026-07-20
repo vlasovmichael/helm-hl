@@ -60,26 +60,35 @@ const SS_CLS = { hit: "oi-pos", miss: "oi-muted", warm: "ss-warm" };
 const ssCell = (c) =>
   `<span class="${SS_CLS[c.cls] || "oi-muted"}">${c.text}</span>`;
 const ssScoreCls = (n) => (n >= 3 ? "ss-s3" : n === 2 ? "ss-s2" : "ss-s0");
-const ssDots = (n) => "●".repeat(n) + "○".repeat(Math.max(0, 4 - n));
+const ssSegs = (n) =>
+  Array.from({ length: 4 }, (_, i) => `<span class="ss-seg${i < n ? " on" : ""}"></span>`).join("");
 
 function renderScannerHero(top) {
   const hero = document.getElementById("ss-hero");
   if (!top) {
+    hero.className = "ss-hero ss-hero--none";
     hero.innerHTML =
-      '<div class="oi-muted">Нет заряженных сетапов (score ≥ 1) прямо сейчас.</div>';
+      '<div class="ss-hero-empty">Нет сетапов со score ≥ 1 прямо сейчас — радар пуст.</div>';
     return;
   }
-  const isLong = top.dir === "LONG";
-  const arrow = isLong ? "▲" : top.dir === "SHORT" ? "▼" : "■";
-  const dirCls = isLong ? "oi-pos" : top.dir === "SHORT" ? "oi-neg" : "oi-muted";
-  const sub =
-    `funding ${top.funding != null ? `${Math.round(top.funding)}%APR` : "—"} · ` +
-    `basis ${top.basis != null ? `${(top.basis * 100).toFixed(2)}%` : "—"} · ` +
-    `vol ${top.vol != null ? `${top.vol.toFixed(1)}x` : "—"}`;
+  const side = top.dir === "LONG" ? "long" : top.dir === "SHORT" ? "short" : "none";
+  const arrow = side === "long" ? "▲" : side === "short" ? "▼" : "■";
+  const stat = (k, v) =>
+    `<div class="ss-stat"><span class="ss-stat-k">${k}</span><span class="ss-stat-v">${v}</span></div>`;
+  hero.className = `ss-hero ss-hero--${side}`;
   hero.innerHTML =
-    `<div class="ss-label">Top setup — score ${top.score}/4 <span class="ss-dots">${ssDots(top.score)}</span></div>` +
-    `<div class="ss-dir ${dirCls}">${arrow} ${top.dir || "WAIT"} · #${top.coin}</div>` +
-    `<div class="ss-sub">${sub}</div>`;
+    `<div class="ss-hero-main">
+       <div class="ss-hero-eyebrow">Top setup <span class="ss-segs">${ssSegs(top.score)}</span> ${top.score}/4</div>
+       <div class="ss-hero-headline">
+         <span class="ss-badge ss-badge--${side}">${arrow} ${top.dir || "WAIT"}</span>
+         <span class="ss-coin">${top.coin}</span>
+       </div>
+     </div>
+     <div class="ss-hero-stats">
+       ${stat("funding", top.funding != null ? `${top.funding >= 0 ? "+" : ""}${Math.round(top.funding)}%` : "—")}
+       ${stat("basis", top.basis != null ? `${top.basis >= 0 ? "+" : ""}${(top.basis * 100).toFixed(2)}%` : "—")}
+       ${stat("vol", top.vol != null ? `${top.vol.toFixed(1)}x` : "—")}
+     </div>`;
 }
 
 // Score 0 = ничего не сошлось (шум радара) → по умолчанию прячем, тумблер вернёт.

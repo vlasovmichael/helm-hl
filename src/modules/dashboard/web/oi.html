@@ -106,20 +106,49 @@
 
       /* ── Setup Scanner card (ss- префикс) ── */
       .ss-hero {
-        border: 1px solid var(--border, #2a2622); border-radius: 10px;
-        padding: 14px 18px; margin: 4px 0 14px;
+        border: 1px solid var(--border, #2a2622); border-radius: var(--radius-lg, 12px);
+        padding: 16px 20px; margin: 6px 0 16px;
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 20px; flex-wrap: wrap;
         background: var(--panel-2, rgba(128,128,128,0.05));
       }
-      .ss-hero .ss-label {
-        font-size: 11px; color: var(--text-dim, #8a8578);
-        text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;
+      .ss-hero--long  { background: var(--green-soft); border-color: var(--green-line); }
+      .ss-hero--short { background: var(--red-soft);   border-color: var(--red-line); }
+      .ss-hero-eyebrow {
+        display: flex; align-items: center; gap: 9px; margin-bottom: 9px;
+        font-size: 10.5px; letter-spacing: 0.8px; text-transform: uppercase;
+        color: var(--text-muted, #8a8578);
       }
-      .ss-hero .ss-dir { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
-      .ss-hero .ss-sub {
-        font-size: 12.5px; color: var(--text-dim, #8a8578);
-        margin-top: 5px; font-variant-numeric: tabular-nums;
+      .ss-segs { display: inline-flex; gap: 3px; }
+      .ss-seg {
+        width: 17px; height: 5px; border-radius: 3px;
+        background: var(--border-strong, rgba(128,128,128,0.3));
       }
-      .ss-dots { letter-spacing: 2px; font-size: 13px; color: var(--text-dim, #8a8578); }
+      .ss-hero--long  .ss-seg.on { background: var(--green); }
+      .ss-hero--short .ss-seg.on { background: var(--red); }
+      .ss-hero-headline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+      .ss-badge {
+        font-size: 14px; font-weight: 800; letter-spacing: 0.3px;
+        padding: 5px 13px; border-radius: 999px; color: #fff; white-space: nowrap;
+      }
+      .ss-badge--long  { background: var(--green); }
+      .ss-badge--short { background: var(--red); }
+      .ss-badge--none  { background: var(--text-muted, #8a8578); }
+      .ss-coin {
+        font-size: 26px; font-weight: 800; letter-spacing: -0.5px;
+        color: var(--text-primary, inherit); font-family: "JetBrains Mono", monospace;
+      }
+      .ss-hero-stats { display: flex; gap: 24px; }
+      .ss-stat { display: flex; flex-direction: column; gap: 3px; text-align: right; }
+      .ss-stat-k {
+        font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px;
+        color: var(--text-muted, #8a8578);
+      }
+      .ss-stat-v {
+        font-size: 15px; font-weight: 600; font-family: "JetBrains Mono", monospace;
+        font-variant-numeric: tabular-nums; color: var(--text-primary, inherit);
+      }
+      .ss-hero--none .ss-hero-empty { color: var(--text-muted, #8a8578); }
       td.ss-scorecell, th.ss-scorecell { text-align: center; }
       .ss-warm { color: #5b9dff; }
       .ss-s3 { color: #0f7a45; font-weight: 700; }
