@@ -661,7 +661,11 @@ export function getActivePaperCoins() {
   return new Set(rows.map((r) => (r.coin || '').toUpperCase()).filter(Boolean));
 }
 
-const EQUITY_SNAPSHOT_RETENTION_MS = 35 * 24 * 3_600_000; // 35 дней
+// Держим 3 года: Performance-график «All» должен показывать ВСЮ жизнь счёта
+// (депозиты-ступеньки, пики вроде $115). Строка снапшота ~16 байт, 288/день ×
+// 3 года ≈ 315k строк ≈ пара МБ — пренебрежимо. Раньше было 35 дней и обрезало
+// старые пики (2026-07-21).
+const EQUITY_SNAPSHOT_RETENTION_MS = 1095 * 24 * 3_600_000; // 3 года
 
 /**
  * Записывает измеренный equity-снапшот. Дашборд строит Performance-график
