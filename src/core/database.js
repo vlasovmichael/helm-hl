@@ -1029,7 +1029,7 @@ export function recordSetupSnapshots(rows) {
 
 /**
  * Возвращает агрегированные данные для Setup Scanner-карточки.
- * Для каждой монеты: current snapshot + history-derived поля (funding persist 48h,
+ * Для каждой монеты: current snapshot + history-derived поля (funding persist 24h,
  * OI/price delta 7d, vol regime 30d). Поля с недостаточной историей возвращают
  * { ageHours, eta_hours } — UI показывает "collecting · ETA …".
  *
@@ -1053,9 +1053,10 @@ export function getSetupScannerRows() {
     byCoin.get(r.coin).push(r);
   }
 
-  const H48 = now - 48 * 3_600_000;
+  const FUNDING_WINDOW_H = 24;
+  const HF = now - FUNDING_WINDOW_H * 3_600_000;
   const D7  = now - 7  * 86_400_000;
-  const H48_FULL = 48;
+  const HF_FULL = FUNDING_WINDOW_H;
   const D7_FULL  = 7 * 24;
   const D30_FULL = 30 * 24;
 
@@ -1063,18 +1064,18 @@ export function getSetupScannerRows() {
   for (const [coin, arr] of byCoin) {
     const last = arr[arr.length - 1];
 
-    // 48h funding persist
-    const f48 = arr.filter((r) => r.ts >= H48 && r.funding_apy != null);
-    const f48Age = f48.length ? (now - f48[0].ts) / 3_600_000 : 0;
-    const extreme = f48.filter((r) => Math.abs(r.funding_apy) > 30).length;
-    // avgApy — средний funding-APR за 48ч (в %); порог Setup Scanner |avg|≥50 бьёт
+    // 24h funding persist
+    const f24 = arr.filter((r) => r.ts >= HF && r.funding_apy != null);
+    const f24Age = f24.length ? (now - f24[0].ts) / 3_600_000 : 0;
+    const extreme = f24.filter((r) => Math.abs(r.funding_apy) > 30).length;
+    // avgApy — средний funding-APR за 24ч (в %); порог Setup Scanner |avg|≥50 бьёт
     // именно по нему (не по last), чтобы разовый спайк не зажигал сигнал.
-    const avgApy = f48.length
-      ? f48.reduce((s, r) => s + r.funding_apy, 0) / f48.length
+    const avgApy = f24.length
+      ? f24.reduce((s, r) => s + r.funding_apy, 0) / f24.length
       : null;
-    const fundingPersist = f48Age >= H48_FULL - 1 && f48.length
-      ? { ageHours: f48Age, fractionExtreme: extreme / f48.length, samples: f48.length, avgApy }
-      : { ageHours: f48Age, etaHours: Math.max(0, H48_FULL - f48Age) };
+    const fundingPersist = f24Age >= HF_FULL - 1 && f24.length
+      ? { ageHours: f24Age, fractionExtreme: extreme / f24.length, samples: f24.length, avgApy }
+      : { ageHours: f24Age, etaHours: Math.max(0, HF_FULL - f24Age) };
 
     // 7d OI/price delta
     const w7 = arr.filter((r) => r.ts >= D7);

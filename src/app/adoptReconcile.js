@@ -29,6 +29,8 @@ import { isQuietHour } from '../modules/setupScannerAlerts.js';
 import { getLastDailyRiskStatus, localDayKey } from '../modules/dailyRisk.js';
 import { atr } from '../modules/trendFollowAtr.js';
 import { getHourlyCandles } from '../modules/candleCache.js';
+import { getPriceNMinAgo, getLatestPrice } from '../core/priceHistory.js';
+import { getOiNMinAgo } from '../core/oiHistory.js';
 
 const ATR_PERIOD = 14;            // стандартный период ATR
 const ATR_LOOKBACK_HOURS = 48;    // с запасом ≥ ATR_PERIOD+1 свечей
@@ -150,6 +152,56 @@ export async function computeStopDistPct(coin) {
     }
   }
   return { distPct: t.adoptStopPct, basis: 'pct' };
+}
+
+/**
+ * Снапшот рыночного контекста в момент усыновления ручного входа.
+ *
+ * Разбор журнала 16.07.2026 показал: у adopt-сделок entry_trend_1h / hour не
+ * писались (входы приходят с биржи без снапшота), поэтому ось «фейдил или
+ * следовал тренду» и час входа из данных не вытаскивались. Досниаем то, что
+ * доступно БЕЗ пробрасывания scoutData — из тех же in-memory ring-буферов, что
+ * наполняет scout (цена 4ч, OI ~20мин). Семантика колонок совпадает с Hunter'ом
+ * (intraday %-ход за N мин), поэтому adopt-строки сравнимы с бот-стратегиями.
+ *
+ * Всё nullable: буфер по монете может быть пуст (свежий рестарт / монета вне
+ * scout-вселенной) → null, не блокирует усыновление. entry_spike_pct не
+ * применим (нет спайк-триггера); funding/volume недоступны без scoutData → null.
+ *
+ * @param {string} coin
+ * @param {number} entryPrice — цена входа из fills (фолбэк, если ring-буфер пуст)
+ * @param {number} now
+ * @returns {object} поля entry_* для savePosition
+ */
+export function buildAdoptEntrySnapshot(coin, entryPrice, now = Date.now()) {
+  const C = String(coin).toUpperCase();
+  // «Сейчас» = свежая цена из буфера (контекст рынка на момент подхвата),
+  // фолбэк на цену фила, если буфер пуст.
+  const nowPrice = getLatestPrice(C) ?? entryPrice;
+  const pctFrom = (past) =>
+    past != null && past > 0 && Number.isFinite(nowPrice) && nowPrice > 0
+      ? ((nowPrice - past) / past) * 100
+      : null;
+
+  const oiNow    = getOiNMinAgo(C, 0, now);   // последний снапшот OI
+  const oiDelta = (mins) => {
+    const past = getOiNMinAgo(C, mins, now);
+    return oiNow != null && past != null && past > 0
+      ? ((oiNow - past) / past) * 100 : null;
+  };
+
+  return {
+    entry_spike_pct:      null,                              // adopt без спайк-триггера
+    entry_trend_15m_pct:  pctFrom(getPriceNMinAgo(C, 15, now)),
+    entry_trend_1h_pct:   pctFrom(getPriceNMinAgo(C, 60, now)),
+    entry_funding_rate:   null,                              // нет scoutData в adopt-пути
+    entry_volume_24h_usd: null,                              // нет scoutData в adopt-пути
+    entry_oi_usd:         oiNow,
+    entry_oi_delta_2m:    oiDelta(2),
+    entry_oi_delta_5m:    oiDelta(5),
+    entry_oi_delta_15m:   oiDelta(15),
+    entry_hour_utc:       new Date(now).getUTCHours(),
+  };
 }
 
 /**
@@ -432,6 +484,10 @@ export async function maybeAdoptManualPosition(manualPositions) {
       // best-effort — integrityCheck деградирует на fills-pnl
     }
 
+    // Снапшот рыночного контекста входа (тренд/час/OI) — для декомпозиции
+    // журнала (фейд vs следование). Best-effort: пустой буфер → null-поля.
+    const entrySnapshot = buildAdoptEntrySnapshot(coin, entry, now);
+
     let id;
     try {
       id = savePosition({
@@ -446,6 +502,7 @@ export async function maybeAdoptManualPosition(manualPositions) {
         entry_equity:  entryEquity,
         sl_price:      plannedSl,
         hunter_sl_oid: slOid,        // → classifyClose пометит 'sl_trigger' при срабатывании
+        ...entrySnapshot,
       });
     } catch (err) {
       // БД-запись не удалась, но стоп УЖЕ на бирже — это безопасно (поза защищена),

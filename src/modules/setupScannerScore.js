@@ -10,7 +10,7 @@
 // тайминг ставит оператор сам. Forward-эдж конвергенции НЕ доказан — цифра = контекст.
 //
 // 4 признака (легенда оригинала):
-//   funding — |средний APR за 48ч| ≥ 50%   (толпа в перекосе)
+//   funding — |средний APR за 24ч| ≥ 50%   (толпа в перекосе)
 //   OI ramp — ΔOI(7д) ≥ +50% при |Δцены| ≤ 7%  (позиции набиваются в сжатии)
 //   basis   — |премия перпа к оракулу| ≥ 0.10%
 //   vol     — 24ч объём / своя норма ≥ 1.5×
@@ -18,7 +18,7 @@
 // «warm» = окно ещё копит историю → признак в score НЕ идёт (нет ложных
 // срабатываний на старте). Соответствует полю { etaHours } из getSetupScannerRows.
 
-export const FUNDING_ABS_APY = 50;   // |avg APR 48ч| ≥ 50%
+export const FUNDING_ABS_APY = 50;   // |avg APR 24ч| ≥ 50%
 export const OI_RAMP_MIN     = 0.50; // ΔOI ≥ +50%
 export const OI_PX_MAX       = 0.07; // |Δцены| ≤ 7%
 export const BASIS_ABS       = 0.001; // |premium| ≥ 0.10%
@@ -32,18 +32,18 @@ export const VOL_RATIO_MIN   = 1.5;  // 24ч/норма ≥ 1.5×
  *   dir: 'LONG'|'SHORT'|null,
  *   hits: {funding:boolean, oiRamp:boolean, basis:boolean, vol:boolean},
  *   warm: {funding:boolean, oiRamp:boolean, vol:boolean},
- *   funding48hApy: number|null,
+ *   funding24hApy: number|null,
  * }}
  */
 export function scoreSetupRow(row) {
   const hits = { funding: false, oiRamp: false, basis: false, vol: false };
   const warm = { funding: false, oiRamp: false, vol: false };
 
-  // funding — средний APR за 48ч. warm пока окно не набрало 48ч (etaHours).
+  // funding — средний APR за 24ч. warm пока окно не набрало 24ч (etaHours).
   const fp = row?.fundingPersist;
-  let funding48hApy = null;
+  let funding24hApy = null;
   if (fp && fp.etaHours == null && fp.avgApy != null) {
-    funding48hApy = fp.avgApy;
+    funding24hApy = fp.avgApy;
     hits.funding = Math.abs(fp.avgApy) >= FUNDING_ABS_APY;
   } else if (fp && fp.etaHours != null) {
     warm.funding = true;
@@ -80,13 +80,13 @@ export function scoreSetupRow(row) {
     (hits.vol ? 1 : 0);
 
   // Направление = фейд толпы по фандингу: толпа в шорте (funding−) → LONG,
-  // толпа в лонге (funding+) → SHORT. Берём 48ч-средний, иначе last.
-  const fundingForDir = funding48hApy != null ? funding48hApy : (row?.fundingApy ?? null);
+  // толпа в лонге (funding+) → SHORT. Берём 24ч-средний, иначе last.
+  const fundingForDir = funding24hApy != null ? funding24hApy : (row?.fundingApy ?? null);
   const dir = fundingForDir == null || fundingForDir === 0
     ? null
     : fundingForDir < 0 ? 'LONG' : 'SHORT';
 
-  return { score, dir, hits, warm, funding48hApy };
+  return { score, dir, hits, warm, funding24hApy };
 }
 
 /**

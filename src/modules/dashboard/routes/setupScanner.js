@@ -40,8 +40,8 @@ function toDisplayRow(r) {
     dir: s.dir,
     funding: {
       // Всегда показываем ТЕКУЩИЙ фандинг (последний снапшот) — чтобы живое
-      // значение было видно сразу, даже пока 48ч-окно ещё копит. Цвет ячейки =
-      // вердикт персистентности за 48ч: hit(зел)/miss(серый)/warm(синий, не в score).
+      // значение было видно сразу, даже пока 24ч-окно ещё копит. Цвет ячейки =
+      // вердикт персистентности за 24ч: hit(зел)/miss(серый)/warm(синий, не в score).
       text: fmtPctInt(r.fundingApy),
       cls: cls(s.hits.funding, s.warm.funding),
     },
@@ -88,7 +88,7 @@ export function buildScannerPayload() {
           dir: topRow.setup.dir,
           score: topRow.setup.score,
           // Сырьё для hero-подписи «funding …, basis …, vol …».
-          funding: topRow.setup.funding48hApy ?? topRow.fundingApy ?? null,
+          funding: topRow.setup.funding24hApy ?? topRow.fundingApy ?? null,
           basis: topRow.premium ?? null,
           vol: topRow.volRegime?.ratio ?? null,
         }
