@@ -429,6 +429,26 @@ export async function notifyExternalClose({ coin, sizeUsd, entryPrice, holdHours
       `🤖 БД синхронизирована. Бот свободен.`,
     true,
   );
+  // Тост на дашборде: ручное закрытие на бирже (external) идёт мимо afterClose,
+  // поэтому тост вешаем отдельно здесь. Без телефона (recordNotification).
+  try {
+    const pnl = Number(estimatedPnl || 0);
+    const pnlStr = `${pnl >= 0 ? '+' : '−'}$${Math.abs(pnl).toFixed(2)}`;
+    const parts = [`PnL ${pnlStr}`];
+    if (holdHours != null) {
+      const m = Math.round(holdHours * 60);
+      parts.push(`held ${m < 60 ? `${m}m` : `${holdHours.toFixed(1)}h`}`);
+    }
+    parts.push('external close');
+    recordNotification({
+      title: `#${coin} closed`,
+      message: parts.join(' · '),
+      tags: [pnl >= 0 ? 'white_check_mark' : 'rotating_light'],
+      priority: pnl >= 0 ? 3 : 4,
+    });
+  } catch (err) {
+    logger.warn(`[Notify] external-close toast failed: ${err.message}`);
+  }
 }
 
 export async function notifySlippageBan({ coin, slipLabel, banMinutes }) {
