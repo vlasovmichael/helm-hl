@@ -333,7 +333,7 @@ async function openHunterPosition(cfg, coin, markPrice, signalPct, sl, tp, silen
 
   notify('afterOpen', {
     coin, price: fillPx, sizeUsd: fillUsd, positionId: Number(id),
-    mode: 'PRODUCTION', strategy: cfg.strategyId,
+    mode: 'PRODUCTION', strategy: cfg.strategyId, side: cfg.side,
   });
 
   return { ok: true, positionId: Number(id), sizeUsd: fillUsd };

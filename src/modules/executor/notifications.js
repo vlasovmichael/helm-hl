@@ -6,6 +6,7 @@
 import { sendMessage } from '../reporter.js';
 import { logger } from '../../core/logger.js';
 import { config } from '../../core/config.js';
+import { recordNotification } from '../../core/notifyLog.js';
 
 // ─────────────────────────────────────────────────
 //  Throttle для повторяющихся алертов
@@ -443,10 +444,26 @@ export async function notifySlippageBan({ coin, slipLabel, banMinutes }) {
   );
 }
 
-export async function notifyCircuitBreaker(_payload) {
+export async function notifyCircuitBreaker(payload = {}) {
   // TG-уведомление о circuit breaker убрано по запросу. Само срабатывание CB
   // по-прежнему логируется в paper.js/production.js ([Executor] 🛑 CIRCUIT
   // BREAKER TRIPPED ...) и видно в статусе через getCircuitBreakerStatus().
+  // Но на ДАШБОРД (тост+колокольчик, без телефона) выносим — это risk-событие.
+  try {
+    const { losses, pauseMinutes, lastCoin, lastPnl } = payload;
+    const parts = [];
+    if (losses != null) parts.push(`${losses} losses in a row`);
+    if (pauseMinutes != null) parts.push(`paused ${pauseMinutes}m`);
+    if (lastCoin) parts.push(`last #${lastCoin} ${lastPnl >= 0 ? '+' : '−'}$${Math.abs(lastPnl ?? 0).toFixed(2)}`);
+    recordNotification({
+      title: 'Circuit breaker tripped',
+      message: parts.join(' · ') || 'trading paused',
+      tags: ['rotating_light'], // → красный danger-тост
+      priority: 5,
+    });
+  } catch (err) {
+    logger.warn(`[Notify] CB toast failed: ${err.message}`);
+  }
 }
 
 export async function notifyOpenBlocked({ coin, reason, details }) {
@@ -504,6 +521,18 @@ export async function notifyDrawdownBreached({ equity, sessionStart, drawdownPct
       `Проверь стратегию и рынок.`,
     true,
   );
+  // На дашборд (тост+колокольчик) — это уже идёт на телефон (риск-алерт), дублируем
+  // в журнал для тоста. recordNotification не шлёт повторно на ntfy.
+  try {
+    recordNotification({
+      title: 'Max drawdown breached',
+      message: `equity $${equity.toFixed(2)} · −${drawdownPct.toFixed(2)}% · new opens blocked`,
+      tags: ['rotating_light'],
+      priority: 5,
+    });
+  } catch (err) {
+    logger.warn(`[Notify] drawdown toast failed: ${err.message}`);
+  }
 }
 
 export async function notifyRotateFailed({ closeCoin, openCoin, closePnl, phase }) {

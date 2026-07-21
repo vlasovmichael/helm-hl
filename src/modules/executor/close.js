@@ -393,7 +393,7 @@ export async function productionClose(signal, position, silent = false) {
 
   notify('afterClose', {
     coin, pnl: realizedPnl, holdHours,
-    reason: signal.reason, fill, mode: 'PRODUCTION',
+    reason: signal.reason, fill, mode: 'PRODUCTION', side: posSide,
   });
 
   return { ok: true, pnl: realizedPnl, holdHours };

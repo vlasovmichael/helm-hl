@@ -21,6 +21,7 @@ import {
   HUNTER_TP_PCT,
 } from "../../strategistHunter.js";
 import { computeBreadthFlush } from "../../hotMoversSetup.js";
+import { reportBreadthFlush } from "../../../app/toastBridge.js";
 import { getHourlyCandles, getFifteenMinCandles } from "../../candleCache.js";
 import { classifyTrend } from "../../candyGirlEma.js";
 import { analyzeChart } from "../../chartCoach.js";
@@ -486,6 +487,9 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
     // Breadth-слив: синхронный делевередж лидеров движения (OI↓ у многих) →
     // fade против движения = лов ножа. Клиент гасит actionable у таких вердиктов.
     const marketFlush = computeBreadthFlush(top);
+    // Тост на дашборде по фронту flush (edge-trigger + кулдаун внутри). Этот роут
+    // поллит открытый дашборд → сигнал приходит ровно когда ты смотришь. Без телефона.
+    reportBreadthFlush(marketFlush);
 
     return {
       ts: state.latestHunterAt || 0,

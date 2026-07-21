@@ -26,6 +26,7 @@ import { startWatchlistAlerts } from './modules/watchlistAlerts.js';
 import { sendDailyDigest } from './modules/mailDigest.js';
 import { shutdown } from './app/lifecycle.js';
 import { createStatusCollector } from './app/status.js';
+import { startToastBridge } from './app/toastBridge.js';
 
 async function main() {
   logger.info('═══════════════════════════════════════════════');
@@ -77,6 +78,11 @@ async function main() {
 
   // ── Web Dashboard (localhost:3000) ─────────────
   startDashboard();
+
+  // ── Toast bridge: open/close/flush → тост на дашборде (без телефона) ──
+  // Подписка на afterOpen/afterClose (PRODUCTION) + breadth-flush → колокольчик и
+  // тост по WS через recordNotification. ntfy/почта не трогаются. Fail-soft.
+  startToastBridge();
 
   // ── WS price feed (Stage 1: shadow) ────────────
   // Gated на HL_WS_FEED_ENABLED. Поднимает allMids-фид + сверяет с поллингом,
