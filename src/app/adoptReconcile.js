@@ -17,6 +17,7 @@
 
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
+import { notify } from '../modules/executor/hooks.js';
 import { savePosition, updatePositionEntryTime } from '../core/database.js';
 import { getAccountSummary, getLivePrice } from '../modules/exchange.js';
 import {
@@ -524,6 +525,13 @@ export async function maybeAdoptManualPosition(manualPositions) {
       `entry=$${entry} size=$${sizeUsd.toFixed(2)} age=${ageMin.toFixed(1)}min | ` +
       `SL @ $${plannedSl.toPrecision(6)} (${distLabel}) oid=${slOid}`,
     );
+
+    // Тост на дашборде «позиция открыта» и для РУЧНЫХ входов (adopt). afterOpen →
+    // toastBridge → recordNotification (колокол+тост), телефон уже покрыт fireAdoptNtfy.
+    notify('afterOpen', {
+      coin, price: entry, sizeUsd, positionId: id,
+      mode: 'PRODUCTION', strategy: 'adopt', side,
+    });
 
     await fireAdoptNtfy(
       `Adopt #${coin} ${side.toUpperCase()} — стоп выставлен`,
