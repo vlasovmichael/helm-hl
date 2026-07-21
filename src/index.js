@@ -27,6 +27,7 @@ import { sendDailyDigest } from './modules/mailDigest.js';
 import { shutdown } from './app/lifecycle.js';
 import { createStatusCollector } from './app/status.js';
 import { startToastBridge } from './app/toastBridge.js';
+import { startEquityHeal } from './app/equityHeal.js';
 
 async function main() {
   logger.info('═══════════════════════════════════════════════');
@@ -83,6 +84,11 @@ async function main() {
   // Подписка на afterOpen/afterClose (PRODUCTION) + breadth-flush → колокольчик и
   // тост по WS через recordNotification. ntfy/почта не трогаются. Fail-soft.
   startToastBridge();
+
+  // ── Equity heal: дотягивает провалы Performance-истории из HL (раз в 6ч) ──
+  // Локальные 5-мин снапшоты остаются основными; HL лишь заполняет дыры, если
+  // снапшоты когда-нибудь встанут. LOW-приоритет, fail-soft.
+  startEquityHeal();
 
   // ── WS price feed (Stage 1: shadow) ────────────
   // Gated на HL_WS_FEED_ENABLED. Поднимает allMids-фид + сверяет с поллингом,

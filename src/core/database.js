@@ -696,6 +696,37 @@ export function getEquitySnapshotsSince(sinceMs) {
 }
 
 /**
+ * Дотягивает недостающие equity-точки (напр. из портфельного API HL) — вставляет
+ * только те, рядом с которыми (±toleranceMs) НЕТ своего снапшота. Так заполняются
+ * провалы/предыстория, а плотные локальные 5-мин точки не задваиваются и не
+ * перетираются. Нулевые/отрицательные equity игнорируются.
+ * @param {Array<{ts:number, equity:number}>} points
+ * @param {number} [toleranceMs=1800000] окно «рядом есть точка» (30 мин)
+ * @returns {number} сколько вставлено
+ */
+export function backfillEquityGaps(points, toleranceMs = 30 * 60_000) {
+  const db = getDb();
+  const near = db.prepare('SELECT 1 FROM equity_snapshots WHERE ts BETWEEN ? AND ? LIMIT 1');
+  const ins = db.prepare('INSERT OR IGNORE INTO equity_snapshots (ts, equity) VALUES (?, ?)');
+  let inserted = 0;
+  const tx = db.transaction((rows) => {
+    for (const p of rows) {
+      if (!Number.isFinite(p.ts) || !Number.isFinite(p.equity) || p.equity <= 0) continue;
+      if (near.get(p.ts - toleranceMs, p.ts + toleranceMs)) continue;
+      ins.run(p.ts, p.equity);
+      inserted += 1;
+    }
+  });
+  tx(Array.isArray(points) ? points : []);
+  return inserted;
+}
+
+/** Убирает мусорные нулевые/отрицательные equity-точки (напр. стартовый $0). */
+export function purgeNonPositiveEquity() {
+  return getDb().prepare('DELETE FROM equity_snapshots WHERE equity <= 0').run().changes;
+}
+
+/**
  * Возвращает последние N записей из истории.
  * @param {number} limit
  */
