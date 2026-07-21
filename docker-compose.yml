@@ -19,16 +19,18 @@ services:
       - gateway_net
       - tax_net
 
-  # Spike-Fade наблюдатель — бумажный замер «скальпа фитилей». Отдельный
-  # процесс (НЕ трогает торгового бота): свой WS к HL allMids, ноль ордеров,
-  # пишет события в общий data-том (data/spike-fade/events.jsonl), которые
+  # Liquidation-Wick Collector — форвард-замер фейда ликвидационных фитилей.
+  # Отдельный процесс (НЕ трогает торгового бота): свой poll 1m-свечей HL, ноль
+  # ордеров. Детект по low/high закрытой свечи + лимит-модель входа, ведение до
+  # target/stop/timeout. Пишет в общий data-том (data/liq-wick/events.jsonl),
   # дашборд показывает на /lab (/api/spike-fade). Параметры — через .env
-  # (SPIKE_PCT, SPIKE_TARGET_PCT, SPIKE_STOP_PCT, SPIKE_HORIZON_MS…).
-  spike-fade:
+  # (LIQ_WICK_PCT, LIQ_TARGET_PCT, LIQ_STOP_PCT, LIQ_HORIZON_MIN, LIQ_COINS…).
+  # Предшественник (spikeFadeMeasure, mid-based) снят — мерил не то (см. memory).
+  liq-wick:
     build: .
-    container_name: hl-spike-fade
+    container_name: hl-liq-wick
     restart: unless-stopped
-    command: node tools/spikeFadeMeasure.mjs
+    command: node tools/liqWickCollector.mjs
     env_file: .env
     environment:
       TZ: ${TZ:-Europe/Warsaw}

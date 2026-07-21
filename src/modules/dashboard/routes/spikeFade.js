@@ -14,7 +14,8 @@
 import { join } from "node:path";
 import { readEvents, buildOverview } from "../../../../tools/spikeFadeStats.mjs";
 
-const EVENTS_FILE = join("data", "spike-fade", "events.jsonl");
+// Переехали на candle-based замер (liqWickCollector) — mid-based spike-fade снят.
+const EVENTS_FILE = join("data", "liq-wick", "events.jsonl");
 const CACHE_TTL_MS = 30_000; // наблюдатель дописывает редко — 30с кэша достаточно
 
 let cache = { payload: null, loadedAt: 0 };
