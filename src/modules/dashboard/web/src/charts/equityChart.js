@@ -96,6 +96,11 @@ export async function initEquityChart() {
       borderColor: grid,
       timeVisible: true,
       secondsVisible: false,
+      // «All» = вся жизнь счёта (~10k 5-мин точек). Дефолтный minBarSpacing (0.5px)
+      // не даёт fitContent() сжать столько баров в ширину графика → он показывал
+      // лишь последние ~3000 (≈10 дней), обрезая старую историю и пик. Уменьшаем
+      // минимум, чтобы вся серия помещалась в окно (2026-07-21).
+      minBarSpacing: 0.02,
       // tickMarkType: 0=Year 1=Month 2=DayOfMonth 3=Time 4=TimeWithSeconds.
       // На дневных/месячных тиках (7d/30d/All) показываем дату, иначе hh:mm —
       // иначе длинные окна на оси выглядят одинаково (видны только часы).
