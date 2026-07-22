@@ -77,22 +77,38 @@ const PRICE_FLAT_PCT = 0.3;
 
 // Классификатор «OI × цена» → человекочитаемый режим. Отвечает на «где падение?»:
 // если цена плоская, так и говорит — OI-движение само по себе хода не требует.
-function describeOiPriceRegime(oiUp, pricePct) {
+//
+// ⚠️ pricePct — ход за КОРОТКОЕ окно OI-сёрджа (3м). Он бывает плоским, пока на
+// 1ч монета уверенно падает/растёт. Поэтому «плоская цена» без старшего тренда
+// = дизинформация: OI↑ при плоской 3м-цене в 1ч-даунтренде — это чаще НОВЫЕ
+// ШОРТЫ давят, а не бычье «копят топливо». htfTrend ('up'|'down'|'none'|null,
+// 1ч EMA — тот же гейт, что у Hunter anti-trend и fade-сетапов) снимает эту
+// двусмысленность на плоском окне.
+function describeOiPriceRegime(oiUp, pricePct, htfTrend = null) {
   if (pricePct == null) {
     return oiUp ? 'набор позиций (цена: нет данных).' : 'сброс позиций (цена: нет данных).';
   }
   const flat = Math.abs(pricePct) < PRICE_FLAT_PCT;
   const px = `цена ${fmtPct(pricePct)}`;
+  const htfHint =
+    htfTrend === 'up' ? ' [1h ↑]' : htfTrend === 'down' ? ' [1h ↓]' : '';
   if (oiUp) {
-    if (flat) return `набор позиций при плоской цене (${px}) — копят топливо, хода пока нет.`;
+    if (flat) {
+      // Плоское 3м-окно — направление даёт ТОЛЬКО старший тренд.
+      if (htfTrend === 'down')
+        return `OI↑ при плоской 3м-цене (${px}), но 1h-тренд ВНИЗ${htfHint} — вероятно новые шорты давят, НЕ бычье накопление.`;
+      if (htfTrend === 'up')
+        return `OI↑ при плоской 3м-цене (${px}), 1h-тренд вверх${htfHint} — набор лонгов по тренду, хода на 3м пока нет.`;
+      return `набор позиций при плоской 3м-цене (${px}) — копят топливо, сторона неясна (1h флэт), хода пока нет.`;
+    }
     return pricePct > 0
-      ? `новые лонги на росте (${px}) — приток, тренд вверх.`
-      : `новые шорты на падении (${px}) — давят вниз.`;
+      ? `новые лонги на росте (${px})${htfHint} — приток, тренд вверх.`
+      : `новые шорты на падении (${px})${htfHint} — давят вниз.`;
   }
-  if (flat) return `тихий делеверидж при плоской цене (${px}) — разгружаются, хода на графике может не быть (это норма).`;
+  if (flat) return `тихий делеверидж при плоской 3м-цене (${px})${htfHint} — разгружаются, хода на графике может не быть (это норма).`;
   return pricePct > 0
-    ? `short-covering на росте (${px}) — шорты крывают, рост может выдыхаться.`
-    : `лонгов выносит на падении (${px}) — сброс, возможен отскок.`;
+    ? `short-covering на росте (${px})${htfHint} — шорты крывают, рост может выдыхаться.`
+    : `лонгов выносит на падении (${px})${htfHint} — сброс, возможен отскок.`;
 }
 
 const STATE_FILE = 'data/watchlist_alert_state.json';
@@ -164,10 +180,20 @@ async function runOnce(now = Date.now()) {
             pxAgoSurge != null && pxAgoSurge > 0
               ? ((item.price - pxAgoSurge) / pxAgoSurge) * 100
               : null;
-          const regime = describeOiPriceRegime(oiUp, pricePct);
+          // 1h-тренд снимает двусмысленность плоского 3м-окна (OI↑ на падающей
+          // монете = шорты, не «топливо»). Дёргаем лишь на реальной сработке
+          // (после порога+кулдауна) — не по всей вселенной каждый тик.
+          let htfTrend = null;
+          try {
+            const { getHtfTrend } = await import('./dashboard/routes/movers.js');
+            htfTrend = await getHtfTrend(item.coin, item.price, now);
+          } catch {
+            // fail-soft: без HTF просто нейтральная формулировка
+          }
+          const regime = describeOiPriceRegime(oiUp, pricePct, htfTrend);
           logger.info(
             `[WatchlistAlerts] 📊 OI #${item.coin} ${fmtPct(oiSurgePct)}/${OI_SURGE_WINDOW_MIN}m, ` +
-              `цена ${pricePct == null ? '—' : fmtPct(pricePct)}`,
+              `цена ${pricePct == null ? '—' : fmtPct(pricePct)}, 1h=${htfTrend ?? '—'}`,
           );
           await fireNtfy(
             `📊 OI #${item.coin} ${oiUp ? '▲' : '▼'} ${fmtPct(oiSurgePct)}`,
