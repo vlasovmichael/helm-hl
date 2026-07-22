@@ -188,6 +188,12 @@ function loadConfig() {
   // (значит за N мин уже был устойчивый рост — это тренд, не reversion-кандидат).
   const hunterTrendLookbackMin = parseFloat(process.env.HUNTER_TREND_LOOKBACK_MIN || '15');
   const hunterTrendMaxRisePct  = parseFloat(process.env.HUNTER_TREND_MAX_RISE_PCT || '8');
+  // HTF anti-trend filter (2026-07-22): не шортим спайк, если за 1ч цена уже
+  // выросла на ≥M% — часовик ещё разгоняется, спайк = продолжение, не выдох.
+  // Данные (61 live-сделка): весь минус Hunter кучкуется на входах с 1h>+5%
+  // (n=20, −$8.14, WR 40%). Гейт на 1h переводит ожидание из −0.08 в плюс.
+  // 0/Infinity → фильтр выключен. Окно фиксировано 60мин (HUNTER_TREND_1H_MIN).
+  const hunterTrend1hMaxRisePct = parseFloat(process.env.HUNTER_TREND_1H_MAX_RISE_PCT || '5');
   // Post-SL cooldown: после SL Hunter блокирует эту монету на N минут.
   // Защита от паттерна APE 17:27→17:56→18:23 — повторные входы по более высокой цене.
   const hunterPostSlCooldownMin = parseFloat(process.env.HUNTER_POST_SL_COOLDOWN_MIN || '30');
@@ -200,6 +206,9 @@ function loadConfig() {
   }
   if (isNaN(hunterTrendMaxRisePct) || hunterTrendMaxRisePct <= 0) {
     throw new Error(`HUNTER_TREND_MAX_RISE_PCT must be positive. Got: "${process.env.HUNTER_TREND_MAX_RISE_PCT}"`);
+  }
+  if (isNaN(hunterTrend1hMaxRisePct) || hunterTrend1hMaxRisePct < 0) {
+    throw new Error(`HUNTER_TREND_1H_MAX_RISE_PCT must be >= 0 (0 disables). Got: "${process.env.HUNTER_TREND_1H_MAX_RISE_PCT}"`);
   }
   if (isNaN(hunterPostSlCooldownMin) || hunterPostSlCooldownMin <= 0) {
     throw new Error(`HUNTER_POST_SL_COOLDOWN_MIN must be positive. Got: "${process.env.HUNTER_POST_SL_COOLDOWN_MIN}"`);
@@ -618,6 +627,7 @@ function loadConfig() {
       hunterMinVolume,
       hunterTrendLookbackMin,
       hunterTrendMaxRisePct,
+      hunterTrend1hMaxRisePct,
       hunterPostSlCooldownMin,
       hunterTimeStopMin,
       hunterTrailEnabled,

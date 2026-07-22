@@ -13,7 +13,7 @@ const buffer = [];
  * @param {string} evt.coin
  * @param {'SHORT'|'LONG'} evt.side
  * @param {number} evt.spikePct      — спайк, который дал триггер (для long — отрицательный)
- * @param {string} evt.reason        — короткий код: 'vol' | 'oi' | 'trend' | 'cooldown' | 'post_sl' | 'cross_cooldown' | 'slot_busy'
+ * @param {string} evt.reason        — короткий код: 'vol' | 'oi' | 'trend' | 'trend_1h' | 'oi_confirms' | 'cooldown' | 'post_sl' | 'cross_cooldown' | 'slot_busy'
  * @param {string} evt.detail        — человекочитаемая строка ("vol $1.29M < $5.0M min")
  * @param {number} [evt.ts]
  */

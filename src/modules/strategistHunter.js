@@ -42,6 +42,7 @@ export const HUNTER_HEARTBEAT_MS     = 5 * 60_000;    // heartbeat в лог р�
 // Анти-тренд + post-SL cooldown + time-stop берутся из config (env-overrideable).
 const HUNTER_TREND_LOOKBACK_MIN  = config.trading.hunterTrendLookbackMin;
 const HUNTER_TREND_MAX_RISE_PCT  = config.trading.hunterTrendMaxRisePct;
+const HUNTER_TREND_1H_MAX_RISE_PCT = config.trading.hunterTrend1hMaxRisePct;
 const HUNTER_POST_SL_COOLDOWN_MS = config.trading.hunterPostSlCooldownMin * 60_000;
 const HUNTER_TIME_STOP_MS        = config.trading.hunterTimeStopMin * 60_000;
 
@@ -167,7 +168,7 @@ export function getHunterMaePct(positionId) {
   return hunterMfeMaeMap.get(positionId)?.maePct ?? 0;
 }
 
-const HUNTER_TREND_1H_MIN = 60;  // окно для entry_trend_1h_pct (логирование, не фильтр)
+const HUNTER_TREND_1H_MIN = 60;  // окно для entry_trend_1h_pct (лог + HTF anti-trend гейт)
 
 /**
  * Снимок активных cooldown'ов Hunter SHORT для дашборда.
@@ -349,6 +350,26 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now(), opts 
       }
     }
 
+    // HTF anti-trend filter (1ч): если часовик уже разогнался на ≥ порога —
+    // «ещё рано, идёт рост», спайк = продолжение тренда, а не выдох. Данные:
+    // весь минус Hunter кучкуется на входах с 1h>+5%. 0/Infinity → выключен.
+    // Нет часовой истории → пропускаем фильтр (как 15m anti-trend).
+    let trend1hPct = null;
+    if (HUNTER_TREND_1H_MAX_RISE_PCT > 0) {
+      const trend1hPastLoop = getPriceNMinAgo(item.coin, HUNTER_TREND_1H_MIN, now);
+      if (trend1hPastLoop !== null) {
+        trend1hPct = ((item.price - trend1hPastLoop) / trend1hPastLoop) * 100;
+        if (trend1hPct >= HUNTER_TREND_1H_MAX_RISE_PCT) {
+          logger.info(
+            `[Hunter] ⛔ #${item.coin} спайк +${pct.toFixed(2)}%/2мин ` +
+              `пропущен: часовик +${trend1hPct.toFixed(2)}% ≥ ${HUNTER_TREND_1H_MAX_RISE_PCT}% (ещё растёт)`,
+          );
+          recordNearMiss({ ts: now, strategy: strategyId, coin: item.coin, side: 'SHORT', spikePct: pct, reason: 'trend_1h', detail: `1h +${trend1hPct.toFixed(1)}% ≥ ${HUNTER_TREND_1H_MAX_RISE_PCT}% (ещё растёт)` });
+          continue;
+        }
+      }
+    }
+
     // OI-divergence ворота (вариант hunter_oi). Большой рост открытого интереса
     // за 15м = свежие лонги залезли в памп = это пробой/продолжение, а не выдох →
     // фейдить опасно. Боевой Hunter ворота НЕ ставит (oiDivMaxPct=Infinity). Нет
@@ -366,7 +387,7 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now(), opts 
     }
 
     if (!best || pct > best.pct) {
-      best = { coin: item.coin, price: item.price, past, pct, item, trend15mPct };
+      best = { coin: item.coin, price: item.price, past, pct, item, trend15mPct, trend1hPct };
     }
   }
 
@@ -400,11 +421,15 @@ export function analyzeHunter(scoutData, activePosition, now = Date.now(), opts 
   const tp = best.price * (1 - HUNTER_TP_PCT / 100);
 
   // Extended logging — фичи рынка в момент сигнала.
-  // Все nullable: missing → null в БД, не блокируют сигнал.
-  const trend1hPast = getPriceNMinAgo(best.coin, HUNTER_TREND_1H_MIN, now);
-  const trend1hPct  = trend1hPast != null
-    ? ((best.price - trend1hPast) / trend1hPast) * 100
-    : null;
+  // trend_1h уже посчитан в цикле отбора (HTF-гейт). Если фильтр выключен
+  // (порог 0) — best.trend1hPct == null, добираем для лога здесь.
+  let trend1hPct = best.trend1hPct ?? null;
+  if (trend1hPct == null) {
+    const trend1hPast = getPriceNMinAgo(best.coin, HUNTER_TREND_1H_MIN, now);
+    trend1hPct = trend1hPast != null
+      ? ((best.price - trend1hPast) / trend1hPast) * 100
+      : null;
+  }
 
   // Трек B (squeeze-фильтр, 2026-06-15): «форсированность» пампа — растёт ли OI
   // синхронно со спайком (свежий леверидж → склонность к сквизу-откату) или
