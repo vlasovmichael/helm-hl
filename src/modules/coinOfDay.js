@@ -527,6 +527,51 @@ export function buildHeldView({ coin, analysis, position, pick, price }) {
 }
 
 /**
+ * Монета, которую оператор сегодня отторговал и по которой сетап УЖЕ рассыпался.
+ * Не вход и не позиция — напоминание, что день по этой монете закрыт.
+ *
+ * Показывается только когда движок больше не видит сетапа. Если ход не выдохся,
+ * монета остаётся во входах с флагом traded_today: решает состояние рынка, а не
+ * факт сделки — иначе карточка прятала бы живое продолжение движения.
+ *
+ * @param {Object} day — {pnl, count, lastCloseAt, side} итог дня по монете
+ */
+export function buildTradedTodayView({ coin, analysis, day, price }) {
+  const won = day.pnl > 0;
+  const notes = [];
+  if (analysis?.verdict?.tone === 'setup') {
+    notes.push(
+      `Сетап формально всё ещё складывается (${analysis.score}/6) — но вход отсюда уже хуже: ` +
+      'лёгкая часть хода отработана, а стоп придётся ставить дальше',
+    );
+  }
+  if (won) {
+    notes.push('Сделка закрыта в плюс. Повтор в тот же день — самый частый способ отдать заработанное');
+  } else {
+    notes.push('Сделка закрыта в минус. Отыгрываться в той же монете — это тильт, а не сетап');
+  }
+
+  return {
+    coin,
+    held: true,          // фронт трактует как «не для входа»
+    tradedToday: true,
+    side: day.side || analysis?.side || null,
+    status: 'traded_today',
+    // Знак ПЕРЕД долларом: иначе минус уезжает внутрь ($-1.20).
+    headline: `Сегодня уже торговал: ${day.count} ${day.count === 1 ? 'сделка' : 'сделки'}, ${day.pnl < 0 ? '-' : '+'}$${Math.abs(day.pnl).toFixed(2)}`,
+    detail:
+      'День по этой монете закрыт. Карточка не предлагает по ней вход повторно — ' +
+      'это защита от «ещё разок», а не оценка сетапа.',
+    notes,
+    day,
+    score: analysis?.score ?? null,
+    hits: analysis?.hits ?? null,
+    features: analysis?.features ?? null,
+    flags: [],
+  };
+}
+
+/**
  * Полный скан: берёт рыночный снапшот бота, отбирает кандидатов, тянет свечи
  * только для них и возвращает разборы, отсортированные по score.
  *
@@ -539,10 +584,12 @@ export function buildHeldView({ coin, analysis, position, pick, price }) {
  * @param {Object} [opts]
  * @param {Map<string,Object>} [opts.positions] — COIN → {side, entryPx, szi, notionalUsd, unrealizedPnl}
  * @param {Map<string,Object>} [opts.picks] — COIN → строка coin_of_day_picks за сегодня
+ * @param {Map<string,Object>} [opts.tradedToday] — COIN → {pnl, count, lastCloseAt, side}
  */
 export async function scanCoinOfDay(marketRows, now = Date.now(), opts = {}) {
   const positions = opts.positions instanceof Map ? opts.positions : new Map();
   const todayPicks = opts.picks instanceof Map ? opts.picks : new Map();
+  const tradedToday = opts.tradedToday instanceof Map ? opts.tradedToday : new Map();
   const rows = Array.isArray(marketRows) ? marketRows : [];
   const banned = config.trading.coinBlacklist;
 
@@ -565,7 +612,8 @@ export async function scanCoinOfDay(marketRows, now = Date.now(), opts = {}) {
   const poolCoins = new Set(pool.map((r) => r.coin.toUpperCase()));
   for (const r of rows) {
     const c = String(r.coin || '').toUpperCase();
-    if (!c || poolCoins.has(c) || !positions.has(c) || !(r.price > 0)) continue;
+    if (!c || poolCoins.has(c) || !(r.price > 0)) continue;
+    if (!positions.has(c) && !tradedToday.has(c)) continue;
     pool.push(r);
     poolCoins.add(c);
   }
@@ -601,6 +649,32 @@ export async function scanCoinOfDay(marketRows, now = Date.now(), opts = {}) {
             price: r.price,
           }),
         );
+      } else if (tradedToday.has(coinUpper)) {
+        // Уже торговал сегодня и вышел. Решает СОСТОЯНИЕ СЕТАПА, а не факт
+        // сделки: если ход не выдохся — вход показываем (с пометкой про
+        // сегодняшнюю сделку, чтобы это было осознанное решение, а не
+        // «карточка снова подсветила»). Если сетап рассыпался — монета
+        // сворачивается в «день закрыт» и из входов уходит.
+        const day = tradedToday.get(coinUpper);
+        if (a && a.verdict.tone === 'setup') {
+          a.dayContext = day;
+          a.flags = [
+            {
+              key: 'traded_today',
+              severity: 'high',
+              text:
+                `Эту монету ты сегодня уже торговал (${day.count} ${day.count === 1 ? 'сделка' : 'сделки'}, ` +
+                `${day.pnl < 0 ? '-' : '+'}$${Math.abs(day.pnl).toFixed(2)}). Сетап ещё жив, но вход отсюда — ` +
+                'уже второй заход за день: по журналу минус делают дни с несколькими входами, а не отдельные сделки',
+            },
+            ...a.flags,
+          ];
+          analyzed.push(a);
+        } else {
+          held.push(
+            buildTradedTodayView({ coin: r.coin, analysis: a, day, price: r.price }),
+          );
+        }
       } else if (a) {
         analyzed.push(a);
       }

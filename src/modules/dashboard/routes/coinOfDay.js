@@ -12,7 +12,7 @@
 import { state } from '../../../app/state.js';
 import { logger } from '../../../core/logger.js';
 import { getPositionsCached } from '../../exchange.js';
-import { getCoinOfDayPicks } from '../../../core/database.js';
+import { getCoinOfDayPicks, getHistorySince } from '../../../core/database.js';
 import { scanCoinOfDay, COD } from '../../coinOfDay.js';
 import { logScanPicks, buildForwardStats, warsawDate } from '../../coinOfDayLog.js';
 
@@ -58,9 +58,36 @@ function loadTodayPicks(now) {
   return map;
 }
 
+/**
+ * COIN → итог дня по РЕАЛЬНЫМ сделкам (закрытым сегодня). Нужен, чтобы карточка
+ * не предлагала повторный вход в монету, которую оператор сегодня уже отторговал.
+ * manual_paper исключён: бумажный журнал не расходует дневной лимит по монете.
+ * Границу дня берём по Варшаве — те же сутки, что у форвард-лога и day_journal.
+ */
+function loadTradedToday(now) {
+  const date = warsawDate(now);
+  const start = new Date(`${date}T00:00:00`).getTime();
+  const map = new Map();
+  for (const t of getHistorySince(start)) {
+    if (!t?.coin || t.strategy_id === 'manual_paper') continue;
+    const c = t.coin.toUpperCase();
+    const prev = map.get(c) || { pnl: 0, count: 0, lastCloseAt: 0, side: null };
+    prev.pnl += t.realized_pnl ?? 0;
+    prev.count += 1;
+    if (t.closed_at > prev.lastCloseAt) {
+      prev.lastCloseAt = t.closed_at;
+      prev.side = (t.side || '').toUpperCase() || null;
+    }
+    map.set(c, prev);
+  }
+  return map;
+}
+
 async function build(now) {
-  const [positions, picks] = [await loadPositions(), loadTodayPicks(now)];
-  const scan = await scanCoinOfDay(state.latestHunter, now, { positions, picks });
+  const positions = await loadPositions();
+  const picks = loadTodayPicks(now);
+  const tradedToday = loadTradedToday(now);
+  const scan = await scanCoinOfDay(state.latestHunter, now, { positions, picks, tradedToday });
   try {
     logScanPicks(scan, now);
   } catch (err) {

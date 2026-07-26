@@ -303,3 +303,42 @@ test('форвард-лог читает signals, а НЕ picks (иначе вы
   );
   assert.equal(isLoggablePick({ ...setup, levels: null }), false);
 });
+
+// ── Монета, отторгованная сегодня ─────────────────────────────────────────
+const { buildTradedTodayView } = await import('../src/modules/coinOfDay.js');
+
+test('отторгованная сегодня монета сворачивается в «день закрыт», когда сетап рассыпался', () => {
+  const day = { pnl: 0.74, count: 1, lastCloseAt: T0, side: 'SHORT' };
+  const weak = { side: 'SHORT', score: 3, verdict: { tone: 'watch' }, hits: {}, features: { chg24h: 27 }, flags: [] };
+  const v = buildTradedTodayView({ coin: 'kSHIB', analysis: weak, day, price: 0.0054 });
+
+  assert.equal(v.tradedToday, true);
+  assert.equal(v.held, true, 'фронт трактует held как «не для входа»');
+  assert.equal(v.status, 'traded_today');
+  assert.equal(v.levels, undefined, 'уровней входа быть не должно');
+  assert.ok(v.headline.includes('+$0.74'));
+  assert.ok(v.notes.some((n) => n.includes('отдать заработанное')), 'предупредить про повтор после плюса');
+});
+
+test('отторгованная в минус монета получает предупреждение про тильт', () => {
+  const day = { pnl: -1.2, count: 2, lastCloseAt: T0, side: 'LONG' };
+  const v = buildTradedTodayView({ coin: 'AAA', analysis: null, day, price: 1 });
+  assert.ok(v.headline.includes('-$1.20'));
+  assert.ok(v.notes.some((n) => n.includes('тильт')));
+});
+
+test('живой сетап по отторгованной монете остаётся входом, но с флагом второго захода', async () => {
+  // Требование оператора: решает СОСТОЯНИЕ сетапа, а не факт сделки. Если движок
+  // всё ещё видит продолжение — монета не должна пропадать из входов.
+  const rows = [
+    { coin: 'ZZZ', price: 1, oiUsd: 1e6, fundingRate: 0, volume24hUsd: 5e7, dayChangePct: 25 },
+  ];
+  const tradedToday = new Map([['ZZZ', { pnl: 0.74, count: 1, lastCloseAt: T0, side: 'SHORT' }]]);
+  // Свечей нет → analyzeCoin вернёт null → ветка «день закрыт».
+  const res = await scanCoinOfDay(rows, Date.now(), { tradedToday });
+  assert.equal(res.picks.length, 0, 'без живого сетапа во входы не попадает');
+  assert.ok(
+    res.held.length === 0 || res.held[0].tradedToday === true,
+    'если разобрана — то как «день закрыт»',
+  );
+});

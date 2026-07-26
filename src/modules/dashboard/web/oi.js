@@ -71,6 +71,21 @@ const codSigned = (n, digits = 2) => {
   return `<span class="${n > 0 ? "oi-pos" : n < 0 ? "oi-neg" : "oi-muted"}">${codPct(n, digits)}</span>`;
 };
 
+/**
+ * Полоски силы сигнала: закрашено ровно score из 6, цвет — по стороне сделки.
+ * Класс-обёртка обязателен: базовое правило .ss-seg.on живёт под .ss-hero--*,
+ * без своей обёртки полоски остаются серыми при любом score.
+ */
+const codSegs = (score, side) => {
+  const tone = side === "SHORT" ? "short" : side === "LONG" ? "long" : "muted";
+  const n = Number.isFinite(score) ? score : 0;
+  const segs = Array.from(
+    { length: 6 },
+    (_, i) => `<span class="ss-seg${i < n ? " on" : ""}"></span>`,
+  ).join("");
+  return `<span class="ss-segs cod-segs--${tone}" title="${n} из 6 признаков сошлось">${segs}</span>`;
+};
+
 const COD_HIT_LABEL = {
   move: "Ход за 24ч ≥ 8%",
   edge: "Упёрлась в край диапазона 72ч",
@@ -98,9 +113,17 @@ function codRenderTabs() {
   el.innerHTML = tabs
     .map(
       (p) => `<button type="button" class="cod-tab${p.coin === codActive ? " active" : ""}${p.held ? " cod-tab--held" : ""}" data-coin="${p.coin}">
-        ${p.held ? '<span class="cod-tab-held">в позиции</span>' : ""}
+        ${
+          p.tradedToday
+            ? '<span class="cod-tab-held cod-tab-done">день закрыт</span>'
+            : p.held
+              ? '<span class="cod-tab-held">в позиции</span>'
+              : p.dayContext
+                ? '<span class="cod-tab-held cod-tab-done">2-й заход</span>'
+                : ""
+        }
         <span class="cod-tab-coin">${p.coin}</span>
-        <span class="cod-tab-side ${p.side.toLowerCase()}">${p.side}</span>
+        ${p.side ? `<span class="cod-tab-side ${p.side.toLowerCase()}">${p.side}</span>` : ""}
         <span class="oi-muted">${p.score == null ? "—" : `${p.score}/6`}</span>
       </button>`,
     )
@@ -123,6 +146,50 @@ const COD_STATUS = {
   wrong_side:         { cls: "none",  label: "позиция против разбора" },
 };
 
+/** Монета, отторгованная сегодня: день закрыт, вход не предлагаем. */
+function codRenderTradedToday(p) {
+  const f = p.features;
+  const d = p.day;
+  const factRows = f
+    ? `
+    <tr><td>Ход 24ч</td><td>${codSigned(f.chg24h, 1)}</td></tr>
+    <tr><td>Последние 4ч</td><td>${codSigned(f.chg4h)}</td></tr>
+    <tr><td>Позиция в диапазоне 72ч</td><td>${(f.rangePos * 100).toFixed(0)}%</td></tr>
+    <tr><td>Тренд 1ч</td><td>${f.trend1h === "up" ? "↑ вверх" : f.trend1h === "down" ? "↓ вниз" : "→ боковик"}</td></tr>`
+    : `<tr><td colspan="2" class="oi-muted">Монета больше не проходит входной фильтр</td></tr>`;
+
+  return `
+    <div class="cod-head">
+      <div class="cod-head-main">
+        <span class="cod-donebadge">день закрыт</span>
+        <span class="ss-coin">${p.coin}</span>
+        ${codSegs(p.score, null)}
+        <span class="oi-muted" style="font-size:13px">${p.score == null ? "—" : `${p.score}/6`}</span>
+      </div>
+      <div class="cod-verdict none">${p.headline}</div>
+    </div>
+    <p class="cod-detail">${p.detail}</p>
+    <div class="cod-grid" style="margin-top:16px">
+      <div>
+        <p class="cod-sub">Итог дня по монете</p>
+        <table class="cod-t">
+          <tr><td>Сделок</td><td>${d.count}</td></tr>
+          <tr><td>Результат</td><td class="${d.pnl >= 0 ? "cod-rr-ok" : "cod-rr-bad"}">${d.pnl < 0 ? "-" : "+"}$${Math.abs(d.pnl).toFixed(2)}</td></tr>
+          <tr><td>Последний выход</td><td>${d.lastCloseAt ? new Date(d.lastCloseAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "—"}</td></tr>
+          ${d.side ? `<tr><td>Сторона</td><td>${d.side}</td></tr>` : ""}
+        </table>
+      </div>
+      <div>
+        <p class="cod-sub">Что с монетой сейчас</p>
+        <table class="cod-t">${factRows}</table>
+      </div>
+      <div>
+        <p class="cod-sub">Почему вход не предлагается</p>
+        <ul class="cod-flags">${(p.notes || []).map((t) => `<li class="med">${t}</li>`).join("")}</ul>
+      </div>
+    </div>`;
+}
+
 /** Разбор монеты, в которой оператор сидит: ведение позиции, а не вход. */
 function codRenderHeld(p) {
   const st = COD_STATUS[p.status] || { cls: "watch", label: p.status };
@@ -134,7 +201,7 @@ function codRenderHeld(p) {
     <tr><td>Твой вход</td><td>${codFmtPx(pos.entryPx)}</td></tr>
     <tr><td>Сейчас</td><td>${codSigned(pos.gainPct)}</td></tr>
     <tr><td>Объём позиции</td><td>${fmtUsd(pos.notionalUsd)}</td></tr>
-    <tr><td>Нереализованный</td><td>${pos.unrealizedPnl >= 0 ? "+" : ""}$${pos.unrealizedPnl.toFixed(2)}</td></tr>`;
+    <tr><td>Нереализованный</td><td>${pos.unrealizedPnl < 0 ? "-" : "+"}$${Math.abs(pos.unrealizedPnl).toFixed(2)}</td></tr>`;
 
   const planRows = pl
     ? `
@@ -207,6 +274,10 @@ function codRenderBody() {
   }
   const p = tabs.find((x) => x.coin === codActive) || tabs[0];
   codActive = p.coin;
+  if (p.tradedToday) {
+    body.innerHTML = codRenderTradedToday(p);
+    return;
+  }
   if (p.held) {
     body.innerHTML = codRenderHeld(p);
     return;
@@ -252,9 +323,11 @@ function codRenderBody() {
   body.innerHTML = `
     <div class="cod-head">
       <div class="cod-head-main">
+        ${p.dayContext ? '<span class="cod-donebadge">сегодня уже торговал</span>' : ""}
         <span class="ss-badge ss-badge--${p.side.toLowerCase()}">${p.side === "SHORT" ? "▼" : "▲"} ${p.side}</span>
         <span class="ss-coin">${p.coin}</span>
-        <span class="ss-segs">${Array.from({ length: 6 }, (_, i) => `<span class="ss-seg${i < p.score ? " on" : ""}"></span>`).join("")}</span>
+        ${codSegs(p.score, p.side)}
+        <span class="oi-muted" style="font-size:13px">${p.score}/6</span>
       </div>
       <div class="cod-verdict ${p.verdict.tone}">${p.verdict.headline}</div>
     </div>
