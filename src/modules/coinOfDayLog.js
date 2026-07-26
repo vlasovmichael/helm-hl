@@ -42,14 +42,23 @@ export function warsawDate(ts = Date.now()) {
  * «наблюдениями», по которым оператор входить и не собирался, и статистика будет
  * мерить не тот процесс.
  */
+/**
+ * Пишем ли этот разбор в форвард-лог. Гейт = ровно вердикт карточки: если лог
+ * писать шире («наблюдения»), он измерит не тот процесс, по которому оператор
+ * входит, и цифры будут не про то.
+ */
+export function isLoggablePick(p) {
+  if (p?.verdict?.tone !== 'setup') return false;
+  return Boolean(p.levels) && p.levels.rr >= COD.MIN_RR;
+}
+
 export function logScanPicks(scan, now = Date.now()) {
   const date = warsawDate(now);
   let written = 0;
-  for (const p of scan?.picks ?? []) {
-    // Гейт = ровно вердикт карточки. Если лог писать шире («наблюдения»), он
-    // измерит не тот процесс, по которому оператор входит, и цифры будут не про то.
-    if (p.verdict?.tone !== 'setup') continue;
-    if (!p.levels || !(p.levels.rr >= COD.MIN_RR)) continue;
+  // signals, а не picks: в picks нет монет, в которых оператор уже сидит, и лог
+  // потерял бы ровно те сигналы, по которым он успел войти → смещённая выборка.
+  for (const p of scan?.signals ?? []) {
+    if (!isLoggablePick(p)) continue;
     const ok = recordCoinOfDayPick({
       date,
       coin: p.coin,

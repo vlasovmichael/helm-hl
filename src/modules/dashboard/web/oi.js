@@ -83,20 +83,25 @@ const COD_HIT_LABEL = {
 let codData = null;
 let codActive = null;
 
+// Все табы = сначала монеты в позиции (их вести важнее, чем искать новый вход),
+// потом кандидаты на вход.
+const codAllTabs = () => [...(codData?.held ?? []), ...(codData?.picks ?? [])];
+
 function codRenderTabs() {
   const el = document.getElementById("cod-tabs");
-  const picks = codData?.picks ?? [];
-  if (picks.length < 2) {
+  const tabs = codAllTabs();
+  if (tabs.length < 2) {
     el.hidden = true;
     return;
   }
   el.hidden = false;
-  el.innerHTML = picks
+  el.innerHTML = tabs
     .map(
-      (p) => `<button type="button" class="cod-tab${p.coin === codActive ? " active" : ""}" data-coin="${p.coin}">
+      (p) => `<button type="button" class="cod-tab${p.coin === codActive ? " active" : ""}${p.held ? " cod-tab--held" : ""}" data-coin="${p.coin}">
+        ${p.held ? '<span class="cod-tab-held">в позиции</span>' : ""}
         <span class="cod-tab-coin">${p.coin}</span>
         <span class="cod-tab-side ${p.side.toLowerCase()}">${p.side}</span>
-        <span class="oi-muted">${p.score}/6</span>
+        <span class="oi-muted">${p.score == null ? "—" : `${p.score}/6`}</span>
       </button>`,
     )
     .join("");
@@ -109,10 +114,89 @@ function codRenderTabs() {
   );
 }
 
+const COD_STATUS = {
+  thesis_intact:      { cls: "setup", label: "тезис в силе" },
+  thesis_weakened:    { cls: "watch", label: "тезис ослаб" },
+  thesis_faded:       { cls: "watch", label: "сетап растворился" },
+  thesis_invalidated: { cls: "none",  label: "стоп плана пробит" },
+  target_reached:     { cls: "setup", label: "цель достигнута" },
+  wrong_side:         { cls: "none",  label: "позиция против разбора" },
+};
+
+/** Разбор монеты, в которой оператор сидит: ведение позиции, а не вход. */
+function codRenderHeld(p) {
+  const st = COD_STATUS[p.status] || { cls: "watch", label: p.status };
+  const pos = p.position;
+  const f = p.features;
+  const pl = p.plan;
+
+  const posRows = `
+    <tr><td>Твой вход</td><td>${codFmtPx(pos.entryPx)}</td></tr>
+    <tr><td>Сейчас</td><td>${codSigned(pos.gainPct)}</td></tr>
+    <tr><td>Объём позиции</td><td>${fmtUsd(pos.notionalUsd)}</td></tr>
+    <tr><td>Нереализованный</td><td>${pos.unrealizedPnl >= 0 ? "+" : ""}$${pos.unrealizedPnl.toFixed(2)}</td></tr>`;
+
+  const planRows = pl
+    ? `
+    <tr><td>Вход по плану</td><td>${codFmtPx(pl.entry)}</td></tr>
+    <tr><td>Стоп плана</td><td>${codFmtPx(pl.stop)} · ${pl.toStopPct.toFixed(2)}% отсюда</td></tr>
+    <tr><td>Цель плана</td><td>${codFmtPx(pl.target)} · ${pl.toTargetPct.toFixed(2)}% отсюда</td></tr>
+    <tr><td>Сейчас в R</td><td class="${pl.rNow >= 0 ? "cod-rr-ok" : "cod-rr-bad"}">${pl.rNow == null ? "—" : `${pl.rNow >= 0 ? "+" : ""}${pl.rNow.toFixed(2)}R`}</td></tr>
+    <tr><td>Пройдено до цели</td><td>${pl.progressPct == null ? "—" : `${pl.progressPct.toFixed(0)}%`}</td></tr>`
+    : `<tr><td colspan="2" class="oi-muted">Вход был не по карточке — плана для сверки нет</td></tr>`;
+
+  const factRows = f
+    ? `
+    <tr><td>Ход 24ч</td><td>${codSigned(f.chg24h, 1)}</td></tr>
+    <tr><td>Последние 4ч</td><td>${codSigned(f.chg4h)}</td></tr>
+    <tr><td>Позиция в диапазоне 72ч</td><td>${(f.rangePos * 100).toFixed(0)}%</td></tr>
+    <tr><td>Структура 15м</td><td>${f.structLegs} ${p.side === "SHORT" ? "lower-high" : "higher-low"}</td></tr>
+    <tr><td>Объём сейчас / пик</td><td>${f.volDecay == null ? "—" : `${(f.volDecay * 100).toFixed(0)}%`}</td></tr>
+    <tr><td>Тренд 1ч</td><td>${f.trend1h === "up" ? "↑ вверх" : f.trend1h === "down" ? "↓ вниз" : "→ боковик"}</td></tr>`
+    : `<tr><td colspan="2" class="oi-muted">Монета больше не проходит входной фильтр</td></tr>`;
+
+  const notes = (p.notes || []).concat((p.flags || []).map((x) => x.text));
+
+  return `
+    <div class="cod-head">
+      <div class="cod-head-main">
+        <span class="cod-heldbadge">в позиции</span>
+        <span class="ss-badge ss-badge--${p.side.toLowerCase()}">${p.side === "SHORT" ? "▼" : "▲"} ${p.side}</span>
+        <span class="ss-coin">${p.coin}</span>
+      </div>
+      <div class="cod-verdict ${st.cls}">${p.headline}</div>
+    </div>
+    <p class="cod-detail">${p.detail}</p>
+    <div class="cod-grid" style="margin-top:16px">
+      <div>
+        <p class="cod-sub">Твоя позиция</p>
+        <table class="cod-t">${posRows}</table>
+      </div>
+      <div>
+        <p class="cod-sub">План, с которым заходили</p>
+        <table class="cod-t cod-levels">${planRows}</table>
+      </div>
+      <div>
+        <p class="cod-sub">Что с монетой сейчас</p>
+        <table class="cod-t">${factRows}</table>
+        ${
+          notes.length
+            ? `<p class="cod-sub" style="margin-top:16px">На что смотреть</p>
+               <ul class="cod-flags">${notes.map((t) => `<li class="med">${t}</li>`).join("")}</ul>`
+            : ""
+        }
+      </div>
+    </div>
+    <p class="cod-detail" style="margin-top:14px">
+      Новый вход по этой монете карточка не считает намеренно: предлагать долив
+      в открытую позицию — это генератор усреднения.
+    </p>`;
+}
+
 function codRenderBody() {
   const body = document.getElementById("cod-body");
-  const picks = codData?.picks ?? [];
-  if (!picks.length) {
+  const tabs = codAllTabs();
+  if (!tabs.length) {
     const others = codData?.others?.length ?? 0;
     body.innerHTML = `<div class="cod-empty">
       Сегодня сетапа нет — ни одна монета не набрала ${codData?.thresholds?.SHOW_MIN_SCORE ?? 4}/6.
@@ -121,8 +205,12 @@ function codRenderBody() {
     </div>`;
     return;
   }
-  const p = picks.find((x) => x.coin === codActive) || picks[0];
+  const p = tabs.find((x) => x.coin === codActive) || tabs[0];
   codActive = p.coin;
+  if (p.held) {
+    body.innerHTML = codRenderHeld(p);
+    return;
+  }
   const f = p.features;
   const l = p.levels;
   const rrOk = l && l.rr >= (codData?.thresholds?.MIN_RR ?? 1.5);
@@ -221,7 +309,7 @@ async function loadCoinOfDay(force = false) {
     if (codData.error) throw new Error(codData.error);
     const age = codData.cached ? ` · из кэша ${codData.ageSec}с` : "";
     meta.textContent = `разобрано ${codData.scanned} из ${codData.universe}${age}`;
-    if (!codData.picks.some((p) => p.coin === codActive)) codActive = codData.picks[0]?.coin ?? null;
+      if (!codAllTabs().some((p) => p.coin === codActive)) codActive = codAllTabs()[0]?.coin ?? null;
     codRenderTabs();
     codRenderBody();
     codRenderForward();

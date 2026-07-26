@@ -11,14 +11,56 @@
 
 import { state } from '../../../app/state.js';
 import { logger } from '../../../core/logger.js';
+import { getPositionsCached } from '../../exchange.js';
+import { getCoinOfDayPicks } from '../../../core/database.js';
 import { scanCoinOfDay, COD } from '../../coinOfDay.js';
-import { logScanPicks, buildForwardStats } from '../../coinOfDayLog.js';
+import { logScanPicks, buildForwardStats, warsawDate } from '../../coinOfDayLog.js';
 
 const TTL_MS = 5 * 60_000;
 let cache = { payload: null, at: 0, inflight: null };
 
+/**
+ * COIN → позиция оператора. Источник правды — биржа (getPositionsCached, тот же
+ * коалесцированный clearinghouseState, что читают integrity/reconcile), а не БД:
+ * позиция может быть ещё не усыновлена adopt'ом, но она уже есть, и карточка
+ * обязана её видеть.
+ */
+async function loadPositions() {
+  try {
+    const raw = await getPositionsCached();
+    const map = new Map();
+    for (const ap of raw || []) {
+      const p = ap?.position;
+      const szi = parseFloat(p?.szi ?? NaN);
+      if (!p?.coin || !Number.isFinite(szi) || szi === 0) continue;
+      map.set(p.coin.toUpperCase(), {
+        side: szi < 0 ? 'SHORT' : 'LONG',
+        entryPx: parseFloat(p.entryPx),
+        szi,
+        notionalUsd: Math.abs(parseFloat(p.positionValue ?? 0)),
+        unrealizedPnl: parseFloat(p.unrealizedPnl ?? 0),
+      });
+    }
+    return map;
+  } catch (err) {
+    logger.debug(`[CoinOfDay] positions read failed: ${err.message}`);
+    return new Map();
+  }
+}
+
+/** COIN → пик карточки за сегодня (чтобы сверить позицию с планом входа). */
+function loadTodayPicks(now) {
+  const date = warsawDate(now);
+  const map = new Map();
+  for (const r of getCoinOfDayPicks(60)) {
+    if (r.date === date) map.set(r.coin.toUpperCase(), r);
+  }
+  return map;
+}
+
 async function build(now) {
-  const scan = await scanCoinOfDay(state.latestHunter, now);
+  const [positions, picks] = [await loadPositions(), loadTodayPicks(now)];
+  const scan = await scanCoinOfDay(state.latestHunter, now, { positions, picks });
   try {
     logScanPicks(scan, now);
   } catch (err) {

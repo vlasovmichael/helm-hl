@@ -208,3 +208,98 @@ test('резолвер: свечи ДО входа игнорируются', ()
   ]);
   assert.equal(res.status, 'target', 'бар до входа не должен закрывать сделку');
 });
+
+// ── Привязка к позициям оператора ─────────────────────────────────────────────
+const { buildHeldView } = await import('../src/modules/coinOfDay.js');
+
+const heldPos = { side: 'SHORT', entryPx: 100, szi: -10, notionalUsd: 1000, unrealizedPnl: 5 };
+const heldPick = { entry: 100, stop: 104, target: 90 };
+
+test('монета в позиции уходит в held и НЕ попадает в picks (никаких доливов)', async () => {
+  const rows = [
+    { coin: 'AAA', price: 1, oiUsd: 1e6, fundingRate: 0, volume24hUsd: 5e7, dayChangePct: 25 },
+  ];
+  const positions = new Map([['AAA', heldPos]]);
+  // Свечей не будет (сеть в тестах недоступна) — важен сам факт разведения веток:
+  // held-монета не должна оказаться среди кандидатов на вход ни при каком раскладе.
+  const res = await scanCoinOfDay(rows, Date.now(), { positions });
+  assert.equal(res.picks.some((p) => p.coin === 'AAA'), false, 'held-монета не предлагается как вход');
+});
+
+test('held: тезис в силе → статус thesis_intact, новых уровней входа нет', () => {
+  const analysis = {
+    side: 'SHORT', score: 5, verdict: { tone: 'setup' },
+    hits: { rollover: true, structure: true }, features: {}, flags: [],
+  };
+  const v = buildHeldView({ coin: 'AAA', analysis, position: heldPos, pick: heldPick, price: 97 });
+  assert.equal(v.held, true);
+  assert.equal(v.status, 'thesis_intact');
+  assert.equal(v.levels, undefined, 'held-разбор не считает вход — это защита от усреднения');
+  assert.ok(Math.abs(v.position.gainPct - 3) < 1e-9, 'шорт со 100 при цене 97 = +3%');
+  // R считается от ТВОЕГО входа (100) до стопа плана (104) = риск 4; прошли 3.
+  assert.ok(Math.abs(v.plan.rNow - 0.75) < 1e-9, 'риск 4, прошли 3 → +0.75R');
+});
+
+test('held: цена за стопом плана → тезис сломан', () => {
+  const analysis = { side: 'SHORT', score: 5, verdict: { tone: 'setup' }, hits: {}, features: {}, flags: [] };
+  const v = buildHeldView({ coin: 'AAA', analysis, position: heldPos, pick: heldPick, price: 105 });
+  assert.equal(v.status, 'thesis_invalidated');
+  assert.equal(v.plan.stopHit, true);
+});
+
+test('held: сетап растворился (analysis=null) → монета всё равно показана', () => {
+  // Регресс: раньше такая монета просто исчезла бы с карточки — ровно тогда,
+  // когда сказать о ней важнее всего.
+  const v = buildHeldView({ coin: 'AAA', analysis: null, position: heldPos, pick: heldPick, price: 99 });
+  assert.equal(v.status, 'thesis_faded');
+  assert.equal(v.held, true);
+});
+
+test('held: R считается от входа оператора, а не от входа карточки', () => {
+  const analysis = { side: 'SHORT', score: 5, verdict: { tone: 'setup' }, hits: {}, features: {}, flags: [] };
+  // План: шорт от 100, стоп 104. Юзер вошёл в 102 — для шорта это ЛУЧШЕ плана,
+  // и стоп плана (104) всё ещё над его входом, значит риск считается: 104−102=2.
+  const pos = { ...heldPos, entryPx: 102 };
+  const v = buildHeldView({ coin: 'AAA', analysis, position: pos, pick: heldPick, price: 100 });
+  assert.equal(v.plan.stopBehindEntry, false);
+  assert.ok(Math.abs(v.plan.rNow - 1) < 1e-9, 'прошёл 2 при риске 2 → ровно 1R от своей цены');
+  assert.ok(v.notes.some((n) => n.includes('лучше плана')), 'расхождение входов должно быть названо');
+});
+
+test('held: стоп плана не защищает вход → R не выдумывается', () => {
+  const analysis = { side: 'SHORT', score: 5, verdict: { tone: 'setup' }, hits: {}, features: {}, flags: [] };
+  // Шорт открыт в 110, а стоп плана 104 — НИЖЕ входа. Для шорта это не стоп,
+  // а уровень прибыли: считать по нему риск нельзя.
+  const v = buildHeldView({ coin: 'AAA', analysis, position: { ...heldPos, entryPx: 110 }, pick: heldPick, price: 106 });
+  assert.equal(v.plan.stopBehindEntry, true);
+  assert.equal(v.plan.rNow, null, 'R не считаем, когда стоп плана не защищает вход');
+  assert.ok(v.notes.some((n) => n.includes('за спиной твоего входа')));
+});
+
+test('held: сторона позиции против разбора → громкий статус', () => {
+  const analysis = { side: 'LONG', score: 5, verdict: { tone: 'setup' }, hits: {}, features: {}, flags: [] };
+  const v = buildHeldView({ coin: 'AAA', analysis, position: heldPos, pick: null, price: 99 });
+  assert.equal(v.status, 'wrong_side');
+  assert.ok(v.notes.some((n) => n.includes('не по карточке')), 'без пика прогресс считать не от чего');
+});
+
+test('форвард-лог читает signals, а НЕ picks (иначе выборка смещена)', async () => {
+  const { logScanPicks, isLoggablePick } = await import('../src/modules/coinOfDayLog.js');
+  const setup = {
+    coin: 'AAA', side: 'SHORT', score: 5, verdict: { tone: 'setup' },
+    levels: { entry: 100, stop: 104, target: 90, rr: 2.5, riskPct: 4 }, flags: [],
+  };
+  // Ключевая регрессия, без БД: сигнал лежит только в picks → лог обязан его
+  // проигнорировать, потому что источник замера — signals.
+  assert.equal(logScanPicks({ picks: [setup], signals: [] }), 0, 'picks не должен быть источником лога');
+
+  // Гейт записи — чистая функция, проверяем её отдельно от БД.
+  assert.equal(isLoggablePick(setup), true);
+  assert.equal(isLoggablePick({ ...setup, verdict: { tone: 'watch' } }), false, 'наблюдения не пишем');
+  assert.equal(
+    isLoggablePick({ ...setup, levels: { ...setup.levels, rr: 1.2 } }),
+    false,
+    'R:R ниже гейта не пишем',
+  );
+  assert.equal(isLoggablePick({ ...setup, levels: null }), false);
+});

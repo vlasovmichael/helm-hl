@@ -393,13 +393,156 @@ export function analyzeCoin({ coin, price, oiUsd, fundingRate, volume24hUsd, c1h
 }
 
 /**
+ * Разбор монеты, в которой оператор УЖЕ сидит. Не «новый вход», а проверка тезиса:
+ * жив ли ещё сетап, по которому заходили, и не пора ли выходить.
+ *
+ * Осознанно НЕ считает новых уровней входа. Карточка, предлагающая долить в
+ * открытую позу, — это генератор усреднения, а усреднение в лося и есть тот
+ * механизм, которым сливают депозит. Максимум, что мы делаем, — сверяем факт
+ * с планом, с которым заходили.
+ *
+ * @param {Object} analysis — результат analyzeCoin для этой монеты (может быть null)
+ * @param {Object} position — {side, entryPx, szi, notionalUsd, unrealizedPnl}
+ * @param {Object|null} pick — строка coin_of_day_picks за сегодня, если вход был по карточке
+ */
+export function buildHeldView({ coin, analysis, position, pick, price }) {
+  const side = position.side;
+  const isShort = side === 'SHORT';
+  const gainPct = position.entryPx > 0
+    ? ((isShort ? position.entryPx - price : price - position.entryPx) / position.entryPx) * 100
+    : null;
+
+  // Прогресс по плану, с которым заходили (если пик за сегодня есть).
+  let plan = null;
+  if (pick && Number.isFinite(pick.stop) && Number.isFinite(pick.target)) {
+    // R считаем от ТВОЕГО входа, а не от входа карточки: риск на позиции несёшь
+    // ты, от своей цены до стопа плана. Раньше бралcя вход пика, и панель
+    // показывала «0.09R» при живом +2.9% — цифра про сделку карточки, не про твою.
+    const risk = Math.abs(pick.stop - position.entryPx);
+    const gainAbs = isShort ? position.entryPx - price : price - position.entryPx;
+    const stopHit = isShort ? price >= pick.stop : price <= pick.stop;
+    const targetHit = isShort ? price <= pick.target : price >= pick.target;
+    const span = Math.abs(pick.target - position.entryPx);
+    // Стоп плана уже за спиной входа (вошёл хуже плана) — R не определён.
+    const stopBehindEntry = isShort ? pick.stop <= position.entryPx : pick.stop >= position.entryPx;
+    plan = {
+      entry: pick.entry,
+      entryDiffPct: pick.entry > 0 ? ((position.entryPx - pick.entry) / pick.entry) * 100 : null,
+      stop: pick.stop,
+      target: pick.target,
+      rNow: risk > 0 && !stopBehindEntry ? gainAbs / risk : null,
+      stopBehindEntry,
+      progressPct: span > 0 ? Math.max(0, Math.min(100, (gainAbs / span) * 100)) : null,
+      toStopPct: Math.abs(((pick.stop - price) / price) * 100),
+      toTargetPct: Math.abs(((pick.target - price) / price) * 100),
+      stopHit,
+      targetHit,
+    };
+  }
+
+  // ── статус тезиса ──
+  let status;
+  let headline;
+  let detail;
+
+  if (analysis && analysis.side !== side) {
+    status = 'wrong_side';
+    headline = `Ты в ${side}, а разбор говорит ${analysis.side}`;
+    detail =
+      'Позиция против того, что сейчас показывает структура. Это не сигнал переворачиваться — ' +
+      'это повод перечитать свой план входа и решить, действует ли он ещё.';
+  } else if (plan?.stopHit) {
+    status = 'thesis_invalidated';
+    headline = 'Стоп плана пробит';
+    detail =
+      `Цена ушла за стоп ${pick.stop}, с которым заходили. Тезис сломан — дальше это уже не та сделка, ` +
+      'которую открывали. Держать её можно только по новому осознанному решению, а не по инерции.';
+  } else if (plan?.targetHit) {
+    status = 'target_reached';
+    headline = 'Цель плана достигнута';
+    detail = `Цена дошла до ${pick.target}. План отработан полностью — дальше идёт бонус, не сделка.`;
+  } else if (!analysis) {
+    status = 'thesis_faded';
+    headline = 'Сетапа в монете больше нет';
+    detail =
+      'Монета уже не проходит даже входной фильтр (ход за сутки / структура). Причина, по которой ' +
+      'заходили, растворилась — выход по плану, а не по надежде.';
+  } else if (analysis.verdict.tone === 'setup') {
+    status = 'thesis_intact';
+    headline = `Тезис в силе (${analysis.score}/6)`;
+    detail = 'Разбор всё ещё описывает тот же сетап. Ничего делать не надо — веди позицию по плану.';
+  } else {
+    status = 'thesis_weakened';
+    headline = `Тезис ослаб (${analysis.score}/6)`;
+    detail =
+      'Часть признаков рассыпалась — на этой картинке движок бы уже не входил. Вход не отменяет, ' +
+      'но подтягивать стоп разумнее, чем ждать цель.';
+  }
+
+  const notes = [];
+  if (analysis && !analysis.hits.rollover && side === 'SHORT') {
+    notes.push('Импульс 4ч снова смотрит вверх — фейд может не доехать до цели');
+  }
+  if (plan && plan.toStopPct < 1) {
+    notes.push(`До стопа ${plan.toStopPct.toFixed(2)}% — одна свеча на текущей волатильности`);
+  }
+  if (!pick) {
+    notes.push('Вход был не по карточке — прогресс по плану посчитать не от чего, сверяйся со своим стопом');
+  }
+  if (plan?.stopBehindEntry) {
+    notes.push(
+      `Стоп плана ${pick.stop} уже за спиной твоего входа ${position.entryPx} — вошёл хуже плана, ` +
+      'риск по этой сделке нужно мерить своим стопом, а не карточкиным',
+    );
+  }
+  if (plan && Math.abs(plan.entryDiffPct ?? 0) > 1) {
+    const better = isShort ? plan.entryDiffPct > 0 : plan.entryDiffPct < 0;
+    notes.push(
+      `Твой вход ${position.entryPx} против плана ${pick.entry} (${plan.entryDiffPct > 0 ? '+' : ''}${plan.entryDiffPct.toFixed(2)}%) — ` +
+      `${better ? 'лучше плана' : 'хуже плана'}; R считается от твоей цены`,
+    );
+  }
+
+  return {
+    coin,
+    held: true,
+    side,
+    status,
+    headline,
+    detail,
+    notes,
+    position: {
+      entryPx: position.entryPx,
+      notionalUsd: position.notionalUsd,
+      unrealizedPnl: position.unrealizedPnl,
+      gainPct,
+    },
+    plan,
+    // score/фичи оставляем для таблицы — но как диагностику позиции, не как вход
+    score: analysis?.score ?? null,
+    hits: analysis?.hits ?? null,
+    features: analysis?.features ?? null,
+    flags: analysis?.flags ?? [],
+  };
+}
+
+/**
  * Полный скан: берёт рыночный снапшот бота, отбирает кандидатов, тянет свечи
  * только для них и возвращает разборы, отсортированные по score.
  *
+ * Монеты, в которых оператор уже сидит, НЕ попадают в picks — они уходят в held
+ * с разбором позиции (см. buildHeldView). Тот же принцип, что у owned-coin
+ * guard координатора: не предлагать вход туда, где вход уже сделан.
+ *
  * @param {Array} marketRows — state.latestHunter: {coin, price, oiUsd, fundingRate, volume24hUsd, dayChangePct}
  * @param {number} [now]
+ * @param {Object} [opts]
+ * @param {Map<string,Object>} [opts.positions] — COIN → {side, entryPx, szi, notionalUsd, unrealizedPnl}
+ * @param {Map<string,Object>} [opts.picks] — COIN → строка coin_of_day_picks за сегодня
  */
-export async function scanCoinOfDay(marketRows, now = Date.now()) {
+export async function scanCoinOfDay(marketRows, now = Date.now(), opts = {}) {
+  const positions = opts.positions instanceof Map ? opts.positions : new Map();
+  const todayPicks = opts.picks instanceof Map ? opts.picks : new Map();
   const rows = Array.isArray(marketRows) ? marketRows : [];
   const banned = config.trading.coinBlacklist;
 
@@ -415,7 +558,21 @@ export async function scanCoinOfDay(marketRows, now = Date.now()) {
     .sort((a, b) => Math.abs(b.dayChangePct) - Math.abs(a.dayChangePct))
     .slice(0, COD.CANDIDATES);
 
+  // Монеты в позиции разбираем ВСЕГДА, даже если они выпали из префильтра
+  // (бан-лист, ход выдохся, оборот просел). Иначе позиция, по которой сетап
+  // рассыпался, просто исчезла бы с карточки — ровно в тот момент, когда о ней
+  // важнее всего сказать. Их анализ не занимает слоты кандидатов.
+  const poolCoins = new Set(pool.map((r) => r.coin.toUpperCase()));
+  for (const r of rows) {
+    const c = String(r.coin || '').toUpperCase();
+    if (!c || poolCoins.has(c) || !positions.has(c) || !(r.price > 0)) continue;
+    pool.push(r);
+    poolCoins.add(c);
+  }
+
   const analyzed = [];
+  const held = [];
+  const signals = [];
   for (const r of pool) {
     try {
       // LOW priority: карточка дашборда не должна конкурировать за слоты пула
@@ -426,7 +583,27 @@ export async function scanCoinOfDay(marketRows, now = Date.now()) {
       ]);
       if (!c1h?.length) continue;
       const a = analyzeCoin({ ...r, c1h, c15: c15 || [] });
-      if (a) analyzed.push(a);
+      const coinUpper = r.coin.toUpperCase();
+      // Форвард-лог пишется из signals, а НЕ из picks. Иначе из замера выпадали
+      // бы ровно те сигналы, по которым оператор успел войти (монета уходит в held),
+      // — то есть лучшие. Выборка стала бы смещённой, а вся ценность лога в том,
+      // что он несмещённый.
+      if (a) signals.push(a);
+      if (positions.has(coinUpper)) {
+        // В позиции: разбор позиции, не вход. analyzeCoin может вернуть null
+        // (сетап рассыпался) — buildHeldView это обрабатывает отдельным статусом.
+        held.push(
+          buildHeldView({
+            coin: r.coin,
+            analysis: a,
+            position: positions.get(coinUpper),
+            pick: todayPicks.get(coinUpper) ?? null,
+            price: r.price,
+          }),
+        );
+      } else if (a) {
+        analyzed.push(a);
+      }
     } catch (err) {
       logger.warn(`[CoinOfDay] #${r.coin} analyze failed: ${err.message}`);
     }
@@ -437,6 +614,9 @@ export async function scanCoinOfDay(marketRows, now = Date.now()) {
     generatedAt: now,
     scanned: pool.length,
     universe: rows.length,
+    held,
+    // signals = ВСЕ разборы, включая монеты в позиции. Источник форвард-лога.
+    signals,
     picks: analyzed.filter((a) => a.score >= COD.SHOW_MIN_SCORE),
     others: analyzed.filter((a) => a.score < COD.SHOW_MIN_SCORE),
   };

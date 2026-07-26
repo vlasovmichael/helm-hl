@@ -16,7 +16,7 @@ import {
   getPositions,
 } from '../exchange.js';
 import { parseFillResponse } from './fill-parser.js';
-import { fetchUserFills, classifyClose } from '../userFills.js';
+import { fetchUserFills, classifyClose, findRoundTripForPosition } from '../userFills.js';
 import { calcPnl, checkSlippage, MARKET_SLIPPAGE } from './math.js';
 import {
   banSlippage, setCooldown, recordLoss,
@@ -144,35 +144,44 @@ export async function productionClose(signal, position, silent = false) {
       // через UI до того, как бот успел отправить marketClose).
       let classified = {
         reason: 'external_close_detected_on_exit',
-        pnl: null, fee: 0, closePx: null, closedAt: null,
+        pnl: null, fee: 0, closePx: null, closedAt: null, feeSource: null,
       };
       try {
         const fills = await fetchUserFills(position.entry_time - 60_000);
         const coinFills = fills.filter((f) => f.coin.toUpperCase() === coin.toUpperCase());
         const c = classifyClose(position, coinFills);
+        // Причина закрытия — только из classifyClose: лишь он различает
+        // sl_trigger/tp_trigger/liquidation по oid и флагу ликвидации.
         if (c.reason !== 'external_unknown') {
           classified.reason = c.reason;
         }
-        if (Number.isFinite(c.fee)) classified.fee = c.fee;
-        if (Number.isFinite(c.pnl)) {
-          classified.pnl = c.pnl;
-          // Контракт БД: realized_pnl = net. classifyClose отдаёт price-PnL ДО
-          // комиссий, поэтому вычитаем fee close-ног — как это уже делает
-          // sync.js на оффлайн-пути. Раньше писался gross + fee_paid=0, и PnL
-          // внешних закрытий был завышен на комиссию.
-          estimatedPnl = c.pnl - classified.fee;
+
+        // Цифры — из round-trip матчера: он даёт комиссию за ОБЕ ноги и матчит
+        // ногу по entry_price (фикс KAITO 13.07), а classifyClose отдаёт fee
+        // только закрывающих филлов. Обычный путь закрытия пишет в fee_paid обе
+        // ноги (size × (ONE_LEG + exitFeeRate)) — внешний обязан быть с ним
+        // согласован, иначе комиссии внешних закрытий систематически занижены,
+        // а PnL завышен. Фолбэк на classifyClose, если ногу сматчить не удалось.
+        const leg = findRoundTripForPosition(position, coinFills);
+        const src = leg && Number.isFinite(leg.pnl) ? leg : c;
+        if (Number.isFinite(src.fee)) classified.fee = src.fee;
+        if (Number.isFinite(src.pnl)) {
+          classified.pnl = src.pnl;
+          // Контракт БД: realized_pnl = net (price PnL − комиссии).
+          estimatedPnl = src.pnl - classified.fee;
         }
-        if (Number.isFinite(c.closePx)) classified.closePx = c.closePx;
+        if (Number.isFinite(src.closePx)) classified.closePx = src.closePx;
+        classified.feeSource = src === leg ? 'round_trip' : 'close_fills';
         // Реальное время закрытия из fills. Без него в history попадал момент
         // ДЕТЕКТА (бот замечает внешнее закрытие через десятки секунд), и
         // дедуп ленты (makeHistoryCoverage, допуск 5с) промахивался — одна
         // сделка показывалась дважды: `close` из history + `manual_close` из
         // fills. Кейс kSHIB 26.07: fill 09:40:01, детект 09:40:30.
-        if (Number.isFinite(c.closedAt)) classified.closedAt = c.closedAt;
+        if (Number.isFinite(src.closedAt)) classified.closedAt = src.closedAt;
         logger.info(
           `[Executor] PROD CLOSE #${coin} — external classified as '${classified.reason}' | ` +
             `pnl(fills)=${classified.pnl != null ? '$' + classified.pnl.toFixed(4) : 'n/a'} gross, ` +
-            `fee=$${classified.fee.toFixed(4)} → net $${estimatedPnl.toFixed(4)} | ` +
+            `fee=$${classified.fee.toFixed(4)} (${classified.feeSource}) → net $${estimatedPnl.toFixed(4)} | ` +
             `closePx(fills)=${classified.closePx != null ? '$' + classified.closePx : 'n/a'} | ` +
             `closedAt(fills)=${classified.closedAt ? new Date(classified.closedAt).toISOString() : 'n/a'}`,
         );

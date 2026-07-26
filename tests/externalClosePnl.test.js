@@ -19,7 +19,7 @@ import assert from 'node:assert/strict';
 
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-const { classifyClose } = await import('../src/modules/userFills.js');
+const { classifyClose, findRoundTripForPosition } = await import('../src/modules/userFills.js');
 const { makeHistoryCoverage } = await import('../src/modules/dashboard/server.js');
 
 const makeFill = ({ coin = 'X', px = 100, sz = 1, time, dir, oid = null, closedPnl = 0, fee = 0 }) =>
@@ -34,20 +34,30 @@ const kshibFills = [
 ];
 const kshibPos = { coin: 'kSHIB', side: 'short', entry_time: FILL_CLOSE_TS - 1_463_000 };
 
-test('classifyClose отдаёт closedAt = время close-fill, а не момент детекта', () => {
+test('closedAt = время close-fill, а не момент детекта', () => {
   const c = classifyClose(kshibPos, kshibFills);
-  assert.equal(c.reason, 'manual_close');
+  assert.equal(c.reason, 'manual_close', 'причину даёт только classifyClose');
   assert.equal(c.closedAt, FILL_CLOSE_TS, 'closed_at обязан приходить из fills');
   assert.notEqual(c.closedAt, DETECT_TS);
+  assert.equal(findRoundTripForPosition(kshibPos, kshibFills).closedAt, FILL_CLOSE_TS);
 });
 
-test('classifyClose отдаёт fee close-ног, а net = pnl − fee (контракт realized_pnl)', () => {
+test('комиссия внешнего закрытия = ОБЕ ноги, как на обычном пути', () => {
+  // Обычный путь пишет fee_paid = size × (ONE_LEG + exitFeeRate), т.е. вход+выход.
+  // classifyClose отдаёт только закрывающие филлы — если брать его, комиссии
+  // внешних закрытий систематически занижены, а PnL завышен. Поэтому цифры
+  // берём из round-trip матчера.
   const c = classifyClose(kshibPos, kshibFills);
-  assert.ok(Math.abs(c.pnl - 0.779196) < 1e-9, 'pnl = price PnL ДО комиссий');
-  assert.ok(Math.abs(c.fee - 0.020149) < 1e-9, 'fee = Σ комиссий close-fills');
-  const net = c.pnl - c.fee;
-  assert.ok(Math.abs(net - 0.759047) < 1e-9, `net = ${net}, ожидалось 0.759047`);
-  assert.ok(net < c.pnl, 'net обязан быть меньше gross — иначе комиссия потеряна');
+  assert.ok(Math.abs(c.fee - 0.020149) < 1e-9, 'classifyClose = только close-нога');
+
+  const leg = findRoundTripForPosition(kshibPos, kshibFills);
+  assert.ok(leg, 'нога round-trip должна найтись');
+  assert.ok(Math.abs(leg.fee - 0.04079) < 1e-9, `обе ноги = 0.04079, got ${leg.fee}`);
+  assert.ok(Math.abs(leg.pnl - 0.779196) < 1e-9, 'pnl = price PnL ДО комиссий');
+
+  const net = leg.pnl - leg.fee;
+  assert.ok(Math.abs(net - 0.738406) < 1e-9, `net = ${net}, ожидалось 0.738406`);
+  assert.ok(leg.fee > c.fee, 'round-trip обязан давать комиссию больше одной ноги');
 });
 
 test('дедуп ленты сходится, когда closed_at взят из fills (и промахивается на детекте)', () => {
