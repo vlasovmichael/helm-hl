@@ -142,7 +142,10 @@ export async function productionClose(signal, position, silent = false) {
       // Classify cause via userFills: matched oid → TP/SL trigger;
       // liquidation flag → liquidation; иначе manual_close (оператор закрыл руками
       // через UI до того, как бот успел отправить marketClose).
-      let classified = { reason: 'external_close_detected_on_exit', pnl: null, closePx: null };
+      let classified = {
+        reason: 'external_close_detected_on_exit',
+        pnl: null, fee: 0, closePx: null, closedAt: null,
+      };
       try {
         const fills = await fetchUserFills(position.entry_time - 60_000);
         const coinFills = fills.filter((f) => f.coin.toUpperCase() === coin.toUpperCase());
@@ -150,15 +153,28 @@ export async function productionClose(signal, position, silent = false) {
         if (c.reason !== 'external_unknown') {
           classified.reason = c.reason;
         }
+        if (Number.isFinite(c.fee)) classified.fee = c.fee;
         if (Number.isFinite(c.pnl)) {
           classified.pnl = c.pnl;
-          estimatedPnl = c.pnl;  // точный PnL из fills предпочтительнее equity-delta
+          // Контракт БД: realized_pnl = net. classifyClose отдаёт price-PnL ДО
+          // комиссий, поэтому вычитаем fee close-ног — как это уже делает
+          // sync.js на оффлайн-пути. Раньше писался gross + fee_paid=0, и PnL
+          // внешних закрытий был завышен на комиссию.
+          estimatedPnl = c.pnl - classified.fee;
         }
         if (Number.isFinite(c.closePx)) classified.closePx = c.closePx;
+        // Реальное время закрытия из fills. Без него в history попадал момент
+        // ДЕТЕКТА (бот замечает внешнее закрытие через десятки секунд), и
+        // дедуп ленты (makeHistoryCoverage, допуск 5с) промахивался — одна
+        // сделка показывалась дважды: `close` из history + `manual_close` из
+        // fills. Кейс kSHIB 26.07: fill 09:40:01, детект 09:40:30.
+        if (Number.isFinite(c.closedAt)) classified.closedAt = c.closedAt;
         logger.info(
           `[Executor] PROD CLOSE #${coin} — external classified as '${classified.reason}' | ` +
-            `pnl(fills)=${classified.pnl != null ? '$' + classified.pnl.toFixed(4) : 'n/a'} | ` +
-            `closePx(fills)=${classified.closePx != null ? '$' + classified.closePx : 'n/a'}`,
+            `pnl(fills)=${classified.pnl != null ? '$' + classified.pnl.toFixed(4) : 'n/a'} gross, ` +
+            `fee=$${classified.fee.toFixed(4)} → net $${estimatedPnl.toFixed(4)} | ` +
+            `closePx(fills)=${classified.closePx != null ? '$' + classified.closePx : 'n/a'} | ` +
+            `closedAt(fills)=${classified.closedAt ? new Date(classified.closedAt).toISOString() : 'n/a'}`,
         );
       } catch (clsErr) {
         logger.debug(`[Executor] classifyClose failed: ${clsErr.message}`);
@@ -168,7 +184,8 @@ export async function productionClose(signal, position, silent = false) {
         dbClosePosition(position.id, {
           close_price:  classified.closePx ?? 0,
           realized_pnl: estimatedPnl,
-          fee_paid:     0,
+          fee_paid:     classified.fee,
+          closed_at:    classified.closedAt ?? undefined,
           reason:       classified.reason,
         });
         logger.info(
