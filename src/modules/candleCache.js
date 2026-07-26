@@ -18,7 +18,8 @@ const cache = new Map();
 
 /**
  * Парсит ответ candleSnapshot в наш формат.
- * Hyperliquid возвращает поля: t (open time), c (close), h (high), l (low), o (open).
+ * Hyperliquid возвращает поля: t (open time), c (close), h (high), l (low),
+ * o (open), v (base volume). vol nullable — старые сиды в тестах его не кладут.
  */
 function parseCandles(raw) {
   if (!Array.isArray(raw)) return [];
@@ -29,6 +30,7 @@ function parseCandles(raw) {
       high:  parseFloat(c.h),
       low:   parseFloat(c.l),
       close: parseFloat(c.c),
+      vol:   Number.isFinite(parseFloat(c.v)) ? parseFloat(c.v) : null,
     }))
     .filter((c) =>
       Number.isFinite(c.high) && Number.isFinite(c.low) && Number.isFinite(c.close) && c.high > 0,

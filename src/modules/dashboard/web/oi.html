@@ -104,6 +104,65 @@
       .oi-legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
       .oi-empty { padding: 30px 10px; text-align: center; color: var(--text-dim, #8a8578); }
 
+      /* ── Монета дня (cod- префикс) ── */
+      .cod-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 14px; }
+      .cod-tab {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 7px 14px; border-radius: 999px; cursor: pointer;
+        border: 1px solid var(--border, #2a2622);
+        background: var(--panel-2, rgba(128, 128, 128, 0.06));
+        color: var(--text-dim, #8a8578);
+        font-family: inherit; font-size: 13px; font-weight: 600;
+      }
+      .cod-tab:hover { border-color: #5b9dff; }
+      .cod-tab.active { color: var(--text, inherit); border-color: #5b9dff; background: rgba(91, 157, 255, 0.14); }
+      .cod-tab-coin { font-family: "JetBrains Mono", monospace; }
+      .cod-tab-side { font-size: 10.5px; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px; color: #fff; }
+      .cod-tab-side.long { background: var(--green); }
+      .cod-tab-side.short { background: var(--red); }
+
+      .cod-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 14px; }
+      .cod-head-main { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+      .cod-verdict { font-size: 15px; font-weight: 700; }
+      .cod-verdict.setup { color: var(--green); }
+      .cod-verdict.watch { color: #c98a1a; }
+      .cod-verdict.none { color: var(--text-dim, #8a8578); }
+      .cod-detail { font-size: 13px; line-height: 1.55; color: var(--text-dim, #8a8578); margin: 6px 0 0; }
+
+      .cod-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
+      .cod-sub {
+        font-size: 10.5px; letter-spacing: 0.8px; text-transform: uppercase;
+        color: var(--text-muted, #8a8578); margin: 0 0 8px;
+      }
+      table.cod-t { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+      .cod-t td { padding: 6px 8px; font-size: 13.5px; border-bottom: 1px solid var(--border-soft, rgba(128, 128, 128, 0.12)); }
+      .cod-t td:first-child { color: var(--text-dim, #8a8578); }
+      .cod-t td:last-child { text-align: right; font-family: "JetBrains Mono", monospace; }
+      .cod-hit::before { content: "✓ "; color: var(--green); }
+      .cod-miss::before { content: "· "; color: var(--text-dim, #8a8578); }
+      .cod-miss { opacity: 0.55; }
+
+      .cod-levels td:last-child { font-weight: 600; }
+      .cod-rr-ok { color: var(--green); }
+      .cod-rr-bad { color: var(--red); }
+
+      .cod-flags { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 7px; }
+      .cod-flags li {
+        font-size: 12.5px; line-height: 1.5; padding: 8px 11px; border-radius: 8px;
+        border-left: 3px solid var(--text-muted, #8a8578);
+        background: var(--panel-2, rgba(128, 128, 128, 0.06));
+      }
+      .cod-flags li.high { border-left-color: var(--red); }
+      .cod-flags li.med { border-left-color: #c98a1a; }
+
+      .cod-fwd {
+        margin-top: 16px; padding: 12px 14px; border-radius: 10px;
+        border: 1px dashed var(--border, #2a2622);
+        font-size: 12.5px; line-height: 1.6; color: var(--text-dim, #8a8578);
+      }
+      .cod-fwd b { color: var(--text, inherit); font-variant-numeric: tabular-nums; }
+      .cod-empty { padding: 26px 10px; text-align: center; color: var(--text-dim, #8a8578); font-size: 13.5px; }
+
       /* ── Setup Scanner card (ss- префикс) ── */
       .ss-hero {
         border: 1px solid var(--border, #2a2622); border-radius: var(--radius-lg, 12px);
@@ -176,9 +235,31 @@
         </div>
       </header>
 
+      <section class="card" id="cod-card">
+        <div class="card-header">
+          <div class="card-title" data-num="01">Монета дня · фейд выдохшегося хвоста</div>
+          <div class="oi-toolbar">
+            <span class="oi-span" id="cod-meta">…</span>
+            <button class="range-btn" id="cod-refresh" type="button">Пересчитать</button>
+          </div>
+        </div>
+        <div class="cod-tabs" id="cod-tabs" hidden></div>
+        <div id="cod-body">
+          <div class="cod-empty">Загрузка…</div>
+        </div>
+        <div class="cod-fwd" id="cod-fwd" hidden></div>
+        <p class="oi-note" style="margin-top: 12px">
+          Скор 0–6: <b>ход 24ч · край диапазона 72ч · разворот 4ч · структура 15м ·
+          распад объёма · OI не перегрет</b>. Сторона по умолчанию — шорт (эдж
+          журнала: payoff шортов 0.70 против 0.44 у лонгов). Гейт R:R ≥ 1.5.
+          <b>Это разбор, не сигнал с доказанным эджем</b> — каждый пик пишется в
+          форвард-лог, вывод по нему делаем на 20+ закрытых, не раньше.
+        </p>
+      </section>
+
       <section class="card" id="ss-card">
         <div class="card-header">
-          <div class="card-title" data-num="01">Setup Scanner · radar</div>
+          <div class="card-title" data-num="02">Setup Scanner · radar</div>
           <div class="oi-toolbar">
             <label class="oi-span ss-toggle"><input type="checkbox" id="ss-showzero" /> show score 0</label>
             <span class="oi-span" id="ss-meta">…</span>
@@ -212,7 +293,7 @@
 
       <section class="card">
         <div class="card-header">
-          <div class="card-title" data-num="02">Overview · all coins</div>
+          <div class="card-title" data-num="03">Overview · all coins</div>
           <div class="oi-toolbar">
             <input id="oi-search" class="oi-search" placeholder="filter" maxlength="12" />
             <span class="oi-span" id="oi-span">…</span>
@@ -246,7 +327,7 @@
 
       <section class="card oi-detail" id="oi-detail" hidden>
         <div class="card-header">
-          <div class="card-title" data-num="03">Coin history</div>
+          <div class="card-title" data-num="04">Coin history</div>
           <div class="time-ranges" id="oi-ranges">
             <button class="range-btn" data-hours="24">24h</button>
             <button class="range-btn active" data-hours="72">3d</button>

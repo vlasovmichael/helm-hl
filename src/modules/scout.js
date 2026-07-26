@@ -437,12 +437,20 @@ export async function scan() {
       // OI-дельта делит против нулевой базы и выдаёт нонсенс типа −200%
       // (физически OI не падает >100%). 2026-06-29.
       const oiUsd       = Number.isFinite(oiCoin) && oiCoin > 0 ? oiCoin * price : null;
+      // prevDayPx — «цена сутки назад» от самой биржи. Нужна «Монете дня» как
+      // дешёвый префильтр кандидатов (кто вообще ходил за сутки) БЕЗ шторма
+      // candleSnapshot по всему юниверсу. Берём из уже полученного ctx.
+      const prevDayPx   = parseFloat(ctx.prevDayPx ?? NaN);
       hunterResults.push({
         coin,
         price,
         fundingRate:   Number.isFinite(fundingRate) ? fundingRate : null,
         volume24hUsd:  Number.isFinite(dayNtlVlm)   ? dayNtlVlm   : null,
         oiUsd,
+        dayChangePct:
+          Number.isFinite(prevDayPx) && prevDayPx > 0
+            ? ((price - prevDayPx) / prevDayPx) * 100
+            : null,
       });
       // Hunter читает priceHistory для детекции спайков — наполняем её
       // для всего hunter-scope (шире, чем carry/fade видят).

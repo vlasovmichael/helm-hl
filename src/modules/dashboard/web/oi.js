@@ -54,7 +54,187 @@ const fmtFunding = (n) => {
 const fmtTime = (t) =>
   new Date(t).toISOString().slice(5, 16).replace("T", " ");
 
-// ── Setup Scanner radar (карточка 01) ──
+// ── Монета дня (карточка 01) ──
+// Разбор сетапа «выдохшийся хвост» из /api/coin-of-day. Табы = монеты, прошедшие
+// порог score. Карточка обязана показывать не только «за», но и «против» —
+// блок флагов не сворачивается и не прячется.
+const codFmtPx = (n) => {
+  if (n == null || !Number.isFinite(n)) return "—";
+  if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 1 });
+  if (n >= 1) return n.toFixed(4);
+  return n.toPrecision(4);
+};
+const codPct = (n, digits = 2) =>
+  n == null || !Number.isFinite(n) ? "—" : `${n >= 0 ? "+" : ""}${n.toFixed(digits)}%`;
+const codSigned = (n, digits = 2) => {
+  if (n == null || !Number.isFinite(n)) return '<span class="oi-muted">—</span>';
+  return `<span class="${n > 0 ? "oi-pos" : n < 0 ? "oi-neg" : "oi-muted"}">${codPct(n, digits)}</span>`;
+};
+
+const COD_HIT_LABEL = {
+  move: "Ход за 24ч ≥ 8%",
+  edge: "Упёрлась в край диапазона 72ч",
+  rollover: "Импульс 4ч уже развернулся",
+  structure: "Структура 15м сломана (3+ ноги)",
+  volDecay: "Объём распался (≤ 40% пика)",
+  notCrowded: "OI не перегрет (памп не на плече)",
+};
+
+let codData = null;
+let codActive = null;
+
+function codRenderTabs() {
+  const el = document.getElementById("cod-tabs");
+  const picks = codData?.picks ?? [];
+  if (picks.length < 2) {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  el.innerHTML = picks
+    .map(
+      (p) => `<button type="button" class="cod-tab${p.coin === codActive ? " active" : ""}" data-coin="${p.coin}">
+        <span class="cod-tab-coin">${p.coin}</span>
+        <span class="cod-tab-side ${p.side.toLowerCase()}">${p.side}</span>
+        <span class="oi-muted">${p.score}/6</span>
+      </button>`,
+    )
+    .join("");
+  el.querySelectorAll(".cod-tab").forEach((b) =>
+    b.addEventListener("click", () => {
+      codActive = b.dataset.coin;
+      codRenderTabs();
+      codRenderBody();
+    }),
+  );
+}
+
+function codRenderBody() {
+  const body = document.getElementById("cod-body");
+  const picks = codData?.picks ?? [];
+  if (!picks.length) {
+    const others = codData?.others?.length ?? 0;
+    body.innerHTML = `<div class="cod-empty">
+      Сегодня сетапа нет — ни одна монета не набрала ${codData?.thresholds?.SHOW_MIN_SCORE ?? 4}/6.
+      ${others ? `Разобрано кандидатов: ${others}, всем чего-то не хватило.` : ""}
+      <br />Пропустить день — это тоже решение.
+    </div>`;
+    return;
+  }
+  const p = picks.find((x) => x.coin === codActive) || picks[0];
+  codActive = p.coin;
+  const f = p.features;
+  const l = p.levels;
+  const rrOk = l && l.rr >= (codData?.thresholds?.MIN_RR ?? 1.5);
+
+  const hitRows = Object.entries(COD_HIT_LABEL)
+    .map(
+      ([k, label]) =>
+        `<tr><td class="${p.hits[k] ? "cod-hit" : "cod-miss"}">${label}</td><td>${p.hits[k] ? "да" : "нет"}</td></tr>`,
+    )
+    .join("");
+
+  const factRows = `
+    <tr><td>Цена</td><td>${codFmtPx(f.price)}</td></tr>
+    <tr><td>Ход 24ч / 48ч</td><td>${codSigned(f.chg24h, 1)} / ${codSigned(f.chg48h, 1)}</td></tr>
+    <tr><td>Последние 4ч</td><td>${codSigned(f.chg4h)}</td></tr>
+    <tr><td>Позиция в диапазоне 72ч</td><td>${(f.rangePos * 100).toFixed(0)}%</td></tr>
+    <tr><td>Диапазон 72ч</td><td>${codFmtPx(f.lo72)} — ${codFmtPx(f.hi72)}</td></tr>
+    <tr><td>Структура 15м</td><td>${f.structLegs} ${p.side === "SHORT" ? "lower-high" : "higher-low"}</td></tr>
+    <tr><td>Объём сейчас / пик</td><td>${f.volDecay == null ? "—" : `${(f.volDecay * 100).toFixed(0)}%`}</td></tr>
+    <tr><td>ATR(1ч) · ER(24ч)</td><td>${f.atr1hPct == null ? "—" : `${f.atr1hPct.toFixed(2)}%`} · ${f.er24 == null ? "—" : f.er24.toFixed(2)}</td></tr>
+    <tr><td>OI / оборот 24ч</td><td>${fmtUsd(f.oiUsd)} / ${fmtUsd(f.volume24hUsd)}${f.oiVolRatio != null ? ` (${f.oiVolRatio.toFixed(2)}×)` : ""}</td></tr>
+    <tr><td>Фандинг APR</td><td>${f.fundingApr == null ? "—" : `${f.fundingApr >= 0 ? "+" : ""}${f.fundingApr.toFixed(0)}%`}</td></tr>
+    <tr><td>Тренд 1ч</td><td>${f.trend1h === "up" ? "↑ вверх" : f.trend1h === "down" ? "↓ вниз" : "→ боковик"}</td></tr>`;
+
+  const levelRows = l
+    ? `
+    <tr><td>Вход</td><td>${codFmtPx(l.entry)}</td></tr>
+    <tr><td>Стоп <span class="oi-muted">(ставить ДО входа)</span></td><td>${codFmtPx(l.stop)} · ${l.riskPct.toFixed(2)}%</td></tr>
+    <tr><td>Цель${l.targetProjected ? ' <span class="oi-muted">(проекция)</span>' : ""}</td><td>${codFmtPx(l.target)} · ${l.rewardPct.toFixed(2)}%</td></tr>
+    ${l.farTarget ? `<tr><td>Дальний уровень <span class="oi-muted">(остаток)</span></td><td>${codFmtPx(l.farTarget)}</td></tr>` : ""}
+    <tr><td>R:R</td><td class="${rrOk ? "cod-rr-ok" : "cod-rr-bad"}">${l.rr.toFixed(2)}</td></tr>
+    <tr><td>Time-stop</td><td>${l.timeStopMin} мин</td></tr>`
+    : `<tr><td colspan="2" class="oi-muted">Уровни не построены</td></tr>`;
+
+  const flags = p.flags.length
+    ? `<ul class="cod-flags">${p.flags.map((fl) => `<li class="${fl.severity}">${fl.text}</li>`).join("")}</ul>`
+    : `<p class="cod-detail">Явных красных флагов движок не нашёл — что не делает сетап безопасным.</p>`;
+
+  body.innerHTML = `
+    <div class="cod-head">
+      <div class="cod-head-main">
+        <span class="ss-badge ss-badge--${p.side.toLowerCase()}">${p.side === "SHORT" ? "▼" : "▲"} ${p.side}</span>
+        <span class="ss-coin">${p.coin}</span>
+        <span class="ss-segs">${Array.from({ length: 6 }, (_, i) => `<span class="ss-seg${i < p.score ? " on" : ""}"></span>`).join("")}</span>
+      </div>
+      <div class="cod-verdict ${p.verdict.tone}">${p.verdict.headline}</div>
+    </div>
+    <p class="cod-detail">${p.verdict.detail}</p>
+    <div class="cod-grid" style="margin-top:16px">
+      <div>
+        <p class="cod-sub">Что сошлось · ${p.score}/6</p>
+        <table class="cod-t">${hitRows}</table>
+      </div>
+      <div>
+        <p class="cod-sub">Цифры</p>
+        <table class="cod-t">${factRows}</table>
+      </div>
+      <div>
+        <p class="cod-sub">План сделки</p>
+        <table class="cod-t cod-levels">${levelRows}</table>
+        <p class="cod-sub" style="margin-top:16px">Что против</p>
+        ${flags}
+      </div>
+    </div>`;
+}
+
+function codRenderForward() {
+  const el = document.getElementById("cod-fwd");
+  const fw = codData?.forward;
+  if (!fw) {
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  if (!fw.closed) {
+    el.innerHTML = `<b>Форвард-лог:</b> записано пиков — <b>${fw.total}</b>, из них открыто <b>${fw.open}</b>,
+      закрытых пока нет. Пока не наберётся 20 закрытых, карточка ничего не доказывает.`;
+    return;
+  }
+  const verdict = fw.enoughForVerdict
+    ? ""
+    : ` <span class="oi-neg">n = ${fw.closed} &lt; 20 — выводов об эдже НЕТ, это ещё шум.</span>`;
+  el.innerHTML = `<b>Форвард-лог:</b> закрыто <b>${fw.closed}</b> пиков (открыто ${fw.open}) ·
+    винрейт <b>${fw.winRate.toFixed(0)}%</b> ·
+    сумма <b>${fw.sumR >= 0 ? "+" : ""}${fw.sumR.toFixed(2)}R</b> ·
+    ожидание <b>${fw.expR >= 0 ? "+" : ""}${fw.expR.toFixed(2)}R</b> на пик ·
+    цель/стоп/таймаут = ${fw.byStatus.target}/${fw.byStatus.stop}/${fw.byStatus.timeout} ·
+    средний MFE ${fw.avgMfePct == null ? "—" : `${fw.avgMfePct.toFixed(2)}%`}.${verdict}`;
+}
+
+async function loadCoinOfDay(force = false) {
+  const meta = document.getElementById("cod-meta");
+  meta.textContent = "скан…";
+  try {
+    codData = await fetchJson(`/api/coin-of-day${force ? "?refresh=1" : ""}`);
+    if (codData.error) throw new Error(codData.error);
+    const age = codData.cached ? ` · из кэша ${codData.ageSec}с` : "";
+    meta.textContent = `разобрано ${codData.scanned} из ${codData.universe}${age}`;
+    if (!codData.picks.some((p) => p.coin === codActive)) codActive = codData.picks[0]?.coin ?? null;
+    codRenderTabs();
+    codRenderBody();
+    codRenderForward();
+  } catch (err) {
+    meta.textContent = "ошибка";
+    document.getElementById("cod-body").innerHTML =
+      `<div class="cod-empty">Скан не удался: ${err.message}</div>`;
+  }
+}
+
+document.getElementById("cod-refresh").addEventListener("click", () => loadCoinOfDay(true));
+
+// ── Setup Scanner radar (карточка 02) ──
 // Данные из /api/scanner (score-логика на бэке). Радар, не сигнал.
 const SS_CLS = { hit: "oi-pos", miss: "oi-muted", warm: "ss-warm" };
 const ssCell = (c) =>
@@ -415,5 +595,6 @@ document.querySelectorAll("#oi-ranges .range-btn").forEach((b) =>
   }),
 );
 
+loadCoinOfDay();
 loadScanner();
 loadOverview();

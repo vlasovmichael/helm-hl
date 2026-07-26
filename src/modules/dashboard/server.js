@@ -79,6 +79,8 @@ import { getManualTrades } from "./routes/manualTrades.js";
 import { handlePnlSummary, handleInsights, handleDayJournal, handleDayNoteSave } from "./routes/pnl.js";
 import { handleTradeBreakdown } from "./routes/tradeBreakdown.js";
 import { handleScannerApi } from "./routes/setupScanner.js";
+import { handleCoinOfDay } from "./routes/coinOfDay.js";
+import { resolveOpenPicks } from "../coinOfDayLog.js";
 import {
   DIVERGENCE_WATCHLIST,
   DIVERGENCE_SNAPSHOT_MS,
@@ -984,6 +986,7 @@ export function startDashboard() {
   app.get("/api/oi-collector/coin", handleOiCoin);
   app.get("/api/spike-fade", handleSpikeFade);
   app.get("/api/scanner", handleScannerApi);
+  app.get("/api/coin-of-day", handleCoinOfDay);
   app.get("/api/btc-divergence/all", handleBtcDivergenceAll);
   app.get("/api/whale-watch", handleWhaleWatch);
   app.get("/api/whale-watch/batch", handleWhaleWatchBatch);
@@ -1181,6 +1184,14 @@ export function startDashboard() {
   divergenceTimer = setInterval(pumpDivergence, DIVERGENCE_SNAPSHOT_MS);
 
   setInterval(takeOiSnapshot, OI_SNAPSHOT_MS);
+
+  // Резолвер «Монеты дня»: догоняет исходы записанных пиков по 15m-свечам.
+  // Раз в 15 минут = темп закрытия бара; measurement-only, торговлю не трогает.
+  setInterval(() => {
+    resolveOpenPicks().catch((err) =>
+      logger.debug(`[CoinOfDay] resolve tick failed: ${err.message}`),
+    );
+  }, 15 * 60_000);
 
   broadcastTimer = setInterval(async () => {
     if (!wss || wss.clients.size === 0) return;

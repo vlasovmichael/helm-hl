@@ -168,6 +168,235 @@
 
 **Итого не хватает только:** присяжные переводы (мамино рождение + мамино БРАК + твоё рождение) + биометрич. фото (мама и ты). Украинские документы (Вацлава, брак Ксавера/Цицилии от Лены) для Двери 2 НЕ обязательны.
 
+## 📦 СТАТУС ПАКЕТА на 25.07.2026 — бумажная часть ЗАКРЫТА
+
+**Готово ✅**
+- [x] Сканы: мамино свид. о рождении · мамино свид. о браке · твоё свид. о рождении · загранпаспорта
+- [x] **Присяжные переводы всех трёх** свидетельств (мамино рождение + мамино брак + твоё рождение)
+- [x] **Биометрич. фото обоим** (25.07, 140 zł) — цифра + бумажные
+- [x] Profil zaufany — **у обоих активен**; e-Doręczenia — у обоих
+- [x] Правовая база вопроса закрыта: советские документы приняты прямо, апостиль не нужен (офиц. страница Mazowieckie), «русская» запись заявку не рвёт
+
+**Ещё НЕ хватает для отправки ❌**
+1. **Пошлины: 640 zł + 100 zł С КАЖДОГО = 1480 zł на двоих**, на разные счета (opłata skarbowa за zezwolenie / за karta pobytu). Подтверждения оплаты прикрепляются к заявке. Не возвращаются при отказе. ← главный оставшийся блокер.
+2. **Декларация о польском происхождении** — заполняется прямо в форме MOS, отдельно маме и тебе (не отдельный файл; формулировку продумать: линия по Вацлаву).
+3. **Подтверждение намерения осесть** — скан договора аренды + твой трудовой договор Grid Dynamics; для мамы — аренда + семейная связь с тобой.
+4. **Проверка спеки фото-файла** перед аплоадом: JPG, **ровно 684×883 px**, ≤2.5 МБ, ≤6 мес. Если ателье дало другой размер — просить у них правильный файл, **самому не ресайзить**.
+5. **Само заполнение и отправка** двух заявлений на mos.cudzoziemcy.gov.pl.
+
+**Потом (после отправки):** appointment на отпечатки → прийти с **ОРИГИНАЛАМИ** документов + бумажным фото → решение.
+
+**Больше НЕ нужно:** консультация юриста как ворота (вопрос снят офиц. страницей Mazowieckie) · дубликат укр. свидетельства от ДРАЦС (только «страховка», не блокер) · документы от Лены из Харькова.
+
+⏳ Спешки нет: временная защита до **04.03.2027**. Но 1–5 — это неделя работы, не месяцы.
+
+## 📝 ДЕКЛАРАЦИЯ О ПОЛЬСКОМ ПРОИСХОЖДЕНИИ — черновики (25.07.2026)
+
+### Что закон требует от декларации
+
+Ссылка: `art. 195 ust. 1 pkt 3 ustawy o cudzoziemcach` → отсылает к `art. 5 ust. 1–3 ustawy o repatriacji`. Оттуда три обязательных элемента — **все три должны быть в тексте явно**:
+
+1. **Декларация польской национальности** — от первого лица, в настоящем времени («oświadczam, że jestem narodowości polskiej»). Это волеизъявление, а не запись в паспорте — потому советская «русская» его не отменяет.
+2. **Происхождение** — «co najmniej jedno z jej **rodziców lub dziadków** albo dwoje pradziadków było narodowości polskiej». Обязательно **назвать человека, степень родства и документ**, которым это доказано.
+3. **Związek z polskością** — дословный текст `art. 5 ust. 1 pkt 2` (сверено по ISAP 25.07.2026): «**wykaże ona swój związek z polskością**». И всё — **никакого перечня требований в законе нет**. Ни языка, ни традиций, ни обрядов как обязательных условий. Форма доказательства свободная.
+   - ⚠️ *Поправка к более ранней версии этого дока:* формулировка «pielęgnowanie polskiej mowy, tradycji i zwyczajów» относится к **`art. 5 ust. 3`** — это про **предка**, подтвердившего свою принадлежность к польскому народу, а не про заявителя. Для нас это работает в плюс: закон не даёт чиновнику чеклиста, по которому можно отказать за «не соблюдаете Wigilię».
+
+⚠️ **Правило №1: ничего не выдумывать.** Всё написанное могут переспросить на *rozmowie o związku z polskością*. Лучше три честных факта, чем десять красивых.
+
+### 📇 ТОЧНЫЕ ДАННЫЕ из документов (сверено 25.07.2026 по сканам + присяжным переводам)
+
+Переводы: **Danuta Olszewska**, tłumacz przysięgły, TP 39/16, Warszawa, 21.07.2026 (rep. 1611–1613/2026). Написание имён в декларации брать **ровно как в паспорте** (переводчик так и сделала).
+
+| | Мама | Миша |
+|---|---|---|
+| Паспорт (латиницей) | **VLASOVA IRYNA** | **VLASOV MYKHAILO** |
+| № паспорта | GG899728, выдан 03.10.2023, до **03.10.2033** | FN981200, выдан 24.05.2018, до **24.05.2028** ⚠️ |
+| Дата рождения | **26.08.1956** (26 sierpnia 1956) | **28.07.1988** (28 lipca 1988) |
+| Место рождения | Charków, USRR | Charków, USRR |
+| Девичья фамилия | **Gonskaia** (Гонская) | — |
+| Отчество в переводе | Vatslavovna [córka Vacłava] | Iurevich [syn Iuriia] |
+
+### 🎖️ КРАСНОАРМЕЙСКАЯ КНИЖКА ВАЦЛАВА — берём обязательно (найдено 25.07.2026)
+
+У мамы хранится **красноармейская книжка деда** (ВОВ) с записью **национальность «поляк»**. Это не дубль маминого свидетельства, а **качественно другое доказательство** — и по закону оно попадает в цель точно.
+
+`art. 6 ust. 1 ustawy o repatriacji` (дословно, сверено по ISAP):
+> Dowodami potwierdzającymi polskie pochodzenie mogą być dokumenty, wydane przez polskie władze państwowe lub kościelne, **a także przez władze byłego Związku Socjalistycznych Republik Radzieckich**, dotyczące wnioskodawcy lub jego rodziców, **dziadków** lub pradziadków, a w szczególności: […]
+> **5) dokumenty tożsamości lub inne dokumenty urzędowe zawierające wpis informujący o narodowości polskiej.**
+
+**Почему это сильнее того, что уже есть:**
+- Мамино свидетельство фиксирует национальность Вацлава **косвенно** — как графу о родителе в чужом документе.
+- Красноармейская книжка — **личный документ самого Вацлава**, где он сам записан поляком. Это прямое попадание в `art. 6 ust. 1 pkt 5`: удостоверение личности, выданное органом бывшего СССР, касающееся деда, с записью о национальности.
+- Снимает вопрос №4 к юристу («не потребуют ли документ о самом Вацлаве») — **документ о самом Вацлаве у нас есть**, и ехать за архивной справкой в воюющий Харьков не нужно.
+- Два независимых источника вместо одного: 1956 г. (ЗАГС) и военного времени (армия). Согласованность записи через десятилетия — сильный аргумент.
+
+⚠️ `pkt 3` (служба в **Wojsku Polskim**) — не наш случай, Красная армия. Но `pkt 5` покрывает полностью, и вводная часть статьи прямо называет органы бывшего СССР и дедов.
+
+**Что делать:**
+1. **Сфотографировать/отсканировать** страницы с ФИО и графой «национальность» + обложку.
+2. **Присяжный перевод** — к той же Danuta Olszewska (уже делала три документа, +48 608 120 711). Почерк военного времени → предупредить и уточнить цену/срок.
+3. **Показать в Ocalenie** и спросить: достаточно ли перевода страниц с данными, или нужен перевод всей книжки.
+4. Приложить к **обеим** заявкам — маминой и твоей.
+5. Оригинал взять на приём с отпечатками. ⚠️ Документ ветхий — беречь, не отдавать безвозвратно (`art. 6 ust. 3`: оригиналы возвращаются).
+
+💡 **Заодно усиливает `związek z polskością`:** дед оставался записан поляком, будучи в Красной армии на войне, — то есть польскую идентичность в семье не скрывали. Отличный материал для *rozmowy o związku z polskością*.
+
+**Ключевая запись (мамино свид. о рождении, перевод rep. 1612/2026):**
+> Ojciec: (nazwisko) **Gonski** (imię, imię odojcowskie) **Vatslav Ksaverovich** *[syn Ksaveriia]* *[zgodnie z polskim zapisem: **Wacław Goński**, imię ojca **Ksawery**]* — narodowość **polska** ✅
+
+Мать Вацлава по этому документу не проходит; Таисия Иосифовна — narodowość rosyjska (это бабушка, не польская линия).
+
+**Брак (rep. 1611/2026):** Vlasov Iurii Nikolaevich × **Gonskaia Iryna Vatslavovna**, 11.10.1986, Oktiabrskii USC Charków → жена носит фамилию **Vlasova**. Это и есть мост «Гонская → Власова».
+
+**Мишино свид. (rep. 1613/2026):** отец Vlasov Iurii Nikolaevich — narodowość **ukraińska**; мать Vlasova Iryna Vatslavovna — narodowość **rosyjska**. ⚠️ Вот та самая запись. В декларацию её НЕ выносим.
+
+⚠️ **Проверить перед подачей:** мамин паспорт действует до 2033 — ок; **твой истекает 24.05.2028** — на подачу и решение хватает с запасом, но держи в голове.
+
+---
+
+### Черновик — МАМА (Ирина Вацлавовна, идёт ПО ОТЦУ, 1-е поколение)
+
+> Ja, niżej podpisana **Iryna Vlasova** (nazwisko rodowe **Gonskaia**), urodzona **26 sierpnia 1956 r. w Charkowie**, oświadczam, że **jestem narodowości polskiej**.
+>
+> Moje polskie pochodzenie wywodzę od **mojego ojca, Wacława Gońskiego** (w dokumentach radzieckich: Gonski Vatslav Ksaverovich, syn Ksawerego), którego **narodowość polska** jest odnotowana w moim akcie urodzenia — w rubryce dotyczącej narodowości ojca widnieje wpis „**Polak**". Odpis aktu urodzenia wraz z tłumaczeniem przysięgłym załączam do wniosku.
+>
+> Polską narodowość mojego ojca potwierdza dodatkowo **jego osobisty dokument wojskowy (książeczka czerwonoarmisty) z okresu II wojny światowej, w którym w rubryce „narodowość" widnieje wpis „Polak"** — dokument wydany przez władze byłego ZSRR, dotyczący mojego ojca, o którym mowa w art. 6 ust. 1 pkt 5 ustawy o repatriacji. Dokument wraz z tłumaczeniem przysięgłym załączam.
+>
+> Rodzicami mojego ojca byli **Ksawery Goński** (ur. ok. 1894 we **Lwowie**) i **Cecylia Gońska** (ur. ok. 1894 w **Gdańsku**) — rodzina katolicka, która około 1914 roku opuściła ziemie polskie i osiedliła się na terenie dzisiejszej Ukrainy.
+>
+> Moje obecne nazwisko wynika z zawarcia małżeństwa w dniu **11 października 1986 r.** — akt małżeństwa, wiążący moje nazwisko rodowe *Gonskaia* z nazwiskiem *Vlasova*, wraz z tłumaczeniem przysięgłym załączam.
+>
+> **Mój związek z polskością:** wychowałam się w rodzinie mojego ojca, Polaka, i to on jest źródłem mojej tożsamości narodowej. Przez całe życie przechowuję rodzinne dokumenty potwierdzające polskie pochodzenie mojej rodziny — to dzięki nim ta pamięć przetrwała. W warunkach ZSRR podtrzymywanie polskiej tradycji i języka było niemożliwe, a narodowość wpisywano administracyjnie; mimo to świadomość polskiego pochodzenia była w mojej rodzinie zachowana i przekazana synowi. Obecnie **uczę się języka polskiego** — pielęgnowanie polskiej mowy jest dla mnie sposobem powrotu do tożsamości mojego ojca.
+>
+> Mieszkam w Polsce nieprzerwanie od **4 lutego 2025 r.**, a pod obecnym adresem od **września 2025 r.** (umowa najmu i zameldowanie w załączeniu). Numer PESEL ze statusem UKR uzyskałam w marcu 2025 r. Mój jedyny syn, **Mykhailo Vlasov**, mieszka i pracuje w Polsce i sprawuje nade mną opiekę. **Centrum moich interesów życiowych znajduje się w Polsce i zamierzam osiedlić się tu na stałe.**
+
+### Черновик — МИША (идёт ПО ДЕДУ — это ключевое отличие)
+
+> Ja, niżej podpisany **Mykhailo Vlasov**, urodzony **28 lipca 1988 r. w Charkowie**, oświadczam, że **jestem narodowości polskiej**.
+>
+> Moje polskie pochodzenie wywodzę od **mojego dziadka ze strony matki — Wacława Gońskiego** (w dokumentach radzieckich: Gonski Vatslav Ksaverovich, syn Ksawerego). Zgodnie z art. 5 ust. 1 ustawy o repatriacji za osobę polskiego pochodzenia uznaje się osobę deklarującą narodowość polską, której **co najmniej jedno z rodziców lub dziadków** było narodowości polskiej — w moim przypadku warunek ten spełnia **dziadek**.
+>
+> Jego narodowość polska jest odnotowana w akcie urodzenia mojej matki, **Iryny Vlasovej z domu Gonskaia**, gdzie w rubryce dotyczącej narodowości ojca widnieje wpis „**Polak**". Pokrewieństwo wykazuję łańcuchem dokumentów, załączonych wraz z tłumaczeniami przysięgłymi:
+> 1. **mój akt urodzenia** (wskazuje moją matkę: Vlasova Iryna Vatslavovna),
+> 2. **akt małżeństwa moich rodziców** z 11.10.1986 (wiąże nazwisko rodowe matki *Gonskaia* z nazwiskiem *Vlasova*),
+> 3. **akt urodzenia mojej matki** (wskazuje **Wacława Gońskiego** jako jej ojca, narodowość „Polak"),
+> 4. **osobisty dokument wojskowy dziadka (książeczka czerwonoarmisty) z okresu II wojny światowej**, w którym w rubryce „narodowość" widnieje wpis „**Polak**" — dokument urzędowy wydany przez władze byłego ZSRR, dotyczący mojego dziadka, w rozumieniu art. 6 ust. 1 pkt 5 ustawy o repatriacji.
+>
+> Rodzicami dziadka byli **Ksawery Goński** (ur. ok. 1894 we Lwowie) i **Cecylia Gońska** (ur. ok. 1894 w Gdańsku) — rodzina katolicka, która ok. 1914 r. opuściła ziemie polskie.
+>
+> **Mój związek z polskością:** **mieszkałem razem z dziadkiem Wacławem i pamiętam go osobiście** — zmarł, gdy miałem siedem lat. Jest to dla mnie więź bezpośrednia, a nie wyłącznie dokumentowa. Historię naszego pochodzenia — Lwów, Gdańsk, ucieczkę rodziny z ziem polskich około 1914 roku — znam z przekazu matki, która do dziś przechowuje wszystkie rodzinne dokumenty. Kilka pokoleń mojej rodziny żyło w ZSRR, gdzie kultywowanie polskich tradycji i języka było niemożliwe, a narodowość wpisywano administracyjnie — dlatego moim sposobem odbudowania tej więzi jest **nauka języka polskiego** oraz świadoma decyzja o związaniu życia właśnie z Polską.
+>
+> Mieszkam w Polsce nieprzerwanie od **4 lutego 2025 r.**, a pod obecnym adresem od **września 2025 r.**; numer PESEL ze statusem UKR uzyskałem w marcu 2025 r. Jestem zatrudniony w **Grid Dynamics** (umowa o pracę i zeznanie PIT za 2025 r. w załączeniu), wynajmuję mieszkanie i mieszkam wspólnie z matką, nad którą sprawuję opiekę. **Zamierzam osiedlić się w Polsce na stałe.**
+
+### 🔑 Что вошло в «więź z polskością» и почему (решено 25.07)
+
+Отобраны только правдивые факты. Католическая традиция **исключена** — в семье не соблюдается, писать нельзя.
+
+| Аргумент | Мама | Миша |
+|---|---|---|
+| Изучение польского языка (`pielęgnowanie polskiej mowy` — прямо в законе) | ✅ | ✅ |
+| Личная связь с предком-поляком | выросла в семье отца | **жил с дедом, помнит его лично** |
+| Хранение семейных документов | ✅ мама хранит всё | через мамин архив |
+| Жизнь в Польше, работа, аренда, семья | ✅ | ✅ |
+
+🔑 **Приём с советским контекстом.** Слабость («традиция не сохранилась, мама помнит мало») превращена в аргумент: в СССР поддерживать польскость было невозможно, национальность записывали административно — поэтому сохранилась память и документы, а не обряды, и **сегодняшний осознанный выбор** (язык + переезд в Польшу) и есть восстановление связи. Это правда и стандартный, знакомый ужонду сюжет.
+
+⚠️ Не выдумывать сверх этого: на *rozmowie o związku z polskością* каждый пункт могут переспросить. «Жил с дедом» — самый сильный ответ, который у тебя есть.
+
+### ⚠️ Как отвечать про запись «русская»
+
+В саму декларацию это **вписывать не надо** — не поднимай вопрос, которого ужонд не задал. Но держи ответ наготове для разговора:
+
+> «W dokumentach radzieckich narodowość wpisywano administracyjnie; moja rodzina ze strony dziadka Wacława jest etnicznie polska, co potwierdza wpis „Polak" w akcie urodzenia mojej matki. Świadomie deklaruję narodowość polską.»
+
+По-русски: советская национальность присваивалась административно, семья по деду этнически польская, что подтверждено записью «поляк»; национальность декларирую сознательно. Не оправдываться, не извиняться — это норма, ужонд видит такое постоянно.
+
+### Порядок работы над декларацией
+
+1. ✅ Пропусков не осталось — въезд **04.02.2025**, PESEL UKR март 2025, текущий адрес с сентября 2025. Тексты готовы к копипасту.
+2. Открыть форму на mos.cudzoziemcy.gov.pl и посмотреть, как подаётся декларация: свободным текстом или структурированными полями. Если поля — резать текст по ячейкам, смысл сохранять.
+3. Прогнать оба текста через юриста в **Ocalenie (Krucza 6/14a)** — заодно спросить про мамин *zamiar osiedlenia się* без дохода.
+
+## 🗣️ ВИЗИТ В OCALENIE — список вопросов (подготовлено 25.07.2026)
+
+**Fundacja Ocalenie — Centrum Pomocy Cudzoziemcom**, ul. **Krucza 6/14a**, Warszawa · ☎️ **+48 22 828 04 50** · консультации по-русски/украински · сайт centrum.ocalenie.org.pl
+📞 **Сначала позвонить** — уточнить, нужна ли запись и часы приёма юриста (на сайте не указано). Один визит должен закрыть всё.
+
+**Взять с собой:** распечатки обеих деклараций · 3 присяжных перевода (Olszewska, rep. 1611–1613/2026) · оригиналы свидетельств · **красноармейская книжка деда** · паспорта · договор аренды + meldunek · твою umowa o pracę + PIT 2025.
+
+### 🔴 Три главных вопроса (ради них и едем)
+
+1. **Мамин «zamiar osiedlenia się» без дохода.** Ей 70, пенсии в Польше нет, не работает. Достаточно ли договора аренды + meldunek + того, что единственный сын живёт и работает в Польше и содержит её? **Нужно ли приложить моё oświadczenie о содержании матери + мой PIT?** Требует ли Mazowieckie от заявителей без собственного дохода подтверждения источника содержания?
+2. **Проверить текст обеих деклараций.** Достаточно ли «pielęgnowanie polskiej mowy» (изучение языка) как связи с польскостью, если польские традиции и обряды в семье **не соблюдаются**? Не режет ли что-то формулировки?
+3. **Линия деда при матери с записью «rosyjska».** Принимает ли Mazowieckie на практике происхождение через деда, когда у промежуточного родителя в советском документе стоит другая национальность? **Упреждать этот вопрос в декларации или не поднимать, пока не спросят?**
+
+### 🟡 Документы — закрыть сомнения
+
+4. **Красноармейская книжка деда** с записью «поляк» — показать оригинал. Достаточно ли перевода только страниц с ФИО и национальностью, или нужен перевод всей книжки? Принимает ли Mazowieckie её как документ по `art. 6 ust. 1 pkt 5` (документ органа бывшего СССР о деде с записью о национальности)? Закрывает ли она вопрос о необходимости архивной справки из ДРАЦС? *(Раньше это был самый дорогой риск — Харьков, война, месяцы ожидания. Похоже, книжка его снимает.)*
+5. **Нужно ли что-то ещё под наше основание** — медстраховка, справка о несудимости, PIT мамы? (В «Напоминании» MOS они перечислены, но это общий список для всех оснований.)
+6. **Оригиналы на приёме** — какие именно нести, нужны ли нотариально заверенные копии, достаточно ли присяжных переводов в одном экземпляре.
+
+### 🟢 Процедура и техника
+
+7. **Как подаётся декларация в MOS** — свободным текстом в поле, отдельным подписанным сканом, или есть готовый шаблон урządu?
+8. **Rozmowa o związku z polskością** — вызывают ли на неё в Mazowieckie на практике? На каком языке, есть ли право на переводчика, **может ли сын сопровождать маму**?
+9. **Подача за маму.** Подтвердить: заявление нельзя подать через доверенное лицо, мама подписывает сама своим profil zaufany. Можно ли ей технически помогать заполнять?
+10. **Пошлины 640 + 100 zł** — реквизиты счетов и что писать в *tytuł przelewu*, чтобы платёж привязался к нужному заявлению. Платить обязательно **до** отправки?
+11. **Сроки** рассмотрения в Mazowieckie сейчас (по закону ≤2 мес, по факту?). Что со статусом UKR во время процедуры, можно ли выезжать за границу.
+
+### ✅ Доказательная база «zamiar osiedlenia się na stałe»
+
+| | Миша | Мама (70 лет, без дохода) |
+|---|---|---|
+| Договор аренды + meldunek | ✅ | ✅ (тот же адрес) |
+| Umowa o pracę | ✅ Grid Dynamics | — не требуется |
+| PIT за 2025 | ✅ | — |
+| Семейная связь | — | ✅ единственный сын живёт и работает в PL |
+| **Работа в Польше** | ✅ | ✅ **umowa zlecenie 30.07–31.12.2025** (найдено 25.07) |
+| Легальное проживание | PESEL UKR / ochrona czasowa | PESEL UKR / ochrona czasowa |
+
+⚠️ Для основания **polskie pochodzenie** доход и медстраховка **не являются условием выдачи** (в отличие от пути «5 лет проживания»). Пенсионерке работа не нужна. Единственная страховка на всякий случай: твоё заявление о содержании матери + твой PIT — готовится за вечер, спросить в Ocalenie, надо ли.
+
+### 💼 Мамина работа в Польше 2025 — усиливает её *zamiar* (найдено 25.07.2026)
+
+**Umowa o świadczenie usług o charakterze umowy zlecenia** nr ZL/POFI/2025/07/036 от 30.07.2025:
+- Заказчик: **FILARCORP SP. Z O.O.**, ul. Kopanina 28/32, 60-105 Poznań, NIP **7831820873**, агентство занятости (nr KRAZ). Клиент — Zdrofit.
+- Zleceniobiorca: **VLASOVA IRYNA**, паспорт GG899728, ур. 26.08.1956, адрес в договоре: 05-520 Bielawa, Mirkowska 1.
+- Срок: **30.07.2025 – 31.12.2025** (~5 мес). Ставка 30,50 zł брутто/единица услуги. Работа: уборка офисов/отелей.
+- §3: заказчик удерживает *składki na ubezpieczenia społeczne oraz zdrowotne* → **это okres składkowy, идёт в стаж** ✅ (в отличие от umowy o dzieło, которая не дала бы ничего).
+
+**Зачем это в заявке на ПМЖ:** снимает рамку «пенсионерка без дохода на иждивении». Мама **легально работала в Польше с уплатой взносов** → интеграция в рынок труда, весомый аргумент *zamiar osiedlenia się na stałe*. Приложить: договор + **PIT-11 за 2025** от FILARCORP + распечатку взносов из **PUE ZUS**.
+
+⚠️ **Сверить адрес:** в договоре Bielawa, Mirkowska 1 (гмина Konstancin-Jeziorna). Убедиться, что в декларации и заявке стоит актуальный адрес проживания, и при расхождении быть готовым объяснить переезд.
+
+### 🏦 Польская пенсия для мамы — отдельный трек (не блокирует ПМЖ)
+
+**Цифра «2000 zł», которую мама вычитала = `najniższa emerytura` 1978,49 zł брутто** (с 01.03.2026 после валоризации). Это **минимум польской пенсии, а НЕ надбавка сверх украинской.**
+
+Как есть на самом деле:
+- **Договор Польша–Украина о соцобеспечении** (18.05.2012, в силе с 2014): периоды страхования обеих стран **суммируются**; украинская пенсия польскую **не приостанавливает и не уменьшает**.
+- Мама старше пенсионного возраста (60 для женщин) → по возрасту препятствий нет; право даёт даже месяц взносов.
+- Сама польская пенсия за 5 месяцев взносов — **десятки злотых/мес**.
+
+**✅ МЕХАНИЗМ ДОПЛАТЫ ДО МИНИМУМА — подтверждён (проверено 25.07.2026):**
+1. Женщине для *podwyższenia do najniższej emerytury* нужно **20 лет** okresów składkowych i nieskładkowych.
+2. **Заграничные периоды в эти 20 лет засчитываются** — ZUS учитывает работу в странах ЕС/ЕЭЗ **и в договорных странах**; **Украина в перечне договорных стран есть**.
+3. Если человек получает пенсию и в Польше, и в договорной стране, и **сумма польской + заграничной пенсии ниже минимума**, ZUS доплачивает **разницу** до `najniższej emerytury`.
+
+⚠️ **Правильная формулировка: это НЕ «+2000 zł сверх украинской пенсии», а доведение ОБЩЕЙ суммы до 1978,49 zł.** Украинская пенсия 500 zł → доплата ≈1450 zł → на руках ≈1978 zł, а не 2478 zł. Чем больше украинская пенсия, тем меньше доплата.
+
+🔑 **Мамины 5 мес в Zdrofit/FILARCORP = входной билет ко всей конструкции.** Доплата полагается только тому, кому Польша уже назначила пенсию; без единого польского периода взносов польской пенсии не существует и доплачивать не к чему — украинский стаж сам по себе права на польскую выплату не даёт. Была бы *umowa o dzieło* (без взносов) — темы бы не было.
+
+| Условие | Статус |
+|---|---|
+| Возраст 60+ | ✅ (69, 70 — 26.08.2026) |
+| Польский период взносов | ✅ 5 мес — **проверить уплату в PUE ZUS** |
+| 20 лет суммарного стажа | 🎯 **узкое место** — подтвердить украинский стаж |
+| Проживание в Польше | ✅ |
+| Сумма пенсий < 1978,49 zł | вероятно да |
+
+**Шаги:** 1) профиль **PUE ZUS** маме (через её profil zaufany) → проверить, реально ли FILARCORP уплатил взносы за авг–дек 2025 · 2) найти украинскую **трудовую книжку**, посчитать стаж — есть ли 20 лет (ZUS запрашивает подтверждение у ПФУ; война → месяцы) · 3) получить **PIT-11 за 2025** · 4) подать *wniosek o emeryturę* с применением договора с Украиной, указав украинскую пенсию (её всё равно учтут). Отказ ничего не стоит, а назначенная пенсия = ещё один официальный доход в Польше для *zamiar*.
+
 ### ▶️ Что делаю СЕЙЧАС (порядок, обновлено 15.07.2026)
 
 > ~~Шаг про подтверждение личности в гмине до 31.08.2026 — НЕ КАСАЕТСЯ~~: PESEL UKR получали **по загранпаспорту** (проверено 15.07). В ужонд идти не нужно, не напоминать.
