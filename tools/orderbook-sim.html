@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Helm · Тренажёр стакана</title>
+<!--
+  ТРЕНАЖЁР СТАКАНА — механика исполнения на управляемой модели.
+
+  ЗАЧЕМ отдельно от tools/orderbook.html: тот показывает ЖИВОЙ стакан HL, где
+  тридцать изменений в секунду от сотен участников и ни одно из них не твоё.
+  Наблюдение за шумом не учит механизму. Здесь действующий один — ты: жмёшь
+  «купить маркетом» и видишь, какие уровни съедены, куда ушёл mid и во что тебе
+  обошёлся вход. Причина и следствие связаны одним кликом.
+
+  ⚠️ Это НЕ симулятор рынка и не предсказывает ничего. Цена здесь двигается
+  только твоими сделками. Модель объясняет ИЗДЕРЖКИ (проскальзывание, почему
+  стоп-маркет в тонкой монете исполняется хуже) — то есть сантехнику, а не эдж.
+
+  Кнопка «а как в реальности» подтягивает настоящий l2Book с HL и отвечает на
+  единственный вопрос, ради которого стакан вообще стоит смотреть при мелком
+  депозите: сколько долларов нужно, чтобы сдвинуть цену на 0.5%.
+-->
+<style>
+  :root {
+    --bg: #0b0e13; --panel: #11161f; --panel-2: #161d29; --line: #1e2735;
+    --txt: #c9d4e3; --dim: #6b7888;
+    --bid: #2bbf73; --bid-bg: rgba(43,191,115,0.12); --bid-wall: rgba(43,191,115,0.30);
+    --ask: #f0556b; --ask-bg: rgba(240,85,107,0.12); --ask-wall: rgba(240,85,107,0.30);
+    --accent: #5b9dff; --gold: #e8b84b;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: var(--bg); color: var(--txt);
+    font-family: "SF Mono","JetBrains Mono","Menlo",monospace; font-size: 13px;
+  }
+  body { display: flex; flex-direction: column; }
+
+  header {
+    display: flex; align-items: center; gap: 18px; padding: 12px 18px;
+    border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  .brand { font-weight: 700; letter-spacing: .5px; }
+  .brand small { color: var(--dim); font-weight: 400; margin-left: 6px; }
+  .warn { margin-left: auto; color: var(--dim); font-size: 11.5px; }
+  .warn b { color: var(--gold); }
+
+  main { flex: 1; display: grid; grid-template-columns: 380px 1fr 340px; gap: 1px; background: var(--line); min-height: 0; }
+  .col { background: var(--bg); overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+
+  .ladder { overflow-y: auto; flex: 1; display: flex; flex-direction: column; }
+  .ladder.asks { justify-content: flex-end; }
+  .row {
+    position: relative; display: grid; grid-template-columns: 60px 1fr 76px;
+    align-items: center; height: 24px; padding: 0 14px; flex: none;
+    font-variant-numeric: tabular-nums; white-space: nowrap; cursor: pointer;
+  }
+  .row:hover { background: rgba(91,157,255,.07); }
+  .row .bar { position: absolute; top: 2px; bottom: 2px; right: 0; border-radius: 3px; z-index: 0; }
+  .row.ask .bar { background: var(--ask-bg); }
+  .row.bid .bar { background: var(--bid-bg); }
+  .row.wall.ask .bar { background: var(--ask-wall); }
+  .row.wall.bid .bar { background: var(--bid-wall); }
+  .row.eaten .bar { background: rgba(232,184,75,.35); }
+  .row > span { position: relative; z-index: 1; }
+  .row .tag { color: var(--gold); font-size: 10px; font-weight: 700; }
+  .row .px { text-align: right; font-weight: 600; }
+  .row.ask .px { color: var(--ask); }
+  .row.bid .px { color: var(--bid); }
+  .row .sz { text-align: right; }
+  .row.mine .sz { color: var(--accent); font-weight: 700; }
+  .row.mine .sz::after { content: " ⬥"; }
+
+  .mid {
+    display: flex; align-items: center; justify-content: center; gap: 16px; height: 52px;
+    background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  }
+  .mid .price { font-size: 24px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+  .mid .spread { color: var(--dim); font-size: 12px; }
+  .mid .spread b { color: var(--gold); }
+
+  .chartwrap { flex: 1; position: relative; padding: 14px; min-height: 0; }
+  canvas { width: 100%; height: 100%; display: block; }
+
+  .side { background: var(--panel); padding: 16px; overflow-y: auto; }
+  .side h3 { margin: 0 0 9px; font-size: 10.5px; letter-spacing: 1.5px; color: var(--dim); text-transform: uppercase; font-weight: 600; }
+  .card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 13px; margin-bottom: 14px; }
+
+  label { display: block; color: var(--dim); font-size: 11px; margin-bottom: 4px; }
+  input {
+    width: 100%; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px;
+    background: var(--bg); color: var(--txt); font-family: inherit; font-size: 13px;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  button {
+    padding: 9px 10px; border: 1px solid var(--line); border-radius: 7px;
+    background: var(--panel-2); color: var(--txt); font-family: inherit;
+    font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all .12s;
+  }
+  button:hover { border-color: #2c3a4f; color: #fff; }
+  button.buy { background: rgba(43,191,115,.16); border-color: var(--bid); color: var(--bid); }
+  button.buy:hover { background: var(--bid); color: #04120a; }
+  button.sell { background: rgba(240,85,107,.16); border-color: var(--ask); color: var(--ask); }
+  button.sell:hover { background: var(--ask); color: #1a0409; }
+  button.ghost { font-weight: 400; color: var(--dim); }
+
+  .kv { display: flex; justify-content: space-between; align-items: baseline; padding: 5px 0; border-bottom: 1px dashed var(--line); }
+  .kv:last-child { border-bottom: none; }
+  .kv .k { color: var(--dim); font-size: 11.5px; }
+  .kv .v { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .v.bad { color: var(--ask); } .v.good { color: var(--bid); } .v.gold { color: var(--gold); }
+
+  .hint { color: var(--dim); font-size: 11.5px; line-height: 1.65; }
+  .hint b { color: var(--txt); } .hint .gold { color: var(--gold); }
+  .toggle { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 11.5px; cursor: pointer; }
+  .toggle input { width: auto; }
+  .empty { color: var(--dim); font-size: 11.5px; text-align: center; padding: 10px 0; }
+</style>
+</head>
+<body>
+  <header>
+    <span class="brand">⎈ Helm <small>тренажёр стакана — механика исполнения</small></span>
+    <span class="warn"><b>⚠️</b> цена здесь двигается только твоими сделками. Это модель издержек, не рынок.</span>
+  </header>
+
+  <main>
+    <!-- ── стакан ── -->
+    <div class="col">
+      <div class="ladder asks" id="asks"></div>
+      <div class="mid">
+        <span class="price" id="midPx">—</span>
+        <span class="spread">спред <b id="spread">—</b></span>
+      </div>
+      <div class="ladder bids" id="bids"></div>
+    </div>
+
+    <!-- ── свечи ── -->
+    <div class="col">
+      <div class="chartwrap"><canvas id="chart"></canvas></div>
+    </div>
+
+    <!-- ── управление ── -->
+    <div class="side">
+      <h3>Заявка</h3>
+      <div class="card">
+        <div class="grid2" style="margin-bottom:10px">
+          <div><label>объём</label><input id="qty" value="150" /></div>
+          <div><label>цена (для лимитки)</label><input id="lpx" value="98.00" /></div>
+        </div>
+        <div class="grid2" style="margin-bottom:8px">
+          <button class="buy" id="mBuy">Купить маркетом</button>
+          <button class="sell" id="mSell">Продать маркетом</button>
+        </div>
+        <div class="grid2">
+          <button id="lBuy">Лимитка на покупку</button>
+          <button id="lSell">Лимитка на продажу</button>
+        </div>
+        <div class="hint" style="margin-top:10px">Клик по строке стакана подставляет её цену.</div>
+      </div>
+
+      <h3>Что стоила сделка</h3>
+      <div class="card" id="fillCard"><div class="empty">сделай первую сделку</div></div>
+
+      <h3>Сессия</h3>
+      <div class="card">
+        <div class="grid2" style="margin-bottom:8px">
+          <button class="ghost" id="newCandle">Новая свеча</button>
+          <button class="ghost" id="reset">Сброс</button>
+        </div>
+        <label class="toggle"><input type="checkbox" id="mm" checked /> маркет-мейкеры пополняют стакан</label>
+        <div class="hint" style="margin-top:8px">
+          Сними галочку — и стакан не восстановится. Так выглядит тонкая монета: каждая твоя сделка делает следующую дороже.
+        </div>
+      </div>
+
+      <h3>А как в реальности</h3>
+      <div class="card">
+        <div class="grid2" style="margin-bottom:8px">
+          <input id="realCoin" value="kSHIB" />
+          <button id="realBtn">Померить</button>
+        </div>
+        <div id="realOut"><div class="empty">глубина живого стакана HL</div></div>
+      </div>
+
+      <h3>Что тут понимать</h3>
+      <div class="card hint">
+        • <b>Маркет-ордер</b> ест стакан снизу вверх: сначала лучшую цену, потом хуже. Средняя цена исполнения всегда хуже той, что видел до клика — это и есть <span class="gold">проскальзывание</span>.<br>
+        • <b>Чем больше объём</b>, тем глубже съел и тем хуже средняя. Удвой объём — проскальзывание вырастет больше чем вдвое.<br>
+        • <b>Лимитка</b> ничего не ест, а <span class="gold">добавляет</span> объём в стакан. Крупная лимитка = «уровень»: цена об неё тормозит, потому что её надо съесть.<br>
+        • <b>Стоп-маркет</b> — это маркет-ордер в худший момент. Вот откуда разница между «стоп на 1.5%» и реальным убытком.
+      </div>
+    </div>
+  </main>
+
+<script>
+// ─────────────────────────────────────────────────────────────
+//  Модель стакана
+// ─────────────────────────────────────────────────────────────
+const TICK = 0.5, DEPTH = 10, START_MID = 100;
+let asks = [], bids = [];        // [{px, sz, mine}] — asks по возрастанию, bids по убыванию
+let candles = [], cur = null;
+let lastEaten = new Set();       // цены, съеденные последней сделкой (для подсветки)
+let mmRefill = true;
+let lastPx = START_MID;          // последняя цена сделки — опора, когда сторона выедена дочиста
+
+const $ = (id) => document.getElementById(id);
+const rnd = (a, b) => a + Math.random() * (b - a);
+const px2 = (p) => p.toFixed(2);
+const usd = (v) => (Math.abs(v) >= 1000 ? '$' + (v / 1000).toFixed(1) + 'k' : '$' + v.toFixed(2));
+
+function genSide(startPx, dir) {
+  const out = [];
+  for (let i = 0; i < DEPTH; i++) {
+    // изредка «стена» — крупная лимитка, чтобы было видно, как цена об неё тормозит
+    const wall = Math.random() < 0.15;
+    out.push({ px: +(startPx + dir * i * TICK).toFixed(2), sz: Math.round(wall ? rnd(70, 140) : rnd(12, 38)), mine: 0 });
+  }
+  return out;
+}
+
+function initBook(mid = START_MID) {
+  asks = genSide(mid + TICK, +1);
+  bids = genSide(mid - TICK, -1);
+}
+
+// Если одну сторону выели дочиста — опираемся на оставшуюся, иначе на последнюю
+// сделку. Иначе mid прыгал бы к стартовым 100 и «сдвиг цены» врал бы про 0%.
+function midPrice() {
+  if (bids.length && asks.length) return (bids[0].px + asks[0].px) / 2;
+  // Аски выели дочиста — цена ушла ВВЕРХ, а нетронутые биды остались внизу.
+  // Брать их за ориентир нельзя: получилось бы, что покупка двинула цену вниз.
+  if (bids.length) return Math.max(lastPx, bids[0].px + TICK / 2);
+  if (asks.length) return Math.min(lastPx, asks[0].px - TICK / 2);
+  return lastPx;
+}
+function spread()   { return bids.length && asks.length ? asks[0].px - bids[0].px : 0; }
+
+/** Восстановление стакана вокруг новой цены. Пользовательские лимитки сохраняются. */
+function refill() {
+  const mid = midPrice();
+  const mine = [];
+  for (const l of asks) if (l.mine > 0) mine.push({ side: 'ask', px: l.px, sz: l.mine });
+  for (const l of bids) if (l.mine > 0) mine.push({ side: 'bid', px: l.px, sz: l.mine });
+
+  const bestAsk = Math.ceil((mid + TICK / 2) / TICK) * TICK;
+  const bestBid = Math.floor((mid - TICK / 2) / TICK) * TICK;
+  asks = genSide(+bestAsk.toFixed(2), +1);
+  bids = genSide(+bestBid.toFixed(2), -1);
+
+  for (const m of mine) addLimit(m.side === 'ask' ? 'sell' : 'buy', m.px, m.sz, true);
+}
+
+/** Маркет-ордер. Возвращает отчёт об исполнении или null. */
+function marketOrder(side, size) {
+  const book = side === 'buy' ? asks : bids;
+  const midBefore = midPrice();
+  let left = size, notional = 0, eaten = new Set(), levels = 0;
+
+  while (left > 0 && book.length) {
+    const lvl = book[0];
+    const take = Math.min(left, lvl.sz);
+    notional += take * lvl.px;
+    left -= take;
+    lvl.sz -= take;
+    if (lvl.mine > 0) lvl.mine = Math.max(0, lvl.mine - take);
+    eaten.add(lvl.px);
+    if (lvl.sz <= 0.0001) { book.shift(); levels++; } else break;
+  }
+
+  const filled = size - left;
+  if (filled <= 0) return null;
+
+  const avg = notional / filled;
+  const midAfter = midPrice();
+  lastEaten = eaten;
+  pushTrade(avg, filled);
+
+  if (mmRefill) setTimeout(() => { refill(); lastEaten = new Set(); render(); }, 650);
+
+  return {
+    side, size, filled, avg, notional, levels,
+    midBefore, midAfter,
+    slipAbs: side === 'buy' ? avg - midBefore : midBefore - avg,
+    slipPct: (side === 'buy' ? avg / midBefore - 1 : 1 - avg / midBefore) * 100,
+    movePct: (midAfter / midBefore - 1) * 100,
+    partial: left > 0 ? left : 0,
+  };
+}
+
+/** Лимитка: добавляет объём в стакан. Пересекла спред — исполняется как маркет. */
+function addLimit(side, price, size, silent) {
+  const p = +price.toFixed(2);
+  if (side === 'buy' && asks.length && p >= asks[0].px) {
+    return silent ? null : { crossed: true, report: marketOrder('buy', size) };
+  }
+  if (side === 'sell' && bids.length && p <= bids[0].px) {
+    return silent ? null : { crossed: true, report: marketOrder('sell', size) };
+  }
+  const book = side === 'buy' ? bids : asks;
+  const at = book.find((l) => Math.abs(l.px - p) < 0.001);
+  if (at) { at.sz += size; at.mine += size; }
+  else {
+    book.push({ px: p, sz: size, mine: size });
+    book.sort((a, b) => (side === 'buy' ? b.px - a.px : a.px - b.px));
+  }
+  return { crossed: false };
+}
+
+// ── свечи ──────────────────────────────────────────────────
+function pushTrade(price, size) {
+  lastPx = price;
+  if (!cur) cur = { o: price, h: price, l: price, c: price, v: 0 };
+  cur.h = Math.max(cur.h, price);
+  cur.l = Math.min(cur.l, price);
+  cur.c = price;
+  cur.v += size;
+}
+function newCandle() {
+  if (cur) { candles.push(cur); if (candles.length > 40) candles.shift(); }
+  cur = null;
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Рендер
+// ─────────────────────────────────────────────────────────────
+function renderLadder(el, levels, side, maxSz) {
+  el.innerHTML = '';
+  const list = side === 'ask' ? [...levels].reverse() : levels;
+  for (const l of list) {
+    const wall = l.sz > maxSz * 0.55;
+    const row = document.createElement('div');
+    row.className = `row ${side}${wall ? ' wall' : ''}${l.mine > 0 ? ' mine' : ''}${lastEaten.has(l.px) ? ' eaten' : ''}`;
+    row.innerHTML =
+      `<span class="tag">${wall ? '▮ СТЕНА' : ''}</span>` +
+      `<span class="px">${px2(l.px)}</span>` +
+      `<span class="sz">${Math.round(l.sz)}</span>` +
+      `<div class="bar" style="width:${Math.max(3, (l.sz / maxSz) * 100)}%"></div>`;
+    row.onclick = () => { $('lpx').value = px2(l.px); };
+    el.appendChild(row);
+  }
+}
+
+function drawChart() {
+  const cv = $('chart'), ctx = cv.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w * dpr; cv.height = h * dpr; ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+
+  const all = cur ? [...candles, cur] : candles;
+  if (!all.length) {
+    ctx.fillStyle = '#6b7888'; ctx.font = '12px monospace'; ctx.textAlign = 'center';
+    ctx.fillText('свечи появятся после первой сделки', w / 2, h / 2);
+    return;
+  }
+  const hi = Math.max(...all.map((c) => c.h)), lo = Math.min(...all.map((c) => c.l));
+  const pad = (hi - lo) * 0.15 || 1;
+  const top = hi + pad, bot = lo - pad;
+  const y = (p) => h - ((p - bot) / (top - bot)) * h;
+
+  // сетка
+  ctx.strokeStyle = '#1e2735'; ctx.fillStyle = '#6b7888';
+  ctx.font = '10px monospace'; ctx.textAlign = 'left'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const p = bot + ((top - bot) * i) / 4, yy = Math.round(y(p)) + 0.5;
+    ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(w - 44, yy); ctx.stroke();
+    ctx.fillText(p.toFixed(2), w - 40, yy + 3);
+  }
+
+  const cw = Math.min(26, (w - 50) / Math.max(all.length, 8));
+  all.forEach((c, i) => {
+    const x = i * cw + cw / 2, up = c.c >= c.o;
+    const forming = cur && i === all.length - 1;
+    ctx.strokeStyle = ctx.fillStyle = up ? '#2bbf73' : '#f0556b';
+    ctx.globalAlpha = forming ? 0.55 : 1;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, y(c.h)); ctx.lineTo(x, y(c.l)); ctx.stroke();
+    const yo = y(c.o), yc = y(c.c);
+    ctx.fillRect(x - cw * 0.32, Math.min(yo, yc), cw * 0.64, Math.max(2, Math.abs(yc - yo)));
+    ctx.globalAlpha = 1;
+  });
+
+  if (cur) {
+    ctx.strokeStyle = '#e8b84b'; ctx.setLineDash([3, 3]); ctx.globalAlpha = .6;
+    const yy = Math.round(y(cur.c)) + 0.5;
+    ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(w - 44, yy); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#e8b84b'; ctx.textAlign = 'left';
+    ctx.fillText('свеча формируется', 4, yy - 5);
+  }
+}
+
+function render() {
+  const maxSz = Math.max(...asks.map((l) => l.sz), ...bids.map((l) => l.sz), 1);
+  renderLadder($('asks'), asks, 'ask', maxSz);
+  renderLadder($('bids'), bids, 'bid', maxSz);
+  $('midPx').textContent = px2(midPrice());
+  $('spread').textContent = px2(spread());
+  drawChart();
+}
+
+function showFill(r, crossed) {
+  if (!r) { $('fillCard').innerHTML = '<div class="empty">ликвидности не хватило — стакан пуст</div>'; return; }
+  const dir = r.side === 'buy' ? 'покупка' : 'продажа';
+  const rows = [
+    ['направление', dir, ''],
+    ['исполнено', `${Math.round(r.filled)}${r.partial ? ` (не влезло ${Math.round(r.partial)})` : ''}`, r.partial ? 'bad' : ''],
+    ['средняя цена', px2(r.avg), ''],
+    ['mid до клика', px2(r.midBefore), ''],
+    ['проскальзывание', `${px2(r.slipAbs)} / ${r.slipPct.toFixed(3)}%`, 'gold'],
+    ['стоило лишнего', usd(r.slipAbs * r.filled), 'bad'],
+    ['съедено уровней', String(r.levels), ''],
+    ['цена сдвинулась', `${r.movePct >= 0 ? '+' : ''}${r.movePct.toFixed(2)}%`, r.movePct >= 0 ? 'good' : 'bad'],
+  ];
+  $('fillCard').innerHTML =
+    (crossed ? '<div class="hint" style="margin-bottom:8px"><span class="gold">Лимитка пересекла спред</span> → исполнилась как маркет. Лимитка защищает от проскальзывания, только если стоит ЗА спредом.</div>' : '') +
+    rows.map(([k, v, c]) => `<div class="kv"><span class="k">${k}</span><span class="v ${c}">${v}</span></div>`).join('');
+}
+
+// ─────────────────────────────────────────────────────────────
+//  Живая глубина HL — сколько $ двигают цену на 0.5%
+// ─────────────────────────────────────────────────────────────
+async function measureReal() {
+  const coin = $('realCoin').value.trim();
+  $('realOut').innerHTML = '<div class="empty">запрашиваю…</div>';
+  try {
+    const meta = await fetch('https://api.hyperliquid.xyz/info', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'meta' }),
+    }).then((r) => r.json());
+    const asset = meta.universe.find((a) => a.name.toUpperCase() === coin.toUpperCase());
+    if (!asset) throw new Error(`монета "${coin}" не найдена`);
+
+    const cost = async (name) => {
+      const b = await fetch('https://api.hyperliquid.xyz/info', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'l2Book', coin: name }),
+      }).then((r) => r.json());
+      const [bd, ak] = b.levels;
+      const mid = (Number(bd[0].px) + Number(ak[0].px)) / 2;
+      const walk = (levels, target, up) => {
+        let sum = 0;
+        for (const l of levels) {
+          const p = Number(l.px);
+          if (up ? p > target : p < target) break;
+          sum += p * Number(l.sz);
+        }
+        return sum;
+      };
+      return {
+        mid,
+        up: walk(ak, mid * 1.005, true),
+        down: walk(bd, mid * 0.995, false),
+      };
+    };
+
+    const [c, btc] = await Promise.all([cost(asset.name), cost('BTC')]);
+    const ratio = btc.up / c.up;
+    $('realOut').innerHTML =
+      `<div class="kv"><span class="k">${asset.name} · вверх 0.5%</span><span class="v gold">${usd(c.up)}</span></div>` +
+      `<div class="kv"><span class="k">${asset.name} · вниз 0.5%</span><span class="v gold">${usd(c.down)}</span></div>` +
+      `<div class="kv"><span class="k">BTC · вверх 0.5%</span><span class="v">${usd(btc.up)}</span></div>` +
+      `<div class="hint" style="margin-top:9px">BTC глубже в <b>${ratio.toFixed(0)}×</b>. Твой размер ни там, ни там не сдвинет цену — глубина важна тебе не для входа, а для <b>стопа</b>: чем тоньше стакан, тем хуже исполнится стоп-маркет.</div>`;
+  } catch (e) {
+    $('realOut').innerHTML = `<div class="hint"><span class="gold">не вышло:</span> ${e.message}<br>Если это CORS — открой файл через локальный сервер, не напрямую из файла.</div>`;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  События
+// ─────────────────────────────────────────────────────────────
+const qty = () => Math.max(1, Math.round(Number($('qty').value) || 0));
+const lpx = () => Number($('lpx').value) || midPrice();
+
+$('mBuy').onclick  = () => { showFill(marketOrder('buy', qty()), false); render(); };
+$('mSell').onclick = () => { showFill(marketOrder('sell', qty()), false); render(); };
+$('lBuy').onclick  = () => { const r = addLimit('buy', lpx(), qty()); if (r && r.crossed) showFill(r.report, true); render(); };
+$('lSell').onclick = () => { const r = addLimit('sell', lpx(), qty()); if (r && r.crossed) showFill(r.report, true); render(); };
+$('newCandle').onclick = () => { newCandle(); render(); };
+$('reset').onclick = () => { initBook(); candles = []; cur = null; lastEaten = new Set(); $('fillCard').innerHTML = '<div class="empty">сделай первую сделку</div>'; render(); };
+$('mm').onchange = (e) => { mmRefill = e.target.checked; };
+$('realBtn').onclick = measureReal;
+window.addEventListener('resize', drawChart);
+
+initBook();
+render();
+</script>
+</body>
+</html>
