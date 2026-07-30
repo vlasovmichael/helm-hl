@@ -39,9 +39,36 @@ const HORIZON_MS = HORIZON_MIN * 60_000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (m) => console.log(`[${new Date().toISOString()}] ${m}`);
 
+// ── Весовой бюджет (2026-07-30) ──────────────────────────────────────────────
+// 🚨 Лимит HL /info — 1200 ЕДИНИЦ ВЕСА в минуту на IP, и он ОБЩИЙ для всех
+// процессов с этого адреса. candleSnapshot весит 20, значит прежний режим
+// (120 монет каждые 90с) жёг ~1600 веса/мин — один этот коллектор перекрывал
+// весь лимит IP, а 429 ловил в основном сосед по коробке, живой бот
+// (hl-paper-scanner): его собственный бюджет показывал 13% расхода, но отказы
+// шли всё равно. Здесь берём МАЛУЮ долю и растягиваем цикл: это форвард-замер
+// для карточки /lab, задержка детекта на минуты не портит ничего — вик всё
+// равно виден в lookback закрытых свечей, а «вход» и так гипотетический.
+const WEIGHT_BUDGET = parseInt(process.env.LIQ_WEIGHT_BUDGET || '250', 10);
+const WEIGHT_WINDOW_MS = 60_000;
+const WEIGHT_LIGHT = new Set(['l2Book', 'allMids', 'clearinghouseState',
+  'spotClearinghouseState', 'orderStatus', 'exchangeStatus']);
+const weightOf = (body) => (WEIGHT_LIGHT.has(body?.type) ? 2 : 20);
+
+const spent = [];
+let spentSum = 0;
+async function reserveWeight(w) {
+  for (;;) {
+    const now = Date.now();
+    while (spent.length && now - spent[0].at >= WEIGHT_WINDOW_MS) spentSum -= spent.shift().w;
+    if (spentSum + w <= WEIGHT_BUDGET) { spent.push({ at: now, w }); spentSum += w; return; }
+    await sleep(Math.min(Math.max(WEIGHT_WINDOW_MS - (now - spent[0].at) + 5, 25), 2000));
+  }
+}
+
 async function post(body, tries = 5) {
   for (let i = 0; i < tries; i++) {
     try {
+      await reserveWeight(weightOf(body));
       const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (r.status === 429 || r.status >= 500) { await sleep(600 * (i + 1)); continue; }
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -133,9 +160,16 @@ async function refreshUniverse() {
   log(`universe=${universe.length} (${universe.slice(0, 8).join(', ')}…)`);
 }
 
+// Полный обход вселенной теперь ограничен весом, а не sleep'ом: 120 монет × 20
+// веса при бюджете 250/мин ≈ 10 мин на круг. Lookback обязан перекрывать круг,
+// иначе между визитами к монете выпадут свечи и открытая гипотетика не
+// разрешится по target/stop. Одна свеча в запросе ничего не стоит (вес зависит
+// от ТИПА запроса, не от count), поэтому берём с запасом.
+const CYCLE_MIN = Math.ceil((N_COINS * 20) / WEIGHT_BUDGET);
+
 async function tick() {
   await refreshUniverse();
-  const need = HORIZON_MIN + 4;
+  const need = HORIZON_MIN + CYCLE_MIN + 10;
   let opened = 0, closed = 0;
   for (const coin of universe) {
     try {
@@ -178,7 +212,7 @@ if (process.argv.includes('--tally')) { tally(); process.exit(0); }
 
 // ── main loop ────────────────────────────────────────
 loadOpen();
-log(`Liq-Wick Collector: wick=${WICK_PCT}% target=${TARGET_PCT}% stop=${STOP_PCT}% horizon=${HORIZON_MIN}m coins=${N_COINS} poll=${POLL_MS}ms`);
+log(`Liq-Wick Collector: wick=${WICK_PCT}% target=${TARGET_PCT}% stop=${STOP_PCT}% horizon=${HORIZON_MIN}m coins=${N_COINS} poll=${POLL_MS}ms | вес ≤${WEIGHT_BUDGET}/мин → круг ≈${CYCLE_MIN}м, lookback ${HORIZON_MIN + CYCLE_MIN + 10}м`);
 log(`восстановлено открытых: ${Object.keys(open).length}`);
 (async function loop() {
   for (;;) {
