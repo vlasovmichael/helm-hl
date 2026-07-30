@@ -77,13 +77,16 @@ function classifyRegime(m15, m1h) {
   return { verdict: "MIXED", arrow: "≈" };
 }
 
-export async function handleMarketContext(_req, res) {
-  if (cache.payload && Date.now() - cache.ts < TTL_MS) {
-    return res.json(cache.payload);
-  }
+// stale-while-revalidate: пока идёт обновление, запросы получают прошлый кэш и
+// НЕ встают в очередь HL. Раньше при протухшем TTL каждый заход на дашборд ждал
+// биржу (на забитом весовом бюджете — секунды), а параллельные заходы плодили
+// дубли запросов, ускоряя 429.
+let refreshing = null;
+
+async function refreshCache() {
   const [moves, stats] = await Promise.all([getMoves(), getStats()]);
-  // Если оба источника отвалились — отдаём прошлый кэш (тихая деградация).
-  if (!moves && !stats && cache.payload) return res.json(cache.payload);
+  // Если оба источника отвалились — прошлый кэш остаётся жить.
+  if (!moves && !stats) return cache.payload;
 
   const m = moves || { m15: null, m1h: null, m4h: null };
   const { verdict, arrow } = classifyRegime(m.m15, m.m1h);
@@ -103,5 +106,20 @@ export async function handleMarketContext(_req, res) {
     ts: Date.now(),
   };
   cache = { payload, ts: Date.now() };
-  res.json(payload);
+  return payload;
+}
+
+export async function handleMarketContext(_req, res) {
+  const fresh = cache.payload && Date.now() - cache.ts < TTL_MS;
+  if (!fresh && !refreshing) {
+    refreshing = refreshCache().finally(() => { refreshing = null; });
+  }
+  // Есть чем ответить сразу — отвечаем, обновление доедет к следующему поллингу.
+  if (cache.payload) return res.json(cache.payload);
+  // Холодный старт: кэша ещё нет, деваться некуда — ждём первое наполнение.
+  try {
+    return res.json((await refreshing) ?? { verdict: 'UNKNOWN', arrow: '•', btc: {}, ts: Date.now() });
+  } catch {
+    return res.json({ verdict: 'UNKNOWN', arrow: '•', btc: {}, ts: Date.now() });
+  }
 }

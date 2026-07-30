@@ -66,30 +66,41 @@ function onStatus(data) {
   updateHotMoversLiveArrow();
 }
 
-async function tick() {
+// Каждая панель рисуется САМА, как только пришли её данные. Раньше здесь стоял
+// `await Promise.allSettled([...])` и рендер шёл после САМОГО МЕДЛЕННОГО ответа:
+// /api/market-context ходит в HL и на загруженном весовом бюджете отвечает
+// секундами — а ждали его локальные Activity и P/L, которым HL вообще не нужен.
+// Отсюда и «страница долго грузится». Ошибка одной панели не роняет остальные.
+function tick() {
+  const paint = (promise, render) => promise.then(render).catch(() => {});
+
   // Фолбэк /api/signals только если WS не присылал hotMovers недавно.
   const wsHotFresh = Date.now() - lastWsHotMoversAt < WS_HOTMOVERS_FRESH_MS;
-  const [hmR, mcR, actR, pnlR] = await Promise.allSettled([
-    wsHotFresh ? Promise.resolve(null) : fetchJson("/api/signals?limit=30"),
-    fetchJson("/api/market-context"),
-    // Recent Activity — локальный эндпоинт (своя БД, без HL-веса), к 429 не причастен.
+  if (!wsHotFresh) {
+    paint(fetchJson("/api/signals?limit=30"), (d) => {
+      if (d?.signals) renderHotMovers(d, fmtTime);
+    });
+  }
+
+  // Локальные эндпоинты (своя БД, без HL-веса) — рисуются первыми, не ждут биржу.
+  paint(
     fetchJson(`/api/activity?hours=${getRangeHours()}&limit=10`),
-    // Дневной счётчик (Today's P/L + цель) в бот-слоте. Funding-часть кэш 5мин.
-    fetchJson("/api/pnl-summary"),
-  ]);
-  if (mcR.status === "fulfilled") renderMarketContext(mcR.value);
-  if (actR.status === "fulfilled") renderActivity(actR.value);
-  if (pnlR.status === "fulfilled" && pnlR.value?.periods?.today) {
-    const p = pnlR.value.periods;
+    (d) => renderActivity(d),
+  );
+  // Дневной счётчик (Today's P/L + цель) в бот-слоте. Funding-часть кэш 5мин.
+  paint(fetchJson("/api/pnl-summary"), (d) => {
+    if (!d?.periods?.today) return;
+    const p = d.periods;
     // fees today/7d — цена оборота перед глазами (пожиратель №1, аудит 02.07).
     setDailyPnl(p.today.totalPnl ?? 0, {
       today: p.today.totalFees ?? 0,
       d7: p.d7?.totalFees ?? 0,
     });
-  }
-  if (hmR.status === "fulfilled" && hmR.value?.signals) {
-    renderHotMovers(hmR.value, fmtTime);
-  }
+  });
+
+  // Единственная панель, зависящая от HL — приходит когда придёт, никого не держит.
+  paint(fetchJson("/api/market-context"), (d) => renderMarketContext(d));
+
   markSuccess();
 }
 
