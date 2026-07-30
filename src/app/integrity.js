@@ -12,7 +12,7 @@ import { getPositionsCached, getAccountSummary } from '../modules/exchange.js';
 import { sendMessage } from '../modules/reporter.js';
 import { fetchExchangePositions } from '../modules/sync.js';
 import { fetchUserFills, classifyClose, findRoundTripForPosition } from '../modules/userFills.js';
-import { maybeAdoptManualPosition, reconcileProvisionalAdoptEntries } from './adoptReconcile.js';
+import { maybeAdoptManualPosition, reconcileProvisionalAdoptEntries, resolveManualOpenTime } from './adoptReconcile.js';
 import { clearAdoptState, consumeAdoptMfeMae } from '../modules/strategistAdopt.js';
 import { finalizeAdoptTimeCut } from '../modules/adoptShadowTimeCut.js';
 import {
@@ -51,12 +51,109 @@ export function liveMatchesPosition(dbPosition, exchangePositions) {
 }
 
 /**
+ * Порог расхождения цены входа, после которого DB-строка и биржевая поза
+ * считаются РАЗНЫМИ позициями (0.2% — выше любого округления/усреднения).
+ */
+const ENTRY_DRIFT_TOL = 0.002;
+
+/**
+ * Чистое решение «та же поза / скейл-ин / перезаход» (см. isReopenedPosition).
+ * Выделено, чтобы тестировать без похода в fills.
+ *
+ * @param {object} a
+ * @param {number} a.dbEntryPrice — entry_price DB-строки
+ * @param {number} a.exEntryPx    — entryPx позы на бирже
+ * @param {number} a.dbEntryTime  — entry_time DB-строки (unix ms)
+ * @param {number|null} a.openTime — время открытия НЫНЕШНЕЙ позы из fills, null=неизвестно
+ * @returns {'same'|'scale-in'|'reopen'|'unknown'}
+ */
+export function classifyEntryDrift({ dbEntryPrice, exEntryPx, dbEntryTime, openTime }) {
+  if (!(dbEntryPrice > 0) || !(exEntryPx > 0)) return 'unknown';
+  const drift = Math.abs(exEntryPx - dbEntryPrice) / dbEntryPrice;
+  if (drift <= ENTRY_DRIFT_TOL) return 'same';
+  if (!Number.isFinite(openTime)) return 'unknown';
+  // 5с допуск: entry_time DB и время fill'а могут разойтись на индексации.
+  return openTime > dbEntryTime + 5_000 ? 'reopen' : 'scale-in';
+}
+
+/**
+ * Позиция на бирже есть, монета и сторона совпадают — но это УЖЕ ДРУГАЯ позиция:
+ * оператор закрыл прежнюю и перезашёл в тот же коин той же стороной между проходами.
+ * liveMatchesPosition (монета+сторона) такое пропускала: DB-строка жила дальше со
+ * СТАРЫМ entry_price, трейл считал % от чужого входа и записывал фиктивный PnL
+ * (KAITO 30.07: реальные −$0.58 записаны как +$1.94).
+ *
+ * Отличаем перезаход от скейл-ина: при скейл-ине средняя цена входа тоже уезжает,
+ * но флэта между входами НЕ было, поэтому resolveManualOpenTime вернёт прежнее
+ * время открытия. openTime заметно ПОЗЖЕ нашего entry_time ⇒ был флэт ⇒ перезаход.
+ * Fills дёргаем только когда цена входа реально разошлась (дешёвый гейт).
+ *
+ * @returns {Promise<boolean>} true → DB-строку надо закрыть по fills и усыновить заново
+ */
+async function isReopenedPosition(dbPosition, exchangePositions) {
+  const dbSide  = (dbPosition.side || 'short').toLowerCase();
+  const dbEntry = Number(dbPosition.entry_price);
+  if (!(dbEntry > 0)) return false;
+
+  const live = (exchangePositions || [])
+    .map((ap) => ap?.position ?? ap)
+    .find((p) => {
+      const szi = parseFloat(p?.szi ?? '0');
+      return isSameCoin(p?.coin, dbPosition.coin) && szi !== 0
+        && (szi < 0 ? 'short' : 'long') === dbSide;
+    });
+  if (!live) return false;
+
+  const exEntry = parseFloat(live.entryPx ?? live.entry_price ?? '0');
+  if (!(exEntry > 0)) return false;
+  const drift = Math.abs(exEntry - dbEntry) / dbEntry;
+  // Дешёвый гейт: цена входа совпала → та же поза, fills не дёргаем.
+  if (classifyEntryDrift({ dbEntryPrice: dbEntry, exEntryPx: exEntry, dbEntryTime: dbPosition.entry_time, openTime: null }) === 'same') {
+    return false;
+  }
+
+  let openTime = null;
+  try {
+    const fills = await fetchUserFills(dbPosition.entry_time - 60_000, { force: true });
+    openTime = resolveManualOpenTime({
+      coin: dbPosition.coin, fills, currentNet: parseFloat(live.szi),
+    });
+  } catch (err) {
+    logger.debug(`[Integrity] reopen-check fills #${dbPosition.coin} failed: ${err.message}`);
+    return false;   // не смогли проверить → не рискуем закрывать живую строку
+  }
+
+  const verdict = classifyEntryDrift({
+    dbEntryPrice: dbEntry, exEntryPx: exEntry, dbEntryTime: dbPosition.entry_time, openTime,
+  });
+  if (verdict === 'unknown') return false;   // не поняли → живую строку не трогаем
+  if (verdict === 'scale-in') {
+    logger.warn(
+      `[Integrity] #${dbPosition.coin} цена входа уехала ` +
+        `($${dbEntry} → $${exEntry}, ${(drift * 100).toFixed(2)}%), но флэта не было — ` +
+        `похоже на скейл-ин, строку не трогаю (трейл считает от старого входа).`,
+    );
+    return false;
+  }
+
+  logger.error(
+    `[Integrity] ♻️ ПЕРЕЗАХОД #${dbPosition.coin} ${dbSide.toUpperCase()}: DB-строка ` +
+      `(id=${dbPosition.id}, entry $${dbEntry}) устарела — на бирже уже другая поза ` +
+      `(entry $${exEntry}, открыта ${new Date(openTime).toISOString()}). ` +
+      `Закрываю строку по реальным fills, новую подхватит adopt.`,
+  );
+  return true;
+}
+
+/**
  * Проверяет ОДНУ позицию: если её нет на бирже — закрывает в БД с классификацией
  * причины и шлёт уведомление. exchangePositions/equity/withdrawable передаются
  * сверху (один fetch на весь проход, multi-position).
+ * @param {boolean} [forceClose] — пропустить проверку «жива ли поза» (вызывающий
+ *   уже установил, что DB-строка не соответствует бирже: перезаход).
  * @returns {Promise<boolean>} true если позиция была закрыта внешне
  */
-async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawable) {
+async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawable, forceClose = false) {
   const now = Date.now();
 
   // Grace period после ОТКРЫТИЯ позиции (даём 10с на индексацию API)
@@ -65,7 +162,7 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
   // «На месте» = живая поза той же монеты И ТОЙ ЖЕ СТОРОНЫ. Поза противоположной
   // стороны на бирже = ФЛИП (оператор закрыл и развернулся) → наша DB-поза закрыта →
   // проваливаемся в закрытие (fix #1 запишет реальную ногу, adopt усыновит новую).
-  if (liveMatchesPosition(dbPosition, exchangePositions)) {
+  if (!forceClose && liveMatchesPosition(dbPosition, exchangePositions)) {
     // Поза снова на месте (был лаг API) — сбрасываем defer-метку, чтобы реальное
     // исчезновение позже получило свежее окно ожидания close-fill.
     state.vanishedSince.delete(dbPosition.id);
@@ -302,10 +399,23 @@ export async function integrityCheck() {
       (db) => !liveMatchesPosition(db, liveOnExchange),
     );
 
+    // Поза «на месте» по монете+стороне, но это уже ДРУГАЯ поза (закрыл→перезашёл):
+    // строка тоже подлежит закрытию, только forceClose (см. isReopenedPosition).
+    const reopened = [];
+    for (const db of positionsToCheck) {
+      if (vanished.includes(db)) continue;
+      if (Date.now() - db.entry_time < 10_000) continue;   // тот же grace, что в closeIfVanished
+      try {
+        if (await isReopenedPosition(db, liveOnExchange)) reopened.push(db);
+      } catch (err) {
+        logger.debug(`[Integrity] reopen-check #${db.coin} failed: ${err.message}`);
+      }
+    }
+
     // Всё на месте → расхождения нет. Это НОРМА, пока открыты позиции — раньше
     // здесь срабатывал margin-guard и спамил варнингом каждые 60с (393×/9ч),
     // потому что withdrawable < 50% equity истинно всегда, когда деньги в позах.
-    if (vanished.length === 0) return false;
+    if (vanished.length === 0 && reopened.length === 0) return false;
 
     // Лаг-сигнатура индексатора: биржа вернула ПУСТО (ни одной живой позы), а
     // маржа заблокирована → позиции есть, просто API отстал. Гасим, чтобы не
@@ -332,6 +442,15 @@ export async function integrityCheck() {
         }
       } catch (err) {
         logger.debug(`[Integrity] check #${dbPosition.coin} failed: ${err.message}`);
+      }
+    }
+    for (const dbPosition of reopened) {
+      try {
+        if (await closeIfVanished(dbPosition, exchangePositions, equity, withdrawable, true)) {
+          anyClosed = true;
+        }
+      } catch (err) {
+        logger.debug(`[Integrity] reopen-close #${dbPosition.coin} failed: ${err.message}`);
       }
     }
     return anyClosed;
