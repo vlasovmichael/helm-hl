@@ -54,7 +54,11 @@ export async function retryWithBackoff(fn, opts = {}) {
 
       // ── Определяем, стоит ли ретраить ───────────────
       if (!isRetryable(err)) {
-        logErr(`${tag} Non-retryable error on attempt ${attempt}: ${err.message}`);
+        // Отвал по весовому бюджету — не авария, а наше СОБСТВЕННОЕ решение
+        // отшить некритичный запрос ради торгового пути. На ERROR он забивает
+        // лог ровно тем шумом, из-за которого настоящие сбои и теряются.
+        if (err.isWeightTimeout) logger.debug(`${tag} отшит по бюджету: ${err.message}`);
+        else logErr(`${tag} Non-retryable error on attempt ${attempt}: ${err.message}`);
         throw err; // бросаем сразу — retry бесполезен
       }
 

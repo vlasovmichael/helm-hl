@@ -18,7 +18,7 @@
 
 import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
-import { hlInfo } from '../core/hlClient.js';
+import { hlInfo, HL_PRIORITY } from '../core/hlClient.js';
 
 const CACHE_TTL_MS = 30_000;  // 30с: fills меняются редко, без смысла спамить API
 const MAX_LOOKBACK_MS = 60 * 24 * 3_600_000;  // 60d — покрывает 30d period с запасом
@@ -76,7 +76,10 @@ export async function fetchUserFills(startTime = 0, { force = false } = {}) {
         user: config.wallet.address,
         startTime: effectiveStart,
       },
-      { label: 'userFills', timeoutMs: FETCH_TIMEOUT_MS },
+      // HIGH: fills — источник правды по PnL и матчингу adopt-ног, а не
+      // косметика. На NORMAL его отшивал весовой дедлайн (2026-07-31), причём
+      // отвал ещё и капал в предохранитель — прямой путь к слепоте.
+      { label: 'userFills', timeoutMs: FETCH_TIMEOUT_MS, priority: HL_PRIORITY.HIGH },
     );
 
     if (!Array.isArray(data)) {
@@ -89,6 +92,12 @@ export async function fetchUserFills(startTime = 0, { force = false } = {}) {
     cache = { ts: now, startTime: effectiveStart, fills: normalized };
     return normalized;
   } catch (err) {
+    // Отвал по весовому бюджету — не аутэйдж HL, а наше собственное решение
+    // отшить запрос. В счётчик предохранителя он капать не должен.
+    if (err.isWeightTimeout) {
+      logger.debug(`[userFills] отшит по весовому бюджету: ${err.message} — отдаю кэш`);
+      return cache.fills.filter((f) => f.time >= effectiveStart);
+    }
     consecutiveFails++;
     if (consecutiveFails >= BREAKER_THRESHOLD && breakerOpenUntil <= now) {
       breakerOpenUntil = now + BREAKER_COOLDOWN_MS;
