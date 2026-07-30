@@ -13,6 +13,7 @@ import { serializeCircuitBreaker, serializeOiCapBans } from '../modules/executor
 import { stopDashboard } from '../modules/dashboard/server.js';
 import { stopPriceFeed } from '../core/priceFeed.js';
 import { stopWsExitLoop } from './wsExitTick.js';
+import { stopTickWatchdog } from './tickWatchdog.js';
 import { stopWsEntryLoop } from './wsEntryTick.js';
 import { state, BOT_STATE_PATH, BOT_STATE_FLUSH_INTERVAL_MS } from './state.js';
 
@@ -180,6 +181,7 @@ export async function shutdown(signal) {
   stopCallbackPolling();
   stopWsEntryLoop();
   stopWsExitLoop();
+  stopTickWatchdog();
   stopPriceFeed();
   try {
     await stopDashboard();

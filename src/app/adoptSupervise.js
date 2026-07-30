@@ -61,9 +61,12 @@ async function maybeFirePeakAlert(pos, price) {
  * Закрывает те, по которым analyzeAdopt вернул CLOSE (трейл / BE-храповик).
  * Best-effort: ошибка по одной монете не валит остальные.
  *
+ * @param {Function} [priceFn=getLivePrice] — источник цены. Быстрая WS-петля
+ *   (wsExitTick) передаёт сюда чистый WS-ридер: на 2-секундном цикле HTTP-
+ *   фолбэк не нужен и вреден (лишний вес → затор бюджета).
  * @returns {Promise<number>} число закрытых этим проходом поз
  */
-export async function superviseAdoptPositions() {
+export async function superviseAdoptPositions(priceFn = getLivePrice) {
   if (!config.isProduction) return 0;
   const positions = getActiveAdoptPositions();
   // Прополка peak-alert метки: позиция закрылась → id из Set (иначе копит мусор).
@@ -75,7 +78,7 @@ export async function superviseAdoptPositions() {
   for (const pos of positions) {
     let price = null;
     try {
-      price = await getLivePrice(pos.coin); // WS-first, HTTP fallback
+      price = await priceFn(pos.coin); // default: WS-first, HTTP fallback
     } catch (err) {
       logger.debug(`[Adopt] supervise getLivePrice #${pos.coin} failed: ${err.message}`);
     }

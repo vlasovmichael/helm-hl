@@ -19,6 +19,7 @@ import { restoreHunterTrailIfNeeded } from './app/hunterTrailArm.js';
 import { startPriceFeed } from './core/priceFeed.js';
 import { startWsExitLoop } from './app/wsExitTick.js';
 import { startWsEntryLoop } from './app/wsEntryTick.js';
+import { startTickWatchdog } from './app/tickWatchdog.js';
 import { startSetupSwingAlerts } from './modules/setupScannerAlerts.js';
 import { startHotMoversAlerts } from './modules/hotMoversAlerts.js';
 import { startFadeHotAlerts } from './modules/fadeHotAlerts.js';
@@ -206,6 +207,11 @@ async function main() {
   // Открывает hunter/hunter_long быстрее 15-сек скана. Gated на
   // HL_WS_ENTRIES_ENABLED (default OFF, меняет частоту входов), mutex с tick().
   startWsEntryLoop();
+
+  // ── Сторож тика ────────────────────────────────
+  // Тик может встать тихо (затор весового бюджета 2026-07-31) — тогда всё, что
+  // живёт внутри него, замирает без единого сигнала. Это его рот.
+  startTickWatchdog();
 
   const handleSignal = (signal) => {
     setTimeout(() => {

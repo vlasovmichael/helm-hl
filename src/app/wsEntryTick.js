@@ -83,6 +83,7 @@ export async function wsFastEntryCheck() {
   // Claim: дальше 15-сек tick увидит tickRunning и пропустит свой прогон.
   running = true;
   state.tickRunning = true;
+  state.tickRunningSince = Date.now();
   try {
     // Приоритет как в coordinator: hunter → hunter_long.
     let signal = { action: 'HOLD' };

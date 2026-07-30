@@ -38,6 +38,25 @@ function parseCandles(raw) {
 }
 
 /**
+ * Общий обработчик неудачного fetch'а для всех четырёх кэшей.
+ *
+ * Отказ по весовому бюджету (isWeightTimeout) — это НЕ авария: клиент HL
+ * намеренно отшивает косметику, когда бюджет занят торговым путём. В этом
+ * случае отдаём протухшие свечи, если они есть: устаревший 1h-тренд полезнее
+ * пустоты, а на торговые решения такой источник и не влияет (там свой путь).
+ */
+function onFetchFail(store, coin, err, tag) {
+  const prev = store.get(coin);
+  store.set(coin, { ...(prev || {}), inflight: null });
+  if (err.isWeightTimeout) {
+    logger.debug(`[${tag}] #${coin} — бюджет занят, отдаю кэш (${err.message})`);
+    return prev?.candles ?? null;
+  }
+  logger.warn(`[${tag}] #${coin} fetch failed: ${err.message}`);
+  return null;
+}
+
+/**
  * Получает 1h свечи для монеты. С кэшем + защитой от одновременных fetch'ей.
  *
  * @param {string} coin
@@ -67,11 +86,7 @@ export async function getHourlyCandles(coin, lookbackHours, now = Date.now(), pr
     const candles = parseCandles(data);
     cache.set(coin, { fetchedAt: Date.now(), candles, inflight: null });
     return candles;
-  }).catch((err) => {
-    cache.set(coin, { ...(cache.get(coin) || {}), inflight: null });
-    logger.warn(`[CandleCache] #${coin} fetch failed: ${err.message}`);
-    return null;
-  });
+  }).catch((err) => onFetchFail(cache, coin, err, 'CandleCache'));
 
   cache.set(coin, { ...(cached || {}), inflight: promise });
   return promise;
@@ -122,11 +137,7 @@ export async function getFiveMinCandles(coin, lookbackMinutes, now = Date.now())
     const candles = parseCandles(data);
     cache5m.set(coin, { fetchedAt: Date.now(), candles, inflight: null });
     return candles;
-  }).catch((err) => {
-    cache5m.set(coin, { ...(cache5m.get(coin) || {}), inflight: null });
-    logger.warn(`[CandleCache5m] #${coin} fetch failed: ${err.message}`);
-    return null;
-  });
+  }).catch((err) => onFetchFail(cache5m, coin, err, 'CandleCache5m'));
 
   cache5m.set(coin, { ...(cached || {}), inflight: promise });
   return promise;
@@ -179,11 +190,7 @@ export async function getFifteenMinCandles(coin, lookbackMinutes, now = Date.now
     const candles = parseCandles(data);
     cache15m.set(coin, { fetchedAt: Date.now(), candles, inflight: null });
     return candles;
-  }).catch((err) => {
-    cache15m.set(coin, { ...(cache15m.get(coin) || {}), inflight: null });
-    logger.warn(`[CandleCache15m] #${coin} fetch failed: ${err.message}`);
-    return null;
-  });
+  }).catch((err) => onFetchFail(cache15m, coin, err, 'CandleCache15m'));
 
   cache15m.set(coin, { ...(cached || {}), inflight: promise });
   return promise;
@@ -234,11 +241,7 @@ export async function getFourHourCandles(coin, lookbackHours, now = Date.now()) 
     const candles = parseCandles(data);
     cache4h.set(coin, { fetchedAt: Date.now(), candles, inflight: null });
     return candles;
-  }).catch((err) => {
-    cache4h.set(coin, { ...(cache4h.get(coin) || {}), inflight: null });
-    logger.warn(`[CandleCache4h] #${coin} fetch failed: ${err.message}`);
-    return null;
-  });
+  }).catch((err) => onFetchFail(cache4h, coin, err, 'CandleCache4h'));
 
   cache4h.set(coin, { ...(cached || {}), inflight: promise });
   return promise;

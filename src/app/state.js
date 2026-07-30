@@ -54,4 +54,8 @@ export const state = {
   lastBotStateSaveAt: 0,
   // Метка завершения последнего tick() — для /api/health и Docker HEALTHCHECK.
   lastTickAt: 0,
+  // Когда был взят мьютекс tickRunning. Нужен, чтобы отличить «тик работает»
+  // от «тик залип»: во втором случае сопровождение adopt-поз не должно ждать
+  // его вечно (инцидент 2026-07-31 — тик держал мьютекс 5 минут).
+  tickRunningSince: 0,
 };

@@ -29,6 +29,7 @@ import { fireAdoptNtfy } from './adoptReconcile.js';
 export async function tick() {
   if (state.tickRunning || state.shuttingDown) return;
   state.tickRunning = true;
+  state.tickRunningSince = Date.now();
 
   try {
     // ── Дневной стоп-лосс (rail, не замок): net дня по fills ≤ −лимит →

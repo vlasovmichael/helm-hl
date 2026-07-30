@@ -464,7 +464,10 @@ const ACCT_PRICES_TTL_MS = parseInt(process.env.HL_PRICES_TTL_MS || "2500", 10);
 async function fetchLivePriceMap() {
   const data = await hlInfo(
     { type: "metaAndAssetCtxs" },
-    { label: "exchange/livePriceMap", timeoutMs: 10_000 },
+    // HIGH: цена — торговое чтение (выходы/стопы считаются от неё). NORMAL
+    // ставил её в общую очередь со свечами дашборда, и при заторе бюджета
+    // цена приезжала через минуты (инцидент 2026-07-31).
+    { label: "exchange/livePriceMap", timeoutMs: 10_000, priority: HL_PRIORITY.HIGH },
   );
   const [meta, ctxs] = data ?? [];
   const universe = meta?.universe;
@@ -512,7 +515,7 @@ export async function getLivePrice(coin) {
   try {
     const data = await hlInfo(
       { type: "metaAndAssetCtxs" },
-      { label: "exchange/livePrice", timeoutMs: 10_000 },
+      { label: "exchange/livePrice", timeoutMs: 10_000, priority: HL_PRIORITY.HIGH },
     );
     const [meta, ctxs] = data ?? [];
     const universe = meta?.universe;

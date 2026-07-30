@@ -41,7 +41,9 @@ const COOLDOWN_429_MS = parseInt(process.env.HL_COOLDOWN_429_MS || '3000', 10);
 // Бюджет веса за окно. Держим ниже документированных 1200: HL считает по своему
 // таймеру, а мы не видим его окна — 15% запаса дешевле, чем кулдаун после 429.
 const WEIGHT_BUDGET    = parseInt(process.env.HL_WEIGHT_BUDGET || '1000', 10);
-const WEIGHT_WINDOW_MS = 60_000;
+// Окно лимита HL — минута. Оверрайд только ради тестов (иначе проверка очереди
+// длилась бы минуту на кейс); в проде не трогать.
+const WEIGHT_WINDOW_MS = parseInt(process.env.HL_WEIGHT_WINDOW_MS || '60000', 10);
 // Доля бюджета, доступная НЕ-торговому пути. Остаток — резерв под HIGH
 // (цены/позиции/ордера), чтобы косметика дашборда не могла выесть весь лимит и
 // ослепить бота. Ср. RESERVED_HIGH для слотов concurrency.
@@ -131,10 +133,18 @@ const spent = [];      // { at, w }
 let spentSum = 0;
 let weightWaitMs = 0;  // накопленное ожидание бюджета — видно в hlClientStats
 let weightWaits  = 0;
+let weightTimeouts = 0; // сколько раз косметика отвалилась по дедлайну
+// Расход по меткам за окно — чтобы «кто выел бюджет» был виден в логе, а не
+// вычислялся раскопками (инцидент 2026-07-31: тик встал, виновник искался руками).
+const spentByLabel = new Map(); // label → вес в окне
 
 function pruneSpent(now) {
   while (spent.length && now - spent[0].at >= WEIGHT_WINDOW_MS) {
-    spentSum -= spent.shift().w;
+    const old = spent.shift();
+    spentSum -= old.w;
+    const rest = (spentByLabel.get(old.label) ?? 0) - old.w;
+    if (rest > 0) spentByLabel.set(old.label, rest);
+    else spentByLabel.delete(old.label);
   }
 }
 
@@ -145,28 +155,130 @@ function budgetFor(priority) {
     : Math.floor(WEIGHT_BUDGET * WEIGHT_LOW_SHARE);
 }
 
+// Ошибка «не дождался бюджета». Не ретраится (см. retry.js: isWeightTimeout) —
+// смысл дедлайна в том, чтобы отвалиться, а не встать в очередь второй раз.
+export class WeightBudgetTimeoutError extends Error {
+  constructor(label, waitedMs) {
+    super(`weight budget wait > ${waitedMs}ms (${label})`);
+    this.name = 'WeightBudgetTimeoutError';
+    this.isWeightTimeout = true;
+  }
+}
+
+// Потолок ожидания бюджета по приоритету. Торговый путь (HIGH) ждёт: его вызов
+// отменить нельзя, но он и не ждёт — идёт первым и видит весь бюджет.
+// Косметика при заторе ОТВАЛИВАЕТСЯ в кэш/null вместо того, чтобы копить
+// очередь и тянуть за собой тик (инцидент 2026-07-31).
+const WAIT_MAX_MS = {
+  [HL_PRIORITY.HIGH]:   parseInt(process.env.HL_WEIGHT_WAIT_HIGH_MS   || '20000', 10),
+  [HL_PRIORITY.NORMAL]: parseInt(process.env.HL_WEIGHT_WAIT_NORMAL_MS || '4000',  10),
+  [HL_PRIORITY.LOW]:    parseInt(process.env.HL_WEIGHT_WAIT_LOW_MS    || '1500',  10),
+};
+function waitMaxFor(priority) {
+  return WAIT_MAX_MS[priority] ?? WAIT_MAX_MS[HL_PRIORITY.NORMAL];
+}
+
+// Очередь за бюджетом. Порядок строгий: приоритет, затем FIFO внутри приоритета.
+// Пока голова очереди не влезает в свой бюджет — НИКТО не проходит вперёд неё.
+// Без этого (до 2026-07-31) новоприбывшие расхватывали освободившийся вес мимо
+// ждущих, и отдельные запросы стояли по 2 минуты при загрузке всего 69%.
+const weightQ = []; // { priority, seq, w, label, resolve, reject, enqueuedAt, deadlineAt }
+let pumpTimer = null;
+
+// Группа для учёта: свечи схлопываем по кэшу (`candleCache15m/SOL` →
+// `candleCache15m`), иначе 200 монет = 200 строк и вместо картины — шум.
+function groupOf(label) {
+  return label.startsWith('candleCache') ? label.split('/')[0] : label;
+}
+
+function charge(w, label, now) {
+  const group = groupOf(label);
+  spent.push({ at: now, w, label: group });
+  spentSum += w;
+  spentByLabel.set(group, (spentByLabel.get(group) ?? 0) + w);
+}
+
+/** Индекс следующего по очереди: высший приоритет, при равном — самый ранний. */
+function headOfWeightQ() {
+  let best = -1;
+  for (let i = 0; i < weightQ.length; i++) {
+    if (best === -1) { best = i; continue; }
+    const a = weightQ[i], b = weightQ[best];
+    if (a.priority > b.priority || (a.priority === b.priority && a.seq < b.seq)) best = i;
+  }
+  return best;
+}
+
+function scheduleWeightPump() {
+  if (pumpTimer) clearTimeout(pumpTimer);
+  pumpTimer = null;
+  if (weightQ.length === 0) return;
+
+  const now = Date.now();
+  // Проснуться нужно к ближайшему из двух событий: истёк чей-то дедлайн ИЛИ
+  // самая старая трата выпала из окна (освободила вес).
+  let wake = Infinity;
+  for (const q of weightQ) wake = Math.min(wake, q.deadlineAt);
+  if (spent.length) wake = Math.min(wake, spent[0].at + WEIGHT_WINDOW_MS + 5);
+  const delay = Math.min(Math.max(wake - now, 5), 2000);
+  // Без unref: пока кто-то ждёт бюджета, процесс не должен «догореть» с
+  // висящим торговым вызовом. Таймер живёт ровно пока непуста очередь.
+  pumpTimer = setTimeout(pumpWeight, delay);
+}
+
+function pumpWeight() {
+  pumpTimer = null;
+  const now = Date.now();
+  pruneSpent(now);
+
+  // 1. Выкидываем протухших по дедлайну (идём с конца — splice на месте).
+  for (let i = weightQ.length - 1; i >= 0; i--) {
+    if (now < weightQ[i].deadlineAt) continue;
+    const q = weightQ.splice(i, 1)[0];
+    weightTimeouts++;
+    q.reject(new WeightBudgetTimeoutError(q.label, now - q.enqueuedAt));
+  }
+
+  // 2. Раздаём бюджет строго по очереди. Голова не влезла → ждём окно.
+  for (;;) {
+    const idx = headOfWeightQ();
+    if (idx === -1) break;
+    const q = weightQ[idx];
+    if (spentSum + q.w > budgetFor(q.priority)) break;
+    weightQ.splice(idx, 1);
+    charge(q.w, q.label, now);
+    const waited = now - q.enqueuedAt;
+    weightWaitMs += waited;
+    weightWaits++;
+    q.resolve();
+  }
+
+  scheduleWeightPump();
+}
+
 /**
- * Ждёт, пока в окне освободится место под вес `w`, и списывает его.
+ * Ждёт места под вес `w` в окне и списывает его.
  * Проверка и списание идут без await между ними → гонки между конкурентными
  * вызовами нет (JS однопоточный), двойное списание невозможно.
+ *
+ * @throws {WeightBudgetTimeoutError} если не дождался за дедлайн приоритета
  */
-async function reserveWeight(w, priority) {
-  const budget = budgetFor(priority);
-  const startedAt = Date.now();
-  for (;;) {
-    const now = Date.now();
-    pruneSpent(now);
-    if (spentSum + w <= budget) {
-      spent.push({ at: now, w });
-      spentSum += w;
-      const waited = now - startedAt;
-      if (waited > 0) { weightWaitMs += waited; weightWaits++; }
-      return;
-    }
-    // Ждём, пока самая старая запись выпадет из окна (+5мс на дребезг таймера).
-    const freeIn = WEIGHT_WINDOW_MS - (now - spent[0].at) + 5;
-    await new Promise((r) => setTimeout(r, Math.min(Math.max(freeIn, 25), 2000)));
+function reserveWeight(w, priority, label) {
+  const now = Date.now();
+  pruneSpent(now);
+  // Фаст-пас: очередь пуста и вес есть — берём сразу, без таймеров и промисов.
+  if (weightQ.length === 0 && spentSum + w <= budgetFor(priority)) {
+    charge(w, label, now);
+    return Promise.resolve();
   }
+  return new Promise((resolve, reject) => {
+    weightQ.push({
+      priority, seq: seq++, w, label, resolve, reject,
+      enqueuedAt: now,
+      deadlineAt: now + waitMaxFor(priority),
+    });
+    scheduleWeightPump();
+  });
 }
 
 async function gap() {
@@ -207,7 +319,7 @@ export async function hlInfo(body, opts = {}) {
     async () => {
       // Бюджет ЖДЁМ ДО слота: иначе запрос, которому не хватает веса, держал бы
       // слот concurrency и блокировал торговый путь.
-      await reserveWeight(weight, priority);
+      await reserveWeight(weight, priority, label);
       await acquire(priority);
       try {
         await gap();
@@ -246,9 +358,17 @@ export async function hlInfo(body, opts = {}) {
  */
 export function hlClientStats() {
   pruneSpent(Date.now());
+  // Топ-потребителей веса за окно — первое, что нужно знать при заторе.
+  const topLabels = [...spentByLabel.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([label, w]) => ({ label, weight: w }));
   return {
     inFlight,
     queued: waiters.length,
+    weightQueued: weightQ.length,
+    weightTimeouts,
+    topLabels,
     maxConcurrent: MAX_CONCURRENT,
     reservedHigh: RESERVED_HIGH,
     minGapMs: MIN_GAP_MS,
@@ -266,10 +386,13 @@ export function hlClientStats() {
 // 429 всё равно идут, значит вес какого-то типа занижен в WEIGHTS.
 setInterval(() => {
   const s = hlClientStats();
+  const top = s.topLabels.map((t) => `${t.label}=${t.weight}`).join(' ');
   logger.info(
     `[HL] вес за 60с: ${s.weightUsed}/${s.weightBudget} (${s.weightPct}%) | ` +
-      `ожиданий бюджета: ${s.weightWaits} (${(s.weightWaitMs / 1000).toFixed(1)}с суммарно) | ` +
-      `in-flight=${s.inFlight} queued=${s.queued}`,
+      `ожиданий бюджета: ${s.weightWaits} (${(s.weightWaitMs / 1000).toFixed(1)}с суммарно), ` +
+      `отвалов по дедлайну: ${s.weightTimeouts} | ` +
+      `in-flight=${s.inFlight} queued=${s.queued} weight-queued=${s.weightQueued}` +
+      (top ? ` | топ: ${top}` : ''),
   );
 }, 5 * 60_000).unref?.();
 
@@ -278,5 +401,8 @@ logger.info(
   `reserved_high=${RESERVED_HIGH}, ` +
   `min_gap_ms=${MIN_GAP_MS}, timeout_ms=${TIMEOUT_MS}, ` +
   `cooldown_429_ms=${COOLDOWN_429_MS}, ` +
-  `weight_budget=${WEIGHT_BUDGET}/60с (low-share ${Math.round(WEIGHT_LOW_SHARE * 100)}%)`,
+  `weight_budget=${WEIGHT_BUDGET}/${WEIGHT_WINDOW_MS / 1000}с ` +
+  `(low-share ${Math.round(WEIGHT_LOW_SHARE * 100)}%, ` +
+  `дедлайн ожидания high/normal/low = ${WAIT_MAX_MS[HL_PRIORITY.HIGH]}/` +
+  `${WAIT_MAX_MS[HL_PRIORITY.NORMAL]}/${WAIT_MAX_MS[HL_PRIORITY.LOW]}ms)`,
 );

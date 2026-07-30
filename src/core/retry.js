@@ -101,6 +101,12 @@ export async function retryWithBackoff(fn, opts = {}) {
  * @returns {boolean}
  */
 function isRetryable(err) {
+  // ── Не дождались весового бюджета HL ───────────
+  // Дедлайн ждать И означает «отвались, не мешай». Ретрай встал бы в ту же
+  // очередь второй раз и вернул бы ровно ту проблему, ради которой дедлайн
+  // и вводился (затор бюджета 2026-07-31).
+  if (err.isWeightTimeout) return false;
+
   // ── Сетевые ошибки (axios / node:http) ─────────
   const networkCodes = [
     'ECONNRESET',
