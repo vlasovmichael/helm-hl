@@ -20,6 +20,7 @@ import { startPriceFeed } from './core/priceFeed.js';
 import { startWsExitLoop } from './app/wsExitTick.js';
 import { startWsEntryLoop } from './app/wsEntryTick.js';
 import { startTickWatchdog } from './app/tickWatchdog.js';
+import { startMemWatch } from './app/memWatch.js';
 import { startSetupSwingAlerts } from './modules/setupScannerAlerts.js';
 import { startHotMoversAlerts } from './modules/hotMoversAlerts.js';
 import { startFadeHotAlerts } from './modules/fadeHotAlerts.js';
@@ -212,6 +213,11 @@ async function main() {
   // Тик может встать тихо (затор весового бюджета 2026-07-31) — тогда всё, что
   // живёт внутри него, замирает без единого сигнала. Это его рот.
   startTickWatchdog();
+
+  // ── Наблюдение за памятью ──────────────────────
+  // OOM-kill по лимиту cgroup убивал процесс молча (02.08, дважды за двое
+  // суток). Даёт кривую RSS для «утечка или кэш» и пуш до потолка, а не после.
+  startMemWatch();
 
   const handleSignal = (signal) => {
     setTimeout(() => {
