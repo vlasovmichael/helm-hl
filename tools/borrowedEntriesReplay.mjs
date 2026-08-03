@@ -94,7 +94,7 @@ const priceAtPct = (side, entry, pct) =>
  * Прогон правил adopt по свечам.
  * @param mode 'pessimistic' | 'optimistic' — порядок экстремумов внутри бара
  */
-function replayAdopt(trip, rows, entryIdx, stopPct, mode) {
+function replayAdopt(trip, rows, entryIdx, stopPct, mode, { beEnabled = true } = {}) {
   const { side, entryPrice: entry } = trip;
   const stopPrice = priceAtPct(side, entry, -stopPct);
   const horizonEnd = trip.entryTime + HORIZON_H * 3600_000;
@@ -125,7 +125,7 @@ function replayAdopt(trip, rows, entryIdx, stopPct, mode) {
     const firstTriggered = () => {
       const cands = [];
       if (advPct <= -stopPct) cands.push({ level: -stopPct, price: stopPrice, reason: "sl_trigger", t });
-      if (beArmed && advPct <= BE_FLOOR_PCT) {
+      if (beEnabled && beArmed && advPct <= BE_FLOOR_PCT) {
         cands.push({
           level: BE_FLOOR_PCT,
           price: priceAtPct(side, entry, BE_FLOOR_PCT),
@@ -216,7 +216,11 @@ export function runReplay(tripsFile, { seed = 7 } = {}) {
 
     const pess = replayAdopt(trip, rows, entryIdx, stopPct, "pessimistic");
     const opti = replayAdopt(trip, rows, entryIdx, stopPct, "optimistic");
-    if (!pess || !opti) {
+    // Вариант без BE-храповика — предзаявленный вопрос «добавляет он или отнимает».
+    // Считается в том же проходе, чтобы выборки совпадали побайтово.
+    const pessNoBe = replayAdopt(trip, rows, entryIdx, stopPct, "pessimistic", { beEnabled: false });
+    const optiNoBe = replayAdopt(trip, rows, entryIdx, stopPct, "optimistic", { beEnabled: false });
+    if (!pess || !opti || !pessNoBe || !optiNoBe) {
       skips.noReplay++;
       continue;
     }
@@ -241,8 +245,11 @@ export function runReplay(tripsFile, { seed = 7 } = {}) {
       randomPct: netPct(pnlPct(trip.side, trip.entryPrice, randomPx)),
       minePessPct: netPct(pnlPct(trip.side, trip.entryPrice, pess.price)),
       mineOptiPct: netPct(pnlPct(trip.side, trip.entryPrice, opti.price)),
+      noBePessPct: netPct(pnlPct(trip.side, trip.entryPrice, pessNoBe.price)),
+      noBeOptiPct: netPct(pnlPct(trip.side, trip.entryPrice, optiNoBe.price)),
       reasonPess: pess.reason,
       reasonOpti: opti.reason,
+      reasonNoBePess: pessNoBe.reason,
       holdTheirMin: (trip.exitTime - trip.entryTime) / 6e4,
       holdMineMin: (pess.t - trip.entryTime) / 6e4,
     });
