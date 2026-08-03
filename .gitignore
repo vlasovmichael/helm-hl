@@ -36,3 +36,4 @@ hl_snapshot.db
 hl_snapshot.db-*
 candles.db
 candles.db-*
+data/borrowed/
