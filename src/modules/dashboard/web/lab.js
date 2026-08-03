@@ -24,6 +24,7 @@ import {
 } from "./src/features/divergence.js";
 import { renderStrategies } from "./src/features/strategies.js";
 import { refreshSpikeFade } from "./src/features/spikeFade.js";
+import { refreshLeaderboardPersistence } from "./src/features/leaderboardPersistence.js";
 
 // ── Bootstrap ──
 mountTopnav("lab");
@@ -44,4 +45,7 @@ initWhaleWatch();
 // дописывается редко, чаще незачем). Данные из /api/spike-fade.
 refreshSpikeFade();
 setInterval(refreshSpikeFade, 30_000);
+// Персистентность лидерборда: снимки недельные, счёт кэширован на 6ч —
+// поллить незачем, тянем один раз при открытии страницы.
+refreshLeaderboardPersistence();
 startFooterTimer();

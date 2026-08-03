@@ -159,6 +159,60 @@
         </div>
       </section>
 
+      <!-- 01.7 / Копировать некого — out-of-sample тест персистентности на
+           публичном лидерборде HL (~41k адресов). Ранг по одному окну, проверка
+           по другому, окна не пересекаются. В выводе перестановочный бейзлайн и
+           CI — без них градиент на таком n «выглядит» значимым всегда.
+           /api/leaderboard-persistence, leaderboardPersistence.js. 2026-08-03. -->
+      <section class="card" id="sec-lb-persist">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-num="01.7"
+            title="Вопрос: сохраняется ли преимущество трейдера ВНЕ выборки, на которой оно замечено. Адреса ранжируются по прошлому результату, проверяются на следующем непересекающемся окне. Метрика — PnL на доллар оборота (базисные пункты), а не ROI: поле roi у HL ненадёжно. Универсум задан механически (порог оборота) ДО взгляда на результат."
+          >
+            Копировать некого?
+          </div>
+          <span
+            id="lbp-meta"
+            style="
+              font-size: 11px;
+              font-family: var(--font-mono);
+              color: var(--text-muted);
+            "
+          ></span>
+        </div>
+        <div id="lbp-verdict" class="empty-state" style="margin-bottom: 8px">
+          загрузка…
+        </div>
+        <div class="u-scroll-x">
+          <table class="data-table" id="lbp-table">
+            <thead>
+              <tr>
+                <th title="Дециль по результату в РАНЖИРУЮЩЕМ окне: D1 — худшие, D10 — лучшие">Дециль</th>
+                <th class="r" title="Число адресов в дециле">n</th>
+                <th class="r" title="Медианный эдж в ПРОВЕРОЧНОМ окне: PnL на доллар оборота, базисные пункты. Отрицательный = когорта теряет.">Эдж, бп</th>
+                <th class="r" title="Доля адресов дециля, закончивших проверочное окно в плюсе">Доля &gt;0</th>
+                <th class="r" title="Медианный размер счёта в дециле">Счёт</th>
+              </tr>
+            </thead>
+            <tbody id="lbp-tbody">
+              <tr><td colspan="5" class="empty-state">…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div
+          id="lbp-stats"
+          style="
+            margin-top: 8px;
+            font-size: 11px;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+            line-height: 1.6;
+          "
+        ></div>
+      </section>
+
       <!-- 02 / BTC Divergence -->
       <section class="card" id="sec-divergence">
         <div class="card-header">

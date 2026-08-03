@@ -26,6 +26,7 @@ data/*.json
 data/tax/
 data/oi-collector/
 data/spike-fade/
+data/leaderboard/
 diag/
 temp/
 plaintext.txt

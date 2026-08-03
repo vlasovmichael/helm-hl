@@ -26,6 +26,7 @@ import { startHotMoversAlerts } from './modules/hotMoversAlerts.js';
 import { startFadeHotAlerts } from './modules/fadeHotAlerts.js';
 import { startWatchlistAlerts } from './modules/watchlistAlerts.js';
 import { sendDailyDigest } from './modules/mailDigest.js';
+import { captureSnapshot, listSnapshots } from '../tools/leaderboardSnapshot.mjs';
 import { shutdown } from './app/lifecycle.js';
 import { createStatusCollector } from './app/status.js';
 import { startToastBridge } from './app/toastBridge.js';
@@ -181,6 +182,32 @@ async function main() {
     { timezone: 'Europe/Warsaw' },
   );
   logger.info('[System] DB maintenance cron scheduled: 04:00 Europe/Warsaw daily (VACUUM weekly Sun)');
+
+  // ── Снимок лидерборда HL — понедельник 05:00 (Europe/Warsaw) ──
+  // Обычный GET на stats-data, НЕ /info: весового бюджета HL-пула не трогает.
+  // HL отдаёт только текущий срез — историю никак; копим сами, иначе форвардный
+  // тест персистентности построить не из чего (2026-08-03).
+  const captureLeaderboard = async (why) => {
+    try {
+      const r = await captureSnapshot();
+      if (r.ok) logger.info(`[Leaderboard] ${why}: ${r.rows} rows → ${r.file} (${(r.bytes / 1e6).toFixed(2)} MB)`);
+      else logger.warn(`[Leaderboard] ${why} failed: ${r.reason}`);
+    } catch (err) {
+      logger.warn(`[Leaderboard] ${why} crashed: ${err.message}`);
+    }
+  };
+  cron.schedule('0 5 * * 1', () => captureLeaderboard('weekly'), { timezone: 'Europe/Warsaw' });
+  logger.info('[System] Leaderboard snapshot cron scheduled: 05:00 Europe/Warsaw, Mondays');
+
+  // Самолечение: если свежего снимка нет (первый деплой / контейнер лежал в
+  // понедельник) — доснять на старте. Иначе в архиве молча образуется дыра.
+  try {
+    const snaps = listSnapshots();
+    const lastMs = snaps.length ? Date.parse(snaps[snaps.length - 1].date) : 0;
+    if (Date.now() - lastMs > 6 * 864e5) captureLeaderboard('startup backfill');
+  } catch (err) {
+    logger.warn(`[Leaderboard] startup check failed: ${err.message}`);
+  }
 
   // Grace period для integrityCheck
   state.botStartedAt = Date.now();
