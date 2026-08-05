@@ -39,8 +39,12 @@ export function riskTint({
   const inProfit = move >= 0;
 
   // Веха храповика (BE-arm) и цель прибыли в цене (favorable-дистанция от входа).
-  const armDist = beArmPct != null && beArmPct > 0 ? entry * (beArmPct / 100) : null;
+  const rawArmDist = beArmPct != null && beArmPct > 0 ? entry * (beArmPct / 100) : null;
   const targetDist = tpPrice != null ? Math.abs(entry - tpPrice) : 2 * risk;
+  // Храповик выключают, задрав порог за небо (ADOPT_BE_ARM_PCT=999). Веха, до
+  // которой цена не дойдёт раньше самой цели прибыли — не веха: иначе фаза «до
+  // храповика» съедает весь плюс и полоса стоит на нуле, пока в минусе живёт.
+  const armDist = rawArmDist != null && rawArmDist < targetDist ? rawArmDist : null;
   const armed = beArmed === true || (armDist != null && move >= armDist);
 
   // Пиковый ход в мою сторону (MFE) в цене — для «призрака» отката на заливке.
