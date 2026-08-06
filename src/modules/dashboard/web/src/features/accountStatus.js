@@ -221,12 +221,11 @@ const fmtMove = (m) => `${m >= 0 ? "+" : "−"}${Math.abs(m).toFixed(2)}%`;
 // В минусе показываем худшую просадку (MAE, «dip −X%») — peak в плюс там сбивал
 // (видел «−0.17R · peak +0.27%», хотя сижу в минусе). В плюсе — свой пик (MFE,
 // «peak +X%»). upnl — текущий uPnL ($), решает какую сторону показать.
-// tint (riskTint) даёт ближайшую веху — дописываем её ЯВНО («→ trail +2.00%»).
-// Без этого порог был виден только по длине ползунка, а какая именно веха на его
-// правом краю — приходилось угадывать по peak. Веха трейла считается по пику,
-// поэтому и подпись вешаем рядом с peak.
-const MILESTONE_TAG = { arm: "BE", trail: "trail", profit: "TP", stop: "stop" };
-const upnlSubTxt = (s, upnl = 0, tint = null) => {
+// ⚠️ Третьего куска здесь быть не может: .pnl-toprow — flex-wrap, и подстрока
+// целиком срывается на СВОЮ строку, как только перестаёт влезать рядом с «uPnL».
+// Пробовал дописывать веху («→ trail +2.00%») — карточка поехала в три строки
+// (2026-08-06). Веху показывает сам ползунок (его правый край) + тултип.
+const upnlSubTxt = (s, upnl = 0) => {
   const extreme =
     upnl < 0
       ? s.maePct != null
@@ -235,13 +234,7 @@ const upnlSubTxt = (s, upnl = 0, tint = null) => {
       : s.peakPct != null
         ? `peak +${s.peakPct.toFixed(2)}%`
         : "";
-  const goal =
-    tint?.milestonePct != null && tint.phase !== "stop"
-      ? `→ ${MILESTONE_TAG[tint.phase] || tint.phase} +${tint.milestonePct.toFixed(2)}%`
-      : "";
-  return [s.rMult != null ? fmtR(s.rMult) : "", extreme, goal]
-    .filter(Boolean)
-    .join(" · ");
+  return [s.rMult != null ? fmtR(s.rMult) : "", extreme].filter(Boolean).join(" · ");
 };
 
 // Текущая монета бот-позиции — чтобы понимать, патчить на месте или пере-строить.
@@ -579,7 +572,7 @@ export function renderManualPositions(list) {
       }
       // R-под-строка живёт во всех трёх слоях (spacer/base/fill) → синхроним все,
       // чтобы бело-залитая копия не отставала от цветной (R «переливается»).
-      const subTxt = upnlSubTxt(s, p.unrealizedPnl, tint);
+      const subTxt = upnlSubTxt(s, p.unrealizedPnl);
       card.querySelectorAll(".pnl-sub").forEach((el) => {
         el.textContent = subTxt;
       });
@@ -679,7 +672,7 @@ export function renderManualPositions(list) {
         <div class="data-grid">
           <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}${riskInline}</div></div>
           <div class="grid-item"><div class="item-label">Entry · Now${moveInline}</div><div class="item-value">${fmtPrice(p.entryPrice)} · <span data-mnow>${cur}</span></div></div>
-          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}`, subText: upnlSubTxt(s, p.unrealizedPnl, tint) })}</div>
+          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}`, subText: upnlSubTxt(s, p.unrealizedPnl) })}</div>
           ${floorCell}
         </div>
       </div>`;
