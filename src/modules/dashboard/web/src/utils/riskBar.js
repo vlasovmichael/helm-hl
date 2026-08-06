@@ -5,7 +5,10 @@
 //    · в убытке      → «до стопа»     (entry → stop, красный)
 //    · в плюсе, до   → «до храповика» (entry → BE-arm, зелёный) — пока бот не
 //      переставил стоп в безубыток;
-//    · храповик взят → «до профита»  (BE-arm → 2R/TP, зелёный) — полоса
+//    · храповик взят → «до трейла»    (BE-arm → TRAIL-arm, зелёный) — пока
+//      нянька не начала вести пик; ⚠️ трейл взводится по ПИКУ (MFE), поэтому
+//      веху берёт «призрак» (--rb-peak), а не яркий край;
+//    · трейл ведёт   → «до профита»  (TRAIL-arm → 2R/TP, зелёный) — полоса
 //      пересчитывается с нуля на новый отрезок.
 //  Так оператор видит ровно один вопрос за раз: «сколько осталось до ближайшего
 //  события». now ∈ [0,1] — край заливки (прогресс фазы). 2026-06-17.
@@ -25,6 +28,8 @@ export function riskTint({
   sizeUsd,
   beArmPct,
   beArmed,
+  trailArmPct,
+  trailArmed,
   tpPrice,
   peakPct,
   maePct,
@@ -47,9 +52,21 @@ export function riskTint({
   const armDist = rawArmDist != null && rawArmDist < targetDist ? rawArmDist : null;
   const armed = beArmed === true || (armDist != null && move >= armDist);
 
+  // Веха трейла — та же проверка «веха раньше цели», иначе она не веха.
+  const rawTrailDist =
+    trailArmPct != null && trailArmPct > 0 ? entry * (trailArmPct / 100) : null;
+  const trailDist =
+    rawTrailDist != null && rawTrailDist < targetDist ? rawTrailDist : null;
+
   // Пиковый ход в мою сторону (MFE) в цене — для «призрака» отката на заливке.
   // peakPct хранит бэк как favorable %, всегда ≥0. null → призрака нет.
   const peakMove = peakPct != null && peakPct > 0 ? entry * (peakPct / 100) : null;
+  // Трейл взводится по ПИКУ, а не по текущей цене: откат ниже порога его уже не
+  // снимает. Поэтому сравниваем именно peakMove (бэк присылает trailArmed — он
+  // главнее, локальный расчёт нужен между тиками поллинга).
+  const trailOn =
+    trailArmed === true ||
+    (trailDist != null && peakMove != null && peakMove >= trailDist);
   // Худшая просадка (MAE) в цене — для зеркального «призрака» на красной полосе.
   // maePct хранит бэк как unrealized %, в минусе ≤0. <0 → было хуже текущего.
   const maeMove = maePct != null && maePct < 0 ? entry * (maePct / 100) : null;
@@ -67,9 +84,23 @@ export function riskTint({
     label = "до храповика";
     milestonePx = isShort ? entry - armDist : entry + armDist;
     fracOf = (m) => Math.min(1, Math.max(0, m / armDist));
+  } else if (trailDist != null && !trailOn) {
+    // Храповик взят (или выключен), трейл ещё нет — это и есть ближайшее
+    // событие. Раньше этой фазы не было: полоса сразу мерила до 2R (≈+10% при
+    // стопе 5%), ползла на четверть и трейл на +2% в ней было не разглядеть.
+    const base = armed && armDist != null ? armDist : 0;
+    const span = Math.max(trailDist - base, 1e-9);
+    phase = "trail";
+    label = "до трейла";
+    milestonePx = isShort ? entry - trailDist : entry + trailDist;
+    fracOf = (m) => Math.min(1, Math.max(0, (m - base) / span));
   } else {
-    // Храповик взят (или его нет) → меряем отрезок до цели прибыли.
-    const base = armed && armDist != null ? armDist : 0; // старт отрезка
+    // Трейл ведёт (или вех больше нет) → меряем отрезок до цели прибыли.
+    const base = trailOn && trailDist != null
+      ? trailDist
+      : armed && armDist != null
+        ? armDist
+        : 0; // старт отрезка
     const span = Math.max(targetDist - base, 1e-9);
     phase = "profit";
     label = "до профита";
@@ -92,16 +123,36 @@ export function riskTint({
     if (!(peak > frac)) peak = null;
   }
 
-  // Tooltip: сколько ещё ($ + %) до вехи текущей фазы.
+  // Веха текущей фазы в favorable-% от входа — для подписи «→ TRAIL +2.00%»
+  // прямо на карточке, чтобы порог читался без наведения мышью.
+  const milestonePct =
+    (isShort ? entry - milestonePx : milestonePx - entry) / entry * 100;
+
+  // Tooltip: сколько ещё ($ + %) до вехи текущей фазы. На фазе трейла остаток
+  // считаем от ПИКА (он и взводит трейл), иначе тултип обещал бы больше, чем
+  // на самом деле осталось: пик уже ближе к вехе, чем текущая цена.
   let tip = label;
-  const remPct = ((milestonePx - now) / entry) * 100 * (isShort ? -1 : 1);
+  const gapRef = phase === "trail" && peakMove != null && peakMove > move
+    ? (isShort ? entry - peakMove : entry + peakMove)
+    : now;
+  const remPct = ((milestonePx - gapRef) / entry) * 100 * (isShort ? -1 : 1);
   tip += ` ${fmtPct(remPct)}`;
   if (sizeUsd != null) {
     const remUsd =
-      ((isShort ? (now - milestonePx) / entry : (milestonePx - now) / entry)) *
+      ((isShort ? (gapRef - milestonePx) / entry : (milestonePx - gapRef) / entry)) *
       sizeUsd;
     tip += ` (${fmtUsd(remUsd)})`;
   }
+  if (gapRef !== now) tip += " по пику";
 
-  return { inProfit, now: frac, peak, phase, label, hot: frac >= 0.85, tip };
+  return {
+    inProfit,
+    now: frac,
+    peak,
+    phase,
+    label,
+    milestonePct,
+    hot: frac >= 0.85,
+    tip,
+  };
 }

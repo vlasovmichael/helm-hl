@@ -187,6 +187,11 @@ function buildBotManagement(position) {
       beArmed,
       beArmPct: config.trading.hunterBeArmPct, // веха храповика (% от входа)
       trailArmed,
+      // Веха трейла (% от входа). Взводится по ПИКУ (MFE), не по текущей цене —
+      // фронт рисует до неё полосу, когда храповик уже взят или выключен.
+      trailArmPct: config.trading.hunterTrailEnabled
+        ? config.trading.hunterTrailArmPct
+        : null,
       floorPct, // живой пол в unrealized % (плюс = прибыль)
       floorPrice, // цена, на которой бот закроется сейчас
       floorKind, // 'trail' | 'be' | 'stop'
@@ -263,6 +268,8 @@ function buildAdoptManagement(adoptPos) {
     beArmed,
     beArmPct: t.adoptBeArmPct, // веха храповика (% от входа)
     trailArmed,
+    trailArmPct: t.adoptTrailArmPct, // веха трейла (% от входа), взвод по ПИКУ
+    trailGiveBackPct: t.adoptTrailGiveBackPct,
     floorPct,
     floorPrice,
     floorKind,
