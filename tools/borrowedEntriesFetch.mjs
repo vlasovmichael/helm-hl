@@ -175,12 +175,21 @@ export function pickAddresses(limit, seed = 42) {
 async function main() {
   const limit = parseInt(process.argv[2] || "40", 10);
   const days = parseInt(process.argv[3] || "30", 10);
-  const outFile = join(OUT_DIR, `trips_${limit}a_${days}d.json`);
+  // Произвольное окно: без него нельзя взять прошлый режим рынка, а сравнение
+  // «падающее vs растущее» — весь смысл замера. Даты в UTC, конец включительно.
+  const startArg = process.argv[4];
+  const endArg = process.argv[5];
+  const tag = startArg ? `${startArg}_${endArg}` : `${days}d`;
+  const outFile = join(OUT_DIR, `trips_${limit}a_${tag}.json`);
   mkdirSync(OUT_DIR, { recursive: true });
 
   const { addrs, poolSize } = pickAddresses(limit);
-  const end = Date.now();
-  const start = end - days * 864e5;
+  const end = endArg ? Date.parse(`${endArg}T00:00:00Z`) : Date.now();
+  const start = startArg ? Date.parse(`${startArg}T00:00:00Z`) : end - days * 864e5;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) {
+    throw new Error(`плохое окно: ${startArg}..${endArg}`);
+  }
+  console.log(`окно: ${new Date(start).toISOString().slice(0, 10)} → ${new Date(end).toISOString().slice(0, 10)}`);
   console.log(`пул адресов по обороту $${VLM_MIN / 1e3}k–$${VLM_MAX / 1e6}M: ${poolSize}; берём ${addrs.length}`);
 
   const all = [];

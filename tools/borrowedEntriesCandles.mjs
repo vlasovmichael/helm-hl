@@ -99,9 +99,14 @@ async function main() {
   }
   const { trips } = JSON.parse(readFileSync(tripsFile));
 
+  // ATR(1h,14) считается по барам ДО входа — нужно ~16 часов предыстории, иначе
+  // atrPctAtEntry вернёт null и стоп у всех свалится на фолбэк 5%, превратив
+  // замер ATR-стопа в замер фиксированного. Берём сутки с запасом.
+  const PREROLL_MS = 24 * 3600_000;
+
   const need = new Map();
   for (const t of trips) {
-    const from = t.entryTime - MIN_MS;
+    const from = t.entryTime - PREROLL_MS;
     const to = Math.min(Date.now(), Math.max(t.exitTime, t.entryTime + horizonH * 3600_000) + MIN_MS);
     const cur = need.get(t.coin) || { from, to, n: 0 };
     cur.from = Math.min(cur.from, from);
