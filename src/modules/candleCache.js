@@ -13,8 +13,43 @@ import { resolveApiCoin } from '../core/universe.js';
 const TTL_MS   = 5 * 60_000;
 const INTERVAL = '1h';
 
-// coin → { fetchedAt, candles, inflight }
+// coin → { fetchedAt, lastAccess, candles, inflight }
 const cache = new Map();
+
+// ── Вытеснение: почему у кэшей должен быть потолок ──────────────────────────
+//
+// Инцидент 2026-08-09 11:51: контейнер упал с
+//   FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap OOM
+// при rss всего 242 из 512 МБ и чистом dmesg — то есть это НЕ cgroup-OOM, как
+// 02.08, а потолок самого V8. Подъём лимита контейнера 256→512 МБ тогда лишь
+// сдвинул режим отказа: Node 20 выводит heap_size_limit из cgroup и поставил
+// себе 259 МБ, в который куча упирается раньше, чем rss в лимит ядра.
+//
+// Росли именно эти четыре карты. TTL здесь решал только «идти в сеть или отдать
+// кэш» — записи не удалялись НИКОГДА (clear*() существуют лишь для тестов).
+// Скаут и movers ходят по широкой вселенной (~1011 монет в PriceFeed против 232
+// в Universe), поэтому набор задетых монет расползался сутками: +1.9 МБ/ч
+// поверх базовых ~130 МБ и упор в потолок примерно за трое суток.
+//
+// Вытесняем по lastAccess, а НЕ по fetchedAt — это важно для деградации: когда
+// весовой бюджет занят, onFetchFail намеренно отдаёт протухшие свечи, при этом
+// fetchedAt стоит на месте, а обращения идут. По fetchedAt мы бы выбросили ровно
+// то, что сейчас нужнее всего (см. candleCacheDegrade.test.js).
+const EVICT_IDLE_MS     = parseInt(process.env.CANDLE_CACHE_IDLE_MS     || String(2 * 60 * 60_000), 10);
+// Жёсткий backstop на случай, если монеты трогают чаще, чем идёт вытеснение:
+// 400 > 232 монет Universe, то есть рабочий набор скана не страдает.
+const EVICT_MAX_ENTRIES = parseInt(process.env.CANDLE_CACHE_MAX_ENTRIES || '400', 10);
+// Подметать чаще нет смысла: это O(размер карты) и растёт всё медленно.
+const SWEEP_MIN_GAP_MS  = 5 * 60_000;
+
+const CACHES = [];   // [{ name, store }] — заполняется в конце файла
+let lastSweepAt = 0;
+
+/** Отметить обращение к монете: продлевает жизнь записи (см. блок выше). */
+function markAccess(store, coin, now) {
+  const entry = store.get(coin);
+  if (entry) entry.lastAccess = now;
+}
 
 /**
  * Парсит ответ candleSnapshot в наш формат.
@@ -66,6 +101,7 @@ function onFetchFail(store, coin, err, tag) {
  * @returns {Promise<Array<{open,high,low,close,time}>|null>}
  */
 export async function getHourlyCandles(coin, lookbackHours, now = Date.now(), priority = HL_PRIORITY.NORMAL) {
+  markAccess(cache, coin, now);
   const cached = cache.get(coin);
   if (cached && now - cached.fetchedAt < TTL_MS) {
     return cached.candles;
@@ -84,7 +120,7 @@ export async function getHourlyCandles(coin, lookbackHours, now = Date.now(), pr
     { label: `candleCache/${coin}`, priority },
   ).then((data) => {
     const candles = parseCandles(data);
-    cache.set(coin, { fetchedAt: Date.now(), candles, inflight: null });
+    cache.set(coin, { fetchedAt: Date.now(), lastAccess: Date.now(), candles, inflight: null });
     return candles;
   }).catch((err) => onFetchFail(cache, coin, err, 'CandleCache'));
 
@@ -99,7 +135,7 @@ export function clearCandleCache() {
 
 /** Прямая инжекция (тесты): задаёт «свежие» свечи без fetch'а. */
 export function seedCandleCache(coin, candles, now = Date.now()) {
-  cache.set(coin, { fetchedAt: now, candles, inflight: null });
+  cache.set(coin, { fetchedAt: now, lastAccess: now, candles, inflight: null });
 }
 
 // ── 5-минутные свечи (для Candy Girl радара) ────────────────────────────────
@@ -118,6 +154,7 @@ const cache5m = new Map();   // coin → { fetchedAt, candles, inflight }
  * @returns {Promise<Array<{open,high,low,close,time}>|null>}
  */
 export async function getFiveMinCandles(coin, lookbackMinutes, now = Date.now()) {
+  markAccess(cache5m, coin, now);
   const cached = cache5m.get(coin);
   if (cached && now - cached.fetchedAt < FIVE_MIN_TTL_MS) {
     return cached.candles;
@@ -135,7 +172,7 @@ export async function getFiveMinCandles(coin, lookbackMinutes, now = Date.now())
     { label: `candleCache5m/${coin}` },
   ).then((data) => {
     const candles = parseCandles(data);
-    cache5m.set(coin, { fetchedAt: Date.now(), candles, inflight: null });
+    cache5m.set(coin, { fetchedAt: Date.now(), lastAccess: Date.now(), candles, inflight: null });
     return candles;
   }).catch((err) => onFetchFail(cache5m, coin, err, 'CandleCache5m'));
 
@@ -145,7 +182,7 @@ export async function getFiveMinCandles(coin, lookbackMinutes, now = Date.now())
 
 /** Прямая инжекция 5m-свечей (тесты). */
 export function seedFiveMinCache(coin, candles, now = Date.now()) {
-  cache5m.set(coin, { fetchedAt: now, candles, inflight: null });
+  cache5m.set(coin, { fetchedAt: now, lastAccess: now, candles, inflight: null });
 }
 
 /** Очистить 5m-кэш (тесты). */
@@ -171,6 +208,7 @@ const cache15m = new Map();   // coin → { fetchedAt, candles, inflight }
  * @returns {Promise<Array<{open,high,low,close,time}>|null>}
  */
 export async function getFifteenMinCandles(coin, lookbackMinutes, now = Date.now(), priority = HL_PRIORITY.LOW) {
+  markAccess(cache15m, coin, now);
   const cached = cache15m.get(coin);
   if (cached && now - cached.fetchedAt < FIFTEEN_MIN_TTL_MS) {
     return cached.candles;
@@ -188,7 +226,7 @@ export async function getFifteenMinCandles(coin, lookbackMinutes, now = Date.now
     { label: `candleCache15m/${coin}`, priority },
   ).then((data) => {
     const candles = parseCandles(data);
-    cache15m.set(coin, { fetchedAt: Date.now(), candles, inflight: null });
+    cache15m.set(coin, { fetchedAt: Date.now(), lastAccess: Date.now(), candles, inflight: null });
     return candles;
   }).catch((err) => onFetchFail(cache15m, coin, err, 'CandleCache15m'));
 
@@ -198,7 +236,7 @@ export async function getFifteenMinCandles(coin, lookbackMinutes, now = Date.now
 
 /** Прямая инжекция 15m-свечей (тесты). */
 export function seedFifteenMinCache(coin, candles, now = Date.now()) {
-  cache15m.set(coin, { fetchedAt: now, candles, inflight: null });
+  cache15m.set(coin, { fetchedAt: now, lastAccess: now, candles, inflight: null });
 }
 
 /** Очистить 15m-кэш (тесты). */
@@ -222,6 +260,7 @@ const cache4h = new Map();   // coin → { fetchedAt, candles, inflight }
  * @returns {Promise<Array<{open,high,low,close,time}>|null>}
  */
 export async function getFourHourCandles(coin, lookbackHours, now = Date.now()) {
+  markAccess(cache4h, coin, now);
   const cached = cache4h.get(coin);
   if (cached && now - cached.fetchedAt < FOUR_HOUR_TTL_MS) {
     return cached.candles;
@@ -239,7 +278,7 @@ export async function getFourHourCandles(coin, lookbackHours, now = Date.now()) 
     { label: `candleCache4h/${coin}` },
   ).then((data) => {
     const candles = parseCandles(data);
-    cache4h.set(coin, { fetchedAt: Date.now(), candles, inflight: null });
+    cache4h.set(coin, { fetchedAt: Date.now(), lastAccess: Date.now(), candles, inflight: null });
     return candles;
   }).catch((err) => onFetchFail(cache4h, coin, err, 'CandleCache4h'));
 
@@ -249,10 +288,87 @@ export async function getFourHourCandles(coin, lookbackHours, now = Date.now()) 
 
 /** Прямая инжекция 4h-свечей (тесты). */
 export function seedFourHourCache(coin, candles, now = Date.now()) {
-  cache4h.set(coin, { fetchedAt: now, candles, inflight: null });
+  cache4h.set(coin, { fetchedAt: now, lastAccess: now, candles, inflight: null });
 }
 
 /** Очистить 4h-кэш (тесты). */
 export function clearFourHourCache() {
   cache4h.clear();
+}
+
+// ── Подметалка ──────────────────────────────────────────────────────────────
+// Регистрируем все четыре карты в одном месте (после их объявления), чтобы
+// вытеснение было общим и никакой пятый кэш не завёлся мимо него.
+CACHES.push(
+  { name: '1h',  store: cache },
+  { name: '5m',  store: cache5m },
+  { name: '15m', store: cache15m },
+  { name: '4h',  store: cache4h },
+);
+
+/**
+ * Вытесняет давно не используемые записи из всех кэшей свечей.
+ *
+ * Два правила, второе — страховка первого:
+ *   1) idle > EVICT_IDLE_MS по lastAccess — монету перестали смотреть;
+ *   2) size > EVICT_MAX_ENTRIES — выкидываем самые давние по lastAccess.
+ * Записи с inflight не трогаем никогда: их ждёт await в getters, удаление
+ * карты из-под промиса привело бы к повторному сетевому запросу.
+ *
+ * Вызывается из tick() — там же, где живёт весь остальной периодический труд.
+ * Сам себя троттлит (SWEEP_MIN_GAP_MS), поэтому звать можно хоть каждый тик.
+ *
+ * @param {number} [now=Date.now()]
+ * @param {{force?: boolean}} [opts] — force обходит троттл (тесты)
+ * @returns {{evicted:number, kept:number}|null} — null если троттл пропустил
+ */
+export function sweepCandleCaches(now = Date.now(), { force = false } = {}) {
+  if (!force && now - lastSweepAt < SWEEP_MIN_GAP_MS) return null;
+  lastSweepAt = now;
+
+  let evicted = 0;
+  let kept    = 0;
+  const parts = [];
+
+  for (const { name, store } of CACHES) {
+    const before = store.size;
+
+    for (const [coin, entry] of store) {
+      if (entry.inflight) continue;
+      if (now - (entry.lastAccess ?? entry.fetchedAt ?? 0) > EVICT_IDLE_MS) store.delete(coin);
+    }
+
+    if (store.size > EVICT_MAX_ENTRIES) {
+      const victims = [...store.entries()]
+        .filter(([, e]) => !e.inflight)
+        .sort((a, b) => (a[1].lastAccess ?? 0) - (b[1].lastAccess ?? 0))
+        .slice(0, store.size - EVICT_MAX_ENTRIES);
+      for (const [coin] of victims) store.delete(coin);
+    }
+
+    evicted += before - store.size;
+    kept    += store.size;
+    if (before !== store.size) parts.push(`${name}: ${before}→${store.size}`);
+  }
+
+  if (evicted > 0) {
+    logger.info(`[CandleCache] вытеснено ${evicted}, осталось ${kept} | ${parts.join(', ')}`);
+  }
+  return { evicted, kept };
+}
+
+/** Размеры кэшей — для [Mem]-строки и тестов. */
+export function candleCacheStats() {
+  const sizes = {};
+  let total = 0;
+  for (const { name, store } of CACHES) {
+    sizes[name] = store.size;
+    total += store.size;
+  }
+  return { sizes, total };
+}
+
+/** Сброс троттла подметалки (тесты). */
+export function _resetSweepThrottleForTest() {
+  lastSweepAt = 0;
 }

@@ -15,6 +15,7 @@ import { stopPriceFeed } from '../core/priceFeed.js';
 import { stopWsExitLoop } from './wsExitTick.js';
 import { stopTickWatchdog } from './tickWatchdog.js';
 import { stopMemWatch } from './memWatch.js';
+import { markCleanShutdown } from './restartWatch.js';
 import { stopWsEntryLoop } from './wsEntryTick.js';
 import { state, BOT_STATE_PATH, BOT_STATE_FLUSH_INTERVAL_MS } from './state.js';
 
@@ -260,6 +261,15 @@ export async function shutdown(signal) {
     } catch (err) {
       logger.error(`[System] ❌ DB close error: ${err.message}`);
     }
+  }
+
+  // Маркер штатного выхода — ставим последним, когда всё уже прибрано. Если
+  // процесс умрёт раньше этой строки, следующий старт увидит clean:false и
+  // протрубит (см. restartWatch.js).
+  try {
+    markCleanShutdown();
+  } catch (err) {
+    logger.warn(`[System] Clean-exit marker failed: ${err.message}`);
   }
 
   const elapsed = Date.now() - t0;

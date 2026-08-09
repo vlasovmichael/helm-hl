@@ -25,6 +25,7 @@ import { flushBotStatePeriodic } from './lifecycle.js';
 import { state } from './state.js';
 import { refreshDailyRisk } from '../modules/dailyRisk.js';
 import { fireAdoptNtfy } from './adoptReconcile.js';
+import { sweepCandleCaches } from '../modules/candleCache.js';
 
 export async function tick() {
   if (state.tickRunning || state.shuttingDown) return;
@@ -198,6 +199,10 @@ export async function tick() {
   } finally {
     state.tickRunning = false;
     state.lastTickAt = Date.now();
+    // Вытеснение кэшей свечей — они росли без потолка и уронили процесс по
+    // heap-limit 09.08 (см. шапку candleCache.js). Сама себя троттлит до раза в
+    // 5 мин, поэтому живёт в finally: подметём даже если тик упал с ошибкой.
+    try { sweepCandleCaches(); } catch (err) { logger.debug(`[CandleCache] sweep: ${err.message}`); }
     await flushBotStatePeriodic();
   }
 }

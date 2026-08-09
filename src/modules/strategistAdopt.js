@@ -15,6 +15,7 @@
 
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
+import { setAdoptTrail, getAdoptTrailAll, clearAdoptTrail } from './adoptTrailStore.js';
 
 const peakPctMap   = new Map(); // positionId → peak unrealized% (MFE)
 const troughPctMap = new Map(); // positionId → min unrealized% (MAE, ≤0 обычно)
@@ -25,21 +26,45 @@ const BE_FLOOR  = config.trading.adoptBeFloorPct;
 const TRAIL_ARM = config.trading.adoptTrailArmPct;
 const TRAIL_GB  = config.trading.adoptTrailGiveBackPct;
 
+// Пик персистим, только когда он уже влияет на защиту — то есть дорос до
+// ближайшего из порогов. Мелкие колебания у нуля писать на диск незачем: они
+// ничего не решают, а запись идёт на каждый тик по каждой позе.
+const PERSIST_FROM_PCT = Math.min(BE_ARM, TRAIL_ARM);
+
+// Восстановление мягкого состояния с диска после рестарта (09.08: до этого пик
+// жил только в памяти и обнулялся, см. шапку adoptTrailStore.js). Ключи в JSON —
+// строки, мапы здесь — по числовому position.id, отсюда Number().
+let restoredFromDisk = false;
+function restoreFromDiskOnce() {
+  if (restoredFromDisk) return;
+  restoredFromDisk = true;
+  for (const [pid, v] of Object.entries(getAdoptTrailAll())) {
+    const id = Number(pid);
+    if (!Number.isFinite(id)) continue;
+    if (typeof v.peak === 'number' && v.peak > 0)     peakPctMap.set(id, v.peak);
+    if (typeof v.trough === 'number' && v.trough < 0) troughPctMap.set(id, v.trough);
+    if (v.beArmed === true) beArmedMap.set(id, true);
+  }
+}
+
 /** Чистит per-position state (вызывается из close-handler'а). */
 export function clearAdoptState(positionId) {
   if (positionId == null) return;
   peakPctMap.delete(positionId);
   troughPctMap.delete(positionId);
   beArmedMap.delete(positionId);
+  clearAdoptTrail(positionId); // снять персист, иначе орфан доживёт до TTL
 }
 
 /** Текущий peak unrealized% (для exitFeatures при close). */
 export function getAdoptPeakPct(positionId) {
+  restoreFromDiskOnce();
   return peakPctMap.get(positionId) ?? 0;
 }
 
 /** Текущий trough unrealized% (MAE, ≤0) — для «призрака просадки» на карточке. */
 export function getAdoptMaePct(positionId) {
+  restoreFromDiskOnce();
   return troughPctMap.get(positionId) ?? 0;
 }
 
@@ -50,6 +75,7 @@ export function getAdoptMaePct(positionId) {
  */
 export function consumeAdoptMfeMae(positionId) {
   if (positionId == null) return { mfePct: null, maePct: null };
+  restoreFromDiskOnce();
   return {
     mfePct: peakPctMap.has(positionId)   ? peakPctMap.get(positionId)   : null,
     maePct: troughPctMap.has(positionId) ? troughPctMap.get(positionId) : null,
@@ -61,6 +87,7 @@ export function resetAdoptState() {
   peakPctMap.clear();
   troughPctMap.clear();
   beArmedMap.clear();
+  restoredFromDisk = false;
 }
 
 /**
@@ -71,7 +98,9 @@ export function resetAdoptState() {
  */
 export function analyzeAdopt(position, price) {
   if (!Number.isFinite(price) || price <= 0) return { action: 'HOLD' };
+  restoreFromDiskOnce();
 
+  const isPersisted = position.mode === 'PRODUCTION';
   const isShort = (position.side || 'short') === 'short';
   const entry   = position.entry_price;
   const unrealizedPct = isShort
@@ -79,13 +108,26 @@ export function analyzeAdopt(position, price) {
     : ((price - entry) / entry) * 100;
 
   const prevPeak = peakPctMap.get(position.id) ?? 0;
-  if (unrealizedPct > prevPeak) peakPctMap.set(position.id, unrealizedPct);
+  if (unrealizedPct > prevPeak) {
+    peakPctMap.set(position.id, unrealizedPct);
+    if (isPersisted && unrealizedPct >= PERSIST_FROM_PCT) {
+      setAdoptTrail(position.id, { peak: unrealizedPct });
+    }
+  }
   const peak = peakPctMap.get(position.id) ?? 0;
 
   // MAE: худшая просадка против позы (для exitFeatures — анализ «ушло ли в плюс
   // перед стопом»). Старт 0: если поза не была в минусе, MAE остаётся 0.
   const prevTrough = troughPctMap.get(position.id) ?? 0;
-  if (unrealizedPct < prevTrough) troughPctMap.set(position.id, unrealizedPct);
+  if (unrealizedPct < prevTrough) {
+    troughPctMap.set(position.id, unrealizedPct);
+    // MAE пишем только по позам, у которых уже есть персистируемый пик — сам по
+    // себе он на выход не влияет, но без него exitFeatures после рестарта
+    // покажут «просадки не было», что портит разбор.
+    if (isPersisted && peak >= PERSIST_FROM_PCT) {
+      setAdoptTrail(position.id, { trough: unrealizedPct });
+    }
+  }
 
   // ── Трейл: даём тянуться, фиксируем на откате ──
   if (peak >= TRAIL_ARM && unrealizedPct > 0) {
@@ -108,7 +150,10 @@ export function analyzeAdopt(position, price) {
   }
 
   // ── BE-храповик: не отдать подарок в минус ──
-  if (peak >= BE_ARM) beArmedMap.set(position.id, true);
+  if (peak >= BE_ARM && beArmedMap.get(position.id) !== true) {
+    beArmedMap.set(position.id, true);
+    if (isPersisted) setAdoptTrail(position.id, { beArmed: true });
+  }
   if (beArmedMap.get(position.id) === true && unrealizedPct <= BE_FLOOR) {
     logger.warn(
       `[Adopt] 🛡 BREAKEVEN RATCHET #${position.coin}: peak +${peak.toFixed(2)}% → ` +

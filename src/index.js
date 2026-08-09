@@ -16,6 +16,7 @@ import { drainOutbox as taxDrainOutbox } from './modules/taxCollector/pusher.js'
 import { state, TICK_INTERVAL_MS, INTEGRITY_GRACE_PERIOD_MS, SHUTDOWN_TIMEOUT_MS } from './app/state.js';
 import { tick } from './app/tick.js';
 import { restoreHunterTrailIfNeeded } from './app/hunterTrailArm.js';
+import { reportRestartIfUnclean } from './app/restartWatch.js';
 import { startPriceFeed } from './core/priceFeed.js';
 import { startWsExitLoop } from './app/wsExitTick.js';
 import { startWsEntryLoop } from './app/wsEntryTick.js';
@@ -245,6 +246,15 @@ async function main() {
   // OOM-kill по лимиту cgroup убивал процесс молча (02.08, дважды за двое
   // суток). Даёт кривую RSS для «утечка или кэш» и пуш до потолка, а не после.
   startMemWatch();
+
+  // ── Голос у самого рестарта ────────────────────
+  // [Mem] предупреждает до упора, сторож ловит замерший тик — но мгновенная
+  // смерть с подъёмом за 25мс не даёт ни того, ни другого. Это сигнал по факту.
+  try {
+    await reportRestartIfUnclean();
+  } catch (err) {
+    logger.warn(`[RestartWatch] старт-проверка не прошла (non-fatal): ${err.message}`);
+  }
 
   const handleSignal = (signal) => {
     setTimeout(() => {
