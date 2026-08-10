@@ -38,6 +38,16 @@ import { fireAdoptNtfy } from './adoptReconcile.js';
 import { candleCacheStats } from '../modules/candleCache.js';
 
 const SAMPLE_EVERY_MS = parseInt(process.env.MEM_WATCH_INTERVAL_MS || '600000', 10);
+// ── Дополнение 2026-08-10: замер оказался крупнее события ────────────────────
+// Третье падение (23:04) и четвёртое (23:41, всего через 37 минут) пришли не
+// течью: между двумя соседними замерами куча стояла на 145МБ, а через четыре
+// минуты процесс умер на 252. Десятиминутный интервал такой залп не видит — в
+// логе остаётся ровная кривая и сразу FATAL, виновника назвать нечем.
+// Поэтому поверх обычного замера идёт частый лёгкий опрос, который молчит,
+// пока куча не прыгнет разом: тогда в лог падает строка рядом с той
+// активностью, которая её и раздула.
+const FAST_EVERY_MS = parseInt(process.env.MEM_WATCH_FAST_INTERVAL_MS || '30000', 10);
+const JUMP_BYTES = parseInt(process.env.MEM_WATCH_JUMP_MB || '40', 10) * 1024 * 1024;
 // 80% потолка: на замеренном темпе (~200 МБ за 1.5 суток) это несколько часов
 // форы — хватит зайти и посмотреть, а не «оно уже упало».
 const ALERT_AT = parseFloat(process.env.MEM_WATCH_ALERT_FRACTION || '0.8');
@@ -45,10 +55,12 @@ const ALERT_AT = parseFloat(process.env.MEM_WATCH_ALERT_FRACTION || '0.8');
 const REARM_AT = ALERT_AT - 0.1;
 
 let timer = null;
+let fastTimer = null;
 let alerted = false;
 let peakRss = 0;
 let firstRss = 0;
 let firstAt = 0;
+let lastFastHeap = 0;
 
 /**
  * Лимит памяти cgroup в байтах, или null если безлимит/не в контейнере.
@@ -97,7 +109,46 @@ export function pickBindingCeiling({ rss, heapUsed, cgroupLimit, heapLimit }) {
   return candidates.reduce((a, b) => (b.fraction > a.fraction ? b : a));
 }
 
+/**
+ * Чистое решение (для тестов): считать ли скачок кучи достойным строки в логе.
+ *
+ * Первый опрос после старта опорной точки не имеет (prev = 0) и обязан молчать,
+ * иначе каждый рестарт давал бы ложную «тревогу» на пустом месте.
+ *
+ * @param {{heapUsed:number, prevHeapUsed:number, jumpBytes:number}} p
+ */
+export function shouldReportJump({ heapUsed, prevHeapUsed, jumpBytes }) {
+  if (!(prevHeapUsed > 0)) return false;
+  return heapUsed - prevHeapUsed >= jumpBytes;
+}
+
 const mb = (bytes) => Math.round(bytes / 1024 / 1024);
+
+/**
+ * Частый лёгкий опрос: молчит, пока куча не прыгнет разом на JUMP_BYTES.
+ * Ничего не пушит — это диагностика для лога, а не риск-алерт (пуш на потолок
+ * живёт отдельно, в sample()).
+ */
+function fastSample() {
+  if (state.shuttingDown) return;
+  const { rss, heapUsed, heapTotal } = process.memoryUsage();
+
+  if (shouldReportJump({ heapUsed, prevHeapUsed: lastFastHeap, jumpBytes: JUMP_BYTES })) {
+    let caches = '';
+    try {
+      const { total, sizes } = candleCacheStats();
+      caches = ` | свечи ${total} (${Object.entries(sizes).map(([k, v]) => `${k}:${v}`).join(' ')})`;
+    } catch { /* диагностика не должна ронять замер */ }
+    const heapLimit = v8.getHeapStatistics().heap_size_limit || null;
+    logger.warn(
+      `[Mem] ⚡ скачок кучи +${mb(heapUsed - lastFastHeap)}МБ за ${Math.round(FAST_EVERY_MS / 1000)}с: ` +
+      `${mb(lastFastHeap)}→${mb(heapUsed)}МБ${heapLimit ? ` из ${mb(heapLimit)}МБ` : ''} ` +
+      `| rss=${mb(rss)}МБ heapTotal=${mb(heapTotal)}МБ${caches}`,
+    );
+  }
+
+  lastFastHeap = heapUsed;
+}
 
 async function sample() {
   if (state.shuttingDown) return;
@@ -166,9 +217,14 @@ export function startMemWatch() {
     sample().catch((err) => logger.debug(`[Mem] ${err.message}`));
   }, SAMPLE_EVERY_MS);
   timer.unref?.();
+  fastTimer = setInterval(() => {
+    try { fastSample(); } catch (err) { logger.debug(`[Mem] fast ${err.message}`); }
+  }, FAST_EVERY_MS);
+  fastTimer.unref?.();
   const heapLimit = v8.getHeapStatistics().heap_size_limit || null;
   logger.info(
     `[Mem] started — замер каждые ${Math.round(SAMPLE_EVERY_MS / 60000)}мин, ` +
+    `ловля скачков каждые ${Math.round(FAST_EVERY_MS / 1000)}с (порог +${mb(JUMP_BYTES)}МБ), ` +
     `алерт на ${Math.round(ALERT_AT * 100)}% ближайшего потолка | ` +
     `cgroup ${limit ? `${mb(limit)}МБ` : 'не найден'}, куча V8 ${heapLimit ? `${mb(heapLimit)}МБ` : 'не определён'}`,
   );
@@ -181,5 +237,9 @@ export function stopMemWatch() {
   if (timer) {
     clearInterval(timer);
     timer = null;
+  }
+  if (fastTimer) {
+    clearInterval(fastTimer);
+    fastTimer = null;
   }
 }

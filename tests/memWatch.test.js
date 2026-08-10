@@ -11,7 +11,7 @@ import fs from 'node:fs';
 
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-const { readCgroupLimitBytes, shouldAlertMemory } = await import('../src/app/memWatch.js');
+const { readCgroupLimitBytes, shouldAlertMemory, shouldReportJump } = await import('../src/app/memWatch.js');
 
 test('порог: трубим на 80% потолка, молчим ниже', () => {
   assert.equal(shouldAlertMemory({ fraction: 0.79, alreadyAlerted: false }), false);
@@ -41,4 +41,25 @@ test('cgroup v1 без лимита (~2^63) не считается потолк
 test('нет файлов cgroup (не в контейнере) → null, без исключения', (t) => {
   t.mock.method(fs, 'readFileSync', () => { throw new Error('ENOENT'); });
   assert.equal(readCgroupLimitBytes(), null);
+});
+
+// ── Ловля залпа (10.08.2026) ────────────────────────────────────────────────
+// Третье и четвёртое падения пришли не течью: между замерами куча стояла на
+// 145МБ, через четыре минуты процесс умер на 252. Десятиминутный интервал такое
+// не видит, поэтому поверх него — частый опрос, который молчит до скачка.
+const MB = 1024 * 1024;
+
+test('скачок: молчим на плавном росте, говорим на залпе', () => {
+  const jumpBytes = 40 * MB;
+  assert.equal(shouldReportJump({ heapUsed: 150 * MB, prevHeapUsed: 145 * MB, jumpBytes }), false);
+  assert.equal(shouldReportJump({ heapUsed: 185 * MB, prevHeapUsed: 145 * MB, jumpBytes }), true);
+  assert.equal(shouldReportJump({ heapUsed: 252 * MB, prevHeapUsed: 145 * MB, jumpBytes }), true);
+});
+
+test('первый опрос после старта опорной точки не имеет и обязан молчать', () => {
+  assert.equal(shouldReportJump({ heapUsed: 250 * MB, prevHeapUsed: 0, jumpBytes: 40 * MB }), false);
+});
+
+test('падение кучи (GC собрал) — не скачок', () => {
+  assert.equal(shouldReportJump({ heapUsed: 90 * MB, prevHeapUsed: 240 * MB, jumpBytes: 40 * MB }), false);
 });

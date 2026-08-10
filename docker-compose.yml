@@ -6,6 +6,23 @@ services:
     env_file: .env
     environment:
       TZ: ${TZ:-Europe/Warsaw}
+      # Потолок кучи задаём САМИ, а не отдаём на откуп ноде.
+      #
+      # Why (10.08.2026, третье и четвёртое падения): Node выводит heap_size_limit
+      # из cgroup и при лимите 512М ставил себе 259М. Рабочая база бота — heap
+      # 140-170М при rss 230-260, то есть процесс постоянно жил ВПЛОТНУЮ к
+      # потолку, и любой залп его убивал. Между падениями было 1д 8ч, потом 37
+      # минут — время смерти стало лотереей.
+      #
+      # 440М кучи + ~85М оверхеда ≈ 525М rss, поэтому cgroup поднят до 768М:
+      # нужен запас и на сам снимок кучи, который пишется в момент упора.
+      # Снимок (--heapsnapshot-near-heap-limit=1, один на запуск) уходит в
+      # /app/data — это смонтированный том, он переживёт рестарт. Без него
+      # виновника залпа назвать нечем: [Mem] раз в 10 минут крупнее события.
+      NODE_OPTIONS: >-
+        --max-old-space-size=440
+        --heapsnapshot-near-heap-limit=1
+        --diagnostic-dir=/app/data
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
@@ -13,9 +30,11 @@ services:
       resources:
         limits:
           # 256M упирался в потолок за ~1.5 суток → тихий OOM-kill и рестарт
-          # (01.08 и 02.08). 512M — это фора на неделю+, пока [Mem] в логе
-          # покажет, утечка это или честный рост кэшей. Хост свободен (20 ГБ).
-          memory: 512M
+          # (01.08 и 02.08). 512M сдвинул режим отказа на потолок кучи V8 (09.08,
+          # 10.08 дважды). 768M — чтобы связывающим стал заданный нами
+          # --max-old-space-size, а не случайное число от ноды. Хост свободен
+          # (19 ГБ из 24).
+          memory: 768M
     ports:
       - "127.0.0.1:3010:3010"
     networks:
@@ -90,7 +109,9 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: dbos
-      POSTGRES_PASSWORD: ${DBOS_DB_PASSWORD:?нужен DBOS_DB_PASSWORD в .env}
+      # Пароль лежит в .env на сервере (сгенерирован `openssl rand -hex 32` —
+      # 32 байта энтропии, 64 символа в hex). В репо его нет и быть не должно.
+      POSTGRES_PASSWORD: ${DBOS_DB_PASSWORD}
       POSTGRES_DB: dbos_hl
       TZ: ${TZ:-Europe/Warsaw}
     volumes:
