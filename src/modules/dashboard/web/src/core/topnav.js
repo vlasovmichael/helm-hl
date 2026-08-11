@@ -51,7 +51,7 @@ const LINKS = [
   // убрали — стакан оператору тяжело читается, не нужен на видном месте (2026-06-28).
   { key: "statistics", href: "/statistics.html", label: "Statistics" },
   { key: "oi", href: "/oi.html", label: "OI", title: "История open interest по всем монетам (ΔOI 24ч/1ч)" },
-  { key: "lab", href: "/lab.html", label: "Lab", title: "Research: BTC Divergence + Whale Watch" },
+  { key: "lab", href: "/lab.html", label: "Lab", title: "Research: реестр стратегий + закрытые вердикты" },
   { key: "journal", href: "/journal.html", label: "Journal", title: "Журнал чтения графика — разметка монеты на сутки вперёд" },
   { key: "ledger", href: "/ledger.html", label: "Ledger", title: "Monthly P&L ledger" },
 ];
