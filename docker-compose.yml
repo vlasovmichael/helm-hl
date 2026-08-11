@@ -23,6 +23,13 @@ services:
         --max-old-space-size=440
         --heapsnapshot-near-heap-limit=1
         --diagnostic-dir=/app/data
+    # Docker по умолчанию даёт на остановку 10 секунд, а уборка у бота из шести
+    # шагов: дождаться тика, снять позицию из БД, сохранить стейт, проверить
+    # защитные ордера на бирже, отбить Telegram и слить WAL. В десять секунд она
+    # не укладывалась НИ РАЗУ (2026-08-11) — процесс добивался SIGKILL'ом на
+    # шаге 1/6. Первопричину (висящий server.close при живом WebSocket) починили
+    # в dashboard/server.js; это второй пояс на случай медленной сети или биржи.
+    stop_grace_period: 90s
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data

@@ -99,6 +99,10 @@ import {
 
 const HOST = "0.0.0.0";
 const PORT = 3010;
+// Потолок ожидания закрытия сокетов при shutdown. Держим сильно ниже
+// stop_grace_period в compose: за ним начинается SIGKILL, а нам нужно успеть
+// ещё пять шагов уборки, включая чекпоинт WAL.
+const DASHBOARD_STOP_TIMEOUT_MS = 3_000;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1243,11 +1247,40 @@ export function stopDashboard() {
   }
   if (!server) return;
   return new Promise((resolve) => {
-    if (wss) wss.close();
-    server.close(() => {
-      logger.info("[Dashboard] ✅ Server stopped");
+    let settled = false;
+    const finish = (how) => {
+      if (settled) return;
+      settled = true;
+      logger.info(`[Dashboard] ✅ Server stopped (${how})`);
       server = null;
       resolve();
-    });
+    };
+
+    // ── Почему тут явный terminate, а не просто close (2026-08-11) ────────
+    // server.close() перестаёт ПРИНИМАТЬ соединения, но ЖДЁТ закрытия уже
+    // открытых. Вкладка дашборда держит WebSocket бессрочно, а wss.close()
+    // живых клиентов не рвёт — поэтому колбэк server.close() не срабатывал
+    // никогда. Из-за этого graceful shutdown ни разу не уходил дальше шага
+    // 1/6: процесс добивался SIGKILL'ом через 10с (дефолт docker stop).
+    //
+    // Цена была не косметическая. Не выполнялись шаги 2-6, в том числе
+    // wal_checkpoint(TRUNCATE) — тот самый, что добавляли против повреждения
+    // базы 25.05, — и маркер штатного выхода. Из-за отсутствия маркера
+    // КАЖДЫЙ рестарт, включая обычный деплой, поднимал алерт «оборвался без
+    // штатного shutdown», то есть прибор для ловли OOM всегда орал одинаково.
+    if (wss) {
+      for (const client of wss.clients) {
+        try { client.terminate(); } catch { /* сокет уже мёртв — не мешает */ }
+      }
+      wss.close();
+    }
+    server.close(() => finish("соединения закрыты"));
+    // Keep-alive HTTP-сокеты держат сервер так же, как WS. Node 18.2+.
+    server.closeAllConnections?.();
+
+    // Страховка: что бы ни удерживало сокет, shutdown обязан идти дальше.
+    // Зависнуть здесь дороже, чем недозакрыть сервер, который через секунду
+    // умрёт вместе с процессом.
+    setTimeout(() => finish("по таймауту"), DASHBOARD_STOP_TIMEOUT_MS).unref();
   });
 }
