@@ -41,8 +41,20 @@ function saveRegistry(reg) {
  * Предзаявление. Вызывается ДО того, как увидены любые результаты.
  * Повторная регистрация того же id запрещена: иначе формулировку можно было бы
  * подкрутить после первого взгляда на данные, что убивает весь смысл.
+ *
+ * stopRule (2026-08-11) — недостающая защита. Пункты 1-5 в шапке ловят подгонку
+ * формулировки и множественность, но НЕ ловят подглядывание: если смотреть на
+ * накопление каждую неделю и остановиться, когда стало красиво, то ложное
+ * срабатывание почти гарантировано — это optional stopping, и он ломает p-value
+ * независимо от того, насколько честно посчитан сам тест. Поэтому момент оценки
+ * заявляется ЗАРАНЕЕ: {n: 277} = «оценивать ровно один раз, когда наберётся
+ * 277 событий, и ни на одном промежуточном n».
+ *
+ * postHoc — честная пометка «гипотеза придумана ПОСЛЕ взгляда на данные».
+ * Такую нельзя проверять на тех же данных, которые её породили; она обязана
+ * ждать свежих. Флаг нужен, чтобы через три месяца это не забылось.
  */
-export function preregister({ id, description, side, holdMin, rationale, condition }) {
+export function preregister({ id, description, side, holdMin, rationale, condition, stopRule, evaluation, postHoc = false, evaluateAfter }) {
   const reg = loadRegistry();
   if (reg.hypotheses.some((h) => h.id === id)) {
     throw new Error(`гипотеза «${id}» уже зарегистрирована — переформулировка после регистрации запрещена`);
@@ -54,6 +66,10 @@ export function preregister({ id, description, side, holdMin, rationale, conditi
     side,
     holdMin,
     rationale,
+    stopRule,
+    evaluation,
+    postHoc,
+    evaluateAfter,
     preregisteredAt: new Date().toISOString(),
   });
   saveRegistry(reg);
