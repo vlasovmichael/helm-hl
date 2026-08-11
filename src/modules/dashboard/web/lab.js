@@ -18,6 +18,11 @@ import {
 import { mountTopnav } from "./src/core/topnav.js";
 import { renderStrategies } from "./src/features/strategies.js";
 import { refreshLeaderboardPersistence } from "./src/features/leaderboardPersistence.js";
+import {
+  refreshExecutionQuality,
+  refreshDiscipline,
+  refreshExternalCalls,
+} from "./src/features/research.js";
 
 // ── Bootstrap ──
 mountTopnav("lab");
@@ -29,4 +34,11 @@ initWebSocket({
 // Персистентность лидерборда: снимки недельные, счёт кэширован на 6ч —
 // поллить незачем, тянем один раз при открытии страницы.
 refreshLeaderboardPersistence();
+// Три накопителя, запущенные 11.08. Стакан пишется раз в минуту — его и
+// обновляем чаще; дисциплина и прогнозы пересчитываются кроном раз в сутки,
+// поллить их незачем.
+refreshExecutionQuality();
+setInterval(refreshExecutionQuality, 60_000);
+refreshDiscipline();
+refreshExternalCalls();
 startFooterTimer();

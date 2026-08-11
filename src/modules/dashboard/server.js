@@ -58,6 +58,11 @@ import {
 import { handleMarketContext } from "./routes/marketContext.js";
 import { handleOiOverview, handleOiCoin } from "./routes/oiCollector.js";
 import { handleSpikeFade } from "./routes/spikeFade.js";
+import {
+  handleExecutionQuality,
+  handleDiscipline,
+  handleExternalCalls,
+} from "./routes/research.js";
 import { handleLeaderboardPersistence } from "./routes/leaderboard.js";
 import {
   handleList as handleManualPaperList,
@@ -994,6 +999,10 @@ export function startDashboard() {
   app.get("/api/oi-collector/coin", handleOiCoin);
   app.get("/api/spike-fade", handleSpikeFade);
   app.get("/api/leaderboard-persistence", handleLeaderboardPersistence);
+  // Три накопителя, запущенные 11.08.2026 (см. routes/research.js).
+  app.get("/api/execution-quality", handleExecutionQuality);
+  app.get("/api/discipline", handleDiscipline);
+  app.get("/api/external-calls", handleExternalCalls);
   app.get("/api/scanner", handleScannerApi);
   app.get("/api/coin-of-day", handleCoinOfDay);
   app.get("/api/btc-divergence/all", handleBtcDivergenceAll);

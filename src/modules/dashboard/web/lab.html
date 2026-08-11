@@ -162,6 +162,107 @@
         ></div>
       </section>
 
+      <!-- 03 / Качество исполнения — стакан копится только вперёд.
+           feeAudit показал 100% тейкера и 5.8 бп по факту; вопрос «а не ждать ли
+           мейкером» упирается в спред, а исторический стакан HL не отдаёт вообще.
+           Данные: tools/bookCollector.mjs (крон раз в минуту) → /api/execution-quality. -->
+      <section class="card" id="sec-exec-quality">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-num="03"
+            title="Половина спреда — цена того, что ты берёшь по рынку прямо сейчас, относительно середины. Если она заметно меньше разницы между тейкерской и мейкерской комиссией (~2.8 бп), ждать в очереди выгодно. Если больше — post-only бессмыслен, спред съест экономию. Глубина ±10 бп показывает, сколько денег стоит между твоим ордером и проскальзыванием: узкий спред на пустом стакане хуже широкого на плотном."
+          >
+            Качество исполнения
+          </div>
+          <span id="eq-meta" style="font-size: 11px; font-family: var(--font-mono); color: var(--text-muted)"></span>
+        </div>
+        <div class="u-scroll-x">
+          <table class="data-table" id="eq-table">
+            <thead>
+              <tr>
+                <th>Монета</th>
+                <th class="r" title="Медианный спред в базисных пунктах">Спред, бп</th>
+                <th class="r" title="90-й перцентиль: насколько плохо бывает">p90</th>
+                <th class="r" title="Медианная глубина в пределах 10 бп от середины, bid / ask">Глубина ±10бп</th>
+                <th title="Стоит ли пытаться исполняться мейкером на этой монете">Мейкер?</th>
+              </tr>
+            </thead>
+            <tbody id="eq-tbody">
+              <tr><td colspan="5" class="empty-state">накапливаем…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 04 / Цена дисциплины — сколько поза жила без защитного ордера.
+           Данные: tools/disciplineAudit.mjs --save → data/discipline/trips.json. -->
+      <section class="card" id="sec-discipline">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-num="04"
+            title="По каждому ручному входу считается задержка между входом и первым защитным ордером (reduceOnly + trigger + Stop). ВНИМАНИЕ: корзины НЕ сравнимы как причина и следствие — сделки, где стоп ставится сразу, отличаются от остальных не только стопом. Читать как описание, а не как «стоп приносит деньги»."
+          >
+            Цена дисциплины
+          </div>
+          <span id="disc-meta" style="font-size: 11px; font-family: var(--font-mono); color: var(--text-muted)"></span>
+        </div>
+        <div id="disc-summary" class="empty-state" style="margin-bottom: 8px; text-align: left; line-height: 1.6"></div>
+        <div class="u-scroll-x">
+          <table class="data-table" id="disc-table">
+            <thead>
+              <tr>
+                <th>Задержка стопа</th>
+                <th class="r">Сделок</th>
+                <th class="r" title="Средний net на сделку">Средний net</th>
+                <th class="r" title="95% доверительный интервал. Если он накрывает ноль — отличить от нуля нельзя.">95% CI</th>
+                <th class="r">Σ net</th>
+              </tr>
+            </thead>
+            <tbody id="disc-tbody">
+              <tr><td colspan="5" class="empty-state">…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- 05 / Чужие прогнозы — базрейт вместо ощущения «он дело говорит».
+           Данные: tools/externalCalls.mjs → data/external-calls/calls.json. -->
+      <section class="card" id="sec-calls">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-num="05"
+            title="Прогноз засчитывается, только если у него есть число и срок — «крупный капитал набирает» не проверяемо ничем. Забывание тут не нейтрально: невспомненные прогнозы это в основном НЕ сбывшиеся, потому что о сбывшихся автор напомнит сам."
+          >
+            Чужие прогнозы
+          </div>
+          <span id="calls-meta" style="font-size: 11px; font-family: var(--font-mono); color: var(--text-muted)"></span>
+        </div>
+        <div class="u-scroll-x">
+          <table class="data-table" id="calls-table">
+            <thead>
+              <tr>
+                <th>Источник</th>
+                <th>Прогноз</th>
+                <th class="r">Цена тогда</th>
+                <th class="r">Заявлен</th>
+                <th class="r">Дедлайн</th>
+                <th class="r">Осталось</th>
+              </tr>
+            </thead>
+            <tbody id="calls-tbody">
+              <tr><td colspan="6" class="empty-state">…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div
+          id="calls-note"
+          style="margin-top: 8px; font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); line-height: 1.6"
+        ></div>
+      </section>
+
       <footer id="footer-status">
         <span>Connecting to core…</span>
         <a
