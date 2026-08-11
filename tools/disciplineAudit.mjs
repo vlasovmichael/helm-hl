@@ -126,12 +126,33 @@ const allFills = readJsonl(FILLS_FILE);
 if (!allFills.length) { console.error(`Нет ${FILLS_FILE} — сперва прогони tools/feeAudit.mjs`); process.exit(1); }
 
 // Только ручные: бот ставит стоп сам и мгновенно, он бы разбавил замер до
-// бессмыслицы. Список бот-oid берём из bot_oid_log (передаётся файлом).
-const botOids = new Set(
-  BOT_OIDS_FILE && existsSync(BOT_OIDS_FILE)
-    ? readFileSync(BOT_OIDS_FILE, "utf8").trim().split("\n").map(Number)
-    : [],
-);
+// бессмыслицы. Список бот-oid — из bot_oid_log.
+//
+// Пустой список НЕ является безопасным значением по умолчанию: без него все
+// бот-сделки поедут в «ручные» и попадут в корзину «стоп сразу», занизив её
+// среднее. Поэтому при неудаче — падаем громко, а не считаем молча.
+async function loadBotOids() {
+  if (BOT_OIDS_FILE && existsSync(BOT_OIDS_FILE)) {
+    return new Set(readFileSync(BOT_OIDS_FILE, "utf8").trim().split("\n").map(Number));
+  }
+  const db = join("data", "trades.db");
+  if (existsSync(db)) {
+    // Динамический импорт: внутри контейнера better-sqlite3 есть, на голом
+    // хосте — нет, и тогда работает путь через BOT_OIDS_FILE.
+    const { default: Database } = await import("better-sqlite3");
+    const conn = new Database(db, { readonly: true });
+    try {
+      return new Set(conn.prepare("SELECT oid FROM bot_oid_log").all().map((r) => Number(r.oid)));
+    } finally {
+      conn.close();
+    }
+  }
+  throw new Error(
+    "не найден список бот-ордеров: ни BOT_OIDS_FILE, ни data/trades.db. " +
+    "Без него бот-сделки будут посчитаны ручными — замер молча испортится.",
+  );
+}
+const botOids = await loadBotOids();
 // ⚠️ Окно ОБЯЗАНО быть обрезано по покрытию архива ордеров, иначе замер врёт
 // молча и в одну сторону. historicalOrders отдаёт последние ~2000 ордеров, а не
 // «всё»: на 11.08.2026 это 06.07…11.08, тогда как филлы есть с 12.06. Без
