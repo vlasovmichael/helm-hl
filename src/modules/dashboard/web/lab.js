@@ -18,6 +18,7 @@ import {
 import { mountTopnav } from "./src/core/topnav.js";
 import { renderStrategies } from "./src/features/strategies.js";
 import { refreshLeaderboardPersistence } from "./src/features/leaderboardPersistence.js";
+import { refreshWinners } from "./src/features/winners.js";
 import {
   refreshExecutionQuality,
   refreshDiscipline,
@@ -34,6 +35,9 @@ initWebSocket({
 // Персистентность лидерборда: снимки недельные, счёт кэширован на 6ч —
 // поллить незачем, тянем один раз при открытии страницы.
 refreshLeaderboardPersistence();
+// Предзаявленный тест «а если взять троих»: форвард пересчитывается кроном
+// раз в сутки, поллить незачем.
+refreshWinners();
 // Три накопителя, запущенные 11.08. Стакан пишется раз в минуту — его и
 // обновляем чаще; дисциплина и прогнозы пересчитываются кроном раз в сутки,
 // поллить их незачем.

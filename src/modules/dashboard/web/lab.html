@@ -162,6 +162,54 @@
         ></div>
       </section>
 
+      <!-- 01.8 / А если взять троих — предзаявленный форвардный тест. Список
+           заморожен 13.08.2026, правила в docs/winners-preregistration.md. -->
+      <section class="card" id="sec-winners">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-num="01.8"
+            title="Вопрос: медианы по децилям ничего не говорят о трёх лучших адресах внутри дециля. Здесь список из трёх заморожен ЗАРАНЕЕ (13.08.2026) и проверяется вперёд против контрольной группы, прошедшей те же фильтры. Ключевой фильтр — оборот ≥ 5 размеров счёта: без него отбор выдаёт держателей лонга, у которых PnL это нереализованная прибыль, а не торговля."
+          >
+            А если взять троих?
+          </div>
+          <span
+            id="win-meta"
+            style="
+              font-size: 11px;
+              font-family: var(--font-mono);
+              color: var(--text-muted);
+            "
+          ></span>
+        </div>
+        <div class="u-scroll-x">
+          <table class="data-table" id="win-table">
+            <thead>
+              <tr>
+                <th title="Адрес на Hyperliquid, ссылка на explorer">Адрес</th>
+                <th class="r" title="Эдж, по которому адрес был отобран: прибыль на доллар оборота за месяц до заморозки">Отбор, бп</th>
+                <th class="r" title="Эдж ПОСЛЕ заморозки — то единственное, что здесь что-то значит">Форвард, бп</th>
+                <th class="r" title="Прибыль после заморозки">PnL</th>
+                <th class="r" title="Оборот после заморозки">Оборот</th>
+              </tr>
+            </thead>
+            <tbody id="win-tbody">
+              <tr><td colspan="5" class="empty-state">…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div
+          id="win-stats"
+          style="
+            margin-top: 8px;
+            font-size: 11px;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+            line-height: 1.6;
+          "
+        ></div>
+      </section>
+
       <!-- 03 / Качество исполнения — стакан копится только вперёд.
            feeAudit показал 100% тейкера и 5.8 бп по факту; вопрос «а не ждать ли
            мейкером» упирается в спред, а исторический стакан HL не отдаёт вообще.

@@ -64,6 +64,7 @@ import {
   handleExternalCalls,
 } from "./routes/research.js";
 import { handleLeaderboardPersistence } from "./routes/leaderboard.js";
+import { handleWinners } from "./routes/winners.js";
 import {
   handleList as handleManualPaperList,
   handleOpen as handleManualPaperOpen,
@@ -1003,6 +1004,7 @@ export function startDashboard() {
   app.get("/api/oi-collector/coin", handleOiCoin);
   app.get("/api/spike-fade", handleSpikeFade);
   app.get("/api/leaderboard-persistence", handleLeaderboardPersistence);
+  app.get("/api/winners", handleWinners);
   // Три накопителя, запущенные 11.08.2026 (см. routes/research.js).
   app.get("/api/execution-quality", handleExecutionQuality);
   app.get("/api/discipline", handleDiscipline);
