@@ -97,9 +97,20 @@ export function handleWinners(_req, res) {
 //
 // Вес запросов: 3 адреса × clearinghouseState раз в минуту, LOW-приоритет —
 // живой бот в очереди всегда впереди.
+//
+// 🚨 LOW ждёт бюджета не дольше 1.5с и штатно отваливается с
+// WeightBudgetTimeoutError — так задумано с инцидента 31.07 (косметика не имеет
+// права копить очередь и тянуть за собой тик). Значит витрина ОБЯЗАНА пережить
+// отказ: адреса опрашиваются по одному, а не залпом, и последний удачный ответ
+// по каждому хранится отдельно и показывается с пометкой возраста. «Данные
+// 3 мин назад» здесь честнее, чем «не ответил»: позиции живут часами, а вердикт
+// теста они всё равно не считают.
 
 const POS_TTL_MS = 60_000;
-let posCache = { payload: null, loadedAt: 0 };
+// Затор → пробуем чаще, чем раз в минуту, но не на каждый клик.
+const POS_RETRY_TTL_MS = 10_000;
+let posCache = { payload: null, loadedAt: 0, ttl: POS_TTL_MS };
+const lastGood = new Map(); // address → { account, at }
 
 async function fetchPositions(address) {
   const state = await hlInfo(
@@ -144,7 +155,7 @@ async function fetchPositions(address) {
 
 export async function handleWinnersPositions(_req, res) {
   const now = Date.now();
-  if (posCache.payload && now - posCache.loadedAt < POS_TTL_MS) {
+  if (posCache.payload && now - posCache.loadedAt < posCache.ttl) {
     res.json(posCache.payload);
     return;
   }
@@ -161,17 +172,35 @@ export async function handleWinnersPositions(_req, res) {
     return;
   }
 
-  // Один упавший адрес не должен гасить остальные — отдаём, что получилось.
-  const settled = await Promise.allSettled(addresses.map(fetchPositions));
-  const accounts = settled.map((r, i) =>
-    r.status === "fulfilled"
-      ? r.value
-      : { address: addresses[i], error: String(r.reason?.message || r.reason) },
-  );
-  const failed = accounts.filter((a) => a.error).length;
-  if (failed) logger.debug(`[Dashboard] winners positions: ${failed}/${addresses.length} не ответили`);
+  // По одному, а не залпом: три параллельных запроса конкурируют за один и тот
+  // же LOW-бюджет и валят друг друга по дедлайну — залп при заторе не быстрее,
+  // он просто отваливается втрое чаще. Один упавший адрес не гасит остальные.
+  const accounts = [];
+  let refused = 0;
+  for (const address of addresses) {
+    try {
+      const account = await fetchPositions(address);
+      lastGood.set(address, { account, at: Date.now() });
+      accounts.push(account);
+    } catch (err) {
+      refused++;
+      const prev = lastGood.get(address);
+      accounts.push(
+        prev
+          ? { ...prev.account, stale: true, staleAgeMs: Date.now() - prev.at }
+          : { address, error: String(err?.message || err) },
+      );
+    }
+  }
+  if (refused)
+    logger.debug(
+      `[Dashboard] winners positions: ${refused}/${addresses.length} не дождались бюджета` +
+        `${accounts.some((a) => a.stale) ? " (показан последний удачный ответ)" : ""}`,
+    );
 
   const payload = { ok: true, fetchedAt: now, accounts };
-  posCache = { payload, loadedAt: now };
+  // Свежими данными живём минуту; если хоть один адрес отвалился — перепробуем
+  // через 10 секунд, затор в пуле обычно короче этого.
+  posCache = { payload, loadedAt: now, ttl: refused ? POS_RETRY_TTL_MS : POS_TTL_MS };
   res.json(payload);
 }
