@@ -75,6 +75,39 @@ services:
     networks:
       - gateway_net
 
+  # Cross-Venue Collector — форвард-замер межбиржевого расхождения HL ↔ Binance.
+  # Отдельный процесс, ордеров не ставит, ключей не читает. Два WS-потока
+  # (HL bbo + Binance bookTicker), пишет строку только когда расхождение пробило
+  # издержки. Разбор — tools/crossVenueStats.mjs, данные в data/xvenue/.
+  #
+  # Почему на сервере, а не на ноутбуке: замер 14.08 показал, что до бирж ~220 мс
+  # ОТКУДА УГОДНО из Европы (их серверы далеко), но домашний канал сверх того
+  # даёт разброс 250-490 мс со скачками, а Oracle держит 222±2 мс. Эджа это не
+  # создаёт — окна живут 0-267 мс, — зато делает измерение ровным. Плюс машина
+  # не засыпает, а вопрос требует дней накопления, а не минут.
+  #
+  # REST-бюджет HL (на котором проект горел 19.07 и 31.07) не тратится вовсе:
+  # WS работает по подписке, запросов не шлёт. Подписок 14, лимит — тысячи.
+  xvenue:
+    build: .
+    container_name: hl-xvenue
+    restart: unless-stopped
+    command: node tools/crossVenueCollector.mjs
+    env_file: .env
+    environment:
+      TZ: ${TZ:-Europe/Warsaw}
+    volumes:
+      - ./data:/app/data
+    # Не веб-сервер → HEALTHCHECK из Dockerfile (пинг :3010) тут не применим.
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - gateway_net
+
   tui:
     profiles: [tui]
     build:
