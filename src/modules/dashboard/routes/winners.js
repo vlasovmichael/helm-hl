@@ -106,18 +106,50 @@ export function handleWinners(_req, res) {
 // 3 мин назад» здесь честнее, чем «не ответил»: позиции живут часами, а вердикт
 // теста они всё равно не считают.
 
+// 🚨 Одного clearinghouseState МАЛО. У HL кроме основного перп-DEX'а есть
+// builder-DEX'ы (HIP-3): xyz с акциями и товарами, flx, vntl, hyna, km, abcd,
+// cash, para, mkts. У каждого своя маржа и свой clearinghouseState, и без
+// параметра `dex` их позиции в ответ НЕ попадают. Первая версия витрины из-за
+// этого соврала: показала у адреса 0x4801 только брошенные крипто-мешки на
+// −$74k, тогда как вся его работа идёт на xyz (акции и ETF, 25 тикеров за
+// последние 2000 сделок) и там отдельный счёт с плюсовыми шортами.
+//
+// Какие DEX'ы опрашивать, узнаём из userFills: тикеры оттуда приходят с
+// префиксом («xyz:EWZ»), так что список DEX'ов адреса читается из его же
+// сделок. Это тяжёлый запрос (вес 20 против 2 у clearinghouseState), поэтому
+// он кэшируется на 6 часов — набор площадок у человека меняется редко.
+
 const POS_TTL_MS = 60_000;
 // Затор → пробуем чаще, чем раз в минуту, но не на каждый клик.
 const POS_RETRY_TTL_MS = 10_000;
+const DEX_TTL_MS = 6 * 3_600_000;
 let posCache = { payload: null, loadedAt: 0, ttl: POS_TTL_MS };
 const lastGood = new Map(); // address → { account, at }
+const dexCache = new Map(); // address → { dexes: string[], at }
 
-async function fetchPositions(address) {
-  const state = await hlInfo(
-    { type: "clearinghouseState", user: address },
-    { label: "dash/winnersPos", timeoutMs: 8_000, maxRetries: 2, priority: HL_PRIORITY.LOW },
-  );
-  const positions = (state?.assetPositions ?? [])
+const hlLow = (body, label) =>
+  hlInfo(body, { label, timeoutMs: 8_000, maxRetries: 2, priority: HL_PRIORITY.LOW });
+
+/** DEX'ы, на которых адрес вообще торговал: '' = основной, остальные по имени. */
+async function dexesFor(address) {
+  const hit = dexCache.get(address);
+  if (hit && Date.now() - hit.at < DEX_TTL_MS) return hit.dexes;
+
+  const fills = await hlLow({ type: "userFills", user: address }, "dash/winnersDexes");
+  const dexes = [""];
+  for (const f of Array.isArray(fills) ? fills : []) {
+    const i = String(f?.coin ?? "").indexOf(":");
+    if (i > 0) {
+      const dex = f.coin.slice(0, i);
+      if (!dexes.includes(dex)) dexes.push(dex);
+    }
+  }
+  dexCache.set(address, { dexes, at: Date.now() });
+  return dexes;
+}
+
+function parsePositions(state, dex) {
+  return (state?.assetPositions ?? [])
     .map((ap) => ap?.position)
     .filter((p) => p?.coin && parseFloat(p.szi ?? "0") !== 0)
     .map((p) => {
@@ -127,6 +159,7 @@ async function fetchPositions(address) {
       const liqPx = p.liquidationPx != null ? parseFloat(p.liquidationPx) : null;
       return {
         coin: p.coin,
+        dex: dex || "main",
         side: szi < 0 ? "SHORT" : "LONG",
         szi: Math.abs(szi),
         entryPrice: entryPx,
@@ -136,19 +169,49 @@ async function fetchPositions(address) {
         leverageType: p.leverage?.type ?? null,
         liquidationPrice: Number.isFinite(liqPx) ? liqPx : null,
       };
-    })
-    .sort((a, b) => b.sizeUsd - a.sizeUsd);
+    });
+}
 
-  const equity = parseFloat(state?.marginSummary?.accountValue ?? "NaN");
+async function fetchPositions(address) {
+  // Список DEX'ов не обязателен: если userFills не дождался бюджета, показываем
+  // хотя бы основной счёт, честно пометив, что смотрели не везде.
+  let dexes = [""];
+  let partial = false;
+  try {
+    dexes = await dexesFor(address);
+  } catch {
+    partial = true;
+  }
+
+  const positions = [];
+  const venues = [];
+  let equity = 0;
+  for (const dex of dexes) {
+    const state = await hlLow(
+      dex ? { type: "clearinghouseState", user: address, dex } : { type: "clearinghouseState", user: address },
+      "dash/winnersPos",
+    );
+    const eq = parseFloat(state?.marginSummary?.accountValue ?? "NaN");
+    const got = parsePositions(state, dex);
+    positions.push(...got);
+    if (Number.isFinite(eq)) equity += eq;
+    // Пустые площадки в шапку не тащим — иначе список из девяти нулей.
+    if (got.length || (Number.isFinite(eq) && eq > 0))
+      venues.push({ dex: dex || "main", equity: Number.isFinite(eq) ? eq : null, positions: got.length });
+  }
+  positions.sort((a, b) => b.sizeUsd - a.sizeUsd);
+
   const notional = positions.reduce((s, p) => s + p.sizeUsd, 0);
   return {
     address,
-    equity: Number.isFinite(equity) ? equity : null,
+    equity,
     notional,
     // Плечо по счёту целиком: номинал позиций к эквити. Одна цифра, по которой
     // видно, «сидит» адрес или крутится.
-    grossLeverage: Number.isFinite(equity) && equity > 0 ? notional / equity : null,
+    grossLeverage: equity > 0 ? notional / equity : null,
     unrealizedPnl: positions.reduce((s, p) => s + p.unrealizedPnl, 0),
+    venues,
+    partial,
     positions,
   };
 }

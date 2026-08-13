@@ -100,10 +100,22 @@ function renderAccount(acc) {
   if (!acc.positions.length)
     return `<div style="padding:6px 10px;color:var(--text-muted)">сейчас вне рынка · эквити ${usd(acc.equity)}${staleNote}</div>`;
 
+  // Разбивка по площадкам: у HL кроме основного перп-DEX'а есть builder-DEX'ы
+  // (xyz — акции и товары, и ещё восемь), у каждого своя маржа. Без этой строки
+  // «эквити $47k» выглядит одним счётом, а это два разных.
+  const venues = (acc.venues ?? []).filter((v) => v.positions || v.equity);
+  const venueNote =
+    venues.length > 1
+      ? ` · счета: ${venues.map((v) => `${v.dex} ${usd(v.equity)}`).join(" + ")}`
+      : "";
+  const partialNote = acc.partial
+    ? ` · <span title="Не удалось узнать список площадок адреса (userFills не дождался бюджета) — показан только основной DEX">смотрели только основной DEX</span>`
+    : "";
+
   const head = `эквити ${usd(acc.equity)} · номинал ${usd(acc.notional)}` +
     (Number.isFinite(acc.grossLeverage) ? ` (${acc.grossLeverage.toFixed(1)}× к счёту)` : "") +
     ` · нереализованный <b style="${col(acc.unrealizedPnl)}">${usd(acc.unrealizedPnl)}</b>` +
-    staleNote;
+    venueNote + partialNote + staleNote;
 
   const rows = acc.positions
     .map((p) => `<tr>
