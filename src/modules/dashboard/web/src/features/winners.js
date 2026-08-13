@@ -32,14 +32,110 @@ const VERDICT_STYLE = {
 
 function renderRows(tbody, res) {
   tbody.innerHTML = res.selected
-    .map((s) => `<tr>
-      <td style="font-family:var(--font-mono)"><a href="https://app.hyperliquid.xyz/explorer/address/${s.address}" target="_blank" rel="noopener" style="color:inherit">${short(s.address)}</a></td>
+    .map((s) => `<tr data-addr="${s.address}">
+      <td style="font-family:var(--font-mono)"><button class="win-toggle" data-addr="${s.address}" title="показать, что у адреса открыто прямо сейчас" style="background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0 4px 0 0;font-size:10px">▸</button><a href="https://app.hyperliquid.xyz/explorer/address/${s.address}" target="_blank" rel="noopener" style="color:inherit">${short(s.address)}</a></td>
       <td class="r">${bp(s.selectionEdgeBp)}</td>
       <td class="r" style="${col(s.forwardEdgeBp)}">${s.forwardEdgeBp === null ? "<span style='color:var(--text-muted)'>не торговал</span>" : bp(s.forwardEdgeBp)}</td>
       <td class="r" style="${col(s.forwardPnl)}">${s.forwardPnl === null ? "—" : usd(s.forwardPnl)}</td>
       <td class="r">${s.forwardVolume === null ? "—" : usd(s.forwardVolume)}</td>
+    </tr>
+    <tr class="win-pos" data-pos-for="${s.address}" hidden><td colspan="5" style="padding:0"></td></tr>`)
+    .join("");
+}
+
+// ─── что у адреса открыто прямо сейчас ──────────────────────────────────────
+//
+// Это НАБЛЮДЕНИЕ, а не сигнал: заморозка списка держится на том, что вердикт
+// считается по снимкам лидерборда и только на дату решения. Смотреть в чужие
+// позиции полезно ровно для одного — увидеть, торгует адрес или сидит: у
+// держателя лидерборд рисует прибыль, которой ещё нет.
+
+let posCache = null;      // { fetchedAt, byAddr: Map }
+let posPending = null;
+
+async function loadPositions() {
+  if (posCache && Date.now() - posCache.fetchedAt < 60_000) return posCache;
+  if (posPending) return posPending;
+  posPending = (async () => {
+    const res = await fetchJson("/api/winners/positions");
+    if (!res?.ok) throw new Error(res?.reason || "нет данных");
+    posCache = {
+      fetchedAt: Date.now(),
+      byAddr: new Map(res.accounts.map((a) => [a.address, a])),
+    };
+    return posCache;
+  })();
+  try {
+    return await posPending;
+  } finally {
+    posPending = null;
+  }
+}
+
+const px = (v) =>
+  !Number.isFinite(v) ? "—" : v >= 100 ? v.toFixed(2) : v >= 1 ? v.toFixed(4) : v.toPrecision(4);
+
+function renderAccount(acc) {
+  if (!acc) return "<div style='padding:6px 10px;color:var(--text-muted)'>адрес не найден</div>";
+  if (acc.error)
+    return `<div style="padding:6px 10px;color:var(--text-muted)">не ответил: ${acc.error}</div>`;
+  if (!acc.positions.length)
+    return `<div style="padding:6px 10px;color:var(--text-muted)">сейчас вне рынка · эквити ${usd(acc.equity)}</div>`;
+
+  const head = `эквити ${usd(acc.equity)} · номинал ${usd(acc.notional)}` +
+    (Number.isFinite(acc.grossLeverage) ? ` (${acc.grossLeverage.toFixed(1)}× к счёту)` : "") +
+    ` · нереализованный <b style="${col(acc.unrealizedPnl)}">${usd(acc.unrealizedPnl)}</b>`;
+
+  const rows = acc.positions
+    .map((p) => `<tr>
+      <td>${p.coin}</td>
+      <td style="color:${p.side === "LONG" ? "var(--green)" : "var(--red)"}">${p.side}</td>
+      <td class="r">${usd(p.sizeUsd)}</td>
+      <td class="r">${p.leverage == null ? "—" : `${p.leverage}×`}${p.leverageType === "isolated" ? " iso" : ""}</td>
+      <td class="r">${px(p.entryPrice)}</td>
+      <td class="r" style="${col(p.unrealizedPnl)}">${usd(p.unrealizedPnl)}</td>
+      <td class="r">${p.liquidationPrice == null ? "—" : px(p.liquidationPrice)}</td>
     </tr>`)
     .join("");
+
+  return `<div style="padding:6px 10px;font-size:11px;font-family:var(--font-mono)">
+    <div style="color:var(--text-muted);margin-bottom:4px">${head}</div>
+    <table class="data-table" style="margin:0">
+      <thead><tr>
+        <th>Монета</th><th>Сторона</th><th class="r">Размер</th><th class="r">Плечо</th>
+        <th class="r">Вход</th><th class="r" title="Нереализованный PnL — он же и попадает в PnL лидерборда">Плавающий</th>
+        <th class="r">Ликв.</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+function bindToggle(tbody) {
+  if (tbody.dataset.winBound === "1") return;
+  tbody.dataset.winBound = "1";
+  tbody.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".win-toggle");
+    if (!btn) return;
+    const addr = btn.dataset.addr;
+    const row = tbody.querySelector(`tr.win-pos[data-pos-for="${addr}"]`);
+    if (!row) return;
+    const cell = row.firstElementChild;
+    if (!row.hidden) {
+      row.hidden = true;
+      btn.textContent = "▸";
+      return;
+    }
+    row.hidden = false;
+    btn.textContent = "▾";
+    cell.innerHTML = "<div style='padding:6px 10px;color:var(--text-muted)'>…</div>";
+    try {
+      const { byAddr } = await loadPositions();
+      cell.innerHTML = renderAccount(byAddr.get(addr));
+    } catch (err) {
+      cell.innerHTML = `<div style="padding:6px 10px;color:var(--text-muted)">${err.message}</div>`;
+    }
+  });
 }
 
 function renderSummary(res) {
@@ -107,5 +203,6 @@ export async function refreshWinners() {
     meta.style.color = VERDICT_STYLE[verdict] ?? "var(--text-muted)";
   }
   renderRows(tbody, res);
+  bindToggle(tbody);
   if (stats) stats.innerHTML = renderSummary(res);
 }

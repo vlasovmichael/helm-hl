@@ -64,7 +64,7 @@ import {
   handleExternalCalls,
 } from "./routes/research.js";
 import { handleLeaderboardPersistence } from "./routes/leaderboard.js";
-import { handleWinners } from "./routes/winners.js";
+import { handleWinners, handleWinnersPositions } from "./routes/winners.js";
 import {
   handleList as handleManualPaperList,
   handleOpen as handleManualPaperOpen,
@@ -1005,6 +1005,8 @@ export function startDashboard() {
   app.get("/api/spike-fade", handleSpikeFade);
   app.get("/api/leaderboard-persistence", handleLeaderboardPersistence);
   app.get("/api/winners", handleWinners);
+  // Клик по адресу в карточке «А если взять троих?» — что у него открыто сейчас.
+  app.get("/api/winners/positions", handleWinnersPositions);
   // Три накопителя, запущенные 11.08.2026 (см. routes/research.js).
   app.get("/api/execution-quality", handleExecutionQuality);
   app.get("/api/discipline", handleDiscipline);
