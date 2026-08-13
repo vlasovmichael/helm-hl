@@ -50,6 +50,10 @@
 
 import { appendFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
+// Пакет ws, а не глобальный WebSocket: глобальный появился только в Node 21, а
+// образ проекта собран на Node 20 — локально (Node 22) файл работал, в
+// контейнере падал с ReferenceError на старте.
+import WebSocket from "ws";
 
 const OUT_DIR = join("data", "xvenue");
 
@@ -208,7 +212,7 @@ function connectHL() {
 
   ws.onmessage = (e) => {
     let d;
-    try { d = JSON.parse(e.data); } catch { return; }
+    try { d = JSON.parse(String(e.data)); } catch { return; }
     if (d.channel !== "bbo") {
       if (d.channel === "error") process.stderr.write(`[xv] HL error: ${JSON.stringify(d.data)}\n`);
       return;
@@ -246,7 +250,7 @@ function connectBN() {
 
   ws.onmessage = (e) => {
     let d;
-    try { d = JSON.parse(e.data); } catch { return; }
+    try { d = JSON.parse(String(e.data)); } catch { return; }
     const x = d.data;
     if (!x?.s) return;
     const coin = BN_TO_HL.get(x.s);
