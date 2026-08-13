@@ -62,6 +62,7 @@ import {
   handleExecutionQuality,
   handleDiscipline,
   handleExternalCalls,
+  handleCrossVenue,
 } from "./routes/research.js";
 import { handleLeaderboardPersistence } from "./routes/leaderboard.js";
 import { handleWinners, handleWinnersPositions } from "./routes/winners.js";
@@ -1011,6 +1012,8 @@ export function startDashboard() {
   app.get("/api/execution-quality", handleExecutionQuality);
   app.get("/api/discipline", handleDiscipline);
   app.get("/api/external-calls", handleExternalCalls);
+  // Межбиржевое расхождение HL ↔ Binance, живой снимок от контейнера hl-xvenue.
+  app.get("/api/xvenue", handleCrossVenue);
   app.get("/api/scanner", handleScannerApi);
   app.get("/api/coin-of-day", handleCoinOfDay);
   app.get("/api/btc-divergence/all", handleBtcDivergenceAll);

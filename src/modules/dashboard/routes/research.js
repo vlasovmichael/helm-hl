@@ -95,3 +95,54 @@ export const handleExternalCalls = served("calls", () => {
   }));
   return { calls, settled: calls.filter((c) => c.expired).length };
 });
+
+// ── Межбиржевое расхождение HL ↔ Binance ────────────────────────────────────
+// Живая витрина: коллектор (контейнер hl-xvenue) кладёт снимок раз в 2 секунды,
+// роут его отдаёт. Своих подписок к биржам дашборд не держит — см. комментарий
+// в tools/crossVenueCollector.mjs.
+//
+// Кэша здесь НЕТ, в отличие от соседних витрин: смысл карточки именно в
+// «прямо сейчас», а 60-секундный кэш превратил бы её в тот самый замёрзший
+// снимок, на котором уже обжигались со Spike-Fade.
+
+const XV_LIVE = join("data", "xvenue", "live.json");
+
+export function handleCrossVenue(_req, res) {
+  try {
+    if (!existsSync(XV_LIVE)) {
+      res.json({ ok: true, empty: true, hint: "коллектор ещё не писал (контейнер hl-xvenue)" });
+      return;
+    }
+    const live = JSON.parse(readFileSync(XV_LIVE, "utf8"));
+
+    // Окна за последние сутки — чтобы карточка показывала не только текущее
+    // состояние, но и «сколько раз за сутки вообще пробивало».
+    const since = Date.now() - 86_400_000;
+    const windows = readJsonl(monthFile("xvenue", "xvenue-windows")).filter((w) => w.t >= since);
+
+    // Достижимость считаем теми же порогами, что и CLI: жизнь ≥ 220 мс (столько
+    // идёт round-trip до бирж из Европы, замер 14.08) и объём ≥ $50. Без этих
+    // фильтров список окон читается как список возможностей, хотя большинство
+    // из них физически недостижимо.
+    const reachable = windows.filter((w) => w.holdMs >= 220 && w.usd >= 50);
+
+    res.json({
+      ok: true,
+      ...live,
+      // Возраст снимка: если коллектор встал, всё остальное на карточке —
+      // прошлое, выданное за настоящее.
+      ageSec: Math.round((Date.now() - live.t) / 1000),
+      day: {
+        windows: windows.length,
+        reachable: reachable.length,
+        pnlUsd: +reachable.reduce((s, w) => s + w.usd * w.peakNetBp / 10_000, 0).toFixed(2),
+        best: windows.length
+          ? windows.reduce((a, b) => (b.peakNetBp > a.peakNetBp ? b : a))
+          : null,
+      },
+      recent: windows.slice(-8).reverse(),
+    });
+  } catch (err) {
+    res.json({ ok: false, reason: "read-error", message: String(err?.message || err) });
+  }
+}

@@ -243,6 +243,57 @@
         </div>
       </section>
 
+      <!-- 03.5 / Межбиржевое расхождение — единственная живая карточка на
+           странице, обновляется раз в 2 секунды. Данные: контейнер hl-xvenue
+           (tools/crossVenueCollector.mjs) → data/xvenue/live.json → /api/xvenue.
+           Разбор накопленного: tools/crossVenueStats.mjs. -->
+      <section class="card" id="sec-xvenue">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-num="03.5"
+            title="Классическая идея «купи дешевле на одной бирже, продай дороже на другой». Порог здесь — ЧЕТЫРЕ тейкерских комиссии (~19 бп), а не две: чтобы забрать расхождение, надо открыть ДВЕ ноги и закрыть ДВЕ. Бэктестом вопрос не решается — HL не отдаёт исторический стакан, поэтому замер только форвардный. Ключевые колонки не «бп», а ОБЪЁМ и ЖИВЁТ: замер 14.08 показал, что окна с реальными деньгами живут 0-1 мс, а те, куда успеваешь, несут $5. Дорога до бирж из Европы ~220 мс в обе стороны, и это не лечится переездом в Цюрих — их серверы далеко."
+          >
+            Межбиржевое расхождение
+          </div>
+          <span
+            id="xv-meta"
+            style="
+              font-size: 11px;
+              font-family: var(--font-mono);
+              color: var(--text-muted);
+            "
+          ></span>
+        </div>
+        <div class="u-scroll-x">
+          <table class="data-table" id="xv-table">
+            <thead>
+              <tr>
+                <th>Монета</th>
+                <th class="r" title="Валовое расхождение между биржами прямо сейчас, до издержек">Расхождение</th>
+                <th class="r" title="После вычета четырёх тейкерских комиссий. Плюс = окно открыто прямо сейчас">Чистыми</th>
+                <th class="r" title="Сколько долларов стоит на лучшей цене с обеих сторон. Расхождение на $5 — не деньги">Объём</th>
+                <th class="r" title="Сколько окно уже живёт. Меньше 220 мс — твой ордер не успеет доехать">Живёт</th>
+                <th title="Направление, либо вердикт по открытому окну">Сторона</th>
+              </tr>
+            </thead>
+            <tbody id="xv-tbody">
+              <tr><td colspan="6" class="empty-state">подключаемся…</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div
+          id="xv-foot"
+          style="
+            margin-top: 8px;
+            font-size: 11px;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+            line-height: 1.6;
+          "
+        ></div>
+      </section>
+
       <!-- 04 / Цена дисциплины — сколько поза жила без защитного ордера.
            Данные: tools/disciplineAudit.mjs --save → data/discipline/trips.json. -->
       <section class="card" id="sec-discipline">

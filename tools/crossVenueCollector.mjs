@@ -48,7 +48,7 @@
 //   node tools/crossVenueCollector.mjs --seconds 120   # разведка, сводка в конце
 //   XV_COINS=BTC,HYPE,PUMP node tools/crossVenueCollector.mjs
 
-import { appendFileSync, mkdirSync, existsSync } from "node:fs";
+import { appendFileSync, mkdirSync, existsSync, writeFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
 // Пакет ws, а не глобальный WebSocket: глобальный появился только в Node 21, а
 // образ проекта собран на Node 20 — локально (Node 22) файл работал, в
@@ -71,6 +71,11 @@ const COST_BP = 2 * HL_TAKER_BP + 2 * BN_TAKER_BP;
 
 const STALE_MS = Number(process.env.XV_STALE_MS || 1500);
 const STATS_MS = Number(process.env.XV_STATS_MS || 5 * 60_000);
+// Живой снимок для витрины на /lab. Дашборд читает файл, а НЕ держит свои
+// сокеты к биржам: два процесса с одинаковыми подписками — это удвоенный
+// трафик ради одной и той же цифры, плюс второй источник правды, который
+// рано или поздно разъедется с первым.
+const LIVE_MS = Number(process.env.XV_LIVE_MS || 2_000);
 const RUN_SECONDS = (() => {
   const i = process.argv.indexOf("--seconds");
   return i > -1 ? Number(process.argv[i + 1]) : 0;
@@ -174,6 +179,61 @@ function evaluate(coin) {
       st.open.delete(dir);
     }
   }
+}
+
+// ── Живой снимок ───────────────────────────────────────────────────────────
+// Пишем через временный файл + rename: витрина читает этот файл каждые пару
+// секунд, и без атомарной подмены она рано или поздно прочитает половину
+// записи и покажет ошибку парсинга вместо данных.
+const LIVE_FILE = join(OUT_DIR, "live.json");
+
+function writeLive() {
+  if (!existsSync(OUT_DIR)) mkdirSync(OUT_DIR, { recursive: true });
+  const now = Date.now();
+
+  const coins = [];
+  for (const [coin, st] of book) {
+    const { hl, bn } = st;
+    if (!hl || !bn) { coins.push({ coin, ready: false }); continue; }
+    const mid = (hl.bid + hl.ask + bn.bid + bn.ask) / 4;
+    const buyBN = { dir: "buyBN", gross: (hl.bid - bn.ask) / mid * 10_000, usd: Math.min(bn.askUsd, hl.bidUsd) };
+    const buyHL = { dir: "buyHL", gross: (bn.bid - hl.ask) / mid * 10_000, usd: Math.min(hl.askUsd, bn.bidUsd) };
+    const best = buyBN.gross >= buyHL.gross ? buyBN : buyHL;
+    coins.push({
+      coin, ready: true,
+      dir: best.dir,
+      grossBp: +best.gross.toFixed(2),
+      netBp: +(best.gross - COST_BP).toFixed(2),
+      usd: +best.usd.toFixed(0),
+      hlMid: +((hl.bid + hl.ask) / 2).toFixed(8),
+      bnMid: +((bn.bid + bn.ask) / 2).toFixed(8),
+      // Возраст каждой ноги отдельно: если встал ОДИН фид, витрина обязана
+      // показать какой именно, иначе «расхождение из воздуха» выглядит находкой.
+      hlAgeMs: now - hl.t,
+      bnAgeMs: now - bn.t,
+      stale: now - hl.t > STALE_MS || now - bn.t > STALE_MS,
+      // Окно открыто прямо сейчас — то есть netBp > 0 держится не мгновение.
+      openMs: st.open.get(best.dir) ? now - st.open.get(best.dir).since : 0,
+    });
+  }
+
+  const payload = {
+    t: now,
+    costBp: COST_BP,
+    hlTakerBp: HL_TAKER_BP,
+    bnTakerBp: BN_TAKER_BP,
+    staleMs: STALE_MS,
+    uptimeMin: +((now - stats.since) / 60_000).toFixed(1),
+    hlMsg: stats.hlMsg,
+    bnMsg: stats.bnMsg,
+    staleSkips: stats.staleSkips,
+    windows: stats.windows,
+    coins: coins.sort((a, b) => (b.grossBp ?? -1e9) - (a.grossBp ?? -1e9)),
+  };
+
+  const tmp = `${LIVE_FILE}.tmp`;
+  writeFileSync(tmp, JSON.stringify(payload));
+  renameSync(tmp, LIVE_FILE);
 }
 
 // ── Перцентили без сортировки всего массива каждый раз ─────────────────────
@@ -315,6 +375,7 @@ process.stderr.write(
 connectHL();
 connectBN();
 setInterval(flushStats, STATS_MS);
+setInterval(writeLive, LIVE_MS);
 
 // Порядок важен: flushStats() опустошает samples, поэтому сводка читает их первой.
 const finish = () => { summary(); flushStats(); process.exit(0); };
