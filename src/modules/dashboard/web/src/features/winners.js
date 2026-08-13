@@ -150,7 +150,14 @@ function bindToggle(tbody) {
     }
     row.hidden = false;
     if (caret) caret.textContent = "▾";
-    cell.innerHTML = "<div style='padding:6px 10px;color:var(--text-muted)'>…</div>";
+    // Скелетон, а не «…»: при заторе в пуле ответ приходит через секунду-две,
+    // и за это время строка должна выглядеть загружающейся, а не сломанной.
+    // Класс общий с остальным дашбордом (_loaders.scss).
+    cell.innerHTML = `<div style="padding:8px 10px;display:flex;flex-direction:column;gap:6px">
+      <div class="skeleton-row" style="width:45%;height:12px"></div>
+      <div class="skeleton-row" style="width:80%"></div>
+      <div class="skeleton-row" style="width:65%"></div>
+    </div>`;
     try {
       const { byAddr } = await loadPositions();
       cell.innerHTML = renderAccount(byAddr.get(addr));
