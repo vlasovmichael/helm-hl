@@ -59,12 +59,12 @@ export async function refreshCrossVenue() {
       return `<tr><td>${c.coin}</td><td colspan="5" class="empty-state">ждём обе биржи</td></tr>`;
     }
     if (c.stale) {
-      // Один фид встал: расхождение в этот момент — арифметика на протухшей
-      // цене, а не рынок. Показываем прямо, какая нога молчит.
-      const which = c.hlAgeMs > c.bnAgeMs ? "HL" : "Binance";
+      // Встал СОКЕТ (а не монета затихла): расхождение в этот момент —
+      // арифметика на протухшей цене. Какая именно биржа молчит, видно из
+      // общего заголовка: тишина идёт сразу по всем монетам этой площадки.
       return `<tr style="opacity:.5">
         <td>${c.coin}</td>
-        <td colspan="5" class="empty-state">фид ${which} молчит ${fmtMs(Math.max(c.hlAgeMs, c.bnAgeMs))} — не считаем</td>
+        <td colspan="5" class="empty-state">соединение встало — не считаем</td>
       </tr>`;
     }
 
@@ -85,6 +85,9 @@ export async function refreshCrossVenue() {
       <td class="r" style="color:var(--text-muted)">${c.openMs ? fmtMs(c.openMs) : "—"}</td>
       <td style="color:${hit ? (reach ? "var(--green)" : "var(--red)") : "var(--text-muted)"}">
         ${hit ? (reach ? "достижимо" : "не успеть") : dirLabel}
+        ${!hit && c.quietMs > 3000
+          ? `<span style="opacity:.5" title="По этой монете лучшая цена не менялась ${fmtMs(c.quietMs)}. Это нормально для неликвида: в стакане отсутствие апдейта значит «цена та же». В расчёт монета входит.">· тихо ${fmtMs(c.quietMs)}</span>`
+          : ""}
       </td>
     </tr>`;
   }).join("");
