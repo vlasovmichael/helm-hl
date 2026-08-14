@@ -19,6 +19,7 @@
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { readSnapshot, listSnapshotFiles } from "./leaderboardSnapshot.mjs";
+import { rng } from "./baseline.mjs";
 
 const API = "https://api.hyperliquid.xyz/info";
 const OUT_DIR = join("data", "borrowed");
@@ -163,8 +164,11 @@ export function pickAddresses(limit, seed = 42) {
   const snap = readSnapshot(files[files.length - 1].replace(".json.gz", ""));
   const pool = snap.rows.filter((r) => r.month.vlm >= VLM_MIN && r.month.vlm <= VLM_MAX);
   // Детерминированный псевдослучайный порядок: повторный прогон = та же выборка.
-  let s = seed;
-  const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  // ⚠️ ГПСЧ заменён 14.08.2026 (разбор в шапке rng() в baseline.mjs), поэтому
+  // выборка при том же seed теперь ДРУГАЯ. Прежний перекос был мягче, чем в
+  // бейзлайне — перемешивание требует от генератора меньше, — но неравномерная
+  // тасовка это всё-таки смещённый отбор адресов.
+  const rnd = rng(seed);
   const shuffled = pool
     .map((r) => ({ r, k: rnd() }))
     .sort((a, b) => a.k - b.k)

@@ -17,6 +17,21 @@ import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { setAdoptTrail, getAdoptTrailAll, clearAdoptTrail } from './adoptTrailStore.js';
 
+// ── Замер 14.08.2026: почему трейл отдаёт 40% пика вместо 30% ───────────────
+// По 127 закрытиям adopt_trail_tp медиана отката = 40% при пороге 30%, p90 = 68%,
+// а худшая сделка (MANTA 28.06) закрылась с пиком +2.86% в МИНУС −0.72%, то есть
+// под ярлыком «трейл забрал прибыль». Починка залипшего тика 31.07 картину не
+// сдвинула: медиана 39% до и 40% после.
+//
+// Лог TRAIL CLOSE показал, что порог перепрыгнут УЖЕ В МОМЕНТ РЕШЕНИЯ (видел 38%,
+// не 30%), значит виновато не исполнение, а редкость осмотра позиции. Но чем
+// именно — доказать нечем: нигде не пишется, что было на ПРЕДЫДУЩЕМ осмотре и
+// сколько времени прошло.
+//
+// Эти две карты и пишут ровно это. Торговлю не меняют, только лог.
+const lastSeenAtMap = new Map(); // positionId → ts предыдущего вызова analyzeAdopt
+const lastGbMap     = new Map(); // positionId → откат от пика (%) на пред. осмотре
+
 const peakPctMap   = new Map(); // positionId → peak unrealized% (MFE)
 const troughPctMap = new Map(); // positionId → min unrealized% (MAE, ≤0 обычно)
 const beArmedMap   = new Map(); // positionId → true, как только peak ≥ BE_ARM
@@ -53,6 +68,10 @@ export function clearAdoptState(positionId) {
   peakPctMap.delete(positionId);
   troughPctMap.delete(positionId);
   beArmedMap.delete(positionId);
+  // Замерные карты чистим здесь же: несмываемая Map — это ровно тот механизм,
+  // которым 09.08 выбило кучу V8 (см. шапку candleCache.js).
+  lastSeenAtMap.delete(positionId);
+  lastGbMap.delete(positionId);
   clearAdoptTrail(positionId); // снять персист, иначе орфан доживёт до TTL
 }
 
@@ -87,6 +106,8 @@ export function resetAdoptState() {
   peakPctMap.clear();
   troughPctMap.clear();
   beArmedMap.clear();
+  lastSeenAtMap.clear();
+  lastGbMap.clear();
   restoredFromDisk = false;
 }
 
@@ -129,14 +150,32 @@ export function analyzeAdopt(position, price) {
     }
   }
 
+  // Разрыв между осмотрами и то, что мы видели в прошлый раз — см. блок выше.
+  const nowTs   = Date.now();
+  const prevTs  = lastSeenAtMap.get(position.id);
+  const gapMs   = prevTs ? nowTs - prevTs : null;
+  const prevGb  = lastGbMap.get(position.id);
+  lastSeenAtMap.set(position.id, nowTs);
+  if (peak > 0) lastGbMap.set(position.id, ((peak - unrealizedPct) / peak) * 100);
+
   // ── Трейл: даём тянуться, фиксируем на откате ──
   if (peak >= TRAIL_ARM && unrealizedPct > 0) {
     const giveBack  = peak - unrealizedPct;
     const threshold = peak * (TRAIL_GB / 100);
     if (giveBack >= threshold) {
+      const gbPct = (giveBack / peak) * 100;
       logger.info(
         `[Adopt] 🎯 TRAIL CLOSE #${position.coin}: peak +${peak.toFixed(2)}% → now +${unrealizedPct.toFixed(2)}% ` +
-          `(gave back ${(giveBack / peak * 100).toFixed(0)}% ≥ ${TRAIL_GB}%)`,
+          `(gave back ${gbPct.toFixed(0)}% ≥ ${TRAIL_GB}%)`,
+      );
+      // Перелёт порога и его причина. Если prevGb был заметно ниже TRAIL_GB, а
+      // gap большой — значит позу просто редко осматривают, и виновата петля,
+      // а не правило. Если prevGb уже был около порога — виновато исполнение.
+      logger.info(
+        `[AdoptTrailProbe] #${position.coin} перелёт=${(gbPct - TRAIL_GB).toFixed(1)}пп ` +
+          `порог=${TRAIL_GB}% факт=${gbPct.toFixed(1)}% ` +
+          `пред.осмотр=${prevGb == null ? 'нет' : prevGb.toFixed(1) + '%'} ` +
+          `пауза=${gapMs == null ? 'нет' : (gapMs / 1000).toFixed(1) + 'с'}`,
       );
       return {
         action: 'CLOSE',

@@ -40,4 +40,5 @@ hl_snapshot.db-*
 candles.db
 candles.db-*
 data/borrowed/
+data/cod/
 data/dbos-lab/

@@ -22,6 +22,7 @@
 
 import { readFileSync } from "node:fs";
 import { loadCandles, INTERVAL } from "./borrowedEntriesCandles.mjs";
+import { rng } from "./baseline.mjs";
 
 // ── параметры adopt (config.js defaults) ──
 const STOP_ATR_MULT = 1.5;
@@ -189,8 +190,10 @@ const netPct = (gross) => gross - (2 * FEE_BP) / 100;
 export function runReplay(tripsFile, { seed = 7 } = {}) {
   const { trips } = JSON.parse(readFileSync(tripsFile));
   const candleCache = new Map();
-  let s = seed;
-  const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  // ГПСЧ общий с бейзлайном: свой LCG здесь терял младшие биты за 2⁵³ и повторял
+  // значения (разбор в шапке rng() в baseline.mjs). Тут он выбирает случайный бар
+  // выхода, то есть это выборка, а не косметика.
+  const rnd = rng(seed);
 
   const out = [];
   const skips = { noCandles: 0, noEntryBar: 0, noReplay: 0 };
