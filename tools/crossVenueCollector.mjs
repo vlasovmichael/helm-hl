@@ -69,6 +69,7 @@ import { join } from "node:path";
 // образ проекта собран на Node 20 — локально (Node 22) файл работал, в
 // контейнере падал с ReferenceError на старте.
 import WebSocket from "ws";
+import { PaperBot } from "./xvenuePaper.mjs";
 
 const OUT_DIR = join("data", "xvenue");
 
@@ -89,6 +90,21 @@ const STATS_MS = Number(process.env.XV_STATS_MS || 5 * 60_000);
 // сокеты к биржам: три процесса с одинаковыми подписками — это утроенный
 // трафик ради одной и той же цифры, плюс второй источник правды.
 const LIVE_MS = Number(process.env.XV_LIVE_MS || 2_000);
+// ── Бумажный бот ───────────────────────────────────────────────────────────
+// Отвечает на вопрос «а если депо $100 и бот ждёт расхождений» — но честно:
+// ордера исполняются по цене ПОСЛЕ задержки, а не по той, что бот увидел.
+// Считает рядом наивную версию (исполнение по цене обнаружения), и разница
+// между ними — это и есть то, что съедает идею. Ордеров не ставит.
+const PAPER_ON = String(process.env.XV_PAPER || "true") !== "false";
+const paper = PAPER_ON
+  ? new PaperBot({
+    equity: Number(process.env.XV_PAPER_EQUITY || 100),
+    latencyMs: Number(process.env.XV_PAPER_LATENCY_MS || 220),
+    takers: { hl: HL_TAKER_BP, kr: KR_TAKER_BP, bn: BN_TAKER_BP },
+    onTrade: (rec) => write("paper", rec),
+  })
+  : null;
+
 const RUN_SECONDS = (() => {
   const i = process.argv.indexOf("--seconds");
   return i > -1 ? Number(process.argv[i + 1]) : 0;
@@ -207,6 +223,12 @@ function evaluate(coin, pair) {
   // Перцентили считаем по лучшей из сторон — это и есть «насколько близко было».
   st.samples.get(pair.key).push(Math.max(sides[0].gross, sides[1].gross));
 
+  // Бумажный бот работает ТОЛЬКО по торговой паре: гонять его по контрольной
+  // значило бы копить эквити на бирже, куда доступа нет.
+  if (paper && pair.tradeable) {
+    paper.onTick(coin, pair.key, { a: A, b: B, venues: [pair.a, pair.b] }, pair.costBp);
+  }
+
   for (const { dir, gross, usd } of sides) {
     const netBp = gross - pair.costBp;
     const slot = `${pair.key}|${dir}`;
@@ -306,6 +328,7 @@ function writeLive() {
       kr: venueLastMsg.kr ? now - venueLastMsg.kr : null,
     },
     listed: { kr: [...listed.kr], bn: [...listed.bn] },
+    paper: paper ? paper.snapshot() : null,
     staleSkips: stats.staleSkips,
     windows: stats.windows,
     pairs,
@@ -523,6 +546,26 @@ function summary() {
     }
   }
   console.log("\n  Числа — ВАЛОВОЕ расхождение лучшей из двух сторон, в бп, ДО издержек.\n");
+
+  if (paper) {
+    const s = paper.snapshot();
+    console.log(`  ── Бумажный бот: депо $${s.startEquity} → $${s.equity} (${s.pnl >= 0 ? "+" : ""}${s.pnl})`);
+    console.log(`     отправлено ордеров ${s.sent}, исполнено ${s.filled}, закрыто сделок ${s.closed}`);
+    console.log(`     РЕАЛЬНО: ${s.real >= 0 ? "+" : ""}$${s.real}`);
+    console.log(`     наивный счёт (вход по цене обнаружения): ${s.naive >= 0 ? "+" : ""}$${s.naive}`);
+    console.log(`     съела задержка ${paper.latencyMs} мс: $${s.slippage}`);
+    if (s.closed) {
+      console.log("\n     время         монета   увидел  исполнил   реально   наивно");
+      for (const t of s.recent) {
+        console.log(
+          `     ${new Date(t.t).toISOString().slice(11, 19)}   ${t.coin.padEnd(7)} ` +
+          `${(t.seenGrossBp + "бп").padStart(8)} ${(t.filledGrossBp + "бп").padStart(9)} ` +
+          `${("$" + t.real).padStart(9)} ${("$" + t.naive).padStart(8)}`,
+        );
+      }
+    }
+    console.log();
+  }
 }
 
 // ── Старт ──────────────────────────────────────────────────────────────────

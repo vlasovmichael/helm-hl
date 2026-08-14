@@ -134,6 +134,47 @@ export async function refreshCrossVenue() {
     </tr>`;
   }).join("");
 
+  // ── Бумажный бот ──────────────────────────────────────────────────────────
+  // Показываем ДВЕ цифры рядом: реальную и наивную. Одна реальная цифра
+  // ничего не объясняет — вся суть в разнице между ними.
+  const paperBox = document.getElementById("xv-paper");
+  if (paperBox && d.paper) {
+    const p2 = d.paper;
+    const col = (v) => (v > 0 ? "var(--green)" : v < 0 ? "var(--red)" : "var(--text-muted)");
+    const money = (v) => `${v < 0 ? "−" : ""}$${Math.abs(v).toFixed(2)}`;
+    paperBox.innerHTML = `
+      <div style="font-size:11px;font-family:var(--font-mono);line-height:1.7">
+        <div style="margin-bottom:4px">
+          <b>Бумажный бот</b> · депо $${p2.startEquity} →
+          <span style="color:${col(p2.pnl)}">$${p2.equity.toFixed(2)} (${p2.pnl >= 0 ? "+" : "−"}$${Math.abs(p2.pnl).toFixed(2)})</span>
+          <span style="color:var(--text-muted)"> · сделок ${p2.closed}, в пути ${p2.pendingOrders}, открыто ${p2.openTrades}</span>
+        </div>
+        <div style="color:var(--text-muted)">
+          Реально <span style="color:${col(p2.real)}">${money(p2.real)}</span> ·
+          наивный счёт (вход по цене обнаружения)
+          <span style="color:${col(p2.naive)}">${money(p2.naive)}</span> ·
+          съела задержка <span style="color:var(--red)">${money(-p2.slippage)}</span>
+        </div>
+        ${p2.recent?.length ? `
+        <table class="data-table" style="margin-top:6px">
+          <thead><tr>
+            <th>Монета</th>
+            <th class="r" title="Расхождение в момент, когда бот решил войти">Увидел, бп</th>
+            <th class="r" title="Расхождение в момент, когда ордера доехали до бирж. Если систематически меньше — окно выедают быстрее, чем летит ордер">Исполнил, бп</th>
+            <th class="r">Реально</th>
+            <th class="r" title="Что показал бы симулятор без учёта задержки">Наивно</th>
+          </tr></thead>
+          <tbody>${p2.recent.map((t) => `<tr>
+            <td>${t.coin}</td>
+            <td class="r">${t.seenGrossBp}</td>
+            <td class="r" style="color:${t.filledGrossBp < t.seenGrossBp ? "var(--red)" : "var(--green)"}">${t.filledGrossBp}</td>
+            <td class="r" style="color:${col(t.real)}">${money(t.real)}</td>
+            <td class="r" style="color:var(--text-muted)">${money(t.naive)}</td>
+          </tr>`).join("")}</tbody>
+        </table>` : `<div style="color:var(--text-muted)">Сделок пока не было — бот ждёт расхождения выше порога.</div>`}
+      </div>`;
+  }
+
   if (foot) {
     const day = (d.day || {})[pair.key] || {};
     const b = day.best;
