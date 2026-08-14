@@ -24,7 +24,7 @@ import {
   refreshDiscipline,
   refreshExternalCalls,
 } from "./src/features/research.js";
-import { refreshCrossVenue } from "./src/features/crossVenue.js";
+import { refreshCrossVenue, bindCrossVenueTabs } from "./src/features/crossVenue.js";
 
 // ── Bootstrap ──
 mountTopnav("lab");
@@ -47,6 +47,7 @@ setInterval(refreshExecutionQuality, 60_000);
 // Межбиржевое расхождение — единственная живая карточка: окна живут сотни
 // миллисекунд, в суточной сводке от них остаётся только след. Снимок пишется
 // коллектором раз в 2с, чаще опрашивать нечего.
+bindCrossVenueTabs();
 refreshCrossVenue();
 setInterval(refreshCrossVenue, 2_000);
 refreshDiscipline();

@@ -3,51 +3,65 @@
 // ─────────────────────────────────────────────────
 // Зачем (2026-08-14). Вопрос: существует ли окно «купи на одной бирже дешевле,
 // продай на другой дороже» размером больше издержек — и живёт ли оно достаточно
-// долго, чтобы человек (или бот с домашнего интернета) успел в него влезть.
+// долго, чтобы бот успел в него влезть.
+//
+// ── Три площадки, две пары ─────────────────────────────────────────────────
+// HL ↔ KRAKEN — торговая пара. Binance из Европы недоступен, Kraken подключён.
+// HL ↔ BINANCE — КОНТРОЛЬ, торговать там нельзя. Нужен потому, что Binance это
+//   площадка, где формируется цена, и без неё нечем отличить «на Kraken реально
+//   другая цена» от «у Kraken тонкий стакан и широкий спред». Если расхождение
+//   HL↔Kraken систематически больше, чем HL↔Binance, — это премия за неликвид
+//   Kraken, а не арбитраж. Данные бесплатные, подписка ничего не стоит.
 //
 // ── Почему форвардно, а не бэктестом ───────────────────────────────────────
 // Та же стена, что у bookCollector: Hyperliquid НЕ отдаёт исторический стакан.
 // Свечи есть, но 1m close — это мид на несинхронной сетке, а не bid/ask. Если
-// посчитать «HL close минус Binance close» за год, получится расхождение мидов
+// посчитать «HL close минус Kraken close» за год, получится расхождение мидов
 // в моменты, которые на двух биржах даже не совпадают по времени, и красивая
 // эквити на спреде, которого нельзя было коснуться. Поэтому: пишем с сегодня.
 //
 // ── Модель издержек: почему порог именно такой ─────────────────────────────
 // Чтобы забрать расхождение, нужны ЧЕТЫРЕ тейкерских исполнения, а не два:
 // открыть обе ноги на расхождении и закрыть обе, когда оно схлопнется.
-//   2 × HL taker (4.5 бп) + 2 × Binance taker (5.0 бп) ≈ 19 бп.
+//   2 × HL taker (4.5 бп) + 2 × Kraken taker ≈ 19 бп при тейкере 5 бп.
 // Считать по двум ногам (≈10 бп) — самый лёгкий способ нарисовать себе эдж,
-// которого нет. Порог по умолчанию = полная четвёрка, см. COST_BP.
+// которого нет.
+//
+// 🚨 КОМИССИЯ KRAKEN — ПАРАМЕТР, И ЕЁ НАДО ПРОВЕРИТЬ В КАБИНЕТЕ. У Kraken две
+// сетки: PF-контракты по умолчанию идут по 0.05% (5 бп), но для розничных
+// клиентов существует сетка Consumer с 0.25% (25 бп). Разница решает вопрос
+// целиком: при 25 бп порог становится 59 бп, а самое большое расхождение за всё
+// наблюдение было 37.9 бп — то есть не пробивало НИ РАЗУ. Ставится через
+// XV_KR_TAKER_BP без пересборки.
+//
 // Модель предполагает выход при gap≈0. Если расхождение не схлопывается, это
 // уже не арбитраж, а базисная позиция — другой зверь, здесь не меряется.
 //
 // ── Главный источник ЛОЖНЫХ находок: замерший сокет ────────────────────────
 // Если один сокет молча встал, вторая биржа продолжает ехать, и «расхождение»
 // растёт линейно до любых величин. Это выглядит как жирный арбитраж и им не
-// является. Отсюда STALE_MS.
-// ВАЖНО, где именно проверять свежесть: на уровне СОЕДИНЕНИЯ, а не монеты —
-// подробности и цена ошибки в комментарии к venueLastMsg ниже.
+// является. Отсюда STALE_MS. ВАЖНО, где проверять свежесть: на уровне
+// СОЕДИНЕНИЯ, а не монеты — подробности в комментарии к venueLastMsg.
 //
 // ── Второй источник: gap без размера и без времени ─────────────────────────
 // 30 бп на $40 стакана — не деньги. 30 бп, прожившие 40 мс, — недостижимы
-// физически (только round-trip до биржи ~50-200 мс с домашнего канала).
+// физически (round-trip до бирж из Европы ~220 мс, замер 14.08).
 // Поэтому каждая строка несёт usd (исполнимый объём) и holdMs (сколько окно
 // прожило). Анализ обязан фильтровать по обоим, иначе смотрит на мираж.
 //
-// ── Почему пишется файл статистики, даже когда находок ноль ─────────────────
-// Пустой файл окон двусмыслен: «окна нет» и «прибор не смотрел» выглядят
-// одинаково. Раз в STATS_MS пишем перцентили расхождения по каждой монете —
-// это доказательство, что замер шёл, и заодно ответ «а насколько близко было».
+// ── Почему у Kraken именно book, а не ticker ───────────────────────────────
+// Фид ticker у Kraken троттлится: замер 14.08 дал медиану 633 мс между
+// сообщениями, максимум 2 с, и 4 смены цены за 20 секунд по BTC. Окна живут
+// 0-580 мс — таким фидом их не увидеть в принципе. Фид book событийный:
+// 6603 дельты за 20 с, медиана интервала 0 мс. Поэтому здесь L2 с дельтами и
+// своим поддержанием лучшей цены, хотя это заметно больше кода.
 //
 // Ордеров не ставит, ключей не читает, к торговому пути не подключается.
-// WS не тратит REST-бюджет веса (на котором проект горел 19.07 и 31.07),
-// но подписки идут с того же IP: 14 монет × 1 подписка — это единицы процентов
-// лимита HL, а торговый бот держит свои сокеты отдельно.
+// WS не тратит REST-бюджет веса (на котором проект горел 19.07 и 31.07).
 //
 // Запуск:
 //   node tools/crossVenueCollector.mjs                 # копить бесконечно
 //   node tools/crossVenueCollector.mjs --seconds 120   # разведка, сводка в конце
-//   XV_COINS=BTC,HYPE,PUMP node tools/crossVenueCollector.mjs
 
 import { appendFileSync, mkdirSync, existsSync, writeFileSync, renameSync } from "node:fs";
 import { join } from "node:path";
@@ -59,23 +73,21 @@ import WebSocket from "ws";
 const OUT_DIR = join("data", "xvenue");
 
 // Монеты: те, которыми ты реально торгуешь (список из bookCollector) плюс
-// крупняк как контроль. CASHCAT выброшен — его нет на Binance, сравнивать не с чем.
+// крупняк как контроль. CASHCAT выброшен — его нет ни на Binance, ни на Kraken.
 const COINS = (process.env.XV_COINS ||
   "BTC,ETH,SOL,HYPE,ACE,HMSTR,KAITO,MANTA,PUMP,DYDX,JTO,XPL,AERO,RESOLV"
 ).split(",").map((c) => c.trim()).filter(Boolean);
 
-// Комиссии тейкером в базисных пунктах, одна нога.
+// Комиссии тейкером в базисных пунктах, ОДНА нога.
 const HL_TAKER_BP = Number(process.env.XV_HL_TAKER_BP || 4.5);
 const BN_TAKER_BP = Number(process.env.XV_BN_TAKER_BP || 5.0);
-// Полный круг: открыть две ноги + закрыть две ноги.
-const COST_BP = 2 * HL_TAKER_BP + 2 * BN_TAKER_BP;
+const KR_TAKER_BP = Number(process.env.XV_KR_TAKER_BP || 5.0);
 
 const STALE_MS = Number(process.env.XV_STALE_MS || 1500);
 const STATS_MS = Number(process.env.XV_STATS_MS || 5 * 60_000);
 // Живой снимок для витрины на /lab. Дашборд читает файл, а НЕ держит свои
-// сокеты к биржам: два процесса с одинаковыми подписками — это удвоенный
-// трафик ради одной и той же цифры, плюс второй источник правды, который
-// рано или поздно разъедется с первым.
+// сокеты к биржам: три процесса с одинаковыми подписками — это утроенный
+// трафик ради одной и той же цифры, плюс второй источник правды.
 const LIVE_MS = Number(process.env.XV_LIVE_MS || 2_000);
 const RUN_SECONDS = (() => {
   const i = process.argv.indexOf("--seconds");
@@ -86,25 +98,58 @@ const RUN_SECONDS = (() => {
 // HL пишет пачечные монеты как kPEPE (= 1000 PEPE), Binance как 1000PEPE —
 // множитель одинаковый, поэтому цены сравнимы напрямую, менять надо только имя.
 // См. память про kcoin naming: строчная k у HL.
-const toBinance = (coin) =>
+const unK = (coin) =>
   (coin.startsWith("k") && coin.length > 1 && coin[1] === coin[1].toUpperCase()
     ? `1000${coin.slice(1)}`
-    : coin) + "USDT";
+    : coin);
 
-const BN_TO_HL = new Map(COINS.map((c) => [toBinance(c), c]));
+const bnSymbol = (coin) => `${unK(coin)}USDT`;
+// Kraken зовёт биткоин XBT — историческое наследие, а не отдельный актив.
+const krSymbol = (coin) => `PF_${unK(coin) === "BTC" ? "XBT" : unK(coin)}USD`;
 
-/** Состояние лучшей цены по каждой бирже. Обновляется по месту, без аллокаций. */
+// Какие монеты реально есть на каждой площадке — заполняется на старте,
+// подписываемся только на существующее (иначе Kraken молча игнорирует, а
+// Binance роняет всё соединение на несуществующем потоке).
+const listed = { bn: new Set(), kr: new Set() };
+
+async function discoverListings() {
+  try {
+    const bn = await (await fetch("https://fapi.binance.com/fapi/v1/exchangeInfo")).json();
+    const set = new Set(bn.symbols.filter((s) => s.status === "TRADING").map((s) => s.symbol));
+    for (const c of COINS) if (set.has(bnSymbol(c))) listed.bn.add(c);
+  } catch (err) {
+    process.stderr.write(`[xv] список Binance не получен: ${err.message}\n`);
+  }
+  try {
+    const kf = await (await fetch("https://futures.kraken.com/derivatives/api/v3/instruments")).json();
+    const set = new Set((kf.instruments || []).filter((i) => i.tradeable).map((i) => i.symbol));
+    for (const c of COINS) if (set.has(krSymbol(c))) listed.kr.add(c);
+  } catch (err) {
+    process.stderr.write(`[xv] список Kraken не получен: ${err.message}\n`);
+  }
+}
+
+// ── Пары ───────────────────────────────────────────────────────────────────
+// tradeable отличает «здесь можно торговать» от «это опорная точка».
+// Без флага контрольная пара рано или поздно попадёт в вывод как возможность.
+const PAIRS = [
+  { key: "hl-kr", a: "hl", b: "kr", label: "HL ↔ Kraken", tradeable: true,
+    costBp: 2 * HL_TAKER_BP + 2 * KR_TAKER_BP },
+  { key: "hl-bn", a: "hl", b: "bn", label: "HL ↔ Binance (контроль)", tradeable: false,
+    costBp: 2 * HL_TAKER_BP + 2 * BN_TAKER_BP },
+];
+
+/** Лучшая цена по каждой площадке + открытые окна и выборки по каждой паре. */
 const book = new Map(
   COINS.map((c) => [c, {
-    hl: null, // { bid, ask, bidUsd, askUsd, t }
-    bn: null,
-    open: new Map(), // dir -> { since, peakNetBp, minUsd, ticks }
-    samples: [],     // сырые gross-расхождения для перцентилей
+    hl: null, bn: null, kr: null, // { bid, ask, bidUsd, askUsd, t }
+    open: new Map(),              // "<pairKey>|<dir>" -> { since, peakNetBp, minUsd, ticks }
+    samples: new Map(PAIRS.map((p) => [p.key, []])),
   }]),
 );
 
 // ── Учёт ───────────────────────────────────────────────────────────────────
-const stats = { windows: 0, hlMsg: 0, bnMsg: 0, staleSkips: 0, since: Date.now() };
+const stats = { windows: 0, msg: { hl: 0, bn: 0, kr: 0 }, staleSkips: 0, since: Date.now() };
 
 // ── Свежесть проверяется на уровне СОЕДИНЕНИЯ, а не монеты ─────────────────
 // Первая версия гарда смотрела на возраст котировки по каждой монете и при
@@ -115,12 +160,7 @@ const stats = { windows: 0, hlMsg: 0, bnMsg: 0, staleSkips: 0, since: Date.now()
 //
 // Цена ошибки не косметическая: из замера выбрасывались ровно те неликвидные
 // альты, ради которых всё и затевалось, то есть выборка смещалась к крупняку.
-//
-// Настоящий отказ, от которого гард и защищает (замерший сокет при живом
-// втором), виден именно на уровне соединения: живой сокет присылает хоть
-// что-то по хоть какой-то монете постоянно. Тишина по ВСЕМ 14 монетам разом —
-// это уже поломка, а не спокойный рынок.
-const venueLastMsg = { hl: 0, bn: 0 };
+const venueLastMsg = { hl: 0, bn: 0, kr: 0 };
 
 function outFile(kind) {
   const month = new Date().toISOString().slice(0, 7);
@@ -133,45 +173,48 @@ function write(kind, obj) {
 }
 
 /**
- * Пересчёт после любого апдейта любой из бирж.
+ * Пересчёт пары после любого апдейта любой из её площадок.
  *
  * Две независимые стороны сделки:
- *   buyBN  — купить на Binance по ask, продать на HL по bid
- *   buyHL  — купить на HL по ask, продать на Binance по bid
+ *   buyB — купить на B по ask, продать на A по bid
+ *   buyA — купить на A по ask, продать на B по bid
  * Считаем обе: базис бывает любого знака и меняется в течение дня.
  */
-function evaluate(coin) {
+function evaluate(coin, pair) {
   const st = book.get(coin);
-  const { hl, bn } = st;
-  if (!hl || !bn) return;
+  const A = st[pair.a], B = st[pair.b];
+  if (!A || !B) return;
 
   const now = Date.now();
-  // Свежесть по времени ПОЛУЧЕНИЯ, а не по времени биржи: у бирж часы свои,
-  // и сравнивать их между собой — отдельный способ обмануться.
-  if (now - venueLastMsg.hl > STALE_MS || now - venueLastMsg.bn > STALE_MS) {
-    // Замерший сокет: закрываем всё открытое как недостоверное, не эмитим.
-    if (st.open.size) { st.open.clear(); stats.staleSkips++; }
+  if (now - venueLastMsg[pair.a] > STALE_MS || now - venueLastMsg[pair.b] > STALE_MS) {
+    // Замерший сокет: закрываем открытое по этой паре как недостоверное.
+    let touched = false;
+    for (const k of [...st.open.keys()]) {
+      if (k.startsWith(`${pair.key}|`)) { st.open.delete(k); touched = true; }
+    }
+    if (touched) stats.staleSkips++;
     return;
   }
 
-  const mid = (hl.bid + hl.ask + bn.bid + bn.ask) / 4;
+  const mid = (A.bid + A.ask + B.bid + B.ask) / 4;
   if (!(mid > 0)) return;
 
   const sides = [
-    { dir: "buyBN", gross: (hl.bid - bn.ask) / mid * 10_000, usd: Math.min(bn.askUsd, hl.bidUsd) },
-    { dir: "buyHL", gross: (bn.bid - hl.ask) / mid * 10_000, usd: Math.min(hl.askUsd, bn.bidUsd) },
+    { dir: "buyB", gross: (A.bid - B.ask) / mid * 10_000, usd: Math.min(B.askUsd, A.bidUsd) },
+    { dir: "buyA", gross: (B.bid - A.ask) / mid * 10_000, usd: Math.min(A.askUsd, B.bidUsd) },
   ];
 
   // Перцентили считаем по лучшей из сторон — это и есть «насколько близко было».
-  st.samples.push(Math.max(sides[0].gross, sides[1].gross));
+  st.samples.get(pair.key).push(Math.max(sides[0].gross, sides[1].gross));
 
   for (const { dir, gross, usd } of sides) {
-    const netBp = gross - COST_BP;
-    const cur = st.open.get(dir);
+    const netBp = gross - pair.costBp;
+    const slot = `${pair.key}|${dir}`;
+    const cur = st.open.get(slot);
 
     if (netBp > 0) {
       if (!cur) {
-        st.open.set(dir, { since: now, peakNetBp: netBp, minUsd: usd, ticks: 1 });
+        st.open.set(slot, { since: now, peakNetBp: netBp, minUsd: usd, ticks: 1 });
       } else {
         cur.peakNetBp = Math.max(cur.peakNetBp, netBp);
         // Исполнимый объём берём МИНИМАЛЬНЫЙ за жизнь окна: если стакан
@@ -180,22 +223,33 @@ function evaluate(coin) {
         cur.ticks++;
       }
     } else if (cur) {
-      const holdMs = now - cur.since;
       stats.windows++;
       write("windows", {
-        t: cur.since, coin, dir,
+        t: cur.since, coin,
+        pair: pair.key,
+        tradeable: pair.tradeable,
+        dir,
         peakNetBp: +cur.peakNetBp.toFixed(2),
-        grossBp: +(cur.peakNetBp + COST_BP).toFixed(2),
-        costBp: COST_BP,
-        holdMs,
+        grossBp: +(cur.peakNetBp + pair.costBp).toFixed(2),
+        costBp: pair.costBp,
+        holdMs: now - cur.since,
         usd: +cur.minUsd.toFixed(2),
         ticks: cur.ticks,
-        // Сколько денег окно стоило бы при полном исполнении на minUsd.
         pnlUsd: +(cur.minUsd * cur.peakNetBp / 10_000).toFixed(4),
       });
-      st.open.delete(dir);
+      st.open.delete(slot);
     }
   }
+}
+
+/** Апдейт площадки: сохранить котировку и пересчитать все пары с её участием. */
+function onQuote(venue, coin, quote) {
+  const st = book.get(coin);
+  if (!st) return;
+  st[venue] = quote;
+  stats.msg[venue]++;
+  venueLastMsg[venue] = quote.t;
+  for (const p of PAIRS) if (p.a === venue || p.b === venue) evaluate(coin, p);
 }
 
 // ── Живой снимок ───────────────────────────────────────────────────────────
@@ -208,50 +262,53 @@ function writeLive() {
   if (!existsSync(OUT_DIR)) mkdirSync(OUT_DIR, { recursive: true });
   const now = Date.now();
 
-  const coins = [];
-  for (const [coin, st] of book) {
-    const { hl, bn } = st;
-    if (!hl || !bn) { coins.push({ coin, ready: false }); continue; }
-    const mid = (hl.bid + hl.ask + bn.bid + bn.ask) / 4;
-    const buyBN = { dir: "buyBN", gross: (hl.bid - bn.ask) / mid * 10_000, usd: Math.min(bn.askUsd, hl.bidUsd) };
-    const buyHL = { dir: "buyHL", gross: (bn.bid - hl.ask) / mid * 10_000, usd: Math.min(hl.askUsd, bn.bidUsd) };
-    const best = buyBN.gross >= buyHL.gross ? buyBN : buyHL;
-    coins.push({
-      coin, ready: true,
-      dir: best.dir,
-      grossBp: +best.gross.toFixed(2),
-      netBp: +(best.gross - COST_BP).toFixed(2),
-      usd: +best.usd.toFixed(0),
-      hlMid: +((hl.bid + hl.ask) / 2).toFixed(8),
-      bnMid: +((bn.bid + bn.ask) / 2).toFixed(8),
-      // Возраст каждой ноги отдельно: если встал ОДИН фид, витрина обязана
-      // показать какой именно, иначе «расхождение из воздуха» выглядит находкой.
-      hlAgeMs: now - hl.t,
-      bnAgeMs: now - bn.t,
-      // Тихая монета — норма, а не поломка: отсутствие апдейта в стакане
-      // значит «цена та же». Поэтому stale здесь про СОЕДИНЕНИЕ, а возраст
-      // каждой ноги остаётся справочным числом рядом.
-      stale: now - venueLastMsg.hl > STALE_MS || now - venueLastMsg.bn > STALE_MS,
-      quietMs: Math.max(now - hl.t, now - bn.t),
-      // Окно открыто прямо сейчас — то есть netBp > 0 держится не мгновение.
-      openMs: st.open.get(best.dir) ? now - st.open.get(best.dir).since : 0,
-    });
-  }
+  const pairs = PAIRS.map((p) => {
+    const coins = [];
+    for (const [coin, st] of book) {
+      const A = st[p.a], B = st[p.b];
+      if (!A || !B) { coins.push({ coin, ready: false }); continue; }
+      const mid = (A.bid + A.ask + B.bid + B.ask) / 4;
+      const buyB = { dir: "buyB", gross: (A.bid - B.ask) / mid * 10_000, usd: Math.min(B.askUsd, A.bidUsd) };
+      const buyA = { dir: "buyA", gross: (B.bid - A.ask) / mid * 10_000, usd: Math.min(A.askUsd, B.bidUsd) };
+      const best = buyB.gross >= buyA.gross ? buyB : buyA;
+      const open = st.open.get(`${p.key}|${best.dir}`);
+      coins.push({
+        coin, ready: true,
+        dir: best.dir,
+        grossBp: +best.gross.toFixed(2),
+        netBp: +(best.gross - p.costBp).toFixed(2),
+        usd: +best.usd.toFixed(0),
+        // Спред каждой площадки отдельно: если расхождение целиком объясняется
+        // широким спредом одной из них, это не окно, а плата за неликвид.
+        aSpreadBp: +((A.ask - A.bid) / mid * 10_000).toFixed(2),
+        bSpreadBp: +((B.ask - B.bid) / mid * 10_000).toFixed(2),
+        // Тихая монета — норма, а не поломка. stale здесь про СОЕДИНЕНИЕ.
+        quietMs: Math.max(now - A.t, now - B.t),
+        stale: now - venueLastMsg[p.a] > STALE_MS || now - venueLastMsg[p.b] > STALE_MS,
+        openMs: open ? now - open.since : 0,
+      });
+    }
+    return {
+      key: p.key, label: p.label, tradeable: p.tradeable, costBp: p.costBp,
+      coins: coins.sort((x, y) => (y.grossBp ?? -1e9) - (x.grossBp ?? -1e9)),
+    };
+  });
 
   const payload = {
     t: now,
-    costBp: COST_BP,
-    hlTakerBp: HL_TAKER_BP,
-    bnTakerBp: BN_TAKER_BP,
+    takers: { hl: HL_TAKER_BP, bn: BN_TAKER_BP, kr: KR_TAKER_BP },
     staleMs: STALE_MS,
-    hlFeedAgeMs: venueLastMsg.hl ? now - venueLastMsg.hl : null,
-    bnFeedAgeMs: venueLastMsg.bn ? now - venueLastMsg.bn : null,
     uptimeMin: +((now - stats.since) / 60_000).toFixed(1),
-    hlMsg: stats.hlMsg,
-    bnMsg: stats.bnMsg,
+    msg: stats.msg,
+    feedAgeMs: {
+      hl: venueLastMsg.hl ? now - venueLastMsg.hl : null,
+      bn: venueLastMsg.bn ? now - venueLastMsg.bn : null,
+      kr: venueLastMsg.kr ? now - venueLastMsg.kr : null,
+    },
+    listed: { kr: [...listed.kr], bn: [...listed.bn] },
     staleSkips: stats.staleSkips,
     windows: stats.windows,
-    coins: coins.sort((a, b) => (b.grossBp ?? -1e9) - (a.grossBp ?? -1e9)),
+    pairs,
   };
 
   const tmp = `${LIVE_FILE}.tmp`;
@@ -259,29 +316,31 @@ function writeLive() {
   renameSync(tmp, LIVE_FILE);
 }
 
-// ── Перцентили без сортировки всего массива каждый раз ─────────────────────
-function pct(arr, p) {
-  if (!arr.length) return null;
-  const i = Math.min(arr.length - 1, Math.floor(arr.length * p));
-  return +arr[i].toFixed(2);
+// ── Перцентили ─────────────────────────────────────────────────────────────
+function pct(sorted, p) {
+  if (!sorted.length) return null;
+  return +sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))].toFixed(2);
 }
 
 function flushStats() {
   const t = Date.now();
   for (const [coin, st] of book) {
-    if (!st.samples.length) continue;
-    const s = st.samples.slice().sort((a, b) => a - b);
-    write("stats", {
-      t, coin, n: s.length,
-      p50: pct(s, 0.5), p90: pct(s, 0.9), p99: pct(s, 0.99),
-      max: +s[s.length - 1].toFixed(2),
-      costBp: COST_BP,
-    });
-    st.samples.length = 0;
+    for (const p of PAIRS) {
+      const arr = st.samples.get(p.key);
+      if (!arr.length) continue;
+      const s = arr.slice().sort((a, b) => a - b);
+      write("stats", {
+        t, coin, pair: p.key, tradeable: p.tradeable, n: s.length,
+        p50: pct(s, 0.5), p90: pct(s, 0.9), p99: pct(s, 0.99),
+        max: +s[s.length - 1].toFixed(2),
+        costBp: p.costBp,
+      });
+      arr.length = 0;
+    }
   }
 }
 
-// ── Hyperliquid: подписка bbo отдаёт только лучшую цену, а не весь стакан ───
+// ── Hyperliquid: подписка bbo отдаёт только лучшую цену ────────────────────
 function connectHL() {
   const ws = new WebSocket("wss://api.hyperliquid.xyz/ws");
   let alive = true;
@@ -301,56 +360,50 @@ function connectHL() {
       return;
     }
     const { coin, bbo } = d.data;
-    const st = book.get(coin);
-    if (!st || !bbo?.[0] || !bbo?.[1]) return;
+    if (!bbo?.[0] || !bbo?.[1]) return;
     const bid = parseFloat(bbo[0].px), ask = parseFloat(bbo[1].px);
     if (!(bid > 0) || !(ask > bid)) return;
-    st.hl = {
+    onQuote("hl", coin, {
       bid, ask,
       bidUsd: bid * parseFloat(bbo[0].sz),
       askUsd: ask * parseFloat(bbo[1].sz),
       t: Date.now(),
-    };
-    stats.hlMsg++;
-    venueLastMsg.hl = st.hl.t;
-    evaluate(coin);
+    });
   };
 
-  // Переподключение: молчащий сокет здесь хуже упавшего — он рисует
-  // расхождения из воздуха. STALE_MS ловит это на уровне данных, reconnect —
-  // на уровне соединения.
+  // Молчащий сокет здесь хуже упавшего — он рисует расхождения из воздуха.
+  // STALE_MS ловит это на уровне данных, reconnect — на уровне соединения.
   const revive = () => { if (alive) { alive = false; setTimeout(connectHL, 3000); } };
   ws.onclose = () => { process.stderr.write("[xv] HL отвалился, переподключаюсь\n"); revive(); };
   ws.onerror = () => revive();
 }
 
-// ── Binance USDT-перпы: bookTicker пушит на каждое изменение лучшей цены ────
+// ── Binance (контроль): bookTicker пушит на каждое изменение лучшей цены ────
 function connectBN() {
-  const streams = COINS.map((c) => `${toBinance(c).toLowerCase()}@bookTicker`).join("/");
+  const coins = [...listed.bn];
+  if (!coins.length) { process.stderr.write("[xv] Binance: нечего слушать\n"); return; }
+  const streams = coins.map((c) => `${bnSymbol(c).toLowerCase()}@bookTicker`).join("/");
   const ws = new WebSocket(`wss://fstream.binance.com/stream?streams=${streams}`);
   let alive = true;
+  const bySymbol = new Map(coins.map((c) => [bnSymbol(c), c]));
 
-  ws.onopen = () => process.stderr.write(`[xv] Binance подключён, ${COINS.length} потоков\n`);
+  ws.onopen = () => process.stderr.write(`[xv] Binance подключён, ${coins.length} потоков\n`);
 
   ws.onmessage = (e) => {
     let d;
     try { d = JSON.parse(String(e.data)); } catch { return; }
     const x = d.data;
     if (!x?.s) return;
-    const coin = BN_TO_HL.get(x.s);
-    const st = coin && book.get(coin);
-    if (!st) return;
+    const coin = bySymbol.get(x.s);
+    if (!coin) return;
     const bid = parseFloat(x.b), ask = parseFloat(x.a);
     if (!(bid > 0) || !(ask > bid)) return;
-    st.bn = {
+    onQuote("bn", coin, {
       bid, ask,
       bidUsd: bid * parseFloat(x.B),
       askUsd: ask * parseFloat(x.A),
       t: Date.now(),
-    };
-    stats.bnMsg++;
-    venueLastMsg.bn = st.bn.t;
-    evaluate(coin);
+    });
   };
 
   const revive = () => { if (alive) { alive = false; setTimeout(connectBN, 3000); } };
@@ -358,46 +411,131 @@ function connectBN() {
   ws.onerror = () => revive();
 }
 
+// ── Kraken Futures: L2 с дельтами ──────────────────────────────────────────
+// Почему не ticker — см. шапку файла (троттлинг 633 мс убивает весь замер).
+// Полный стакан держим в Map, лучшую цену кэшируем и пересчитываем только
+// когда сносят сам верхний уровень: пересортировывать тысячу уровней на каждой
+// из 6600 дельт в секунду — верный способ упереться в CPU на ровном месте.
+function connectKR() {
+  const coins = [...listed.kr];
+  if (!coins.length) { process.stderr.write("[xv] Kraken: нечего слушать\n"); return; }
+  const ws = new WebSocket("wss://futures.kraken.com/ws/v1");
+  let alive = true;
+  const byProduct = new Map(coins.map((c) => [krSymbol(c), c]));
+  const books = new Map(); // product -> { bids: Map, asks: Map, bestBid, bestAsk }
+
+  const best = (m, side) => {
+    let out = side === "bid" ? -Infinity : Infinity;
+    for (const px of m.keys()) {
+      if (side === "bid") { if (px > out) out = px; }
+      else if (px < out) out = px;
+    }
+    return Number.isFinite(out) ? out : null;
+  };
+
+  const publish = (product) => {
+    const b = books.get(product);
+    const coin = byProduct.get(product);
+    if (!b || !coin || b.bestBid == null || b.bestAsk == null) return;
+    if (!(b.bestBid > 0) || !(b.bestAsk > b.bestBid)) return;
+    onQuote("kr", coin, {
+      bid: b.bestBid, ask: b.bestAsk,
+      bidUsd: b.bestBid * (b.bids.get(b.bestBid) || 0),
+      askUsd: b.bestAsk * (b.asks.get(b.bestAsk) || 0),
+      t: Date.now(),
+    });
+  };
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ event: "subscribe", feed: "book", product_ids: coins.map(krSymbol) }));
+    process.stderr.write(`[xv] Kraken подключён, ${coins.length} стаканов\n`);
+  };
+
+  ws.onmessage = (e) => {
+    let d;
+    try { d = JSON.parse(String(e.data)); } catch { return; }
+
+    if (d.event === "error" || d.event === "alert") {
+      process.stderr.write(`[xv] Kraken: ${JSON.stringify(d).slice(0, 200)}\n`);
+      return;
+    }
+
+    if (d.feed === "book_snapshot") {
+      const bids = new Map(), asks = new Map();
+      for (const x of d.bids || []) bids.set(x.price, x.qty);
+      for (const x of d.asks || []) asks.set(x.price, x.qty);
+      books.set(d.product_id, { bids, asks, bestBid: best(bids, "bid"), bestAsk: best(asks, "ask") });
+      publish(d.product_id);
+      return;
+    }
+
+    if (d.feed !== "book") return;
+    const b = books.get(d.product_id);
+    if (!b) return; // дельта до снимка — пропускаем, снимок придёт следом
+
+    const isBid = d.side === "buy";
+    const m = isBid ? b.bids : b.asks;
+    if (d.qty === 0) {
+      m.delete(d.price);
+      // Снесли верхний уровень — только здесь нужен полный пересчёт.
+      if (isBid && d.price === b.bestBid) b.bestBid = best(m, "bid");
+      if (!isBid && d.price === b.bestAsk) b.bestAsk = best(m, "ask");
+    } else {
+      m.set(d.price, d.qty);
+      if (isBid && (b.bestBid == null || d.price > b.bestBid)) b.bestBid = d.price;
+      if (!isBid && (b.bestAsk == null || d.price < b.bestAsk)) b.bestAsk = d.price;
+    }
+    publish(d.product_id);
+  };
+
+  const revive = () => { if (alive) { alive = false; setTimeout(connectKR, 3000); } };
+  ws.onclose = () => { process.stderr.write("[xv] Kraken отвалился, переподключаюсь\n"); revive(); };
+  ws.onerror = () => revive();
+}
+
 // ── Сводка на выход ────────────────────────────────────────────────────────
 function summary() {
   const mins = (Date.now() - stats.since) / 60_000;
-  console.log(`\n  Замер ${mins.toFixed(1)} мин. Порог = ${COST_BP} бп ` +
-    `(2×HL ${HL_TAKER_BP} + 2×BN ${BN_TAKER_BP}).`);
-  console.log(`  Апдейтов: HL ${stats.hlMsg}, Binance ${stats.bnMsg}. ` +
-    `Пропущено по несвежести: ${stats.staleSkips}.`);
-  console.log(`  Окон выше порога: ${stats.windows}\n`);
+  console.log(`\n  Замер ${mins.toFixed(1)} мин.`);
+  console.log(`  Апдейтов: HL ${stats.msg.hl}, Kraken ${stats.msg.kr}, Binance ${stats.msg.bn}. ` +
+    `Пропущено по несвежести: ${stats.staleSkips}. Окон выше порога: ${stats.windows}`);
 
-  // В samples лежит ВАЛОВОЕ расхождение. Сравнивать его надо с COST_BP, а не с
-  // нулём: сравнение с нулём один раз уже нарисовало «ВЫШЕ ПОРОГА» у BTC с его
-  // 4.8 бп при пороге 19. Шкалу держим валовой, вердикт — относительно порога.
-  console.log("  монета     n      p50      p90      p99      max     вердикт (порог " + COST_BP + " бп)");
-  const rows = [];
-  for (const [coin, st] of book) {
-    if (!st.samples.length) { rows.push([coin, 0]); continue; }
-    const s = st.samples.slice().sort((a, b) => a - b);
-    rows.push([coin, s.length, pct(s, 0.5), pct(s, 0.9), pct(s, 0.99), +s[s.length - 1].toFixed(2)]);
+  for (const p of PAIRS) {
+    console.log(`\n  ── ${p.label} · порог ${p.costBp} бп ` +
+      `${p.tradeable ? "" : "· ТОРГОВАТЬ НЕЛЬЗЯ, опорная точка"}`);
+    console.log("  монета     n      p50      p90      p99      max     вердикт");
+    const rows = [];
+    for (const [coin, st] of book) {
+      const arr = st.samples.get(p.key);
+      if (arr.length) rows.push([coin, arr.slice().sort((a, b) => a - b)]);
+    }
+    if (!rows.length) { console.log("  (нет данных)"); continue; }
+    for (const [coin, s] of rows.sort((a, b) => b[1][b[1].length - 1] - a[1][a[1].length - 1])) {
+      const max = s[s.length - 1];
+      const verdict = max > p.costBp
+        ? `ПРОБИЛ на ${(max - p.costBp).toFixed(1)} бп`
+        : `не дотянул ${(p.costBp - max).toFixed(1)} бп`;
+      console.log(
+        `  ${coin.padEnd(9)} ${String(s.length).padStart(5)} ` +
+        `${String(pct(s, 0.5)).padStart(8)} ${String(pct(s, 0.9)).padStart(8)} ` +
+        `${String(pct(s, 0.99)).padStart(8)} ${String(+max.toFixed(2)).padStart(8)}   ${verdict}`,
+      );
+    }
   }
-  for (const [coin, n, p50, p90, p99, max] of rows.sort((a, b) => (b[5] ?? -1e9) - (a[5] ?? -1e9))) {
-    if (!n) { console.log(`  ${coin.padEnd(9)} нет данных`); continue; }
-    const verdict = max > COST_BP
-      ? `ПРОБИЛ на ${(max - COST_BP).toFixed(1)} бп`
-      : `не дотянул ${(COST_BP - max).toFixed(1)} бп`;
-    console.log(
-      `  ${coin.padEnd(9)} ${String(n).padStart(5)} ` +
-      `${String(p50).padStart(8)} ${String(p90).padStart(8)} ` +
-      `${String(p99).padStart(8)} ${String(max).padStart(8)}   ${verdict}`,
-    );
-  }
-  console.log(`\n  Числа — ВАЛОВОЕ расхождение лучшей из двух сторон, в бп,`);
-  console.log(`  ДО издержек. Деньги начинаются правее ${COST_BP} бп.\n`);
+  console.log("\n  Числа — ВАЛОВОЕ расхождение лучшей из двух сторон, в бп, ДО издержек.\n");
 }
 
 // ── Старт ──────────────────────────────────────────────────────────────────
+await discoverListings();
 process.stderr.write(
-  `[xv] старт: ${COINS.length} монет, порог ${COST_BP} бп, ` +
-  `несвежесть >${STALE_MS} мс → ${OUT_DIR}\n`,
+  `[xv] старт: ${COINS.length} монет · Kraken ${listed.kr.size} · Binance ${listed.bn.size} · ` +
+  `порог HL↔Kraken ${PAIRS[0].costBp} бп → ${OUT_DIR}\n`,
 );
+const missing = COINS.filter((c) => !listed.kr.has(c));
+if (missing.length) process.stderr.write(`[xv] нет на Kraken: ${missing.join(", ")}\n`);
+
 connectHL();
+connectKR();
 connectBN();
 setInterval(flushStats, STATS_MS);
 setInterval(writeLive, LIVE_MS);

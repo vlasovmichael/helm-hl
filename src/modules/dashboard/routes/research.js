@@ -118,13 +118,24 @@ export function handleCrossVenue(_req, res) {
     // Окна за последние сутки — чтобы карточка показывала не только текущее
     // состояние, но и «сколько раз за сутки вообще пробивало».
     const since = Date.now() - 86_400_000;
-    const windows = readJsonl(monthFile("xvenue", "xvenue-windows")).filter((w) => w.t >= since);
+    // Строки старше 14.08 писались до появления пар и были HL↔Binance.
+    const all = readJsonl(monthFile("xvenue", "xvenue-windows"))
+      .filter((w) => w.t >= since)
+      .map((w) => ({ ...w, pair: w.pair || "hl-bn" }));
 
     // Достижимость считаем теми же порогами, что и CLI: жизнь ≥ 220 мс (столько
     // идёт round-trip до бирж из Европы, замер 14.08) и объём ≥ $50. Без этих
     // фильтров список окон читается как список возможностей, хотя большинство
     // из них физически недостижимо.
-    const reachable = windows.filter((w) => w.holdMs >= 220 && w.usd >= 50);
+    const summarise = (rows) => {
+      const reachable = rows.filter((w) => w.holdMs >= 220 && w.usd >= 50);
+      return {
+        windows: rows.length,
+        reachable: reachable.length,
+        pnlUsd: +reachable.reduce((s, w) => s + w.usd * w.peakNetBp / 10_000, 0).toFixed(2),
+        best: rows.length ? rows.reduce((a, b) => (b.peakNetBp > a.peakNetBp ? b : a)) : null,
+      };
+    };
 
     res.json({
       ok: true,
@@ -132,15 +143,11 @@ export function handleCrossVenue(_req, res) {
       // Возраст снимка: если коллектор встал, всё остальное на карточке —
       // прошлое, выданное за настоящее.
       ageSec: Math.round((Date.now() - live.t) / 1000),
-      day: {
-        windows: windows.length,
-        reachable: reachable.length,
-        pnlUsd: +reachable.reduce((s, w) => s + w.usd * w.peakNetBp / 10_000, 0).toFixed(2),
-        best: windows.length
-          ? windows.reduce((a, b) => (b.peakNetBp > a.peakNetBp ? b : a))
-          : null,
-      },
-      recent: windows.slice(-8).reverse(),
+      // Итог по КАЖДОЙ паре отдельно. Складывать их вместе нельзя: у Binance
+      // из Европы нельзя торговать, и его окна — не возможности, а опорная точка.
+      day: Object.fromEntries((live.pairs || []).map((p) => [
+        p.key, summarise(all.filter((w) => w.pair === p.key)),
+      ])),
     });
   } catch (err) {
     res.json({ ok: false, reason: "read-error", message: String(err?.message || err) });

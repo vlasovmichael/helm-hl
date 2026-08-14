@@ -32,9 +32,18 @@
 // исполнения и риск остаться с одной ногой. Все они работают ПРОТИВ тебя,
 // поэтому цифра отсюда — потолок, а не ожидание.
 //
+// ── Пары: торговая и контрольная ───────────────────────────────────────────
+// С 14.08 коллектор пишет две пары. HL↔Kraken — где можно торговать (Binance
+// из Европы недоступен). HL↔Binance — опорная точка: Binance это площадка, где
+// формируется цена, и без неё нечем отличить «на Kraken реально другая цена»
+// от «у Kraken тонкий стакан». Отчёт считает возможности ТОЛЬКО по торговой
+// паре, а контрольную показывает рядом как справку — иначе контрольные окна
+// однажды попадут в вывод как деньги, которых взять нельзя.
+//
 // Запуск:
 //   node tools/crossVenueStats.mjs
 //   node tools/crossVenueStats.mjs --latency 400 --min-usd 100
+//   node tools/crossVenueStats.mjs --pair hl-bn   # посмотреть контроль
 
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -48,6 +57,10 @@ const arg = (name, dflt) => {
 const LATENCY_MS = arg("latency", 250);
 const MIN_USD = arg("min-usd", 50);
 const CLUSTER_MS = arg("cluster", 1000);
+const pairArg = (() => {
+  const i = process.argv.indexOf("--pair");
+  return i > -1 ? process.argv[i + 1] : "hl-kr";
+})();
 
 if (!existsSync(DIR)) {
   console.log(`  ${DIR} пуст — сначала покрути crossVenueCollector.mjs\n`);
@@ -64,8 +77,21 @@ function load(kind) {
   return rows.sort((a, b) => a.t - b.t);
 }
 
-const windows = load("windows");
-const statRows = load("stats");
+// Строки старше 14.08 писались до появления пар — считаем их парой HL↔Binance,
+// какой они и были. Молча смешать их с Kraken значило бы сравнить разные рынки.
+const withPair = (r) => ({ ...r, pair: r.pair || "hl-bn" });
+
+const allWindows = load("windows").map(withPair);
+const allStats = load("stats").map(withPair);
+
+const windows = allWindows.filter((w) => w.pair === pairArg);
+const statRows = allStats.filter((r) => r.pair === pairArg);
+
+const PAIR_LABEL = { "hl-kr": "HL ↔ Kraken (торговая)", "hl-bn": "HL ↔ Binance (контроль)" };
+console.log(`\n  Пара: ${PAIR_LABEL[pairArg] || pairArg}`);
+if (pairArg !== "hl-kr") {
+  console.log("  ⚠ Это НЕ торговая пара: Binance из Европы недоступен. Справка, не возможности.");
+}
 
 if (!windows.length && !statRows.length) {
   console.log("  Данных нет.\n");
