@@ -20,12 +20,32 @@
 // в моменты, которые на двух биржах даже не совпадают по времени, и красивая
 // эквити на спреде, которого нельзя было коснуться. Поэтому: пишем с сегодня.
 //
-// ── Модель издержек: почему порог именно такой ─────────────────────────────
-// Чтобы забрать расхождение, нужны ЧЕТЫРЕ тейкерских исполнения, а не два:
-// открыть обе ноги на расхождении и закрыть обе, когда оно схлопнется.
+// ── Модель издержек: комиссии — только ПОЛОВИНА счёта ──────────────────────
+// Чтобы забрать расхождение, нужны ЧЕТЫРЕ тейкерских исполнения:
 //   2 × HL taker (4.5 бп) + 2 × Kraken taker ≈ 19 бп при тейкере 5 бп.
-// Считать по двум ногам (≈10 бп) — самый лёгкий способ нарисовать себе эдж,
-// которого нет.
+//
+// 🚨 ИСПРАВЛЕНО 14.08 ПО ДАННЫМ БУМАЖНОГО БОТА. Порога в 19 бп НЕ хватает, и
+// первые три сделки это показали: KAITO вошёл при 19.7 бп, расхождение к
+// исполнению НЕ изменилось — и всё равно вышел −37 бп. Причина в том, что
+// спреды пересекаются ДВАЖДЫ, а метрика вычитала их один раз.
+//
+// Считаем честно через расхождение МИДОВ (D) и спреды площадок (sA, sB):
+//   вход:  покупаем по ask одной, продаём по bid другой  → платим (sA+sB)/2
+//   выход: продаём по bid одной,  выкупаем по ask другой → платим (sA+sB)/2
+//   итог:  прибыль = (D_вход − D_выход) − (sA + sB) − комиссии
+//
+// То, что коллектор мерил раньше как «валовое расхождение», это уже
+// G = D − (sA+sB)/2, то есть спреды входа в нём учтены. Спреды ВЫХОДА не были
+// учтены нигде. Отсюда рабочий порог:
+//   G > комиссии + (sA + sB) / 2
+//
+// Разница не косметическая. У Kraken спреды на альтах огромные: ACE 49 бп,
+// KAITO 15 бп. Порог по ACE получается не 19, а ~47 бп — при том что максимум
+// расхождения за всё наблюдение был 38 бп. То есть значительная часть «окон»
+// была не окнами, а шириной чужого стакана.
+//
+// Поэтому порог здесь ДИНАМИЧЕСКИЙ: считается на каждом тике по текущим
+// спредам. costBp пары остался как комиссионная часть.
 //
 // 🚨 КОМИССИЯ KRAKEN — ПАРАМЕТР, И ЕЁ НАДО ПРОВЕРИТЬ В КАБИНЕТЕ. У Kraken две
 // сетки: PF-контракты по умолчанию идут по 0.05% (5 бп), но для розничных
@@ -215,6 +235,12 @@ function evaluate(coin, pair) {
   const mid = (A.bid + A.ask + B.bid + B.ask) / 4;
   if (!(mid > 0)) return;
 
+  // Спреды выхода: их пересекать придётся второй раз, когда будем закрываться.
+  // Половина суммы — потому что G уже включает половину (спреды входа).
+  const spreadA = (A.ask - A.bid) / mid * 10_000;
+  const spreadB = (B.ask - B.bid) / mid * 10_000;
+  const thresholdBp = pair.costBp + (spreadA + spreadB) / 2;
+
   const sides = [
     { dir: "buyB", gross: (A.bid - B.ask) / mid * 10_000, usd: Math.min(B.askUsd, A.bidUsd) },
     { dir: "buyA", gross: (B.bid - A.ask) / mid * 10_000, usd: Math.min(A.askUsd, B.bidUsd) },
@@ -226,22 +252,23 @@ function evaluate(coin, pair) {
   // Бумажный бот работает ТОЛЬКО по торговой паре: гонять его по контрольной
   // значило бы копить эквити на бирже, куда доступа нет.
   if (paper && pair.tradeable) {
-    paper.onTick(coin, pair.key, { a: A, b: B, venues: [pair.a, pair.b] }, pair.costBp);
+    paper.onTick(coin, pair.key, { a: A, b: B, venues: [pair.a, pair.b] }, thresholdBp);
   }
 
   for (const { dir, gross, usd } of sides) {
-    const netBp = gross - pair.costBp;
+    const netBp = gross - thresholdBp;
     const slot = `${pair.key}|${dir}`;
     const cur = st.open.get(slot);
 
     if (netBp > 0) {
       if (!cur) {
-        st.open.set(slot, { since: now, peakNetBp: netBp, minUsd: usd, ticks: 1 });
+        st.open.set(slot, { since: now, peakNetBp: netBp, minUsd: usd, ticks: 1, thresholdBp });
       } else {
         cur.peakNetBp = Math.max(cur.peakNetBp, netBp);
         // Исполнимый объём берём МИНИМАЛЬНЫЙ за жизнь окна: если стакан
         // подсох в середине, влезть на пиковый размер было нельзя.
         cur.minUsd = Math.min(cur.minUsd, usd);
+        cur.thresholdBp = Math.max(cur.thresholdBp, thresholdBp);
         cur.ticks++;
       }
     } else if (cur) {
@@ -252,8 +279,12 @@ function evaluate(coin, pair) {
         tradeable: pair.tradeable,
         dir,
         peakNetBp: +cur.peakNetBp.toFixed(2),
-        grossBp: +(cur.peakNetBp + pair.costBp).toFixed(2),
+        grossBp: +(cur.peakNetBp + cur.thresholdBp).toFixed(2),
         costBp: pair.costBp,
+        // Порог на момент входа: комиссии + половина суммы спредов. Пишем его
+        // в строку, иначе задним числом не восстановить, почему окно засчиталось.
+        thresholdBp: +cur.thresholdBp.toFixed(2),
+        spreadsBp: +(spreadA + spreadB).toFixed(2),
         holdMs: now - cur.since,
         usd: +cur.minUsd.toFixed(2),
         ticks: cur.ticks,

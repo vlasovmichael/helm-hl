@@ -24,6 +24,20 @@
 // нельзя: это часы и комиссия за вывод. Значит размер позиции ограничен не
 // только стаканом, но и половиной депозита.
 //
+// ── ИСПРАВЛЕНО 14.08: спреды пересекаются ДВАЖДЫ ───────────────────────────
+// Первые три сделки были в минус, и не из-за задержки. KAITO вошёл при 19.7 бп,
+// расхождение к моменту исполнения НЕ изменилось — и сделка всё равно дала
+// −37 бп. Разбор: вход пересекает оба спреда, выход пересекает их ЕЩЁ РАЗ, а
+// порог считался только по комиссиям.
+//   прибыль = (D_вход − D_выход) − (sA + sB) − комиссии
+// Порог теперь приходит из коллектора уже с поправкой на спреды и на каждом
+// тике свой. У Kraken спреды на альтах по 15-50 бп, так что поправка крупнее
+// самих комиссий.
+//
+// Выход тоже был наивным: «ждём, пока расхождение схлопнется до нуля». Но при
+// нулевом расхождении выход стоит оба спреда, то есть закрываться в этот момент
+// — гарантированный минус. Теперь закрываемся по фактической прибыли позиции.
+//
 // ── Третье: размер ограничен стаканом ──────────────────────────────────────
 // Берём минимум из того, что стоит на лучшей цене с обеих сторон. Глубже
 // лучшей цены не лезем: это уже проскальзывание, которое здесь не моделируется
@@ -92,6 +106,7 @@ export class PaperBot {
       { dir: "buyA", grossBp: (b.bid - a.ask) / mid * 10_000, usd: Math.min(a.askUsd, b.bidUsd) },
     ];
     const best = sides[0].grossBp >= sides[1].grossBp ? sides[0] : sides[1];
+    // costBp здесь — уже ПОЛНЫЙ порог: комиссии + половина суммы спредов.
     if (best.grossBp - costBp <= 0) return;
 
     // Размер: минимум из стакана и половины депозита. Депозит ограничивает
@@ -151,19 +166,29 @@ export class PaperBot {
     const { a, b } = state;
     const mid = (a.bid + a.ask + b.bid + b.ask) / 4;
     if (!(mid > 0)) return;
-    // Текущее расхождение в ту же сторону, в которую входили.
-    const grossBp = trade.dir === "buyB"
-      ? (a.bid - b.ask) / mid * 10_000
-      : (b.bid - a.ask) / mid * 10_000;
 
-    const converged = grossBp <= this.exitBp;
+    // Считаем, что дала бы позиция, если закрыть её ПРЯМО СЕЙЧАС — по реальным
+    // ценам выхода, с комиссиями. Раньше выход триггерился по «расхождение
+    // схлопнулось до нуля», и это гарантировало минус: в этот момент закрытие
+    // стоит оба спреда. Теперь ждём, пока закрытие станет выгодным.
+    const sellBackPx = trade.dir === "buyB" ? b.bid : a.bid;
+    const buyBackPx = trade.dir === "buyB" ? a.ask : b.ask;
+    if (!(sellBackPx > 0) || !(buyBackPx > 0)) return;
+    const feesOut = trade.qty * sellBackPx * this.fee(trade.buyVenue)
+      + trade.qty * buyBackPx * this.fee(trade.sellVenue);
+    const markToMarket =
+      (sellBackPx - trade.buyPx) * trade.qty
+      + (trade.sellPx - buyBackPx) * trade.qty
+      - trade.feesIn - feesOut;
+
+    const profitable = markToMarket > 0;
     const timedOut = now - trade.openedAt >= this.maxHoldMs;
-    if (!converged && !timedOut) return;
+    if (!profitable && !timedOut) return;
     if (this.pending.some((p) => p.key === key && p.kind === "close")) return;
 
     this.pending.push({
       key, coin: trade.coin, pair: trade.pair, kind: "close",
-      sentAt: now, fillAt: now + this.latencyMs, reason: timedOut ? "timeout" : "converged",
+      sentAt: now, fillAt: now + this.latencyMs, reason: timedOut ? "timeout" : "profitable",
     });
   }
 
