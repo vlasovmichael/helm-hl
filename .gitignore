@@ -27,6 +27,9 @@ data/tax/
 data/oi-collector/
 data/spike-fade/
 data/leaderboard/
+# Межбиржевой замер: сырьё коллектора, растёт постоянно и в репо не нужно.
+# Попало в c6c7a3d по недосмотру — вычищено из индекса следующим коммитом.
+data/xvenue/
 diag/
 temp/
 plaintext.txt
