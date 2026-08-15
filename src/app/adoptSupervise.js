@@ -20,6 +20,7 @@ import { analyzeAdopt, getAdoptPeakPct } from '../modules/strategistAdopt.js';
 import { getLivePrice } from '../modules/exchange.js';
 import { execute } from '../modules/executor/index.js';
 import { trackAdoptTimeCutTick } from '../modules/adoptShadowTimeCut.js';
+import { trackAdoptShadowTrailTick } from '../modules/adoptShadowTrail.js';
 import { fireAdoptNtfy } from './adoptReconcile.js';
 
 // Пик-алерт: систематизация дискрец-выхода (оператор закрывает 63% adopt-поз рукой,
@@ -89,6 +90,11 @@ export async function superviseAdoptPositions(priceFn = getLivePrice) {
     // analyzeAdopt — peak в strategistAdopt уже обновлён этим тиком.
     try { trackAdoptTimeCutTick(pos, price); } catch (err) {
       logger.debug(`[Adopt] shadow time-cut tick #${pos.coin} failed: ${err.message}`);
+    }
+    // Shadow trail (гипотеза adopt-trail-025r): считает 0.25R-модель и симуляцию
+    // текущего трейла на ОДНОМ потоке цен. Тоже measurement-only.
+    try { trackAdoptShadowTrailTick(pos, price); } catch (err) {
+      logger.debug(`[Adopt] shadow trail tick #${pos.coin} failed: ${err.message}`);
     }
     if (sig.action === 'HOLD') {
       // Пик-алерт (best-effort): звонок оператору у пика, пока трейл ещё не сработал.

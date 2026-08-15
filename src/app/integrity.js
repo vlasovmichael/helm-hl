@@ -15,6 +15,7 @@ import { fetchUserFills, classifyClose, findRoundTripForPosition } from '../modu
 import { maybeAdoptManualPosition, reconcileProvisionalAdoptEntries, resolveManualOpenTime } from './adoptReconcile.js';
 import { clearAdoptState, consumeAdoptMfeMae } from '../modules/strategistAdopt.js';
 import { finalizeAdoptTimeCut } from '../modules/adoptShadowTimeCut.js';
+import { finalizeAdoptShadowTrail, clearAdoptShadowTrail } from '../modules/adoptShadowTrail.js';
 import {
   state,
   INTEGRITY_CHECK_INTERVAL_MS,
@@ -310,6 +311,8 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
   // trail-state, иначе peak-Map копит мусор.
   if (dbPosition.strategy_id === 'adopt') {
     finalizeAdoptTimeCut(dbPosition, closePx);
+    finalizeAdoptShadowTrail(dbPosition, closePx);
+    clearAdoptShadowTrail(dbPosition.id);
     clearAdoptState(dbPosition.id);
   }
 

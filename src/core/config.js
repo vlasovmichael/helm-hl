@@ -409,6 +409,15 @@ function loadConfig() {
   if (isNaN(adoptTimecutGreenPct) || adoptTimecutGreenPct <= 0) {
     throw new Error(`ADOPT_TIMECUT_GREEN_PCT must be > 0. Got: "${process.env.ADOPT_TIMECUT_GREEN_PCT}"`);
   }
+  // Теневой трейл (2026-08-15, гипотеза adopt-trail-025r). Текущий трейл отдаёт
+  // долю ПИКА, поэтому на малом пике буфер схлопывается в шум (разбор ACE 14.08).
+  // Альтернатива: отступ = R_MULT × исходный риск. Только лог, торговлю не трогает;
+  // решение — по стоп-правилу гипотезы (n ≥ 60 пар), не раньше. Default on = это лог.
+  const adoptTrailShadowEnabled = (process.env.ADOPT_TRAIL_SHADOW_ENABLED || 'true').toLowerCase() === 'true';
+  const adoptShadowTrailR       = parseFloat(process.env.ADOPT_SHADOW_TRAIL_R || '0.25');
+  if (isNaN(adoptShadowTrailR) || adoptShadowTrailR <= 0) {
+    throw new Error(`ADOPT_SHADOW_TRAIL_R must be > 0. Got: "${process.env.ADOPT_SHADOW_TRAIL_R}"`);
+  }
   // Пик-алерт (2026-07-02): систематизация дискрец-выхода. Юзер закрывает 63%
   // adopt-поз рукой (capture 68% MFE) — даём звонок в момент решения: пик ≥ MFE_PCT
   // (p75 его шортов ≈2.5%) и откат ≥ GIVEBACK_PCT от пика. GIVEBACK строго МЕНЬШЕ
@@ -680,6 +689,8 @@ function loadConfig() {
       adoptTimecutShadowEnabled,
       adoptTimecutMin,
       adoptTimecutGreenPct,
+      adoptTrailShadowEnabled,
+      adoptShadowTrailR,
       adoptPeakAlertEnabled,
       adoptPeakAlertMfePct,
       adoptPeakAlertGiveBackPct,

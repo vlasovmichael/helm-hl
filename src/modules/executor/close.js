@@ -34,6 +34,7 @@ import {
 import { setHunterCrossCooldown } from '../hunterCrossCooldown.js';
 import { clearAdoptState, getAdoptPeakPct, consumeAdoptMfeMae } from '../strategistAdopt.js';
 import { finalizeAdoptTimeCut } from '../adoptShadowTimeCut.js';
+import { finalizeAdoptShadowTrail, clearAdoptShadowTrail } from '../adoptShadowTrail.js';
 import {
   notifySlippageBan,
   notifyProductionClose, notifyCloseRejected, notifyCloseFailed,
@@ -410,6 +411,8 @@ async function finishProductionClose({
       exitFeatures.trail_give_back_pct = signal.giveBackPct ?? null;
     }
     finalizeAdoptTimeCut(position, fill.avgPx); // shadow time-cut: строка сравнения
+    finalizeAdoptShadowTrail(position, fill.avgPx); // shadow trail: 0.25R vs текущий
+    clearAdoptShadowTrail(position.id);
     clearAdoptState(position.id);
   }
 
