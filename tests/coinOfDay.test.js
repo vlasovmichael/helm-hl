@@ -327,6 +327,25 @@ test('отторгованная в минус монета получает п�
   assert.ok(v.notes.some((n) => n.includes('тильт')));
 });
 
+test('бумажные сделки бота не закрывают день по монете', async () => {
+  // Регрессия: фильтр отсекал только manual_paper, поэтому закрытия hunter_oi и
+  // fadehot (mode=PAPER) закрывали день по ACE/LINK, хотя оператор не торговал.
+  const { tradedTodayFromHistory } = await import('../src/modules/dashboard/routes/coinOfDay.js');
+  const rows = [
+    { coin: 'ACE',  strategy_id: 'hunter_oi',    mode: 'PAPER',      realized_pnl: 0.36, closed_at: T0, side: 'short' },
+    { coin: 'LINK', strategy_id: 'fadehot',      mode: 'PAPER',      realized_pnl: 0.13, closed_at: T0, side: 'long' },
+    { coin: 'SUI',  strategy_id: 'manual_paper', mode: 'PAPER',      realized_pnl: -0.5, closed_at: T0, side: 'long' },
+    { coin: 'HYPE', strategy_id: 'adopt',        mode: 'PRODUCTION', realized_pnl: -1.2, closed_at: T0, side: 'long' },
+  ];
+  const map = tradedTodayFromHistory(rows);
+
+  assert.equal(map.has('ACE'), false, 'бумажный hunter_oi не расходует дневной лимит');
+  assert.equal(map.has('LINK'), false, 'бумажный fadehot тоже');
+  assert.equal(map.has('SUI'), false, 'личный бумажный журнал — как и раньше');
+  assert.equal(map.get('HYPE')?.count, 1, 'реальная сделка день по монете закрывает');
+  assert.equal(map.get('HYPE')?.side, 'LONG');
+});
+
 test('живой сетап по отторгованной монете остаётся входом, но с флагом второго захода', async () => {
   // Требование оператора: решает СОСТОЯНИЕ сетапа, а не факт сделки. Если движок
   // всё ещё видит продолжение — монета не должна пропадать из входов.

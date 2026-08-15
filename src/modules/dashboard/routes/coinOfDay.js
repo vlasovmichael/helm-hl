@@ -61,15 +61,19 @@ function loadTodayPicks(now) {
 /**
  * COIN → итог дня по РЕАЛЬНЫМ сделкам (закрытым сегодня). Нужен, чтобы карточка
  * не предлагала повторный вход в монету, которую оператор сегодня уже отторговал.
- * manual_paper исключён: бумажный журнал не расходует дневной лимит по монете.
  * Границу дня берём по Варшаве — те же сутки, что у форвард-лога и day_journal.
+ *
+ * Фильтр по mode='PRODUCTION', а НЕ по списку бумажных strategy_id: раньше
+ * исключался только manual_paper, поэтому закрытия бумажных стратегий бота
+ * (hunter_oi, fadehot — они пишут mode='PAPER') закрывали день по монете, хотя
+ * оператор по ней не торговал ни разу. Бумажные прогоны не расходуют дневной лимит:
+ * лимит существует против «ещё разок» реальными деньгами. Любая новая бумажная
+ * стратегия теперь отсекается сама, без правки этого списка.
  */
-function loadTradedToday(now) {
-  const date = warsawDate(now);
-  const start = new Date(`${date}T00:00:00`).getTime();
+export function tradedTodayFromHistory(rows) {
   const map = new Map();
-  for (const t of getHistorySince(start)) {
-    if (!t?.coin || t.strategy_id === 'manual_paper') continue;
+  for (const t of rows || []) {
+    if (!t?.coin || t.mode !== 'PRODUCTION') continue;
     const c = t.coin.toUpperCase();
     const prev = map.get(c) || { pnl: 0, count: 0, lastCloseAt: 0, side: null };
     prev.pnl += t.realized_pnl ?? 0;
@@ -81,6 +85,12 @@ function loadTradedToday(now) {
     map.set(c, prev);
   }
   return map;
+}
+
+function loadTradedToday(now) {
+  const date = warsawDate(now);
+  const start = new Date(`${date}T00:00:00`).getTime();
+  return tradedTodayFromHistory(getHistorySince(start));
 }
 
 async function build(now) {
