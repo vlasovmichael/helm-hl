@@ -7,6 +7,12 @@
 
 import { escapeHtml } from "../utils/format.js";
 
+// Taker HL за одну сторону. Держим копией, а не импортом из executor/math.js:
+// web/ собирается Vite'ом со своим корнем и тянуть в бандл серверный модуль
+// ради одной цифры не стоит. Сверено с фактом: CASHCAT $11.73 → fee_paid
+// $0.0047 ≈ 2 × 0.0002 × нотионал.
+const TAKER_FEE_RATE = 0.0002;
+
 let activeCoinSet = new Set();
 // coin → краткая сводка открытой позиции (для пин-строки в Hot Movers).
 let activePosByCoin = new Map();
@@ -112,16 +118,28 @@ export function hmPosHintInner(coin) {
       const sp = bot.stopPct != null ? ` (−${bot.stopPct.toFixed(1)}%)` : "";
       chips.push(["neutral", `stop @${fmtPx(bot.stopPrice)}${sp}`]);
     }
-    // Locked profit: когда взведён BE/трейл — сколько $ бот уже зафиксировал
-    // храповиком (floorPct% от номинала). Видно, что защита реально работает.
+    // Что защищает храповик, ЧИСТЫМИ. Раньше чип показывал floorPct×номинал —
+    // брутто на цене триггера, то есть сумму, которую получить нельзя в принципе:
+    // на полу бот только ПРИНИМАЕТ решение, а закрывается ниже (полёт ордера +
+    // перелёт порога) и платит две комиссии. Замер CASHCAT 15.08: чип обещал
+    // $0.58, пришло $0.52, и весь разрыв — эти три вычета.
+    // Комиссии вычитаем (их размер известен точно), перелёт — нет: он меряется
+    // AdoptTrailProbe и на момент правки n=1. Поэтому «≈» и подпись в title.
     if (
       (kind === "be" || kind === "trail") &&
       bot.floorPct > 0 &&
       sizeUsd != null
     ) {
-      const lockedUsd = (bot.floorPct / 100) * sizeUsd;
-      if (lockedUsd >= 0.01)
-        chips.push(["good", `locked +$${lockedUsd.toFixed(2)}`]);
+      const grossUsd = (bot.floorPct / 100) * sizeUsd;
+      const netUsd = grossUsd - 2 * TAKER_FEE_RATE * sizeUsd;
+      if (netUsd >= 0.01)
+        chips.push([
+          "good",
+          `locked ≈ +$${netUsd.toFixed(2)}`,
+          `Пол храповика: $${grossUsd.toFixed(2)} брутто − $${(grossUsd - netUsd).toFixed(2)} комиссий. ` +
+            "Это уровень, на котором бот решает выходить, а не цена исполнения: " +
+            "фактический выход ниже на перелёт порога и полёт ордера.",
+        ]);
     }
     // R-multiple: текущий ход в единицах исходного риска (+1.2R / −0.5R).
     // Главная метрика дисциплины payoff (плюсы тянутся, минусы маленькие).
@@ -167,7 +185,10 @@ export function hmPosHintInner(coin) {
 
   const tag = source === "manual" ? (adopted ? "YOU + BOT" : "YOU") : "BOT";
   const chipsHtml = chips
-    .map(([k, t]) => `<span class="hm-hint hm-hint-${k}">${escapeHtml(t)}</span>`)
+    .map(([k, t, title]) => {
+      const tip = title ? ` title="${escapeHtml(title)}"` : "";
+      return `<span class="hm-hint hm-hint-${k}"${tip}>${escapeHtml(t)}</span>`;
+    })
     .join(" ");
   return `<td colspan="11">
     <span class="hm-pos-tag hm-pos-${source}">${tag}</span>${chipsHtml}
