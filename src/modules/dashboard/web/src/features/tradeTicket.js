@@ -134,6 +134,12 @@ export function validateOpen(s, ctx) {
 /**
  * Валидация закрытия. Выход намеренно почти не гейтится: дневной стоп на него
  * НЕ распространяется — запирать себе выход опасно.
+ *
+ * ⚠️ UI её сейчас НЕ вызывает: закрытие переехало на карточку позиции и делает
+ * только «всё по рынку». Функция оставлена сознательно — она зеркалит контракт
+ * `POST /api/ticket/close`, который по-прежнему принимает `pct` и `orderType`,
+ * и держит на тестах инвариант «дневной стоп выход не запирает». Понадобится
+ * частичное или post-only закрытие — вернуть в интерфейс, не переписывая.
  */
 export function validateClose(s, position, ctx) {
   const blockers = [];
@@ -206,7 +212,6 @@ function slider(name, value, min, max, step) {
 
 function createModal(io) {
   const state = {
-    view: "open", // 'open' | 'close'
     coin: "",
     side: "short",
     marginUsd: 0,
@@ -216,11 +221,6 @@ function createModal(io) {
     submitting: false,
     error: null,
     result: null,
-    // Состояние закрытия — СВОЁ у каждой монеты. Раньше pct/orderType/limitPx
-    // лежали в общем state, и «50%» на CHIP молча применялось к ACE, а цена
-    // лимитки CHIP (0.028) уходила закрывать ACE (0.14) — заявка на 80% мимо
-    // рынка. Найдено оператором 16.08.2026.
-    close: Object.create(null), // coin → {pct, orderType, limitPx, error, result}
     suggestOpen: false, // видна ли выпадашка тикеров
     suggestIdx: 0,      // подсвеченный пункт (для ↑/↓ + Enter)
   };
@@ -326,7 +326,7 @@ function createModal(io) {
       <div class="tt-card tt-card--coin">
         <div class="tt-card__label">Coin</div>
         <div class="tt-combo">
-          <input class="tt-coin-input" data-f="coin" type="text" placeholder="CHIP"
+          <input class="tt-coin-input" data-f="coin" type="text" placeholder="ticker"
                  autocomplete="off" autocapitalize="characters" spellcheck="false"
                  role="combobox" aria-expanded="${state.suggestOpen ? "true" : "false"}"
                  aria-autocomplete="list" value="${escapeHtml(state.coin)}">
@@ -413,149 +413,24 @@ function createModal(io) {
   }
 
   // ── Вид «Закрыть» ──
-  function renderClose() {
-    const positions = ctx.positions || [];
-    if (!positions.length) {
-      return `
-        <h2 class="tt-panel__title">Positions</h2>
-        <div class="tt-empty">No open positions.<br><span>Everything actually sitting on the exchange shows up here — manual entries and bot entries alike.</span></div>`;
-    }
-    return `<h2 class="tt-panel__title">Positions</h2>${positions.map(closeCard).join("")}`;
-  }
-
-  /**
-   * Состояние закрытия конкретной монеты. Заводится лениво.
-   * Отдельное на каждую позу — доли, тип ордера и цена лимитки у разных монет
-   * не имеют друг к другу никакого отношения.
-   */
-  function closeStateFor(coin) {
-    if (!state.close[coin]) {
-      state.close[coin] = { pct: 100, orderType: "market", limitPx: "", error: null, result: null };
-    }
-    return state.close[coin];
-  }
-
-  function closeCard(p) {
-    const isShort = p.side === "short";
-    const cs = closeStateFor(p.coin);
-    const v = validateClose(cs, p, { price: p.markPrice });
-    const busy = state.submitting && state.closingCoin === p.coin;
-    const closingUsd = (Number(p.sizeUsd) * Number(cs.pct)) / 100;
-    const c = escapeHtml(p.coin);
-    return `
-      <div class="tt-pos" data-poscoin="${c}">
-        <div class="tt-pos__head">
-          <span class="tt-pos__coin">${c}</span>
-          <span class="tt-pos__side tt-pos__side--${isShort ? "short" : "long"}">${isShort ? "Short" : "Long"}</span>
-          <span class="tt-pos__pnl ${p.unrealized >= 0 ? "is-up" : "is-down"}">${fmtSigned(p.unrealized)}</span>
-        </div>
-        <div class="tt-rows tt-rows--tight">
-          <div class="tt-row"><span>Entry</span><b>${escapeHtml(fmtPrice(p.entryPrice))}</b></div>
-          <div class="tt-row"><span>Mark</span><b>${escapeHtml(fmtPrice(p.markPrice))}</b></div>
-          <div class="tt-row"><span>Size</span><b>${fmtUsd(p.sizeUsd)}</b></div>
-          <div class="tt-row ${p.stopPrice ? "" : "tt-row--bad"}">
-            <span>Bot Stop</span>
-            <b>${p.stopPrice ? escapeHtml(fmtPrice(p.stopPrice)) : "none — nobody is watching"}</b>
-          </div>
-        </div>
-
-        <div class="tt-seg tt-seg--pct">
-          ${[25, 50, 100]
-            .map(
-              (n) =>
-                `<button type="button" class="tt-seg__btn ${Number(cs.pct) === n ? "is-on" : ""}" data-pct="${n}">${n}%</button>`,
-            )
-            .join("")}
-        </div>
-
-        <div class="tt-rows">
-          <div class="tt-row">
-            <span>Order Type</span>
-            <button type="button" class="tt-row__toggle" data-toggle-close-type>
-              ${cs.orderType === "limit" ? "Limit post-only" : "Market"} <i>⇄</i>
-            </button>
-          </div>
-          ${cs.orderType === "limit"
-            ? `<div class="tt-row tt-row--input">
-                 <span>${isShort ? "Buyback Price" : "Sell Price"}</span>
-                 <input class="tt-row__input" data-closef="limitPx" type="text" inputmode="decimal"
-                        placeholder="${fmtPrice(p.markPrice)}" value="${escapeHtml(cs.limitPx)}">
-               </div>`
-            : ""}
-          <div class="tt-row"><span>Closing</span><b>${fmtUsd(closingUsd)}</b></div>
-        </div>
-
-        ${listBlock("tt-blockers", v.blockers)}
-        ${cs.error ? `<div class="tt-alert tt-alert--err">${escapeHtml(cs.error)}</div>` : ""}
-        ${cs.result ? `<div class="tt-alert tt-alert--ok">${escapeHtml(cs.result)}</div>` : ""}
-
-        <button type="button" class="tt-cta tt-cta--close" data-close="${c}"
-                ${v.ok && !busy ? "" : "disabled"}>
-          ${busy ? "Closing…" : `Close ${cs.pct}%`}
-        </button>
-      </div>`;
-  }
-
-  // Анимацию появления играем ТОЛЬКО при смене вкладки. Иначе она проигрывалась
-  // на каждый render (переключил Long/Short — вся панель мигнула), и это
-  // читалось как «окно перезагрузилось».
-  let lastView = null;
-
   function render() {
     ensureDom();
     // Прижимаем ДО построения разметки: иначе слайдер получит value=10 при
     // max=3, браузер молча поправит поле, а state и число рядом останутся на 10.
     clampState();
-    const positions = (ctx.positions || []).length;
-    const enter = state.view !== lastView ? " tt-view--enter" : "";
-    lastView = state.view;
-    bodyEl.innerHTML = `
-      <div class="tt-tabs">
-        <button type="button" class="tt-tab ${state.view === "open" ? "is-on" : ""}" data-view="open">Open</button>
-        <button type="button" class="tt-tab ${state.view === "close" ? "is-on" : ""}" data-view="close">
-          Close${positions ? `<i class="tt-tab__n">${positions}</i>` : ""}
-        </button>
-      </div>
-      <div class="tt-view${enter}">${state.view === "open" ? renderOpen() : renderClose()}</div>`;
+    // Вкладок Open/Close больше нет: закрытие переехало на карточку позиции,
+    // где цена живая. Пока откроешь модалку и переключишь вкладку — рынок
+    // уезжает, и выход по устаревшей цене хуже, чем выигрыш в удобстве.
+    bodyEl.innerHTML = `<div class="tt-view">${renderOpen()}</div>`;
     wire();
   }
 
   function wire() {
     const q = (sel) => bodyEl.querySelectorAll(sel);
 
-    q("[data-view]").forEach((b) =>
-      b.addEventListener("click", () => { state.view = b.dataset.view; state.error = null; state.result = null; render(); }),
-    );
     q("[data-side]").forEach((b) =>
       b.addEventListener("click", () => { state.side = b.dataset.side; render(); }),
     );
-    // Контролы закрытия адресуются к СВОЕЙ карточке: коин берём из ближайшего
-    // .tt-pos, иначе «50%» на одной монете применялось бы ко всем сразу.
-    const coinOf = (el) => el.closest("[data-poscoin]")?.dataset.poscoin;
-    q("[data-pct]").forEach((b) =>
-      b.addEventListener("click", () => {
-        const cs = closeStateFor(coinOf(b));
-        cs.pct = Number(b.dataset.pct);
-        render();
-      }),
-    );
-    q("[data-toggle-close-type]").forEach((b) =>
-      b.addEventListener("click", () => {
-        const cs = closeStateFor(coinOf(b));
-        cs.orderType = cs.orderType === "limit" ? "market" : "limit";
-        cs.limitPx = ""; // цена от другого типа ордера смысла не имеет
-        render();
-      }),
-    );
-    q("[data-closef]").forEach((el) =>
-      el.addEventListener("input", () => {
-        const cs = closeStateFor(coinOf(el));
-        cs[el.dataset.closef] = el.value;
-        cs.error = null;
-        render();
-      }),
-    );
-    // Тип ордера ВХОДА — отдельный тумблер, к закрытию отношения не имеет.
     q("[data-toggle-type]").forEach((b) =>
       b.addEventListener("click", () => {
         state.orderType = state.orderType === "limit" ? "market" : "limit";
@@ -588,7 +463,6 @@ function createModal(io) {
     });
 
     bodyEl.querySelector("[data-submit]")?.addEventListener("click", submitOpen);
-    q("[data-close]").forEach((b) => b.addEventListener("click", () => submitClose(b.dataset.close)));
   }
 
   /** Пересчёт производных чисел без перерисовки — чтобы слайдер не «прыгал». */
@@ -833,39 +707,6 @@ function createModal(io) {
     }
   }
 
-  async function submitClose(coin) {
-    const p = (ctx.positions || []).find((x) => x.coin === coin);
-    if (!p || state.submitting) return;
-    const cs = closeStateFor(coin);
-    state.submitting = true;
-    // Какую позу закрываем — отдельное поле. Раньше сюда писался state.coin,
-    // и закрытие ACE переименовывало монету во вкладке Open.
-    state.closingCoin = coin;
-    cs.error = null;
-    cs.result = null;
-    render();
-    try {
-      const res = await io.close({
-        coin,
-        pct: Number(cs.pct),
-        orderType: cs.orderType,
-        limitPx: cs.orderType === "limit" ? Number(cs.limitPx) : null,
-      });
-      if (res?.ok) {
-        cs.result = res.message || "close order sent";
-        cs.limitPx = "";
-      } else {
-        cs.error = res?.error || "exchange rejected the order";
-      }
-    } catch (err) {
-      cs.error = err?.message || "network unavailable";
-    } finally {
-      state.submitting = false;
-      state.closingCoin = null;
-      render();
-    }
-  }
-
   async function loadContext() {
     if (!io?.getContext) return;
     try {
@@ -878,15 +719,22 @@ function createModal(io) {
     } catch { /* держим прежний контекст — модалка остаётся управляемой */ }
   }
 
-  async function open({ coin = "", side, view } = {}) {
+  async function open({ coin = "", side } = {}) {
     ensureDom();
     if (coin) state.coin = String(coin).toUpperCase();
     if (side) state.side = side;
-    if (view) state.view = view;
     state.error = null;
     state.result = null;
-    await loadContext();
+    // Показываем СРАЗУ, на прошлом контексте, и догружаем свежий фоном.
+    // Раньше тут стоял `await loadContext()` перед render() — модалка ждала
+    // ответа сервера (цена + ATR + позиции), и это читалось как «тормозит».
+    // Кнопка отправки всё равно заблокирована, пока контекст не приехал:
+    // без available маржа не проходит проверку, так что торговать по
+    // устаревшим числам это не даёт.
     render();
+    loadContext().then(() => {
+      if (el && !el.hidden) softRefresh();
+    });
     el.hidden = false;
     // Чтобы анимация проигралась, браузер должен сначала зафиксировать
     // НАЧАЛЬНОЕ состояние (opacity 0 + сдвиг), и только потом получить класс.
@@ -897,10 +745,31 @@ function createModal(io) {
     void el.offsetHeight;
     el.classList.add("is-open");
     document.body.style.overflow = "hidden";
+    startPricePoll();
+  }
+
+  // Пока модалка открыта — тянем цену раз в 5 секунд. Без этого «Current Price»
+  // застывал на момент открытия, и на низколиквидной монете за полминуты
+  // размышлений цена уезжала, а форма показывала старую.
+  let pollTimer = null;
+  function startPricePoll() {
+    stopPricePoll();
+    pollTimer = setInterval(async () => {
+      if (!el || el.hidden) return stopPricePoll();
+      // Во время ввода тикера не мешаем: там свой debounce на смену монеты.
+      if (document.activeElement?.dataset?.f === "coin") return;
+      await loadContext();
+      if (el && !el.hidden) softRefresh();
+    }, 5000);
+  }
+  function stopPricePoll() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = null;
   }
 
   function close() {
     if (!el) return;
+    stopPricePoll(); // иначе опрос цены продолжается на закрытой модалке
     el.classList.remove("is-open");
     document.body.style.overflow = "";
     // Ждём выезд панели вниз, потом прячем.

@@ -512,6 +512,25 @@ function floorTimerParts(p) {
   return { cls: " floor-timed", bg, chip: `<span class="floor-timer-chip" data-mtimer="${openedMs}">${chipTxt}</span>` };
 }
 
+/**
+ * Классы кнопки Close по тому, насколько сделка прошла в R.
+ *
+ * Шкала в R, а не в долларах: $1 на позиции с риском $1 и на позиции с риском
+ * $10 — совершенно разные события, а окраска по абсолютному доллару врала бы
+ * тем сильнее, чем больше поза. rMult уже считает manualStats.
+ *
+ * Без стопа (rMult=null) остаёмся нейтральными: не с чем соотносить.
+ */
+function closeBtnCls(s, p) {
+  const r = s?.rMult;
+  if (r == null || !Number.isFinite(r) || p?.unrealizedPnl == null) return "";
+  const a = Math.abs(r);
+  if (a < 0.15) return ""; // болтается около нуля — красить нечего
+  const sign = r >= 0 ? "is-pos" : "is-neg";
+  const level = a >= 1 ? "is-l3" : a >= 0.5 ? "is-l2" : "is-l1";
+  return ` ${sign} ${level}`;
+}
+
 export function renderManualPositions(list) {
   const container = document.getElementById("manual-positions-container");
   if (!container) return;
@@ -564,6 +583,12 @@ export function renderManualPositions(list) {
         nowEl.textContent = p.currentPrice != null ? fmtPrice(p.currentPrice) : "—";
       // Производные метрики двигаются каждый тик (now/peak/трейл) → патчим их же.
       const s = manualStats(p);
+      // Окраска Close идёт за R, а R меняется каждый тик — иначе кнопка
+      // застыла бы в цвете того момента, когда карточку отрисовали целиком.
+      const closeBtn = card.querySelector("[data-posclose]");
+      if (closeBtn && !closeBtn.classList.contains("is-armed")) {
+        closeBtn.className = `pos-close-btn${closeBtnCls(s, p)}`;
+      }
       const moveEl = card.querySelector("[data-mmove]");
       if (moveEl) {
         moveEl.textContent = s.movePct != null ? fmtMove(s.movePct) : "—";
@@ -668,6 +693,12 @@ export function renderManualPositions(list) {
           <span style="background:rgba(234,179,8,0.12); color:var(--yellow,#eab308); border:1px solid rgba(234,179,8,0.3); padding:2px 8px; border-radius:6px; font-size:11px; font-family:var(--font-mono); font-weight:700;">${manualBadge}</span>
           <span class="item-value highlight">#${p.coin}</span>
           <span class="item-value ${sideCls}">${p.side}</span>
+          <!-- Закрытие живёт ЗДЕСЬ, а не в модалке: на карточке цена уже
+               обновляется в реальном времени, а пока откроешь окно и
+               переключишь вкладку — рынок уезжает. Долей нет намеренно, оператор
+               ими не пользуется: одна кнопка = закрыть всё по рынку. -->
+          <button type="button" class="pos-close-btn${closeBtnCls(s, p)}" data-posclose="${escapeHtml(p.coin)}"
+                  title="Закрыть всю позицию по рынку (тейкер 4.32 бп, без builder-fee)"><span>Close</span></button>
         </div>
         <div class="data-grid">
           <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}${riskInline}</div></div>

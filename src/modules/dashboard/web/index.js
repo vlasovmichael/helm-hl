@@ -121,6 +121,64 @@ function initTradeButton() {
     if (r.status === 401) window.location.href = "/login";
     return r.json();
   };
+  // Закрытие позиции прямо с карточки. Делегируем с контейнера: карточки
+  // перерисовываются каждый тик, вешать слушатель на кнопку бессмысленно.
+  //
+  // Два клика, а не один: первый переводит кнопку в «Sure?», второй закрывает.
+  // Это необратимая операция живыми деньгами, и промах мышью тут стоит позиции.
+  // Через 4 секунды взвод сам сбрасывается.
+  const armed = new Map(); // coin → timeoutId
+  document.getElementById("manual-positions-container")?.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-posclose]");
+    if (!btn) return;
+    const coin = btn.dataset.posclose;
+    const label = btn.querySelector("span") || btn;
+
+    if (!armed.has(coin)) {
+      label.textContent = "Sure?";
+      btn.classList.add("is-armed");
+      armed.set(coin, setTimeout(() => {
+        armed.delete(coin);
+        label.textContent = "Close";
+        btn.classList.remove("is-armed");
+      }, 4000));
+      return;
+    }
+    clearTimeout(armed.get(coin));
+    armed.delete(coin);
+    btn.disabled = true;
+    btn.classList.remove("is-armed");
+    label.textContent = "…";
+
+    // Общий возврат в исходное. Раньше сброс висел ТОЛЬКО на ветке `!res.ok`,
+    // а ветка catch (сеть отвалилась, сервер вернул не-JSON) оставляла кнопку
+    // в «failed» навсегда — до перезагрузки страницы.
+    const fail = (msg) => {
+      label.textContent = "failed";
+      btn.title = msg;
+      btn.classList.add("is-failed");
+      btn.disabled = false;
+      setTimeout(() => {
+        label.textContent = "Close";
+        btn.classList.remove("is-failed");
+        btn.title = "Закрыть всю позицию по рынку (тейкер 4.32 бп, без builder-fee)";
+      }, 4000);
+    };
+
+    try {
+      const res = await post("/api/ticket/close", { coin, pct: 100, orderType: "market" });
+      if (res?.ok) {
+        label.textContent = "closed";
+        // Кнопку не разблокируем: позиция уходит, карточка исчезнет сама на
+        // ближайшем тике. Разблокировка тут дала бы окно для второго закрытия.
+      } else {
+        fail(res?.error || "exchange rejected the order");
+      }
+    } catch (err) {
+      fail(err?.message || "network unavailable");
+    }
+  });
+
   const ticket = initTradeTicket({
     getContext: async (coin) => {
       const r = await fetch(`/api/ticket/context?coin=${encodeURIComponent(coin || "")}`);

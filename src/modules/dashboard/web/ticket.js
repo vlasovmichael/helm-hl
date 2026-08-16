@@ -41,18 +41,11 @@ function mockIo(ctx, overrides = {}) {
         }
       );
     },
-    close: async (p) => {
-      await new Promise((r) => setTimeout(r, 500));
-      return (
-        overrides.close ?? {
-          ok: true,
-          message: `${p.coin}: закрытие ${p.pct}% ${p.orderType === "limit" ? `лимиткой @ ${p.limitPx}` : "по рынку"} отправлено`,
-        }
-      );
-    },
   };
 }
 
+// Позиции остались только как контекст для предупреждения «уже есть позиция»:
+// закрытие переехало на карточку в Active Position.
 const positions = [
   {
     coin: "CHIP",
@@ -96,23 +89,21 @@ const base = {
 };
 
 const scenarios = {
-  normal: { ctx: base, opts: { coin: "CHIP", side: "short", view: "open" } },
+  normal: { ctx: base, opts: { coin: "CHIP", side: "short" } },
   rich: {
     ctx: { ...base, available: 120, day: { netUsd: 0.4, limitUsd: 5, halted: false } },
-    opts: { coin: "CHIP", side: "long", view: "open" },
+    opts: { coin: "CHIP", side: "long" },
   },
   halted: {
     ctx: { ...base, day: { netUsd: -5.2, limitUsd: 5, halted: true } },
-    opts: { coin: "CHIP", side: "short", view: "open" },
+    opts: { coin: "CHIP", side: "short" },
   },
-  nonanny: { ctx: { ...base, adoptEnabled: false }, opts: { coin: "CHIP", side: "short", view: "open" } },
-  nocoin: { ctx: { ...base, price: null }, opts: { view: "open" } },
-  close: { ctx: base, opts: { view: "close" } },
-  closeEmpty: { ctx: { ...base, positions: [] }, opts: { view: "close" } },
+  nonanny: { ctx: { ...base, adoptEnabled: false }, opts: { coin: "CHIP", side: "short" } },
+  nocoin: { ctx: { ...base, price: null }, opts: {} },
   reject: {
     ctx: base,
     io: { open: { ok: false, error: "Order has invalid price: post-only would cross the book" } },
-    opts: { coin: "CHIP", side: "short", view: "open" },
+    opts: { coin: "CHIP", side: "short" },
   },
 };
 

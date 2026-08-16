@@ -40,6 +40,105 @@
   .tt-trade-cta { padding: 14px; }
 }
 
+// ── Кнопка Close на карточке ручной позиции ──
+// Цвет ведёт R (uPnL / риск до стопа), а не доллар: $1 на позиции с риском $1
+// и с риском $10 — разные события.
+//
+// Правила, выведенные из первой (неудачной) версии:
+//  · текст ВСЕГДА цветной на мягкой подложке. Сплошная заливка с
+//    инвертированным текстом ломалась на ховере — красный текст на красном
+//    фоне, буквы исчезали;
+//  · при наведении ничего не двигается и не бликует. Меняется только
+//    плотность фона;
+//  · инвертированный текст остаётся ровно в одном месте — «Sure?», где он
+//    и должен выбиваться из общего ряда.
+.pos-close-btn {
+  margin-left: auto;
+  padding: 4px 14px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--canvas-inset);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition:
+    background-color 0.16s var(--ease),
+    border-color 0.16s var(--ease),
+    color 0.16s var(--ease);
+
+  // Рамка на наведении одна на все состояния — белая. Раньше она подхватывала
+  // цвет ступени (зелёная у плюса, красная у минуса), и ховер выглядел
+  // по-разному на соседних карточках.
+  &:hover:not(:disabled) {
+    background: var(--card-bg-hover);
+    color: var(--text-primary);
+    border-color: var(--text-primary);
+  }
+  &:disabled { opacity: 0.65; cursor: default; }
+
+  // ── Ступени по R: меняется только плотность подложки ──
+  &.is-pos {
+    color: var(--green);
+    border-color: var(--green-line);
+    background: color-mix(in srgb, var(--green) 8%, transparent);
+
+    &.is-l2 { background: color-mix(in srgb, var(--green) 15%, transparent); }
+    &.is-l3 {
+      background: color-mix(in srgb, var(--green) 24%, transparent);
+      border-color: var(--green);
+    }
+    // Рамку задаём и здесь: у .is-l3 border-color той же специфичности, что и
+    // базовое правило ховера, и объявлен ниже — без этого на сильном R рамка
+    // оставалась цветной.
+    &:hover:not(:disabled) {
+      color: var(--green);
+      background: color-mix(in srgb, var(--green) 30%, transparent);
+      border-color: var(--text-primary);
+    }
+  }
+  &.is-neg {
+    color: var(--red);
+    border-color: var(--red-line);
+    background: color-mix(in srgb, var(--red) 8%, transparent);
+
+    &.is-l2 { background: color-mix(in srgb, var(--red) 15%, transparent); }
+    &.is-l3 {
+      background: color-mix(in srgb, var(--red) 24%, transparent);
+      border-color: var(--red);
+    }
+    // Рамку задаём и здесь: у .is-l3 border-color той же специфичности, что и
+    // базовое правило ховера, и объявлен ниже — без этого на сильном R рамка
+    // оставалась цветной.
+    &:hover:not(:disabled) {
+      color: var(--red);
+      background: color-mix(in srgb, var(--red) 30%, transparent);
+      border-color: var(--text-primary);
+    }
+  }
+
+  // Взвод перебивает окраску по R: это уже не индикатор прибыли, а
+  // предупреждение о необратимом действии. Единственная сплошная заливка.
+  &.is-armed,
+  &.is-armed.is-pos,
+  &.is-armed.is-neg {
+    background: var(--red);
+    border-color: var(--red);
+    color: #fff;
+  }
+  &.is-armed:hover:not(:disabled) { color: #fff; background: var(--red); border-color: var(--text-primary); }
+
+  &.is-failed,
+  &.is-failed.is-pos,
+  &.is-failed.is-neg {
+    background: var(--red-soft);
+    border-color: var(--red-line);
+    color: var(--red);
+  }
+}
+
 .tt-modal {
   // Плоская панель: глянцевый градиент общего .trade-modal тут не нужен.
   .trade-modal__panel {
