@@ -14,10 +14,21 @@ import { createTradeTicketModal } from "./src/features/tradeTicket.js";
 const CHIP = 0.027763;
 const ACE = 0.1635;
 
+// Настоящие лимиты плеча HL (сверено с meta 16.08.2026). Мок обязан их
+// повторять — иначе стенд не поймает баг «10x на монете с потолком 3x».
+const MAX_LEV = { CASHCAT: 3, CHIP: 3, ACE: 3, LIT: 5, DOGE: 10, ETH: 25, BTC: 40 };
+
 /** Мок-биржа: контекст статичен, ответы приходят через 500мс. */
 function mockIo(ctx, overrides = {}) {
   return {
-    getContext: async () => ctx,
+    getContext: async (coin) => {
+      const ex = MAX_LEV[String(coin || "").toUpperCase()] ?? null;
+      return {
+        ...ctx,
+        exchangeMaxLeverage: ex,
+        maxLeverage: ex == null ? 10 : Math.min(10, ex),
+      };
+    },
     open: async (p) => {
       await new Promise((r) => setTimeout(r, 500));
       return (
@@ -63,7 +74,18 @@ const positions = [
   },
 ];
 
+// Кусок реального universe HL — чтобы щупать автодополнение тикера.
+const COINS = [
+  "ACE", "ACX", "AAVE", "ADA", "AI", "ALGO", "APE", "APT", "ARB", "ATOM",
+  "AVAX", "BCH", "BNB", "BTC", "CASHCAT", "CHIP", "CRV", "DOGE", "DOT", "DYDX",
+  "ENA", "ETH", "FARTCOIN", "FIL", "GRASS", "HYPE", "HYPER", "INJ", "JUP",
+  "KAITO", "LDO", "LINK", "LIT", "LTC", "NEAR", "OP", "PENDLE", "POPCAT",
+  "PUMP", "SEI", "SOL", "SUI", "TAO", "TIA", "TON", "TRUMP", "UNI", "WIF",
+  "WLD", "XRP", "ZRO",
+];
+
 const base = {
+  coins: COINS,
   price: CHIP,
   available: 6.88,
   maxLeverage: 10,

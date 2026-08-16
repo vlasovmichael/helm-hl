@@ -78,38 +78,39 @@
       <section class="card" id="sec-position">
         <div class="card-header">
           <div class="card-title" data-num="01">Active Position</div>
-          <div class="pos-header-right">
-            <!-- Ручной вход/выход прямо с дашборда. Ордера уходят через SDK,
-                 поэтому builder-fee = 0 бп (сторонние фронтенды берут 2 бп).
-                 Стоп ставит нянька — модалка его только показывает. -->
-            <button
-              id="tt-trade-btn"
-              class="whatif-btn"
-              type="button"
-              title="Open or close a position from here. Orders go straight to Hyperliquid via the API wallet — no builder fee, no wallet popup. The bot still places the stop and runs the exit."
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                style="vertical-align: -2px; margin-right: 4px"
-              >
-                <path d="M3 17l6-6 4 4 8-8" />
-                <path d="M17 7h4v4" />
-              </svg>
-              Trade
-            </button>
-            <div id="daily-goal-badge" class="daily-goal-badge" hidden></div>
-          </div>
+          <div id="daily-goal-badge" class="daily-goal-badge" hidden></div>
         </div>
         <div id="position-container"></div>
         <div id="manual-positions-container"></div>
         <div id="mp-active-container"></div>
+
+        <!-- Ручной вход/выход прямо с дашборда. Ордера уходят через SDK, поэтому
+             builder-fee = 0 бп (сторонние фронтенды берут 2 бп) и кошелёк не
+             всплывает. Стоп ставит нянька — модалка его только показывает.
+             Стоит ПОД позициями намеренно: сначала смотришь, что уже открыто,
+             и только потом открываешь ещё. -->
+        <button
+          id="tt-trade-btn"
+          class="tt-trade-cta"
+          type="button"
+          title="Open or close a position. Orders go straight to Hyperliquid via the API wallet — no builder fee, no wallet popup. The bot still places the stop and runs the exit."
+        >
+          <svg
+            width="19"
+            height="19"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M3 17l6-6 4 4 8-8" />
+            <path d="M17 7h4v4" />
+          </svg>
+          Trade
+        </button>
       </section>
 
       <!-- 01.5 / Hot Movers — live price spikes + OI delta -->

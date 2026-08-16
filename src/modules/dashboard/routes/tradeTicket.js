@@ -25,7 +25,6 @@ import {
   openMarket,
   closeMarket,
   placeLimit,
-  getAccountSummary,
   getBalance,
   setLeverage,
   getPositions,
@@ -43,9 +42,23 @@ import { getUniverse } from "../../../core/universe.js";
 // Биржевой минимум ордера на HL. Меньше — гарантированный отказ.
 const MIN_ORDER_USD = 10;
 
-// Потолок плеча. Депо ~$10-15: выше 10x ликвидация приходит раньше, чем стоп
-// няньки (−7% ATR), то есть стоп перестаёт быть стопом.
-const MAX_LEVERAGE = 10;
+// Наш собственный потолок плеча — НЕ биржевой. При стопе няньки ~−7% ATR
+// изолированная ликвидация на 20x приходит около −5%, то есть РАНЬШЕ стопа:
+// стоп перестаёт быть стопом. На 10x запас ещё есть.
+//
+// Эффективный потолок = min(биржевой для монеты, WALLET_LEVERAGE_CAP).
+// Биржевые лимиты разные: CASHCAT/CHIP/ACE = 3x, LIT = 5x, DOGE = 10x,
+// ETH = 25x, BTC = 40x. Одним числом их подменять нельзя — проверено 16.08.2026.
+const WALLET_LEVERAGE_CAP = 10;
+
+/** Максимальное плечо по монете: биржевое, прижатое нашим потолком. null если тикер неизвестен. */
+function maxLeverageFor(coin) {
+  const asset = getUniverse().find((a) => String(a?.name).toUpperCase() === coin);
+  if (!asset) return null;
+  const exchangeMax = Number(asset.maxLeverage);
+  if (!Number.isFinite(exchangeMax) || exchangeMax < 1) return null;
+  return { exchangeMax, effective: Math.min(WALLET_LEVERAGE_CAP, exchangeMax) };
+}
 
 // Потолок нотионала на одну ручную сделку. Защита от опечатки и от того, что
 // одна сделка съест весь депозит. Не риск-менеджмент — грубый предохранитель.
@@ -114,25 +127,35 @@ export async function handleContext(req, res) {
       }
     }
 
-    // Потолок плеча по монете из universe HL (у большинства 3–10x).
-    // resolveAsset отдаёт только szDecimals, поэтому maxLeverage берём из
-    // universe напрямую — как это делает routes/manualPaper.js.
-    let maxLeverage = MAX_LEVERAGE;
+    // Потолок плеча — из биржевых метаданных монеты, не из константы.
+    // resolveAsset отдаёт только szDecimals, поэтому universe читаем напрямую.
+    let maxLeverage = WALLET_LEVERAGE_CAP;
+    let exchangeMaxLeverage = null;
     let coinKnown = null;
     if (coin) {
-      const asset = getUniverse().find((a) => String(a?.name).toUpperCase() === coin);
-      coinKnown = !!asset;
-      const lev = Number(asset?.maxLeverage);
-      if (Number.isFinite(lev) && lev > 0) maxLeverage = Math.min(MAX_LEVERAGE, lev);
+      const lev = maxLeverageFor(coin);
+      coinKnown = lev !== null;
+      if (lev) {
+        maxLeverage = lev.effective;
+        exchangeMaxLeverage = lev.exchangeMax;
+      }
     }
 
     const day = getLastDailyRiskStatus();
     res.json({
       coin,
       coinKnown,
+      // Список тикеров для автодополнения. Отдаём целиком (~230 строк, ~2КБ) —
+      // дешевле, чем ручка-поиск на каждое нажатие клавиши.
+      coins: getUniverse()
+        .map((a) => a?.name)
+        .filter(Boolean)
+        .sort(),
       price,
       available,
-      maxLeverage,
+      maxLeverage,              // эффективный: min(биржевой, наш потолок)
+      exchangeMaxLeverage,      // биржевой — чтобы UI сказал, чей лимит связывает
+      walletLeverageCap: WALLET_LEVERAGE_CAP,
       maxNotionalUsd: MAX_NOTIONAL_USD,
       minOrderUsd: MIN_ORDER_USD,
       stopDistPct,
@@ -141,6 +164,11 @@ export async function handleContext(req, res) {
       hasPosition: positions.some((p) => p.coin === coin),
       positions,
       day: {
+        // known=false — статус ещё не считался (бот только поднялся) либо
+        // refreshDailyRisk падает. Тогда halted=false НЕ означает «лимит цел»,
+        // означает «не знаем». Молча пускать вход под видом «всё в порядке»
+        // нельзя — UI обязан сказать, что рельса сейчас не держит.
+        known: !!day,
         netUsd: day?.netUsd ?? null,
         limitUsd: day?.limitUsd ?? config.trading.dailyLossLimitUsd,
         halted: !!day?.halted,
@@ -173,9 +201,12 @@ async function buildPositions() {
   }
   return raw.map((p) => {
     const side = p.szi < 0 ? "short" : "long";
+    // Предикат 1:1 с проверенным setupScannerAlerts: обязателен isTrigger,
+    // иначе под «стоп» может попасть обычный reduce-only лимитник.
     const stop = triggers.find(
       (o) =>
         String(o.coin).toUpperCase() === String(p.coin).toUpperCase() &&
+        o.isTrigger &&
         o.reduceOnly &&
         /stop/i.test(o.orderType || ""),
     );
@@ -204,8 +235,22 @@ export async function handleOpen(req, res) {
   if (!b.coin) return res.status(400).json({ error: "coin required" });
   if (!b.side) return res.status(400).json({ error: "side must be long|short" });
   if (!(b.marginUsd > 0)) return res.status(400).json({ error: "marginUsd must be > 0" });
-  if (!Number.isInteger(b.leverage) || b.leverage < 1 || b.leverage > MAX_LEVERAGE) {
-    return res.status(400).json({ error: `leverage must be 1..${MAX_LEVERAGE}` });
+
+  // Плечо проверяем ПРОТИВ ЛИМИТА КОНКРЕТНОЙ МОНЕТЫ, а не против общей константы.
+  // Раньше тут стояло «1..10», и на CASHCAT (биржевой максимум 3x) проходила
+  // десятка: биржа такой ордер отбивает, а если бы приняла — ликвидация пришла
+  // бы раньше стопа няньки. Найдено 16.08.2026.
+  const lev = maxLeverageFor(b.coin);
+  if (!lev) return res.status(422).json({ error: `биржа не знает тикер ${b.coin}` });
+  if (!Number.isInteger(b.leverage) || b.leverage < 1) {
+    return res.status(400).json({ error: "leverage must be a positive integer" });
+  }
+  if (b.leverage > lev.effective) {
+    const who =
+      lev.exchangeMax <= WALLET_LEVERAGE_CAP
+        ? `биржевой максимум для ${b.coin} — ${lev.exchangeMax}x`
+        : `наш потолок — ${WALLET_LEVERAGE_CAP}x (биржа даёт ${lev.exchangeMax}x)`;
+    return res.status(422).json({ error: `плечо ${b.leverage}x недопустимо: ${who}` });
   }
 
   const notional = b.marginUsd * b.leverage;
@@ -248,9 +293,25 @@ export async function handleOpen(req, res) {
     }
   }
 
-  // Размер в монетах — округляем вниз до szDecimals, иначе биржа отклонит.
+  // Размер в монетах округляем до szDecimals. У монет с szDecimals=0
+  // (CHIP, CASHCAT, DOGE) шаг равен ЦЕЛОЙ монете, и округление вниз легко
+  // уводит нотионал под биржевой минимум: $10.02 по CHIP → 360 шт → $9.99,
+  // биржа такой ордер отбивает. Поэтому если после округления вниз не хватает
+  // до минимума — добираем один шаг вверх, но только если хватает маржи.
   const step = Math.pow(10, szDecimals);
-  const sz = Math.floor((notional / entryPx) * step) / step;
+  let sz = Math.floor((notional / entryPx) * step) / step;
+  if (sz > 0 && sz * entryPx < MIN_ORDER_USD) {
+    const bumped = Math.ceil((MIN_ORDER_USD / entryPx) * step) / step;
+    const bumpedMargin = (bumped * entryPx) / b.leverage;
+    if (bumpedMargin > available + 1e-9) {
+      return res.status(422).json({
+        error:
+          `размер округляется до $${(sz * entryPx).toFixed(2)} — ниже минимума $${MIN_ORDER_USD}. ` +
+          `Для ${b.coin} на ${b.leverage}x нужна маржа от $${bumpedMargin.toFixed(2)}, свободно $${available.toFixed(2)}`,
+      });
+    }
+    sz = bumped;
+  }
   if (!(sz > 0)) {
     return res.status(422).json({ error: `размер округлился в ноль (szDecimals=${szDecimals})` });
   }

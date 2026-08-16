@@ -8,12 +8,36 @@
 // вставкой из чужого приложения.
 @use "../core/breakpoints" as *;
 
-// Правый блок шапки Active Position: кнопка Trade + бейдж дневной цели.
-.pos-header-right {
+// ── Кнопка Trade под позициями в Active Position ──
+// Во всю ширину и заметная: это единственная точка входа в реальную торговлю с
+// дашборда, и искать её глазами не должно приходиться. Карточка Active Position
+// подкрашивается в цвет дня (красный/зелёный), поэтому кнопка держит СВОЙ
+// акцентный фон — иначе в красный день она сливалась бы с подложкой.
+.tt-trade-cta {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  justify-content: center;
+  gap: 9px;
+  width: 100%;
+  margin-top: 16px;
+  padding: 16px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--card-bg-elev);
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: filter 0.14s var(--ease);
+
+  &:hover { filter: brightness(1.08); }
+  &:active { filter: brightness(0.96); }
+}
+
+@include until($bp-sm) {
+  .tt-trade-cta { padding: 14px; }
 }
 
 .tt-modal {
@@ -140,7 +164,9 @@
   to { transform: scaleX(1); }
 }
 
-.tt-view { animation: tt-view-in 200ms ease-out; }
+// Анимация только при смене вкладки (класс вешает render), иначе панель
+// мигала бы на каждое переключение Long/Short.
+.tt-view--enter { animation: tt-view-in 200ms ease-out; }
 @keyframes tt-view-in {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
@@ -262,6 +288,45 @@
 
   &::placeholder { color: var(--text-faint); font-weight: 400; }
   &:focus { border-color: var(--accent-line); }
+}
+
+// ── Поле монеты с выпадашкой подсказок ──
+.tt-card--coin { overflow: visible; } // иначе список обрезался бы карточкой
+.tt-combo {
+  position: relative;
+}
+.tt-combo__list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  max-height: 232px;
+  margin: 0;
+  padding: 5px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--card-bg-elev);
+  box-shadow: var(--shadow);
+  animation: tt-view-in 140ms ease-out;
+}
+.tt-combo__item {
+  padding: 9px 11px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+
+  &:hover,
+  &.is-on {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
 }
 
 // ── Слайдер ──
@@ -488,7 +553,8 @@
     transform: none;
     opacity: 1;
   }
-  .tt-view,
+  .tt-view--enter,
+  .tt-combo__list,
   .tt-alert,
   .tt-tab.is-on::after { animation: none; }
   .tt-cta:hover:not(:disabled) { transform: none; }

@@ -29,9 +29,18 @@ import { escapeHtml, fmtUsd, fmtPrice } from "../utils/format.js";
 // предупреждение (Rabby показывает ровно его же красным).
 const MIN_ORDER_USD = 10;
 
-// Практический потолок плеча на этом кошельке. Депо ~$10-15: выше 10x
-// ликвидация приходит раньше, чем стоп няньки (−7% ATR).
-const MAX_LEVERAGE = 10;
+// Наш потолок плеча — НЕ биржевой, а страховка: при стопе няньки ~−7% ATR
+// изолированная ликвидация на 20x приходит около −5%, то есть раньше стопа.
+// Используется только как fallback, пока контекст с сервера не приехал.
+// Настоящий лимит у каждой монеты свой (CASHCAT 3x, LIT 5x, ETH 25x, BTC 40x)
+// и приходит в ctx.maxLeverage — подменять его константой нельзя.
+const FALLBACK_LEVERAGE_CAP = 10;
+
+/** Эффективный потолок плеча: что сказал сервер, иначе осторожный fallback. */
+export function leverageCap(ctx) {
+  const n = Number(ctx?.maxLeverage);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : FALLBACK_LEVERAGE_CAP;
+}
 
 // ── Чистая математика (экспортируется — на неё есть тесты) ──────────────────
 
@@ -103,7 +112,18 @@ export function validateOpen(s, ctx) {
     }
   }
 
+  // Плечо против лимита КОНКРЕТНОЙ монеты. Слайдер и так ограничен, но состояние
+  // переживает смену монеты: выставил 10x на DOGE, переключился на CASHCAT (3x) —
+  // без этой проверки ушёл бы заведомо отбойный ордер.
+  const cap = leverageCap(ctx);
+  if (Number(s.leverage) > cap) {
+    blockers.push(`max leverage for ${s.coin || "this coin"} is ${cap}x`);
+  }
+
   if (ctx?.day?.halted) blockers.push("daily stop hit — entries locked until midnight");
+  // known === false: статус дня не посчитан (бот только поднялся или падает
+  // запрос). halted=false тут не значит «лимит цел», значит «не знаем».
+  else if (ctx?.day && ctx.day.known === false) warnings.push("daily P&L unknown — the daily stop can't be enforced right now");
 
   if (ctx?.adoptEnabled === false) warnings.push("bot sitter is off — nobody will place a stop");
   if (ctx?.hasPosition) warnings.push(`${s.coin} position already open — this adds to it`);
@@ -152,6 +172,26 @@ function listBlock(cls, items) {
     .join("")}</ul>`;
 }
 
+/**
+ * Подсказки тикеров под вводом. Совпадение с НАЧАЛА строки идёт выше, чем
+ * вхождение в середине: набирая «AC», человек ищет ACE, а не CASHCAT.
+ */
+export function suggestCoins(query, coins, limit = 8) {
+  const q = String(query || "").trim().toUpperCase();
+  const list = Array.isArray(coins) ? coins : [];
+  if (!q) return list.slice(0, limit);
+  const starts = [];
+  const contains = [];
+  for (const c of list) {
+    const u = String(c).toUpperCase();
+    if (u === q) continue; // точное совпадение уже введено — подсказывать нечего
+    if (u.startsWith(q)) starts.push(c);
+    else if (u.includes(q)) contains.push(c);
+    if (starts.length >= limit) break;
+  }
+  return [...starts, ...contains].slice(0, limit);
+}
+
 /** Слайдер с залитой левой частью — залив рисуем градиентом по значению. */
 function slider(name, value, min, max, step) {
   const pct = max > min ? ((Number(value) - min) / (max - min)) * 100 : 0;
@@ -173,12 +213,18 @@ function createModal(io) {
     leverage: 3,
     orderType: "market",
     limitPx: "",
-    pct: 100,
     submitting: false,
     error: null,
     result: null,
+    // Состояние закрытия — СВОЁ у каждой монеты. Раньше pct/orderType/limitPx
+    // лежали в общем state, и «50%» на CHIP молча применялось к ACE, а цена
+    // лимитки CHIP (0.028) уходила закрывать ACE (0.14) — заявка на 80% мимо
+    // рынка. Найдено оператором 16.08.2026.
+    close: Object.create(null), // coin → {pct, orderType, limitPx, error, result}
+    suggestOpen: false, // видна ли выпадашка тикеров
+    suggestIdx: 0,      // подсвеченный пункт (для ↑/↓ + Enter)
   };
-  let ctx = { price: null, available: 0, maxLeverage: MAX_LEVERAGE, day: {}, adoptEnabled: true, positions: [] };
+  let ctx = { price: null, available: 0, maxLeverage: FALLBACK_LEVERAGE_CAP, day: {}, adoptEnabled: true, positions: [] };
   let el = null;
   let bodyEl = null;
 
@@ -206,6 +252,52 @@ function createModal(io) {
   }
 
   // ── Вид «Открыть» ──
+  /**
+   * Монета введена целиком и биржа её знает. Список тикеров может ещё не
+   * приехать — тогда доверяем флагу coinKnown с бэкенда, а если нет и его,
+   * считаем известной (лучше не мешать, чем мешать зря).
+   */
+  function knownCoin() {
+    if (!state.coin) return false;
+    if (Array.isArray(ctx.coins) && ctx.coins.length) {
+      return ctx.coins.some((c) => String(c).toUpperCase() === state.coin);
+    }
+    return ctx.coinKnown !== false;
+  }
+
+  /**
+   * Подпись под «Leverage». Показываем, ЧЕЙ лимит связывает: у CASHCAT потолок
+   * ставит биржа (3x), у BTC — мы сами (биржа даёт 40x). Иначе «up to 10x» на
+   * биткоине выглядело бы как ограничение биржи, чем оно не является.
+   */
+  function levCapLabel() {
+    const cap = leverageCap(ctx);
+    const ex = Number(ctx.exchangeMaxLeverage);
+    if (Number.isFinite(ex) && ex > cap) return `up to ${cap}x · own cap, venue allows ${ex}x`;
+    return `up to ${cap}x`;
+  }
+
+  /** Содержимое строки Stop Loss — общее для render и точечного обновления. */
+  function botStopHtml(botStop) {
+    if (ctx.adoptEnabled === false) return "nobody will set it";
+    if (botStop == null) return "by ATR after entry";
+    return `${escapeHtml(fmtPrice(botStop))} <i class="tt-row__sub">−${Number(ctx.stopDistPct).toFixed(1)}% ATR</i>`;
+  }
+
+  /** Выпадашка подсказок под полем монеты. Пусто → ничего не рисуем. */
+  function suggestList() {
+    if (!state.suggestOpen) return "";
+    const items = suggestCoins(state.coin, ctx.coins);
+    if (!items.length) return "";
+    return `<ul class="tt-combo__list" role="listbox">${items
+      .map(
+        (c, i) =>
+          `<li class="tt-combo__item ${i === state.suggestIdx ? "is-on" : ""}" role="option"
+               aria-selected="${i === state.suggestIdx}" data-pick="${escapeHtml(c)}">${escapeHtml(c)}</li>`,
+      )
+      .join("")}</ul>`;
+  }
+
   function renderOpen() {
     const v = validateOpen(state, ctx);
     const isShort = state.side === "short";
@@ -213,25 +305,34 @@ function createModal(io) {
     const coins = sizeInCoins(notional, v.entry ?? ctx.price);
     const botStop = projectedBotStop({ side: state.side, entry: v.entry, stopDistPct: ctx.stopDistPct });
     const risk = stopRiskUsd({ notional, stopDistPct: ctx.stopDistPct });
-    const maxLev = Math.min(MAX_LEVERAGE, ctx.maxLeverage || MAX_LEVERAGE);
+    const maxLev = leverageCap(ctx);
     const available = Number(ctx.available) || 0;
     const tooSmall = notional > 0 && notional < MIN_ORDER_USD;
 
     return `
-      <h2 class="tt-panel__title">Open ${escapeHtml(state.coin || "")} Position</h2>
+      <!-- Тикер в заголовке — только когда он РЕАЛЬНЫЙ: иначе на полпути ввода
+           получалось бы «Open A Position». -->
+      <h2 class="tt-panel__title">${
+        knownCoin() ? `Open ${escapeHtml(state.coin)} Position` : "Open Position"
+      }</h2>
 
       <div class="tt-seg tt-seg--side">
         <button type="button" class="tt-seg__btn ${!isShort ? "is-on is-long" : ""}" data-side="long">Long</button>
         <button type="button" class="tt-seg__btn ${isShort ? "is-on is-short" : ""}" data-side="short">Short</button>
       </div>
 
-      ${!state.coin
-        ? `<div class="tt-card">
-             <div class="tt-card__label">Coin</div>
-             <input class="tt-coin-input" data-f="coin" type="text" placeholder="CHIP"
-                    autocomplete="off" spellcheck="false" value="${escapeHtml(state.coin)}">
-           </div>`
-        : ""}
+      <!-- Поле монеты видно ВСЕГДА (а не только пока пусто): иначе, выбрав
+           монету, её нельзя было бы поменять не закрыв модалку. -->
+      <div class="tt-card tt-card--coin">
+        <div class="tt-card__label">Coin</div>
+        <div class="tt-combo">
+          <input class="tt-coin-input" data-f="coin" type="text" placeholder="CHIP"
+                 autocomplete="off" autocapitalize="characters" spellcheck="false"
+                 role="combobox" aria-expanded="${state.suggestOpen ? "true" : "false"}"
+                 aria-autocomplete="list" value="${escapeHtml(state.coin)}">
+          ${suggestList()}
+        </div>
+      </div>
 
       <div class="tt-card">
         <div class="tt-card__head">
@@ -240,7 +341,7 @@ function createModal(io) {
         </div>
         <div class="tt-card__row">
           <div class="tt-card__minor">
-            <b>${available.toFixed(2)}</b>
+            <b data-avail>${available.toFixed(2)}</b>
             <span>available</span>
           </div>
           <div class="tt-card__major ${tooSmall ? "is-bad" : ""}" data-margin>${Number(state.marginUsd).toFixed(2)}</div>
@@ -253,7 +354,7 @@ function createModal(io) {
         <div class="tt-card__row">
           <div class="tt-card__minor">
             <b class="tt-card__label--accent">Leverage</b>
-            <span>up to ${maxLev}x</span>
+            <span data-levcap>${levCapLabel()}</span>
           </div>
           <div class="tt-card__major" data-lev>${state.leverage}<i>x</i></div>
         </div>
@@ -263,7 +364,7 @@ function createModal(io) {
       <div class="tt-rows">
         <div class="tt-row">
           <span>Current Price</span>
-          <b>${ctx.price > 0 ? escapeHtml(fmtPrice(ctx.price)) : "—"}</b>
+          <b data-price>${ctx.price > 0 ? escapeHtml(fmtPrice(ctx.price)) : "—"}</b>
         </div>
         <div class="tt-row">
           <span>Order Type</span>
@@ -287,13 +388,7 @@ function createModal(io) {
         </div>
         <div class="tt-row ${ctx.adoptEnabled === false ? "tt-row--bad" : ""}">
           <span>Stop Loss <i class="tt-row__by">set by bot</i></span>
-          <b>${
-            ctx.adoptEnabled === false
-              ? "nobody will set it"
-              : botStop != null
-                ? `${escapeHtml(fmtPrice(botStop))} <i class="tt-row__sub">−${Number(ctx.stopDistPct).toFixed(1)}% ATR</i>`
-                : "by ATR after entry"
-          }</b>
+          <b data-botstop>${botStopHtml(botStop)}</b>
         </div>
         <div class="tt-row">
           <span>Risk at that stop</span>
@@ -328,15 +423,29 @@ function createModal(io) {
     return `<h2 class="tt-panel__title">Positions</h2>${positions.map(closeCard).join("")}`;
   }
 
+  /**
+   * Состояние закрытия конкретной монеты. Заводится лениво.
+   * Отдельное на каждую позу — доли, тип ордера и цена лимитки у разных монет
+   * не имеют друг к другу никакого отношения.
+   */
+  function closeStateFor(coin) {
+    if (!state.close[coin]) {
+      state.close[coin] = { pct: 100, orderType: "market", limitPx: "", error: null, result: null };
+    }
+    return state.close[coin];
+  }
+
   function closeCard(p) {
     const isShort = p.side === "short";
-    const v = validateClose(state, p, { price: p.markPrice });
-    const busy = state.submitting && state.coin === p.coin;
-    const closingUsd = (Number(p.sizeUsd) * Number(state.pct)) / 100;
+    const cs = closeStateFor(p.coin);
+    const v = validateClose(cs, p, { price: p.markPrice });
+    const busy = state.submitting && state.closingCoin === p.coin;
+    const closingUsd = (Number(p.sizeUsd) * Number(cs.pct)) / 100;
+    const c = escapeHtml(p.coin);
     return `
-      <div class="tt-pos">
+      <div class="tt-pos" data-poscoin="${c}">
         <div class="tt-pos__head">
-          <span class="tt-pos__coin">${escapeHtml(p.coin)}</span>
+          <span class="tt-pos__coin">${c}</span>
           <span class="tt-pos__side tt-pos__side--${isShort ? "short" : "long"}">${isShort ? "Short" : "Long"}</span>
           <span class="tt-pos__pnl ${p.unrealized >= 0 ? "is-up" : "is-down"}">${fmtSigned(p.unrealized)}</span>
         </div>
@@ -352,41 +461,54 @@ function createModal(io) {
 
         <div class="tt-seg tt-seg--pct">
           ${[25, 50, 100]
-            .map((n) => `<button type="button" class="tt-seg__btn ${Number(state.pct) === n ? "is-on" : ""}" data-pct="${n}">${n}%</button>`)
+            .map(
+              (n) =>
+                `<button type="button" class="tt-seg__btn ${Number(cs.pct) === n ? "is-on" : ""}" data-pct="${n}">${n}%</button>`,
+            )
             .join("")}
         </div>
 
         <div class="tt-rows">
           <div class="tt-row">
             <span>Order Type</span>
-            <button type="button" class="tt-row__toggle" data-toggle-type>
-              ${state.orderType === "limit" ? "Limit post-only" : "Market"} <i>⇄</i>
+            <button type="button" class="tt-row__toggle" data-toggle-close-type>
+              ${cs.orderType === "limit" ? "Limit post-only" : "Market"} <i>⇄</i>
             </button>
           </div>
-          ${state.orderType === "limit"
+          ${cs.orderType === "limit"
             ? `<div class="tt-row tt-row--input">
                  <span>${isShort ? "Buyback Price" : "Sell Price"}</span>
-                 <input class="tt-row__input" data-f="limitPx" type="text" inputmode="decimal"
-                        placeholder="${fmtPrice(p.markPrice)}" value="${escapeHtml(state.limitPx)}">
+                 <input class="tt-row__input" data-closef="limitPx" type="text" inputmode="decimal"
+                        placeholder="${fmtPrice(p.markPrice)}" value="${escapeHtml(cs.limitPx)}">
                </div>`
             : ""}
           <div class="tt-row"><span>Closing</span><b>${fmtUsd(closingUsd)}</b></div>
         </div>
 
         ${listBlock("tt-blockers", v.blockers)}
-        ${state.error ? `<div class="tt-alert tt-alert--err">${escapeHtml(state.error)}</div>` : ""}
-        ${state.result ? `<div class="tt-alert tt-alert--ok">${escapeHtml(state.result)}</div>` : ""}
+        ${cs.error ? `<div class="tt-alert tt-alert--err">${escapeHtml(cs.error)}</div>` : ""}
+        ${cs.result ? `<div class="tt-alert tt-alert--ok">${escapeHtml(cs.result)}</div>` : ""}
 
-        <button type="button" class="tt-cta tt-cta--close" data-close="${escapeHtml(p.coin)}"
+        <button type="button" class="tt-cta tt-cta--close" data-close="${c}"
                 ${v.ok && !busy ? "" : "disabled"}>
-          ${busy ? "Closing…" : `Close ${state.pct}%`}
+          ${busy ? "Closing…" : `Close ${cs.pct}%`}
         </button>
       </div>`;
   }
 
+  // Анимацию появления играем ТОЛЬКО при смене вкладки. Иначе она проигрывалась
+  // на каждый render (переключил Long/Short — вся панель мигнула), и это
+  // читалось как «окно перезагрузилось».
+  let lastView = null;
+
   function render() {
     ensureDom();
+    // Прижимаем ДО построения разметки: иначе слайдер получит value=10 при
+    // max=3, браузер молча поправит поле, а state и число рядом останутся на 10.
+    clampState();
     const positions = (ctx.positions || []).length;
+    const enter = state.view !== lastView ? " tt-view--enter" : "";
+    lastView = state.view;
     bodyEl.innerHTML = `
       <div class="tt-tabs">
         <button type="button" class="tt-tab ${state.view === "open" ? "is-on" : ""}" data-view="open">Open</button>
@@ -394,7 +516,7 @@ function createModal(io) {
           Close${positions ? `<i class="tt-tab__n">${positions}</i>` : ""}
         </button>
       </div>
-      <div class="tt-view">${state.view === "open" ? renderOpen() : renderClose()}</div>`;
+      <div class="tt-view${enter}">${state.view === "open" ? renderOpen() : renderClose()}</div>`;
     wire();
   }
 
@@ -407,9 +529,33 @@ function createModal(io) {
     q("[data-side]").forEach((b) =>
       b.addEventListener("click", () => { state.side = b.dataset.side; render(); }),
     );
+    // Контролы закрытия адресуются к СВОЕЙ карточке: коин берём из ближайшего
+    // .tt-pos, иначе «50%» на одной монете применялось бы ко всем сразу.
+    const coinOf = (el) => el.closest("[data-poscoin]")?.dataset.poscoin;
     q("[data-pct]").forEach((b) =>
-      b.addEventListener("click", () => { state.pct = Number(b.dataset.pct); render(); }),
+      b.addEventListener("click", () => {
+        const cs = closeStateFor(coinOf(b));
+        cs.pct = Number(b.dataset.pct);
+        render();
+      }),
     );
+    q("[data-toggle-close-type]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const cs = closeStateFor(coinOf(b));
+        cs.orderType = cs.orderType === "limit" ? "market" : "limit";
+        cs.limitPx = ""; // цена от другого типа ордера смысла не имеет
+        render();
+      }),
+    );
+    q("[data-closef]").forEach((el) =>
+      el.addEventListener("input", () => {
+        const cs = closeStateFor(coinOf(el));
+        cs[el.dataset.closef] = el.value;
+        cs.error = null;
+        render();
+      }),
+    );
+    // Тип ордера ВХОДА — отдельный тумблер, к закрытию отношения не имеет.
     q("[data-toggle-type]").forEach((b) =>
       b.addEventListener("click", () => {
         state.orderType = state.orderType === "limit" ? "market" : "limit";
@@ -433,11 +579,10 @@ function createModal(io) {
 
     q("[data-f]").forEach((el) => {
       const key = el.dataset.f;
+      if (key === "coin") return wireCombo(el);
       el.addEventListener("input", () => {
-        state[key] = key === "coin" ? el.value.toUpperCase().replace(/[^A-Z0-9:_-]/g, "") : el.value;
-        if (key === "coin" && el.value !== state.coin) el.value = state.coin;
+        state[key] = el.value;
         state.error = null;
-        if (key === "coin") scheduleContext();
         softRefresh();
       });
     });
@@ -447,10 +592,97 @@ function createModal(io) {
   }
 
   /** Пересчёт производных чисел без перерисовки — чтобы слайдер не «прыгал». */
+  /**
+   * Точечное обновление всех производных чисел БЕЗ перерисовки DOM.
+   *
+   * Полный render() тут использовать нельзя: он пересоздаёт .tt-view, из-за
+   * чего переигрывается CSS-анимация появления и модалка визуально «моргает
+   * как перезагруженная» на каждом введённом символе. Плюс терялись бы фокус,
+   * каретка и открытая выпадашка. Поэтому всё, что зависит от state и от
+   * контекста с сервера, обновляется здесь адресно.
+   */
+  /**
+   * Прижимает плечо и маржу к лимитам текущей монеты и синхронизирует слайдеры.
+   *
+   * Нужен потому, что state переживает смену монеты: выставил 10x на DOGE,
+   * переключился на CASHCAT (биржевой максимум 3x) — плечо обязано переехать
+   * само, а не ждать, пока биржа отобьёт ордер.
+   */
+  /**
+   * ЧИСТОЕ прижатие state к лимитам — без DOM. Вызывается и из render(), и из
+   * softRefresh, потому что состояние переживает смену монеты по ЛЮБОМУ пути:
+   * набор с клавиатуры, клик по подсказке, ↑↓+Enter, повторное открытие модалки
+   * с уже выбранной монетой.
+   *
+   * Раньше кламп жил только в softRefresh, и путь «клик по подсказке → render()»
+   * оставлял плечо стухшим: на CASHCAT (3x) в state висело 10x, слайдер молча
+   * прижимался разметкой, а число рядом показывало 10x и уходило на сервер.
+   * Найдено оператором 16.08.2026 на связке BTC → CASHCAT.
+   */
+  function clampState() {
+    const maxLev = leverageCap(ctx);
+    if (state.leverage > maxLev) state.leverage = maxLev;
+    const maxMargin = Math.max(Number(ctx.available) || 0, 0);
+    if (maxMargin > 0 && state.marginUsd > maxMargin) state.marginUsd = maxMargin;
+  }
+
+  /** clampState + синхронизация слайдеров с новым потолком. */
+  function clampToLimits() {
+    clampState();
+    const maxLev = leverageCap(ctx);
+    const levSlider = bodyEl.querySelector('[data-slider="leverage"]');
+    if (levSlider) {
+      levSlider.max = String(maxLev);
+      levSlider.value = String(state.leverage);
+      levSlider.style.setProperty(
+        "--fill",
+        `${maxLev > 1 ? ((state.leverage - 1) / (maxLev - 1)) * 100 : 100}%`,
+      );
+    }
+
+    const maxMargin = Math.max(Number(ctx.available) || 0, 0.01);
+    const marginSlider = bodyEl.querySelector('[data-slider="margin"]');
+    if (state.marginUsd > maxMargin) state.marginUsd = maxMargin;
+    if (marginSlider && Number(marginSlider.max) !== maxMargin) {
+      marginSlider.max = String(maxMargin);
+      marginSlider.value = String(state.marginUsd);
+      marginSlider.style.setProperty(
+        "--fill",
+        `${maxMargin > 0 ? (state.marginUsd / maxMargin) * 100 : 0}%`,
+      );
+    }
+  }
+
   function softRefresh() {
+    // ── Сначала прижимаем состояние к новым лимитам, только ПОТОМ валидируем ──
+    // Порядок важен: если провалидировать раньше клампа, блокер «max leverage
+    // is 3x» останется висеть уже после того, как ползунок сам переехал на 3x.
+    clampToLimits();
+
     const v = validateOpen(state, ctx);
     const notional = v.notional;
     const coins = sizeInCoins(notional, v.entry ?? ctx.price);
+
+    // ── Данные, приезжающие с сервера при смене монеты ──
+    const priceEl = bodyEl.querySelector("[data-price]");
+    if (priceEl) priceEl.textContent = ctx.price > 0 ? fmtPrice(ctx.price) : "—";
+
+    const availEl = bodyEl.querySelector("[data-avail]");
+    if (availEl) availEl.textContent = (Number(ctx.available) || 0).toFixed(2);
+
+    const stopEl = bodyEl.querySelector("[data-botstop]");
+    if (stopEl) {
+      stopEl.innerHTML = botStopHtml(
+        projectedBotStop({ side: state.side, entry: v.entry, stopDistPct: ctx.stopDistPct }),
+      );
+      stopEl.closest(".tt-row")?.classList.toggle("tt-row--bad", ctx.adoptEnabled === false);
+    }
+
+    const capEl = bodyEl.querySelector("[data-levcap]");
+    if (capEl) capEl.textContent = levCapLabel();
+
+    const titleEl = bodyEl.querySelector(".tt-panel__title");
+    if (titleEl) titleEl.textContent = knownCoin() ? `Open ${state.coin} Position` : "Open Position";
 
     const marginEl = bodyEl.querySelector("[data-margin]");
     if (marginEl) {
@@ -481,10 +713,93 @@ function createModal(io) {
     }
   }
 
+  /**
+   * Поле монеты с выпадашкой. Список перерисовывается ТОЧЕЧНО, без render():
+   * полная перерисовка сбрасывала бы фокус и каретку на каждом символе.
+   */
+  function wireCombo(input) {
+    const combo = input.parentElement;
+
+    const redrawList = () => {
+      combo.querySelector(".tt-combo__list")?.remove();
+      combo.insertAdjacentHTML("beforeend", suggestList());
+      input.setAttribute("aria-expanded", state.suggestOpen ? "true" : "false");
+      combo.querySelectorAll("[data-pick]").forEach((li) => {
+        // mousedown, а не click: blur поля успел бы закрыть список раньше клика.
+        li.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          pick(li.dataset.pick);
+        });
+      });
+    };
+
+    const pick = (coin) => {
+      state.coin = coin;
+      state.suggestOpen = false;
+      state.suggestIdx = 0;
+      input.value = coin;
+      loadContext().then(render); // новая монета → своя цена, ATR и плечо
+    };
+
+    input.addEventListener("input", () => {
+      const clean = input.value.toUpperCase().replace(/[^A-Z0-9:_-]/g, "");
+      if (input.value !== clean) input.value = clean;
+      state.coin = clean;
+      state.error = null;
+      state.suggestOpen = true;
+      state.suggestIdx = 0;
+      redrawList();
+      scheduleContext();
+      softRefresh();
+    });
+
+    input.addEventListener("focus", () => {
+      state.suggestOpen = true;
+      state.suggestIdx = 0;
+      redrawList();
+    });
+
+    input.addEventListener("blur", () => {
+      state.suggestOpen = false;
+      redrawList();
+    });
+
+    input.addEventListener("keydown", (e) => {
+      const items = suggestCoins(state.coin, ctx.coins);
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        if (!items.length) return;
+        e.preventDefault();
+        state.suggestOpen = true;
+        const step = e.key === "ArrowDown" ? 1 : -1;
+        state.suggestIdx = (state.suggestIdx + step + items.length) % items.length;
+        redrawList();
+      } else if (e.key === "Enter" && state.suggestOpen && items[state.suggestIdx]) {
+        e.preventDefault();
+        pick(items[state.suggestIdx]);
+      } else if (e.key === "Escape" && state.suggestOpen) {
+        // Гасим список, но НЕ модалку — иначе Esc закрывал бы всё разом.
+        e.stopPropagation();
+        state.suggestOpen = false;
+        redrawList();
+      }
+    });
+  }
+
+  // Смена монеты меняет цену, ATR-стоп и потолок плеча → перезапрашиваем
+  // контекст, но не на каждый символ: «CHIP» — это четыре нажатия.
+  // Смена монеты меняет цену, ATR-стоп и потолок плеча → перезапрашиваем
+  // контекст, но не на каждый символ: «CHIP» — это четыре нажатия.
+  //
+  // Ответ вливаем через softRefresh, а НЕ через render(): полная перерисовка
+  // на каждом символе выглядела как перезагрузка окна (переигрывалась анимация
+  // появления) и сбрасывала фокус с кареткой.
   let ctxTimer = null;
   function scheduleContext() {
     clearTimeout(ctxTimer);
-    ctxTimer = setTimeout(() => loadContext().then(render), 350);
+    ctxTimer = setTimeout(async () => {
+      await loadContext();
+      softRefresh();
+    }, 350);
   }
 
   async function submitOpen() {
@@ -521,28 +836,32 @@ function createModal(io) {
   async function submitClose(coin) {
     const p = (ctx.positions || []).find((x) => x.coin === coin);
     if (!p || state.submitting) return;
+    const cs = closeStateFor(coin);
     state.submitting = true;
-    state.coin = coin;
-    state.error = null;
-    state.result = null;
+    // Какую позу закрываем — отдельное поле. Раньше сюда писался state.coin,
+    // и закрытие ACE переименовывало монету во вкладке Open.
+    state.closingCoin = coin;
+    cs.error = null;
+    cs.result = null;
     render();
     try {
       const res = await io.close({
         coin,
-        pct: Number(state.pct),
-        orderType: state.orderType,
-        limitPx: state.orderType === "limit" ? Number(state.limitPx) : null,
+        pct: Number(cs.pct),
+        orderType: cs.orderType,
+        limitPx: cs.orderType === "limit" ? Number(cs.limitPx) : null,
       });
       if (res?.ok) {
-        state.result = res.message || "close order sent";
-        state.limitPx = "";
+        cs.result = res.message || "close order sent";
+        cs.limitPx = "";
       } else {
-        state.error = res?.error || "exchange rejected the order";
+        cs.error = res?.error || "exchange rejected the order";
       }
     } catch (err) {
-      state.error = err?.message || "network unavailable";
+      cs.error = err?.message || "network unavailable";
     } finally {
       state.submitting = false;
+      state.closingCoin = null;
       render();
     }
   }

@@ -17,6 +17,8 @@ import {
   stopRiskUsd,
   validateOpen,
   validateClose,
+  suggestCoins,
+  leverageCap,
 } from "../src/modules/dashboard/web/src/features/tradeTicket.js";
 
 // Числа из реальной сделки CHIP 16.08.2026 и скриншота Rabby.
@@ -175,4 +177,100 @@ test("validateClose: без позиции нечего закрывать", () 
   const v = validateClose({ pct: 100, orderType: "market" }, null, {});
   assert.equal(v.ok, false);
   assert.ok(v.blockers.some((b) => /no open position/.test(b)));
+});
+
+// ── Автодополнение тикера ───────────────────────────────────────────────────
+
+test("suggestCoins: совпадение с НАЧАЛА идёт выше вхождения в середине", () => {
+  // Набирая «AC», человек ищет ACE, а не PACE — порядок тут не косметика.
+  const out = suggestCoins("AC", ["PACE", "ACE", "ACX"]);
+  assert.deepEqual(out, ["ACE", "ACX", "PACE"]);
+});
+
+test("suggestCoins: регистр не важен, точное совпадение не подсказывается", () => {
+  assert.deepEqual(suggestCoins("chip", ["CHIP", "CHIPS"]), ["CHIPS"]);
+});
+
+test("suggestCoins: пустой ввод даёт начало списка, лимит соблюдается", () => {
+  const coins = Array.from({ length: 30 }, (_, i) => `C${i}`);
+  assert.equal(suggestCoins("", coins).length, 8);
+  assert.equal(suggestCoins("", coins, 3).length, 3);
+});
+
+test("suggestCoins: не падает на пустом/битом списке", () => {
+  assert.deepEqual(suggestCoins("AC", null), []);
+  assert.deepEqual(suggestCoins("AC", []), []);
+});
+
+// ── Плечо: лимит у каждой монеты свой ───────────────────────────────────────
+
+test("leverageCap: берётся с сервера, а не из константы", () => {
+  // Реальные лимиты HL (проверено 16.08.2026): CASHCAT 3x, LIT 5x, BTC 40x.
+  assert.equal(leverageCap({ maxLeverage: 3 }), 3);
+  assert.equal(leverageCap({ maxLeverage: 5 }), 5);
+  // Контекст ещё не приехал → осторожный fallback, не бесконечность.
+  assert.equal(leverageCap({}), 10);
+  assert.equal(leverageCap(null), 10);
+  assert.equal(leverageCap({ maxLeverage: 0 }), 10);
+});
+
+test("validateOpen: плечо выше лимита монеты — блокер", () => {
+  // Ровно тот баг: на CASHCAT (3x) проходила десятка.
+  const v = validateOpen(openState({ coin: "CASHCAT", leverage: 10, marginUsd: 3.44 }), {
+    ...ctx,
+    maxLeverage: 3,
+  });
+  assert.equal(v.ok, false);
+  assert.ok(v.blockers.some((b) => /max leverage for CASHCAT is 3x/.test(b)));
+});
+
+test("validateOpen: плечо ровно на лимите проходит", () => {
+  const v = validateOpen(openState({ coin: "CASHCAT", leverage: 3, marginUsd: 3.44 }), {
+    ...ctx,
+    maxLeverage: 3,
+  });
+  assert.equal(v.ok, true, `неожиданные блокеры: ${v.blockers.join(", ")}`);
+});
+
+test("validateOpen: смена монеты на более строгую ловит устаревшее плечо", () => {
+  // Выставил 10x на DOGE, переключился на CASHCAT — состояние плеча пережило
+  // смену монеты, и без этой проверки ушёл бы заведомо отбойный ордер.
+  const stale = openState({ coin: "CASHCAT", leverage: 10, marginUsd: 2 });
+  assert.equal(validateOpen(stale, { ...ctx, maxLeverage: 10 }).ok, true);
+  assert.equal(validateOpen(stale, { ...ctx, maxLeverage: 3 }).ok, false);
+});
+
+// ── Регрессии, найденные при самопроверке 16.08.2026 ────────────────────────
+
+test("validateOpen: неизвестный дневной P&L — предупреждение, не тишина", () => {
+  // day.known=false бывает сразу после рестарта бота или когда refreshDailyRisk
+  // падает. halted=false тут значит «не знаем», а не «лимит цел» — молча
+  // пускать вход под видом порядка нельзя.
+  const v = validateOpen(openState(), { ...ctx, day: { known: false, halted: false, limitUsd: 5 } });
+  assert.equal(v.ok, true, "вход не запираем — иначе после каждого деплоя торговля стоит");
+  assert.ok(v.warnings.some((w) => /daily P&L unknown/.test(w)));
+});
+
+test("validateOpen: посчитанный день предупреждения не даёт", () => {
+  const v = validateOpen(openState(), { ...ctx, day: { known: true, halted: false, limitUsd: 5, netUsd: -1 } });
+  assert.equal(v.warnings.filter((w) => /daily P&L unknown/.test(w)).length, 0);
+});
+
+test("validateClose: состояние закрытия у каждой монеты своё", () => {
+  // Регрессия 16.08.2026: pct/orderType/limitPx лежали в общем state, поэтому
+  // «25%» на CHIP применялось и к ACE, а цена лимитки CHIP (0.028) уходила
+  // закрывать ACE (0.14) — заявка на 80% мимо рынка.
+  const chip = { pct: 25, orderType: "limit", limitPx: "0.027" };
+  const ace = { pct: 50, orderType: "market", limitPx: "" };
+  const chipPos = { coin: "CHIP", side: "short", markPrice: 0.027763 };
+  const acePos = { coin: "ACE", side: "long", markPrice: 0.1635 };
+
+  assert.equal(validateClose(chip, chipPos, { price: 0.027763 }).ok, true);
+  assert.equal(validateClose(ace, acePos, { price: 0.1635 }).ok, true);
+
+  // Настройки CHIP, приложенные к ACE, — это лимитка в 6 раз ниже рынка на
+  // ПРОДАЖУ лонга: post-only ушла бы стоять мёртвым грузом. Ловим.
+  const leaked = validateClose(chip, acePos, { price: 0.1635 });
+  assert.equal(leaked.ok, false);
+  assert.ok(leaked.blockers.some((b) => /cross the book/.test(b)));
 });
