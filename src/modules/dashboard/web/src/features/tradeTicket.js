@@ -227,6 +227,7 @@ function createModal(io) {
   let ctx = { price: null, available: 0, maxLeverage: FALLBACK_LEVERAGE_CAP, day: {}, adoptEnabled: true, positions: [] };
   let el = null;
   let bodyEl = null;
+  let closeAfter = null; // отложенное авто-закрытие после успешного ордера
 
   // ── Каркас модалки (создаётся один раз) ──
   function ensureDom() {
@@ -696,6 +697,13 @@ function createModal(io) {
         state.result = res.message || "order sent";
         state.marginUsd = 0;
         state.limitPx = "";
+        // Ордер ушёл — держать форму открытой незачем: дальше всё происходит на
+        // карточке позиции (там живая цена и стоп няньки). Секунда паузы, чтобы
+        // ответ биржи успел прочитаться, и закрываемся.
+        closeAfter = setTimeout(() => {
+          closeAfter = null;
+          close();
+        }, 1000);
       } else {
         state.error = res?.error || "exchange rejected the order";
       }
@@ -725,6 +733,7 @@ function createModal(io) {
     if (side) state.side = side;
     state.error = null;
     state.result = null;
+    if (closeAfter) { clearTimeout(closeAfter); closeAfter = null; }
     // Показываем СРАЗУ, на прошлом контексте, и догружаем свежий фоном.
     // Раньше тут стоял `await loadContext()` перед render() — модалка ждала
     // ответа сервера (цена + ATR + позиции), и это читалось как «тормозит».
@@ -770,6 +779,7 @@ function createModal(io) {
   function close() {
     if (!el) return;
     stopPricePoll(); // иначе опрос цены продолжается на закрытой модалке
+    if (closeAfter) { clearTimeout(closeAfter); closeAfter = null; } // закрыли раньше таймера
     el.classList.remove("is-open");
     document.body.style.overflow = "";
     // Ждём выезд панели вниз, потом прячем.
