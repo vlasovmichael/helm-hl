@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0c0a09" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f5f1ea" media="(prefers-color-scheme: light)" />
+    <title>Helm · Trade Ticket (стенд)</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Mona+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("hl-scanner-theme") || "auto";
+          var theme =
+            stored === "auto"
+              ? window.matchMedia("(prefers-color-scheme: dark)").matches
+                ? "dark"
+                : "light"
+              : stored === "light"
+                ? "light"
+                : "dark";
+          document.documentElement.setAttribute("data-theme", theme);
+        } catch (_) {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <div class="equity-group">
+          <div class="label">Trade Ticket</div>
+          <div class="value" style="font-size: 20px">Стенд модалки · моки, биржа не задействована</div>
+        </div>
+        <div class="meta-group">
+          <button id="theme-toggle" class="status-pill">тема</button>
+        </div>
+      </header>
+
+      <section class="card">
+        <div class="card-header"><div class="card-title">Сценарии</div></div>
+        <p class="tk-lead">
+          Каждая кнопка открывает ту же модалку на своём моке. Размер задаётся как в Rabby —
+          двигаешь <b>маржу</b> и <b>плечо</b>, нотионал считается сам. Стоп не вводится: его
+          ставит нянька, поэтому строка «Стоп-лосс» показывает, что она сделает, а не просит
+          ввода.
+        </p>
+        <div class="tk-btns">
+          <button class="tk-btn" data-scenario="normal">
+            <b>Обычный</b><span>депо $6.88 · CHIP · Short</span>
+          </button>
+          <button class="tk-btn" data-scenario="rich">
+            <b>Депо побольше</b><span>$120 свободно · Long · день в плюсе</span>
+          </button>
+          <button class="tk-btn" data-scenario="nocoin">
+            <b>Монета не выбрана</b><span>появляется поле ввода тикера</span>
+          </button>
+          <button class="tk-btn" data-scenario="halted">
+            <b>Дневной стоп сработал</b><span>−$5.20 из −$5.00 · вход заперт</span>
+          </button>
+          <button class="tk-btn" data-scenario="nonanny">
+            <b>Нянька выключена</b><span>стоп никто не поставит</span>
+          </button>
+          <button class="tk-btn" data-scenario="reject">
+            <b>Биржа отклонила</b><span>ответ с ошибкой post-only</span>
+          </button>
+          <button class="tk-btn" data-scenario="close">
+            <b>Закрыть</b><span>две позиции, у ACE стопа нет</span>
+          </button>
+          <button class="tk-btn" data-scenario="closeEmpty">
+            <b>Закрыть · пусто</b><span>позиций нет</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header"><div class="card-title">Что потрогать</div></div>
+        <ul class="tk-list">
+          <li>
+            Слайдер <b>маржи</b> при плече 3× — ниже $3.34 нотионал падает под биржевой минимум
+            $10, число краснеет и вылезает та же надпись, что показал Rabby.
+          </li>
+          <li>Слайдер <b>плеча</b> — размер в монетах пересчитывается сразу.</li>
+          <li>
+            <b>Тип ордера</b> переключается прямо в строке (Market ⇄ Limit post-only); у лимитки
+            появляется поле цены, и цена, пересекающая рынок, ловится до отправки.
+          </li>
+          <li>Вкладка <b>Закрыть</b> — доли 25/50/100% и та же пара Market/Limit.</li>
+          <li><b>Esc</b> или клик по фону закрывает; на узком окне панель выезжает снизу листом.</li>
+        </ul>
+      </section>
+    </div>
+    <script type="module" src="./ticket.js"></script>
+  </body>
+</html>

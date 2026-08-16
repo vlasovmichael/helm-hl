@@ -34,6 +34,7 @@ import { renderMarketContext, updateBtcLivePrice } from "./src/features/marketCo
 import { initModals, renderActivity } from "./src/features/modals.js";
 import { initWhatIf } from "./src/features/whatif.js";
 import { initManualPaperTrigger, initManualPaperActive } from "./src/features/manualPaper.js";
+import { initTradeTicket } from "./src/features/tradeTicket.js";
 
 // WS шлёт hotMovers каждые ~2с. Пока поток живой — HTTP-фолбэк /api/signals
 // в tick() не дёргаем (был бы дубликат тех же данных).
@@ -104,6 +105,34 @@ function tick() {
   markSuccess();
 }
 
+// ── Trade Ticket: кнопка в шапке Active Position ──
+// Ордера уходят на биржу через API-кошелёк бота: builder-fee 0 бп и кошелёк не
+// всплывает. Стоп и сопровождение остаются у няньки — модалка их только
+// показывает (см. features/tradeTicket.js, «граница ответственности»).
+function initTradeButton() {
+  const btn = document.getElementById("tt-trade-btn");
+  if (!btn) return;
+  const post = async (path, body) => {
+    const r = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (r.status === 401) window.location.href = "/login";
+    return r.json();
+  };
+  const ticket = initTradeTicket({
+    getContext: async (coin) => {
+      const r = await fetch(`/api/ticket/context?coin=${encodeURIComponent(coin || "")}`);
+      if (r.status === 401) window.location.href = "/login";
+      return r.json();
+    },
+    open: (payload) => post("/api/ticket/open", payload),
+    close: (payload) => post("/api/ticket/close", payload),
+  });
+  btn.addEventListener("click", () => ticket.open());
+}
+
 // ── Bootstrap ──
 mountTopnav("dashboard");
 bindTheme([]);
@@ -112,6 +141,7 @@ initModals();
 initWhatIf();
 initManualPaperTrigger("mp-paper-btn");
 initManualPaperActive();
+initTradeButton();
 // BTC Divergence + Whale Watch вынесены на /lab.html — их HL-поллинг
 // (candleSnapshot/metaAndAssetCtxs) грузится только когда открыта Lab, а не на
 // торговом дашборде (разгрузка весового бюджета HL, защита от 429). 2026-06-17.

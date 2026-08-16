@@ -72,6 +72,11 @@ import {
   handleClose as handleManualPaperClose,
 } from "./routes/manualPaper.js";
 import {
+  handleContext as handleTicketContext,
+  handleOpen as handleTicketOpen,
+  handleClose as handleTicketClose,
+} from "./routes/tradeTicket.js";
+import {
   handleWhaleWatch,
   handleWhaleWatchBatch,
   handleWhaleLeaderboard,
@@ -993,6 +998,13 @@ export function startDashboard() {
   app.get("/api/manual-paper", handleManualPaperList);
   app.post("/api/manual-paper/open", handleManualPaperOpen);
   app.post("/api/manual-paper/close", handleManualPaperClose);
+
+  // Trade Ticket: РЕАЛЬНЫЕ ордера с дашборда (модалка в Active Position).
+  // Только кладут ордер на биржу — стоп и сопровождение остаются за нянькой.
+  // Ордера идут через SDK ⇒ builder-fee 0 бп (сторонний фронтенд берёт 2 бп).
+  app.get("/api/ticket/context", handleTicketContext);
+  app.post("/api/ticket/open", handleTicketOpen);
+  app.post("/api/ticket/close", handleTicketClose);
 
   app.get("/api/insights", handleInsights);
   app.get("/api/my-trades", handleTradeBreakdown);

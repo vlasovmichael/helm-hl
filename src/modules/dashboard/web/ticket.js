@@ -1,0 +1,111 @@
+import "./ticket.scss";
+// ─────────────────────────────────────────────────
+//  ticket.html — локальный стенд модалки Trade Ticket
+// ─────────────────────────────────────────────────
+// Гоняет НАСТОЯЩИЙ модуль features/tradeTicket.js на мок-адаптере: биржи,
+// кошелька и бэкенда тут нет вообще. Нужен, чтобы смотреть и править дизайн
+// (`npm run dev:dash` → /ticket.html) до того, как что-то поедет в прод.
+//
+// Числа взяты из реальных сделок CHIP 16.08.2026 и из скриншота Rabby
+// (свободно 6.88, минимум ордера $10), чтобы масштаб был честный.
+
+import { createTradeTicketModal } from "./src/features/tradeTicket.js";
+
+const CHIP = 0.027763;
+const ACE = 0.1635;
+
+/** Мок-биржа: контекст статичен, ответы приходят через 500мс. */
+function mockIo(ctx, overrides = {}) {
+  return {
+    getContext: async () => ctx,
+    open: async (p) => {
+      await new Promise((r) => setTimeout(r, 500));
+      return (
+        overrides.open ?? {
+          ok: true,
+          message:
+            `${p.side === "short" ? "Short" : "Long"} ${p.coin} · маржа $${p.marginUsd.toFixed(2)} × ${p.leverage}x = $${p.sizeUsd.toFixed(2)} · ` +
+            `${p.orderType === "limit" ? `лимитка @ ${p.limitPx} поставлена` : "маркет исполнен"} · ` +
+            `нянька повесит стоп в течение ~15 сек`,
+        }
+      );
+    },
+    close: async (p) => {
+      await new Promise((r) => setTimeout(r, 500));
+      return (
+        overrides.close ?? {
+          ok: true,
+          message: `${p.coin}: закрытие ${p.pct}% ${p.orderType === "limit" ? `лимиткой @ ${p.limitPx}` : "по рынку"} отправлено`,
+        }
+      );
+    },
+  };
+}
+
+const positions = [
+  {
+    coin: "CHIP",
+    side: "short",
+    sizeUsd: 15.78,
+    entryPrice: 0.030577,
+    markPrice: CHIP,
+    unrealized: 1.44,
+    stopPrice: 0.0325773,
+  },
+  {
+    coin: "ACE",
+    side: "long",
+    sizeUsd: 12.6,
+    entryPrice: 0.1662,
+    markPrice: ACE,
+    unrealized: -0.2,
+    stopPrice: null,
+  },
+];
+
+const base = {
+  price: CHIP,
+  available: 6.88,
+  maxLeverage: 10,
+  stopDistPct: 7.2,
+  adoptEnabled: true,
+  day: { netUsd: -1.77, limitUsd: 5, halted: false },
+  positions,
+};
+
+const scenarios = {
+  normal: { ctx: base, opts: { coin: "CHIP", side: "short", view: "open" } },
+  rich: {
+    ctx: { ...base, available: 120, day: { netUsd: 0.4, limitUsd: 5, halted: false } },
+    opts: { coin: "CHIP", side: "long", view: "open" },
+  },
+  halted: {
+    ctx: { ...base, day: { netUsd: -5.2, limitUsd: 5, halted: true } },
+    opts: { coin: "CHIP", side: "short", view: "open" },
+  },
+  nonanny: { ctx: { ...base, adoptEnabled: false }, opts: { coin: "CHIP", side: "short", view: "open" } },
+  nocoin: { ctx: { ...base, price: null }, opts: { view: "open" } },
+  close: { ctx: base, opts: { view: "close" } },
+  closeEmpty: { ctx: { ...base, positions: [] }, opts: { view: "close" } },
+  reject: {
+    ctx: base,
+    io: { open: { ok: false, error: "Order has invalid price: post-only would cross the book" } },
+    opts: { coin: "CHIP", side: "short", view: "open" },
+  },
+};
+
+document.querySelectorAll("[data-scenario]").forEach((btn) => {
+  btn.addEventListener("click", async () => {
+    const s = scenarios[btn.dataset.scenario];
+    if (!s) return;
+    const modal = createTradeTicketModal(mockIo(s.ctx, s.io || {}));
+    await modal.open(s.opts);
+  });
+});
+
+// Переключатель темы — стенд смотрят и в светлой.
+document.getElementById("theme-toggle")?.addEventListener("click", () => {
+  const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem("hl-scanner-theme", next);
+});

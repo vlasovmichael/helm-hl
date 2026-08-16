@@ -28,6 +28,10 @@ export default defineConfig({
         lab: resolve(webRoot, "lab.html"),
         oi: resolve(webRoot, "oi.html"),
         login: resolve(webRoot, "login.html"),
+        // Стенд дизайна Trade Ticket на моках (биржи не касается). Живёт в
+        // сборке намеренно: страницу удобно открыть и на задеплоенном дашборде,
+        // чтобы посмотреть вёрстку с телефона.
+        ticket: resolve(webRoot, "ticket.html"),
       },
     },
   },
