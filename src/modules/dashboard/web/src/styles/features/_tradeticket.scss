@@ -44,99 +44,67 @@
 // Цвет ведёт R (uPnL / риск до стопа), а не доллар: $1 на позиции с риском $1
 // и с риском $10 — разные события.
 //
-// Правила, выведенные из первой (неудачной) версии:
-//  · текст ВСЕГДА цветной на мягкой подложке. Сплошная заливка с
-//    инвертированным текстом ломалась на ховере — красный текст на красном
-//    фоне, буквы исчезали;
-//  · при наведении ничего не двигается и не бликует. Меняется только
-//    плотность фона;
-//  · инвертированный текст остаётся ровно в одном месте — «Sure?», где он
-//    и должен выбиваться из общего ряда.
+// Вся окраска идёт через ДВА токена: --tint (цвет состояния) и --fill
+// (плотность подложки). Текст и рамка всегда берутся из --tint, поэтому
+// «в цвет кнопки» получается само собой и рассинхрону взяться неоткуда.
+//
+// Так вылечены обе болячки прошлых версий:
+//  · ЗЕЛЁНЫЙ ХОВЕР НА КРАСНОЙ КНОПКЕ. Класс ступени (is-pos) остаётся на
+//    кнопке и после того, как она стала красной failed, и отдельное правило
+//    `.is-pos:hover` перекрашивало её обратно в зелёный. Теперь ховер не
+//    трогает ни цвет, ни рамку — только плотность фона;
+//  · ИСЧЕЗАЮЩИЙ ТЕКСТ. Сплошная заливка с инвертированным текстом конфликтовала
+//    с ховером. Инверсия осталась ровно в одном месте — «Sure?».
 .pos-close-btn {
+  --tint: var(--text-muted);
+  --fill: 0%;
+
   margin-left: auto;
   padding: 4px 14px;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--tint) 40%, transparent);
   border-radius: 7px;
-  background: var(--canvas-inset);
-  color: var(--text-muted);
+  background: color-mix(in srgb, var(--tint) var(--fill), var(--canvas-inset));
+  color: var(--tint);
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.03em;
   cursor: pointer;
-  transition:
-    background-color 0.16s var(--ease),
-    border-color 0.16s var(--ease),
-    color 0.16s var(--ease);
+  transition: background-color 0.16s var(--ease);
 
-  // Рамка на наведении одна на все состояния — белая. Раньше она подхватывала
-  // цвет ступени (зелёная у плюса, красная у минуса), и ховер выглядел
-  // по-разному на соседних карточках.
-  &:hover:not(:disabled) {
-    background: var(--card-bg-hover);
-    color: var(--text-primary);
-    border-color: var(--text-primary);
-  }
+  // Единственное, что делает наведение, — уплотняет подложку. Ни цвет, ни
+  // рамка не переопределяются, поэтому кнопка не может «сменить сторону».
+  &:hover:not(:disabled) { --fill: 32%; }
   &:disabled { opacity: 0.65; cursor: default; }
 
-  // ── Ступени по R: меняется только плотность подложки ──
-  &.is-pos {
-    color: var(--green);
-    border-color: var(--green-line);
-    background: color-mix(in srgb, var(--green) 8%, transparent);
+  &.is-pos { --tint: var(--green); }
+  &.is-neg { --tint: var(--red); }
 
-    &.is-l2 { background: color-mix(in srgb, var(--green) 15%, transparent); }
-    &.is-l3 {
-      background: color-mix(in srgb, var(--green) 24%, transparent);
-      border-color: var(--green);
-    }
-    // Рамку задаём и здесь: у .is-l3 border-color той же специфичности, что и
-    // базовое правило ховера, и объявлен ниже — без этого на сильном R рамка
-    // оставалась цветной.
-    &:hover:not(:disabled) {
-      color: var(--green);
-      background: color-mix(in srgb, var(--green) 30%, transparent);
-      border-color: var(--text-primary);
-    }
+  &.is-l1 { --fill: 8%; }
+  &.is-l2 { --fill: 15%; }
+  &.is-l3 {
+    --fill: 24%;
+    border-color: var(--tint);
   }
-  &.is-neg {
-    color: var(--red);
-    border-color: var(--red-line);
-    background: color-mix(in srgb, var(--red) 8%, transparent);
-
-    &.is-l2 { background: color-mix(in srgb, var(--red) 15%, transparent); }
-    &.is-l3 {
-      background: color-mix(in srgb, var(--red) 24%, transparent);
-      border-color: var(--red);
-    }
-    // Рамку задаём и здесь: у .is-l3 border-color той же специфичности, что и
-    // базовое правило ховера, и объявлен ниже — без этого на сильном R рамка
-    // оставалась цветной.
-    &:hover:not(:disabled) {
-      color: var(--red);
-      background: color-mix(in srgb, var(--red) 30%, transparent);
-      border-color: var(--text-primary);
-    }
-  }
+  &.is-l1:hover:not(:disabled),
+  &.is-l2:hover:not(:disabled),
+  &.is-l3:hover:not(:disabled) { --fill: 34%; }
 
   // Взвод перебивает окраску по R: это уже не индикатор прибыли, а
   // предупреждение о необратимом действии. Единственная сплошная заливка.
-  &.is-armed,
-  &.is-armed.is-pos,
-  &.is-armed.is-neg {
-    background: var(--red);
-    border-color: var(--red);
+  &.is-armed {
+    --tint: var(--red);
+    --fill: 100%;
+    border-color: var(--tint);
     color: #fff;
   }
-  &.is-armed:hover:not(:disabled) { color: #fff; background: var(--red); border-color: var(--text-primary); }
+  &.is-armed:hover:not(:disabled) { --fill: 100%; }
 
-  &.is-failed,
-  &.is-failed.is-pos,
-  &.is-failed.is-neg {
-    background: var(--red-soft);
-    border-color: var(--red-line);
-    color: var(--red);
+  &.is-failed {
+    --tint: var(--red);
+    --fill: 14%;
   }
+  &.is-failed:hover:not(:disabled) { --fill: 24%; }
 }
 
 .tt-modal {
