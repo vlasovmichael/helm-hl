@@ -74,6 +74,18 @@ const FEATURES = ["mom4", "mom16", "mom96", "rev1", "atr14", "volshock", "rangep
 const TAILS = ["top", "bottom"];
 const HORIZONS_BARS = String(argVal("--horizons", "4,16,96")).split(",").map(Number).filter((x) => x > 0);
 
+// Фильтр по ликвидности: оставить только монеты, чей трейлинговый медианный
+// оборот в долларах попадает в верхние (100−X)% кросс-секции. Ранг берётся по
+// СРЕЗУ на ту же метку времени, поэтому заглядывания нет. 0 = без фильтра.
+const MIN_TURN_PCT = Number(argVal("--minturn", 0));
+// Окно по датам — под holdout: гипотеза, придуманная после взгляда на данные,
+// обязана проверяться на периоде, в который не заглядывали (harness, postHoc).
+const FROM = argVal("--from", null) ? new Date(argVal("--from", null)).getTime() : null;
+const TO = argVal("--to", null) ? new Date(argVal("--to", null)).getTime() : null;
+// Сузить сетку до конкретных ячеек — для репликации одной находки, а не поиска.
+const ONLY_FEATURES = argVal("--features", null)?.split(",");
+const ONLY_TAILS = argVal("--tails", null)?.split(",");
+
 const K = Number(argVal("--k", 200));
 const DO_REGISTER = args.includes("--register");
 
@@ -88,7 +100,7 @@ const HYP_ID = argVal("--id", INTERVAL === "15m" ? "grid-scan-2026-08" : `grid-s
 
 function computeFeatures(rows) {
   const N = rows.length;
-  const out = { mom4: [], mom16: [], mom96: [], rev1: [], atr14: [], volshock: [], rangepos: [], wick: [] };
+  const out = { mom4: [], mom16: [], mom96: [], rev1: [], atr14: [], volshock: [], rangepos: [], wick: [], turn: [] };
 
   // True Range для ATR
   const tr = new Array(N).fill(NaN);
@@ -101,6 +113,7 @@ function computeFeatures(rows) {
     const c = rows[i][4];
     if (i < WARMUP || !(c > 0)) {
       for (const f of FEATURES) out[f].push(NaN);
+      out.turn.push(NaN);
       continue;
     }
     const ret = (k) => {
@@ -136,6 +149,13 @@ function computeFeatures(rows) {
     const upper = h - Math.max(o, c);
     const lower = Math.min(o, c) - l;
     out.wick.push(range > 0 ? (upper - lower) / range : NaN);
+
+    // Вспомогательный ряд (НЕ признак сетки): медианный оборот в долларах за 96
+    // баров. Нужен только фильтру ликвидности.
+    const dv = [];
+    for (let j = i - 95; j <= i; j++) dv.push(rows[j][5] * rows[j][4]);
+    dv.sort((a, b) => a - b);
+    out.turn.push(dv[dv.length >> 1]);
   }
   return out;
 }
@@ -221,6 +241,9 @@ let allTs = [...new Set([...panel.values()].flatMap((p) => p.rows.map((r) => r[0
 // смотреть, держится ли знак и размер эффекта во второй половине, если первую
 // считать «где мы его увидели». Половина = 26 дней, это слабый тест, но
 // единственный доступный на 52 днях.
+if (FROM != null) allTs = allTs.filter((t) => t >= FROM);
+if (TO != null) allTs = allTs.filter((t) => t <= TO);
+
 const HALF = Number(argVal("--half", 0));
 if (HALF === 1 || HALF === 2) {
   const mid = Math.floor(allTs.length / 2);
@@ -315,10 +338,18 @@ function buildSlices(horizonBars) {
       const a = p.rows[i][4];
       const b = p.rows[i + horizonBars][4];
       if (!(a > 0) || !(b > 0)) continue;
-      items.push({ i, fwd: (b - a) / a, p });
+      items.push({ i, fwd: (b - a) / a, p, turn: p.feats.turn[i] });
     }
-    if (items.length < MIN_COINS_PER_TS) continue;
-    slices.push({ ts, items });
+    let kept = items;
+    if (MIN_TURN_PCT > 0) {
+      const withTurn = items.filter((x) => Number.isFinite(x.turn));
+      if (withTurn.length < MIN_COINS_PER_TS) continue;
+      withTurn.sort((a, b) => a.turn - b.turn);
+      const drop = Math.floor(withTurn.length * (MIN_TURN_PCT / 100));
+      kept = withTurn.slice(drop);
+    }
+    if (kept.length < MIN_COINS_PER_TS) continue;
+    slices.push({ ts, items: kept });
   }
   return slices;
 }
@@ -372,8 +403,10 @@ function randomMeans(slices, k, seed) {
 // ── Прогон ──────────────────────────────────────────────────────────────────
 
 const cells = [];
-for (const feature of FEATURES) {
-  for (const tail of TAILS) {
+const useFeatures = ONLY_FEATURES ? FEATURES.filter((f) => ONLY_FEATURES.includes(f)) : FEATURES;
+const useTails = ONLY_TAILS ? TAILS.filter((t) => ONLY_TAILS.includes(t)) : TAILS;
+for (const feature of useFeatures) {
+  for (const tail of useTails) {
     for (const hb of HORIZONS_BARS) cells.push({ feature, tail, horizonBars: hb });
   }
 }
@@ -382,8 +415,12 @@ console.log(`\nячеек: ${cells.length}, случайных отборов н
 const regimeLabels = buildRegimeLabels();
 const REGIMES = regimeLabels ? ["рост", "падение"] : [];
 if (regimeLabels) {
+  // Считаем ТОЛЬКО внутри рабочего окна: labels строятся по всей серии BTC, и
+  // печатать их целиком при активном --from/--to значит показывать режимы
+  // периода, который в прогон не входит (поймано 17.08 на holdout-прогоне).
+  const inWindow = new Set(allTs);
   const counts = {};
-  for (const v of regimeLabels.values()) counts[v] = (counts[v] || 0) + 1;
+  for (const [ts, v] of regimeLabels) if (inWindow.has(ts)) counts[v] = (counts[v] || 0) + 1;
   const d = (n) => ((n * BAR_MS) / 864e5).toFixed(0);
   console.log(`ось режимов (BTC vs 200д SMA): рост ${d(counts["рост"] || 0)}д, падение ${d(counts["падение"] || 0)}д`);
 } else {
@@ -417,8 +454,8 @@ for (const hb of HORIZONS_BARS) {
     byRegime[rg] = { slices: sub, nulls: nl, nullMean: nl.reduce((a, b) => a + b, 0) / nl.length };
   }
 
-  for (const feature of FEATURES) {
-    for (const tail of TAILS) {
+  for (const feature of useFeatures) {
+    for (const tail of useTails) {
       const a = actualMean(slices, feature, tail);
       const label = `${feature}.${tail}.${hb}b`;
       if (!Number.isFinite(a.mean)) {

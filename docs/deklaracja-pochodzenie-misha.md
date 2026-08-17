@@ -16,6 +16,7 @@
 - ✅ 29.07: добавлен абзац про запись «rosyjska/ukraińska» в собственном свид. о рождении
 - ✅ 29.07: дед Вацлав умер **17.08.1995**, вписано
 - ✅ 29.07: уровень польского указан честно — начало изучения, понимают отдельные слова, не говорят
+- ✅ 15.08: блок «zamiar osiedlenia się» переписан по фактическим документам — было «umowa o pracę», на деле **umowa zlecenia от 27.02.2026**; было «pod obecnym adresem od września 2025», на деле аренда с 27.10.2025 и meldunek с 09.03.2026. Выездов из Польши не было → `nieprzerwanie` оставлено, `data ostatniego wjazdu` = 04.02.2025.
 
 **Текст готов, вопросов нет.**
 
@@ -52,4 +53,4 @@ Historię naszego pochodzenia — Lwów, Gdańsk, ucieczkę rodziny z ziem polsk
 
 ### Okoliczności formalne i zamiar osiedlenia się
 
-Mieszkam w Polsce nieprzerwanie od 4 lutego 2025 r., a pod obecnym adresem od września 2025 r.; numer PESEL ze statusem UKR uzyskałem w marcu 2025 r. Jestem zatrudniony w Grid Dynamics (umowa o pracę oraz zeznanie PIT za 2025 r. w załączeniu), wynajmuję mieszkanie i mieszkam wspólnie z matką, nad którą sprawuję opiekę. Zamierzam osiedlić się w Polsce na stałe.
+Mieszkam w Polsce nieprzerwanie od 4 lutego 2025 r.; numer PESEL ze statusem UKR uzyskałem w marcu 2025 r. Pod obecnym adresem — ul. Literatów 6 m. 29, 05-520 Konstancin-Jeziorna — mieszkam od 27 października 2025 r. jako najemca lokalu, a od 9 marca 2026 r. jestem tam zameldowany na pobyt czasowy (umowa najmu oraz zaświadczenie o zameldowaniu w załączeniu). Wykonuję pracę na rzecz Grid Dynamics Poland sp. z o.o. z siedzibą w Krakowie na podstawie umowy zlecenia z dnia 27 lutego 2026 r. (umowa, zeznanie PIT-37 za 2025 r. oraz UPO w załączeniu). Mieszkam wspólnie z matką, Iryną Vlasovą, nad którą sprawuję opiekę i która złożyła własny wniosek o zezwolenie na pobyt stały z tytułu polskiego pochodzenia. Centrum moich interesów życiowych znajduje się w Polsce i zamierzam osiedlić się tu na stałe.
