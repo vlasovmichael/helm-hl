@@ -1,0 +1,410 @@
+// ─────────────────────────────────────────────────
+//  gridScan — предзаявленная сетка признаков поверх harness
+// ─────────────────────────────────────────────────
+// Это НЕ «агент перебирает гипотезы». Сетка фиксируется здесь, в коде, до
+// прогона, и её размер известен заранее — значит знаменатель поправки на
+// множественность честный. Свободный перебор даёт при alpha=0.05 одно ложное
+// срабатывание на каждые 20 попыток; на 400 сделках мы это уже проходили.
+//
+// ── СЕТКА (48 ячеек = 8 признаков × 2 хвоста × 3 горизонта) ────────────────
+// Признаки считаются ТОЛЬКО по барам ≤ t. Сигнал — попадание в верхний или
+// нижний дециль ПО СРЕЗУ РЫНКА в тот же момент времени (кросс-секция), а не по
+// квантилю всей выборки: квантиль по всей истории знает будущее, и на нём
+// «эдж» появляется из ничего.
+//
+//   mom4/mom16/mom96 — доходность за 4/16/96 баров (1ч/4ч/24ч): импульс
+//   rev1             — доходность за 1 бар: краткосрочный разворот
+//   atr14            — ATR(14)/close: уровень волатильности
+//   volshock         — объём за 4 бара / медиана объёма за 96: объёмный шок
+//   rangepos         — где close внутри диапазона 48 баров: пробой/прижатие
+//   wick             — асимметрия фитилей последнего бара
+//
+// Горизонты: 4, 16, 96 баров (1ч, 4ч, 24ч на 15m).
+//
+// ── Две ловушки, на которых такие прогоны врут чаще всего ──────────────────
+// 🚨 ПЕРЕКРЫТИЕ ОКОН. Соседние бары дают почти одно и то же событие, их
+//    форвардные окна перекрываются, наблюдения зависимы — и значимость
+//    раздувается в разы. Здесь на монету разрешено одно событие на горизонт:
+//    следующее не раньше, чем закроется окно предыдущего.
+// 🚨 ЗАГЛЯДЫВАНИЕ. Все признаки — из прошлого, дециль — из текущего среза
+//    рынка. Ни одна величина не использует бар, который ещё не закрылся.
+//
+// ── Что здесь НЕ проверяется ──────────────────────────────────────────────
+// ⚠️ Исполнимость. Форвардная доходность бара — это не PnL: нет спреда (а он
+//    на наших монетах 16 бп, см. postOnlySim), нет проскальзывания, нет стопа.
+//    Найденный тут эффект в 5 бп неторгуем. Порог осмысленности — десятки бп.
+// ⚠️ Режим. 52 дня — почти наверняка ОДИН режим рынка. Статус «подтверждено»
+//    на таком окне недостижим (harness, правило 4). Всё, что тут может
+//    получиться, — КАНДИДАТ, ждущий смены режима.
+//
+// Запуск:
+//   node tools/gridScan.mjs --register   # предзаявить сетку (один раз)
+//   node tools/gridScan.mjs              # прогон
+//   node tools/gridScan.mjs --k 300      # больше суррогатов (медленнее)
+
+import { setCandleSource, baselineTest } from "./baseline.mjs";
+import { loadGridCandles, gridCoins } from "./gridData.mjs";
+import { preregister, loadRegistry } from "./harness.mjs";
+
+const INTERVAL = "15m";
+const BAR_MS = 900_000;
+
+// Минимум монет в срезе, чтобы дециль вообще что-то значил.
+const MIN_COINS_PER_TS = 30;
+// Разогрев: самому длинному признаку нужно 96 баров предыстории.
+const WARMUP = 96;
+const DECILE = 0.1;
+// Потолок событий на ячейку. Мощность упирается не в это: при sd ~0.8% эффект
+// 5 бп ловится примерно на 2000 наблюдениях, 4000 — двойной запас. А без
+// потолка короткий горизонт даёт ~20 000 событий, и 200 суррогатов × 48 ячеек
+// превращаются в миллиарды операций без выигрыша в точности.
+// Прореживание РАВНОМЕРНОЕ по времени, а не случайное: случайное выкинуло бы
+// разные куски у разных ячеек, и ячейки перестали бы сравниваться между собой.
+const MAX_EVENTS = 4000;
+
+const FEATURES = ["mom4", "mom16", "mom96", "rev1", "atr14", "volshock", "rangepos", "wick"];
+const TAILS = ["top", "bottom"];
+const HORIZONS_BARS = [4, 16, 96];
+
+const args = process.argv.slice(2);
+const argVal = (n, d) => { const i = args.indexOf(n); return i === -1 ? d : args[i + 1]; };
+const K = Number(argVal("--k", 200));
+const DO_REGISTER = args.includes("--register");
+
+const HYP_ID = "grid-scan-2026-08";
+
+// ── Признаки ────────────────────────────────────────────────────────────────
+// rows: [t, o, h, l, c, v, n]
+
+function computeFeatures(rows) {
+  const N = rows.length;
+  const out = { mom4: [], mom16: [], mom96: [], rev1: [], atr14: [], volshock: [], rangepos: [], wick: [] };
+
+  // True Range для ATR
+  const tr = new Array(N).fill(NaN);
+  for (let i = 1; i < N; i++) {
+    const h = rows[i][2], l = rows[i][3], pc = rows[i - 1][4];
+    tr[i] = Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc));
+  }
+
+  for (let i = 0; i < N; i++) {
+    const c = rows[i][4];
+    if (i < WARMUP || !(c > 0)) {
+      for (const f of FEATURES) out[f].push(NaN);
+      continue;
+    }
+    const ret = (k) => {
+      const p = rows[i - k][4];
+      return p > 0 ? (c - p) / p : NaN;
+    };
+    out.mom4.push(ret(4));
+    out.mom16.push(ret(16));
+    out.mom96.push(ret(96));
+    out.rev1.push(ret(1));
+
+    let atr = 0;
+    for (let j = i - 13; j <= i; j++) atr += tr[j];
+    out.atr14.push(atr / 14 / c);
+
+    let vRecent = 0;
+    for (let j = i - 3; j <= i; j++) vRecent += rows[j][5];
+    const vHist = [];
+    for (let j = i - 95; j <= i; j++) vHist.push(rows[j][5]);
+    vHist.sort((a, b) => a - b);
+    const vMed = vHist[vHist.length >> 1];
+    out.volshock.push(vMed > 0 ? vRecent / 4 / vMed : NaN);
+
+    let hi = -Infinity, lo = Infinity;
+    for (let j = i - 47; j <= i; j++) {
+      if (rows[j][2] > hi) hi = rows[j][2];
+      if (rows[j][3] < lo) lo = rows[j][3];
+    }
+    out.rangepos.push(hi > lo ? (c - lo) / (hi - lo) : NaN);
+
+    const o = rows[i][1], h = rows[i][2], l = rows[i][3];
+    const range = h - l;
+    const upper = h - Math.max(o, c);
+    const lower = Math.min(o, c) - l;
+    out.wick.push(range > 0 ? (upper - lower) / range : NaN);
+  }
+  return out;
+}
+
+// ── Предзаявление ───────────────────────────────────────────────────────────
+// Стоит ДО загрузки данных намеренно: предзаявление не должно ни в каком виде
+// зависеть от того, что в данных видно.
+
+if (DO_REGISTER) {
+  preregister({
+    id: HYP_ID,
+    description:
+      "Сеточный поиск эджа на барах: 8 признаков × 2 хвоста × 3 горизонта = 48 ячеек. " +
+      "Сигнал — попадание монеты в дециль по кросс-секции рынка. Ищется условное среднее " +
+      "форвардной доходности, отличимое от нулевой модели «случайный момент».",
+    condition:
+      `признаки ${FEATURES.join("/")}; хвосты ${TAILS.join("/")}; горизонты ${HORIZONS_BARS.join("/")} баров по ${INTERVAL}; ` +
+      `дециль ${DECILE}; минимум ${MIN_COINS_PER_TS} монет в срезе; одно событие на монету на горизонт`,
+    side: "long",
+    holdMin: null,
+    rationale:
+      "Пересчёт 26.07: на уровне СДЕЛОК sd=2.79% при среднем +0.07%, поэтому для различения " +
+      "с нулём нужно >10 000 сделок — недостижимо. На уровне БАРА тех же пяти слоёв шума " +
+      "(стоп, трейл, комиссия, момент выхода, размер) нет: при sd 15-минутной доходности ~0.8% " +
+      "эффект 5 бп ловится примерно на 2000 наблюдениях. Это не новая стратегия и не новая идея — " +
+      "это перенос замера туда, где хватает мощности. Сетка фиксирована в коде ДО прогона, " +
+      "её размер (48) и есть знаменатель поправки на множественность.",
+    stopRule: {
+      cells: 48,
+      peeking: "запрещено — сетка прогоняется целиком одним заходом, ячейки не досыпаются",
+    },
+    evaluation:
+      "Порог ДО прогона: ячейка считается КАНДИДАТОМ, если (а) проходит FDR Benjamini-Hochberg " +
+      "при q=0.1 по всему реестру прогонов, И (б) |условное среднее| ≥ 20 бп — иначе эффект " +
+      "неторгуем: спред на наших монетах 16 бп (postOnlySim 17.08) плюс комиссия. " +
+      "Статус «подтверждено» на этом окне НЕДОСТИЖИМ: 52 дня — один режим рынка. " +
+      "Кандидат ждёт смены режима и повторного прогона на свежих данных.",
+    postHoc: false,
+    evaluateAfter: "прогон всей сетки одним заходом",
+  });
+  console.log(`\n✅ сетка предзаявлена как «${HYP_ID}» (48 ячеек). Теперь прогон без --register.`);
+  process.exit(0);
+}
+
+// Проверяем регистрацию до загрузки данных — падать после 30 секунд чтения
+// кэша из-за отсутствующей строки в реестре незачем.
+const reg = loadRegistry();
+if (!reg.hypotheses.some((h) => h.id === HYP_ID)) {
+  console.error(`гипотеза «${HYP_ID}» не зарегистрирована. Сначала: node tools/gridScan.mjs --register`);
+  process.exit(1);
+}
+
+// ── Загрузка панели ─────────────────────────────────────────────────────────
+
+console.log(`загружаю свечи ${INTERVAL}…`);
+const coins = gridCoins(INTERVAL);
+if (coins.length < MIN_COINS_PER_TS) {
+  console.error(`монет в кэше ${coins.length} — мало. Сначала node tools/gridData.mjs`);
+  process.exit(1);
+}
+
+const panel = new Map(); // coin → { rows, feats, idxByTs }
+for (const coin of coins) {
+  const c = loadGridCandles(coin, INTERVAL);
+  if (!c?.rows?.length || c.rows.length < WARMUP + 200) continue;
+  const idxByTs = new Map();
+  c.rows.forEach((r, i) => idxByTs.set(r[0], i));
+  panel.set(coin, { rows: c.rows, feats: computeFeatures(c.rows), idxByTs });
+}
+console.log(`монет пригодных: ${panel.size} из ${coins.length}`);
+
+// Источник свечей для нулевых моделей — тот же кэш.
+setCandleSource((coin) => loadGridCandles(coin, INTERVAL), BAR_MS);
+
+// Все метки времени, отсортированные.
+let allTs = [...new Set([...panel.values()].flatMap((p) => p.rows.map((r) => r[0])))].sort((a, b) => a - b);
+
+// ── Половина периода (--half 1|2) ──────────────────────────────────────────
+// Зачем: нулевая модель «случайный выбор монет» отвечает на вопрос «отличался
+// ли дециль от среднего ВНУТРИ этой истории». На одной реализации ответ почти
+// всегда «да», и p-value там измеряет выборку из фиксированного прошлого, а не
+// неопределённость будущего. Единственный тест на forward-вопрос — вне выборки:
+// смотреть, держится ли знак и размер эффекта во второй половине, если первую
+// считать «где мы его увидели». Половина = 26 дней, это слабый тест, но
+// единственный доступный на 52 днях.
+const HALF = Number(argVal("--half", 0));
+if (HALF === 1 || HALF === 2) {
+  const mid = Math.floor(allTs.length / 2);
+  allTs = HALF === 1 ? allTs.slice(0, mid) : allTs.slice(mid);
+}
+console.log(`меток времени: ${allTs.length}${HALF ? ` (половина ${HALF})` : ""}`);
+
+
+// ── ТЕСТ: «а если в тот же момент выбрать монеты наугад?» ───────────────────
+//
+// 🚨 ДВЕ ПРЕДЫДУЩИЕ НУЛЕВЫЕ МОДЕЛИ БЫЛИ НЕПРАВИЛЬНЫМИ (обе найдены 17.08).
+//
+// Попытка 1 — побарный суррогат (baseline.mjs mode='time'): каждое событие
+// переносится в случайный момент НЕЗАВИСИМО. Это разрушает кросс-секционную
+// связку (в одну метку срабатывают ~17 монет, и их доходности связаны —
+// рынок ходит вместе), разброс суррогата падает, значимость завышается.
+// Результат: 17 значимых ячеек из 48 с одинаковым знаком.
+//
+// Попытка 2 — общий сдвиг всей сетки на δ. Связку сохраняет, но не помогает:
+// события размазаны по всем 52 дням почти равномерно, поэтому средняя
+// доходность сдвинутого набора почти не зависит от δ. Разброс суррогата
+// схлопывается по другой причине, значимость завышается снова.
+// Результат: 21 ячейка из 48.
+//
+// Обе модели ломали ВРЕМЯ. Но признак выбирает не время — он выбирает МОНЕТУ
+// внутри уже заданного момента. Поэтому ломать надо именно отбор:
+//
+//   в каждый момент берём то же ЧИСЛО монет из того же набора доступных,
+//   но выбираем их СЛУЧАЙНО вместо дециля по признаку.
+//
+// Тогда автоматически вычитается всё общее: движение рынка, время суток,
+// кучность событий, режим, состав вселенной. Остаётся ровно один вопрос —
+// умеет ли признак выбрать монеты лучше жребия. Это и есть определение эджа.
+//
+// Побочный выигрыш: запрет перекрытия окон больше не нужен. Перекрытие
+// одинаково устроено у реальности и у суррогата, поэтому в сравнении оно
+// сокращается — а раньше его приходилось давить прореживанием, теряя данные.
+
+/** Детерминированный ГПСЧ (xorshift32). Тот же seed — тот же результат. */
+function makeRng(seed) {
+  let s = seed >>> 0 || 1;
+  return () => {
+    s ^= s << 13; s >>>= 0;
+    s ^= s >> 17;
+    s ^= s << 5; s >>>= 0;
+    return s / 4294967296;
+  };
+}
+
+/**
+ * Срезы по каждой метке времени для горизонта h: какие монеты доступны, их
+ * форвардная доходность и значения всех признаков. Строится один раз на
+ * горизонт и переиспользуется всеми 16 парами (признак × хвост).
+ */
+function buildSlices(horizonBars) {
+  const slices = [];
+  for (const ts of allTs) {
+    const items = [];
+    for (const [, p] of panel) {
+      const i = p.idxByTs.get(ts);
+      if (i === undefined || i < WARMUP) continue;
+      if (i + horizonBars >= p.rows.length) continue;
+      const a = p.rows[i][4];
+      const b = p.rows[i + horizonBars][4];
+      if (!(a > 0) || !(b > 0)) continue;
+      items.push({ i, fwd: (b - a) / a, p });
+    }
+    if (items.length < MIN_COINS_PER_TS) continue;
+    slices.push(items);
+  }
+  return slices;
+}
+
+/** Среднее по децилю, отобранному признаком. */
+function actualMean(slices, feature, tail) {
+  let sum = 0, n = 0;
+  for (const items of slices) {
+    const vals = [];
+    for (const it of items) {
+      const v = it.p.feats[feature][it.i];
+      if (Number.isFinite(v)) vals.push({ v, fwd: it.fwd });
+    }
+    if (vals.length < MIN_COINS_PER_TS) continue;
+    vals.sort((a, b) => a.v - b.v);
+    const cut = Math.max(1, Math.floor(vals.length * DECILE));
+    const picked = tail === "top" ? vals.slice(-cut) : vals.slice(0, cut);
+    for (const x of picked) { sum += x.fwd; n++; }
+  }
+  return { mean: n ? sum / n : NaN, n };
+}
+
+/**
+ * Распределение среднего при случайном отборе. НЕ зависит ни от признака, ни
+ * от хвоста — только от горизонта, поэтому считается один раз на горизонт и
+ * переиспользуется всеми 16 ячейками. Это же делает прогон быстрым.
+ */
+function randomMeans(slices, k, seed) {
+  const rnd = makeRng(seed);
+  const out = [];
+  for (let j = 0; j < k; j++) {
+    let sum = 0, n = 0;
+    for (const items of slices) {
+      const len = items.length;
+      const cut = Math.max(1, Math.floor(len * DECILE));
+      // Частичный Фишер–Йейтс: cut случайных без повторов, без копии массива.
+      const idx = [];
+      const used = new Set();
+      while (idx.length < cut) {
+        const r = Math.floor(rnd() * len);
+        if (used.has(r)) continue;
+        used.add(r); idx.push(r);
+      }
+      for (const r of idx) { sum += items[r].fwd; n++; }
+    }
+    if (n) out.push(sum / n);
+  }
+  return out;
+}
+
+// ── Прогон ──────────────────────────────────────────────────────────────────
+
+const cells = [];
+for (const feature of FEATURES) {
+  for (const tail of TAILS) {
+    for (const hb of HORIZONS_BARS) cells.push({ feature, tail, horizonBars: hb });
+  }
+}
+console.log(`\nячеек: ${cells.length}, случайных отборов на горизонт: ${K}\n`);
+
+const results = [];
+for (const hb of HORIZONS_BARS) {
+  process.stdout.write(`\rгоризонт ${hb} баров: строю срезы…            `);
+  const slices = buildSlices(hb);
+  process.stdout.write(`\rгоризонт ${hb} баров: ${slices.length} срезов, случайный отбор ×${K}…   `);
+  const nulls = randomMeans(slices, K, 7 + hb);
+  const nullMean = nulls.reduce((a, b) => a + b, 0) / nulls.length;
+
+  for (const feature of FEATURES) {
+    for (const tail of TAILS) {
+      const a = actualMean(slices, feature, tail);
+      const label = `${feature}.${tail}.${hb}b`;
+      if (!Number.isFinite(a.mean)) {
+        results.push({ feature, tail, horizonBars: hb, label, n: a.n, note: "нет данных" });
+        continue;
+      }
+      const dev = Math.abs(a.mean - nullMean);
+      const extreme = nulls.filter((x) => Math.abs(x - nullMean) >= dev).length;
+      results.push({
+        feature, tail, horizonBars: hb, label,
+        n: a.n,
+        edgeBp: (a.mean - nullMean) * 10_000,
+        p: (1 + extreme) / (nulls.length + 1),
+      });
+    }
+  }
+}
+console.log("\n");
+
+// ── Вывод ───────────────────────────────────────────────────────────────────
+
+const scored = results.filter((r) => r.p != null);
+scored.sort((a, b) => a.p - b.p);
+
+const m = results.length;
+const q = 0.1;
+let kMax = 0;
+scored.forEach((r, i) => { if (r.p <= ((i + 1) / m) * q) kMax = i + 1; });
+const fdrThreshold = kMax ? (kMax / m) * q : null;
+
+const sgn = (x) => (x == null ? "—" : `${x >= 0 ? "+" : "−"}${Math.abs(x).toFixed(1)}`);
+
+console.log(`  СЕТОЧНЫЙ ПРОГОН — ${panel.size} монет, ${INTERVAL}, ${allTs.length} меток времени`);
+console.log(`  нулевая модель: случайный выбор монет в тот же момент, ×${K}`);
+console.log(`  ячеек ${m}, с результатом ${scored.length}\n`);
+console.log(`  ${"ячейка".padEnd(22)} ${"n".padStart(7)} ${"эдж,бп".padStart(9)} ${"p".padStart(7)}`);
+console.log(`  ${"─".repeat(50)}`);
+for (const r of scored.slice(0, Number(argVal("--top", 12)))) {
+  console.log(`  ${r.label.padEnd(22)} ${String(r.n).padStart(7)} ${sgn(r.edgeBp).padStart(9)} ${r.p.toFixed(4).padStart(7)}`);
+}
+
+console.log(`\n  ── ОТБОР ПО ПРЕДЗАЯВЛЕННОМУ ПОРОГУ ──`);
+console.log(`  FDR q=${q}: порог p ≤ ${fdrThreshold != null ? fdrThreshold.toFixed(5) : "ни одна ячейка не прошла"}`);
+const survivors = fdrThreshold == null ? [] : scored.filter((r) => r.p <= fdrThreshold);
+const tradeable = survivors.filter((r) => Math.abs(r.edgeBp) >= 20);
+
+if (!survivors.length) {
+  console.log(`  Ни одна ячейка не прошла поправку на множественность.`);
+} else {
+  console.log(`  Прошли FDR (${survivors.length}): ${survivors.map((s) => s.label).join(", ")}`);
+  if (!tradeable.length) {
+    console.log(`\n  Но ни одна не дотянула до 20 бп — все эффекты меньше спреда (16 бп). Неторгуемо.`);
+  } else {
+    console.log(`\n  КАНДИДАТЫ (FDR + ≥20 бп): ${tradeable.map((t) => `${t.label} ${sgn(t.edgeBp)}бп`).join(", ")}`);
+    console.log(`  ⚠️  КАНДИДАТЫ, не находки: 52 дня = один режим рынка.`);
+  }
+}
+console.log("");

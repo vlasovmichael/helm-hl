@@ -36,8 +36,12 @@ const TIMEOUT_MS = 8_000;
 // Монеты: те, которыми ты реально торгуешь руками (топ по числу исполнений в
 // data/fills/). Список фиксированный, а не «топ по объёму рынка» — мерить надо
 // стакан ТВОИХ монет, у CASHCAT и BTC совершенно разная ликвидность.
+// Пересобран 17.08 по факту входов за 30 дней (tools/postOnlySim.mjs показал,
+// что покрытие упирается не в список, а в срок накопления — но платить весом за
+// монеты с нулём входов всё равно незачем). Выброшены MANTA/DYDX/AERO/RESOLV
+// (0 входов), добавлен живой хвост. HYPE оставлен: он на экране, не в сделках.
 const COINS = (process.env.BOOK_COINS ||
-  "CASHCAT,ACE,HMSTR,HYPE,KAITO,MANTA,PUMP,DYDX,JTO,XPL,AERO,RESOLV"
+  "CASHCAT,ACE,KAITO,PUMP,SKR,HYPER,kSHIB,HEMI,CHIP,HMSTR,PENGU,JTO,XPL,HYPE"
 ).split(",").map((c) => c.trim()).filter(Boolean);
 
 const once = process.argv.includes("--once");

@@ -79,9 +79,33 @@ export function rng(seed = 12345) {
 }
 
 // ── работа со свечами ──
+//
+// Источник подставляемый (17.08): сеточный поиск (tools/gridScan.mjs) держит
+// свой кэш — вся вселенная HL, 15m, с объёмом — в data/grid/candles. Формат
+// строк совместим по первым пяти полям [t,o,h,l,c], поэтому весь код ниже
+// работает с обоими источниками без изменений. По умолчанию — borrowed-кэш,
+// то есть поведение прежних инструментов не меняется.
+//
+// Нулевые модели и ГПСЧ переиспользуются намеренно: заводить второй бейзлайн
+// под сетку значило бы иметь две реализации защиты от самообмана, и чинить
+// баги (как тот в LCG 14.08) пришлось бы дважды.
 const cache = new Map();
+let candleSource = loadCandles;
+let barMs = BAR_MS;
+
+/**
+ * Подменить источник свечей и шаг бара. Сбрасывает кэш: смешивать свечи из
+ * двух источников в одной таблице нельзя — молча получились бы разные
+ * таймфреймы у разных монет.
+ */
+export function setCandleSource(fn, intervalMs) {
+  candleSource = fn || loadCandles;
+  barMs = intervalMs || BAR_MS;
+  cache.clear();
+}
+
 function candles(coin) {
-  if (!cache.has(coin)) cache.set(coin, loadCandles(coin));
+  if (!cache.has(coin)) cache.set(coin, candleSource(coin));
   return cache.get(coin);
 }
 
@@ -166,7 +190,7 @@ function surrogate(ev, mode, rnd, ctx) {
     const ts = day * DAY_MS + tod;
     if (ts < first || ts + ev.holdMin * 60_000 > last) continue;
     // Не даём суррогату совпасть с настоящим входом (±1 бар)
-    if (Math.abs(ts - ev.entryTime) <= BAR_MS) continue;
+    if (Math.abs(ts - ev.entryTime) <= barMs) continue;
     return { ...ev, entryTime: ts };
   }
   return null;
