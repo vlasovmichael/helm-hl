@@ -6,6 +6,8 @@
 
 import { escapeHtml } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
+import { createMorphIcon } from "../core/iconMorph.js";
+import { PLAYBACK_ICONS } from "../core/icons.js";
 
 const LOG_BUFFER_MAX = 1000;
 const logsState = {
@@ -113,17 +115,32 @@ export function bindLogsUi() {
       renderLogs();
     });
   }
+  // Иконка ⏸↔▶ перетекает вместо подмены эмодзи: глиф зависел от шрифта ОС и
+  // выпадал из набора остальных иконок.
+  const pauseIco = document.getElementById("logs-pause-ico");
+  const pauseIcon = pauseIco
+    ? createMorphIcon(pauseIco, PLAYBACK_ICONS, "pause")
+    : null;
+
+  // Пауза выставляется из ДВУХ мест (клик и авто-возврат по скроллу вниз) —
+  // держим их на одной функции, иначе кнопка и статус разъезжаются.
+  const setPaused = (next) => {
+    if (logsState.paused === next) return;
+    logsState.paused = next;
+    pauseIcon?.to(next ? "play" : "pause");
+    pauseBtn?.classList.toggle("active", next);
+    const label = next ? "Resume autoscroll" : "Pause autoscroll";
+    if (pauseBtn) {
+      pauseBtn.title = label;
+      pauseBtn.setAttribute("aria-label", label);
+    }
+    const status = document.getElementById("logs-status");
+    if (status) status.textContent = next ? "paused" : "live";
+    if (!next && viewport) viewport.scrollTop = viewport.scrollHeight;
+  };
+
   if (pauseBtn) {
-    pauseBtn.addEventListener("click", () => {
-      logsState.paused = !logsState.paused;
-      pauseBtn.textContent = logsState.paused ? "▶" : "⏸";
-      pauseBtn.classList.toggle("active", logsState.paused);
-      document.getElementById("logs-status").textContent = logsState.paused
-        ? "paused"
-        : "live";
-      if (!logsState.paused && viewport)
-        viewport.scrollTop = viewport.scrollHeight;
-    });
+    pauseBtn.addEventListener("click", () => setPaused(!logsState.paused));
   }
   if (filters) {
     filters.addEventListener("click", (ev) => {
@@ -142,13 +159,8 @@ export function bindLogsUi() {
     viewport.addEventListener("scroll", () => {
       const atBottom =
         viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 30;
-      if (atBottom && logsState.paused) {
-        // user scrolled back to bottom — resume
-        logsState.paused = false;
-        pauseBtn.textContent = "⏸";
-        pauseBtn.classList.remove("active");
-        document.getElementById("logs-status").textContent = "live";
-      }
+      // user scrolled back to bottom — resume
+      if (atBottom && logsState.paused) setPaused(false);
     });
   }
 }

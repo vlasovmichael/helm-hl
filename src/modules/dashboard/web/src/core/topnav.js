@@ -8,44 +8,7 @@
 
 import { initNotifications } from "../features/notifications.js";
 import { createMorphIcon } from "./iconMorph.js";
-import { BELL_ICONS } from "./icons.js";
-
-const ICONS = {
-  dashboard: `
-    <rect x="3" y="3" width="7" height="9" rx="1" />
-    <rect x="14" y="3" width="7" height="5" rx="1" />
-    <rect x="14" y="12" width="7" height="9" rx="1" />
-    <rect x="3" y="16" width="7" height="5" rx="1" />`,
-  statistics: `
-    <circle cx="12" cy="12" r="9" />
-    <circle cx="12" cy="12" r="4" />
-    <line x1="12" y1="1" x2="12" y2="5" />
-    <line x1="12" y1="19" x2="12" y2="23" />
-    <line x1="1" y1="12" x2="5" y2="12" />
-    <line x1="19" y1="12" x2="23" y2="12" />`,
-  ledger: `
-    <path d="M4 5a2 2 0 0 1 2-2h12a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2z" />
-    <line x1="4" y1="17" x2="19" y2="17" />
-    <line x1="9" y1="3" x2="9" y2="21" />`,
-  lab: `
-    <path d="M9 3h6M10 3v6.5L5.5 17a2 2 0 0 0 1.8 3h9.4a2 2 0 0 0 1.8-3L14 9.5V3" />
-    <line x1="8" y1="14" x2="16" y2="14" />`,
-  orderbook: `
-    <line x1="4" y1="6" x2="13" y2="6" />
-    <line x1="4" y1="10" x2="17" y2="10" />
-    <line x1="4" y1="14" x2="10" y2="14" />
-    <line x1="4" y1="18" x2="15" y2="18" />`,
-  journal: `
-    <path d="M5 3h11a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
-    <line x1="7" y1="7" x2="13" y2="7" />
-    <path d="M7 14l2.5-2.5L12 14l3-3.5" />`,
-  oi: `
-    <line x1="3" y1="21" x2="21" y2="21" />
-    <line x1="3" y1="21" x2="3" y2="3" />
-    <rect x="6" y="12" width="3" height="6" rx="0.5" />
-    <rect x="11" y="8" width="3" height="10" rx="0.5" />
-    <rect x="16" y="4" width="3" height="14" rx="0.5" />`,
-};
+import { BELL_ICONS, NAV_ICONS } from "./icons.js";
 
 const LINKS = [
   { key: "dashboard", href: "/", label: "Dashboard" },
@@ -63,8 +26,8 @@ const navLink = (l, active) => {
   return `
     <a class="nav-link${isActive ? " active" : ""}" href="${l.href}"${
       isActive ? ' aria-current="page"' : ""
-    }${l.title ? ` title="${l.title}"` : ""}>
-      <svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true">${ICONS[l.key]}</svg>
+    }${l.title ? ` title="${l.title}"` : ""} data-nav="${l.key}">
+      <svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true">${NAV_ICONS[l.key].rest}</svg>
       ${l.label}
     </a>`;
 };
@@ -104,6 +67,30 @@ export function mountTopnav(active) {
     </div>`;
   initNotifications();
   mountBellMorph();
+  mountNavMorph(nav);
+}
+
+/**
+ * Иконки ссылок оживают под курсором и при фокусе с клавиатуры.
+ *
+ * pointerenter/leave, а не mouseenter: на тач-экране pointerenter приходит
+ * вместе с тапом, и иконка успевает отыграть до ухода на другую страницу.
+ * focus/blur дублируют то же для тех, кто ходит табом, — иначе анимация
+ * доставалась бы только мышке.
+ */
+function mountNavMorph(nav) {
+  for (const link of nav.querySelectorAll(".nav-link[data-nav]")) {
+    const set = NAV_ICONS[link.dataset.nav];
+    const svg = link.querySelector(".nav-ico");
+    if (!set || !svg) continue;
+    const icon = createMorphIcon(svg, set, "rest");
+    const wake = () => icon.to("hover");
+    const rest = () => icon.to("rest");
+    link.addEventListener("pointerenter", wake);
+    link.addEventListener("pointerleave", rest);
+    link.addEventListener("focus", wake);
+    link.addEventListener("blur", rest);
+  }
 }
 
 /**

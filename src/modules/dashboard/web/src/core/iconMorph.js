@@ -285,8 +285,23 @@ function solvePair(a, b) {
   return { src, dst: unapplyT(b.pts, T), T, closed };
 }
 
-const buildMorph = (fromMarkup, toMarkup) =>
-  pairShapes(sampleMarkup(fromMarkup), sampleMarkup(toMarkup)).map(([a, b]) => solvePair(a, b));
+// Пара «откуда→куда» разбирается один раз на всё приложение: ховер по навбару
+// дёргает это на каждое наведение, а результат для одной пары разметок всегда
+// один и тот же. Кадры из него только ЧИТАЮТСЯ (frameToPath ничего не меняет),
+// поэтому запись безопасно делить между иконками.
+const morphCache = new Map();
+
+function buildMorph(fromMarkup, toMarkup) {
+  const key = fromMarkup + " " + toMarkup;
+  let parts = morphCache.get(key);
+  if (!parts) {
+    parts = pairShapes(sampleMarkup(fromMarkup), sampleMarkup(toMarkup)).map(([a, b]) =>
+      solvePair(a, b),
+    );
+    morphCache.set(key, parts);
+  }
+  return parts;
+}
 
 const round = (v) => Math.round(v * 100) / 100 + " ";
 
