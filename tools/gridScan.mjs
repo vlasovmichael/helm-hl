@@ -46,8 +46,16 @@ import { setCandleSource, baselineTest } from "./baseline.mjs";
 import { loadGridCandles, gridCoins } from "./gridData.mjs";
 import { preregister, loadRegistry } from "./harness.mjs";
 
-const INTERVAL = "15m";
-const BAR_MS = 900_000;
+const args = process.argv.slice(2);
+const argVal = (n, d) => { const i = args.indexOf(n); return i === -1 ? d : args[i + 1]; };
+
+const IV_MS = {
+  "1m": 60_000, "5m": 300_000, "15m": 900_000,
+  "1h": 3_600_000, "4h": 14_400_000, "1d": 86_400_000,
+};
+const INTERVAL = argVal("--interval", "15m");
+const BAR_MS = IV_MS[INTERVAL];
+if (!BAR_MS) { console.error(`неизвестный интервал ${INTERVAL}`); process.exit(1); }
 
 // Минимум монет в срезе, чтобы дециль вообще что-то значил.
 const MIN_COINS_PER_TS = 30;
@@ -64,14 +72,16 @@ const MAX_EVENTS = 4000;
 
 const FEATURES = ["mom4", "mom16", "mom96", "rev1", "atr14", "volshock", "rangepos", "wick"];
 const TAILS = ["top", "bottom"];
-const HORIZONS_BARS = [4, 16, 96];
+const HORIZONS_BARS = String(argVal("--horizons", "4,16,96")).split(",").map(Number).filter((x) => x > 0);
 
-const args = process.argv.slice(2);
-const argVal = (n, d) => { const i = args.indexOf(n); return i === -1 ? d : args[i + 1]; };
 const K = Number(argVal("--k", 200));
 const DO_REGISTER = args.includes("--register");
 
-const HYP_ID = "grid-scan-2026-08";
+// Гипотеза своя на каждый интервал: спецификация сетки (таймфрейм + горизонты)
+// входит в условие, а переиспользовать чужое предзаявление под другую
+// спецификацию — это и есть подгонка через чёрный ход. Каждая новая сетка
+// добавляет свои ячейки в знаменатель FDR по всему реестру.
+const HYP_ID = argVal("--id", INTERVAL === "15m" ? "grid-scan-2026-08" : `grid-scan-${INTERVAL}-2026-08`);
 
 // ── Признаки ────────────────────────────────────────────────────────────────
 // rows: [t, o, h, l, c, v, n]
@@ -265,6 +275,35 @@ function makeRng(seed) {
  * форвардная доходность и значения всех признаков. Строится один раз на
  * горизонт и переиспользуется всеми 16 парами (признак × хвост).
  */
+// ── Ось режимов рынка ───────────────────────────────────────────────────────
+// Правило 4 харнесса: статус «подтверждено» недостижим на одном режиме. Чтобы
+// его вообще можно было получить, нужна ось, и она обязана быть объявлена ДО
+// прогона и вычисляться механически — иначе граница режимов подгоняется под
+// результат. Берём самую стандартную и неоспоримую: BTC выше/ниже своей
+// 200-ДНЕВНОЙ средней. Никаких порогов «на глаз».
+//
+// ⚠️ На 15m 200 дней = 19 200 баров, а у нас 5000 ⇒ ось построить нельзя, и
+// функция честно возвращает null вместо того, чтобы «что-нибудь придумать».
+// Именно поэтому весь смысл 4h: 833 дня дают и 200-дневную среднюю, и оба
+// режима внутри окна.
+function buildRegimeLabels() {
+  const btc = panel.get("BTC");
+  if (!btc) return null;
+  const barsPer200d = Math.round((200 * 864e5) / BAR_MS);
+  if (btc.rows.length < barsPer200d + 50) return null;
+
+  const labels = new Map(); // ts → 'рост' | 'падение'
+  let sum = 0;
+  for (let i = 0; i < btc.rows.length; i++) {
+    sum += btc.rows[i][4];
+    if (i >= barsPer200d) sum -= btc.rows[i - barsPer200d][4];
+    if (i < barsPer200d) continue;
+    const sma = sum / barsPer200d;
+    labels.set(btc.rows[i][0], btc.rows[i][4] >= sma ? "рост" : "падение");
+  }
+  return labels;
+}
+
 function buildSlices(horizonBars) {
   const slices = [];
   for (const ts of allTs) {
@@ -279,7 +318,7 @@ function buildSlices(horizonBars) {
       items.push({ i, fwd: (b - a) / a, p });
     }
     if (items.length < MIN_COINS_PER_TS) continue;
-    slices.push(items);
+    slices.push({ ts, items });
   }
   return slices;
 }
@@ -287,7 +326,7 @@ function buildSlices(horizonBars) {
 /** Среднее по децилю, отобранному признаком. */
 function actualMean(slices, feature, tail) {
   let sum = 0, n = 0;
-  for (const items of slices) {
+  for (const { items } of slices) {
     const vals = [];
     for (const it of items) {
       const v = it.p.feats[feature][it.i];
@@ -312,7 +351,7 @@ function randomMeans(slices, k, seed) {
   const out = [];
   for (let j = 0; j < k; j++) {
     let sum = 0, n = 0;
-    for (const items of slices) {
+    for (const { items } of slices) {
       const len = items.length;
       const cut = Math.max(1, Math.floor(len * DECILE));
       // Частичный Фишер–Йейтс: cut случайных без повторов, без копии массива.
@@ -340,6 +379,27 @@ for (const feature of FEATURES) {
 }
 console.log(`\nячеек: ${cells.length}, случайных отборов на горизонт: ${K}\n`);
 
+const regimeLabels = buildRegimeLabels();
+const REGIMES = regimeLabels ? ["рост", "падение"] : [];
+if (regimeLabels) {
+  const counts = {};
+  for (const v of regimeLabels.values()) counts[v] = (counts[v] || 0) + 1;
+  const d = (n) => ((n * BAR_MS) / 864e5).toFixed(0);
+  console.log(`ось режимов (BTC vs 200д SMA): рост ${d(counts["рост"] || 0)}д, падение ${d(counts["падение"] || 0)}д`);
+} else {
+  console.log(`ось режимов НЕДОСТУПНА на ${INTERVAL}: 200 дней не влезают в 5000 баров ⇒ окно = один режим`);
+}
+
+/** Эдж ячейки на подмножестве срезов. Своя нулевая модель на каждое подмножество:
+ *  переиспользовать нули полного окна нельзя — у режимов разные средние. */
+function cellEdge(slices, feature, tail, nulls, nullMean) {
+  const a = actualMean(slices, feature, tail);
+  if (!Number.isFinite(a.mean)) return null;
+  const dev = Math.abs(a.mean - nullMean);
+  const extreme = nulls.filter((x) => Math.abs(x - nullMean) >= dev).length;
+  return { n: a.n, edgeBp: (a.mean - nullMean) * 10_000, p: (1 + extreme) / (nulls.length + 1) };
+}
+
 const results = [];
 for (const hb of HORIZONS_BARS) {
   process.stdout.write(`\rгоризонт ${hb} баров: строю срезы…            `);
@@ -347,6 +407,15 @@ for (const hb of HORIZONS_BARS) {
   process.stdout.write(`\rгоризонт ${hb} баров: ${slices.length} срезов, случайный отбор ×${K}…   `);
   const nulls = randomMeans(slices, K, 7 + hb);
   const nullMean = nulls.reduce((a, b) => a + b, 0) / nulls.length;
+
+  // Подмножества по режиму + свои нули для каждого.
+  const byRegime = {};
+  for (const rg of REGIMES) {
+    const sub = slices.filter((s) => regimeLabels.get(s.ts) === rg);
+    if (sub.length < 50) continue;
+    const nl = randomMeans(sub, K, 21 + hb + rg.length);
+    byRegime[rg] = { slices: sub, nulls: nl, nullMean: nl.reduce((a, b) => a + b, 0) / nl.length };
+  }
 
   for (const feature of FEATURES) {
     for (const tail of TAILS) {
@@ -358,11 +427,17 @@ for (const hb of HORIZONS_BARS) {
       }
       const dev = Math.abs(a.mean - nullMean);
       const extreme = nulls.filter((x) => Math.abs(x - nullMean) >= dev).length;
+      const perRegime = {};
+      for (const [rg, ctx] of Object.entries(byRegime)) {
+        const e = cellEdge(ctx.slices, feature, tail, ctx.nulls, ctx.nullMean);
+        if (e) perRegime[rg] = e;
+      }
       results.push({
         feature, tail, horizonBars: hb, label,
         n: a.n,
         edgeBp: (a.mean - nullMean) * 10_000,
         p: (1 + extreme) / (nulls.length + 1),
+        perRegime,
       });
     }
   }
@@ -403,8 +478,36 @@ if (!survivors.length) {
   if (!tradeable.length) {
     console.log(`\n  Но ни одна не дотянула до 20 бп — все эффекты меньше спреда (16 бп). Неторгуемо.`);
   } else {
-    console.log(`\n  КАНДИДАТЫ (FDR + ≥20 бп): ${tradeable.map((t) => `${t.label} ${sgn(t.edgeBp)}бп`).join(", ")}`);
-    console.log(`  ⚠️  КАНДИДАТЫ, не находки: 52 дня = один режим рынка.`);
+    console.log(`\n  ПРОШЛИ FDR + ≥20 бп: ${tradeable.map((t) => `${t.label} ${sgn(t.edgeBp)}бп`).join(", ")}`);
+
+    if (!REGIMES.length) {
+      console.log(`  ⚠️  КАНДИДАТЫ, не находки: ось режимов на ${INTERVAL} недоступна ⇒ окно = один режим.`);
+    } else {
+      // Правило 4 харнесса в исполняемом виде: эффект, который есть только в
+      // одном режиме, — это бета. Так умерла нянька, так умер oi-up-px-flat.
+      console.log(`\n  ── ПРОВЕРКА ПО РЕЖИМАМ (BTC vs 200д SMA) ──`);
+      console.log(`  ${"ячейка".padEnd(22)} ${"всё".padStart(9)} ${"рост".padStart(9)} ${"падение".padStart(10)}   вердикт`);
+      const survivors2 = [];
+      for (const t of tradeable) {
+        const up = t.perRegime["рост"], dn = t.perRegime["падение"];
+        let verdict;
+        if (!up || !dn) verdict = "нет данных в одном из режимов";
+        else if (up.edgeBp * dn.edgeBp < 0) verdict = "ЗНАК ПЕРЕВЕРНУЛСЯ = бета";
+        else if (Math.abs(up.edgeBp) < 20 || Math.abs(dn.edgeBp) < 20) verdict = "в одном режиме <20бп";
+        else { verdict = "✅ ДЕРЖИТСЯ В ОБОИХ"; survivors2.push(t); }
+        console.log(
+          `  ${t.label.padEnd(22)} ${sgn(t.edgeBp).padStart(9)} ${(up ? sgn(up.edgeBp) : "—").padStart(9)}` +
+          ` ${(dn ? sgn(dn.edgeBp) : "—").padStart(10)}   ${verdict}`,
+        );
+      }
+      console.log("");
+      if (!survivors2.length) {
+        console.log(`  Ни одна ячейка не держится в обоих режимах ⇒ эджа нет, есть бета.`);
+      } else {
+        console.log(`  🔬 ВЫЖИЛИ НА ДВУХ РЕЖИМАХ: ${survivors2.map((t) => t.label).join(", ")}`);
+        console.log(`  Это НЕ «работает». Это право идти на holdout (лестница статусов харнесса).`);
+      }
+    }
   }
 }
 console.log("");
