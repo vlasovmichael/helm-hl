@@ -7,6 +7,8 @@
 // ─────────────────────────────────────────────────
 
 import { initNotifications } from "../features/notifications.js";
+import { createMorphIcon } from "./iconMorph.js";
+import { BELL_ICONS } from "./icons.js";
 
 const ICONS = {
   dashboard: `
@@ -69,7 +71,7 @@ const navLink = (l, active) => {
 
 /**
  * Рендерит topnav в placeholder `#topnav`. Вызывать ДО bindTheme() — иначе
- * .theme-btn ещё не существуют в DOM.
+ * #theme-toggle ещё не существует в DOM.
  * @param {'dashboard'|'statistics'|'ledger'|'lab'} active
  */
 export function mountTopnav(active) {
@@ -96,11 +98,35 @@ export function mountTopnav(active) {
           <div class="notif-list" id="notif-list"></div>
         </div>
       </div>
-      <div class="theme-switcher" role="group" aria-label="Theme">
-        <button class="theme-btn" data-theme="auto" title="Auto (system)">Auto</button>
-        <button class="theme-btn" data-theme="light" title="Light">Light</button>
-        <button class="theme-btn" data-theme="dark" title="Dark">Dark</button>
-      </div>
+      <button class="theme-toggle" id="theme-toggle" type="button">
+        <svg class="nav-ico" id="theme-ico" viewBox="0 0 24 24" aria-hidden="true"></svg>
+      </button>
     </div>`;
   initNotifications();
+  mountBellMorph();
+}
+
+/**
+ * Колокольчик перетекает idle ↔ unread. Морф ведёт СОСТОЯНИЕ (висят ли
+ * непрочитанные), а не событие — за «дзынь» отвечает CSS-класс .is-ringing,
+ * который ставит notifications.js.
+ *
+ * Слушаем badge, а не зовёмся из notifications.js: там ровно один источник
+ * правды (renderBadge прячет/показывает .notif-badge), и подписка не заставляет
+ * фичу знать про существование морфа.
+ */
+function mountBellMorph() {
+  const svg = document.querySelector(".notif-bell");
+  const badge = document.getElementById("notif-badge");
+  if (!svg || !badge) return;
+
+  const bell = createMorphIcon(svg, BELL_ICONS, "idle");
+  const sync = () => bell.to(badge.hidden ? "idle" : "unread");
+
+  // hidden — атрибут, поэтому ловится attributes-наблюдателем.
+  new MutationObserver(sync).observe(badge, {
+    attributes: true,
+    attributeFilter: ["hidden"],
+  });
+  sync();
 }

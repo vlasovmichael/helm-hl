@@ -285,15 +285,22 @@ function createModal(io) {
     return `${escapeHtml(fmtPrice(botStop))} <i class="tt-row__sub">−${Number(ctx.stopDistPct).toFixed(1)}% ATR</i>`;
   }
 
+  /** Префикс id пунктов выпадашки (для aria-activedescendant). */
+  const COMBO_OPT_ID = "tt-coin-opt-";
+
   /** Выпадашка подсказок под полем монеты. Пусто → ничего не рисуем. */
   function suggestList() {
     if (!state.suggestOpen) return "";
     const items = suggestCoins(state.coin, ctx.coins);
     if (!items.length) return "";
+    // id на каждом пункте — чтобы input мог указать на подсвеченный через
+    // aria-activedescendant: без этого скринридер читает список, но молчит о
+    // том, где сейчас стоит выбор при навигации стрелками.
     return `<ul class="tt-combo__list" role="listbox">${items
       .map(
         (c, i) =>
           `<li class="tt-combo__item ${i === state.suggestIdx ? "is-on" : ""}" role="option"
+               id="${COMBO_OPT_ID}${i}"
                aria-selected="${i === state.suggestIdx}" data-pick="${escapeHtml(c)}">${escapeHtml(c)}</li>`,
       )
       .join("")}</ul>`;
@@ -599,6 +606,10 @@ function createModal(io) {
       combo.querySelector(".tt-combo__list")?.remove();
       combo.insertAdjacentHTML("beforeend", suggestList());
       input.setAttribute("aria-expanded", state.suggestOpen ? "true" : "false");
+      // Указываем на подсвеченный пункт, только если он реально нарисован.
+      const active = combo.querySelector(".tt-combo__item.is-on");
+      if (active) input.setAttribute("aria-activedescendant", active.id);
+      else input.removeAttribute("aria-activedescendant");
       combo.querySelectorAll("[data-pick]").forEach((li) => {
         // mousedown, а не click: blur поля успел бы закрыть список раньше клика.
         li.addEventListener("mousedown", (e) => {
@@ -647,6 +658,12 @@ function createModal(io) {
         state.suggestOpen = true;
         const step = e.key === "ArrowDown" ? 1 : -1;
         state.suggestIdx = (state.suggestIdx + step + items.length) % items.length;
+        redrawList();
+      } else if ((e.key === "Home" || e.key === "End") && state.suggestOpen && items.length) {
+        // Прыжок к краям списка. Home/End в поле ввода иначе гоняли бы каретку
+        // по тексту тикера — при открытой выпадашке полезнее список.
+        e.preventDefault();
+        state.suggestIdx = e.key === "Home" ? 0 : items.length - 1;
         redrawList();
       } else if (e.key === "Enter" && state.suggestOpen && items[state.suggestIdx]) {
         e.preventDefault();

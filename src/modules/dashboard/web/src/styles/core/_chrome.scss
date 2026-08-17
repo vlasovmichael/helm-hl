@@ -117,35 +117,34 @@ header {
   gap: 14px;
 }
 
-/* GitHub-style segmented switcher */
-.theme-switcher {
+/* Одна кнопка, циклящая auto → light → dark. Раньше здесь стоял сегментный
+   свитчер из трёх текстовых кнопок: он занимал ~150px и повторял то, что
+   иконка говорит одним глифом. Иконка показывает ТЕКУЩИЙ режим (монитор /
+   солнце / луна) и перетекает между ними — см. iconMorph.js.
+   Габариты и повадки намеренно совпадают с .notif-btn: это соседи в topnav. */
+.theme-toggle {
   display: inline-flex;
-  background: var(--canvas-subtle);
-  padding: 2px;
-  border-radius: 6px;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   border: 1px solid var(--border);
-}
-.theme-btn {
+  border-radius: var(--radius);
   background: transparent;
-  border: none;
   color: var(--text-secondary);
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 500;
-  border-radius: 4px;
   cursor: pointer;
-  transition: all 0.12s var(--ease);
-  font-family: var(--font-sans);
+  transition:
+    color 0.15s var(--ease),
+    background 0.15s var(--ease),
+    border-color 0.15s var(--ease);
 
   &:hover {
     color: var(--text-primary);
+    background: var(--card-bg-hover);
   }
-  &.active {
-    background: var(--card-bg);
-    color: var(--text-primary);
-    box-shadow: var(--shadow-sm);
-    border: 1px solid var(--border);
-    margin: -1px;
+  .nav-ico {
+    opacity: 0.9;
   }
 }
 
@@ -267,25 +266,9 @@ header {
     margin-left: auto;
     gap: 6px;
   }
-  /* Тема — компактные глифы вместо слов Auto/Light/Dark. */
-  .theme-btn {
-    font-size: 0;
-    padding: 5px 8px;
-
-    &::before {
-      font-size: 13px;
-      line-height: 1;
-    }
-    &[data-theme="auto"]::before {
-      content: "◐";
-    }
-    &[data-theme="light"]::before {
-      content: "☀";
-    }
-    &[data-theme="dark"]::before {
-      content: "☾";
-    }
-  }
+  /* Подмена слов Auto/Light/Dark глифами ◐/☀/☾ жила здесь, пока свитчер был
+     из трёх текстовых кнопок. Теперь это одна иконка 32×32 на всех ширинах —
+     ужимать нечего. */
 }
 
 /* ──────────────────────── Cards */

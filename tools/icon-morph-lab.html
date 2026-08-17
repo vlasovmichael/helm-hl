@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Icon Morph Lab — Helm</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!--
+  ─────────────────────────────────────────────────
+   ПЕСОЧНИЦА морфинга иконок. НЕ часть дашборда.
+   • Вне сборки: vite.config.js перечисляет входы явно, tools/ туда не входит.
+   • Ноль зависимостей, ноль сетевых запросов — файл самодостаточен.
+   • Геометрию путей парсит САМ БРАУЗЕР (getPointAtLength), своего SVG-парсера нет.
+
+   Зачем: посмотреть, стоит ли тащить в проект morphicons (npm, v1.7.0,
+   опубликована 13.08.2026 — свежак). Здесь та же идея, реализованная руками:
+     1. каждую фигуру ресемплим в N равноудалённых точек;
+     2. фигуры двух иконок паруем (жадно, по центроиду и длине);
+     3. кольца точек прокручиваем/разворачиваем до минимума суммы квадратов;
+     4. между иконками считаем 2D Procrustes (поворот+масштаб+сдвиг) и
+        интерполируем УГОЛ, а не координаты — отсюда «стрелка сама повернулась»;
+     5. время гонит пружина, а не линейный ease.
+   Тумблеры 3-5 можно выключить и увидеть, что именно каждый шаг даёт.
+  ─────────────────────────────────────────────────
+-->
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #0f1115; --panel: #161a21; --line: #262c36;
+    --fg: #e6e9ef; --muted: #8b93a3; --accent: #5b9dff; --ok: #3fb950;
+  }
+  :root[data-lab-theme="light"] {
+    --bg: #f6f7f9; --panel: #ffffff; --line: #e2e5ea;
+    --fg: #1c1f26; --muted: #6b7280; --accent: #2563eb; --ok: #16a34a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    font: 14px/1.5 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--fg);
+  }
+  h1 { font-size: 18px; margin: 0 0 4px; letter-spacing: -.01em; }
+  h2 { font-size: 13px; margin: 0 0 12px; color: var(--muted); font-weight: 600;
+       text-transform: uppercase; letter-spacing: .06em; }
+  .sub { color: var(--muted); margin: 0 0 24px; max-width: 70ch; }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  .grid { display: grid; grid-template-columns: minmax(0,1fr) 300px; gap: 16px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .panel + .panel { margin-top: 16px; }
+
+  /* Сцена морфа */
+  .stage { display: flex; align-items: center; justify-content: center; padding: 8px 0 16px; }
+  #morph { width: 200px; height: 200px; color: var(--fg); }
+  #morph path { fill: none; stroke: currentColor; stroke-width: 1.35;
+                stroke-linecap: round; stroke-linejoin: round; }
+
+  /* Палитра иконок */
+  .picker { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { display: flex; flex-direction: column; align-items: center; gap: 4px;
+          width: 74px; padding: 8px 4px; cursor: pointer; color: var(--fg);
+          background: transparent; border: 1px solid var(--line); border-radius: 10px; }
+  .chip:hover { border-color: var(--accent); }
+  .chip[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .chip svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.5;
+              stroke-linecap: round; stroke-linejoin: round; }
+  .chip span { font-size: 10px; color: var(--muted); }
+
+  /* Контролы */
+  label.row { display: block; margin-bottom: 14px; font-size: 12px; color: var(--muted); }
+  label.row b { display: block; color: var(--fg); font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+  label.row input[type=range] { width: 100%; accent-color: var(--accent); }
+  label.tog { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; font-size: 12px; cursor: pointer; }
+  label.tog input { margin-top: 2px; accent-color: var(--accent); }
+  label.tog em { display: block; color: var(--muted); font-style: normal; font-size: 11px; }
+  .val { float: right; font-variant-numeric: tabular-nums; color: var(--fg); }
+
+  /* Живые превью «как в навбаре» */
+  .bar { display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+         border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+  .bar .spacer { flex: 1; }
+  .iconbtn { display: inline-flex; align-items: center; justify-content: center;
+             width: 34px; height: 34px; padding: 0; cursor: pointer; color: var(--fg);
+             background: transparent; border: 1px solid transparent; border-radius: 8px; }
+  .iconbtn:hover { border-color: var(--line); }
+  .iconbtn svg { width: 20px; height: 20px; }
+  .iconbtn svg path { fill: none; stroke: currentColor; stroke-width: 1.6;
+                      stroke-linecap: round; stroke-linejoin: round; }
+  .brand { font-weight: 700; letter-spacing: -.02em; }
+  .hint { color: var(--muted); font-size: 12px; margin: 10px 0 0; }
+  code { background: color-mix(in srgb, var(--fg) 8%, transparent); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  .note { border-left: 2px solid var(--accent); padding-left: 12px; color: var(--muted); font-size: 12px; }
+  #hidden { position: absolute; width: 0; height: 0; overflow: hidden; opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<svg id="hidden" viewBox="0 0 24 24" aria-hidden="true"></svg>
+
+<div class="wrap">
+  <div class="bar" style="margin-bottom:20px">
+    <span class="brand">Icon Morph Lab</span>
+    <span class="spacer"></span>
+    <button class="iconbtn" id="lab-theme" title="Тема страницы"></button>
+  </div>
+
+  <h1>Морфинг иконок на наших контурах</h1>
+  <p class="sub">
+    Песочница. Ничего из дашборда не задействовано и не изменено — иконки скопированы
+    из <code>src/core/topnav.js</code>, чтобы смотреть на реальную геометрию.
+    Зависимостей нет, сеть не трогается.
+  </p>
+
+  <div class="grid">
+    <div>
+      <div class="panel">
+        <h2>Сцена</h2>
+        <div class="stage"><svg id="morph" viewBox="0 0 24 24" aria-hidden="true"></svg></div>
+        <div class="picker" id="picker"></div>
+        <p class="hint">Клик по иконке — перетечь в неё. Скрабом ниже можно остановить время и разглядеть середину пути.</p>
+      </div>
+
+      <div class="panel">
+        <h2>Как это выглядело бы в навбаре</h2>
+        <div class="bar">
+          <span class="brand">Helm</span>
+          <span class="spacer"></span>
+          <button class="iconbtn" id="pv-bell" title="Колокольчик: обычный ↔ звонящий"></button>
+          <button class="iconbtn" id="pv-theme" title="Тема: авто → светлая → тёмная"></button>
+        </div>
+        <p class="hint">
+          Два слота, где морф в дашборде реально применим: колокольчик
+          (<code>topnav.js:85</code>) и переключатель темы (<code>topnav.js:99</code>,
+          сейчас там текстовые кнопки). Nav-иконки страниц не морфятся — они не меняются.
+        </p>
+      </div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <h2>Пружина</h2>
+        <label class="row"><b>Жёсткость <span class="val" id="v-stiff"></span></b>
+          <input type="range" id="stiff" min="40" max="400" step="5" value="170"></label>
+        <label class="row"><b>Затухание <span class="val" id="v-damp"></span></b>
+          <input type="range" id="damp" min="8" max="60" step="1" value="24"></label>
+        <label class="row"><b>Скраб (0 → 1) <span class="val" id="v-scrub"></span></b>
+          <input type="range" id="scrub" min="0" max="1000" step="1" value="0" disabled></label>
+        <label class="tog"><input type="checkbox" id="manual">
+          <span>Ручной режим<em>Пружина выключена, прогресс задаёт скраб.</em></span></label>
+      </div>
+
+      <div class="panel">
+        <h2>Шаги алгоритма</h2>
+        <label class="tog"><input type="checkbox" id="opt-align" checked>
+          <span>Прокрутка колец<em>Точки замкнутых фигур сдвигаются по кругу до минимума суммы квадратов. Выключи — контуры будут перекручиваться.</em></span></label>
+        <label class="tog"><input type="checkbox" id="opt-proc" checked>
+          <span>Procrustes<em>Общий поворот/масштаб выносится наружу и интерполируется как УГОЛ. Выключи — точки поедут по прямым, сквозь центр.</em></span></label>
+        <label class="row" style="margin-top:14px"><b>Точек на фигуру <span class="val" id="v-pts"></span></b>
+          <input type="range" id="pts" min="8" max="128" step="8" value="64"></label>
+      </div>
+
+      <div class="panel">
+        <p class="note">
+          <b>Что здесь не реализовано</b>, а в morphicons есть: биндинги под React/Vue/Svelte,
+          SSR без гидрационного рассинхрона, прерывание морфа на лету с сохранением
+          скорости, адаптеры в CSS-маски и canvas. Для двух слотов навбара это не нужно.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Намеренно НЕ type="module": модульные скрипты Chrome режет по CORS на file://,
+     а страницу хочется открывать двойным кликом, без сервера. Импортов тут нет. -->
+<script>
+"use strict";
+
+/* ═══════════════════════════════════════════════
+   1. ИКОНКИ
+   Первые семь — дословно из src/core/topnav.js (ICONS), чтобы смотреть на
+   настоящую геометрию проекта. Остальные дорисованы под слоты навбара.
+   ═══════════════════════════════════════════════ */
+const ICONS = {
+  dashboard: `
+    <rect x="3" y="3" width="7" height="9" rx="1" />
+    <rect x="14" y="3" width="7" height="5" rx="1" />
+    <rect x="14" y="12" width="7" height="9" rx="1" />
+    <rect x="3" y="16" width="7" height="5" rx="1" />`,
+  statistics: `
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="12" r="4" />
+    <line x1="12" y1="1" x2="12" y2="5" />
+    <line x1="12" y1="19" x2="12" y2="23" />
+    <line x1="1" y1="12" x2="5" y2="12" />
+    <line x1="19" y1="12" x2="23" y2="12" />`,
+  ledger: `
+    <path d="M4 5a2 2 0 0 1 2-2h12a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2z" />
+    <line x1="4" y1="17" x2="19" y2="17" />
+    <line x1="9" y1="3" x2="9" y2="21" />`,
+  lab: `
+    <path d="M9 3h6M10 3v6.5L5.5 17a2 2 0 0 0 1.8 3h9.4a2 2 0 0 0 1.8-3L14 9.5V3" />
+    <line x1="8" y1="14" x2="16" y2="14" />`,
+  orderbook: `
+    <line x1="4" y1="6" x2="13" y2="6" />
+    <line x1="4" y1="10" x2="17" y2="10" />
+    <line x1="4" y1="14" x2="10" y2="14" />
+    <line x1="4" y1="18" x2="15" y2="18" />`,
+  journal: `
+    <path d="M5 3h11a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z" />
+    <line x1="7" y1="7" x2="13" y2="7" />
+    <path d="M7 14l2.5-2.5L12 14l3-3.5" />`,
+  oi: `
+    <line x1="3" y1="21" x2="21" y2="21" />
+    <line x1="3" y1="21" x2="3" y2="3" />
+    <rect x="6" y="12" width="3" height="6" rx="0.5" />
+    <rect x="11" y="8" width="3" height="10" rx="0.5" />
+    <rect x="16" y="4" width="3" height="14" rx="0.5" />`,
+
+  bell: `
+    <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+    <path d="M13.7 21a2 2 0 0 1-3.4 0" />`,
+  bellRing: `
+    <path d="M17.5 8.5a5.5 5.5 0 1 0-11 0c0 6.4-2.8 8.2-2.8 8.2h16.6s-2.8-1.8-2.8-8.2" />
+    <path d="M13.7 20.2a2 2 0 0 1-3.4 0" />`,
+
+  sun: `
+    <circle cx="12" cy="12" r="4.2" />
+    <line x1="12" y1="2.2" x2="12" y2="4.6" />
+    <line x1="12" y1="19.4" x2="12" y2="21.8" />
+    <line x1="2.2" y1="12" x2="4.6" y2="12" />
+    <line x1="19.4" y1="12" x2="21.8" y2="12" />
+    <line x1="5.2" y1="5.2" x2="6.9" y2="6.9" />
+    <line x1="17.1" y1="17.1" x2="18.8" y2="18.8" />
+    <line x1="18.8" y1="5.2" x2="17.1" y2="6.9" />
+    <line x1="6.9" y1="17.1" x2="5.2" y2="18.8" />`,
+  moon: `
+    <path d="M20.5 14.2A8.6 8.6 0 0 1 9.8 3.5a8.6 8.6 0 1 0 10.7 10.7z" />`,
+  auto: `
+    <rect x="2.6" y="4" width="18.8" height="13" rx="1.6" />
+    <line x1="8" y1="20.4" x2="16" y2="20.4" />
+    <line x1="12" y1="17" x2="12" y2="20.4" />`,
+
+  /* Пара, ради которой у morphicons всё и затевалось: линейная интерполяция
+     точек «схлопнет» стрелку через центр, Procrustes же увидит поворот. */
+  arrowUp: `
+    <line x1="12" y1="19" x2="12" y2="5" />
+    <path d="M6 11l6-6 6 6" />`,
+  arrowRight: `
+    <line x1="5" y1="12" x2="19" y2="12" />
+    <path d="M13 6l6 6-6 6" />`,
+};
+
+const PICKER_ORDER = [
+  "dashboard", "statistics", "ledger", "lab", "orderbook", "journal", "oi",
+  "bell", "bellRing", "sun", "moon", "auto", "arrowUp", "arrowRight",
+];
+
+/* ═══════════════════════════════════════════════
+   2. ГЕОМЕТРИЯ
+   Своего парсера путей нет и не надо: любую фигуру помещаем в невидимый <svg>
+   и спрашиваем у браузера getPointAtLength(). Работает для path/line/rect/
+   circle/ellipse/polyline/polygon.
+   ═══════════════════════════════════════════════ */
+const NS = "http://www.w3.org/2000/svg";
+const hidden = document.getElementById("hidden");
+
+const isClosedEl = (el) => {
+  const t = el.tagName.toLowerCase();
+  if (t === "circle" || t === "ellipse" || t === "rect" || t === "polygon") return true;
+  if (t === "path") return /[zZ]\s*$/.test(el.getAttribute("d") || "");
+  return false;
+};
+
+/** Иконка → массив фигур, каждая = плоский Float64Array из n точек [x,y,...]. */
+function sampleIcon(markup, n) {
+  hidden.innerHTML = markup;
+  const out = [];
+  for (const el of hidden.children) {
+    if (typeof el.getTotalLength !== "function") continue;
+    const len = el.getTotalLength();
+    if (!(len > 0)) continue;
+    const closed = isClosedEl(el);
+    const pts = new Float64Array(n * 2);
+    for (let i = 0; i < n; i++) {
+      // У замкнутого кольца последняя точка совпадает с первой — берём n/n, не n/(n-1).
+      const t = closed ? i / n : i / (n - 1);
+      const p = el.getPointAtLength(t * len);
+      pts[i * 2] = p.x;
+      pts[i * 2 + 1] = p.y;
+    }
+    out.push({ pts, closed, len });
+  }
+  hidden.innerHTML = "";
+  return out;
+}
+
+const centroid = (pts) => {
+  let x = 0, y = 0;
+  const n = pts.length / 2;
+  for (let i = 0; i < n; i++) { x += pts[i * 2]; y += pts[i * 2 + 1]; }
+  return [x / n, y / n];
+};
+
+/** Сумма квадратов между кольцом a (со сдвигом off и направлением dir) и b. */
+function ringCost(a, b, off, dir) {
+  const n = a.length / 2;
+  let s = 0;
+  for (let i = 0; i < n; i++) {
+    const j = dir > 0 ? (i + off) % n : ((off - i) % n + n) % n;
+    const dx = a[j * 2] - b[i * 2];
+    const dy = a[j * 2 + 1] - b[i * 2 + 1];
+    s += dx * dx + dy * dy;
+  }
+  return s;
+}
+
+const reindex = (a, off, dir) => {
+  const n = a.length / 2;
+  const out = new Float64Array(n * 2);
+  for (let i = 0; i < n; i++) {
+    const j = dir > 0 ? (i + off) % n : ((off - i) % n + n) % n;
+    out[i * 2] = a[j * 2];
+    out[i * 2 + 1] = a[j * 2 + 1];
+  }
+  return out;
+};
+
+/**
+ * Шаг 3: найти, как развернуть кольцо A, чтобы оно легло на B с минимальной
+ * суммой квадратов. Для замкнутых перебираем все n сдвигов × 2 направления,
+ * для открытых — только направление обхода (у линии нет «начала по кругу»).
+ * Возвращаем ПАРАМЕТРЫ перестановки, а не точки: применить их надо будет к
+ * исходной геометрии, а искать — на выпрямленной (см. solvePair).
+ */
+function findAlignment(a, b, closed) {
+  const n = a.length / 2;
+  let best = Infinity, bo = 0, bd = 1;
+  for (const dir of [1, -1]) {
+    if (closed) {
+      for (let off = 0; off < n; off++) {
+        const c = ringCost(a, b, off, dir);
+        if (c < best) { best = c; bo = off; bd = dir; }
+      }
+    } else {
+      // Открытый путь: «реверс» = пойти с конца, т.е. off = n-1.
+      const o = dir > 0 ? 0 : n - 1;
+      const c = ringCost(a, b, o, dir);
+      if (c < best) { best = c; bo = o; bd = dir; }
+    }
+  }
+  return { off: bo, dir: bd };
+}
+
+/** Жадное сопоставление фигур двух иконок: ближе центроид и похожее периметр. */
+function pairShapes(A, B, n) {
+  const used = new Set();
+  const pairs = [];
+  for (const b of B) {
+    const cb = centroid(b.pts);
+    let best = -1, bestCost = Infinity;
+    for (let i = 0; i < A.length; i++) {
+      if (used.has(i)) continue;
+      const ca = centroid(A[i].pts);
+      const d = Math.hypot(ca[0] - cb[0], ca[1] - cb[1]);
+      const cost = d + Math.abs(A[i].len - b.len) * 0.35;
+      if (cost < bestCost) { bestCost = cost; best = i; }
+    }
+    if (best >= 0) { used.add(best); pairs.push([A[best], b]); }
+    else pairs.push([degenerate(centroid(b.pts), n), b]); // вырастает из точки
+  }
+  // Лишние фигуры A схлопываются сами в себя.
+  for (let i = 0; i < A.length; i++) {
+    if (!used.has(i)) pairs.push([A[i], degenerate(centroid(A[i].pts), n)]);
+  }
+  return pairs;
+}
+
+function degenerate([x, y], n) {
+  const pts = new Float64Array(n * 2);
+  for (let i = 0; i < n; i++) { pts[i * 2] = x; pts[i * 2 + 1] = y; }
+  return { pts, closed: false, len: 0 };
+}
+
+/**
+ * Шаг 4: 2D Procrustes без отражений — подобие T (поворот θ, масштаб s, сдвиг),
+ * переводящее весь набор точек A в B. Возвращаем параметры, а не матрицу:
+ * угол потом интерполируется отдельно, и в этом весь смысл.
+ */
+function procrustes(A, B) {
+  const n = A.length / 2;
+  const [cax, cay] = centroid(A);
+  const [cbx, cby] = centroid(B);
+  let Sxx = 0, Sxy = 0, na = 0;
+  for (let i = 0; i < n; i++) {
+    const ax = A[i * 2] - cax, ay = A[i * 2 + 1] - cay;
+    const bx = B[i * 2] - cbx, by = B[i * 2 + 1] - cby;
+    Sxx += ax * bx + ay * by;
+    Sxy += ax * by - ay * bx;
+    na += ax * ax + ay * ay;
+  }
+  const theta = Math.atan2(Sxy, Sxx);
+  const s = na > 1e-9 ? Math.hypot(Sxx, Sxy) / na : 1;
+  return { theta, s: clamp(s, 0.2, 5), ca: [cax, cay], cb: [cbx, cby] };
+}
+
+const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+
+/** T: переносим A в систему координат B (нужно, чтобы кольца сравнивались без поворота). */
+function apply(A, { theta, s, ca, cb }) {
+  const n = A.length / 2;
+  const out = new Float64Array(n * 2);
+  const c = Math.cos(theta), sn = Math.sin(theta);
+  for (let i = 0; i < n; i++) {
+    const x = (A[i * 2] - ca[0]) * s, y = (A[i * 2 + 1] - ca[1]) * s;
+    out[i * 2] = x * c - y * sn + cb[0];
+    out[i * 2 + 1] = x * sn + y * c + cb[1];
+  }
+  return out;
+}
+
+/** T⁻¹: тянем B обратно в систему координат A, чтобы лерп шёл по «выпрямленным» фигурам. */
+function unapply(B, { theta, s, ca, cb }) {
+  const n = B.length / 2;
+  const out = new Float64Array(n * 2);
+  const c = Math.cos(-theta), sn = Math.sin(-theta), inv = 1 / s;
+  for (let i = 0; i < n; i++) {
+    const x = (B[i * 2] - cb[0]) * inv, y = (B[i * 2 + 1] - cb[1]) * inv;
+    out[i * 2] = x * c - y * sn + ca[0];
+    out[i * 2 + 1] = x * sn + y * c + ca[1];
+  }
+  return out;
+}
+
+/* ═══════════════════════════════════════════════
+   3. МОРФ: подготовка пары и отрисовка кадра
+   ═══════════════════════════════════════════════ */
+/**
+ * Одна пара фигур → готовая к отрисовке связка {src, dst, T}.
+ *
+ * Порядок шагов здесь важен и достался кровью. Наивно хочется сначала
+ * прокрутить кольца, потом искать поворот — но у повёрнутой на 90° фигуры
+ * прокрутка по СЫРОМУ расстоянию выбирает направление обхода наугад, и
+ * Procrustes потом честно подгоняется под кривое соответствие (наконечник
+ * стрелки слипался со стержнем). Поэтому: грубый Procrustes → прокрутка колец
+ * в выпрямленной системе → точный Procrustes на найденном соответствии.
+ */
+function solvePair(a, b, opts) {
+  const closed = a.closed && b.closed;
+  const neutral = () => ({ theta: 0, s: 1, ca: centroid(a.pts), cb: centroid(a.pts) });
+
+  let src = a.pts;
+  if (opts.align && a.len > 0 && b.len > 0) {
+    // Выпрямляем A по грубой оценке — только чтобы честно сравнить кольца…
+    const rough = opts.procrustes ? procrustes(src, b.pts) : null;
+    const probe = rough ? apply(src, rough) : src;
+    // …а найденную перестановку применяем к ИСХОДНОЙ геометрии.
+    const { off, dir } = findAlignment(probe, b.pts, closed);
+    src = reindex(src, off, dir);
+  }
+
+  // Без Procrustes — нейтральное преобразование: чистый линейный лерп точек.
+  const T = opts.procrustes ? procrustes(src, b.pts) : neutral();
+  const dst = opts.procrustes ? unapply(b.pts, T) : b.pts;
+  return { src, dst, T, closed };
+}
+
+function buildMorph(fromKey, toKey, opts) {
+  const n = opts.points;
+  const A = sampleIcon(ICONS[fromKey], n);
+  const B = sampleIcon(ICONS[toKey], n);
+  return pairShapes(A, B, n).map(([a, b]) => solvePair(a, b, opts));
+}
+
+/** Кадр в момент t: лерп в выпрямленной системе + частично применённое подобие. */
+function frameToPath({ src, dst, T, closed }, t) {
+  const n = src.length / 2;
+  const { theta, s, ca, cb } = T;
+  const ang = theta * t;
+  const cs = Math.cos(ang), sn = Math.sin(ang);
+  const st = 1 + (s - 1) * t;
+  const dx = (cb[0] - ca[0]) * t, dy = (cb[1] - ca[1]) * t;
+
+  let d = "";
+  for (let i = 0; i < n; i++) {
+    const lx = src[i * 2] + (dst[i * 2] - src[i * 2]) * t;
+    const ly = src[i * 2 + 1] + (dst[i * 2 + 1] - src[i * 2 + 1]) * t;
+    const px = lx - ca[0], py = ly - ca[1];
+    const x = (px * cs - py * sn) * st + ca[0] + dx;
+    const y = (px * sn + py * cs) * st + ca[1] + dy;
+    d += (i === 0 ? "M" : "L") + round(x) + " " + round(y);
+  }
+  return closed ? d + "Z" : d;
+}
+
+const round = (v) => (Math.round(v * 100) / 100) + " ";
+
+/* ═══════════════════════════════════════════════
+   4. ДВИЖОК: пружина + один общий rAF на все инстансы
+   ═══════════════════════════════════════════════ */
+const REDUCED = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const instances = new Set();
+let raf = 0, last = 0;
+
+class Morpher {
+  constructor(svg, key, opts) {
+    this.svg = svg;
+    this.key = key;
+    this.opts = opts;
+    this.t = 1;
+    this.v = 0;
+    this.parts = null;
+    this.manual = false;
+    this.render(key);
+    instances.add(this);
+  }
+
+  /** Статичная иконка без анимации (старт и reduced-motion). */
+  render(key) {
+    this.parts = buildMorph(key, key, this.opts);
+    this.paint(1);
+  }
+
+  to(key) {
+    if (key === this.key) return;
+    // Прерывание на лету: текущий кадр становится новым стартом, скорость
+    // не сбрасываем — иначе на быстрых кликах видно «дёрганье».
+    const start = this.t < 1 ? this.freeze() : null;
+    this.parts = start
+      ? buildFrom(start, key, this.opts)
+      : buildMorph(this.key, key, this.opts);
+    this.key = key;
+    this.t = 0;
+    this.v = 0;
+    if (REDUCED) { this.t = 1; this.paint(1); return; }
+    // В ручном режиме время гонит скраб, а не пружина: показываем нулевой кадр
+    // и ждём. Раньше здесь стоял t=1 — из-за него пара оставалась несыгранной,
+    // а следующий клик подхватывал её как «прерванный морф» и стартовал не с той
+    // геометрии (на сцене вылезали фигуры предыдущей иконки).
+    this.paint(0);
+    if (!this.manual) schedule();
+  }
+
+  /** Текущий кадр как набор путей — стартовая геометрия для прерванного морфа. */
+  freeze() {
+    return this.parts.map((p) => frameToPath(p, this.t));
+  }
+
+  step(dt) {
+    if (this.manual || this.t >= 1) return this.t >= 1;
+    const { stiffness, damping } = this.opts;
+    const a = -stiffness * (this.t - 1) - damping * this.v;
+    this.v += a * dt;
+    this.t += this.v * dt;
+    if (this.t > 1 || (Math.abs(1 - this.t) < 0.001 && Math.abs(this.v) < 0.01)) {
+      this.t = 1; this.v = 0;
+    }
+    this.paint(this.t);
+    return this.t >= 1;
+  }
+
+  paint(t) {
+    const ds = this.parts.map((p) => frameToPath(p, t));
+    // Число фигур в паре постоянно — переиспользуем узлы, не пересоздаём DOM.
+    while (this.svg.childElementCount > ds.length) this.svg.lastElementChild.remove();
+    while (this.svg.childElementCount < ds.length) this.svg.appendChild(document.createElementNS(NS, "path"));
+    ds.forEach((d, i) => this.svg.children[i].setAttribute("d", d));
+  }
+
+  rebuild() {
+    this.parts = buildMorph(this.key, this.key, this.opts);
+    this.paint(1);
+  }
+}
+
+/** Пересборка пары, когда предыдущий морф не доиграл: старт = замороженные пути. */
+function buildFrom(startPaths, toKey, opts) {
+  const n = opts.points;
+  const B = sampleIcon(ICONS[toKey], n);
+  hidden.innerHTML = startPaths.map((d) => `<path d="${d}"/>`).join("");
+  const A = [];
+  for (const el of hidden.children) {
+    const len = el.getTotalLength();
+    const closed = /[zZ]\s*$/.test(el.getAttribute("d") || "");
+    const pts = new Float64Array(n * 2);
+    for (let i = 0; i < n; i++) {
+      const p = el.getPointAtLength((closed ? i / n : i / (n - 1)) * len);
+      pts[i * 2] = p.x; pts[i * 2 + 1] = p.y;
+    }
+    A.push({ pts, closed, len });
+  }
+  hidden.innerHTML = "";
+  return pairShapes(A, B, n).map(([a, b]) => solvePair(a, b, opts));
+}
+
+function schedule() { if (!raf) { last = performance.now(); raf = requestAnimationFrame(tick); } }
+
+function tick(now) {
+  const dt = Math.min((now - last) / 1000, 1 / 30); // на вкладке в фоне dt не взрывается
+  last = now;
+  let busy = false;
+  for (const m of instances) if (!m.step(dt)) busy = true;
+  raf = busy ? requestAnimationFrame(tick) : 0;
+}
+
+/* ═══════════════════════════════════════════════
+   5. СБОРКА СТРАНИЦЫ
+   ═══════════════════════════════════════════════ */
+const opts = { points: 64, align: true, procrustes: true, stiffness: 170, damping: 24 };
+
+const main = new Morpher(document.getElementById("morph"), "dashboard", opts);
+
+// Палитра: рисуем миниатюры исходным разметочным способом (без морфа).
+const picker = document.getElementById("picker");
+picker.innerHTML = PICKER_ORDER.map((k) => `
+  <button class="chip" type="button" data-key="${k}" aria-pressed="${k === "dashboard"}">
+    <svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[k]}</svg>
+    <span>${k}</span>
+  </button>`).join("");
+
+picker.addEventListener("click", (e) => {
+  const btn = e.target.closest(".chip");
+  if (!btn) return;
+  for (const b of picker.children) b.setAttribute("aria-pressed", String(b === btn));
+  main.to(btn.dataset.key);
+  if (main.manual) { scrub.value = "0"; syncLabels(); }
+});
+
+// ── Превью навбара ────────────────────────────────
+const bellStates = ["bell", "bellRing"];
+const themeStates = ["auto", "sun", "moon"];
+const mkPreview = (id, states) => {
+  const btn = document.getElementById(id);
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  btn.appendChild(svg);
+  const m = new Morpher(svg, states[0], opts);
+  let i = 0;
+  btn.addEventListener("click", () => { i = (i + 1) % states.length; m.to(states[i]); });
+  return m;
+};
+mkPreview("pv-bell", bellStates);
+mkPreview("pv-theme", themeStates);
+
+// Тема самой страницы — тем же движком, чтобы было видно в деле.
+const labThemeBtn = document.getElementById("lab-theme");
+const labSvg = document.createElementNS(NS, "svg");
+labSvg.setAttribute("viewBox", "0 0 24 24");
+labThemeBtn.appendChild(labSvg);
+const labMorph = new Morpher(labSvg, "moon", opts);
+let labDark = true;
+labThemeBtn.addEventListener("click", () => {
+  labDark = !labDark;
+  document.documentElement.dataset.labTheme = labDark ? "dark" : "light";
+  labMorph.to(labDark ? "moon" : "sun");
+});
+
+// ── Контролы ──────────────────────────────────────
+const $ = (id) => document.getElementById(id);
+const stiff = $("stiff"), damp = $("damp"), scrub = $("scrub"), pts = $("pts");
+const manual = $("manual"), optAlign = $("opt-align"), optProc = $("opt-proc");
+
+function syncLabels() {
+  $("v-stiff").textContent = stiff.value;
+  $("v-damp").textContent = damp.value;
+  $("v-pts").textContent = pts.value;
+  $("v-scrub").textContent = (Number(scrub.value) / 1000).toFixed(2);
+}
+
+stiff.addEventListener("input", () => { opts.stiffness = +stiff.value; syncLabels(); });
+damp.addEventListener("input", () => { opts.damping = +damp.value; syncLabels(); });
+
+pts.addEventListener("input", () => {
+  opts.points = +pts.value;
+  syncLabels();
+  for (const m of instances) m.rebuild();
+});
+
+for (const [el, key] of [[optAlign, "align"], [optProc, "procrustes"]]) {
+  el.addEventListener("change", () => {
+    opts[key] = el.checked;
+    for (const m of instances) m.rebuild();
+  });
+}
+
+manual.addEventListener("change", () => {
+  main.manual = manual.checked;
+  scrub.disabled = !manual.checked;
+  // Кадр НЕ перерисовываем: включение режима не должно ничего двигать. Просто
+  // подводим скраб под текущее положение — дальше пользователь ведёт сам.
+  if (main.manual) { scrub.value = String(Math.round(main.t * 1000)); syncLabels(); }
+  else if (main.t < 1) schedule();
+});
+
+scrub.addEventListener("input", () => {
+  syncLabels();
+  if (!main.manual) return;
+  main.t = Number(scrub.value) / 1000;
+  main.paint(main.t);
+});
+
+syncLabels();
+document.documentElement.dataset.labTheme = "dark";
+
+if (REDUCED) {
+  const p = document.createElement("p");
+  p.className = "hint";
+  p.textContent = "Система просит уменьшить анимацию — морфы переключаются мгновенно. Включи ручной режим, чтобы разглядеть промежуточные кадры.";
+  document.querySelector(".stage").after(p);
+}
+</script>
+</body>
+</html>

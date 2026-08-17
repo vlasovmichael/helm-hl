@@ -4,6 +4,9 @@
 //  Страница даёт свои render-хендлеры; фичи грузит только она (route code-split).
 // ─────────────────────────────────────────────────
 
+import { createMorphIcon } from "./iconMorph.js";
+import { THEME_ICONS } from "./icons.js";
+
 export const REFRESH_MS = 10_000;
 
 let lastSuccessAt = 0;
@@ -46,8 +49,21 @@ function getStoredTheme() {
   return localStorage.getItem(THEME_KEY) || "auto";
 }
 
+// Порядок цикла кнопки. auto первым — это и дефолт при пустом localStorage.
+const THEME_CYCLE = ["auto", "light", "dark"];
+const THEME_TITLE = {
+  auto: "Тема: как в системе",
+  light: "Тема: светлая",
+  dark: "Тема: тёмная",
+};
+
 // chartThemers — фабрики тем графиков страницы (само-гардятся, если графика нет).
 export function bindTheme(chartThemers = []) {
+  const btn = document.getElementById("theme-toggle");
+  const svg = document.getElementById("theme-ico");
+  // Морф не поднимаем, если кнопки нет (напр. login.html без topnav).
+  const icon = svg ? createMorphIcon(svg, THEME_ICONS, getStoredTheme()) : null;
+
   const apply = (mode) => {
     const root = document.documentElement;
     const resolved =
@@ -57,17 +73,27 @@ export function bindTheme(chartThemers = []) {
           : "light"
         : mode;
     root.setAttribute("data-theme", resolved);
-    document
-      .querySelectorAll(".theme-btn")
-      .forEach((b) => b.classList.toggle("active", b.dataset.theme === mode));
+    // Три состояния нельзя прочитать «по противоположному», поэтому иконка
+    // показывает ТЕКУЩИЙ режим: монитор для auto, солнце/луна когда закреплено.
+    icon?.to(mode);
+    if (btn) {
+      btn.title = THEME_TITLE[mode];
+      btn.setAttribute("aria-label", THEME_TITLE[mode]);
+    }
     chartThemers.forEach((fn) => fn());
   };
-  document.querySelectorAll(".theme-btn").forEach((b) =>
-    b.addEventListener("click", () => {
-      localStorage.setItem(THEME_KEY, b.dataset.theme);
-      apply(b.dataset.theme);
-    }),
-  );
+
+  btn?.addEventListener("click", () => {
+    const next = THEME_CYCLE[(THEME_CYCLE.indexOf(getStoredTheme()) + 1) % THEME_CYCLE.length];
+    localStorage.setItem(THEME_KEY, next);
+    apply(next);
+  });
+
+  // Пока следуем за системой, закат должен доезжать и до страницы.
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (getStoredTheme() === "auto") apply("auto");
+  });
+
   apply(getStoredTheme());
 }
 
