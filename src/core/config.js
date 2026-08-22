@@ -309,6 +309,23 @@ function loadConfig() {
   }
 
 
+  // ── TP-лимитка на бирже при подхвате ──────────────────────────────────────
+  // Цель ставится СРАЗУ вместе со стопом и висит в книге reduce-only: исполняется
+  // мейкером и не зависит от того, проснулся ли бот. Дистанция считается не от
+  // ATR напрямую, а от фактической дистанции стопа (сам стоп уже по ATR и зажат
+  // в ADOPT_STOP_MIN/MAX_PCT) — только так заявленный R:R не плывёт в зажатых
+  // случаях. RR=1 значит «цель на том же расстоянии, что и стоп», то есть
+  // breakeven-winrate 50%; RR=0.5 требует уже 67%, RR=0.33 — 75%.
+  const adoptTpEnabled = (process.env.ADOPT_TP_ENABLED || 'true').toLowerCase() === 'true';
+  const adoptTpRr      = parseFloat(process.env.ADOPT_TP_RR      || '1');
+  const adoptTpMaxPct  = parseFloat(process.env.ADOPT_TP_MAX_PCT || '15');
+  if (!Number.isFinite(adoptTpRr) || adoptTpRr <= 0 || adoptTpRr > 10) {
+    throw new Error(`ADOPT_TP_RR must be in (0, 10]. Got: "${process.env.ADOPT_TP_RR}"`);
+  }
+  if (!Number.isFinite(adoptTpMaxPct) || adoptTpMaxPct <= 0 || adoptTpMaxPct >= 50) {
+    throw new Error(`ADOPT_TP_MAX_PCT must be in (0, 50). Got: "${process.env.ADOPT_TP_MAX_PCT}"`);
+  }
+
   // ── Выход лимиткой (post-only) вместо маркета ──────────────────────────────
   // Замер 14.08.2026: 1440 из 1440 закрытий ушли тейкером, медиана спреда 15.98 бп,
   // и на комиссии+спред пришлось ~69% всего минуса. Поэтому бот сначала кладёт
@@ -706,6 +723,9 @@ function loadConfig() {
       adoptStopMaxPct,
       adoptBeArmPct,
       adoptBeFloorPct,
+      adoptTpEnabled,
+      adoptTpRr,
+      adoptTpMaxPct,
       closeLimitEnabled,
       closeLimitWaitMs,
       closeLimitPollMs,

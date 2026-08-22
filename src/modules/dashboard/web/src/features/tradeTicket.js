@@ -60,6 +60,15 @@ export function sizeInCoins(notional, price) {
 }
 
 /** Цена, от которой считается вход: лимитка либо рынок. */
+// Цена для подстановки в input: без "$" и разделителей, 5 значащих цифр —
+// столько держит цена перпа на HL. Бэкенд всё равно прогонит через formatHlPrice,
+// но класть в поле заведомо валидное значение честнее, чем "$1,234.5".
+function plainPrice(p) {
+  const n = Number(p);
+  if (!Number.isFinite(n) || !(n > 0)) return "";
+  return String(Number(n.toPrecision(5)));
+}
+
 export function effectiveEntry({ orderType, limitPx, price }) {
   if (orderType === "limit") {
     const n = Number(limitPx);
@@ -385,6 +394,13 @@ function createModal(io) {
                <span>Limit Price</span>
                <input class="tt-row__input" data-f="limitPx" type="text" inputmode="decimal"
                       placeholder="${ctx.price > 0 ? fmtPrice(ctx.price) : "0.00"}" value="${escapeHtml(state.limitPx)}">
+             </div>
+             <div class="tt-row tt-row--sub">
+               <span></span>
+               <button type="button" class="tt-row__toggle" data-use-price
+                       ${ctx.price > 0 ? "" : "disabled"}>
+                 use current <b data-useprice>${ctx.price > 0 ? escapeHtml(fmtPrice(ctx.price)) : "—"}</b>
+               </button>
              </div>`
           : ""}
       </div>
@@ -470,6 +486,19 @@ function createModal(io) {
       });
     });
 
+    // «use current» — подставить текущую цену в поле лимитки. Ровно текущая цена
+    // валидацию на пересечение не нарушает (wouldCross строго больше/меньше),
+    // дальше её двигают руками на нужную сторону книги.
+    q("[data-use-price]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const px = plainPrice(ctx.price);
+        if (!px) return;
+        state.limitPx = px;
+        state.error = null;
+        render();
+      }),
+    );
+
     bodyEl.querySelector("[data-submit]")?.addEventListener("click", submitOpen);
   }
 
@@ -548,6 +577,15 @@ function createModal(io) {
     // ── Данные, приезжающие с сервера при смене монеты ──
     const priceEl = bodyEl.querySelector("[data-price]");
     if (priceEl) priceEl.textContent = ctx.price > 0 ? fmtPrice(ctx.price) : "—";
+
+    // Подпись на «use current» — та же цена; без этого кнопка предлагала бы
+    // цену из прошлого поллинга.
+    const usePriceEl = bodyEl.querySelector("[data-useprice]");
+    if (usePriceEl) {
+      usePriceEl.textContent = ctx.price > 0 ? fmtPrice(ctx.price) : "—";
+      const btn = usePriceEl.closest("[data-use-price]");
+      if (btn) btn.disabled = !(ctx.price > 0);
+    }
 
     const availEl = bodyEl.querySelector("[data-avail]");
     if (availEl) availEl.textContent = (Number(ctx.available) || 0).toFixed(2);

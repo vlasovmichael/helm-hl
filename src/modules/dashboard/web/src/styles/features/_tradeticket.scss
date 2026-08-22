@@ -496,6 +496,25 @@
   i { font-style: normal; color: var(--accent); }
   &:hover i { opacity: 0.7; }
 }
+// Строка-приклейка под полем лимитки («use current»). Логически это часть той
+// же ячейки, что и Limit Price, поэтому без разделителя сверху и с урезанным
+// верхним отступом — иначе кнопка читается как самостоятельный параметр.
+.tt-row.tt-row--sub {
+  padding-top: 0;
+  padding-bottom: 8px;
+  border-top: none;
+
+  .tt-row__toggle {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+
+    b { color: var(--accent); font-weight: 700; }
+    &:hover b { opacity: 0.7; }
+    &:disabled { opacity: 0.4; cursor: default; }
+  }
+}
+
 .tt-row__input {
   width: 130px;
   padding: 6px 8px;

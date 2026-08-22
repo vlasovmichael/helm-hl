@@ -8,7 +8,7 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getActivePosition, getActiveAdoptPositions, closePosition as dbClosePosition } from '../core/database.js';
-import { getPositionsCached, getAccountSummary } from '../modules/exchange.js';
+import { getPositionsCached, getAccountSummary, cancelOrderFor } from '../modules/exchange.js';
 import { sendMessage } from '../modules/reporter.js';
 import { fetchExchangePositions } from '../modules/sync.js';
 import { fetchUserFills, classifyClose, findRoundTripForPosition } from '../modules/userFills.js';
@@ -305,6 +305,21 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
     closed_at:    closedAtOverride,  // реальное время ноги (флип) — иначе Date.now()
     exitFeatures,
   });
+
+  // Позиции больше нет — снимаем её недобитые ордера с биржи. Раньше это сходило
+  // с рук: у adopt был один только SL, и сработав, он исчезал сам. С парой SL+TP
+  // выживший ордер становится опасен — оператор перезаходит в ту же монету, и чужой
+  // reduce-only закрывает НОВУЮ позу по цене старой (класс «зеркало ≠ биржа»).
+  const staleOids = [dbPosition.hunter_sl_oid, dbPosition.hunter_tp_oid].filter(Boolean);
+  for (const oid of staleOids) {
+    try {
+      await cancelOrderFor(dbPosition.coin, oid);
+      logger.info(`[Integrity] снял осиротевший ордер #${dbPosition.coin} oid=${oid}`);
+    } catch (err) {
+      // Сработал или уже снят — штатный исход, а не ошибка.
+      logger.debug(`[Integrity] cancel oid=${oid} #${dbPosition.coin}: ${err.message}`);
+    }
+  }
 
   // Adopt: внешнее/ручное закрытие — частый путь выхода для adopted-позы.
   // Shadow time-cut финализируем ДО clearAdoptState, затем чистим per-position

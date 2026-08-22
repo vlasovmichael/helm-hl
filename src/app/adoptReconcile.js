@@ -25,6 +25,8 @@ import {
   placeHunterLongTrigger,
 } from '../modules/executor/hunterOpen.js';
 import { resolveAsset } from '../modules/executor/fill-parser.js';
+import { placeLimit } from '../modules/exchange.js';
+import { formatHlPrice } from '../modules/executor/math.js';
 import { fetchUserFills } from '../modules/userFills.js';
 import { isQuietHour } from '../modules/setupScannerAlerts.js';
 import { getLastDailyRiskStatus, localDayKey } from '../modules/dailyRisk.js';
@@ -153,6 +155,48 @@ export async function computeStopDistPct(coin) {
     }
   }
   return { distPct: t.adoptStopPct, basis: 'pct' };
+}
+
+/**
+ * Плановая цель (TP) и её дистанция — чистая функция, отсюда же и тесты.
+ *
+ * Дистанция берётся от ФАКТИЧЕСКОЙ дистанции стопа, а не от ATR заново: стоп
+ * уже посчитан по ATR и зажат в [MIN_PCT, MAX_PCT], и если цель считать
+ * независимо, в зажатых случаях заявленный R:R разъедется с настоящим. Так же
+ * проще читать результат: RR=1 — цель ровно там же, где риск.
+ *
+ * @param {Object} p
+ * @param {'short'|'long'} p.side
+ * @param {number} p.entry     — цена входа
+ * @param {number} p.stopDistPct — дистанция стопа в % от входа (>0)
+ * @param {number} p.rr        — целевой R:R
+ * @param {number} p.maxPct    — потолок дистанции цели, % от входа
+ * @returns {{ tpPrice:number, distPct:number, rr:number, capped:boolean }|null}
+ */
+export function computeAdoptTp({ side, entry, stopDistPct, rr, maxPct }) {
+  if (!Number.isFinite(entry) || entry <= 0) return null;
+  if (!Number.isFinite(stopDistPct) || stopDistPct <= 0) return null;
+  if (!Number.isFinite(rr) || rr <= 0) return null;
+
+  const rawPct = stopDistPct * rr;
+  const capped = Number.isFinite(maxPct) && maxPct > 0 && rawPct > maxPct;
+  const distPct = capped ? maxPct : rawPct;
+  // Цель по ходу позиции: short зарабатывает на падении, long — на росте.
+  const tpPrice = side === 'short'
+    ? entry * (1 - distPct / 100)
+    : entry * (1 + distPct / 100);
+  // Потолок режет цель, но не риск — значит фактический R:R ниже заявленного.
+  return { tpPrice, distPct, rr: distPct / stopDistPct, capped };
+}
+
+/**
+ * Winrate, при котором система с данным R:R выходит в ноль (без комиссий).
+ * Держим рядом с расчётом цели: цена решения должна быть видна в момент
+ * решения, а не по итогам месяца.
+ */
+export function breakevenWinrate(rr) {
+  if (!Number.isFinite(rr) || rr <= 0) return null;
+  return (1 / (1 + rr)) * 100;
 }
 
 /**
@@ -476,6 +520,54 @@ export async function maybeAdoptManualPosition(manualPositions) {
       continue;
     }
 
+    // ── Цель: reduce-only лимитка в книгу, сразу за стопом ──────────────────
+    // Мейкер по построению (цель всегда по ту сторону рынка), исполняется без
+    // участия бота — не нужен живой тик и не страшен рестарт. Провал постановки
+    // усыновление НЕ отменяет: стоп уже стоит, а поза без цели безопаснее, чем
+    // поза без стопа. Такая позиция просто ждёт стопа или руки.
+    let tpOid = null;
+    let tpPrice = null;
+    if (config.trading.adoptTpEnabled) {
+      const tp = computeAdoptTp({
+        side,
+        entry,
+        stopDistPct: distPct,
+        rr:     config.trading.adoptTpRr,
+        maxPct: config.trading.adoptTpMaxPct,
+      });
+      if (tp) {
+        try {
+          const px = formatHlPrice(tp.tpPrice, szDecimals);
+          const res = await placeLimit({
+            coin,
+            isBuy: side === 'short', // закрытие шорта = BUY
+            sz,
+            px,
+            tif: 'Gtc',              // цель стоит в книге до исполнения, не post-only-reject
+            reduceOnly: true,
+          });
+          const st = res?.response?.data?.statuses?.[0];
+          if (typeof st === 'string') throw new Error(st);
+          if (st?.error) throw new Error(st.error);
+          tpOid = st?.resting?.oid ?? st?.filled?.oid ?? null;
+          tpPrice = Number(px);
+          const beWr = breakevenWinrate(tp.rr);
+          logger.info(
+            `[Adopt] 🎯 TP #${coin} @ $${px} (+${tp.distPct.toFixed(2)}% от входа) ` +
+            `R:R=${tp.rr.toFixed(2)}${tp.capped ? ' (срезан потолком)' : ''} → ` +
+            `нужен winrate ${beWr.toFixed(0)}% чтобы быть в нуле | oid=${tpOid}`,
+          );
+        } catch (err) {
+          logger.warn(
+            `[Adopt] ⚠️ TP #${coin} не встал (${err.message}) — усыновляю без цели, ` +
+            `выход остаётся стоп или рука`,
+          );
+          tpOid = null;
+          tpPrice = null;
+        }
+      }
+    }
+
     // entry_equity для корректной оценки pnl при закрытии (integrityCheck Δequity).
     let entryEquity = null;
     try {
@@ -502,7 +594,9 @@ export async function maybeAdoptManualPosition(manualPositions) {
         side,
         entry_equity:  entryEquity,
         sl_price:      plannedSl,
+        tp_price:      tpPrice,
         hunter_sl_oid: slOid,        // → classifyClose пометит 'sl_trigger' при срабатывании
+        hunter_tp_oid: tpOid,        // → и 'tp_trigger', когда сработает цель
         ...entrySnapshot,
       });
     } catch (err) {
@@ -523,7 +617,8 @@ export async function maybeAdoptManualPosition(manualPositions) {
     logger.info(
       `[Adopt] 🤝 adopted #${coin} ${side.toUpperCase()} (id=${id}) | ` +
       `entry=$${entry} size=$${sizeUsd.toFixed(2)} age=${ageMin.toFixed(1)}min | ` +
-      `SL @ $${plannedSl.toPrecision(6)} (${distLabel}) oid=${slOid}`,
+      `SL @ $${plannedSl.toPrecision(6)} (${distLabel}) oid=${slOid}` +
+      (tpPrice != null ? ` | TP @ $${tpPrice.toPrecision(6)} oid=${tpOid}` : ' | без TP'),
     );
 
     // Тост на дашборде «позиция открыта» и для РУЧНЫХ входов (adopt). afterOpen →

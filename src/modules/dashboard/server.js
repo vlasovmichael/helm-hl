@@ -280,6 +280,9 @@ function buildAdoptManagement(adoptPos) {
   return {
     strategy: "adopt",
     stopPrice: adoptPos.sl_price ?? null,
+    // Реальная цель с биржи (reduce-only лимитка, выставлена при подхвате).
+    // Полоса «до профита» теперь ведёт к ней, а не к абстрактному 2R.
+    tpPrice: adoptPos.tp_price ?? null,
     initialRiskPct,
     peakPct,
     maePct: getAdoptMaePct(adoptPos.id),
