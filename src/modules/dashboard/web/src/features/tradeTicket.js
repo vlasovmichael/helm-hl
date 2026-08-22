@@ -95,6 +95,28 @@ export function stopRiskUsd({ notional, stopDistPct }) {
   return (notional * d) / 100;
 }
 
+/**
+ * Риск против ДЕПО, а не против маржи сделки. Здесь же — размер, который отвечал
+ * бы порогу: стоп двигать нельзя (он по волатильности монеты), двигается размер.
+ *
+ *   нотионал = депо × riskPct / дистанция_стопа
+ *
+ * Это единственная величина риск-модели, которая переносится между счетами: 5%
+ * значит $0.21 на депо $4 и $1000 на $20 000.
+ */
+export function riskVsEquity({ riskUsd, equity, riskPct, stopDistPct }) {
+  const eq = Number(equity);
+  const d = Number(stopDistPct);
+  if (!(riskUsd > 0) || !(eq > 0)) return null;
+  const pctOfEquity = (riskUsd / eq) * 100;
+  const limit = Number(riskPct);
+  const hasLimit = Number.isFinite(limit) && limit > 0;
+  const suggestedNotional = hasLimit && Number.isFinite(d) && d > 0
+    ? (eq * (limit / 100)) / (d / 100)
+    : null;
+  return { pctOfEquity, suggestedNotional, over: hasLimit && pctOfEquity > limit };
+}
+
 /** Валидация открытия. { ok, blockers[], warnings[], entry, notional } */
 export function validateOpen(s, ctx) {
   const blockers = [];
@@ -322,6 +344,12 @@ function createModal(io) {
     const coins = sizeInCoins(notional, v.entry ?? ctx.price);
     const botStop = projectedBotStop({ side: state.side, entry: v.entry, stopDistPct: ctx.stopDistPct });
     const risk = stopRiskUsd({ notional, stopDistPct: ctx.stopDistPct });
+    const riskEq = riskVsEquity({
+      riskUsd: risk,
+      equity: ctx.equity,
+      riskPct: ctx.riskPct,
+      stopDistPct: ctx.stopDistPct,
+    });
     const maxLev = leverageCap(ctx);
     const available = Number(ctx.available) || 0;
     const tooSmall = notional > 0 && notional < MIN_ORDER_USD;
@@ -414,10 +442,24 @@ function createModal(io) {
           <span>Stop Loss <i class="tt-row__by">set by bot</i></span>
           <b data-botstop>${botStopHtml(botStop)}</b>
         </div>
-        <div class="tt-row">
+        <div class="tt-row ${riskEq?.over ? "tt-row--bad" : ""}">
           <span>Risk at that stop</span>
-          <b class="${risk != null ? "is-risk" : ""}">${risk != null ? `−${fmtUsd(risk)}` : "—"}</b>
+          <b class="${risk != null ? "is-risk" : ""}">${
+            risk != null
+              ? `−${fmtUsd(risk)}${riskEq ? ` <i class="tt-row__sub">${riskEq.pctOfEquity.toFixed(0)}% of equity</i>` : ""}`
+              : "—"
+          }</b>
         </div>
+        ${riskEq?.over && riskEq.suggestedNotional != null
+          ? `<div class="tt-row tt-row--sub">
+               <span></span>
+               <b class="tt-row__sub">${ctx.riskPct}% would be ${fmtUsd(riskEq.suggestedNotional)}${
+                 riskEq.suggestedNotional < MIN_ORDER_USD
+                   ? ` — below the ${fmtUsd(MIN_ORDER_USD)} minimum`
+                   : ""
+               }</b>
+             </div>`
+          : ""}
       </div>
 
       ${listBlock("tt-blockers", v.blockers)}

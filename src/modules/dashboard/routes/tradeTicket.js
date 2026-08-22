@@ -25,6 +25,7 @@ import {
   openMarket,
   closeMarket,
   placeLimit,
+  getAccountSummary,
   getBalance,
   setLeverage,
   getPositions,
@@ -90,6 +91,20 @@ async function safeAvailable() {
   }
 }
 
+/**
+ * Депо целиком (accountValue), не свободная маржа. Риск на сделку считается от
+ * всего счёта: свободная маржа схлопывается по мере набора поз, и процент от неё
+ * рос бы тем сильнее, чем больше ты уже нарисковал.
+ */
+async function safeEquity() {
+  try {
+    const { equity } = await getAccountSummary();
+    return Number.isFinite(equity) && equity > 0 ? equity : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Нормализация тела запроса — на входе всегда недоверенные данные. */
 function readOpenBody(b) {
   return {
@@ -110,9 +125,10 @@ function readOpenBody(b) {
 export async function handleContext(req, res) {
   const coin = String(req.query.coin || "").toUpperCase().replace(/-PERP$/i, "");
   try {
-    const [price, available, positions] = await Promise.all([
+    const [price, available, equity, positions] = await Promise.all([
       coin ? resolvePrice(coin) : Promise.resolve(null),
       safeAvailable(),
+      safeEquity(),
       buildPositions(),
     ]);
 
@@ -160,6 +176,8 @@ export async function handleContext(req, res) {
       minOrderUsd: MIN_ORDER_USD,
       stopDistPct,
       stopBasis,
+      equity,                                  // депо целиком — база для риска
+      riskPct: config.trading.adoptRiskPct,    // порог риска на сделку
       adoptEnabled: config.trading.adoptEnabled,
       hasPosition: positions.some((p) => p.coin === coin),
       positions,

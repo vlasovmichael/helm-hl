@@ -35,6 +35,10 @@ import { getHourlyCandles } from '../modules/candleCache.js';
 import { getPriceNMinAgo, getLatestPrice } from '../core/priceHistory.js';
 import { getOiNMinAgo } from '../core/oiHistory.js';
 
+// Минимальный ордер HL — та же величина, что показывает тикет. Нужна, чтобы
+// отличить «возьми размер поменьше» от «на этом депо монета недоступна вовсе».
+const MIN_ADOPT_ORDER_USD = 10;
+
 const ATR_PERIOD = 14;            // стандартный период ATR
 const ATR_LOOKBACK_HOURS = 48;    // с запасом ≥ ATR_PERIOD+1 свечей
 
@@ -187,6 +191,39 @@ export function computeAdoptTp({ side, entry, stopDistPct, rr, maxPct }) {
     : entry * (1 + distPct / 100);
   // Потолок режет цель, но не риск — значит фактический R:R ниже заявленного.
   return { tpPrice, distPct, rr: distPct / stopDistPct, capped };
+}
+
+/**
+ * Риск позиции до стопа и размер, который отвечал бы заданному риску.
+ * Чистая функция — единственное место, где живёт эта арифметика.
+ *
+ * @param {Object} p
+ * @param {number} p.notionalUsd  — размер позиции в долларах
+ * @param {number} p.stopDistPct  — дистанция стопа, % от входа
+ * @param {number} p.equityUsd    — депо (accountValue)
+ * @param {number} p.riskPct      — целевой риск на сделку, % от депо
+ * @returns {{ riskUsd:number, riskPctOfEquity:number|null,
+ *             suggestedNotionalUsd:number|null, overLimit:boolean }|null}
+ */
+export function assessPositionRisk({ notionalUsd, stopDistPct, equityUsd, riskPct }) {
+  if (!Number.isFinite(notionalUsd) || notionalUsd <= 0) return null;
+  if (!Number.isFinite(stopDistPct) || stopDistPct <= 0) return null;
+
+  const riskUsd = notionalUsd * (stopDistPct / 100);
+  const equityKnown = Number.isFinite(equityUsd) && equityUsd > 0;
+  const riskPctOfEquity = equityKnown ? (riskUsd / equityUsd) * 100 : null;
+  // Размер, при котором риск равен заданному проценту депо. Стоп при этом не
+  // трогаем — двигается только размер, иначе стоп уедет внутрь шума.
+  const suggestedNotionalUsd = equityKnown && Number.isFinite(riskPct) && riskPct > 0
+    ? (equityUsd * (riskPct / 100)) / (stopDistPct / 100)
+    : null;
+
+  return {
+    riskUsd,
+    riskPctOfEquity,
+    suggestedNotionalUsd,
+    overLimit: riskPctOfEquity != null && Number.isFinite(riskPct) && riskPctOfEquity > riskPct,
+  };
 }
 
 /**
@@ -612,6 +649,39 @@ export async function maybeAdoptManualPosition(manualPositions) {
     // проиндексирован. Запоминаем, чтобы бэкфиллить реальный entry_time, когда
     // fill долетит (точная классификация 'adopted' в ленте/леджере).
     if (provisional) _provisionalAdopt.set(up(coin), { id, since: now });
+
+    // ── Размер против депо ───────────────────────────────────────────────────
+    // Бот не выбирал этот размер и не может его исправить: сузить стоп под
+    // крупную позу значит поменять вынос движением на вынос шумом. Поэтому
+    // единственное честное действие — назвать цифру вслух, с конкретным
+    // размером, который отвечал бы порогу.
+    const risk = assessPositionRisk({
+      notionalUsd: sizeUsd,
+      stopDistPct: distPct,
+      equityUsd:   entryEquity,
+      riskPct:     config.trading.adoptRiskPct,
+    });
+    if (risk?.overLimit) {
+      const wouldFitMinOrder = risk.suggestedNotionalUsd >= MIN_ADOPT_ORDER_USD;
+      logger.warn(
+        `[Adopt] ⚖️ #${coin} риск $${risk.riskUsd.toFixed(2)} = ` +
+        `${risk.riskPctOfEquity.toFixed(0)}% депо (порог ${config.trading.adoptRiskPct}%) | ` +
+        `под порог подошёл бы размер $${risk.suggestedNotionalUsd.toFixed(2)}` +
+        (wouldFitMinOrder ? '' : ` — это НИЖЕ минимального ордера $${MIN_ADOPT_ORDER_USD}`),
+      );
+      await fireAdoptNtfy(
+        `⚖️ #${coin}: риск ${risk.riskPctOfEquity.toFixed(0)}% депо`,
+        `Поза $${sizeUsd.toFixed(2)} со стопом ${distPct.toFixed(2)}% рискует ` +
+        `$${risk.riskUsd.toFixed(2)} при депо $${entryEquity.toFixed(2)}.\n` +
+        `Порог ${config.trading.adoptRiskPct}% → размер был бы $${risk.suggestedNotionalUsd.toFixed(2)}` +
+        (wouldFitMinOrder
+          ? '.'
+          : `, а это ниже минимального ордера биржи $${MIN_ADOPT_ORDER_USD} — ` +
+            `на таком депо эта монета недоступна по риску.`) +
+        `\nСтоп и цель уже стоят, поза защищена.`,
+        ['balance_scale'],
+      );
+    }
 
     const distLabel = `−${distPct.toFixed(2)}% ${basis === 'atr' ? 'ATR' : 'фикс'}`;
     logger.info(

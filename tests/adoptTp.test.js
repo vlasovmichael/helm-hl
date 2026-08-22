@@ -54,3 +54,35 @@ test('breakeven-winrate: цена решения по R:R', () => {
   assert.ok(Math.abs(breakevenWinrate(1 / 3) - 75) < 1e-9);
   assert.equal(breakevenWinrate(0), null);
 });
+
+// ── Риск позиции против депо (серверная сторона) ─────────────────────────────
+// Та же арифметика, что в тикете, но для няньки: она видит уже открытую позу и
+// может только назвать цифру вслух — сужать стоп под чужой размер нельзя.
+
+const { assessPositionRisk } = await import('../src/app/adoptReconcile.js');
+
+test('assessPositionRisk: PUMP 22.08 — 36% депо, размер под порог ниже минимума', () => {
+  const r = assessPositionRisk({
+    notionalUsd: 21.97, stopDistPct: 7.12, equityUsd: 4.31, riskPct: 5,
+  });
+  assert.equal(r.riskUsd.toFixed(2), '1.56');
+  assert.equal(r.riskPctOfEquity.toFixed(0), '36');
+  assert.equal(r.overLimit, true);
+  assert.equal(r.suggestedNotionalUsd.toFixed(2), '3.03');
+});
+
+test('assessPositionRisk: в пределах порога — тишина', () => {
+  const r = assessPositionRisk({
+    notionalUsd: 100, stopDistPct: 3, equityUsd: 2000, riskPct: 5,
+  });
+  assert.equal(r.overLimit, false);
+});
+
+test('assessPositionRisk: депо неизвестно — доля null, алерта не будет', () => {
+  const r = assessPositionRisk({
+    notionalUsd: 100, stopDistPct: 3, equityUsd: null, riskPct: 5,
+  });
+  assert.equal(r.riskPctOfEquity, null);
+  assert.equal(r.overLimit, false);
+  assert.equal(r.suggestedNotionalUsd, null);
+});

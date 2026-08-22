@@ -15,6 +15,7 @@ import {
   effectiveEntry,
   projectedBotStop,
   stopRiskUsd,
+  riskVsEquity,
   validateOpen,
   validateClose,
   suggestCoins,
@@ -273,4 +274,37 @@ test("validateClose: состояние закрытия у каждой мон�
   const leaked = validateClose(chip, acePos, { price: 0.1635 });
   assert.equal(leaked.ok, false);
   assert.ok(leaked.blockers.some((b) => /cross the book/.test(b)));
+});
+
+// ── Риск против депо (23.08.2026) ────────────────────────────────────────────
+// Why: стоп считается от волатильности монеты, размер выбирает рука — и на
+// депо $4.31 поза в $21.97 со стопом 7.12% дала риск 36% счёта. Дистанцию стопа
+// под это сужать нельзя (уедет внутрь шума), двигать надо размер. Здесь
+// проверяется, что арифметика подсказки не врёт и переносится между счетами.
+
+test("riskVsEquity: доля депо и размер под порог", () => {
+  const r = riskVsEquity({ riskUsd: 1.56, equity: 4.31, riskPct: 5, stopDistPct: 7.12 });
+  assert.equal(r.pctOfEquity.toFixed(0), "36");
+  assert.equal(r.over, true);
+  // 4.31 × 5% / 7.12% = $3.03 — ниже минимального ордера, монета недоступна.
+  assert.equal(r.suggestedNotional.toFixed(2), "3.03");
+});
+
+test("riskVsEquity: та же формула на крупном счёте даёт крупный размер", () => {
+  const r = riskVsEquity({ riskUsd: 1000, equity: 20000, riskPct: 5, stopDistPct: 7.12 });
+  assert.equal(r.pctOfEquity.toFixed(0), "5");
+  assert.equal(r.over, false);
+  assert.equal(Math.round(r.suggestedNotional), 14045);
+});
+
+test("riskVsEquity: без депо или без риска — null, а не деление на ноль", () => {
+  assert.equal(riskVsEquity({ riskUsd: 1, equity: 0, riskPct: 5, stopDistPct: 7 }), null);
+  assert.equal(riskVsEquity({ riskUsd: 0, equity: 100, riskPct: 5, stopDistPct: 7 }), null);
+});
+
+test("riskVsEquity: без порога считает долю, но ничего не советует", () => {
+  const r = riskVsEquity({ riskUsd: 5, equity: 100, riskPct: null, stopDistPct: 7 });
+  assert.equal(r.pctOfEquity.toFixed(0), "5");
+  assert.equal(r.over, false);
+  assert.equal(r.suggestedNotional, null);
 });
