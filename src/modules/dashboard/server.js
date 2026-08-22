@@ -247,7 +247,9 @@ function buildAdoptManagement(adoptPos) {
   const peakPct = getAdoptPeakPct(adoptPos.id) ?? 0;
   const t = config.trading;
 
-  const trailArmed = peakPct >= t.adoptTrailArmPct;
+  // Трейл выключен (ADOPT_TRAIL_ENABLED=false) → вехи «до трейла» и трейл-пола
+  // не существует: показывать её значило бы рисовать событие, которого не будет.
+  const trailArmed = t.adoptTrailEnabled && peakPct >= t.adoptTrailArmPct;
   const beArmed = peakPct >= t.adoptBeArmPct;
 
   let floorPct, floorKind;
@@ -284,8 +286,10 @@ function buildAdoptManagement(adoptPos) {
     beArmed,
     beArmPct: t.adoptBeArmPct, // веха храповика (% от входа)
     trailArmed,
-    trailArmPct: t.adoptTrailArmPct, // веха трейла (% от входа), взвод по ПИКУ
-    trailGiveBackPct: t.adoptTrailGiveBackPct,
+    // Веха трейла (% от входа), взвод по ПИКУ. null при выключенном трейле —
+    // фронт тогда ведёт полосу от храповика сразу до цели прибыли.
+    trailArmPct: t.adoptTrailEnabled ? t.adoptTrailArmPct : null,
+    trailGiveBackPct: t.adoptTrailEnabled ? t.adoptTrailGiveBackPct : null,
     floorPct,
     floorPrice,
     floorKind,

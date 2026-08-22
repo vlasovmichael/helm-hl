@@ -16,6 +16,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
+process.env.ADOPT_TRAIL_ENABLED = 'true'; // трейл выключен по умолчанию с 23.08.2026
 process.env.ADOPT_BE_ARM_PCT = '1.5';
 process.env.ADOPT_TRAIL_ARM_PCT = '2';
 process.env.ADOPT_TRAIL_GIVE_BACK_PCT = '30';

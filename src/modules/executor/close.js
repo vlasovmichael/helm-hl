@@ -16,8 +16,10 @@ import {
   getPositions,
 } from '../exchange.js';
 import { parseFillResponse } from './fill-parser.js';
+import { closeLimitFirst } from './limitClose.js';
 import { fetchUserFills, classifyClose, findRoundTripForPosition } from '../userFills.js';
-import { calcPnl, checkSlippage, MARKET_SLIPPAGE } from './math.js';
+import { calcPnl, checkSlippage, MARKET_SLIPPAGE, FEE_RATE, MAKER_FEE_RATE } from './math.js';
+import { config } from '../../core/config.js';
 import {
   banSlippage, setCooldown, recordLoss,
   SLIPPAGE_BAN_TTL_MS, REENTRY_COOLDOWN_MS, CB_PAUSE_MS,
@@ -131,13 +133,20 @@ export async function productionClose(signal, position, silent = false) {
   }
 
   // ── 1. Отправляем ордер на закрытие ──────────
+  // По умолчанию сначала мейкером (CLOSE_LIMIT_ENABLED), с добивкой маркетом по
+  // дедлайну — см. шапку limitClose.js. Старый путь остаётся под флагом=false.
   let result;
+  let limitFill = null;
   try {
-    result = await retryWithBackoff(
-      () =>
-        closeMarket(coin, undefined, MARKET_SLIPPAGE), // size undefined → закрыть полностью
-      { label: `close-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
-    );
+    if (config.trading.closeLimitEnabled) {
+      limitFill = await closeLimitFirst({ coin, side: posSide });
+    } else {
+      result = await retryWithBackoff(
+        () =>
+          closeMarket(coin, undefined, MARKET_SLIPPAGE), // size undefined → закрыть полностью
+        { label: `close-${coin}`, maxRetries: 2, baseDelayMs: 1500 },
+      );
+    }
   } catch (err) {
     if (err.message?.includes("No position found")) {
       logger.error(
@@ -159,7 +168,8 @@ export async function productionClose(signal, position, silent = false) {
   }
 
   // ── 2. Парсим ответ ──────────────────────────
-  const fill = parseFillResponse(result, "CLOSE");
+  // limitClose отдаёт уже готовую форму fill'а — парсить нечего.
+  const fill = limitFill ?? parseFillResponse(result, "CLOSE");
 
   if (!fill.ok) {
     logger.error(
@@ -337,7 +347,18 @@ async function finishProductionClose({
   // ── 3. Slippage guard ────────────────────────
   const slip = checkSlippage(signal.price, fill.avgPx, closeLabel);
 
-  if (slip.ban) {
+  // Через limit-first путь между решением и fill'ом проходит до CLOSE_LIMIT_WAIT_MS.
+  // Разница цен там измеряет движение рынка за время ожидания, а не качество
+  // исполнения, и банить монету за неё нельзя — иначе бот сам себе выключит
+  // торговлю на первом же быстром движении. Логируем, но не баним.
+  const waitedForMaker = fill.kind != null;
+
+  if (slip.ban && waitedForMaker) {
+    logger.warn(
+      `[Executor] ⚠️ #${coin} цена ушла на ${slip.label} за время ожидания мейкер-выхода ` +
+        `(kind=${fill.kind}) — это дрейф рынка, не слиппедж; бан не ставлю`,
+    );
+  } else if (slip.ban) {
     banSlippage(coin);
     logger.error(
       `[Executor] 🚫 SLIPPAGE BAN #${coin} ${closeLabel}: ${slip.label} (>${1.5}%) — ` +
@@ -362,8 +383,11 @@ async function finishProductionClose({
   );
 
   // ── 4. Считаем реальный PnL ──────────────────
+  // Мейкер-выход платит 0.3 бп вместо 2 бп + слиппедж — если считать его по
+  // тейкерской ставке, вся экономия от лимитки исчезнет в учёте.
+  const exitFeeRate = fill.kind === 'limit' ? MAKER_FEE_RATE : FEE_RATE;
   const { pricePnl, fundingPnl, totalFee, realizedPnl, fundingSource } =
-    calcPnl(position, fill.avgPx, holdHours, realFundingUsd);
+    calcPnl(position, fill.avgPx, holdHours, realFundingUsd, exitFeeRate);
 
   // ── 5. Закрываем в БД ────────────────────────
   // Hunter: подмешиваем MFE/MAE из tick-трекера + hold_seconds.

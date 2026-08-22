@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 // Дефолты adopt: BE_ARM=1.5, FLOOR=0, TRAIL_ARM=2, GIVE_BACK=30.
+// Трейл с 23.08.2026 выключен по умолчанию — здесь включаем явно, чтобы
+// проверять именно его механику. Поведение «выключен» — adoptTrailDisabled.test.js.
+process.env.ADOPT_TRAIL_ENABLED = 'true';
 
 const { analyzeAdopt, resetAdoptState } = await import('../src/modules/strategistAdopt.js');
 

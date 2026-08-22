@@ -8,8 +8,10 @@
 // механики Hunter D3:
 //   • BE-храповик: peak% ≥ ARM → взвести; если потом unrealized% ≤ FLOOR (0) —
 //     закрыть в безубыток, не отдавать подарок в минус.
-//   • Трейл: peak% ≥ ARM → если откат от пика ≥ GIVE_BACK% — закрыть в плюс,
-//     дать прибыли тянуться, но зафиксировать на развороте.
+//   • Трейл: peak% ≥ ARM → если откат от пика ≥ GIVE_BACK% — закрыть в плюс.
+//     ВЫКЛЮЧЕН 23.08.2026 (ADOPT_TRAIL_ENABLED=false): на 127 закрытиях медиана
+//     отдачи от пика была 40% при пороге 30%. Выход теперь либо BE-храповик,
+//     либо биржевой SL, либо рука — а звонок о развороте шлёт peak-alert.
 // Жёсткий SL тут НЕ дублируем (его исполнит биржа + поймает integrityCheck) —
 // иначе риск двойного закрытия. Side-aware (short и long).
 
@@ -38,13 +40,14 @@ const beArmedMap   = new Map(); // positionId → true, как только peak
 
 const BE_ARM    = config.trading.adoptBeArmPct;
 const BE_FLOOR  = config.trading.adoptBeFloorPct;
+const TRAIL_ON  = config.trading.adoptTrailEnabled;
 const TRAIL_ARM = config.trading.adoptTrailArmPct;
 const TRAIL_GB  = config.trading.adoptTrailGiveBackPct;
 
 // Пик персистим, только когда он уже влияет на защиту — то есть дорос до
 // ближайшего из порогов. Мелкие колебания у нуля писать на диск незачем: они
 // ничего не решают, а запись идёт на каждый тик по каждой позе.
-const PERSIST_FROM_PCT = Math.min(BE_ARM, TRAIL_ARM);
+const PERSIST_FROM_PCT = TRAIL_ON ? Math.min(BE_ARM, TRAIL_ARM) : BE_ARM;
 
 // Восстановление мягкого состояния с диска после рестарта (09.08: до этого пик
 // жил только в памяти и обнулялся, см. шапку adoptTrailStore.js). Ключи в JSON —
@@ -159,7 +162,8 @@ export function analyzeAdopt(position, price) {
   if (peak > 0) lastGbMap.set(position.id, ((peak - unrealizedPct) / peak) * 100);
 
   // ── Трейл: даём тянуться, фиксируем на откате ──
-  if (peak >= TRAIL_ARM && unrealizedPct > 0) {
+  // Выключен по умолчанию (ADOPT_TRAIL_ENABLED=false), см. шапку флага в config.js.
+  if (TRAIL_ON && peak >= TRAIL_ARM && unrealizedPct > 0) {
     const giveBack  = peak - unrealizedPct;
     const threshold = peak * (TRAIL_GB / 100);
     if (giveBack >= threshold) {

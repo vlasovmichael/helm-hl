@@ -309,6 +309,22 @@ function loadConfig() {
   }
 
 
+  // ── Выход лимиткой (post-only) вместо маркета ──────────────────────────────
+  // Замер 14.08.2026: 1440 из 1440 закрытий ушли тейкером, медиана спреда 15.98 бп,
+  // и на комиссии+спред пришлось ~69% всего минуса. Поэтому бот сначала кладёт
+  // reduce-only Alo на СВОЮ сторону книги и ждёт; не налилось за CLOSE_LIMIT_WAIT_MS —
+  // отменяет и добивает маркетом. Фолбэк обязателен: выход, который «может не
+  // исполниться», — это не выход, а надежда.
+  const closeLimitEnabled = (process.env.CLOSE_LIMIT_ENABLED || 'true').toLowerCase() === 'true';
+  const closeLimitWaitMs  = parseInt(process.env.CLOSE_LIMIT_WAIT_MS  || '20000', 10);
+  const closeLimitPollMs  = parseInt(process.env.CLOSE_LIMIT_POLL_MS  || '2000', 10);
+  if (!Number.isFinite(closeLimitWaitMs) || closeLimitWaitMs < 1000 || closeLimitWaitMs > 300000) {
+    throw new Error(`CLOSE_LIMIT_WAIT_MS must be in [1000, 300000]. Got: "${process.env.CLOSE_LIMIT_WAIT_MS}"`);
+  }
+  if (!Number.isFinite(closeLimitPollMs) || closeLimitPollMs < 250 || closeLimitPollMs > closeLimitWaitMs) {
+    throw new Error(`CLOSE_LIMIT_POLL_MS must be in [250, CLOSE_LIMIT_WAIT_MS]. Got: "${process.env.CLOSE_LIMIT_POLL_MS}"`);
+  }
+
   // ── Adopt Mode — бот-нянька на ручные входы (plans/adopt-mode-plan.md) ──
   // Юзер открывает позу руками → бот подхватывает её в свободный слот как
   // strategy_id='adopt' и СРАЗУ ставит реальный reduce-only стоп на бирже
@@ -363,6 +379,12 @@ function loadConfig() {
   // меньше стоп-дистанции). FLOOR 0 = безубыток.
   const adoptBeArmPct         = parseFloat(process.env.ADOPT_BE_ARM_PCT         || '1.5');
   const adoptBeFloorPct       = parseFloat(process.env.ADOPT_BE_FLOOR_PCT       || '0');
+  // Трейл выключен 23.08.2026 по решению оператора: за 127 закрытий adopt_trail_tp
+  // медиана отдачи от пика = 40% при пороге 30% (p90 = 68%), а худший случай
+  // закрылся с пика +2.86% в минус −0.72%. Правило «дать прибыли тянуться» на
+  // практике превращалось в «отдать её обратно». Флаг оставлен, чтобы вернуть
+  // поведение одной переменной, а не откатом кода.
+  const adoptTrailEnabled     = (process.env.ADOPT_TRAIL_ENABLED || 'false').toLowerCase() === 'true';
   const adoptTrailArmPct      = parseFloat(process.env.ADOPT_TRAIL_ARM_PCT      || '2');
   const adoptTrailGiveBackPct = parseFloat(process.env.ADOPT_TRAIL_GIVE_BACK_PCT || '30');
   if (isNaN(adoptStopPct) || adoptStopPct <= 0 || adoptStopPct >= 20) {
@@ -684,6 +706,10 @@ function loadConfig() {
       adoptStopMaxPct,
       adoptBeArmPct,
       adoptBeFloorPct,
+      closeLimitEnabled,
+      closeLimitWaitMs,
+      closeLimitPollMs,
+      adoptTrailEnabled,
       adoptTrailArmPct,
       adoptTrailGiveBackPct,
       adoptTimecutShadowEnabled,
