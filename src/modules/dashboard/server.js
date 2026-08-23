@@ -88,6 +88,7 @@ import {
   handleWhatIf,
   OI_SNAPSHOT_MS,
 } from "./routes/movers.js";
+import { handleScreen } from "./routes/screen.js";
 import { getManualTrades } from "./routes/manualTrades.js";
 import { handlePnlSummary, handleInsights, handleDayJournal, handleDayNoteSave } from "./routes/pnl.js";
 import { handleTradeBreakdown } from "./routes/tradeBreakdown.js";
@@ -961,6 +962,7 @@ export function startDashboard() {
   app.get("/api/activity", handleActivity);
   app.get("/api/logs", handleLogs);
   app.get("/api/signals", handleSignals);
+  app.get("/api/screen", handleScreen);
   app.get("/api/whatif", handleWhatIf);
   app.get("/api/near-misses", handleNearMisses);
   app.get("/api/trade/:id", handleTradeDetail);

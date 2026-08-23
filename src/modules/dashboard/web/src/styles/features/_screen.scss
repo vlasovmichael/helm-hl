@@ -1,0 +1,278 @@
+/* ───────────────────────────────────────────────
+   Экран монет + бюджет дня (карточка 01.4)
+
+   Заменяет Hot Movers в роли «куда смотреть». Визуальный принцип: НИЧЕГО не
+   подсвечиваем как «сигнал» — цветом здесь говорит только трение (цена входа),
+   потому что это единственное, что мы про монету достоверно знаем. Движение
+   красится нейтральной парой up/down, как везде в проекте.
+   ─────────────────────────────────────────────── */
+
+.scr-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.scr-meta {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ── Бюджет дня: счётчик сделок + остаток до дневного стопа ── */
+.scr-budget {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 28px;
+  padding: 10px 14px;
+  margin: 0 0 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--card-bg-elev);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+
+  &:empty {
+    display: none;
+  }
+
+  .scr-budget__row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .scr-budget__label {
+    color: var(--text-muted);
+  }
+
+  b {
+    color: var(--text-primary);
+    font-weight: 600;
+
+    &.is-over {
+      color: var(--red);
+    }
+  }
+
+  .scr-budget__note {
+    flex-basis: 100%;
+    color: var(--text-muted);
+    font-size: 11px;
+
+    &.is-over {
+      color: var(--red);
+    }
+  }
+}
+
+/* Точки-счётчик сделок: видно с одного взгляда, без чтения цифр. */
+.scr-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 3px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  vertical-align: middle;
+
+  &.is-on {
+    background: var(--text-muted);
+    border-color: var(--text-muted);
+  }
+  /* Сверх дневного лимита — единственное место карточки, где мы повышаем голос. */
+  &.is-over {
+    background: var(--red);
+    border-color: var(--red);
+  }
+}
+
+/* ── Таблица экрана ── */
+.scr-table {
+  /* Сортируемые заголовки: клик меняет поле, повторный — направление.
+     Стрелка появляется только у активной колонки, чтобы шапка не рябила. */
+  th[data-sort] {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: color 0.15s ease;
+
+    &:hover {
+      color: var(--text-primary);
+    }
+
+    &::after {
+      content: "";
+      display: inline-block;
+      width: 0.7em;
+      margin-left: 3px;
+      opacity: 0;
+    }
+    &.is-sorted {
+      color: var(--text-primary);
+    }
+    &.is-sorted[data-dir="desc"]::after {
+      content: "↓";
+      opacity: 1;
+    }
+    &.is-sorted[data-dir="asc"]::after {
+      content: "↑";
+      opacity: 1;
+    }
+  }
+
+  /* Строка ведёт в Trade Ticket на этой монете. */
+  .scr-row {
+    cursor: pointer;
+    transition: background 0.12s ease;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--card-bg-elev);
+      outline: none;
+    }
+    &:focus-visible {
+      box-shadow: inset 2px 0 0 var(--accent);
+    }
+  }
+
+  /* Твой послужной список: минус по монете — приглушённый красный, не тревога.
+     Это факт о прошлом, а не запрет на вход. */
+  .scr-mine {
+    font-weight: 600;
+
+    &.is-bad {
+      color: var(--red);
+    }
+    &.is-good {
+      color: var(--green);
+    }
+    &.scr-mine--none {
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+  }
+
+  width: 100%;
+
+  .scr-coin {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    letter-spacing: 0.3px;
+  }
+
+  td {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .up {
+    color: var(--green);
+  }
+  .down {
+    color: var(--red);
+  }
+
+  /* Подпись под числом: окно движения либо сам спред в бп. */
+  .scr-win {
+    display: block;
+    font-style: normal;
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.2;
+  }
+
+  .scr-vol {
+    color: var(--text-muted);
+  }
+
+  /* Трение — главная колонка карточки. Пороги в frictionClass():
+     ≤8% бюджета риска — норма, ≤15% — терпимо, выше — монета съедает
+     риск раньше, чем цена куда-то пойдёт (HMSTR 31%, PURR 19%). */
+  .scr-fr {
+    font-weight: 600;
+
+    &.scr-fr--ok {
+      color: var(--green);
+    }
+    &.scr-fr--mid {
+      color: var(--amber);
+    }
+    &.scr-fr--bad {
+      color: var(--red);
+    }
+  }
+}
+
+/* ── Сворачивание Hot Movers ──
+   Карточка остаётся целиком: оператору нужны её Paper и What-if. Прячется только
+   таблица — та самая техника «двадцать входов в день». */
+/* Полоса-переключатель на всю ширину карточки вместо системного чекбокса:
+   попасть по ней мышью легко, и она сама объясняет, что произойдёт. */
+.hm-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    background: var(--card-bg-elev);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .hm-toggle__chev {
+    display: inline-flex;
+    transition: transform 0.2s ease;
+  }
+
+  &[aria-expanded="true"] {
+    border-style: solid;
+
+    .hm-toggle__chev {
+      transform: rotate(180deg);
+    }
+  }
+}
+
+.hm-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#sec-movers {
+  /* Свёрнутая карточка садится в шапку + полосу-переключатель. */
+  &.is-collapsed .hm-collapsible {
+    display: none;
+  }
+
+  .hm-collapsible {
+    margin-top: 12px;
+  }
+}

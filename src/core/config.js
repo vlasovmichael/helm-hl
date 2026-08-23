@@ -494,6 +494,27 @@ function loadConfig() {
     throw new Error(`DAILY_LOSS_LIMIT_USD must be > 0. Got: "${process.env.DAILY_LOSS_LIMIT_USD}"`);
   }
 
+  // ── Screen (экран торгуемых монет, 2026-08-23) ──
+  // Порог трения: монета попадает на экран по цене входа, а не по движению.
+  // 25бп ≈ 89 монет из 177 с живой книгой — TRUMP/ZEC/PENGU внутри, PURR(29бп)
+  // и HMSTR(52бп) снаружи. Разбор 703 сделок: комиссии = $27 из $35 убытка.
+  const screenMaxFrictionBp = parseFloat(process.env.SCREEN_MAX_FRICTION_BP || '25');
+  if (isNaN(screenMaxFrictionBp) || screenMaxFrictionBp <= 0) {
+    throw new Error(`SCREEN_MAX_FRICTION_BP must be > 0. Got: "${process.env.SCREEN_MAX_FRICTION_BP}"`);
+  }
+  // Счётчик сделок за день. Не гейт (входы ручные, запрещать нечего) — цифра
+  // перед глазами, чтобы двадцатый вход был осознанным, а не незаметным.
+  const screenTradesPerDay = parseInt(process.env.SCREEN_TRADES_PER_DAY || '5', 10);
+  if (isNaN(screenTradesPerDay) || screenTradesPerDay <= 0) {
+    throw new Error(`SCREEN_TRADES_PER_DAY must be > 0. Got: "${process.env.SCREEN_TRADES_PER_DAY}"`);
+  }
+  // Нотионал, от которого считается стоимость трения в карточке. Биржевой
+  // минимум ордера — на нём и показываем, иначе цифра не про эту жизнь.
+  const screenNotionalUsd = parseFloat(process.env.SCREEN_NOTIONAL_USD || '10');
+  if (isNaN(screenNotionalUsd) || screenNotionalUsd <= 0) {
+    throw new Error(`SCREEN_NOTIONAL_USD must be > 0. Got: "${process.env.SCREEN_NOTIONAL_USD}"`);
+  }
+
   // ── Risk-based position sizing (cross-strategy: Hunter / Hunter Long / ChillBoy) ──
   const riskBasedSizing  = (process.env.RISK_BASED_SIZING  || 'false').toLowerCase() === 'true';
   const riskSizingShadow = (process.env.RISK_SIZING_SHADOW || 'true').toLowerCase() === 'true';
@@ -756,6 +777,9 @@ function loadConfig() {
       adoptPeakAlertGiveBackPct,
       dailyLossLimitEnabled,
       dailyLossLimitUsd,
+      screenMaxFrictionBp,
+      screenTradesPerDay,
+      screenNotionalUsd,
       // ── Candy Girl радар (signal-only) ──
       candyGirlEnabled,
       candyGirlAlertEnabled,

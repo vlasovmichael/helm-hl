@@ -113,6 +113,65 @@
         </button>
       </section>
 
+      <!-- 01.4 / Screen — монеты, отобранные по цене входа, + бюджет дня.
+           Заменяет Hot Movers в роли «куда смотреть»: отбор идёт по трению
+           (спред + комиссии), а не по движению. Обоснование и порог —
+           routes/screen.js. Предсказаний здесь нет и быть не должно. -->
+      <section class="card" id="sec-screen">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-num="01.4"
+            title="Coins where entering is cheap. «Friction» = what share of your risk budget the round trip (book spread + two taker fees) eats. These are NOT signals: the list is filtered by cost of entry, movement is shown as fact — the call is yours."
+          >
+            Screen
+          </div>
+          <div class="scr-header-right">
+            <span id="screen-actions-slot"></span>
+            <span id="screen-meta" class="scr-meta"></span>
+          </div>
+        </div>
+        <div id="screen-budget" class="scr-budget"></div>
+        <div class="u-scroll-x">
+          <table class="data-table scr-table">
+            <thead>
+              <tr>
+                <th data-sort="coin" title="Sort by ticker">Coin</th>
+                <th class="r" data-sort="price" title="Sort by price">Price</th>
+                <th
+                  class="r"
+                  data-sort="move"
+                  title="Short-window move from the bot's live price buffer (15m, falls back to 1h). Sort by size of move."
+                >
+                  Move
+                </th>
+                <th class="r" data-sort="chg24h" title="Sort by 24h change">24h</th>
+                <th
+                  class="r"
+                  data-sort="friction"
+                  title="What share of your risk budget the round trip eats: book spread + two taker fees (4.32 bp each). Small print is the raw spread. Sort cheapest first."
+                >
+                  Friction
+                </th>
+                <th
+                  class="r"
+                  data-sort="mine"
+                  title="Your own track record on this coin: net P&L, number of trades and winrate. Not a prediction about the market — a fact about you."
+                >
+                  Mine
+                </th>
+                <th class="r" data-sort="volume" title="Sort by 24h volume">Volume</th>
+              </tr>
+            </thead>
+            <tbody id="screen-tbody">
+              <tr>
+                <td colspan="7" class="empty-state">Building screen…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- 01.5 / Hot Movers — live price spikes + OI delta -->
       <section class="card" id="sec-movers">
         <div class="card-header">
@@ -124,6 +183,8 @@
             Hot Movers
           </div>
           <div class="hm-header-right">
+            <span id="hm-actions-slot"></span>
+            <span id="hm-tools" class="hm-tools">
             <button
               id="mp-paper-btn"
               class="whatif-btn"
@@ -168,6 +229,7 @@
               </svg>
               What if…
             </button>
+            </span>
             <span
               id="hot-movers-meta"
               style="
@@ -178,6 +240,23 @@
             ></span>
           </div>
         </div>
+        <button
+          type="button"
+          id="hm-toggle"
+          class="hm-toggle"
+          aria-expanded="false"
+          aria-controls="hm-collapsible"
+          title="The spike list across the whole exchange is the «twenty entries a day» technique — hidden by default. Paper and What if… stay available either way."
+        >
+          <span class="hm-toggle__label">Show Hot Movers table</span>
+          <span class="hm-toggle__chev" aria-hidden="true">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </span>
+        </button>
+        <div class="hm-collapsible" id="hm-collapsible">
         <div class="u-scroll-x hm-scroll-wrap">
           <table class="data-table signals-table hm-table">
             <thead>
@@ -225,6 +304,7 @@
               </tr>
             </tbody>
           </table>
+        </div>
         </div>
       </section>
 
