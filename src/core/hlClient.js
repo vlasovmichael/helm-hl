@@ -11,6 +11,7 @@
 
 import axios from 'axios';
 import { retryWithBackoff } from './retry.js';
+import { probeAlloc } from '../app/allocProbe.js';
 import { logger } from './logger.js';
 
 const HL_INFO_URL = 'https://api.hyperliquid.xyz/info';
@@ -323,10 +324,17 @@ export async function hlInfo(body, opts = {}) {
       await acquire(priority);
       try {
         await gap();
-        const response = await axios.post(HL_INFO_URL, body, {
-          timeout: timeoutMs ?? TIMEOUT_MS,
-          headers: DEFAULT_HEADERS,
-        });
+        // Замер кучи вокруг запроса: сюда входит и разбор тела, а тело /info
+        // бывает многомегабайтным (candleSnapshot, userFills). Если залп родом
+        // из сети — виновник назовётся здесь. См. allocProbe.js.
+        const response = await probeAlloc(
+          `hl:${body?.type || 'info'}/${label}`,
+          () => axios.post(HL_INFO_URL, body, {
+            timeout: timeoutMs ?? TIMEOUT_MS,
+            headers: DEFAULT_HEADERS,
+          }),
+          (res) => Number(res?.headers?.['content-length']) || 0,
+        );
         return response.data;
       } catch (err) {
         // На 429 — взводим глобальный кулдаун, чтобы остальные запросы в очереди

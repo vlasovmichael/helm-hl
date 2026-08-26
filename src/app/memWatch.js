@@ -36,6 +36,8 @@ import { logger } from '../core/logger.js';
 import { state } from './state.js';
 import { fireAdoptNtfy } from './adoptReconcile.js';
 import { candleCacheStats } from '../modules/candleCache.js';
+import { logRecentAllocs } from './allocProbe.js';
+import { hlClientStats } from '../core/hlClient.js';
 
 const SAMPLE_EVERY_MS = parseInt(process.env.MEM_WATCH_INTERVAL_MS || '600000', 10);
 // ── Дополнение 2026-08-10: замер оказался крупнее события ────────────────────
@@ -124,6 +126,32 @@ export function shouldReportJump({ heapUsed, prevHeapUsed, jumpBytes }) {
 
 const mb = (bytes) => Math.round(bytes / 1024 / 1024);
 
+// Снимок кучи на залпе — тяжёлая артиллерия: пауза в секунды и файл размером с
+// кучу на диск (диск Oracle не резиновый, см. oracle_disk_cleanup). Поэтому по
+// умолчанию ВЫКЛЮЧЕН и включается долей потолка через env, а за один запуск
+// пишется ровно один файл. Порог держать высоким: смысл — снять картинку
+// близко к смерти, а не на каждом всплеске.
+const SNAPSHOT_AT = parseFloat(process.env.MEM_WATCH_SNAPSHOT_FRACTION || '0');
+const SNAPSHOT_DIR = process.env.MEM_WATCH_SNAPSHOT_DIR || 'data';
+let snapshotTaken = false;
+
+/** Чистое решение (для тестов): писать ли снимок кучи на этом залпе. */
+export function shouldWriteSnapshot({ heapUsed, heapLimit, fraction, alreadyTaken }) {
+  if (alreadyTaken || !(fraction > 0) || !(heapLimit > 0)) return false;
+  return heapUsed / heapLimit >= fraction;
+}
+
+function maybeHeapSnapshot(heapUsed, heapLimit) {
+  if (!shouldWriteSnapshot({ heapUsed, heapLimit, fraction: SNAPSHOT_AT, alreadyTaken: snapshotTaken })) return;
+  snapshotTaken = true;
+  try {
+    const file = v8.writeHeapSnapshot(`${SNAPSHOT_DIR}/jump-${Date.now()}.heapsnapshot`);
+    logger.warn(`[Mem] 📸 снимок кучи на залпе: ${file} (один за запуск)`);
+  } catch (err) {
+    logger.warn(`[Mem] снимок кучи не удался: ${err.message}`);
+  }
+}
+
 /**
  * Частый лёгкий опрос: молчит, пока куча не прыгнет разом на JUMP_BYTES.
  * Ничего не пушит — это диагностика для лога, а не риск-алерт (пуш на потолок
@@ -145,6 +173,17 @@ function fastSample() {
       `${mb(lastFastHeap)}→${mb(heapUsed)}МБ${heapLimit ? ` из ${mb(heapLimit)}МБ` : ''} ` +
       `| rss=${mb(rss)}МБ heapTotal=${mb(heapTotal)}МБ${caches}`,
     );
+    // Кто именно раздул: топ измеренных операций за минуту до залпа.
+    // Без этого в логе рядом остаются только безобидные [Universe] Updated.
+    try { logRecentAllocs(60_000); } catch { /* диагностика не роняет замер */ }
+    try {
+      const { inFlight, queued, weightPct, topLabels } = hlClientStats();
+      logger.warn(
+        `[Mem] ⚡ HL в этот момент: inFlight=${inFlight} queued=${queued} вес=${weightPct}% ` +
+        `| ${topLabels.map((t) => `${t.label}:${t.weight}`).join(' ')}`,
+      );
+    } catch { /* то же */ }
+    maybeHeapSnapshot(heapUsed, heapLimit);
   }
 
   lastFastHeap = heapUsed;

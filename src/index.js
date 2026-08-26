@@ -5,6 +5,7 @@
 import cron from 'node-cron';
 import { config } from './core/config.js';
 import { logger } from './core/logger.js';
+import { probeAlloc, recordAlloc } from './app/allocProbe.js';
 import { initDB, getActivePosition, runDbMaintenance, compactHistoryArchive } from './core/database.js';
 import { initExchange, getAccountSummary } from './modules/exchange.js';
 import { getAccountEquity } from './modules/wallet.js';
@@ -122,7 +123,7 @@ async function main() {
   cron.schedule(
     '5 21 * * *',
     () => {
-      sendDailyDigest().catch((err) => {
+      probeAlloc('cron:mailDigest', sendDailyDigest).catch((err) => {
         logger.warn(`[mailDigest] cron crashed: ${err.message}`);
       });
     },
@@ -135,7 +136,7 @@ async function main() {
   cron.schedule(
     '0 3 * * *',
     () => {
-      taxDailyJob().catch((err) => {
+      probeAlloc('cron:tax', taxDailyJob).catch((err) => {
         logger.error(`[Tax] Cron job crashed: ${err.message}`);
       });
     },
@@ -152,7 +153,7 @@ async function main() {
   // ── Tax Outbox pusher — каждые 15 минут ──
   // Драйнит tax_outbox в tax-manager. Fail-soft: если env не задан — skip.
   cron.schedule('*/15 * * * *', () => {
-    taxDrainOutbox().catch((err) => {
+    probeAlloc('cron:taxOutbox', taxDrainOutbox).catch((err) => {
       logger.error(`[TaxPusher] Cron crashed: ${err.message}`);
     });
   });
@@ -165,10 +166,16 @@ async function main() {
   cron.schedule(
     '0 4 * * *',
     () => {
+      const dbT0 = Date.now();
+      const dbH0 = process.memoryUsage().heapUsed;
       try {
         const isWeekly = new Date().getDay() === 0; // воскресенье → VACUUM
         const res = runDbMaintenance({ vacuum: isWeekly });
         compactHistoryArchive();
+        recordAlloc('cron:dbMaintenance', {
+          ms: Date.now() - dbT0,
+          heapDelta: process.memoryUsage().heapUsed - dbH0,
+        });
         if (!res.ok) {
           sendMessage(
             `🚨 DB integrity_check FAILED:\n<code>${res.integrity}</code>`,
@@ -190,7 +197,7 @@ async function main() {
   // тест персистентности построить не из чего (2026-08-03).
   const captureLeaderboard = async (why) => {
     try {
-      const r = await captureSnapshot();
+      const r = await probeAlloc('cron:leaderboard', captureSnapshot, (x) => x?.bytes || 0);
       if (r.ok) logger.info(`[Leaderboard] ${why}: ${r.rows} rows → ${r.file} (${(r.bytes / 1e6).toFixed(2)} MB)`);
       else logger.warn(`[Leaderboard] ${why} failed: ${r.reason}`);
     } catch (err) {

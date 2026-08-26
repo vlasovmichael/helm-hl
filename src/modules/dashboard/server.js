@@ -4,6 +4,7 @@
 // Слушает 0.0.0.0:3010. Доступ снаружи — через Cloudflare Tunnel + Access.
 
 import express from "express";
+import { recordAlloc, probeAlloc } from "../../app/allocProbe.js";
 import { WebSocketServer } from "ws";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -930,6 +931,28 @@ export function startDashboard() {
   }
 
   const app = express();
+
+  // Замер кучи на каждый роут: дашбордовые ответы (история, журнал, экран,
+  // свечи) — второй кандидат в авторы залпа наравне с /info. Стоимость —
+  // два process.memoryUsage() на запрос. См. src/app/allocProbe.js.
+  app.use((req, res, next) => {
+    const t0 = Date.now();
+    const h0 = process.memoryUsage().heapUsed;
+    res.on("finish", () => {
+      // Статику сворачиваем в одно имя: иначе каждый /assets/*.js даёт свою
+      // строку и вытесняет из кольца то, ради чего оно заведено.
+      const name = req.path.startsWith("/api/")
+        ? `http:${req.method} ${req.route?.path || req.path}`
+        : "http:static";
+      recordAlloc(name, {
+        ms: Date.now() - t0,
+        bytes: Number(res.getHeader("content-length")) || 0,
+        heapDelta: process.memoryUsage().heapUsed - h0,
+      });
+    });
+    next();
+  });
+
   app.use(express.urlencoded({ extended: false, limit: "4kb" }));
   app.use(express.json({ limit: "4kb" }));
 
@@ -1175,12 +1198,19 @@ export function startDashboard() {
     ws.isAlive = true;
     ws.on("pong", () => { ws.isAlive = true; });
     try {
-      const data = await getStatusData();
-      ws.send(JSON.stringify({ type: "status", data }));
-      ws.send(JSON.stringify({ type: "logs:init", entries: getLogBuffer() }));
-      if (hasDivergenceSnapshots()) {
-        ws.send(JSON.stringify({ type: "btc-divergence", data: buildDivergencePayload(DIVERGENCE_WATCHLIST) }));
-      }
+      // Открытие вкладки дашборда — разовая тяжёлая посылка (весь буфер логов
+      // + статус + divergence). Кандидат в авторы залпа: замеряем отдельно.
+      await probeAlloc("ws:client-init", async () => {
+        const data = await getStatusData();
+        let bytes = 0;
+        const send = (obj) => { const m = JSON.stringify(obj); bytes += m.length; ws.send(m); };
+        send({ type: "status", data });
+        send({ type: "logs:init", entries: getLogBuffer() });
+        if (hasDivergenceSnapshots()) {
+          send({ type: "btc-divergence", data: buildDivergencePayload(DIVERGENCE_WATCHLIST) });
+        }
+        return bytes;
+      }, (bytes) => bytes);
     } catch (err) {
       logger.error(`[Dashboard] WS initial send failed: ${err.message}`);
     }
@@ -1231,9 +1261,12 @@ export function startDashboard() {
     }
   };
   pumpDivergence();
-  divergenceTimer = setInterval(pumpDivergence, DIVERGENCE_SNAPSHOT_MS);
+  divergenceTimer = setInterval(
+    () => probeAlloc("dash:divergence", async () => pumpDivergence()),
+    DIVERGENCE_SNAPSHOT_MS,
+  );
 
-  setInterval(takeOiSnapshot, OI_SNAPSHOT_MS);
+  setInterval(() => probeAlloc("dash:oiSnapshot", async () => takeOiSnapshot()), OI_SNAPSHOT_MS);
 
   // Резолвер «Монеты дня»: догоняет исходы записанных пиков по 15m-свечам.
   // Раз в 15 минут = темп закрытия бара; measurement-only, торговлю не трогает.
@@ -1246,11 +1279,14 @@ export function startDashboard() {
   broadcastTimer = setInterval(async () => {
     if (!wss || wss.clients.size === 0) return;
     try {
-      const data = await getStatusData();
-      const msg = JSON.stringify({ type: "status", data });
-      for (const client of wss.clients) {
-        if (client.readyState === 1) client.send(msg);
-      }
+      await probeAlloc("ws:status-broadcast", async () => {
+        const data = await getStatusData();
+        const msg = JSON.stringify({ type: "status", data });
+        for (const client of wss.clients) {
+          if (client.readyState === 1) client.send(msg);
+        }
+        return msg.length * Math.max(1, wss.clients.size);
+      }, (bytes) => bytes);
     } catch (err) {
       logger.debug(`[Dashboard] WS broadcast failed: ${err.message}`);
     }

@@ -26,9 +26,16 @@ import { state } from './state.js';
 import { refreshDailyRisk } from '../modules/dailyRisk.js';
 import { fireAdoptNtfy } from './adoptReconcile.js';
 import { sweepCandleCaches } from '../modules/candleCache.js';
+import { probeAlloc } from './allocProbe.js';
 
 export async function tick() {
   if (state.tickRunning || state.shuttingDown) return;
+  // Замер кучи за тик — после гардов, иначе холостые вызовы из WS-петель
+  // забили бы кольцевой буфер пустыми записями. См. src/app/allocProbe.js.
+  return probeAlloc('tick', tickBody);
+}
+
+async function tickBody() {
   state.tickRunning = true;
   state.tickRunningSince = Date.now();
 
