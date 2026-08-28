@@ -108,8 +108,10 @@
            которую смотришь и не действуешь, — налог на внимание. Код фич цел
            (web/src/features/), вернуть = импорт + разметка. -->
 
-      <!-- 01.8 / А если взять троих — предзаявленный форвардный тест. Список
-           заморожен 13.08.2026, правила в docs/winners-preregistration.md. -->
+      <!-- 01.8 / Гении Уолл-стрит (бывш. «А если взять троих») — предзаявленный
+           форвардный тест. Название шуточное, суть прежняя: три адреса с вершины
+           лидерборда, замороженные 13.08.2026, против контрольной группы.
+           Правила в docs/winners-preregistration.md, решение 10.11.2026. -->
       <section class="card" id="sec-winners">
         <div class="card-header">
           <div
@@ -117,7 +119,7 @@
             data-num="01.8"
             title="Вопрос: медианы по децилям ничего не говорят о трёх лучших адресах внутри дециля. Здесь список из трёх заморожен ЗАРАНЕЕ (13.08.2026) и проверяется вперёд против контрольной группы, прошедшей те же фильтры. Ключевой фильтр — оборот ≥ 5 размеров счёта: без него отбор выдаёт держателей лонга, у которых PnL это нереализованная прибыль, а не торговля."
           >
-            А если взять троих?
+            Гении Уолл-стрит
           </div>
           <span
             id="win-meta"
@@ -182,42 +184,6 @@
         <div id="fvg-body" style="font-family: var(--font-mono); font-size: 12px">
           <div class="empty-state">…</div>
         </div>
-      </section>
-
-      <!-- 05 / Чужие прогнозы — базрейт вместо ощущения «он дело говорит».
-           Данные: tools/externalCalls.mjs → data/external-calls/calls.json. -->
-      <section class="card" id="sec-calls">
-        <div class="card-header">
-          <div
-            class="card-title"
-            data-num="05"
-            title="Прогноз засчитывается, только если у него есть число и срок — «крупный капитал набирает» не проверяемо ничем. Забывание тут не нейтрально: невспомненные прогнозы это в основном НЕ сбывшиеся, потому что о сбывшихся автор напомнит сам."
-          >
-            Чужие прогнозы
-          </div>
-          <span id="calls-meta" style="font-size: 11px; font-family: var(--font-mono); color: var(--text-muted)"></span>
-        </div>
-        <div class="u-scroll-x">
-          <table class="data-table" id="calls-table">
-            <thead>
-              <tr>
-                <th>Источник</th>
-                <th>Прогноз</th>
-                <th class="r">Цена тогда</th>
-                <th class="r">Заявлен</th>
-                <th class="r">Дедлайн</th>
-                <th class="r">Осталось</th>
-              </tr>
-            </thead>
-            <tbody id="calls-tbody">
-              <tr><td colspan="6" class="empty-state">…</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div
-          id="calls-note"
-          style="margin-top: 8px; font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); line-height: 1.6"
-        ></div>
       </section>
 
       <footer id="footer-status">

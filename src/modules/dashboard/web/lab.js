@@ -24,7 +24,7 @@ import {
 import { mountTopnav } from "./src/core/topnav.js";
 import { renderStrategies } from "./src/features/strategies.js";
 import { refreshWinners } from "./src/features/winners.js";
-import { refreshExternalCalls, refreshFvgForward } from "./src/features/research.js";
+import { refreshFvgForward } from "./src/features/research.js";
 
 // ── Bootstrap ──
 mountTopnav("lab");
@@ -38,6 +38,4 @@ initWebSocket({
 refreshWinners();
 // Форвард FVG: коллектор пишет журнал раз в сутки по крону — поллить незачем.
 refreshFvgForward();
-// Чужие прогнозы: пересчитываются кроном раз в сутки, поллить незачем.
-refreshExternalCalls();
 startFooterTimer();

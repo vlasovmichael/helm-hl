@@ -1,9 +1,9 @@
 // ─────────────────────────────────────────────────
 //  Research routes — витрина накопителя чужих прогнозов
 // ─────────────────────────────────────────────────
-// 2026-08-28: /api/execution-quality и /api/discipline сняты вместе со своими
-// карточками — вопросы закрыты, а стакан за две недели не записал ни строки.
-// Остался /api/external-calls: чужие прогнозы и их базрейт.
+// 2026-08-28: /api/execution-quality, /api/discipline и /api/external-calls
+// сняты вместе со своими карточками — вопросы закрыты. Остался прогресс
+// форварда FVG, и он по устройству не отдаёт ни одной метрики результата.
 //
 // Витрина существует не для красоты: накопитель, который не видно, тихо
 // умирает — ровно так три недели простоял Spike-Fade, показывая замёрзший
@@ -15,7 +15,7 @@
 
 import { join } from "node:path";
 import { readFileSync, existsSync } from "node:fs";
-import { readJsonl, stats } from "../../../../tools/researchStats.mjs";
+import { readJsonl } from "../../../../tools/researchStats.mjs";
 
 const CACHE_TTL_MS = 60_000;
 const cache = new Map();
@@ -36,19 +36,6 @@ function served(key, build) {
     res.json(payload);
   };
 }
-
-const CALLS_FILE = join("data", "external-calls", "calls.json");
-export const handleExternalCalls = served("calls", () => {
-  if (!existsSync(CALLS_FILE)) return { calls: [], settled: 0 };
-  const db = JSON.parse(readFileSync(CALLS_FILE, "utf8"));
-  const today = new Date().toISOString().slice(0, 10);
-  const calls = (db.calls || []).map((c) => ({
-    ...c,
-    expired: c.deadline < today,
-    daysLeft: Math.round((new Date(c.deadline) - Date.now()) / 86_400_000),
-  }));
-  return { calls, settled: calls.filter((c) => c.expired).length };
-});
 
 // ── Форвард FVG: ТОЛЬКО прогресс ────────────────────────────────────────────
 // Карточка существует, чтобы накопитель было видно: невидимый накопитель тихо
