@@ -1,6 +1,12 @@
 import "./src/styles/index.scss";
 // ─────────────────────────────────────────────────
 //  lab.html — research-страница: реестр стратегий + закрытые вердикты.
+//  2026-08-28: сняты «Копировать некого», «Качество исполнения», «Межбиржевое
+//  расхождение» и «Цена дисциплины» — по всем четырём вердикт получен и вопрос
+//  закрыт (децили лидерборда все в минусе; достижимых окон арбитража 0; стакан
+//  так и не записал ни строки). Вместе с ними сняты кроны, которые продолжали
+//  копить данные для уже отвеченных вопросов. «А если взять троих» НЕ тронут:
+//  это предзаявленный форвард с датой решения 10.11.2026.
 //  2026-08-11: сняты BTC Divergence, Whale Watch и Spike-Fade. Первые два не
 //  использовались и не валидировались; третий показывал замёрзший снимок —
 //  mid-based замер снят 21.07, форвард копит наследник liq-wick (отдельный
@@ -17,14 +23,8 @@ import {
 } from "./src/core/shell.js";
 import { mountTopnav } from "./src/core/topnav.js";
 import { renderStrategies } from "./src/features/strategies.js";
-import { refreshLeaderboardPersistence } from "./src/features/leaderboardPersistence.js";
 import { refreshWinners } from "./src/features/winners.js";
-import {
-  refreshExecutionQuality,
-  refreshDiscipline,
-  refreshExternalCalls,
-} from "./src/features/research.js";
-import { refreshCrossVenue, bindCrossVenueTabs } from "./src/features/crossVenue.js";
+import { refreshExternalCalls } from "./src/features/research.js";
 
 // ── Bootstrap ──
 mountTopnav("lab");
@@ -33,23 +33,9 @@ bindTheme();
 initWebSocket({
   onStatus: (data) => renderStrategies(data.strategies),
 });
-// Персистентность лидерборда: снимки недельные, счёт кэширован на 6ч —
-// поллить незачем, тянем один раз при открытии страницы.
-refreshLeaderboardPersistence();
 // Предзаявленный тест «а если взять троих»: форвард пересчитывается кроном
 // раз в сутки, поллить незачем.
 refreshWinners();
-// Три накопителя, запущенные 11.08. Стакан пишется раз в минуту — его и
-// обновляем чаще; дисциплина и прогнозы пересчитываются кроном раз в сутки,
-// поллить их незачем.
-refreshExecutionQuality();
-setInterval(refreshExecutionQuality, 60_000);
-// Межбиржевое расхождение — единственная живая карточка: окна живут сотни
-// миллисекунд, в суточной сводке от них остаётся только след. Снимок пишется
-// коллектором раз в 2с, чаще опрашивать нечего.
-bindCrossVenueTabs();
-refreshCrossVenue();
-setInterval(refreshCrossVenue, 2_000);
-refreshDiscipline();
+// Чужие прогнозы: пересчитываются кроном раз в сутки, поллить незачем.
 refreshExternalCalls();
 startFooterTimer();
