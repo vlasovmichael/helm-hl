@@ -11,7 +11,8 @@
 //  Запуск: node scripts/fvgForward.mjs [--days 15] [--no-fetch]
 // ─────────────────────────────────────────────────────────────────────────────
 import Database from 'better-sqlite3';
-import { appendFileSync, readFileSync, existsSync } from 'node:fs';
+import { appendFileSync, readFileSync, existsSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { findTrades, PARAMS } from '../tools/fvgRule.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? process.argv[i + 1] : d; };
@@ -66,6 +67,10 @@ if (!process.argv.includes('--no-fetch')) {
   }));
   console.log(`[fetch] ${coins.length} монет · +${got} свечей`);
 }
+
+// Каталог журнала создаём заранее: на чистой машине его нет, и без этого
+// первая же найденная сделка упала бы с ENOENT — молча, в лог крона.
+mkdirSync(dirname(JOURNAL), { recursive: true });
 
 // ── уже записанные сделки: дедуп по coin+entryT ──
 const seen = new Set();
