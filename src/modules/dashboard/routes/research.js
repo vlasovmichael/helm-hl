@@ -37,7 +37,7 @@ function served(key, build) {
   };
 }
 
-const monthFile = (dir, prefix) => join("data", dir, `${prefix}-${new Date().toISOString().slice(0, 7)}.jsonl`);
+const CALLS_FILE = join("data", "external-calls", "calls.json");
 export const handleExternalCalls = served("calls", () => {
   if (!existsSync(CALLS_FILE)) return { calls: [], settled: 0 };
   const db = JSON.parse(readFileSync(CALLS_FILE, "utf8"));
@@ -48,4 +48,41 @@ export const handleExternalCalls = served("calls", () => {
     daysLeft: Math.round((new Date(c.deadline) - Date.now()) / 86_400_000),
   }));
   return { calls, settled: calls.filter((c) => c.expired).length };
+});
+
+// ── Форвард FVG: ТОЛЬКО прогресс ────────────────────────────────────────────
+// Карточка существует, чтобы накопитель было видно: невидимый накопитель тихо
+// умирает (Spike-Fade простоял так три недели). Но показывать она обязана
+// только счётчик и даты — ни E[R], ни winrate, ни даже знак последней сделки.
+// Причина не в стиле: гипотеза предзаявлена со stopRule n=1500, и подглядывание
+// в промежуточный результат ломает тест независимо от того, как честно потом
+// посчитан сам критерий. Поле `r` из журнала сюда не попадает намеренно.
+const FVG_JOURNAL = join("data", "fvg-forward", "trades.jsonl");
+const FVG_TARGET = 1500;
+export const handleFvgForward = served("fvg", () => {
+  const rows = readJsonl(FVG_JOURNAL);
+  const n = rows.length;
+  const times = rows.map((t) => t.entryT).filter(Number.isFinite).sort((a, b) => a - b);
+  const firstT = times[0] ?? null;
+  const lastT = times[times.length - 1] ?? null;
+  const startedMs = Date.parse("2026-08-29T00:00:00Z");
+  const daysRunning = Math.max(0, (Date.now() - startedMs) / 86_400_000);
+  const perDay = daysRunning >= 1 && n ? n / daysRunning : null;
+  const etaDays = perDay && perDay > 0 ? (FVG_TARGET - n) / perDay : null;
+  return {
+    n,
+    target: FVG_TARGET,
+    pct: (n / FVG_TARGET) * 100,
+    firstT,
+    lastT,
+    daysRunning,
+    perDay,
+    etaISO: etaDays != null && Number.isFinite(etaDays)
+      ? new Date(Date.now() + etaDays * 86_400_000).toISOString().slice(0, 10)
+      : null,
+    // возраст последней записи — чтобы молчащий коллектор было видно сразу,
+    // а не через месяц при разборе
+    staleHours: lastT ? (Date.now() - lastT) / 3_600_000 : null,
+    decisionRule: `оценка ровно один раз при n=${FVG_TARGET}`,
+  };
 });

@@ -59,7 +59,7 @@ import {
 import { handleMarketContext } from "./routes/marketContext.js";
 import { handleOiOverview, handleOiCoin } from "./routes/oiCollector.js";
 import { handleSpikeFade } from "./routes/spikeFade.js";
-import { handleExternalCalls } from "./routes/research.js";
+import { handleExternalCalls, handleFvgForward } from "./routes/research.js";
 import { handleWinners, handleWinnersPositions } from "./routes/winners.js";
 import {
   handleList as handleManualPaperList,
@@ -1046,6 +1046,8 @@ export function startDashboard() {
   // Клик по адресу в карточке «А если взять троих?» — что у него открыто сейчас.
   app.get("/api/winners/positions", handleWinnersPositions);
   app.get("/api/external-calls", handleExternalCalls);
+  // Прогресс форварда FVG — только счётчик и даты, метрик по определению нет.
+  app.get("/api/fvg-forward", handleFvgForward);
   app.get("/api/scanner", handleScannerApi);
   app.get("/api/coin-of-day", handleCoinOfDay);
   app.get("/api/btc-divergence/all", handleBtcDivergenceAll);

@@ -156,6 +156,34 @@
         ></div>
       </section>
 
+      <!-- 01.9 / Форвард FVG — предзаявлен 28.08.2026, оценка при n=1500.
+           Карточка показывает ТОЛЬКО счётчик и возраст последней записи: ни
+           E[R], ни winrate. Это не скупость вывода, а условие теста — stopRule
+           запрещает промежуточные замеры, а увиденное число невозможно развидеть.
+           Данные: scripts/fvgForward.mjs → data/fvg-forward/trades.jsonl. -->
+      <section class="card" id="sec-fvg">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-num="01.9"
+            title="Ретест широкой FVG-зоны (>1.6%) на 4h по тренду ТФ. На бэктесте 28.04–28.08.2026 дал E[R]=+0.174 при кластерном CI [0.060, 0.292] и держался во всех четырёх клетках лонг/шорт × btc_up/btc_down — то есть не сводился к бете. Но порог 1.6% выбран на тех же данных, поэтому проверять его можно только на свежих. Здесь копится именно это: сделки со входом после 29.08.2026."
+          >
+            Форвард FVG
+          </div>
+          <span
+            id="fvg-meta"
+            style="
+              font-size: 11px;
+              font-family: var(--font-mono);
+              color: var(--text-muted);
+            "
+          ></span>
+        </div>
+        <div id="fvg-body" style="font-family: var(--font-mono); font-size: 12px">
+          <div class="empty-state">…</div>
+        </div>
+      </section>
+
       <!-- 05 / Чужие прогнозы — базрейт вместо ощущения «он дело говорит».
            Данные: tools/externalCalls.mjs → data/external-calls/calls.json. -->
       <section class="card" id="sec-calls">
