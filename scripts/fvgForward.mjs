@@ -17,6 +17,10 @@ import { findTrades, PARAMS } from '../tools/fvgRule.mjs';
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? process.argv[i + 1] : d; };
 const DAYS = parseInt(arg('days', '15'), 10);   // 52 бара 4h истории ≈ 9 дней, берём с запасом
 const JOURNAL = 'data/fvg-forward/trades.jsonl';
+// В контейнере корень /app лежит ВНУТРИ образа и переживает только до
+// следующей пересборки; том смонтирован на /app/data. Поэтому на сервере база
+// свечей задаётся через FVG_DB=/app/data/candles.db, локально остаётся в корне.
+const DB_PATH = process.env.FVG_DB || 'candles.db';
 // Граница форварда — 29.08, а не 28.08: данные за 28-е уже были в бэктесте,
 // который породил гипотезу, и «свежими» для неё быть не могут.
 const PREREG_TS = Date.parse('2026-08-29T00:00:00Z');
@@ -33,7 +37,7 @@ async function post(b, tries = 6) {
   throw new Error('HTTP 429 (исчерпаны ретраи)');
 }
 
-const db = new Database('candles.db');
+const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 // самодостаточность: скрипт должен подниматься на чистой машине (Oracle) без
 // предварительного бэкфилла — иначе форвард молча не стартует после деплоя
