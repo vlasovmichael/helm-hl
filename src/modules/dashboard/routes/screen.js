@@ -290,6 +290,13 @@ export async function handleScreen(_req, res) {
       res.json({ ...cache.payload, budget: buildBudget(), stale: true });
       return;
     }
-    res.json({ ok: false, reason: "build-failed", message: String(err?.message || err) });
+    // Кэша ещё нет (первый заход после старта) — честно говорим причину, фронт
+    // покажет её и продолжит опрашивать. Чаще всего это весовой лимит HL.
+    res.json({
+      ok: false,
+      reason: "build-failed",
+      message: String(err?.message || err).slice(0, 200),
+      budget: buildBudget(),
+    });
   }
 }

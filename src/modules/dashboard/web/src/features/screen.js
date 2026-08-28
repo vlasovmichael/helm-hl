@@ -32,6 +32,12 @@ function fmtVol(n) {
   return "$" + (n / 1e3).toFixed(0) + "K";
 }
 
+/** reason/message с сервера уезжает в innerHTML — экранируем. */
+function escapeText(t) {
+  return t.replace(/[&<>"']/g, (ch) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
+}
+
 const fmtSignedUsd = (n) =>
   !Number.isFinite(n) ? "—" : (n >= 0 ? "+$" : "−$") + Math.abs(n).toFixed(2);
 
@@ -198,9 +204,24 @@ export function renderScreen(data) {
   if (data?.budget) renderBudget(data.budget);
 
   if (!data?.ok || !Array.isArray(data.coins)) {
-    if (!tbody.dataset.filled) {
-      tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Screen unavailable — exchange didn't answer</td></tr>`;
-    }
+    // Уже показывали список — оставляем его. Данные о ликвидности живут 120с и
+    // устаревают медленно, поэтому старый экран честнее пустого: мигать
+    // «недоступно» на каждом сетевом чихе хуже, чем показать чуть несвежее.
+    if (tbody.dataset.filled) return;
+    // Первая загрузка не удалась — говорим ПОЧЕМУ и что это не тупик: следующий
+    // тик попробует снова. Сырое сообщение исключения («Unexpected end of JSON
+    // input») пользователю ничего не объясняет, поэтому наружу идёт причина, а
+    // техническая деталь — только когда её прислал сервер.
+    const why =
+      data?.reason === "dashboard unreachable"
+        ? "dashboard is not answering"
+        : data?.reason === "build-failed"
+          ? `exchange call failed (${data.message || "no detail"})`
+          : "no answer yet";
+    tbody.innerHTML =
+      `<tr><td colspan="7" class="empty-state">` +
+        `Screen is still loading — ${escapeText(String(why))}. Retrying…` +
+      `</td></tr>`;
     return;
   }
 
