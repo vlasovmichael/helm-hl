@@ -54,346 +54,186 @@ const fmtFunding = (n) => {
 const fmtTime = (t) =>
   new Date(t).toISOString().slice(5, 16).replace("T", " ");
 
-// ── Монета дня (карточка 01) ──
-// Разбор сетапа «выдохшийся хвост» из /api/coin-of-day. Табы = монеты, прошедшие
-// порог score. Карточка обязана показывать не только «за», но и «против» —
-// блок флагов не сворачивается и не прячется.
-const codFmtPx = (n) => {
+// ── Нянька (карточка 01) ──
+// Панель ведения ОТКРЫТЫХ позиций из /api/position-nanny. Пришла на смену
+// «Монете дня» 29.08.2026: та искала входы и на двух замерах дала ноль при
+// сломанной конструкции (реплей n=103 → −0.046R, цель достигнута 1 раз).
+// Здесь нет ни скоринга, ни предсказаний — только факт о позиции и её плане.
+const nanPx = (n) => {
   if (n == null || !Number.isFinite(n)) return "—";
   if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 1 });
   if (n >= 1) return n.toFixed(4);
   return n.toPrecision(4);
 };
-const codPct = (n, digits = 2) =>
+const nanPct = (n, digits = 2) =>
   n == null || !Number.isFinite(n) ? "—" : `${n >= 0 ? "+" : ""}${n.toFixed(digits)}%`;
-const codSigned = (n, digits = 2) => {
+const nanSigned = (n, digits = 2) => {
   if (n == null || !Number.isFinite(n)) return '<span class="oi-muted">—</span>';
-  return `<span class="${n > 0 ? "oi-pos" : n < 0 ? "oi-neg" : "oi-muted"}">${codPct(n, digits)}</span>`;
+  return `<span class="${n > 0 ? "oi-pos" : n < 0 ? "oi-neg" : "oi-muted"}">${nanPct(n, digits)}</span>`;
+};
+// Знак ПЕРЕД долларом: иначе минус уезжает внутрь ($-1.20).
+const nanUsd = (n, digits = 2) =>
+  n == null || !Number.isFinite(n) ? "—" : `${n < 0 ? "-" : ""}$${Math.abs(n).toFixed(digits)}`;
+const nanUsdSigned = (n) => {
+  if (n == null || !Number.isFinite(n)) return '<span class="oi-muted">—</span>';
+  return `<span class="${n > 0 ? "oi-pos" : n < 0 ? "oi-neg" : "oi-muted"}">${n > 0 ? "+" : ""}${nanUsd(n)}</span>`;
+};
+
+const NAN_STATUS = {
+  unprotected:    "unprotected",
+  orders_unknown: "orders_unknown",
+  stop_only:      "stop_only",
+  armed:          "armed",
 };
 
 /**
- * Полоски силы сигнала: закрашено ровно score из 6, цвет — по стороне сделки.
- * Класс-обёртка обязателен: базовое правило .ss-seg.on живёт под .ss-hero--*,
- * без своей обёртки полоски остаются серыми при любом score.
+ * Шкала стоп → вход → цена → цель. Масштаб линейный по цене, поэтому длина
+ * плеч честно показывает, что до чего ближе — ради этого она и рисуется.
+ * Без стопа или без цели шкала не строится: половина шкалы врала бы о риске.
  */
-const codSegs = (score, side) => {
-  const tone = side === "SHORT" ? "short" : side === "LONG" ? "long" : "muted";
-  const n = Number.isFinite(score) ? score : 0;
-  const segs = Array.from(
-    { length: 6 },
-    (_, i) => `<span class="ss-seg${i < n ? " on" : ""}"></span>`,
-  ).join("");
-  return `<span class="ss-segs cod-segs--${tone}" title="${n} из 6 признаков сошлось">${segs}</span>`;
-};
-
-const COD_HIT_LABEL = {
-  move: "Ход за 24ч ≥ 8%",
-  edge: "Упёрлась в край диапазона 72ч",
-  rollover: "Импульс 4ч уже развернулся",
-  structure: "Структура 15м сломана (3+ ноги)",
-  volDecay: "Объём распался (≤ 40% пика)",
-  notCrowded: "OI не перегрет (памп не на плече)",
-};
-
-let codData = null;
-let codActive = null;
-
-// Все табы = сначала монеты в позиции (их вести важнее, чем искать новый вход),
-// потом кандидаты на вход.
-const codAllTabs = () => [...(codData?.held ?? []), ...(codData?.picks ?? [])];
-
-function codRenderTabs() {
-  const el = document.getElementById("cod-tabs");
-  const tabs = codAllTabs();
-  if (tabs.length < 2) {
-    el.hidden = true;
-    return;
-  }
-  el.hidden = false;
-  el.innerHTML = tabs
-    .map(
-      (p) => `<button type="button" class="cod-tab${p.coin === codActive ? " active" : ""}${p.held ? " cod-tab--held" : ""}" data-coin="${p.coin}">
-        ${
-          p.tradedToday
-            ? '<span class="cod-tab-held cod-tab-done">день закрыт</span>'
-            : p.held
-              ? '<span class="cod-tab-held">в позиции</span>'
-              : p.dayContext
-                ? '<span class="cod-tab-held cod-tab-done">2-й заход</span>'
-                : ""
-        }
-        <span class="cod-tab-coin">${p.coin}</span>
-        ${p.side ? `<span class="cod-tab-side ${p.side.toLowerCase()}">${p.side}</span>` : ""}
-        <span class="oi-muted">${p.score == null ? "—" : `${p.score}/6`}</span>
-      </button>`,
-    )
-    .join("");
-  el.querySelectorAll(".cod-tab").forEach((b) =>
-    b.addEventListener("click", () => {
-      codActive = b.dataset.coin;
-      codRenderTabs();
-      codRenderBody();
-    }),
-  );
-}
-
-const COD_STATUS = {
-  thesis_intact:      { cls: "setup", label: "тезис в силе" },
-  thesis_weakened:    { cls: "watch", label: "тезис ослаб" },
-  thesis_faded:       { cls: "watch", label: "сетап растворился" },
-  thesis_invalidated: { cls: "none",  label: "стоп плана пробит" },
-  target_reached:     { cls: "setup", label: "цель достигнута" },
-  wrong_side:         { cls: "none",  label: "позиция против разбора" },
-};
-
-/** Монета, отторгованная сегодня: день закрыт, вход не предлагаем. */
-function codRenderTradedToday(p) {
-  const f = p.features;
-  const d = p.day;
-  const factRows = f
-    ? `
-    <tr><td>Ход 24ч</td><td>${codSigned(f.chg24h, 1)}</td></tr>
-    <tr><td>Последние 4ч</td><td>${codSigned(f.chg4h)}</td></tr>
-    <tr><td>Позиция в диапазоне 72ч</td><td>${(f.rangePos * 100).toFixed(0)}%</td></tr>
-    <tr><td>Тренд 1ч</td><td>${f.trend1h === "up" ? "↑ вверх" : f.trend1h === "down" ? "↓ вниз" : "→ боковик"}</td></tr>`
-    : `<tr><td colspan="2" class="oi-muted">Монета больше не проходит входной фильтр</td></tr>`;
-
+function nanScale(p) {
+  const pl = p.plan;
+  const pos = p.position;
+  if (pl.stop == null || pl.target == null) return "";
+  const lo = Math.min(pl.stop, pl.target);
+  const hi = Math.max(pl.stop, pl.target);
+  const span = hi - lo;
+  if (!(span > 0)) return "";
+  const at = (v) => Math.max(0, Math.min(100, ((v - lo) / span) * 100));
+  const isShort = p.side === "SHORT";
+  const entryAt = at(pos.entryPx);
+  const priceAt = at(pos.price);
+  // Заливка от входа до цены: зелёная, если сделка в плюсе.
+  const good = isShort ? pos.price < pos.entryPx : pos.price > pos.entryPx;
+  const from = Math.min(entryAt, priceAt);
+  const width = Math.abs(priceAt - entryAt);
+  const label = (v, name, px) =>
+    `<span class="nan-tick" style="left:${at(v)}%"><b>${name}</b>${nanPx(px)}</span>`;
   return `
-    <div class="cod-head">
-      <div class="cod-head-main">
-        <span class="cod-donebadge">день закрыт</span>
-        <span class="ss-coin">${p.coin}</span>
-        ${codSegs(p.score, null)}
-        <span class="oi-muted" style="font-size:13px">${p.score == null ? "—" : `${p.score}/6`}</span>
+    <div class="nan-scale">
+      <div class="nan-bar">
+        <div class="nan-bar-fill ${good ? "pos" : "neg"}" style="left:${from}%;width:${width}%"></div>
+        <div class="nan-mark entry" style="left:${entryAt}%"></div>
+        <div class="nan-mark" style="left:${priceAt}%"></div>
+        ${label(pl.stop, "стоп", pl.stop)}
+        ${label(pl.target, "цель", pl.target)}
       </div>
-      <div class="cod-verdict none">${p.headline}</div>
-    </div>
-    <p class="cod-detail">${p.detail}</p>
-    <div class="cod-grid" style="margin-top:16px">
-      <div>
-        <p class="cod-sub">Итог дня по монете</p>
-        <table class="cod-t">
-          <tr><td>Сделок</td><td>${d.count}</td></tr>
-          <tr><td>Результат</td><td class="${d.pnl >= 0 ? "cod-rr-ok" : "cod-rr-bad"}">${d.pnl < 0 ? "-" : "+"}$${Math.abs(d.pnl).toFixed(2)}</td></tr>
-          <tr><td>Последний выход</td><td>${d.lastCloseAt ? new Date(d.lastCloseAt).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "—"}</td></tr>
-          ${d.side ? `<tr><td>Сторона</td><td>${d.side}</td></tr>` : ""}
-        </table>
-      </div>
-      <div>
-        <p class="cod-sub">Что с монетой сейчас</p>
-        <table class="cod-t">${factRows}</table>
-      </div>
-      <div>
-        <p class="cod-sub">Почему вход не предлагается</p>
-        <ul class="cod-flags">${(p.notes || []).map((t) => `<li class="med">${t}</li>`).join("")}</ul>
-      </div>
+      <div class="nan-scale-pad"></div>
     </div>`;
 }
 
-/** Разбор монеты, в которой оператор сидит: ведение позиции, а не вход. */
-function codRenderHeld(p) {
-  const st = COD_STATUS[p.status] || { cls: "watch", label: p.status };
+function nanRenderPosition(p) {
   const pos = p.position;
-  const f = p.features;
   const pl = p.plan;
+  const st = NAN_STATUS[p.status] || "armed";
 
   const posRows = `
-    <tr><td>Твой вход</td><td>${codFmtPx(pos.entryPx)}</td></tr>
-    <tr><td>Сейчас</td><td>${codSigned(pos.gainPct)}</td></tr>
-    <tr><td>Объём позиции</td><td>${fmtUsd(pos.notionalUsd)}</td></tr>
-    <tr><td>Нереализованный</td><td>${pos.unrealizedPnl < 0 ? "-" : "+"}$${Math.abs(pos.unrealizedPnl).toFixed(2)}</td></tr>`;
+    <tr><td>Твой вход</td><td>${nanPx(pos.entryPx)}</td></tr>
+    <tr><td>Сейчас</td><td>${nanPx(pos.price)} · ${nanSigned(pos.gainPct)}</td></tr>
+    <tr><td>Объём позиции</td><td>${nanUsd(pos.notionalUsd)}</td></tr>
+    <tr class="nan-strong"><td>Нереализованный</td><td>${nanUsdSigned(pos.unrealizedPnl)}</td></tr>`;
 
-  const planRows = pl
-    ? `
-    <tr><td>Вход по плану</td><td>${codFmtPx(pl.entry)}</td></tr>
-    <tr><td>Стоп плана</td><td>${codFmtPx(pl.stop)} · ${pl.toStopPct.toFixed(2)}% отсюда</td></tr>
-    <tr><td>Цель плана</td><td>${codFmtPx(pl.target)} · ${pl.toTargetPct.toFixed(2)}% отсюда</td></tr>
-    <tr><td>Сейчас в R</td><td class="${pl.rNow >= 0 ? "cod-rr-ok" : "cod-rr-bad"}">${pl.rNow == null ? "—" : `${pl.rNow >= 0 ? "+" : ""}${pl.rNow.toFixed(2)}R`}</td></tr>
-    <tr><td>Пройдено до цели</td><td>${pl.progressPct == null ? "—" : `${pl.progressPct.toFixed(0)}%`}</td></tr>`
-    : `<tr><td colspan="2" class="oi-muted">Вход был не по карточке — плана для сверки нет</td></tr>`;
+  // Риск в долларах стоит первым: это единственное число, которое напрямую
+  // отвечает на вопрос «сколько я теряю, если ошибся».
+  const planRows = `
+    <tr class="nan-strong"><td>Риск до стопа</td><td>${
+      pl.riskUsd == null
+        ? '<span class="oi-neg">не ограничен</span>'
+        : `<span class="oi-neg">-$${pl.riskUsd.toFixed(2)}</span>`
+    }</td></tr>
+    <tr><td>Стоп</td><td>${
+      pl.stop == null
+        ? '<span class="oi-neg">нет</span>'
+        : `${nanPx(pl.stop)}${pl.toStopPct == null ? "" : ` · ${pl.toStopPct.toFixed(2)}% отсюда`}`
+    }</td></tr>
+    <tr><td>Цель</td><td>${
+      pl.target == null
+        ? '<span class="oi-muted">нет</span>'
+        : `${nanPx(pl.target)}${pl.toTargetPct == null ? "" : ` · ${pl.toTargetPct.toFixed(2)}% отсюда`}`
+    }</td></tr>
+    <tr><td>Отдача до цели</td><td>${pl.rewardUsd == null ? "—" : `+$${pl.rewardUsd.toFixed(2)}`}</td></tr>
+    <tr><td>R:R плана</td><td>${
+      pl.rr == null ? "—" : `<span class="${pl.rr >= 1.5 ? "oi-pos" : "oi-neg"}">${pl.rr.toFixed(2)}</span>`
+    }</td></tr>
+    <tr><td>Сейчас в R</td><td>${
+      pl.stopLocksProfit
+        ? '<span class="oi-pos">стоп в прибыли</span>'
+        : pl.rNow == null
+          ? "—"
+          : `<span class="${pl.rNow >= 0 ? "oi-pos" : "oi-neg"}">${pl.rNow >= 0 ? "+" : ""}${pl.rNow.toFixed(2)}R</span>`
+    }</td></tr>
+    <tr><td>Пройдено до цели</td><td>${pl.progressPct == null ? "—" : `${pl.progressPct.toFixed(0)}%`}</td></tr>`;
 
-  const factRows = f
-    ? `
-    <tr><td>Ход 24ч</td><td>${codSigned(f.chg24h, 1)}</td></tr>
-    <tr><td>Последние 4ч</td><td>${codSigned(f.chg4h)}</td></tr>
-    <tr><td>Позиция в диапазоне 72ч</td><td>${(f.rangePos * 100).toFixed(0)}%</td></tr>
-    <tr><td>Структура 15м</td><td>${f.structLegs} ${p.side === "SHORT" ? "lower-high" : "higher-low"}</td></tr>
-    <tr><td>Объём сейчас / пик</td><td>${f.volDecay == null ? "—" : `${(f.volDecay * 100).toFixed(0)}%`}</td></tr>
-    <tr><td>Тренд 1ч</td><td>${f.trend1h === "up" ? "↑ вверх" : f.trend1h === "down" ? "↓ вниз" : "→ боковик"}</td></tr>`
-    : `<tr><td colspan="2" class="oi-muted">Монета больше не проходит входной фильтр</td></tr>`;
-
-  const notes = (p.notes || []).concat((p.flags || []).map((x) => x.text));
+  const notes = (p.notes || []).length
+    ? `<ul class="nan-notes">${p.notes
+        .map((t) => `<li class="${/НЕТ|без защиты|не ограничен|одна свеча/.test(t) ? "warn" : ""}">${t}</li>`)
+        .join("")}</ul>`
+    : "";
 
   return `
-    <div class="cod-head">
-      <div class="cod-head-main">
-        <span class="cod-heldbadge">в позиции</span>
-        <span class="ss-badge ss-badge--${p.side.toLowerCase()}">${p.side === "SHORT" ? "▼" : "▲"} ${p.side}</span>
-        <span class="ss-coin">${p.coin}</span>
+    <div class="nan-pos nan-pos--${st}">
+      <div class="nan-head">
+        <span class="nan-coin">${p.coin}</span>
+        <span class="nan-side ${p.side === "SHORT" ? "short" : "long"}">${p.side}</span>
+        <span class="nan-status ${st}">${p.headline}</span>
       </div>
-      <div class="cod-verdict ${st.cls}">${p.headline}</div>
-    </div>
-    <p class="cod-detail">${p.detail}</p>
-    <div class="cod-grid" style="margin-top:16px">
-      <div>
-        <p class="cod-sub">Твоя позиция</p>
-        <table class="cod-t">${posRows}</table>
+      <p class="nan-detail">${p.detail}</p>
+      ${nanScale(p)}
+      <div class="nan-grid">
+        <div>
+          <p class="nan-sub">Твоя позиция</p>
+          <table class="nan-t">${posRows}</table>
+        </div>
+        <div>
+          <p class="nan-sub">План на бирже</p>
+          <table class="nan-t">${planRows}</table>
+        </div>
       </div>
-      <div>
-        <p class="cod-sub">План, с которым заходили</p>
-        <table class="cod-t cod-levels">${planRows}</table>
-      </div>
-      <div>
-        <p class="cod-sub">Что с монетой сейчас</p>
-        <table class="cod-t">${factRows}</table>
-        ${
-          notes.length
-            ? `<p class="cod-sub" style="margin-top:16px">На что смотреть</p>
-               <ul class="cod-flags">${notes.map((t) => `<li class="med">${t}</li>`).join("")}</ul>`
-            : ""
-        }
-      </div>
-    </div>
-    <p class="cod-detail" style="margin-top:14px">
-      Новый вход по этой монете карточка не считает намеренно: предлагать долив
-      в открытую позицию — это генератор усреднения.
-    </p>`;
-}
-
-function codRenderBody() {
-  const body = document.getElementById("cod-body");
-  const tabs = codAllTabs();
-  if (!tabs.length) {
-    const others = codData?.others?.length ?? 0;
-    body.innerHTML = `<div class="cod-empty">
-      Сегодня сетапа нет — ни одна монета не набрала ${codData?.thresholds?.SHOW_MIN_SCORE ?? 4}/6.
-      ${others ? `Разобрано кандидатов: ${others}, всем чего-то не хватило.` : ""}
-      <br />Пропустить день — это тоже решение.
-    </div>`;
-    return;
-  }
-  const p = tabs.find((x) => x.coin === codActive) || tabs[0];
-  codActive = p.coin;
-  if (p.tradedToday) {
-    body.innerHTML = codRenderTradedToday(p);
-    return;
-  }
-  if (p.held) {
-    body.innerHTML = codRenderHeld(p);
-    return;
-  }
-  const f = p.features;
-  const l = p.levels;
-  const rrOk = l && l.rr >= (codData?.thresholds?.MIN_RR ?? 1.5);
-
-  const hitRows = Object.entries(COD_HIT_LABEL)
-    .map(
-      ([k, label]) =>
-        `<tr><td class="${p.hits[k] ? "cod-hit" : "cod-miss"}">${label}</td><td>${p.hits[k] ? "да" : "нет"}</td></tr>`,
-    )
-    .join("");
-
-  const factRows = `
-    <tr><td>Цена</td><td>${codFmtPx(f.price)}</td></tr>
-    <tr><td>Ход 24ч / 48ч</td><td>${codSigned(f.chg24h, 1)} / ${codSigned(f.chg48h, 1)}</td></tr>
-    <tr><td>Последние 4ч</td><td>${codSigned(f.chg4h)}</td></tr>
-    <tr><td>Позиция в диапазоне 72ч</td><td>${(f.rangePos * 100).toFixed(0)}%</td></tr>
-    <tr><td>Диапазон 72ч</td><td>${codFmtPx(f.lo72)} — ${codFmtPx(f.hi72)}</td></tr>
-    <tr><td>Структура 15м</td><td>${f.structLegs} ${p.side === "SHORT" ? "lower-high" : "higher-low"}</td></tr>
-    <tr><td>Объём сейчас / пик</td><td>${f.volDecay == null ? "—" : `${(f.volDecay * 100).toFixed(0)}%`}</td></tr>
-    <tr><td>ATR(1ч) · ER(24ч)</td><td>${f.atr1hPct == null ? "—" : `${f.atr1hPct.toFixed(2)}%`} · ${f.er24 == null ? "—" : f.er24.toFixed(2)}</td></tr>
-    <tr><td>OI / оборот 24ч</td><td>${fmtUsd(f.oiUsd)} / ${fmtUsd(f.volume24hUsd)}${f.oiVolRatio != null ? ` (${f.oiVolRatio.toFixed(2)}×)` : ""}</td></tr>
-    <tr><td>Фандинг APR</td><td>${f.fundingApr == null ? "—" : `${f.fundingApr >= 0 ? "+" : ""}${f.fundingApr.toFixed(0)}%`}</td></tr>
-    <tr><td>Тренд 1ч</td><td>${f.trend1h === "up" ? "↑ вверх" : f.trend1h === "down" ? "↓ вниз" : "→ боковик"}</td></tr>`;
-
-  const levelRows = l
-    ? `
-    <tr><td>Вход</td><td>${codFmtPx(l.entry)}</td></tr>
-    <tr><td>Стоп <span class="oi-muted">(ставить ДО входа)</span></td><td>${codFmtPx(l.stop)} · ${l.riskPct.toFixed(2)}%</td></tr>
-    <tr><td>Цель${l.targetProjected ? ' <span class="oi-muted">(проекция)</span>' : ""}</td><td>${codFmtPx(l.target)} · ${l.rewardPct.toFixed(2)}%</td></tr>
-    ${l.farTarget ? `<tr><td>Дальний уровень <span class="oi-muted">(остаток)</span></td><td>${codFmtPx(l.farTarget)}</td></tr>` : ""}
-    <tr><td>R:R</td><td class="${rrOk ? "cod-rr-ok" : "cod-rr-bad"}">${l.rr.toFixed(2)}</td></tr>
-    <tr><td>Time-stop</td><td>${l.timeStopMin} мин</td></tr>`
-    : `<tr><td colspan="2" class="oi-muted">Уровни не построены</td></tr>`;
-
-  const flags = p.flags.length
-    ? `<ul class="cod-flags">${p.flags.map((fl) => `<li class="${fl.severity}">${fl.text}</li>`).join("")}</ul>`
-    : `<p class="cod-detail">Явных красных флагов движок не нашёл — что не делает сетап безопасным.</p>`;
-
-  body.innerHTML = `
-    <div class="cod-head">
-      <div class="cod-head-main">
-        ${p.dayContext ? '<span class="cod-donebadge">сегодня уже торговал</span>' : ""}
-        <span class="ss-badge ss-badge--${p.side.toLowerCase()}">${p.side === "SHORT" ? "▼" : "▲"} ${p.side}</span>
-        <span class="ss-coin">${p.coin}</span>
-        ${codSegs(p.score, p.side)}
-        <span class="oi-muted" style="font-size:13px">${p.score}/6</span>
-      </div>
-      <div class="cod-verdict ${p.verdict.tone}">${p.verdict.headline}</div>
-    </div>
-    <p class="cod-detail">${p.verdict.detail}</p>
-    <div class="cod-grid" style="margin-top:16px">
-      <div>
-        <p class="cod-sub">Что сошлось · ${p.score}/6</p>
-        <table class="cod-t">${hitRows}</table>
-      </div>
-      <div>
-        <p class="cod-sub">Цифры</p>
-        <table class="cod-t">${factRows}</table>
-      </div>
-      <div>
-        <p class="cod-sub">План сделки</p>
-        <table class="cod-t cod-levels">${levelRows}</table>
-        <p class="cod-sub" style="margin-top:16px">Что против</p>
-        ${flags}
-      </div>
+      ${notes}
     </div>`;
 }
 
-function codRenderForward() {
-  const el = document.getElementById("cod-fwd");
-  const fw = codData?.forward;
-  if (!fw) {
-    el.hidden = true;
-    return;
-  }
-  el.hidden = false;
-  if (!fw.closed) {
-    el.innerHTML = `<b>Форвард-лог:</b> записано пиков — <b>${fw.total}</b>, из них открыто <b>${fw.open}</b>,
-      закрытых пока нет. Пока не наберётся 20 закрытых, карточка ничего не доказывает.`;
-    return;
-  }
-  const verdict = fw.enoughForVerdict
-    ? ""
-    : ` <span class="oi-neg">n = ${fw.closed} &lt; 20 — выводов об эдже НЕТ, это ещё шум.</span>`;
-  el.innerHTML = `<b>Форвард-лог:</b> закрыто <b>${fw.closed}</b> пиков (открыто ${fw.open}) ·
-    винрейт <b>${fw.winRate.toFixed(0)}%</b> ·
-    сумма <b>${fw.sumR >= 0 ? "+" : ""}${fw.sumR.toFixed(2)}R</b> ·
-    ожидание <b>${fw.expR >= 0 ? "+" : ""}${fw.expR.toFixed(2)}R</b> на пик ·
-    цель/стоп/таймаут = ${fw.byStatus.target}/${fw.byStatus.stop}/${fw.byStatus.timeout} ·
-    средний MFE ${fw.avgMfePct == null ? "—" : `${fw.avgMfePct.toFixed(2)}%`}.${verdict}`;
+function nanRenderTotals(t) {
+  if (!t || !t.count) return "";
+  const risk =
+    t.riskUsd == null
+      ? '<span class="oi-muted">—</span>'
+      : `<span class="oi-neg">-$${Math.abs(t.riskUsd).toFixed(2)}</span>`;
+  const unp = t.unprotected
+    ? `<span class="oi-neg">${t.unprotected}</span>`
+    : '<span class="oi-pos">0</span>';
+  return `
+    <div class="nan-totals">
+      <span><span class="nan-total-k">Позиций</span><span class="nan-total-v">${t.count}</span></span>
+      <span><span class="nan-total-k">Объём</span><span class="nan-total-v">$${t.notionalUsd.toFixed(2)}</span></span>
+      <span><span class="nan-total-k">Риск, если сработают все стопы</span><span class="nan-total-v">${risk}</span></span>
+      <span><span class="nan-total-k">Без стопа</span><span class="nan-total-v">${unp}</span></span>
+    </div>`;
 }
 
-async function loadCoinOfDay(force = false) {
-  const meta = document.getElementById("cod-meta");
-  meta.textContent = "скан…";
+async function loadNanny(force = false) {
+  const meta = document.getElementById("nan-meta");
+  const body = document.getElementById("nan-body");
+  meta.textContent = "чтение…";
   try {
-    codData = await fetchJson(`/api/coin-of-day${force ? "?refresh=1" : ""}`);
-    if (codData.error) throw new Error(codData.error);
-    const age = codData.cached ? ` · из кэша ${codData.ageSec}с` : "";
-    meta.textContent = `разобрано ${codData.scanned} из ${codData.universe}${age}`;
-      if (!codAllTabs().some((p) => p.coin === codActive)) codActive = codAllTabs()[0]?.coin ?? null;
-    codRenderTabs();
-    codRenderBody();
-    codRenderForward();
+    const data = await fetchJson(`/api/position-nanny${force ? "?refresh=1" : ""}`);
+    if (data.error) throw new Error(data.error);
+    const age = data.cached ? ` · из кэша ${data.ageSec}с` : "";
+    const list = data.positions || [];
+    meta.textContent = `${list.length} ${list.length === 1 ? "позиция" : "позиций"}${age}`;
+    if (!list.length) {
+      body.innerHTML =
+        '<div class="nan-empty">Открытых позиций нет — вести нечего.</div>';
+      return;
+    }
+    body.innerHTML = nanRenderTotals(data.totals) + list.map(nanRenderPosition).join("");
   } catch (err) {
     meta.textContent = "ошибка";
-    document.getElementById("cod-body").innerHTML =
-      `<div class="cod-empty">Скан не удался: ${err.message}</div>`;
+    body.innerHTML = `<div class="nan-empty">Не удалось прочитать позиции: ${err.message}</div>`;
   }
 }
 
-document.getElementById("cod-refresh").addEventListener("click", () => loadCoinOfDay(true));
+document.getElementById("nan-refresh").addEventListener("click", () => loadNanny(true));
 
 // ── Setup Scanner radar (карточка 02) ──
 // Данные из /api/scanner (score-логика на бэке). Радар, не сигнал.
@@ -756,6 +596,6 @@ document.querySelectorAll("#oi-ranges .range-btn").forEach((b) =>
   }),
 );
 
-loadCoinOfDay();
+loadNanny();
 loadScanner();
 loadOverview();

@@ -292,11 +292,16 @@ export function initDB() {
     );
   `);
 
-  // Coin of the day (2026-07-26) — форвард-лог пиков скоринга coinOfDay.js.
-  // Смысл таблицы: не дать карточке стать пятым красивым оракулом без цифр.
-  // Пик фиксируется ОДИН раз в сутки на монету (PK date+coin) по ценам первого
-  // срабатывания, дальше резолвер гоняет его по свечам и проставляет исход.
-  // Measurement-only: торговлю не трогает, размер позиции не считает.
+  // Coin of the day (2026-07-26 … 2026-08-29) — АРХИВ ЗАКРЫТОГО ЗАМЕРА.
+  // Карточка «Монета дня» снята 29.08.2026: реплей (n=103) дал −0.046R
+  // [−0.209 … +0.116] против бейзлайнов −0.027R / −0.003R, форвард (n=33) дал
+  // +0.09R при разбросе ±0.28R. Оба замера показали один дефект конструкции:
+  // гейт R:R ≥ 1.5 требовал полтора риска, а таймаут 2ч закрывал раньше — цель
+  // достигнута 1 раз из 103 и 2 раза из 33.
+  // Таблица НЕ удаляется: это сами данные замера, по которым принято решение.
+  // Писателей у неё больше нет — только чтение через SQL, если понадобится
+  // перепроверить вывод. Два последних пика остались в статусе open: резолвер
+  // снят вместе с карточкой, дорезолвивать замороженный лог смысла нет.
   db.exec(`
     CREATE TABLE IF NOT EXISTS coin_of_day_picks (
       date        TEXT    NOT NULL,
@@ -326,64 +331,9 @@ export function initDB() {
   return db;
 }
 
-/**
- * Пишет пик «Монеты дня», если на эту дату+монету его ещё нет.
- * INSERT OR IGNORE — намеренно: фиксируем ПЕРВОЕ срабатывание за сутки, чтобы
- * лог не переписывался по мере того, как цена уезжает (иначе форвард-статистика
- * получит задним числом улучшённый вход и станет враньём).
- * @returns {boolean} true, если строка реально записана
- */
-export function recordCoinOfDayPick(pick) {
-  try {
-    const info = getDb()
-      .prepare(
-        `INSERT OR IGNORE INTO coin_of_day_picks
-           (date, coin, side, created_at, score, entry, stop, target, rr, risk_pct, flags)
-         VALUES (@date, @coin, @side, @created_at, @score, @entry, @stop, @target, @rr, @risk_pct, @flags)`,
-      )
-      .run(pick);
-    return info.changes > 0;
-  } catch (err) {
-    logger.warn(`[CoinOfDay] pick write failed: ${err.message}`);
-    return false;
-  }
-}
 
-/** Незакрытые пики (для резолвера). */
-export function getOpenCoinOfDayPicks() {
-  try {
-    return getDb().prepare(`SELECT * FROM coin_of_day_picks WHERE status = 'open'`).all();
-  } catch {
-    return [];
-  }
-}
 
-/** Проставляет исход пика после прогона по свечам. */
-export function resolveCoinOfDayPick(date, coin, res) {
-  try {
-    getDb()
-      .prepare(
-        `UPDATE coin_of_day_picks
-            SET status = @status, resolved_at = @resolved_at, exit_price = @exit_price,
-                exit_pct = @exit_pct, outcome_r = @outcome_r, mfe_pct = @mfe_pct, mae_pct = @mae_pct
-          WHERE date = @date AND coin = @coin`,
-      )
-      .run({ ...res, date, coin });
-  } catch (err) {
-    logger.warn(`[CoinOfDay] pick resolve failed: ${err.message}`);
-  }
-}
 
-/** Последние N пиков, свежие сверху (витрина + подсчёт статистики). */
-export function getCoinOfDayPicks(limit = 60) {
-  try {
-    return getDb()
-      .prepare(`SELECT * FROM coin_of_day_picks ORDER BY created_at DESC LIMIT ?`)
-      .all(limit);
-  } catch {
-    return [];
-  }
-}
 
 /**
  * Записать oid бот-ордера для последующей фильтрации в manual reconstruction.
