@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 process.env.HL_PRIVATE_KEY        = '0x0000000000000000000000000000000000000000000000000000000000000001';
-process.env.TELEGRAM_BOT_TOKEN    = '';
 
 const { runOnce, clearFadeHotAlertState } = await import('../src/modules/fadeHotAlerts.js');
 const { state } = await import('../src/app/state.js');

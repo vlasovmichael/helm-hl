@@ -4,7 +4,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
-process.env.TELEGRAM_BOT_TOKEN    = '';
 process.env.HUNTER_LONG_TRAIL_ENABLED  = 'true';
 process.env.HUNTER_LONG_TRAIL_ARM_PCT  = '2';
 process.env.HUNTER_LONG_TRAIL_GIVE_BACK_PCT = '30';

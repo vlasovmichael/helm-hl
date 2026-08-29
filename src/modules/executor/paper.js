@@ -74,8 +74,6 @@ function resolvePaperSzDecimals(coin) {
  *  - strategy_id = 'hunter', entry_apy = 0 (Hunter не получает funding).
  *  - Направление в Iter A — всегда SHORT (short-after-pump).
  *
- * Telegram-нотификация появится в Iter A.4.
- *
  * @param {string} coin
  * @param {number} price — цена входа
  * @param {number} spikePct — величина пампа на входе (для лога/аналитики)

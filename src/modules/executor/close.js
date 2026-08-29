@@ -467,7 +467,7 @@ async function finishProductionClose({
   // ── 6. Reconciliation (fire-and-forget) ──────
   reconcile(coin, "CLOSE", { expectPosition: false });
 
-  // ── 7. Telegram + hooks ──────────────────────
+  // ── 7. Уведомления + hooks ───────────────────
   if (!silent) {
     if (position.strategy_id === 'hunter' && signal.reason === 'hunter_trail_tp') {
       await notifyHunterTrailTp({

@@ -9,7 +9,7 @@ import { coordinate } from '../modules/coordinator.js';
 import { config } from '../core/config.js';
 import { scanCandyGirlRadar } from '../modules/strategistCandyGirl.js';
 import { execute } from '../modules/executor/index.js';
-import { runSmartAlerts } from './alerts.js';
+import { runDailyMaintenance } from './alerts.js';
 import { integrityCheck, orphanCheck } from './integrity.js';
 import { superviseAdoptPositions } from './adoptSupervise.js';
 import { superviseManualPaperPositions } from './manualPaperSupervise.js';
@@ -196,7 +196,7 @@ async function tickBody() {
     await tickHunterLongPaper(hunterData);
     await tickFadeHotPaper(hunterData);
 
-    await runSmartAlerts(scoutData, signal, activePosition);
+    await runDailyMaintenance();
 
     // Балансовая диагностика (PROD-only, дросселирована до раз в 5 мин)
     await runBalanceDiag();

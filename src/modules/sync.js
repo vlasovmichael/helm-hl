@@ -2,7 +2,12 @@ import { readFile } from 'fs/promises';
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getActivePosition, closePosition as dbClosePosition } from '../core/database.js';
-import { sendMessage } from './reporter.js';
+import { fireNtfy } from '../core/ntfy.js';
+
+// pnlLine/dbStatusLine собираются выше с HTML-разметкой — ntfy её не понимает.
+function htmlToPlain(text) {
+  return String(text ?? '').replace(/<[^>]+>/g, '');
+}
 import { fetchUserFills, classifyClose } from './userFills.js';
 import { checkAccountLeverage, getPositionsCached } from './exchange.js';
 import { restoreCircuitBreaker, restoreOiCapBans } from './executor/state.js';
@@ -168,16 +173,7 @@ async function handleMatch(dbPosition, exchangePos) {
     `held: ${heldH}h | unrealizedPnl: $${exchangePos.unrealizedPnl.toFixed(4)}`,
   );
 
-  await sendMessage(
-    `🔄 <b>[SYNC] Позиция подтверждена</b>\n` +
-    `<code>─────────────────────</code>\n` +
-    `📌 #${dbPosition.coin}\n` +
-    `💰 $${dbPosition.size_usd.toFixed(2)} @ $${dbPosition.entry_price}\n` +
-    `📊 APY на входе: ${dbPosition.entry_apy.toFixed(2)}%\n` +
-    `⏳ Удержание: ${heldH}ч\n` +
-    `💵 Unrealized PnL: $${exchangePos.unrealizedPnl.toFixed(4)}\n` +
-    `✅ Продолжаю сопровождение.`,
-  );
+  // Штатное совпадение БД и биржи — пуш не нужен, хватает лога выше.
 }
 
 /**
@@ -259,21 +255,20 @@ async function handleMismatch(dbPosition) {
     ? `${realizedPnl >= 0 ? '📈' : '📉'} PnL: <b>${realizedPnl >= 0 ? '+' : ''}$${realizedPnl.toFixed(4)}</b> (из fills)\n`
     : `📊 PnL: <i>не удалось дотянуть из fills — сверь на бирже</i>\n`;
 
-  await sendMessage(
-    `🚨 <b>[SYNC] ЧП! Сделка закрыта оффлайн</b>\n` +
-    `<code>─────────────────────</code>\n` +
-    `⚠️ Пока бот был выключен, позиция была закрыта!\n\n` +
-    `📌 #${dbPosition.coin}\n` +
-    `💰 $${dbPosition.size_usd.toFixed(2)} @ $${dbPosition.entry_price}\n` +
-    `📊 APY: ${dbPosition.entry_apy.toFixed(2)}%\n` +
-    `⏳ Удержание до выключения: ${heldH}ч\n` +
-    `<code>─────────────────────</code>\n` +
-    `❗️ Причина: <b>${closeReason}</b>\n` +
-    pnlLine +
-    `<code>─────────────────────</code>\n` +
-    `${dbStatusLine}`,
-    true, // critical
-  );
+  // Риск-алерт: позиция закрылась, пока бот был выключен. Деньги уже
+  // двинулись, а бот узнаёт об этом только сейчас.
+  await fireNtfy({
+    title: `🚨 Сделка закрыта оффлайн #${dbPosition.coin}`,
+    message:
+      `Пока бот был выключен, позиция была закрыта.\n` +
+      `$${dbPosition.size_usd.toFixed(2)} @ $${dbPosition.entry_price}\n` +
+      `APY: ${dbPosition.entry_apy.toFixed(2)}% | Удержание до выключения: ${heldH}ч\n` +
+      `Причина: ${closeReason}\n` +
+      htmlToPlain(pnlLine) +
+      htmlToPlain(dbStatusLine),
+    tags: ['rotating_light'],
+    urgent: true,
+  });
 }
 
 /**
@@ -324,13 +319,7 @@ async function syncPaper() {
       `($${dbPosition.size_usd.toFixed(2)} @ ${dbPosition.entry_apy.toFixed(2)}% APY, held ${heldH}h)`,
     );
 
-    await sendMessage(
-      `🔄 <b>[SYNC] PAPER — позиция восстановлена</b>\n` +
-      `📌 #${dbPosition.coin} | $${dbPosition.size_usd.toFixed(2)}\n` +
-      `📊 APY: ${dbPosition.entry_apy.toFixed(2)}%\n` +
-      `⏳ Удержание: ${heldH}ч\n` +
-      `✅ Продолжаю сопровождение.`,
-    );
+      // PAPER подхвачен штатно — хватает лога выше.
     return;
   }
 
@@ -343,16 +332,7 @@ async function syncPaper() {
       `Position may have been closed outside normal flow.`,
     );
 
-    await sendMessage(
-      `⚠️ <b>[SYNC] PAPER — рассинхрон стейта</b>\n` +
-      `<code>─────────────────────</code>\n` +
-      `📄 bot_state.json: #${sp.coin} ($${sp.size_usd.toFixed(2)})\n` +
-      `🗄 БД: нет открытых позиций\n` +
-      `<code>─────────────────────</code>\n` +
-      `ℹ️ Позиция могла быть закрыта вне штатного процесса.\n` +
-      `🤖 Бот стартует без позиции.`,
-      true,
-    );
+      // Рассинхрон в PAPER: денег на кону нет, будить телефон незачем.
   }
 }
 
@@ -415,7 +395,7 @@ async function syncProduction() {
 /**
  * Проверяет настройки leverage/margin mode на аккаунте при старте.
  * Логирует предупреждения если leverage > 1x или mode != cross.
- * Шлёт Telegram-алерт при обнаружении опасных настроек.
+ * Шлёт риск-алерт на телефон при обнаружении опасных настроек.
  */
 async function checkLeverageSettings() {
   try {
@@ -431,15 +411,17 @@ async function checkLeverageSettings() {
         (w) => `⚠️ #${w.coin}: ${w.value}x ${w.type}`,
       );
 
-      await sendMessage(
-        `🚨 <b>[SYNC] Опасные настройки leverage!</b>\n` +
-          `<code>─────────────────────</code>\n` +
+      // Риск-алерт: не 1x isolated значит, что реальный риск позиции
+      // отличается от заложенного в расчёт размера.
+      await fireNtfy({
+        title: '🚨 Опасные настройки leverage',
+        message:
           `${lines.join('\n')}\n` +
-          `<code>─────────────────────</code>\n` +
-          `⚙️ Ожидается: <b>1x isolated</b> для всех позиций.\n` +
-          `❗️ Исправь вручную или бот выставит 1x при следующем OPEN.`,
-        true,
-      );
+          `Ожидается 1x isolated для всех позиций.\n` +
+          `Исправь вручную или бот выставит 1x при следующем OPEN.`,
+        tags: ['rotating_light'],
+        urgent: true,
+      });
     }
   } catch (err) {
     logger.warn(`[Sync] Leverage check failed (non-critical): ${err.message}`);
@@ -491,15 +473,14 @@ export async function syncWithExchange() {
       { stack: err.stack },
     );
 
-    // Не даём ошибке синхронизации убить бота — только уведомляем
-    await sendMessage(
-      `⚠️ <b>[SYNC] Ошибка синхронизации при старте</b>\n` +
-      `<code>─────────────────────</code>\n` +
-      `<code>${err.message}</code>\n` +
-      `<code>─────────────────────</code>\n` +
-      `🤖 Бот продолжает работу. Проверь состояние вручную!`,
-      true,
-    );
+    // Не даём ошибке синхронизации убить бота — только уведомляем.
+    // Риск-алерт: бот стартовал, не сумев сверить состояние с биржей.
+    await fireNtfy({
+      title: '⚠️ Ошибка синхронизации при старте',
+      message: `${err.message}\nБот продолжает работу. Проверь состояние вручную!`,
+      tags: ['rotating_light'],
+      urgent: true,
+    });
   }
 
   logger.info('───────────────────────────────────────────────');

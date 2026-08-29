@@ -6,7 +6,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
-process.env.TELEGRAM_BOT_TOKEN    = '';
 
 const { push, clearAll } = await import('../src/core/priceHistory.js');
 const { analyzeHunter, resetHunterCooldowns } = await import('../src/modules/strategistHunter.js');

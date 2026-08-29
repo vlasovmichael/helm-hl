@@ -16,7 +16,6 @@ import { join } from 'path';
 
 // ── ENV до импорта ──
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
-process.env.TELEGRAM_BOT_TOKEN    = '';
 
 const CACHE_FILE = join('data', 'balance_cache.json');
 

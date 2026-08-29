@@ -1,12 +1,51 @@
 // ─────────────────────────────────────────────────
-//  Executor Notifications — все TG-сообщения
+//  Executor Notifications — уведомления исполнителя
 // ─────────────────────────────────────────────────
-// Единственная зависимость — sendMessage из reporter.js.
+// Канал — ntfy. Маршрутизация: critical=true → пуш со звуком мимо тихого часа,
+// остальное — строка в лог.
+//
+// 🚨 Тела notify*-функций не трогать: они в торговом пути. Канал подменён в
+// локальном sendMessage() ниже, поэтому разметка в текстах осталась
+// телеграмной — теги снимает htmlToPlain.
 
-import { sendMessage } from '../reporter.js';
 import { logger } from '../../core/logger.js';
 import { config } from '../../core/config.js';
 import { recordNotification } from '../../core/notifyLog.js';
+import { fireNtfy } from '../../core/ntfy.js';
+
+/** Снимает HTML-разметку: ntfy показывает текст как есть. */
+function htmlToPlain(text) {
+  return String(text ?? '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+/**
+ * @param {string} text — размеченный текст
+ * @param {boolean} critical — true = риск-алерт → пуш на телефон
+ */
+async function sendMessage(text, critical = false) {
+  const plain = htmlToPlain(text);
+  const lines = plain.split('\n').map((l) => l.trim()).filter(Boolean);
+  const title = lines[0] || 'Alert';
+  const body = lines.slice(1).join('\n');
+
+  if (!critical) {
+    logger.info(`[Notify] ${title}${body ? ` — ${lines.slice(1).join(' · ')}` : ''}`);
+    return;
+  }
+
+  logger.warn(`[Notify] 🚨 ${title}`);
+  await fireNtfy({
+    title,
+    message: body,
+    tags: ['rotating_light'],
+    urgent: true,
+  });
+}
 
 // ─────────────────────────────────────────────────
 //  Throttle для повторяющихся алертов
@@ -41,7 +80,7 @@ function shouldThrottle(key) {
 // Гейт уведомлений о жизненном цикле сделок (open/close/SL/TP). По умолчанию OFF
 // (TG_TRADE_NOTIFICATIONS). Не влияет на ошибки/CB/drawdown/внешнее закрытие.
 function tradeAlertsOff() {
-  return !config.telegram.tradeNotifications;
+  return !config.alerts.trade;
 }
 
 // ── OPEN ───────────────────────────────────────
@@ -380,12 +419,12 @@ export async function notifyOpenRejected({ coin, error, sz, price, banMinutes })
       `Биржа отклонила ордер:\n<code>${error}</code>\n\n` +
       `Запрошено: ${sz} ${coin} (~$${(sz * price).toFixed(2)})\n` +
       `⏱ Бан: ${banMinutes} мин`,
-    true,
+    false, // биржа отклонила вход — денег на кону нет, позиция не открыта
   );
 }
 
 export async function notifyOpenSkipped({ coin, reason }) {
-  if (!config.telegram.notifications) return;
+  if (!config.alerts.noisy) return;
   if (shouldThrottle(`${coin}_open_skipped`)) return;
   await sendMessage(
     `⚠️ <b>[OPEN SKIPPED] #${coin}</b>\n${reason}`
@@ -452,7 +491,7 @@ export async function notifyExternalClose({ coin, sizeUsd, entryPrice, holdHours
 }
 
 export async function notifySlippageBan({ coin, slipLabel, banMinutes }) {
-  if (!config.telegram.notifications) return;
+  if (!config.alerts.noisy) return;
   if (shouldThrottle(`${coin}_slippage_ban`)) return;
   await sendMessage(
     `🚫 <b>[SLIPPAGE BAN] #${coin}</b>\n` +
@@ -460,7 +499,7 @@ export async function notifySlippageBan({ coin, slipLabel, banMinutes }) {
       `📉 Slippage: <b>${slipLabel}</b> (порог: 1.5%)\n` +
       `⏱ Бан: <b>${banMinutes} мин</b>\n` +
       `⚠️ Торговля по ${coin} приостановлена.`,
-    true,
+    false, // бан по проскальзыванию — рабочий шум, не риск денег
   );
 }
 
@@ -487,7 +526,7 @@ export async function notifyCircuitBreaker(payload = {}) {
 }
 
 export async function notifyOpenBlocked({ coin, reason, details }) {
-  if (!config.telegram.notifications) return;
+  if (!config.alerts.noisy) return;
   if (shouldThrottle(`${coin}_open_blocked`)) return;
   await sendMessage(
     `⛔ <b>[OPEN BLOCKED] #${coin}</b>\n` +
@@ -498,7 +537,7 @@ export async function notifyOpenBlocked({ coin, reason, details }) {
 }
 
 export async function notifyOiCapBan({ coin, banMinutes = 30 }) {
-  if (!config.telegram.notifications) return;
+  if (!config.alerts.noisy) return;
   if (shouldThrottle(`${coin}_oicap`)) return;
   await sendMessage(
     `⚠️ <b>[OI CAP BAN] #${coin}</b>\n` +
@@ -523,7 +562,7 @@ export async function notifyOiCapAfterRotate({ closeCoin, openCoin, closePnl, ba
       `<code>═════════════════════</code>\n` +
       `🚫 <b>#${openCoin}</b> забанен на <b>${banMinutes} мин</b>\n` +
       `⚠️ Бот остался <b>БЕЗ ПОЗИЦИИ</b>. Подыщет другую в след. тике.`,
-    true,
+    false, // бан по OI-cap — рабочий шум
   );
 }
 

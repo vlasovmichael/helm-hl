@@ -30,7 +30,6 @@ function loadConfig() {
   }
 
   if (isProduction && !agentPrivateKey) {
-    // eslint-disable-next-line no-console
     console.warn(
       '⚠️  WARNING: Using HL_PRIVATE_KEY (main wallet) instead of HL_AGENT_PRIVATE_KEY (agent). ' +
       'Agent wallet is strongly recommended for production — it cannot withdraw funds.',
@@ -824,26 +823,10 @@ function loadConfig() {
       cbPauseMs:   cbPauseHours * 3_600_000,
     },
 
-    telegram: {
-      token:           process.env.TELEGRAM_BOT_TOKEN  || null,
-      chatId:          process.env.TELEGRAM_CHAT_ID    || null,
-      silentStartHour: parseInt(process.env.SILENT_START_HOUR || '22', 10),
-      silentEndHour:   parseInt(process.env.SILENT_END_HOUR   || '9',  10),
-
-      // ── Шумовые уведомления (один общий рубильник, по умолчанию ВЫКЛ) ──
-      // Информационные алерты, которые сыпались каждый тик: FOMO, аномалия APY,
-      // PnL-качель ±3%, OPEN BLOCKED/SKIPPED, OI CAP BAN, SLIPPAGE BAN.
-      // Сделки, SL/TP, ошибки и аварийные события (FAILED/REJECTED/CIRCUIT/
-      // DRAWDOWN/внешнее закрытие) НЕ зависят от флага — они приходят всегда.
-      // TG_NOTIFICATIONS=true чтобы вернуть весь шум.
-      notifications: process.env.TG_NOTIFICATIONS === 'true',
-
-      // ── Уведомления о жизненном цикле сделок (open/close/SL/TP) ──
-      // По умолчанию ВЫКЛ: оператор не хочет спама об открытии/закрытии позиций
-      // (особенно после paper-накопления 5-6 стратегий — это лавина). Ошибки,
-      // circuit-breaker, drawdown и ВНЕШНЕЕ закрытие НЕ зависят от флага.
-      // TG_TRADE_NOTIFICATIONS=true чтобы вернуть уведомления о сделках.
-      tradeNotifications: process.env.TG_TRADE_NOTIFICATIONS === 'true',
+    // Рубильники уведомлений. Риск-события от них не зависят — идут всегда.
+    alerts: {
+      noisy: process.env.ALERTS_NOISY === 'true',  // FOMO, аномалии APY, баны
+      trade: process.env.ALERTS_TRADE === 'true',  // open/close/SL/TP
     },
 
     ntfy: {
@@ -879,6 +862,7 @@ function loadConfig() {
       apiKey:    process.env.BINANCE_API_KEY    || null,
       apiSecret: process.env.BINANCE_API_SECRET || null,
     },
+
   };
 }
 

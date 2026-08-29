@@ -9,7 +9,7 @@ import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getActivePosition, getActiveAdoptPositions, closePosition as dbClosePosition } from '../core/database.js';
 import { getPositionsCached, getAccountSummary, cancelOrderFor } from '../modules/exchange.js';
-import { sendMessage } from '../modules/reporter.js';
+import { fireNtfy } from '../core/ntfy.js';
 import { fetchExchangePositions } from '../modules/sync.js';
 import { fetchUserFills, classifyClose, findRoundTripForPosition } from '../modules/userFills.js';
 import { maybeAdoptManualPosition, reconcileProvisionalAdoptEntries, resolveManualOpenTime } from './adoptReconcile.js';
@@ -343,26 +343,24 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
     const pnlSign  = estimatedPnl >= 0 ? '+' : '';
     const pnlEmoji = estimatedPnl >= 0 ? '📈' : '📉';
     const pnlLine = pnlAccurate
-      ? `${pnlEmoji} PnL: <b>${pnlSign}$${estimatedPnl.toFixed(4)}</b>\n`
-      : `📊 PnL: <i>точная оценка недоступна (нет entry_equity для этой позиции)</i>\n` +
-        `   Смотри Hyperliquid UI или сравни с предыдущим equity вручную.\n`;
+      ? `${pnlEmoji} PnL: ${pnlSign}$${estimatedPnl.toFixed(4)}\n`
+      : `PnL: точная оценка недоступна (нет entry_equity)\n` +
+        `Смотри Hyperliquid UI или сравни с предыдущим equity вручную.\n`;
 
-    await sendMessage(
-      `⚠️ <b>ВНЕШНЕЕ ЗАКРЫТИЕ ПОЗИЦИИ</b>\n` +
-        `<code>═════════════════════</code>\n` +
-        `🔍 Обнаружено расхождение:\n` +
-        `<b>#${dbPosition.coin}</b> закрыт на стороне биржи\n` +
-        `<i>(ADL, ликвидация или ручное действие)</i>\n` +
-        `<code>─────────────────────</code>\n` +
-        `💰 Размер: <b>$${dbPosition.size_usd.toFixed(2)}</b>\n` +
-        `💵 Entry: <b>$${dbPosition.entry_price}</b>\n` +
-        `⏳ Удержание: <b>${holdHours.toFixed(1)}ч</b>\n` +
+    // Риск-алерт: позиция исчезла с биржи помимо бота (ADL, ликвидация, рука).
+    // Знать об этом надо немедленно и ночью тоже.
+    await fireNtfy({
+      title: `⚠️ Внешнее закрытие #${dbPosition.coin}`,
+      message:
+        `Закрыт на стороне биржи (ADL, ликвидация или ручное действие)\n` +
+        `Размер: $${dbPosition.size_usd.toFixed(2)} | Entry: $${dbPosition.entry_price}\n` +
+        `Удержание: ${holdHours.toFixed(1)}ч\n` +
         pnlLine +
-        `💰 Equity: <b>$${equity.toFixed(2)}</b> | Withdrawable: <b>$${withdrawable.toFixed(2)}</b>\n` +
-        `<code>═════════════════════</code>\n` +
-        `🤖 Слот освобождён.`,
-      true,
-    );
+        `Equity: $${equity.toFixed(2)} | Withdrawable: $${withdrawable.toFixed(2)}\n` +
+        `Слот освобождён.`,
+      tags: ['rotating_light'],
+      urgent: true,
+    });
   }
 
   return true;

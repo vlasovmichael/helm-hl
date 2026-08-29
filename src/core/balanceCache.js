@@ -29,7 +29,7 @@
 import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { logger } from './logger.js';
-import { sendMessage } from '../modules/reporter.js';
+import { fireNtfy } from './ntfy.js';
 
 const STALE_MAX_AGE_MS = 6 * 60 * 60_000; // 6 часов
 const CACHE_FILE = join('data', 'balance_cache.json');
@@ -163,13 +163,18 @@ export async function getCachedBalance(fetcher) {
 
     if (!freezeAlerted) {
       freezeAlerted = true;
-      sendMessage(
-        `⚠️ <b>API Hyperliquid вернул $0.00</b>\n` +
-          `<code>─────────────────────</code>\n` +
+      // Риск-алерт: на замороженном балансе бот считает размер позиции по
+      // кэшу, и если индексатор врёт дольше 6ч — встанет совсем. Будим со
+      // звуком в любое время суток.
+      fireNtfy({
+        title: 'API Hyperliquid вернул $0.00',
+        message:
           `Возможно, индексатор застрял. Использую кэш.\n` +
-          `💰 Кэш: <b>$${lastGood.value.accountValue.toFixed(2)}</b> (${ageMin} мин назад)\n` +
-          `<i>Если продлится >6ч — бот вернёт $0 и встанет.</i>`,
-      ).catch(() => { /* TG недоступен — ок */ });
+          `Кэш: $${lastGood.value.accountValue.toFixed(2)} (${ageMin} мин назад)\n` +
+          `Если продлится >6ч — бот вернёт $0 и встанет.`,
+        tags: ['rotating_light'],
+        urgent: true,
+      }).catch(() => { /* канал недоступен — ок */ });
     }
 
     return { ...lastGood.value, stale: true };

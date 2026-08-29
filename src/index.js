@@ -4,12 +4,12 @@
 
 import cron from 'node-cron';
 import { config } from './core/config.js';
+import { fireNtfy } from './core/ntfy.js';
 import { logger } from './core/logger.js';
 import { probeAlloc, recordAlloc } from './app/allocProbe.js';
 import { initDB, getActivePosition, runDbMaintenance, compactHistoryArchive } from './core/database.js';
 import { initExchange, getAccountSummary } from './modules/exchange.js';
 import { getAccountEquity } from './modules/wallet.js';
-import { sendStartupNotification, setStatusCollector, startCallbackPolling, sendMessage } from './modules/reporter.js';
 import { syncWithExchange } from './modules/sync.js';
 import { startDashboard } from './modules/dashboard/server.js';
 import { dailyJob as taxDailyJob } from './modules/taxCollector/index.js';
@@ -29,7 +29,6 @@ import { startFadeHotAlerts } from './modules/fadeHotAlerts.js';
 import { startWatchlistAlerts } from './modules/watchlistAlerts.js';
 import { sendDailyDigest } from './modules/mailDigest.js';
 import { shutdown } from './app/lifecycle.js';
-import { createStatusCollector } from './app/status.js';
 import { startToastBridge } from './app/toastBridge.js';
 import { startEquityHeal } from './app/equityHeal.js';
 
@@ -69,17 +68,6 @@ async function main() {
   logger.info(
     `[System] Session baseline equity: $${state.sessionStartEquity.toFixed(2)}`,
   );
-
-  await sendStartupNotification({
-    balance:        startupBalance,
-    activePosition: activePos,
-  });
-
-  // ── Status collector (для кнопки "📊 Статус") ──
-  setStatusCollector(createStatusCollector());
-
-  // ── Запуск callback polling для inline-кнопок ──
-  startCallbackPolling();
 
   // ── Web Dashboard (localhost:3000) ─────────────
   startDashboard();
@@ -176,14 +164,22 @@ async function main() {
           heapDelta: process.memoryUsage().heapUsed - dbH0,
         });
         if (!res.ok) {
-          sendMessage(
-            `🚨 DB integrity_check FAILED:\n<code>${res.integrity}</code>`,
-            true,
-          ).catch(() => {});
+          // Риск-алерт: битая БД — это потерянные позиции и неверный учёт.
+          fireNtfy({
+            title: '🚨 DB integrity_check FAILED',
+            message: String(res.integrity),
+            tags: ['rotating_light'],
+            urgent: true,
+          }).catch(() => {});
         }
       } catch (err) {
         logger.error(`[System] DB maintenance crashed: ${err.message}`);
-        sendMessage(`🚨 DB maintenance crashed: ${err.message}`, true).catch(() => {});
+        fireNtfy({
+          title: '🚨 DB maintenance crashed',
+          message: err.message,
+          tags: ['rotating_light'],
+          urgent: true,
+        }).catch(() => {});
       }
     },
     { timezone: 'Europe/Warsaw' },

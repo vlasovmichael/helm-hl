@@ -4,7 +4,7 @@
 
 import { logger } from '../../core/logger.js';
 import { getPositions, getClearinghouseStateFull } from '../exchange.js';
-import { sendMessage } from '../reporter.js';
+import { fireNtfy } from '../../core/ntfy.js';
 import {
   RECONCILIATION_TOLERANCE_PCT,
   RECONCILE_INITIAL_DELAY_MS,
@@ -191,13 +191,16 @@ export async function reconcile(coin, operation, checks) {
         `[Reconcile] ❌ ${operation} #${coin} — expected position but found NONE ` +
           `after ${RECONCILE_MAX_RETRIES} retries + final clearinghouseState check!`,
       );
-      await sendMessage(
-        `⚠️ <b>[RECONCILE] #${coin}</b>\n` +
-          `После ${operation}: позиция не найдена на бирже\n` +
-          `после ${RECONCILE_MAX_RETRIES} попыток + final check!\n` +
-          `🔍 Проверь вручную.`,
-        true,
-      );
+      // Риск-алерт: состояние бота и биржи разошлись — бот думает, что позиция
+      // есть, биржа её не видит. Дальше он может действовать вслепую.
+      await fireNtfy({
+        title: `⚠️ Reconcile #${coin}: позиции НЕТ на бирже`,
+        message:
+          `После ${operation} позиция не найдена ` +
+          `(${RECONCILE_MAX_RETRIES} попыток + final check).\nПроверь вручную.`,
+        tags: ['rotating_light'],
+        urgent: true,
+      });
       return;
     }
 
@@ -207,13 +210,16 @@ export async function reconcile(coin, operation, checks) {
         `[Reconcile] ⚠️ ${operation} #${coin} — expected NO position but found szi=${state.szi} ` +
           `after ${RECONCILE_MAX_RETRIES} retries + final check`,
       );
-      await sendMessage(
-        `⚠️ <b>[RECONCILE] #${coin}</b>\n` +
-          `После ${operation}: позиция всё ещё открыта (szi=${state.szi})\n` +
-          `после ${RECONCILE_MAX_RETRIES} попыток + final check!\n` +
-          `🔍 Возможно, частичный fill. Проверь вручную.`,
-        true,
-      );
+      // Риск-алерт: закрытие не прошло, позиция висит с реальными деньгами.
+      await fireNtfy({
+        title: `⚠️ Reconcile #${coin}: позиция ВСЁ ЕЩЁ открыта`,
+        message:
+          `После ${operation} szi=${state.szi} ` +
+          `(${RECONCILE_MAX_RETRIES} попыток + final check).\n` +
+          `Возможно, частичный fill. Проверь вручную.`,
+        tags: ['rotating_light'],
+        urgent: true,
+      });
       return;
     }
 

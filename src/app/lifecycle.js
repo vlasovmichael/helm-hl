@@ -8,7 +8,6 @@ import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getActivePosition } from '../core/database.js';
 import { disconnectExchange } from '../modules/exchange.js';
-import { sendMessage, stopCallbackPolling, formatUptime } from '../modules/reporter.js';
 import { serializeCircuitBreaker, serializeOiCapBans } from '../modules/executor/state.js';
 import { stopDashboard } from '../modules/dashboard/server.js';
 import { stopPriceFeed } from '../core/priceFeed.js';
@@ -131,33 +130,6 @@ export async function ensureExchangeProtection(activePosition) {
   );
 }
 
-/**
- * Отправляет Telegram-уведомление о завершении работы.
- */
-async function sendShutdownNotification(activePosition, reason) {
-  const uptimeMin = (Date.now() - state.startedAt) / 60_000;
-
-  let status = '💤 Нет открытых позиций';
-  if (activePosition) {
-    const heldH = ((Date.now() - activePosition.entry_time) / 3_600_000).toFixed(1);
-    status =
-      `📌 Открыта: <b>#${activePosition.coin}</b>\n` +
-      `💰 $${activePosition.size_usd.toFixed(2)} @ $${activePosition.entry_price}\n` +
-      `📊 APY: ${activePosition.entry_apy.toFixed(2)}%\n` +
-      `⏳ Удержание: ${heldH}ч`;
-  }
-
-  await sendMessage(
-    `🛑 <b>[SYSTEM] Бот остановлен</b>\n` +
-      `<code>─────────────────────</code>\n` +
-      `📡 Сигнал: <b>${reason}</b>\n` +
-      `⏱ Uptime: ${formatUptime(uptimeMin)}\n` +
-      `<code>─────────────────────</code>\n` +
-      `${status}\n` +
-      `<code>─────────────────────</code>\n` +
-      `✅ Параметры сохранены.`,
-  );
-}
 
 /**
  * Graceful shutdown — 6 шагов.
@@ -180,7 +152,6 @@ export async function shutdown(signal) {
     clearInterval(state.tickTimer);
     state.tickTimer = null;
   }
-  stopCallbackPolling();
   stopWsEntryLoop();
   stopWsExitLoop();
   stopTickWatchdog();
@@ -234,14 +205,7 @@ export async function shutdown(signal) {
     logger.error(`[System] [5/6] ❌ Exchange protection check failed: ${err.message}`);
   }
 
-  // ── [6/6] Telegram + закрыть БД ──────────────
-  logger.info('[System] [6/6] Sending Telegram notification…');
-  try {
-    await sendShutdownNotification(activePosition, signal);
-    logger.info('[System] [6/6] ✅ Telegram notification sent');
-  } catch (err) {
-    logger.error(`[System] [6/6] ❌ Telegram notification failed: ${err.message}`);
-  }
+  // ── [6/6] Закрыть БД ─────────────────────────
 
   try {
     await disconnectExchange();

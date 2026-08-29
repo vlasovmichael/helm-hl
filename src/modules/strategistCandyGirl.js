@@ -45,7 +45,6 @@ const SIGNAL_TIMEOUT_MS  = (config.trading.candyGirlSignalTimeoutMin ?? 240) * 6
 
 // Лента/алерты
 const ALERT_ENABLED      = config.trading.candyGirlAlertEnabled !== false;
-const TG_ENABLED         = config.trading.candyGirlTgEnabled === true;
 const ALERT_COOLDOWN_MS  = (config.trading.candyGirlAlertCooldownMin ?? 45) * 60_000;
 const MAX_SIGNALS_PER_TICK = config.trading.candyGirlMaxSignalsPerTick ?? 3;
 const MAX_RECENT_SIGNALS = 30;
@@ -155,16 +154,6 @@ export async function resolveOpenCandySignals(now = Date.now(), fiveMinFetcher =
   }
 }
 
-/** Lazy-import reporter, чтобы не тянуть axios в юнит-тестах детектора. */
-async function fireCandyGirlAlert(text) {
-  try {
-    const { sendMessage } = await import('./reporter.js');
-    await sendMessage(text, false, { bypassThrottle: true });
-  } catch (err) {
-    logger.warn(`[CandyGirl] TG alert failed: ${err.message}`);
-  }
-}
-
 async function fireNtfyAlert(coin, direction, entry, sl, tp, price) {
   const { url, topic, token } = config.ntfy;
   if (!url || !topic) return;
@@ -237,26 +226,9 @@ function recordCandyGirlSignal(r, now) {
   }
 
   if (ALERT_ENABLED) {
-    const arrow = direction === 'long' ? '🟢 LONG' : '🔴 SHORT';
-    const risk = Math.abs(signal.entry - signal.sl);
-    const rrTxt = risk > 0 ? (Math.abs(signal.tp - signal.entry) / risk).toFixed(1) : '?';
-    const htfTxt = HTF_CONFLUENCE ? ` · 4h ${(entry.trend4h || 'none').toUpperCase()}` : '';
-    if (TG_ENABLED) {
-      fireCandyGirlAlert(
-        `🍬 <b>Candy Girl</b> — сетап по тренду\n` +
-          `${arrow} <b>#${item.coin}</b> @ $${item.price}\n` +
-          `1h-тренд ${direction === 'long' ? 'UP' : 'DOWN'}${htfTxt} · откат к 5m EMA20 + reclaim\n` +
-          `entry $${fmt(signal.entry)} · SL $${fmt(signal.sl)} · TP $${fmt(signal.tp)} (R:R ${rrTxt})\n` +
-          `👀 сигнал — это РАДАР, бот не входит. Вход и стоп — руками.`,
-      );
-    }
     fireNtfyAlert(item.coin, entry.direction, signal.entry, signal.sl, signal.tp, item.price);
   }
   return true;
-}
-
-function fmt(v) {
-  return v == null ? '—' : Number(v).toFixed(6);
 }
 
 /** Прогон детектора по всему юниверсу. Чистый скан без побочных решений. */

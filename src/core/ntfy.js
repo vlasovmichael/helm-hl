@@ -25,17 +25,19 @@ export function isQuietHour(now = Date.now()) {
  * POST в ntfy. В тихий час приоритет принудительно 1 (без звука), иначе — заданный
  * или config.ntfy.priority. Никогда не бросает — при ошибке логирует warn и резолвит false.
  *
- * @param {{topic?:string, title:string, message:string, tags?:string[], priority?:number, now?:number}} opts
+ * urgent=true — риск-алерт: priority=5, тихий час НЕ глушит.
+ *
+ * @param {{topic?:string, title:string, message:string, tags?:string[], priority?:number, urgent?:boolean, now?:number}} opts
  * @returns {Promise<boolean>} true если запрос ушёл, false если не настроено/ошибка
  */
-export async function fireNtfy({ topic, title, message, tags = [], priority, now = Date.now() } = {}) {
+export async function fireNtfy({ topic, title, message, tags = [], priority, urgent = false, now = Date.now() } = {}) {
   const { url, token } = config.ntfy;
   const t = topic || config.ntfy.topic;
   if (!url || !t) return false;
   try {
     const { default: https } = await import('node:https');
     const { default: http } = await import('node:http');
-    const prio = isQuietHour(now) ? 1 : (priority ?? config.ntfy.priority ?? 3);
+    const prio = urgent ? 5 : (isQuietHour(now) ? 1 : (priority ?? config.ntfy.priority ?? 3));
     const body = JSON.stringify({ topic: t, title, message, priority: prio, tags });
     const u = new URL(`${url}/`);
     const lib = u.protocol === 'https:' ? https : http;
