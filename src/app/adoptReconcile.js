@@ -18,7 +18,7 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { notify } from '../modules/executor/hooks.js';
-import { savePosition, updatePositionEntryTime } from '../core/database.js';
+import { savePosition, updatePositionEntryTime, recordBotOid } from '../core/database.js';
 import { getAccountSummary, getLivePrice } from '../modules/exchange.js';
 import {
   placeHunterTrigger,
@@ -644,6 +644,16 @@ export async function maybeAdoptManualPosition(manualPositions) {
       logger.error(`[Adopt] savePosition #${coin} failed ПОСЛЕ постановки стопа (oid=${slOid}): ${err.message}`);
       break;
     }
+
+    // Триггеры няньки — в bot_oid_log. Классификация round-trip'ов идёт по oid
+    // (userFills.isBotFill): без этой записи fill по стопу или по цели читается
+    // как ручной, и выход няньки в леджере и в разборах выглядит как «закрыл я».
+    // Так и было с 15.08.2026 — таблица стояла пустой, потому что recordBotOid
+    // звали только hunterOpen/close, а adopt ставит триггеры своим путём.
+    // Метка получается 'adopted' (вход мой, выход бота), а не 'bot': эти oid'ы
+    // закрывающие, openIsBot они не поднимают.
+    if (slOid) recordBotOid(slOid, coin, 'sl_trigger', id);
+    if (tpOid) recordBotOid(tpOid, coin, 'tp_trigger', id);
 
     // Усыновлено по провизорному (first-seen) времени — fill ещё не был
     // проиндексирован. Запоминаем, чтобы бэкфиллить реальный entry_time, когда
