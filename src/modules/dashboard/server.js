@@ -89,6 +89,8 @@ import { handlePnlSummary, handleInsights, handleDayJournal, handleDayNoteSave }
 import { handleTradeBreakdown } from "./routes/tradeBreakdown.js";
 import { handleScannerApi } from "./routes/setupScanner.js";
 import { handlePositionNanny } from "./routes/positionNanny.js";
+import { handleCoinOfDay } from "./routes/coinOfDay.js";
+import { resolveOpenPicks } from "../coinOfDayLog.js";
 import {
   DIVERGENCE_WATCHLIST,
   DIVERGENCE_SNAPSHOT_MS,
@@ -1048,6 +1050,7 @@ export function startDashboard() {
   app.get("/api/fvg-forward", handleFvgForward);
   app.get("/api/scanner", handleScannerApi);
   app.get("/api/position-nanny", handlePositionNanny);
+  app.get("/api/coin-of-day", handleCoinOfDay);
   app.get("/api/btc-divergence/all", handleBtcDivergenceAll);
   app.get("/api/whale-watch", handleWhaleWatch);
   app.get("/api/whale-watch/batch", handleWhaleWatchBatch);
@@ -1255,6 +1258,14 @@ export function startDashboard() {
   );
 
   setInterval(() => probeAlloc("dash:oiSnapshot", async () => takeOiSnapshot()), OI_SNAPSHOT_MS);
+
+  // Резолвер «Монеты дня»: догоняет ход монеты и BTC на 4/8/24ч.
+  // Раз в 15 минут = темп закрытия бара; measurement-only, торговлю не трогает.
+  setInterval(() => {
+    resolveOpenPicks().catch((err) =>
+      logger.debug(`[CoinOfDay] resolve tick failed: ${err.message}`),
+    );
+  }, 15 * 60_000);
 
   broadcastTimer = setInterval(async () => {
     if (!wss || wss.clients.size === 0) return;

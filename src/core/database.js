@@ -327,6 +327,44 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS coin_of_day_status_idx ON coin_of_day_picks (status);
   `);
 
+  // Форвард-лог «Монеты дня», версия 2 (30.08.2026). Старая таблица выше —
+  // архив закрытого замера, её не трогаем.
+  //
+  // 🚨 Мерим ДРУГОЕ. Версия 1 писала исход по стопу/цели и упиралась в таймаут
+  // 2ч: цель бралась 1 раз из 103, то есть замер отвечал на вопрос «успевает ли
+  // сетап за два часа», а не «есть ли в нём что-то». Здесь исход — чистый ход
+  // цены на 4/8/24ч, без стопа и без срока. Юзер прямо сказал, что смотрел
+  // именно эти горизонты («подождать 4-6-8 часов»).
+  //
+  // 🚨 Рядом пишется ход BTC за ТО ЖЕ окно. Без этого столбца лог не отвечает
+  // на главный вопрос («или так совпало с ценой битка») — падение альты на
+  // общем сливе рынка неотличимо от отработки фейда. Решение принимается по
+  // excess = chg − btc, а не по chg.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cod_forward (
+      date        TEXT    NOT NULL,
+      coin        TEXT    NOT NULL,
+      side        TEXT    NOT NULL,
+      created_at  INTEGER NOT NULL,
+      score       INTEGER NOT NULL,
+      entry       REAL    NOT NULL,
+      stop        REAL,
+      risk_pct    REAL,
+      chg24h_at   REAL,
+      flags       TEXT,
+      btc_at      REAL,
+      chg_4h      REAL,
+      chg_8h      REAL,
+      chg_24h     REAL,
+      btc_4h      REAL,
+      btc_8h      REAL,
+      btc_24h     REAL,
+      resolved_at INTEGER,
+      PRIMARY KEY (date, coin)
+    );
+    CREATE INDEX IF NOT EXISTS cod_forward_created_idx ON cod_forward (created_at);
+  `);
+
   logger.info(`[DB] Initialized at ${DB_PATH}`);
   return db;
 }
@@ -1330,4 +1368,75 @@ export function runDbMaintenance({ vacuum = false } = {}) {
   );
 
   return { ok: integrity === 'ok', integrity, sizeBefore, sizeAfter };
+}
+
+// ─────────────────────────────────────────────────
+//  Форвард-лог «Монеты дня» v2 (cod_forward)
+// ─────────────────────────────────────────────────
+
+/**
+ * Пишет пик, если на эту дату+монету его ещё нет.
+ * INSERT OR IGNORE намеренно: фиксируем ПЕРВОЕ срабатывание за сутки. Иначе
+ * лог переписывался бы по мере того, как цена уезжает, и форвард получил бы
+ * задним числом улучшённый вход.
+ * @returns {boolean} true, если строка реально записана
+ */
+export function recordCodPick(pick) {
+  try {
+    const info = getDb()
+      .prepare(
+        `INSERT OR IGNORE INTO cod_forward
+           (date, coin, side, created_at, score, entry, stop, risk_pct, chg24h_at, flags, btc_at)
+         VALUES (@date, @coin, @side, @created_at, @score, @entry, @stop, @risk_pct, @chg24h_at, @flags, @btc_at)`,
+      )
+      .run(pick);
+    return info.changes > 0;
+  } catch (err) {
+    logger.warn(`[CoinOfDay] forward pick write failed: ${err.message}`);
+    return false;
+  }
+}
+
+/** Пики, у которых ещё не проставлен ход на 24ч (резолвер добирает по мере созревания). */
+export function getUnresolvedCodPicks() {
+  try {
+    return getDb()
+      .prepare(`SELECT * FROM cod_forward WHERE chg_24h IS NULL ORDER BY created_at`)
+      .all();
+  } catch {
+    return [];
+  }
+}
+
+/** Дописывает ход монеты и BTC на созревших горизонтах. */
+export function resolveCodPick(date, coin, res) {
+  try {
+    getDb()
+      .prepare(
+        `UPDATE cod_forward
+            SET chg_4h = COALESCE(@chg_4h, chg_4h),
+                chg_8h = COALESCE(@chg_8h, chg_8h),
+                chg_24h = COALESCE(@chg_24h, chg_24h),
+                btc_4h = COALESCE(@btc_4h, btc_4h),
+                btc_8h = COALESCE(@btc_8h, btc_8h),
+                btc_24h = COALESCE(@btc_24h, btc_24h),
+                resolved_at = @resolved_at
+          WHERE date = @date AND coin = @coin`,
+      )
+      .run({ date, coin, resolved_at: Date.now(), ...res });
+    return true;
+  } catch (err) {
+    logger.warn(`[CoinOfDay] forward resolve failed ${coin}: ${err.message}`);
+    return false;
+  }
+}
+
+export function getCodPicks(limit = 200) {
+  try {
+    return getDb()
+      .prepare(`SELECT * FROM cod_forward ORDER BY created_at DESC LIMIT ?`)
+      .all(limit);
+  } catch {
+    return [];
+  }
 }
