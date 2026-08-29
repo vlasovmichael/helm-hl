@@ -105,7 +105,7 @@ export async function appendEntries(newEntries) {
             kind:         entry.type === 'COST' ? 'crypto.cost' : 'crypto.revenue',
             amount:       entry.fiat_val,
             currency:     entry.fiat_currency,
-            counterparty: 'Binance',
+            counterparty: counterpartyOf(entry.source),
             raw:          entry,
           });
         } catch (err) {
@@ -153,4 +153,12 @@ export async function getYearSummary(year) {
 
 function round2(n) {
   return Math.round(n * 100) / 100;
+}
+
+// Контрагент для tax_outbox. Был захардкожен 'Binance' — с приходом Kraken
+// (29.08.2026) это стало враньём в бухгалтерской выгрузке, а поправить постфактум
+// нечем: в outbox уходит только имя, без ссылки на источник.
+function counterpartyOf(source) {
+  if (typeof source === 'string' && source.startsWith('kraken')) return 'Kraken';
+  return 'Binance';
 }

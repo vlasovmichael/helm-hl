@@ -5,8 +5,15 @@
 // Вызывается из cron в src/index.js.
 
 import { logger } from '../../core/logger.js';
-import { fetchAllFiatEvents, isConfigured } from './binanceClient.js';
-import { classifyEvent } from './classifier.js';
+import {
+  fetchAllFiatEvents as fetchBinanceEvents,
+  isConfigured as binanceConfigured,
+} from './binanceClient.js';
+import {
+  fetchAllFiatEvents as fetchKrakenEvents,
+  isConfigured as krakenConfigured,
+} from './krakenClient.js';
+import { classifyEvent, FIAT_CURRENCIES } from './classifier.js';
 import { getNbpRate, toWarsawDate } from './nbpClient.js';
 import { appendEntries, getYearSummary, loadLedger } from './ledger.js';
 
@@ -22,8 +29,10 @@ export async function dailyJob() {
   const t0 = Date.now();
   logger.info('[Tax] ─── Daily tax collection started ───');
 
-  if (!isConfigured()) {
-    logger.info('[Tax] Binance API keys not configured — skipping. Bot continues normally.');
+  // Источники независимы: настроен хоть один — работаем. Binance после ухода
+  // из Польши 1.07.2026 обычно уже без ключей, и это не повод не собирать Kraken.
+  if (!binanceConfigured() && !krakenConfigured()) {
+    logger.info('[Tax] No exchange API keys configured — skipping. Bot continues normally.');
     return { ok: false, reason: 'no_keys' };
   }
 
@@ -44,13 +53,33 @@ export async function dailyJob() {
       `(${new Date(startMs).toISOString().slice(0, 10)} → ${new Date(endMs).toISOString().slice(0, 10)})`,
     );
 
-    // ── 1. Тащим всё с Binance ──
-    let rawEvents;
-    try {
-      rawEvents = await fetchAllFiatEvents(startMs, endMs);
-    } catch (err) {
-      logger.error(`[Tax] Binance fetch failed: ${err.message} — will retry tomorrow`);
-      return { ok: false, reason: 'binance_failed' };
+    // ── 1. Тащим со всех настроенных бирж ──
+    // Падение одной биржи НЕ отменяет сбор с другой: иначе мёртвый Binance-ключ
+    // навсегда заблокировал бы Kraken. Прогон проваливается, только если легли
+    // ВСЕ настроенные источники — тогда завтрашний lookback подберёт пропуск.
+    const sources = [];
+    if (binanceConfigured()) {
+      sources.push({ name: 'Binance', fetch: () => fetchBinanceEvents(startMs, endMs) });
+    }
+    if (krakenConfigured()) {
+      sources.push({ name: 'Kraken', fetch: () => fetchKrakenEvents(startMs, endMs, FIAT_CURRENCIES) });
+    }
+
+    const rawEvents = [];
+    let failedSources = 0;
+    for (const src of sources) {
+      try {
+        const events = await src.fetch();
+        rawEvents.push(...events);
+        logger.info(`[Tax] ${src.name}: ${events.length} raw events`);
+      } catch (err) {
+        failedSources++;
+        logger.error(`[Tax] ${src.name} fetch failed: ${err.message} — will retry tomorrow`);
+      }
+    }
+
+    if (failedSources === sources.length) {
+      return { ok: false, reason: 'all_sources_failed' };
     }
 
     // ── 2. Классифицируем ──
@@ -116,27 +145,6 @@ export async function getTaxSummary(year) {
   return getYearSummary(y);
 }
 
-/**
- * Форматирование для Telegram /tax команды.
- */
-export async function formatTaxSummaryForTelegram(year) {
-  const y = year || new Date().getFullYear();
-  const s = await getTaxSummary(y);
-  const profitSign  = s.netProfitPLN >= 0 ? '+' : '';
-  const profitEmoji = s.netProfitPLN >= 0 ? '📈' : '📉';
-
-  return (
-    `📋 <b>PIT-38 Summary — ${s.year}</b>\n` +
-    `<code>─────────────────────</code>\n` +
-    `💸 Расходы (Koszty): <b>${s.totalCostsPLN.toFixed(2)} PLN</b>\n` +
-    `💰 Доходы (Przychody): <b>${s.totalRevenuePLN.toFixed(2)} PLN</b>\n` +
-    `<code>─────────────────────</code>\n` +
-    `${profitEmoji} Прибыль (Dochód): <b>${profitSign}${s.netProfitPLN.toFixed(2)} PLN</b>\n` +
-    `<code>─────────────────────</code>\n` +
-    `📦 Записей в гроссбухе: ${s.count}\n` +
-    `<i>Источник: data/tax/${s.year}_ledger.json</i>`
-  );
-}
 
 function round2(n) {
   return Math.round(n * 100) / 100;

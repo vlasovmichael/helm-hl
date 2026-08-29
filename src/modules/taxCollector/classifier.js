@@ -5,7 +5,10 @@
 //   { tx_id, date, type, asset, fiat_val, fiat_currency, source, comment }
 // либо null если событие не релевантно (крипта-крипта, internal, failed).
 
-const FIAT_CURRENCIES = new Set(['USD', 'EUR', 'PLN']);
+// Экспортируется: krakenClient решает по этому же списку, какая нога сделки
+// фиатная, и списки обязаны совпадать — иначе клиент отдаст пару, которую
+// классификатор потом молча выбросит.
+export const FIAT_CURRENCIES = new Set(['USD', 'EUR', 'PLN']);
 
 /**
  * Главная функция: принимает raw event, возвращает нормализованный объект или null.
@@ -21,6 +24,7 @@ export function classifyEvent(raw) {
     case 'fiat_payments': return classifyFiatPayment(raw);
     case 'c2c':           return classifyC2c(raw);
     case 'convert':       return classifyConvert(raw);
+    case 'kraken_trade':  return classifyKrakenTrade(raw);
     default:              return null;
   }
 }
@@ -155,4 +159,53 @@ function classifyConvert(raw) {
       comment:       `Binance Convert ${fromAsset}→${toAsset}`,
     };
   }
+}
+
+// ─────────────────────────────────────────────────
+//  Kraken — /0/private/Ledgers, пара фиат↔крипта
+// ─────────────────────────────────────────────────
+// Поля приходят уже сведёнными в krakenClient.pairLedgerEntries:
+//   refid, time (unix seconds), fiatAsset, fiatAmount, fiatFee,
+//   cryptoAsset, cryptoAmount, isBuy
+//
+// 🚨 КОМИССИЯ. В ledger'е Kraken поле amount НЕ включает fee — баланс меняется
+// на (amount − fee). Значит на покупке из кармана уходит fiatAmount + fee, а на
+// продаже приходит fiatAmount − fee. Для PIT-38 это существенно: prowizja
+// входит в koszt uzyskania przychodu, и брать «чистый» amount значило бы
+// занизить расход и переплатить налог.
+
+function classifyKrakenTrade(raw) {
+  const fiatCurrency = (raw.fiatAsset || '').toUpperCase();
+  if (!FIAT_CURRENCIES.has(fiatCurrency)) return null;
+
+  const amount = parseFloat(raw.fiatAmount);
+  if (!isFinite(amount) || amount <= 0) return null;
+
+  const fee = isFinite(parseFloat(raw.fiatFee)) ? parseFloat(raw.fiatFee) : 0;
+  const fiatVal = raw.isBuy ? amount + fee : amount - fee;
+  if (!isFinite(fiatVal) || fiatVal <= 0) return null;
+
+  const timeMs = Number(raw.time) * 1000;
+  if (!isFinite(timeMs) || timeMs <= 0) return null;
+
+  const asset = (raw.cryptoAsset || '').toUpperCase() || 'UNKNOWN';
+
+  return {
+    tx_id:         `kraken_${raw.refid}`,
+    date:          new Date(timeMs).toISOString(),
+    type:          raw.isBuy ? 'COST' : 'REVENUE',
+    asset,
+    fiat_val:      round8(fiatVal),
+    fiat_currency: fiatCurrency,
+    source:        'kraken_trade',
+    comment:       raw.isBuy
+      ? `Kraken Buy ${asset} for ${fiatCurrency}`
+      : `Kraken Sell ${asset} for ${fiatCurrency}`,
+  };
+}
+
+// Складывать float'ы приходится (частичные исполнения), а 100.00000000000001
+// в гроссбухе выглядит как баг. Округляем до 8 знаков — точнее любого фиата.
+function round8(n) {
+  return Math.round(n * 1e8) / 1e8;
 }

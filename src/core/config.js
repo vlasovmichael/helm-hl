@@ -863,6 +863,11 @@ function loadConfig() {
       apiSecret: process.env.BINANCE_API_SECRET || null,
     },
 
+    // Kraken, read-only. Право нужно одно: Query ledger entries.
+    kraken: {
+      apiKey:    process.env.KRAKEN_API_KEY    || null,
+      apiSecret: process.env.KRAKEN_API_SECRET || null,
+    },
   };
 }
 
