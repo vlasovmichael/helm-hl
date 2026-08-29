@@ -298,6 +298,5 @@ export function startMock({ onStatus }) {
   // ?mock=1&tour → сразу гоняем авто-тур фаз (без клика): цена ходит
   // вход→цель→вход, пик SOL уходит выше текущего → виден «призрак» отката.
   if (/[?&]tour\b/.test(location.search)) raf = setInterval(step, 700);
-  // eslint-disable-next-line no-console
   console.log("[mock] активная монета засимулирована — панель справа снизу");
 }
