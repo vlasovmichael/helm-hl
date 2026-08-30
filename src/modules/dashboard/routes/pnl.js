@@ -7,7 +7,7 @@
 // (как воспринимает пользователь), 7d/30d — rolling N*24h, all — без границы.
 //
 // Funding: query Hyperliquid userFunding API раз в N минут (cache), суммируем
-// по period boundaries. Старые DB-записи funding_collected = NULL — игнорим.
+// по period boundaries — с начала торговли, чтобы «All» совпадал с Ledger.
 
 import { config } from "../../../core/config.js";
 import { logger } from "../../../core/logger.js";
@@ -54,9 +54,10 @@ async function getFundingHistory() {
     return fundingCache.deltas;
   }
   // userFunding возвращает все funding-payments (uPnL делится на ts + usdc).
-  // Берём за 60 дней — покрывает 30d period с запасом.
+  // Окно — с начала торговли, как у Ledger: на 60 днях период «All» показывал
+  // funding −$0.08 против +$1.95 в Ledger, и итоги двух витрин расходились.
   try {
-    const startTime = Date.now() - 60 * 24 * 3600_000;
+    const startTime = Date.UTC(2026, 3, 1);
     const data = await hlInfo(
       {
         type: "userFunding",
