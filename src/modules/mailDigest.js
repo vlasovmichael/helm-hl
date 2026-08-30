@@ -98,7 +98,7 @@ export async function buildDigestHtml(now = Date.now(), tripsOverride = null) {
     const s = arr.reduce((a, t) => a + tripNet(t), 0);
     return `${label} <strong style="color:${C.text}">${arr.length}</strong> (<span style="color:${s >= 0 ? C.green : C.red}">${fmtUsd(s)}</span>)`;
   };
-  const split = [splitLine('нянька', adopt), splitLine('рука', hand)].filter(Boolean).join(' · ');
+  const split = [splitLine('nanny', adopt), splitLine('by hand', hand)].filter(Boolean).join(' · ');
 
   // Лучшая/худшая сделка — факт из fills.
   let extremes = '';
@@ -108,8 +108,8 @@ export async function buildDigestHtml(now = Date.now(), tripsOverride = null) {
     const cell = (t) => `${esc(t.coin)} ${t.side === 'short' ? '↓' : '↑'} <strong>${fmtUsd(tripNet(t))}</strong>`;
     extremes =
       `<div style="font-size:15px;line-height:1.7;color:${C.body};margin-top:6px">` +
-      `Лучшая: <span style="color:${C.green}">${cell(best)}</span><br>` +
-      `Худшая: <span style="color:${C.red}">${cell(worst)}</span></div>`;
+      `Best: <span style="color:${C.green}">${cell(best)}</span><br>` +
+      `Worst: <span style="color:${C.red}">${cell(worst)}</span></div>`;
   }
 
   // Бот-стратегии одной строкой.
@@ -119,7 +119,7 @@ export async function buildDigestHtml(now = Date.now(), tripsOverride = null) {
     const botNet = rows
       .filter((r) => !MY_SOURCES.has(r.id) && (r.status === 'live' || r.status === 'paper'))
       .reduce((s, r) => s + (r.pnl?.day || 0), 0);
-    botLine = `Боты (автономные) за день: <strong style="color:${botNet >= 0 ? C.green : C.red}">${fmtUsd(botNet)}</strong>`;
+    botLine = `Bots (autonomous) today: <strong style="color:${botNet >= 0 ? C.green : C.red}">${fmtUsd(botNet)}</strong>`;
   } catch (err) {
     logger.warn(`[mailDigest] bot line failed: ${err.message}`);
   }
@@ -128,11 +128,11 @@ export async function buildDigestHtml(now = Date.now(), tripsOverride = null) {
   const payoffColor = !losses.length ? C.body : payoff >= 1 ? C.green : C.red;
   const summaryLine =
     `<div style="font-size:16px;line-height:1.6;color:${C.body};margin-bottom:4px">` +
-    `<strong style="color:${C.text}">${n}</strong> ${n === 1 ? 'сделка' : 'сделок'} · ` +
+    `<strong style="color:${C.text}">${n}</strong> ${n === 1 ? 'trade' : 'trades'} · ` +
     `win <strong style="color:${C.text}">${winPct}%</strong> · ` +
     `payoff <strong style="color:${payoffColor}">${payoffStr}</strong>` +
     (losses.length && payoff < 1
-      ? ` <span style="color:${C.mut}">(в плюс при таком payoff нужен win ≥ ${Math.round((1 / (1 + payoff)) * 100)}%)</span>`
+      ? ` <span style="color:${C.mut}">(at this payoff you need win ≥ ${Math.round((1 / (1 + payoff)) * 100)}% to be green)</span>`
       : '') +
     `</div>` +
     (split ? `<div style="font-size:15px;color:${C.mut};margin-bottom:2px">${split}</div>` : '');
@@ -142,9 +142,9 @@ export async function buildDigestHtml(now = Date.now(), tripsOverride = null) {
     `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;color:${C.text}">` +
 
     // Заголовок
-    `<div style="font-size:13px;font-weight:600;color:${C.accent};text-transform:uppercase;letter-spacing:.08em">Helm · итог дня</div>` +
+    `<div style="font-size:13px;font-weight:600;color:${C.accent};text-transform:uppercase;letter-spacing:.08em">Helm · daily wrap</div>` +
     `<div style="font-size:26px;font-weight:700;color:${C.text};margin:4px 0 2px">${fmtDate(now)}</div>` +
-    `<div style="font-size:16px;color:${C.mut};margin-bottom:18px">Итог дня: <strong style="color:${net >= 0 ? C.green : C.red};font-size:18px">${fmtUsd(net)}</strong></div>` +
+    `<div style="font-size:16px;color:${C.mut};margin-bottom:18px">Day result: <strong style="color:${net >= 0 ? C.green : C.red};font-size:18px">${fmtUsd(net)}</strong></div>` +
 
     summaryLine +
     extremes +
@@ -154,8 +154,8 @@ export async function buildDigestHtml(now = Date.now(), tripsOverride = null) {
 
     // Подпись
     `<div style="font-size:13px;color:${C.faint};line-height:1.6;margin-top:18px">` +
-    `Цифры из HL fills (тот же источник, что Ledger на дашборде) — не из таблицы history. Разбор сделок — в журнале. ` +
-    `<a href="https://dashboard.example.com/journal" style="color:${C.accent};text-decoration:none">Открыть журнал →</a></div>` +
+    `Numbers come from HL fills (the same source as the dashboard Ledger), not from the history table. Trade review lives in the journal. ` +
+    `<a href="https://dashboard.example.com/journal" style="color:${C.accent};text-decoration:none">Open the journal →</a></div>` +
 
     `</div>`
   );
@@ -175,7 +175,7 @@ export async function sendDailyDigest(now = Date.now()) {
     logger.info('[mailDigest] skipped — no trades to review today');
     return false;
   }
-  const ok = await sendMail({ subject: `Helm · итог дня ${date}`, html });
+  const ok = await sendMail({ subject: `Helm · daily wrap ${date}`, html });
   logger.info(`[mailDigest] daily digest ${ok ? 'sent' : 'failed'}`);
   return ok;
 }

@@ -457,12 +457,12 @@ export async function maybeAdoptManualPosition(manualPositions) {
     });
     if (decision === 'unknown-age') {
       logger.info(`[Adopt] skip #${coin} — open time undetermined (старый orphan со старта, fills молчат)`);
-      _adoptSkipReason.set(coin, 'возраст входа неизвестен');
+      _adoptSkipReason.set(coin, 'entry age unknown');
       continue;
     }
     if (decision === 'too-old') {
       logger.info(`[Adopt] skip #${coin} — too old (${ageMin.toFixed(1)}min > ${config.trading.adoptMaxAgeMin}min)`);
-      _adoptSkipReason.set(coin, `слишком старая (${ageMin.toFixed(0)}м > ${config.trading.adoptMaxAgeMin}м)`);
+      _adoptSkipReason.set(coin, `too old (${ageMin.toFixed(0)}m > ${config.trading.adoptMaxAgeMin}m)`);
       continue;
     }
     if (provisional) {
@@ -494,15 +494,15 @@ export async function maybeAdoptManualPosition(manualPositions) {
           `плановым SL $${plannedSl.toPrecision(6)} (−${lossPct.toFixed(2)}% при стопе ${distPct.toFixed(2)}%). ` +
           `НЕ усыновляю — стоп сработал бы мгновенно. Решение за оператором.`,
       );
-      _adoptSkipReason.set(coin, `уже глубже стопа (−${lossPct.toFixed(1)}%) — реши сам`);
+      _adoptSkipReason.set(coin, `already beyond the stop (−${lossPct.toFixed(1)}%) — your call`);
       const lastAlert = _orphanAlertAt.get(up(coin)) || 0;
       if (now - lastAlert >= ORPHAN_REALERT_MS) {
         _orphanAlertAt.set(up(coin), now);
         await fireAdoptNtfy(
-          `🚨 #${coin} ${side.toUpperCase()} уже глубже стопа`,
-          `Поза $${sizeUsd.toFixed(0)} в −${lossPct.toFixed(2)}% — глубже плановой стоп-дистанции ` +
-          `${distPct.toFixed(2)}%.\nБот НЕ ставит стоп (закрылась бы мгновенно по рынку).\n` +
-          `Реши сам: резать или держать. Поза БЕЗ защиты.`,
+          `🚨 #${coin} ${side.toUpperCase()} is already beyond the stop`,
+          `A $${sizeUsd.toFixed(0)} position at −${lossPct.toFixed(2)}% — beyond the planned stop distance of ` +
+          `${distPct.toFixed(2)}%.\nThe bot is NOT placing a stop (it would fill instantly at market).\n` +
+          `Your call: cut it or hold it. The position is UNPROTECTED.`,
           ['rotating_light'],
           { urgent: true },
         );
@@ -516,7 +516,7 @@ export async function maybeAdoptManualPosition(manualPositions) {
       ({ szDecimals } = resolveAsset(coin));
     } catch (err) {
       logger.warn(`[Adopt] skip #${coin} — resolveAsset failed: ${err.message}`);
-      _adoptSkipReason.set(coin, 'не распознал тикер');
+      _adoptSkipReason.set(coin, 'ticker not recognised');
       continue;
     }
 
@@ -529,22 +529,22 @@ export async function maybeAdoptManualPosition(manualPositions) {
         `[Adopt] ❌ SL placement failed for #${coin} ${side} @ $${plannedSl.toPrecision(6)}: ${err.message}. ` +
         `NOT adopting — позиция остаётся в обычном hands-off.`,
       );
-      _adoptSkipReason.set(coin, 'стоп не встал на бирже');
+      _adoptSkipReason.set(coin, 'stop did not reach the exchange');
       const lastSlFailAlert = _slFailAlertAt.get(up(coin)) || 0;
       if (now - lastSlFailAlert >= SL_FAIL_REALERT_MS) {
         _slFailAlertAt.set(up(coin), now);
         const walletDead = /does not exist/i.test(err.message);
         await fireAdoptNtfy(
           walletDead
-            ? `🚨 API-кошелёк бота МЁРТВ — #${coin} без стопа`
-            : `🚨 #${coin}: стоп НЕ встал на бирже`,
+            ? `🚨 The bot's API wallet is DEAD — #${coin} has no stop`
+            : `🚨 #${coin}: the stop did NOT reach the exchange`,
           walletDead
-            ? `Биржа не признаёт агент-ключ («does not exist») — протух или дерегистрирован.\n` +
-              `Бот НЕ может ставить стопы и торговать. Все ручные позы без защиты.\n` +
-              `Перевыпусти API wallet: app.hyperliquid.xyz → More → API.`
-            : `Поза #${coin} ${side.toUpperCase()} НЕ усыновлена: биржа отклонила SL.\n` +
+            ? `The exchange does not recognise the agent key ("does not exist") — expired or deregistered.\n` +
+              `The bot CANNOT place stops or trade. Every manual position is unprotected.\n` +
+              `Reissue the API wallet: app.hyperliquid.xyz → More → API.`
+            : `Position #${coin} ${side.toUpperCase()} was NOT adopted: the exchange rejected the stop.\n` +
               `${err.message.slice(0, 200)}\n` +
-              `Поза БЕЗ защиты — поставь стоп руками или закрой.`,
+              `The position is UNPROTECTED — set a stop by hand or close it.`,
           ['rotating_light'],
           { urgent: true },
         );
