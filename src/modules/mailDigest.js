@@ -155,7 +155,7 @@ export async function buildDigestHtml(now = Date.now(), tripsOverride = null) {
     // Подпись
     `<div style="font-size:13px;color:${C.faint};line-height:1.6;margin-top:18px">` +
     `Цифры из HL fills (тот же источник, что Ledger на дашборде) — не из таблицы history. Разбор сделок — в журнале. ` +
-    `<a href="https://dashboard.example.com/journal.html" style="color:${C.accent};text-decoration:none">Открыть журнал →</a></div>` +
+    `<a href="https://dashboard.example.com/journal" style="color:${C.accent};text-decoration:none">Открыть журнал →</a></div>` +
 
     `</div>`
   );

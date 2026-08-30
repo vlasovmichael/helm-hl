@@ -12,13 +12,13 @@ import { BELL_ICONS, NAV_ICONS } from "./icons.js";
 
 const LINKS = [
   { key: "dashboard", href: "/", label: "Dashboard" },
-  // Order Book остаётся как страница (/orderbook.html), но ссылку из навбара
+  // Order Book остаётся как страница (/orderbook), но ссылку из навбара
   // убрали — стакан оператору тяжело читается, не нужен на видном месте (2026-06-28).
-  { key: "statistics", href: "/statistics.html", label: "Statistics" },
-  { key: "oi", href: "/oi.html", label: "OI", title: "История open interest по всем монетам (ΔOI 24ч/1ч)" },
-  { key: "lab", href: "/lab.html", label: "Lab", title: "Research: реестр стратегий + закрытые вердикты" },
-  { key: "journal", href: "/journal.html", label: "Journal", title: "Журнал чтения графика — разметка монеты на сутки вперёд" },
-  { key: "ledger", href: "/ledger.html", label: "Ledger", title: "Monthly P&L ledger" },
+  { key: "statistics", href: "/statistics", label: "Statistics" },
+  { key: "oi", href: "/oi", label: "OI", title: "История open interest по всем монетам (ΔOI 24ч/1ч)" },
+  { key: "lab", href: "/lab", label: "Lab", title: "Research: реестр стратегий + закрытые вердикты" },
+  { key: "journal", href: "/journal", label: "Journal", title: "Журнал чтения графика — разметка монеты на сутки вперёд" },
+  { key: "ledger", href: "/ledger", label: "Ledger", title: "Monthly P&L ledger" },
 ];
 
 const navLink = (l, active) => {

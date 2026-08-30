@@ -105,17 +105,29 @@ const __dirname = dirname(__filename);
 // no-cache, а хэшированные app/styles браузер кэширует навсегда (immutable).
 // Дев фронта живёт на отдельном vite-сервере (npm run dev:dash), сюда не заходит.
 const PUBLIC_DIR = join(__dirname, "dist");
-function handleIndex(_req, res) {
+// Страницы живут по чистым путям (/ledger, не /ledger.html): .html — деталь
+// сборки, а не часть адреса. Старые адреса редиректим 301, чтобы закладки и
+// ссылки в ntfy-пушах не побились.
+const PAGES = [
+  "index", "ledger", "journal", "statistics", "lab", "oi",
+  "orderbook", "orderbook-sim", "ticket",
+];
+
+function sendPage(name, res) {
   try {
-    const html = readFileSync(join(PUBLIC_DIR, "index.html"), "utf8");
+    const html = readFileSync(join(PUBLIC_DIR, `${name}.html`), "utf8");
     res.set("Cache-Control", "no-cache");
     res.type("html").send(html);
   } catch (err) {
     logger.warn(
-      `[Dashboard] index render failed: ${err.message} — собрана ли дашборда? (npm run build:dash)`,
+      `[Dashboard] ${name} render failed: ${err.message} — собрана ли дашборда? (npm run build:dash)`,
     );
     res.status(500).send("dashboard build missing — run: npm run build:dash");
   }
+}
+
+function handleIndex(_req, res) {
+  sendPage("index", res);
 }
 
 let server = null;
@@ -898,7 +910,12 @@ export function startDashboard() {
   app.post("/login", handleLoginPost);
   app.get("/logout", handleLogout);
   app.get("/", handleIndex);
-  app.get("/index.html", handleIndex);
+  for (const name of PAGES) {
+    const clean = name === "index" ? "/" : `/${name}`;
+    if (clean !== "/") app.get(clean, (_req, res) => sendPage(name, res));
+    // Старый адрес с расширением → 301 на чистый.
+    app.get(`/${name}.html`, (_req, res) => res.redirect(301, clean));
+  }
   app.get("/api/status", handleStatus);
   app.get("/api/history", handleHistory);
   app.get("/api/activity", handleActivity);
@@ -1080,6 +1097,10 @@ export function startDashboard() {
 
   app.use(
     express.static(PUBLIC_DIR, {
+      // .html не раздаём напрямую: страницы отдаёт sendPage по чистому пути,
+      // а /<page>.html выше отвечает редиректом.
+      extensions: [],
+      index: false,
       setHeaders: (res, filePath) => {
         // Хэшированные ассеты Vite (/assets/*.[hash].js|css) иммутабельны → кэшим навсегда.
         // HTML отдаём no-cache, чтобы новые хэши подхватывались сразу после деплоя.
