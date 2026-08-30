@@ -6,19 +6,19 @@
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  margin-bottom: 22px;
+  margin: 8px 0 26px;
 
   h1 {
-    font-size: 22px;
-    font-weight: 700;
+    font-family: var(--font-display);
+    font-size: 30px;
+    font-weight: 600;
     letter-spacing: -0.02em;
-    margin: 0 0 4px;
+    margin: 0 0 6px;
     color: var(--text-primary);
   }
   .sub {
-    font-size: 12.5px;
+    font-size: 14px;
     color: var(--text-muted);
-    font-family: var(--font-mono);
   }
 }
 .back-link {
@@ -49,20 +49,21 @@
   background: var(--card-bg-elev);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 14px 16px;
+  padding: 16px 18px;
 
   .k {
     font-size: 11px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.07em;
     color: var(--text-muted);
-    margin-bottom: 6px;
+    margin-bottom: 8px;
   }
   // color не фиксируем: .pos/.neg ниже слабее по специфичности и раньше
   // проигрывали — карточки всегда были нейтральные.
   .v {
     font-family: var(--font-mono);
-    font-size: 21px;
+    font-size: 23px;
     font-weight: 600;
     letter-spacing: -0.01em;
 
@@ -86,6 +87,11 @@
   overflow: hidden;
   margin-bottom: 26px;  // раньше зазор до Tax Summary держал footnote
 }
+
+// Последняя строка месяцев не рисует разделитель — его роль берёт кромка tfoot.
+table.ledger tbody tr:last-child td {
+  border-bottom: 0;
+}
 table.ledger {
   width: 100%;
   border-collapse: collapse;
@@ -93,18 +99,26 @@ table.ledger {
 
   th,
   td {
-    padding: 11px 14px;
+    padding: 13px 16px;
     text-align: right;
     white-space: nowrap;
+  }
+  th:first-child,
+  td:first-child {
+    padding-left: 20px;
+  }
+  th:last-child,
+  td:last-child {
+    padding-right: 20px;
   }
   th:first-child,
   td:first-child {
     text-align: left;
   }
   thead th {
-    font-size: 10.5px;
+    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.08em;
     color: var(--text-muted);
     font-weight: 600;
     background: var(--canvas-subtle);

@@ -254,8 +254,8 @@ const codSigned = (n, digits = 2) => {
 
 /**
  * Полоски силы сигнала: закрашено ровно score из 5, цвет — по стороне сделки.
- * Класс-обёртка обязателен: базовое правило .ss-seg.on живёт под .ss-hero--*,
- * без своей обёртки полоски остаются серыми при любом score.
+ * Класс-обёртка обязателен: правило .ss-seg.on живёт под .cod-segs--*,
+ * без обёртки полоски остаются серыми при любом score.
  */
 const codSegs = (score, side) => {
   const tone = side === "SHORT" ? "short" : side === "LONG" ? "long" : "muted";
@@ -575,7 +575,9 @@ async function loadCoinOfDay(force = false) {
     codData = await fetchJson(`/api/coin-of-day${force ? "?refresh=1" : ""}`);
     if (codData.error) throw new Error(codData.error);
     const age = codData.cached ? ` · cached ${codData.ageSec}s ago` : "";
-    meta.textContent = `reviewed ${codData.scanned} of ${codData.universe}${age}`;
+    meta.textContent = codData.scanned == null
+      ? ""
+      : `reviewed ${codData.scanned} of ${codData.universe}${age}`;
       if (!codAllTabs().some((p) => p.coin === codActive)) codActive = codAllTabs()[0]?.coin ?? null;
     codRenderTabs();
     codRenderBody();
@@ -588,115 +590,6 @@ async function loadCoinOfDay(force = false) {
 }
 
 
-// ── Setup Scanner radar (карточка 03) ──
-// Данные из /api/scanner (score-логика на бэке). Радар, не сигнал.
-const SS_CLS = { hit: "oi-pos", miss: "oi-muted", warm: "ss-warm" };
-const ssCell = (c) =>
-  `<span class="${SS_CLS[c.cls] || "oi-muted"}">${c.text}</span>`;
-const ssScoreCls = (n) => (n >= 3 ? "ss-s3" : n === 2 ? "ss-s2" : "ss-s0");
-const ssSegs = (n) =>
-  Array.from({ length: 4 }, (_, i) => `<span class="ss-seg${i < n ? " on" : ""}"></span>`).join("");
-
-function renderScannerHero(top) {
-  const hero = document.getElementById("ss-hero");
-  if (!top) {
-    hero.className = "ss-hero ss-hero--none";
-    hero.innerHTML =
-      '<div class="ss-hero-empty">No setups with score ≥ 1 right now — the radar is empty.</div>';
-    return;
-  }
-  const side = top.dir === "LONG" ? "long" : top.dir === "SHORT" ? "short" : "none";
-  const arrow = side === "long" ? "▲" : side === "short" ? "▼" : "■";
-  const stat = (k, v) =>
-    `<div class="ss-stat"><span class="ss-stat-k">${k}</span><span class="ss-stat-v">${v}</span></div>`;
-  hero.className = `ss-hero ss-hero--${side}`;
-  hero.innerHTML =
-    `<div class="ss-hero-main">
-       <div class="ss-hero-eyebrow">Top setup <span class="ss-segs">${ssSegs(top.score)}</span> ${top.score}/4</div>
-       <div class="ss-hero-headline">
-         <span class="ss-badge ss-badge--${side}">${arrow} ${top.dir || "WAIT"}</span>
-         <span class="ss-coin">${top.coin}</span>
-       </div>
-     </div>
-     <div class="ss-hero-stats">
-       ${stat("funding", top.funding != null ? `${top.funding >= 0 ? "+" : ""}${Math.round(top.funding)}%` : "—")}
-       ${stat("basis", top.basis != null ? `${top.basis >= 0 ? "+" : ""}${(top.basis * 100).toFixed(2)}%` : "—")}
-       ${stat("vol", top.vol != null ? `${top.vol.toFixed(1)}x` : "—")}
-     </div>`;
-}
-
-// Score 0 = ничего не сошлось (шум радара) → по умолчанию прячем, тумблер вернёт.
-let ssRows = [];
-let ssShowZero = false;
-
-function rowHtml(r) {
-  return `
-      <tr>
-        <td>${r.coin}</td>
-        <td class="ss-scorecell ${ssScoreCls(r.score)}">${r.score}</td>
-        <td>${ssCell(r.funding)}</td>
-        <td>${ssCell(r.oiRamp)}</td>
-        <td>${ssCell(r.basis)}</td>
-        <td>${ssCell(r.vol)}</td>
-        <td class="oi-muted">${r.vlm}</td>
-      </tr>`;
-}
-
-function renderScannerRows() {
-  const tbody = document.getElementById("ss-tbody");
-  const shown = ssShowZero ? ssRows : ssRows.filter((r) => r.score > 0);
-  const hidden = ssRows.length - shown.length;
-  if (!shown.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="oi-empty">${
-      ssRows.length ? "No setups with score ≥ 1 (everything is score 0)." : "No coins."
-    }</td></tr>`;
-    return;
-  }
-  let html = shown.map(rowHtml).join("");
-  if (!ssShowZero && hidden > 0) {
-    html += `<tr><td colspan="7" class="oi-muted" style="text-align:center;padding:10px">
-      + ${hidden} coins with score 0 hidden · <span style="text-decoration:underline;cursor:pointer" id="ss-showzero-link">show all</span></td></tr>`;
-  }
-  tbody.innerHTML = html;
-  const link = document.getElementById("ss-showzero-link");
-  if (link)
-    link.addEventListener("click", () => {
-      ssShowZero = true;
-      document.getElementById("ss-showzero").checked = true;
-      renderScannerRows();
-    });
-}
-
-async function loadScanner() {
-  const tbody = document.getElementById("ss-tbody");
-  const meta = document.getElementById("ss-meta");
-  let data;
-  try {
-    data = await fetchJson("/api/scanner");
-  } catch {
-    tbody.innerHTML =
-      '<tr><td colspan="7" class="oi-empty">Scanner unavailable.</td></tr>';
-    meta.textContent = "";
-    return;
-  }
-  if (data.error || !Array.isArray(data.rows)) {
-    tbody.innerHTML =
-      '<tr><td colspan="7" class="oi-empty">No snapshot data yet.</td></tr>';
-    meta.textContent = "";
-    return;
-  }
-  meta.textContent =
-    `${data.coins} coins · span ${data.dataSpanHours.toFixed(0)}h` +
-    (data.updatedAgoSec != null ? ` · updated ${data.updatedAgoSec}s ago` : "");
-  renderScannerHero(data.top);
-  ssRows = data.rows;
-  renderScannerRows();
-}
-
-document.getElementById("ss-showzero").addEventListener("change", (e) => {
-  ssShowZero = e.target.checked;
-  renderScannerRows();
-});
 
 // ── состояние обзора ──
 const PAGE_SIZE = 10;
@@ -951,5 +844,4 @@ document.querySelectorAll("#oi-ranges .range-btn").forEach((b) =>
 
 loadNanny();
 loadCoinOfDay();
-loadScanner();
 loadOverview();

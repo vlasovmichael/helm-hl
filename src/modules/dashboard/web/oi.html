@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Mona+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Geologica:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
     <script>
@@ -173,59 +173,24 @@
       .nan-notes li.warn { border-left-color: var(--red); color: var(--text, inherit); }
       .nan-empty { padding: 26px 10px; text-align: center; color: var(--text-dim, #8a8578); font-size: 13.5px; }
 
-      /* ── Setup Scanner card (ss- префикс) ── */
-      .ss-hero {
-        border: 1px solid var(--border, #2a2622); border-radius: var(--radius-lg, 12px);
-        padding: 16px 20px; margin: 6px 0 16px;
-        display: flex; align-items: center; justify-content: space-between;
-        gap: 20px; flex-wrap: wrap;
-        background: var(--panel-2, rgba(128,128,128,0.05));
-      }
-      .ss-hero--long  { background: var(--green-soft); border-color: var(--green-line); }
-      .ss-hero--short { background: var(--red-soft);   border-color: var(--red-line); }
-      .ss-hero-eyebrow {
-        display: flex; align-items: center; gap: 9px; margin-bottom: 9px;
-        font-size: 10.5px; letter-spacing: 0.8px; text-transform: uppercase;
-        color: var(--text-muted, #8a8578);
-      }
+      /* Пилюли и сегменты «Монеты дня» (ss- префикс остался от снятого
+         Setup Scanner — карточка переиспользует его разметку). */
       .ss-segs { display: inline-flex; gap: 3px; }
       .ss-seg {
         width: 17px; height: 5px; border-radius: 3px;
         background: var(--border-strong, rgba(128,128,128,0.3));
       }
-      .ss-hero--long  .ss-seg.on { background: var(--green); }
-      .ss-hero--short .ss-seg.on { background: var(--red); }
-      .ss-hero-headline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
       .ss-badge {
-        font-size: 14px; font-weight: 800; letter-spacing: 0.3px;
-        padding: 5px 13px; border-radius: 999px; color: #fff; white-space: nowrap;
+        font-size: 14px; font-weight: 700; letter-spacing: 0.3px;
+        padding: 5px 13px; border-radius: var(--radius-pill); color: #fff; white-space: nowrap;
       }
       .ss-badge--long  { background: var(--green); }
       .ss-badge--short { background: var(--red); }
       .ss-badge--none  { background: var(--text-muted, #8a8578); }
       .ss-coin {
-        font-size: 26px; font-weight: 800; letter-spacing: -0.5px;
-        color: var(--text-primary, inherit); font-family: "JetBrains Mono", monospace;
+        font-size: 26px; font-weight: 700; letter-spacing: -0.5px;
+        color: var(--text-primary, inherit); font-family: var(--font-mono);
       }
-      .ss-hero-stats { display: flex; gap: 24px; }
-      .ss-stat { display: flex; flex-direction: column; gap: 3px; text-align: right; }
-      .ss-stat-k {
-        font-size: 10px; text-transform: uppercase; letter-spacing: 0.6px;
-        color: var(--text-muted, #8a8578);
-      }
-      .ss-stat-v {
-        font-size: 15px; font-weight: 600; font-family: "JetBrains Mono", monospace;
-        font-variant-numeric: tabular-nums; color: var(--text-primary, inherit);
-      }
-      .ss-hero--none .ss-hero-empty { color: var(--text-muted, #8a8578); }
-      td.ss-scorecell, th.ss-scorecell { text-align: center; }
-      .ss-warm { color: #5b9dff; }
-      .ss-s3 { color: #0f7a45; font-weight: 700; }
-      :root[data-theme="dark"] .ss-s3 { color: #2f9d63; }
-      .ss-s2 { color: #c98a1a; font-weight: 700; }
-      .ss-s0 { color: var(--text-dim, #8a8578); font-weight: 700; }
-      .ss-toggle { cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 5px; }
-      .ss-toggle input { vertical-align: middle; margin: 0; cursor: pointer; }
       .cod-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 14px; }
       .cod-tab {
         display: inline-flex; align-items: center; gap: 8px;
@@ -355,44 +320,9 @@
         </p>
       </section>
 
-      <section class="card" id="ss-card">
-        <div class="card-header">
-          <div class="card-title" data-num="03">Setup Scanner · radar</div>
-          <div class="oi-toolbar">
-            <label class="oi-span ss-toggle"><input type="checkbox" id="ss-showzero" /> show score 0</label>
-            <span class="oi-span" id="ss-meta">…</span>
-          </div>
-        </div>
-        <div class="ss-hero" id="ss-hero"></div>
-        <div class="oi-table-wrap">
-          <table class="oi-table" id="ss-table">
-            <thead>
-              <tr>
-                <th>Coin</th>
-                <th class="ss-scorecell">Score</th>
-                <th>Funding</th>
-                <th>OI ramp</th>
-                <th>Basis</th>
-                <th>Vol</th>
-                <th>24h vol</th>
-              </tr>
-            </thead>
-            <tbody id="ss-tbody">
-              <tr><td colspan="7" class="oi-empty">Loading…</td></tr>
-            </tbody>
-          </table>
-        </div>
-        <p class="oi-note" style="margin-top: 10px">
-          Score 0–4 = how many of <b>funding / OI ramp / basis / vol</b> line up at once.
-          Direction = fading the crowd by funding. <b>This is a radar, not a signal.</b>
-          <span class="ss-warm">warm</span> = the window is still building history (not
-          counted in the score).
-        </p>
-      </section>
-
       <section class="card">
         <div class="card-header">
-          <div class="card-title" data-num="04">Overview · all coins</div>
+          <div class="card-title" data-num="03">Overview · all coins</div>
           <div class="oi-toolbar">
             <input id="oi-search" class="oi-search" placeholder="filter" maxlength="12" />
             <span class="oi-span" id="oi-span">…</span>
@@ -426,7 +356,7 @@
 
       <section class="card oi-detail" id="oi-detail" hidden>
         <div class="card-header">
-          <div class="card-title" data-num="05">Coin history</div>
+          <div class="card-title" data-num="04">Coin history</div>
           <div class="time-ranges" id="oi-ranges">
             <button class="range-btn" data-hours="24">24h</button>
             <button class="range-btn active" data-hours="72">3d</button>
