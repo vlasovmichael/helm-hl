@@ -373,10 +373,28 @@ table.cal {
     color: var(--text-faint);
   }
 
+  // Итог недели — не «ещё один день»: тон в 2 раза плотнее, чем у клеток,
+  // и слева акцентная полоса знака.
   td.cal-week {
     background: var(--card-bg-elev);
     border-left-width: 3px;
     text-align: right;
+
+    &.pos {
+      background: color-mix(in srgb, var(--green) 24%, var(--card-bg-elev));
+      border-color: color-mix(in srgb, var(--green) 55%, transparent);
+      border-left-color: var(--green);
+    }
+    &.neg {
+      background: color-mix(in srgb, var(--red) 24%, var(--card-bg-elev));
+      border-color: color-mix(in srgb, var(--red) 55%, transparent);
+      border-left-color: var(--red);
+    }
+
+    // На плотной подложке --text-faint проваливается — подпись недели темнее.
+    .dsub {
+      color: var(--text-secondary);
+    }
 
     &.out {
       background: transparent;
