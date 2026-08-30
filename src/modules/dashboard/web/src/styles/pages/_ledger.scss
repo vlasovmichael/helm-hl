@@ -263,9 +263,13 @@ tr.expandable {
   &:hover {
     background: var(--canvas-subtle);
   }
-  // Рамку рисуем только на клавиатурном фокусе. У tr с tabindex Chrome зажигает
-  // :focus-visible и после клика мышью — строка оставалась обведённой, читалось
-  // как залипший баг. Клик гасим через .is-clicked (снимается на blur).
+  // Дефолтный фокус-ринг Chrome (синий) гасим всегда: у tr с tabindex он
+  // вылезал после клика мышью и читался как залипший баг. Свою рамку рисуем
+  // только на клавиатурном фокусе — .is-clicked помечает мышиный клик и
+  // снимается на blur.
+  &:focus {
+    outline: none;
+  }
   &:focus-visible:not(.is-clicked) {
     outline: 2px solid var(--text-secondary);
     outline-offset: -2px;
