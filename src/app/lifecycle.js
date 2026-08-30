@@ -15,7 +15,6 @@ import { stopWsExitLoop } from './wsExitTick.js';
 import { stopTickWatchdog } from './tickWatchdog.js';
 import { stopMemWatch } from './memWatch.js';
 import { markCleanShutdown } from './restartWatch.js';
-import { stopWsEntryLoop } from './wsEntryTick.js';
 import { state, BOT_STATE_PATH, BOT_STATE_FLUSH_INTERVAL_MS } from './state.js';
 
 /**
@@ -152,7 +151,6 @@ export async function shutdown(signal) {
     clearInterval(state.tickTimer);
     state.tickTimer = null;
   }
-  stopWsEntryLoop();
   stopWsExitLoop();
   stopTickWatchdog();
   stopMemWatch();
