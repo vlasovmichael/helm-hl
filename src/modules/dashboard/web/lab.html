@@ -48,16 +48,16 @@
       <nav class="topnav" id="topnav" aria-label="Primary"></nav>
 
       <header>
-        <div class="equity-group">
+        <div class="equity-group page-head">
           <div class="label">Lab</div>
-          <div class="value" style="font-size: 20px">Research · Strategies &amp; Verdicts</div>
+          <div class="value page-title">Research · forward tests &amp; verdicts</div>
         </div>
         <div class="meta-group">
           <div id="ws-pill" class="status-pill offline">WS connecting…</div>
         </div>
       </header>
 
-      <!-- 01 / Strategies — единый обзор всех стратегий (реестр-driven). Перенесено
+      <!-- 01 / Режимы ведения позиции (реестр-driven). Перенесено
            со statistics, первой картой на Lab. Данные — из WS status-payload
            (msg.data.strategies), renderStrategies() в lab.js. Live/Paper/Radar. -->
       <section class="card" id="sec-strategies">
@@ -67,7 +67,7 @@
             data-num=""
             title="How positions are run, in one place. Live trades real money; Paper accumulates stats in a shadow slot, separate from production."
           >
-            Strategies
+            How positions are run
           </div>
           <div class="time-ranges" id="strategies-summary"></div>
         </div>

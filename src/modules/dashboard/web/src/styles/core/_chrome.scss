@@ -11,6 +11,24 @@ header {
   border-bottom: 1px solid var(--border);
 }
 
+// Шапка страницы (не дашборда): eyebrow + крупный дисплейный заголовок.
+// На дашборде в .value лежит equity — там остаётся моно-цифра.
+.page-head {
+  .label {
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    font-size: 11px !important;
+    font-weight: 600;
+  }
+  .value.page-title {
+    font-family: var(--font-display);
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+  }
+}
+
 .equity-group {
   .label {
     color: var(--text-muted);
@@ -270,8 +288,8 @@ header {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 20px 24px;
-  margin-bottom: 16px;
+  padding: 22px 26px;
+  margin-bottom: 18px;
   box-shadow: var(--shadow-sm);
 }
 
@@ -352,11 +370,11 @@ header {
 }
 
 .card-title {
-  font-family: var(--font-sans);
-  font-size: 18px;
+  font-family: var(--font-display);
+  font-size: 19px;
   font-weight: 600;
   color: var(--text-primary);
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
 }
 
 /* ──────────────────────── Radar — collapsible scanner hub */
@@ -368,11 +386,11 @@ header {
   flex-wrap: wrap;
 
   &__title {
-    font-family: var(--font-sans);
-    font-size: 18px;
+    font-family: var(--font-display);
+    font-size: 19px;
     font-weight: 600;
     color: var(--text-primary);
-    letter-spacing: -0.01em;
+    letter-spacing: -0.015em;
   }
   &__sub {
     font-family: var(--font-mono);
