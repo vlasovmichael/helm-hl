@@ -34,7 +34,7 @@ function payoffCls(p) {
 
 function statRow(label, s, { strong = false } = {}) {
   if (!s) {
-    return `<tr><td class="mt-label">${esc(label)}</td><td colspan="5" class="mt-empty">нет сделок</td></tr>`;
+    return `<tr><td class="mt-label">${esc(label)}</td><td colspan="5" class="mt-empty">no trades</td></tr>`;
   }
   return `
     <tr class="${strong ? "mt-strong" : ""}">
@@ -60,7 +60,7 @@ function renderBreakdown(data) {
   // Правила рисуем всегда (даже если сделок ещё нет).
   if (rulesEl && Array.isArray(data.rules)) {
     rulesEl.innerHTML =
-      `<div class="mt-rules-title">Мои правила <span>— выведены из этих цифр, чтобы не сливать депо снова</span></div>` +
+      `<div class="mt-rules-title">My rules <span>— derived from these numbers, so the account stops bleeding</span></div>` +
       data.rules
         .map(
           (r) => `
@@ -76,7 +76,7 @@ function renderBreakdown(data) {
   }
 
   if (data.empty || !data.overall) {
-    body.innerHTML = `<div class="mt-empty-note">Реальных закрытых сделок пока нет — таблица появится, как только бот проведёт сделки.</div>`;
+    body.innerHTML = `<div class="mt-empty-note">No closed real trades yet — the table appears once trades are done.</div>`;
     return;
   }
 
@@ -90,7 +90,7 @@ function renderBreakdown(data) {
   body.innerHTML = `
     <div class="mt-headline">
       <div class="mt-hl-item">
-        <span class="mt-hl-label">Всего сделок</span>
+        <span class="mt-hl-label">Trades total</span>
         <span class="mt-hl-value">${o.n}</span>
       </div>
       <div class="mt-hl-item">
@@ -107,21 +107,21 @@ function renderBreakdown(data) {
       </div>
     </div>
     <div class="mt-fee-note ${grossCls}">
-      До комиссий: <b>${money(o.gross)}</b> · комиссии: <b>−$${o.fees.toFixed(2)}</b> ·
-      после комиссий: <b>${money(o.net)}</b>
-      ${o.gross > 0 && o.net < 0 ? "<span class=\"mt-flag\">← комиссии съели весь плюс</span>" : ""}
+      Before fees: <b>${money(o.gross)}</b> · fees: <b>−$${o.fees.toFixed(2)}</b> ·
+      after fees: <b>${money(o.net)}</b>
+      ${o.gross > 0 && o.net < 0 ? "<span class=\"mt-flag\">← fees ate the entire gain</span>" : ""}
     </div>
 
     <div class="mt-table-wrap">
       <table class="mt-table">
         <thead>
-          <tr><th>Срез</th><th>n</th><th>Win</th><th>Payoff</th><th>Ожид.</th><th>Net</th></tr>
+          <tr><th>Cut</th><th>n</th><th>Win</th><th>Payoff</th><th>Expect.</th><th>Net</th></tr>
         </thead>
         <tbody>
-          ${statRow("ИТОГО", o, { strong: true })}
-          <tr class="mt-divider"><td colspan="6">По стороне</td></tr>
-          ${data.bySide.map((s) => statRow(s.key === "long" ? "Лонги" : s.key === "short" ? "Шорты" : s.key, s)).join("")}
-          <tr class="mt-divider"><td colspan="6">По стратегии</td></tr>
+          ${statRow("TOTAL", o, { strong: true })}
+          <tr class="mt-divider"><td colspan="6">By side</td></tr>
+          ${data.bySide.map((s) => statRow(s.key === "long" ? "Longs" : s.key === "short" ? "Shorts" : s.key, s)).join("")}
+          <tr class="mt-divider"><td colspan="6">By strategy</td></tr>
           ${data.byStrategy.map((s) => statRow(s.key, s)).join("")}
         </tbody>
       </table>
@@ -129,11 +129,11 @@ function renderBreakdown(data) {
 
     <div class="mt-coins">
       <div class="mt-coins-col">
-        <div class="mt-coins-title negative">Чёрные дыры</div>
+        <div class="mt-coins-title negative">Black holes</div>
         <div class="mt-chips">${data.byCoin.worst.map(coinChip).join("")}</div>
       </div>
       <div class="mt-coins-col">
-        <div class="mt-coins-title positive">Лучшие монеты</div>
+        <div class="mt-coins-title positive">Best coins</div>
         <div class="mt-chips">${data.byCoin.best.map(coinChip).join("")}</div>
       </div>
     </div>`;
@@ -145,6 +145,6 @@ export async function tickTradeBreakdown() {
     renderBreakdown(data);
   } catch (err) {
     const body = document.getElementById("mytrades-body");
-    if (body) body.innerHTML = `<div class="mt-empty-note">Не удалось загрузить разбор: ${esc(err.message)}</div>`;
+    if (body) body.innerHTML = `<div class="mt-empty-note">Could not load the breakdown: ${esc(err.message)}</div>`;
   }
 }

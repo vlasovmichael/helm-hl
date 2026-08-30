@@ -107,7 +107,7 @@ function stratTradesBlock(s) {
     return `<div class="strat-detail-block strat-detail-full"><div class="strat-detail-h">Recent trades</div><div class="strat-dim">loading…</div></div>`;
   }
   if (tc.error) {
-    return `<div class="strat-detail-block strat-detail-full"><div class="strat-detail-h">Recent trades</div><div class="strat-neg">не удалось загрузить</div></div>`;
+    return `<div class="strat-detail-block strat-detail-full"><div class="strat-detail-h">Recent trades</div><div class="strat-neg">failed to load</div></div>`;
   }
   const trades = tc.trades || [];
   if (!trades.length) {
@@ -170,7 +170,7 @@ function stratShadowBlock(s) {
     `<tr><td class="strat-dt-coin">time-decay</td>${cell(sh.td, sh.tdDelta, sh.tdFired)}</tr>` +
     `<tr><td class="strat-dt-coin">chandelier</td>${cell(sh.chandelier, sh.chDelta, sh.chFired)}</tr>` +
     `</tbody></table>` +
-    `<div class="strat-dim strat-shadow-note">measurement-only · реальные выходы не тронуты · «fired» = сколько раз модель сработала раньше реального выхода</div>` +
+    `<div class="strat-dim strat-shadow-note">measurement-only · real exits untouched · “fired” = how often the model would have exited earlier</div>` +
     `</div>`
   );
 }
@@ -229,7 +229,7 @@ function stratRowHtml(s, planned, opts = {}) {
       `<td class="strat-col-name"><div class="strat-name">${escapeHtml(s.label)}</div>` +
       `<div class="strat-kind">${escapeHtml(s.kind || "")}</div></td>` +
       `<td><span class="strat-pill ${st.cls}">${st.label}</span></td>` +
-      `<td colspan="11" class="strat-dim">— зарезервировано под будущую стратегию —</td></tr>`
+      `<td colspan="11" class="strat-dim">— reserved for a future strategy —</td></tr>`
     );
   }
 

@@ -243,9 +243,9 @@ function panel() {
   el.innerHTML =
     '<b style="font-size:11px;letter-spacing:.04em;opacity:.7">MOCK · UNI SHORT</b>' +
     '<div id="mock-stat" style="font-family:monospace"></div>' +
-    '<button id="mock-auto">▶ авто-тур фаз</button>' +
-    '<button id="mock-surge">🚀 резкий слайд (surge)</button>' +
-    '<button id="mock-extreme">🚀 одиночный экстрим</button>';
+    '<button id="mock-auto">▶ auto tour</button>' +
+    '<button id="mock-surge">🚀 sharp slide (surge)</button>' +
+    '<button id="mock-extreme">🚀 single extreme</button>';
   document.body.appendChild(el);
   for (const b of el.querySelectorAll("button"))
     b.style.cssText =
@@ -255,7 +255,7 @@ function panel() {
   const autoBtn = el.querySelector("#mock-auto");
   autoBtn.onclick = () => {
     auto = !auto;
-    autoBtn.textContent = auto ? "⏸ стоп тур" : "▶ авто-тур фаз";
+    autoBtn.textContent = auto ? "⏸ stop tour" : "▶ auto tour";
     if (auto) raf = setInterval(step, 700);
     else clearInterval(raf);
   };
@@ -265,10 +265,10 @@ function panel() {
   setInterval(() => {
     const stat = el.querySelector("#mock-stat");
     const ph = beArmed(price)
-      ? "профит"
+      ? "profit"
       : POS.entry - price >= 0
-        ? "храповик"
-        : "стоп";
+        ? "ratchet"
+        : "stop";
     stat.textContent = `px ${price.toFixed(4)} · ${ph} · ${pnlUsd(price) >= 0 ? "+" : ""}$${pnlUsd(price).toFixed(2)}`;
   }, 200);
 }
@@ -298,5 +298,5 @@ export function startMock({ onStatus }) {
   // ?mock=1&tour → сразу гоняем авто-тур фаз (без клика): цена ходит
   // вход→цель→вход, пик SOL уходит выше текущего → виден «призрак» отката.
   if (/[?&]tour\b/.test(location.search)) raf = setInterval(step, 700);
-  console.log("[mock] активная монета засимулирована — панель справа снизу");
+  console.log("[mock] active coin simulated — panel is bottom-right");
 }

@@ -24,7 +24,7 @@ let _wwSort = { key: "sizeUsd", desc: true };
 
 const WW_STORAGE_KEY = "ww-addresses-v2";
 const WW_DEFAULTS = [
-  { label: "Василий", address: "0x3ed4033676d0bdb3938728ca4ac673d00e74bd06" },
+  { label: "Whale 1", address: "0x3ed4033676d0bdb3938728ca4ac673d00e74bd06" },
 ];
 
 // Map<COIN, [{label, side, sizeUsd}]> — shared with divRenderRows for BTC Div integration
@@ -70,7 +70,7 @@ function wwRenderChips() {
       const labelDiffersFromShort = w.label !== short;
       return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--bg-header);border:1px solid var(--hairline);border-radius:4px;padding:2px 7px;font-family:var(--font-mono);font-size:10px;color:var(--text-muted)" title="${escapeHtml(w.address)}">
       ${escapeHtml(w.label)}${labelDiffersFromShort ? ` <span style="opacity:.5;font-size:9px">${short}</span>` : ""}
-      <button data-ww-remove="${i}" style="background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:11px;padding:0 0 0 3px;line-height:1" title="Удалить">×</button>
+      <button data-ww-remove="${i}" style="background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:11px;padding:0 0 0 3px;line-height:1" title="Remove">×</button>
     </span>`;
     })
     .join("");
@@ -151,7 +151,7 @@ function renderWhaleWatch(results) {
 
   if (allRows.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="8" class="empty-state">нет открытых perp позиций</td></tr>';
+      '<tr><td colspan="8" class="empty-state">no open perp positions</td></tr>';
     if (biasEl) biasEl.textContent = "";
     if (footerEl) footerEl.textContent = "";
     // Re-render BTC Div to clear whale column
@@ -277,7 +277,7 @@ async function fetchWhaleWatch() {
         const tbody = document.getElementById("ww-tbody");
         if (tbody)
           tbody.innerHTML =
-            '<tr><td colspan="8" class="empty-state" style="color:var(--red)">ошибка загрузки — HL API недоступен</td></tr>';
+            '<tr><td colspan="8" class="empty-state" style="color:var(--red)">load failed — HL API unavailable</td></tr>';
       }
       return;
     }
@@ -286,7 +286,7 @@ async function fetchWhaleWatch() {
     if (!_wwHasData) {
       const tbody = document.getElementById("ww-tbody");
       if (tbody)
-        tbody.innerHTML = `<tr><td colspan="8" class="empty-state" style="color:var(--red)">ошибка: ${err?.message ?? "неизвестно"}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="empty-state" style="color:var(--red)">error: ${err?.message ?? "unknown"}</td></tr>`;
     }
   }
 }

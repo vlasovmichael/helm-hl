@@ -23,11 +23,11 @@ export async function refreshFvgForward() {
   try {
     res = await fetchJson("/api/fvg-forward");
   } catch {
-    body.innerHTML = `<div class="empty-state">нет связи</div>`;
+    body.innerHTML = `<div class="empty-state">no connection</div>`;
     return;
   }
   if (!res?.ok) {
-    body.innerHTML = `<div class="empty-state">нет данных</div>`;
+    body.innerHTML = `<div class="empty-state">no data</div>`;
     return;
   }
 
@@ -40,10 +40,10 @@ export async function refreshFvgForward() {
 
   if (meta) {
     meta.textContent = started
-      ? "старт 29.08"
+      ? "started Aug 29"
       : stale
-        ? `последняя запись ${Math.round(res.staleHours)} ч назад`
-        : `${res.n} из ${res.target}`;
+        ? `last entry ${Math.round(res.staleHours)}h ago`
+        : `${res.n} of ${res.target}`;
     meta.style.color = stale ? "var(--red)" : "var(--text-muted)";
   }
 
@@ -52,17 +52,17 @@ export async function refreshFvgForward() {
     `<div style="height:100%;width:${pct.toFixed(1)}%;background:var(--accent)"></div></div>`;
 
   const rows = [
-    `<b>${res.n}</b> из ${res.target} сделок · ${pct.toFixed(1)}%`,
+    `<b>${res.n}</b> of ${res.target} trades · ${pct.toFixed(1)}%`,
     res.perDay
-      ? `темп ${res.perDay.toFixed(1)}/день · при нём порог около <b>${res.etaISO}</b>`
-      : `темп будет виден, когда наберутся первые сутки`,
+      ? `pace ${res.perDay.toFixed(1)}/day · at that rate the threshold lands near <b>${res.etaISO}</b>`
+      : `pace shows up after the first full day`,
     res.decisionRule +
-      ` — E[R], winrate и знак сделок здесь не показываются <b>намеренно</b>: ` +
-      `подглядывание в промежуточный результат обесценивает форвард целиком.`,
+      ` — E[R], winrate and trade signs are hidden <b>on purpose</b>: ` +
+      `peeking at an interim result invalidates the whole forward test.`,
   ];
   if (stale) {
     rows.push(
-      `<span style="color:var(--red)">Коллектор молчит больше трёх суток — проверь logs/fvg-forward.log на Oracle.</span>`,
+      `<span style="color:var(--red)">Collector silent for over three days — check logs/fvg-forward.log on Oracle.</span>`,
     );
   }
 

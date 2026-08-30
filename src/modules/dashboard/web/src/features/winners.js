@@ -25,17 +25,17 @@ const usd = (v) => {
 const short = (addr) => `${addr.slice(0, 8)}…${addr.slice(-4)}`;
 
 const VERDICT_STYLE = {
-  "подтверждено": "var(--green)",
-  "не подтверждено": "var(--red)",
-  "рано": "var(--text-muted)",
+  "confirmed": "var(--green)",
+  "not confirmed": "var(--red)",
+  "too early": "var(--text-muted)",
 };
 
 function renderRows(tbody, res) {
   tbody.innerHTML = res.selected
-    .map((s) => `<tr data-addr="${s.address}" style="cursor:pointer" title="клик по строке — что у адреса открыто прямо сейчас">
+    .map((s) => `<tr data-addr="${s.address}" style="cursor:pointer" title="click a row — what this address holds right now">
       <td style="font-family:var(--font-mono)"><span class="win-caret" data-addr="${s.address}" style="color:var(--text-muted);padding-right:4px;font-size:10px">▸</span><a href="https://app.hyperliquid.xyz/explorer/address/${s.address}" target="_blank" rel="noopener" style="color:inherit">${short(s.address)}</a></td>
       <td class="r">${bp(s.selectionEdgeBp)}</td>
-      <td class="r" style="${col(s.forwardEdgeBp)}">${s.forwardEdgeBp === null ? "<span style='color:var(--text-muted)'>не торговал</span>" : bp(s.forwardEdgeBp)}</td>
+      <td class="r" style="${col(s.forwardEdgeBp)}">${s.forwardEdgeBp === null ? "<span style='color:var(--text-muted)'>no trades</span>" : bp(s.forwardEdgeBp)}</td>
       <td class="r" style="${col(s.forwardPnl)}">${s.forwardPnl === null ? "—" : usd(s.forwardPnl)}</td>
       <td class="r">${s.forwardVolume === null ? "—" : usd(s.forwardVolume)}</td>
     </tr>
@@ -58,7 +58,7 @@ async function loadPositions() {
   if (posPending) return posPending;
   posPending = (async () => {
     const res = await fetchJson("/api/winners/positions");
-    if (!res?.ok) throw new Error(res?.reason || "нет данных");
+    if (!res?.ok) throw new Error(res?.reason || "no data");
     posCache = {
       fetchedAt: Date.now(),
       // Отдали прошлый ответ вместо свежего → держим кэш недолго, чтобы
@@ -83,22 +83,22 @@ const px = (v) =>
 // пометкой, сколько ему минут, а не пустую строку «не ответил».
 const age = (ms) => {
   const min = Math.round(ms / 60_000);
-  if (min < 1) return "меньше минуты назад";
-  if (min < 60) return `${min} мин назад`;
-  return `${Math.floor(min / 60)}ч ${min % 60}м назад`;
+  if (min < 1) return "less than a minute ago";
+  if (min < 60) return `${min} min ago`;
+  return `${Math.floor(min / 60)}h ${min % 60}m ago`;
 };
 
 function renderAccount(acc) {
-  if (!acc) return "<div style='padding:6px 10px;color:var(--text-muted)'>адрес не найден</div>";
+  if (!acc) return "<div style='padding:6px 10px;color:var(--text-muted)'>address not found</div>";
   if (acc.error)
-    return `<div style="padding:6px 10px;color:var(--text-muted)">не ответил: ${acc.error}</div>`;
+    return `<div style="padding:6px 10px;color:var(--text-muted)">no response: ${acc.error}</div>`;
 
   const staleNote = acc.stale
-    ? ` · <span title="Пул запросов HL был занят живым ботом — витрина ждёт бюджета не дольше 1.5с и показывает прошлый ответ">данные ${age(acc.staleAgeMs)}</span>`
+    ? ` · <span title="The HL request pool was busy with the live bot — this view waits at most 1.5s for budget and shows the previous answer">data from ${age(acc.staleAgeMs)}</span>`
     : "";
 
   if (!acc.positions.length)
-    return `<div style="padding:6px 10px;color:var(--text-muted)">сейчас вне рынка · эквити ${usd(acc.equity)}${staleNote}</div>`;
+    return `<div style="padding:6px 10px;color:var(--text-muted)">flat right now · equity ${usd(acc.equity)}${staleNote}</div>`;
 
   // Разбивка по площадкам: у HL кроме основного перп-DEX'а есть builder-DEX'ы
   // (xyz — акции и товары, и ещё восемь), у каждого своя маржа. Без этой строки
@@ -106,15 +106,15 @@ function renderAccount(acc) {
   const venues = (acc.venues ?? []).filter((v) => v.positions || v.equity);
   const venueNote =
     venues.length > 1
-      ? ` · счета: ${venues.map((v) => `${v.dex} ${usd(v.equity)}`).join(" + ")}`
+      ? ` · accounts: ${venues.map((v) => `${v.dex} ${usd(v.equity)}`).join(" + ")}`
       : "";
   const partialNote = acc.partial
-    ? ` · <span title="Не удалось узнать список площадок адреса (userFills не дождался бюджета) — показан только основной DEX">смотрели только основной DEX</span>`
+    ? ` · <span title="Could not list this address’s venues (userFills did not get budget) — showing the main DEX only">main DEX only</span>`
     : "";
 
-  const head = `эквити ${usd(acc.equity)} · номинал ${usd(acc.notional)}` +
-    (Number.isFinite(acc.grossLeverage) ? ` (${acc.grossLeverage.toFixed(1)}× к счёту)` : "") +
-    ` · нереализованный <b style="${col(acc.unrealizedPnl)}">${usd(acc.unrealizedPnl)}</b>` +
+  const head = `equity ${usd(acc.equity)} · notional ${usd(acc.notional)}` +
+    (Number.isFinite(acc.grossLeverage) ? ` (${acc.grossLeverage.toFixed(1)}× of account)` : "") +
+    ` · unrealized <b style="${col(acc.unrealizedPnl)}">${usd(acc.unrealizedPnl)}</b>` +
     venueNote + partialNote + staleNote;
 
   const rows = acc.positions
@@ -133,9 +133,9 @@ function renderAccount(acc) {
     <div style="color:var(--text-muted);margin-bottom:4px">${head}</div>
     <table class="data-table" style="margin:0">
       <thead><tr>
-        <th>Монета</th><th>Сторона</th><th class="r">Размер</th><th class="r">Плечо</th>
-        <th class="r">Вход</th><th class="r" title="Нереализованный PnL — он же и попадает в PnL лидерборда">Плавающий</th>
-        <th class="r">Ликв.</th>
+        <th>Coin</th><th>Side</th><th class="r">Size</th><th class="r">Lev</th>
+        <th class="r">Entry</th><th class="r" title="Unrealized PnL — this is what the leaderboard PnL counts">Floating</th>
+        <th class="r">Liq.</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
@@ -190,25 +190,25 @@ function renderSummary(res) {
         : null;
 
     rows.push(
-      `Форвард ${f.from} → ${f.to} (${f.days} дн.): медиана выбранных <b style="${col(f.selectedMedianBp)}">${bp(f.selectedMedianBp)} бп</b> · ` +
-      `контроль (${f.controlCount} адресов, те же фильтры) <b style="${col(f.controlMedianBp)}">${bp(f.controlMedianBp)} бп</b>` +
-      (beatsControl === null ? "" : beatsControl ? " → отбор пока впереди" : " → отбор пока не помогает"),
+      `Forward ${f.from} → ${f.to} (${f.days} days): selected median <b style="${col(f.selectedMedianBp)}">${bp(f.selectedMedianBp)} bp</b> · ` +
+      `control (${f.controlCount} addresses, same filters) <b style="${col(f.controlMedianBp)}">${bp(f.controlMedianBp)} bp</b>` +
+      (beatsControl === null ? "" : beatsControl ? " → the selection is ahead so far" : " → the selection is not helping so far"),
     );
   } else {
-    rows.push("Форвард ещё не считался: <code>node tools/winners.mjs track</code>");
+    rows.push("Forward not computed yet: <code>node tools/winners.mjs track</code>");
   }
 
   rows.push(
-    `Отобраны 13.08 из ${res.poolSize} прошедших фильтры (счёт ≥ $${(res.rules.minAccountValue / 1e3).toFixed(0)}k, ` +
-    `оборот ≥ ${res.rules.minTurnover}× счёта, эдж ≤ ${res.rules.maxPlausibleEdgeBp} бп) по окну ${res.selectionFrom}–${res.selectionTo}.`,
+    `Picked Aug 13 out of ${res.poolSize} addresses passing the filters (account ≥ $${(res.rules.minAccountValue / 1e3).toFixed(0)}k, ` +
+    `turnover ≥ ${res.rules.minTurnover}× account, edge ≤ ${res.rules.maxPlausibleEdgeBp} bp) over the window ${res.selectionFrom}–${res.selectionTo}.`,
   );
   rows.push(
-    `Промежуточный взгляд ${res.interimDate} <b>ничего не решает</b>. Дата решения — <b>${res.decisionDate}</b>: ` +
-    `нужно обогнать контроль И превысить +${res.successEdgeBp} бп, иначе гипотеза закрывается.`,
+    `The interim look on ${res.interimDate} <b>decides nothing</b>. Decision date is <b>${res.decisionDate}</b>: ` +
+    `it must beat the control AND clear +${res.successEdgeBp} bp, otherwise the hypothesis is closed.`,
   );
   rows.push(
-    "⚠️ Даже подтверждение ≠ деньги: маркет-мейкеров скопировать нечем (прибыль в спреде), " +
-    "сделки видны постфактум, а на тонком эдже комиссии съедают результат первыми.",
+    "⚠️ Even a confirmation ≠ money: market makers cannot be copied (their profit is the spread), " +
+    "fills are only visible after the fact, and on a thin edge fees eat the result first.",
   );
 
   return rows.map((r) => `<div>${r}</div>`).join("");
@@ -230,17 +230,17 @@ export async function refreshWinners() {
   try {
     res = await fetchJson("/api/winners");
   } catch {
-    fail("нет связи");
+    fail("no connection");
     return;
   }
   if (!res?.ok) {
-    fail(res?.reason === "not-frozen" ? "список не заморожен" : "нет данных");
+    fail(res?.reason === "not-frozen" ? "list not frozen" : "no data");
     return;
   }
 
-  const verdict = res.forward?.verdict ?? "рано";
+  const verdict = res.forward?.verdict ?? "too early";
   if (meta) {
-    meta.textContent = `вердикт: ${verdict}`;
+    meta.textContent = `verdict: ${verdict}`;
     meta.style.color = VERDICT_STYLE[verdict] ?? "var(--text-muted)";
   }
   renderRows(tbody, res);

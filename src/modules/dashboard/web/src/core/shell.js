@@ -52,9 +52,9 @@ function getStoredTheme() {
 // Порядок цикла кнопки. auto первым — это и дефолт при пустом localStorage.
 const THEME_CYCLE = ["auto", "light", "dark"];
 const THEME_TITLE = {
-  auto: "Тема: как в системе",
-  light: "Тема: светлая",
-  dark: "Тема: тёмная",
+  auto: "Theme: follow system",
+  light: "Theme: light",
+  dark: "Theme: dark",
 };
 
 // chartThemers — фабрики тем графиков страницы (само-гардятся, если графика нет).

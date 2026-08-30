@@ -315,7 +315,7 @@ export function renderHotMovers(payload, fmtTime) {
     const trendInner =
       trendPct == null
         ? '<span class="num-inline-muted">—</span>'
-        : `<span class="${trendPct > 0 ? "num-inline-pos" : "num-inline-neg"}" title="тренд цены за ${th.trendLookbackMin || "?"}m">${arwSvg(trendPct > 0 ? 1 : -1)}${fmtPct(trendPct)}</span>`;
+        : `<span class="${trendPct > 0 ? "num-inline-pos" : "num-inline-neg"}" title="price trend over ${th.trendLookbackMin || "?"}m">${arwSvg(trendPct > 0 ? 1 : -1)}${fmtPct(trendPct)}</span>`;
 
     // Living heatmap: тинт строки по доминирующему движению цены (как на бирже —
     // вверх зелёный, вниз красный), интенсивность по |move|. Не зависит от
@@ -479,7 +479,7 @@ export function renderHotMovers(payload, fmtTime) {
       openSetupHtml = `<span style="color:${color};font-weight:600">OI 15m ${arrow}${fmtPct(v)}</span>`;
     }
     const setupCell = isOpen
-      ? `<td class="hm-setup c" data-w="Setup" title="Изменение открытого интереса за 15м: растёт = в движ заходит новый объём (топливо), падает = участники разгружаются (движ выдыхается).">${openSetupHtml}</td>`
+      ? `<td class="hm-setup c" data-w="Setup" title="Open-interest change over 15m: rising = new money entering the move (fuel), falling = participants closing">${openSetupHtml}</td>`
       : `<td class="hm-setup c ${setupCls}" data-w="Setup" title="${setupTitle}"><span class="hm-setup-pill">${setupLabel}</span></td>`;
 
     // ENTER: для открытой монеты вход неактуален — вместо таймера ОДНА стрелка,
@@ -497,8 +497,8 @@ export function renderHotMovers(payload, fmtTime) {
       const aligned = aSide === "SHORT" ? domMove < 0 : domMove > 0;
       const dir = moveAbs < 0.05 || !aSide ? "mid" : aligned ? "up" : "down";
       const tip =
-        dir === "up" ? "цена в твою сторону" : dir === "down" ? "цена против тебя" : "движения почти нет";
-      entryCell = `<td class="hm-entry hm-dir" data-w="Dir" title="в позиции — ${tip}"><span class="hm-entry-icon"><span class="hm-dir-mount" data-dir="${dir}"></span></span></td>`;
+        dir === "up" ? "price moving your way" : dir === "down" ? "price moving against you" : "barely moving";
+      entryCell = `<td class="hm-entry hm-dir" data-w="Dir" title="in position — ${tip}"><span class="hm-entry-icon"><span class="hm-dir-mount" data-dir="${dir}"></span></span></td>`;
     } else {
       const eico = ENTRY_ICON_SVG[entryState] || ENTRY_ICON_SVG.none;
       entryCell = `<td class="hm-entry hm-entry-${entryState}" data-w="Enter" title="${entryTitle}"><span class="hm-entry-icon">${eico}</span></td>`;
@@ -508,11 +508,11 @@ export function renderHotMovers(payload, fmtTime) {
     // леак (контр-тренд). s.htfTrend = 'up'|'down'|'flat'|'none' из enrichHtfTrend.
     let htfChip = "";
     if (s.htfTrend === "up")
-      htfChip = `<span class="hm-htf num-inline-pos" style="margin-left:6px;font-size:11px;font-weight:600" title="Старший тренд 1h ВВЕРХ — лонг по тренду; шорт против него = ловишь нож">1h ↑</span>`;
+      htfChip = `<span class="hm-htf num-inline-pos" style="margin-left:6px;font-size:11px;font-weight:600" title="Higher timeframe 1h trend UP — longs go with it; shorts fight it">1h ↑</span>`;
     else if (s.htfTrend === "down")
-      htfChip = `<span class="hm-htf num-inline-neg" style="margin-left:6px;font-size:11px;font-weight:600" title="Старший тренд 1h ВНИЗ — шорт по тренду; лонг против него = ловишь нож">1h ↓</span>`;
+      htfChip = `<span class="hm-htf num-inline-neg" style="margin-left:6px;font-size:11px;font-weight:600" title="Higher timeframe 1h trend DOWN — shorts go with it; longs fight it">1h ↓</span>`;
     else if (s.htfTrend === "flat")
-      htfChip = `<span class="hm-htf num-inline-muted" style="margin-left:6px;font-size:11px" title="Старший тренд 1h — флэт/боковик: чёткого попутного ветра нет">1h →</span>`;
+      htfChip = `<span class="hm-htf num-inline-muted" style="margin-left:6px;font-size:11px" title="Higher timeframe 1h trend flat — no tailwind either way">1h →</span>`;
 
     // Чип Vol/OI: суточный оборот ≥ открытого интереса (Vol ≥ OI). На HL это
     // редкость (норма OI>Vol, медиана ~3×), поэтому Vol≥OI = монета сегодня реально
@@ -522,18 +522,18 @@ export function renderHotMovers(payload, fmtTime) {
       s.oiUsd > 0 && s.vol24hUsd > 0 ? s.vol24hUsd / s.oiUsd : null;
     if (typeof volOi === "number" && isFinite(volOi) && volOi >= VOL_OI_PARTY) {
       const tip =
-        `Суточный оборот в ${volOi.toFixed(1)} раз больше открытого интереса: 24h Vol ${fmtUsdShort(s.vol24hUsd)} ≥ OI ${fmtUsdShort(s.oiUsd)}. ` +
-        `На HL обычно наоборот (OI>Vol), так что это редкость: монета сегодня активно крутится — высокий turnover, ` +
-        `деньги входят-выходят, а не залегли.`;
+        `Daily turnover is ${volOi.toFixed(1)}× open interest: 24h vol ${fmtUsdShort(s.vol24hUsd)} ≥ OI ${fmtUsdShort(s.oiUsd)}. ` +
+        `On HL it is usually the other way round (OI>Vol), so this is rare: the coin is churning today — ` +
+        `money moving in and out rather than sitting.`;
       oiVolChip = `<span class="hm-oivol" style="margin-left:6px;font-size:11px;font-weight:600" title="${escapeHtml(tip)}">Vol ${volOi.toFixed(1)}× OI</span>`;
     }
 
     const rowHtml = `
       <td>${isOpen ? "📍" : idx + 1}</td>
-      <td><a class="signals-price hm-coin-link" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" title="Открыть ${escapeHtml(s.coin)} в TradingView">#${escapeHtml(s.coin)}</a>${htfChip}${oiVolChip}</td>
+      <td><a class="signals-price hm-coin-link" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" title="Open ${escapeHtml(s.coin)} in TradingView">#${escapeHtml(s.coin)}</a>${htfChip}${oiVolChip}</td>
       ${setupCell}
       ${entryCell}
-      <td class="hm-price-cell r ${flashCls}"><span class="hm-price-inner"><span class="hm-spark-wrap" title="Цена за ~20 мин (live)">${sparkSvg(s.spark)}</span><span class="signals-price">${fmtPrice(s.price)}</span></span></td>
+      <td class="hm-price-cell r ${flashCls}"><span class="hm-price-inner"><span class="hm-spark-wrap" title="Price over ~20 min (live)">${sparkSvg(s.spark)}</span><span class="signals-price">${fmtPrice(s.price)}</span></span></td>
       ${cells}
       <td class="r ${accelCellCls}" data-w="Acc">${accelInner}</td>
       <td class="r" data-w="OI">${oiInner}</td>

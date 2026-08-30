@@ -84,7 +84,7 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
     return {
       label: '<span class="num-inline-muted">—</span>',
       cls: "setup-none",
-      title: "Нет данных",
+      title: "No data",
       score: 0,
       side: null,
       mode: null,
@@ -114,34 +114,34 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
     if (oiKind === "up") {
       tagText = "trend";
       why = priceUp
-        ? `цена↑ + OI↑ (${oiStr}) = тренд вверх, новые лонги подтверждают`
-        : `цена↓ + OI↑ (${oiStr}) = тренд вниз, новые шорты давят`;
+        ? `price↑ + OI↑ (${oiStr}) = uptrend, new longs confirm it`
+        : `price↓ + OI↑ (${oiStr}) = downtrend, new shorts pressing`;
     } else if (oiKind === "down") {
       tagText = "fade?";
       why = priceUp
-        ? `цена↑ + OI↓ (${oiStr}) = ⚠ рост на short-covering, импульс может выдохнуться`
-        : `цена↓ + OI↓ (${oiStr}) = ⚠ падение на делевередже, возможен отскок`;
+        ? `price↑ + OI↓ (${oiStr}) = ⚠ rally on short covering, momentum may fade`
+        : `price↓ + OI↓ (${oiStr}) = ⚠ drop on deleveraging, a bounce is possible`;
     } else {
       tagText = "trend";
-      why = oiKind === "flat" ? `OI флэт (${oiStr}) — OI хода не подтверждает` : "OI: нет данных";
+      why = oiKind === "flat" ? `OI flat (${oiStr}) — OI does not confirm the move` : "OI: no data";
     }
   } else if (oiKind === "up") {
     mode = "trend";
     side = priceUp ? "LONG" : "SHORT";
     why = priceUp
-      ? `цена↑ + OI↑ (${oiStr}) = новые лонги, реальный спрос`
-      : `цена↓ + OI↑ (${oiStr}) = новые шорты давят`;
+      ? `price↑ + OI↑ (${oiStr}) = new longs, real demand`
+      : `price↓ + OI↑ (${oiStr}) = new shorts pressing`;
   } else if (oiKind === "down") {
     mode = "fade";
     side = priceUp ? "SHORT" : "LONG";
     why = priceUp
-      ? `цена↑ + OI↓ (${oiStr}) = short-covering / выдох`
-      : `цена↓ + OI↓ (${oiStr}) = лонгов вынесло, выдох`;
+      ? `price↑ + OI↓ (${oiStr}) = short covering / exhaustion`
+      : `price↓ + OI↓ (${oiStr}) = longs flushed, exhaustion`;
   } else {
     // OI флэт или нет данных — направление по движению, режим не подтверждён.
     mode = null;
     side = priceUp ? "LONG" : "SHORT";
-    why = oiKind === "flat" ? `OI флэт (${oiStr}) — режим не подтверждён` : "OI: нет данных";
+    why = oiKind === "flat" ? `OI flat (${oiStr}) — regime unconfirmed` : "OI: no data";
   }
 
   // Breadth-слив: fade против синхронного делевереджа = лов ножа. Снимаем режим
@@ -149,7 +149,7 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
   if (fadeMutedByFlush(side, mode, flush)) {
     mode = null;
     const sharePct = Math.round((flush.share || 0) * 100);
-    why = `рыночный слив (${sharePct}% топа OI↓) — fade ненадёжен, лов ножа`;
+    why = `market-wide flush (${sharePct}% of the top has OI↓) — fading is unreliable, that is knife-catching`;
   }
 
   // Fade = ставка на ВЫДОХ. Гасим actionable, если выдоха нет: (a) движение
@@ -162,13 +162,13 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
   if (mode === "fade") {
     if (accelKind === "up") {
       mode = null;
-      why = `⛔ ускорение в сторону движения — не выдох (нож разгоняется) · ${why}`;
+      why = `⛔ accelerating with the move — not exhaustion (the knife is speeding up) · ${why}`;
     } else if (priceUp && htf === "up") {
       mode = null;
-      why = `⛔ 1h-тренд ВВЕРХ — фейд-шорт против тренда · ${why}`;
+      why = `⛔ 1h trend UP — a fade short goes against it · ${why}`;
     } else if (!priceUp && htf === "down") {
       mode = null;
-      why = `⛔ 1h-тренд ВНИЗ — фейд-лонг против тренда · ${why}`;
+      why = `⛔ 1h trend DOWN — a fade long goes against it · ${why}`;
     }
   }
 
@@ -183,7 +183,7 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
     return {
       label: `<span class="setup-pill">${_SVG_WAIT} WAIT</span>`,
       cls: "setup-wait",
-      title: `Нет подтверждённого сетапа · ${why}`,
+      title: `No confirmed setup · ${why}`,
       score, // величину хода сохраняем — для сортировки муверов
       side: null, // нет направления — Enter='—' (вход не таймим)
       mode: null,
@@ -231,7 +231,7 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
     return {
       label: `<span class="setup-pill">${icon}${side}${modeTag}</span>`,
       cls: weakCls,
-      title: `Слабый ${mode.toUpperCase()} ${side} (score ${score.toFixed(1)}) · ${why} — наблюдаем`,
+      title: `Weak ${mode.toUpperCase()} ${side} (score ${score.toFixed(1)}) · ${why} — watching`,
       score,
       side,
       mode,
@@ -241,7 +241,7 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
   return {
     label: `<span class="setup-pill">${_SVG_WAIT} WAIT</span>`,
     cls: "setup-wait",
-    title: `Хода мало — ждём явный сетап · ${why}`,
+    title: `Move too small — waiting for a clear setup · ${why}`,
     score,
     side,
     mode,

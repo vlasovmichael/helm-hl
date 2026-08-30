@@ -313,46 +313,45 @@
 
       <section class="card" id="nan-card">
         <div class="card-header">
-          <div class="card-title" data-num="01">Нянька · открытые позиции и их план</div>
+          <div class="card-title" data-num="01">Nanny · open positions and their plan</div>
           <div class="oi-toolbar">
             <span class="oi-span" id="nan-meta">…</span>
-            <button class="range-btn" id="nan-refresh" type="button">Обновить</button>
+            <button class="range-btn" id="nan-refresh" type="button">Refresh</button>
           </div>
         </div>
         <div id="nan-body">
-          <div class="nan-empty">Загрузка…</div>
+          <div class="nan-empty">Loading…</div>
         </div>
         <p class="oi-note" style="margin-top: 12px">
-          Панель показывает <b>факт по уже открытым позициям</b>: есть ли стоп на
-          бирже, сколько он стоит в долларах, где ты сейчас в R. Стоп и цель
-          читаются <b>с биржи</b>, а не из нашей базы — в БД они могут быть, а на
-          бирже нет (инцидент мёртвого API-кошелька). Входов панель не предлагает
-          и ничего не предсказывает.
+          Shows <b>facts about positions that are already open</b>: is there a stop on
+          the exchange, what it costs in dollars, where you are in R. Stop and target are
+          read <b>from the exchange</b>, not from our database — the DB can hold values the
+          exchange does not (the dead API-wallet incident). It suggests no entries and
+          predicts nothing.
         </p>
       </section>
 
       <section class="card" id="cod-card">
         <div class="card-header">
-          <div class="card-title" data-num="02">Монета дня · фейд выдохшегося хвоста</div>
+          <div class="card-title" data-num="02">Coin of the day · fading an exhausted tail</div>
           <div class="oi-toolbar">
             <span class="oi-span" id="cod-meta">…</span>
-            <button class="range-btn" id="cod-refresh" type="button">Пересчитать</button>
+            <button class="range-btn" id="cod-refresh" type="button">Recompute</button>
           </div>
         </div>
         <div class="cod-tabs" id="cod-tabs" hidden></div>
         <div id="cod-body">
-          <div class="cod-empty">Загрузка…</div>
+          <div class="cod-empty">Loading…</div>
         </div>
         <div class="cod-fwd" id="cod-fwd" hidden></div>
         <p class="oi-note" style="margin-top: 12px">
-          Скор 0–5: <b>край диапазона 72ч · разворот 4ч · структура 15м ·
-          распад объёма · OI не перегрет</b>. Ход за сутки задаёт сторону и
-          порядок списка, но <b>ничего не отсекает</b>: раньше монета пропадала
-          с экрана по мере отработки фейда. Сторона по умолчанию — шорт (эдж
-          журнала: payoff шортов 0.70 против 0.44 у лонгов).
-          <b>Это разбор, не сигнал с доказанным эджем</b> — каждый пик пишется в
-          форвард-лог вместе с ходом BTC за то же окно, вывод по нему делаем на
-          20+ закрытых, не раньше.
+          Score 0–5: <b>edge of the 72h range · 4h reversal · 15m structure · volume
+          decay · OI not overheated</b>. The 24h move sets the side and the ordering, but
+          <b>filters nothing out</b>: coins used to vanish from the screen as the fade
+          played out. Default side is short (journal edge: payoff 0.70 on shorts vs 0.44
+          on longs). <b>This is analysis, not a proven-edge signal</b> — every pick is
+          written to a forward log alongside BTC's move over the same window, and no
+          conclusion is drawn before 20+ closed.
         </p>
       </section>
 
@@ -384,9 +383,10 @@
           </table>
         </div>
         <p class="oi-note" style="margin-top: 10px">
-          Score 0–4 = сколько из <b>funding / OI-ramp / basis / vol</b> сошлись
-          одновременно. Направление = фейд толпы по фандингу. <b>Это радар, не сигнал.</b>
-          <span class="ss-warm">warm</span> = окно ещё копит историю (в score не идёт).
+          Score 0–4 = how many of <b>funding / OI ramp / basis / vol</b> line up at once.
+          Direction = fading the crowd by funding. <b>This is a radar, not a signal.</b>
+          <span class="ss-warm">warm</span> = the window is still building history (not
+          counted in the score).
         </p>
       </section>
 

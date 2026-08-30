@@ -67,7 +67,7 @@
       <div
         id="market-context"
         class="market-context unknown mc-loading"
-        title="Живая статистика BTC. Зелёная рамка = чёткий тренд (RISK-ON/OFF), вход по фону. Жёлтая = боковик, вход против структуры рискован."
+        title="Live BTC stats. Green frame = clear trend (RISK-ON/OFF), trade with the backdrop. Yellow = range, trading against structure is risky."
       >
         <span class="mc-loader" aria-hidden="true"><span class="loader-spinner"></span></span>
         <span class="mc-head" id="mc-head"></span>
@@ -178,7 +178,7 @@
           <div
             class="card-title"
             data-num="01.5"
-            title="Монеты с наибольшими ценовыми движениями. Setup — контекст-направление по движению (слив → SHORT, памп → LONG); это НЕ сделка (continuation в минус по бэктесту). Actionable вход = под-строка 🔥 fade-high-ER. Причина вердикта — в tooltip ячейки Setup."
+            title="Coins with the largest price moves. Setup is a context direction (dump → SHORT, pump → LONG) — NOT a trade: continuation backtests negative."
           >
             Hot Movers
           </div>
@@ -265,13 +265,13 @@
                 <th>Coin</th>
                 <th
                   class="c"
-                  title="Fade setup: SHORT/LONG = готово к входу против движения; WAIT = ждём выдоха импульса"
+                  title="Fade setup: SHORT/LONG = ready to fade the move; WAIT = waiting for momentum to exhaust"
                 >
                   Setup
                 </th>
                 <th
                   class="c"
-                  title="Чейз-метр: насколько цена уже ушла В СТОРОНУ СДЕЛКИ от короткой средней (15m, fallback 5m). Горит только при подтверждённом сетапе (рамка Setup: score≥3 + режим); иначе нейтральная точка. 🎯 у базы — вход рядом, чейза нет; ⏳ растянута — дай откатить; ⛔ уже ушла в твою сторону — поздно, жди отката. Точку входа (5m) ставишь сам."
+                  title="Chase meter: how far price has already run IN THE TRADE DIRECTION from the short average (15m, 5m fallback). Lit only on a confirmed setup. 🎯 near the base — no chase; ⏳ stretched — let it pull back; ⛔ already gone your way — too late, wait for a retrace. You pick the 5m entry yourself."
                 >
                   Enter
                 </th>
@@ -281,17 +281,17 @@
                 <th class="r">15m%</th>
                 <th
                   class="r"
-                  title="Ускорение: |2m| vs экстраполяция 5m. ▼=выдыхается (fade), ▲=ускоряется (avoid)"
+                  title="Acceleration: |2m| vs 5m extrapolation. ▼ = exhausting (fade), ▲ = accelerating (avoid)"
                 >
                   Acc
                 </th>
                 <th
                   class="r"
-                  title="OI change за 5 минут. Растёт = новые позиции; падает = закрытия/ликвидации"
+                  title="OI change over 5 minutes. Rising = new positions; falling = closes/liquidations"
                 >
                   OI 5m
                 </th>
-                <th class="r" title="Тренд за 15m (anti-trend gate Hunter'а)">
+                <th class="r" title="15m trend">
                   Trend
                 </th>
               </tr>

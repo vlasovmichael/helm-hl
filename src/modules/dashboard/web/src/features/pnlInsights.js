@@ -232,7 +232,7 @@ function renderExits() {
   if (!meta || !cards || !tbody) return;
 
   if (!ex || !ex.sample) {
-    meta.textContent = "Нет моих сделок с трекингом MFE/MAE (adopt: ручной вход + выход боту)";
+    meta.textContent = "No trades with MFE/MAE tracking yet (adopt: manual entry, bot exit)";
     cards.innerHTML = "";
     tbody.innerHTML =
       '<tr><td colspan="6" class="empty-state">No excursion data yet</td></tr>';
@@ -242,10 +242,10 @@ function renderExits() {
   // Малая выборка — честно подсвечиваем, что это линза, а не «доказательство».
   const thin = ex.winners < 20;
   meta.innerHTML =
-    `${ex.sample} сделок с MFE/MAE · ${ex.winners} winners` +
-    (ex.dupsRemoved ? ` · ${ex.dupsRemoved} дубль(ей) схлопнуто` : "") +
+    `${ex.sample} trades with MFE/MAE · ${ex.winners} winners` +
+    (ex.dupsRemoved ? ` · ${ex.dupsRemoved} duplicate(s) merged` : "") +
     (thin
-      ? ` · <span class="exits-warn">выборка мала (&lt;20) — это диагностика, не эдж</span>`
+      ? ` · <span class="exits-warn">sample too small (&lt;20) — diagnostics, not an edge</span>`
       : "");
 
   const cap = ex.avgCapturePct;
@@ -255,25 +255,25 @@ function renderExits() {
       "Avg capture",
       cap == null ? "—" : `${cap.toFixed(0)}%`,
       capCls,
-      "realized ÷ MFE на winners — какую долю доступного хода забираешь. ~50%+ крепко",
+      "realized ÷ MFE on winners — how much of the available move you take. ~50%+ is solid",
     ),
     statCard(
-      "Avg на столе",
+      "Avg left on table",
       ex.avgLeftOnTable == null ? "—" : fmtMoney(ex.avgLeftOnTable),
       "",
-      "MFE − realized: сколько в среднем отдаёшь от пика (нормально, пик недостижим)",
+      "MFE − realized: how much of the peak you give back on average (some is unavoidable)",
     ),
     statCard(
       "Avg heat (MAE)",
       ex.avgHeat == null ? "—" : fmtMoney(-ex.avgHeat),
       "",
-      "Средний минус на winners до разворота — тайминг входа / ловля ножа",
+      "Average drawdown on winners before they turned — entry timing / catching knives",
     ),
     statCard(
       "Round-tripped",
       String(ex.roundTripped),
       ex.roundTripped > 0 ? "is-bad" : "is-good",
-      "Был заметно в плюсе, закрылся в минус — худший тип выхода",
+      "Was clearly green, closed red — the worst kind of exit",
     ),
   ].join("");
 

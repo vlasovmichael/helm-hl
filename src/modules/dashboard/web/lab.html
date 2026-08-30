@@ -65,7 +65,7 @@
           <div
             class="card-title"
             data-num=""
-            title="Все стратегии в одном месте. Live торгует реальными деньгами, Paper копит статистику в shadow-слоте (отдельно от прода), Radar только сигналит, Planned — зарезервированное место под будущие стратегии."
+            title="How positions are run, in one place. Live trades real money; Paper accumulates stats in a shadow slot, separate from production."
           >
             Strategies
           </div>
@@ -76,18 +76,18 @@
             <thead>
               <tr>
                 <th class="strat-col-name">Strategy</th>
-                <th title="Режим работы">Status</th>
-                <th title="Открытая позиция (slot / paper-slot)">Position</th>
-                <th class="num" title="Виртуальный equity compound-песочницы (paper)">Equity</th>
-                <th class="num" title="Число закрытых сделок">Trades</th>
-                <th class="num" title="Доля прибыльных">Win%</th>
-                <th class="num" title="Ожидание на сделку (avg net)">Exp</th>
-                <th class="num" title="Payoff = avgWin / |avgLoss|. ≥2 = здоровый профиль">Payoff</th>
-                <th class="num" title="Макс. просадка по кривой net-P&L">Max DD</th>
-                <th class="num" title="Net P&L сегодня">Today</th>
-                <th class="num" title="Net P&L за 7 дней">7d</th>
-                <th class="num" title="Net P&L за всё время">All</th>
-                <th class="strat-col-spark" title="Кривая накопленного P&L">Trend</th>
+                <th title="Operating mode">Status</th>
+                <th title="Open position (slot / paper slot)">Position</th>
+                <th class="num" title="Virtual equity of the compounding paper sandbox">Equity</th>
+                <th class="num" title="Number of closed trades">Trades</th>
+                <th class="num" title="Share of winners">Win%</th>
+                <th class="num" title="Expectancy per trade (avg net)">Exp</th>
+                <th class="num" title="Payoff = avgWin / |avgLoss|. ≥2 is a healthy profile">Payoff</th>
+                <th class="num" title="Max drawdown on the net P&L curve">Max DD</th>
+                <th class="num" title="Net P&L today">Today</th>
+                <th class="num" title="Net P&L over 7 days">7d</th>
+                <th class="num" title="Net P&L all time">All</th>
+                <th class="strat-col-spark" title="Cumulative P&L curve">Trend</th>
               </tr>
             </thead>
             <tbody id="strategies-tbody">
@@ -108,7 +108,7 @@
            которую смотришь и не действуешь, — налог на внимание. Код фич цел
            (web/src/features/), вернуть = импорт + разметка. -->
 
-      <!-- 01.8 / Гении Уолл-стрит (бывш. «А если взять троих») — предзаявленный
+      <!-- 01.8 / Wall Street geniuses (бывш. «А если взять троих») — предзаявленный
            форвардный тест. Название шуточное, суть прежняя: три адреса с вершины
            лидерборда, замороженные 13.08.2026, против контрольной группы.
            Правила в docs/winners-preregistration.md, решение 10.11.2026. -->
@@ -117,9 +117,9 @@
           <div
             class="card-title"
             data-num="01.8"
-            title="Вопрос: медианы по децилям ничего не говорят о трёх лучших адресах внутри дециля. Здесь список из трёх заморожен ЗАРАНЕЕ (13.08.2026) и проверяется вперёд против контрольной группы, прошедшей те же фильтры. Ключевой фильтр — оборот ≥ 5 размеров счёта: без него отбор выдаёт держателей лонга, у которых PnL это нереализованная прибыль, а не торговля."
+            title="Question: decile medians say nothing about the three best addresses inside a decile. Here the list of three was frozen IN ADVANCE (2026-08-13) and is checked forward."
           >
-            Гении Уолл-стрит
+            Wall Street geniuses
           </div>
           <span
             id="win-meta"
@@ -134,11 +134,11 @@
           <table class="data-table" id="win-table">
             <thead>
               <tr>
-                <th title="Адрес на Hyperliquid: ▸ разворачивает его открытые позиции прямо сейчас (монета, сторона, плечо, плавающий PnL), сама ссылка ведёт в explorer. Позиции — наблюдение, вердикт теста они не меняют.">Адрес</th>
-                <th class="r" title="Эдж, по которому адрес был отобран: прибыль на доллар оборота за месяц до заморозки">Отбор, бп</th>
-                <th class="r" title="Эдж ПОСЛЕ заморозки — то единственное, что здесь что-то значит">Форвард, бп</th>
-                <th class="r" title="Прибыль после заморозки">PnL</th>
-                <th class="r" title="Оборот после заморозки">Оборот</th>
+                <th title="Hyperliquid address: ▸ expands its open positions right now (coin, side, leverage, floating PnL); the link itself opens the explorer">Address</th>
+                <th class="r" title="Edge the address was selected on: profit per dollar of turnover in the month before the freeze">Selection, bp</th>
+                <th class="r" title="Edge AFTER the freeze — the only number here that means anything">Forward, bp</th>
+                <th class="r" title="Profit after the freeze">PnL</th>
+                <th class="r" title="Turnover after the freeze">Turnover</th>
               </tr>
             </thead>
             <tbody id="win-tbody">
@@ -158,7 +158,7 @@
         ></div>
       </section>
 
-      <!-- 01.9 / Форвард FVG — предзаявлен 28.08.2026, оценка при n=1500.
+      <!-- 01.9 / FVG forward test — предзаявлен 28.08.2026, оценка при n=1500.
            Карточка показывает ТОЛЬКО счётчик и возраст последней записи: ни
            E[R], ни winrate. Это не скупость вывода, а условие теста — stopRule
            запрещает промежуточные замеры, а увиденное число невозможно развидеть.
@@ -168,9 +168,9 @@
           <div
             class="card-title"
             data-num="01.9"
-            title="Ретест широкой FVG-зоны (>1.6%) на 4h по тренду ТФ. На бэктесте 28.04–28.08.2026 дал E[R]=+0.174 при кластерном CI [0.060, 0.292] и держался во всех четырёх клетках лонг/шорт × btc_up/btc_down — то есть не сводился к бете. Но порог 1.6% выбран на тех же данных, поэтому проверять его можно только на свежих. Здесь копится именно это: сделки со входом после 29.08.2026."
+            title="Retest of a wide FVG zone (>1.6%) on 4h in the direction of the timeframe trend. Backtest 2026-04-28→08-28 gave E[R]=+0.174 with a clustered CI of [0.060, 0.292]."
           >
-            Форвард FVG
+            FVG forward test
           </div>
           <span
             id="fvg-meta"

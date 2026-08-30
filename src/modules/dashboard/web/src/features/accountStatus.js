@@ -329,11 +329,11 @@ function renderDailyBadge() {
       : "";
   const icon = danger ? _ICON_STOP : reached ? _ICON_GOAL : "";
   const label = _dailyRiskHalted
-    ? "стоп: входы закрыты"
+    ? "stopped: entries closed"
     : danger ? "stop" : reached ? "goal" : `goal ${DAILY_GOAL_PCT}%`;
   badge.innerHTML = `Today ${valStr}${pctStr}${feeStr} · ${icon}${label}`;
   if (_lastFees != null) {
-    badge.title = `Комиссии: сегодня $${(_lastFees.today ?? 0).toFixed(2)} · за 7д $${(_lastFees.d7 ?? 0).toFixed(2)}`;
+    badge.title = `Fees: today $${(_lastFees.today ?? 0).toFixed(2)} · 7d $${(_lastFees.d7 ?? 0).toFixed(2)}`;
   }
   badge.hidden = false;
   badge.classList.toggle("is-pos", reached && !danger);
@@ -639,11 +639,11 @@ export function renderManualPositions(list) {
       // Не усыновлена → показываем ПОЧЕМУ (если бэк знает причину), чтобы не
       // лезть в логи на сервере. Усыновлена → зелёный ADOPTED.
       const manualBadge = p.adoptResyncing
-        ? `HANDS-OFF · MANUAL · <span style="color:var(--orange,#f59e0b)" title="Сторона позиции сменилась (флип) — бот закрывает старую DB-строку и переусыновляет живую. Управление обновится в течение ~минуты.">RE-SYNCING ⟳</span>`
+        ? `HANDS-OFF · MANUAL · <span style="color:var(--orange,#f59e0b)" title="Position side flipped — the bot closes the old DB row and re-adopts the position on the new side">RE-SYNCING ⟳</span>`
         : p.adopted
         ? `HANDS-OFF · MANUAL · <span style="color:var(--green,#22c55e)">ADOPTED</span>`
         : p.adoptSkipReason
-          ? `HANDS-OFF · MANUAL · <span style="color:var(--red,#cf222e)">без стопа: ${escapeHtml(p.adoptSkipReason)}</span>`
+          ? `HANDS-OFF · MANUAL · <span style="color:var(--red,#cf222e)">no stop: ${escapeHtml(p.adoptSkipReason)}</span>`
           : "HANDS-OFF · MANUAL";
       // Глубинная заливка карточки uPnL — только у усыновлённых (нянька повесила
       // стоп). У голого HANDS-OFF стопа нет → riskTint вернёт null, карточка
@@ -682,11 +682,11 @@ export function renderManualPositions(list) {
       const ft = floorTimerParts(p);
       const floorCell =
         s.floorPrice != null
-          ? `<div class="grid-item${ft.cls}" title="Ликвидация: ${liq}">${ft.bg}
+          ? `<div class="grid-item${ft.cls}" title="Liquidation: ${liq}">${ft.bg}
                <div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>Floor${fb ? ` <span class="fl-badge ${fb.cls}">${fb.txt}</span>` : ""}</span>${ft.chip}</div>
                <div class="item-value"><span data-mfloor>${fmtPrice(s.floorPrice)}</span><span class="grid-inline ${s.floorPnl >= 0 ? "positive" : "negative"}" data-mfloorpnl>${s.floorPnl != null ? fmtSignedUsd2(s.floorPnl) : ""}</span></div>
              </div>`
-          : `<div class="grid-item${ft.cls}" title="Ликвидация: ${liq}">${ft.bg}<div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>Liq</span>${ft.chip}</div><div class="item-value">${liq}</div></div>`;
+          : `<div class="grid-item${ft.cls}" title="Liquidation: ${liq}">${ft.bg}<div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>Liq</span>${ft.chip}</div><div class="item-value">${liq}</div></div>`;
       return `
       <div data-mcard="${escapeHtml(p.coin)}" style="margin-top:0.75rem; padding:0.75rem; border:1px dashed var(--border); border-radius:8px;">
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:0.5rem;">
@@ -698,7 +698,7 @@ export function renderManualPositions(list) {
                переключишь вкладку — рынок уезжает. Долей нет намеренно, оператор
                ими не пользуется: одна кнопка = закрыть всё по рынку. -->
           <button type="button" class="pos-close-btn${closeBtnCls(s, p)}" data-posclose="${escapeHtml(p.coin)}"
-                  title="Закрыть всю позицию по рынку (тейкер 4.32 бп, без builder-fee)"><span>Close</span></button>
+                  title="Close the whole position at market (taker 4.32 bp, no builder fee)"><span>Close</span></button>
         </div>
         <div class="data-grid">
           <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}${riskInline}</div></div>

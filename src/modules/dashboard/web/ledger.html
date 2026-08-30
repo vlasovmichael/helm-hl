@@ -326,7 +326,7 @@
                 <th>Month</th>
                 <th class="grp">Bot P&L</th>
                 <th class="col-opt">#</th>
-                <th class="grp" title="Я вошёл, бот подхватил и закрыл (adopt-нянька)">Adopted P&L</th>
+                <th class="grp" title="I entered by hand, the nanny picked it up and closed it">Adopted P&L</th>
                 <th class="col-opt">#</th>
                 <th class="grp">Manual P&L</th>
                 <th class="col-opt">#</th>
@@ -369,14 +369,14 @@
             data.startDate || "—";
           if (!data.live || !data.months.length) {
             document.getElementById("table-host").innerHTML =
-              '<div class="errbox">Нет данных (бот в PAPER-режиме или fills недоступны).</div>';
+              '<div class="errbox">No data (bot is in PAPER mode or fills are unavailable).</div>';
             return;
           }
           renderSummary(data.totals);
           renderTable(data);
         } catch (e) {
           document.getElementById("table-host").innerHTML =
-            '<div class="errbox">Ошибка загрузки: ' + e.message + "</div>";
+            '<div class="errbox">Failed to load: ' + e.message + "</div>";
         }
       }
       load();

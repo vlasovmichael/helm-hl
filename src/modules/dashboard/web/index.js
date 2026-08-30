@@ -183,7 +183,7 @@ function initTradeButton() {
       setTimeout(() => {
         label.textContent = "Close";
         btn.classList.remove("is-failed");
-        btn.title = "Закрыть всю позицию по рынку (тейкер 4.32 бп, без builder-fee)";
+        btn.title = "Close the whole position at market (taker 4.32 bp, no builder fee)";
       }, 4000);
     };
 

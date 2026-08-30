@@ -136,9 +136,9 @@ export function hmPosHintInner(coin) {
         chips.push([
           "good",
           `locked ≈ +$${netUsd.toFixed(2)}`,
-          `Пол храповика: $${grossUsd.toFixed(2)} брутто − $${(grossUsd - netUsd).toFixed(2)} комиссий. ` +
-            "Это уровень, на котором бот решает выходить, а не цена исполнения: " +
-            "фактический выход ниже на перелёт порога и полёт ордера.",
+          `Ratchet floor: $${grossUsd.toFixed(2)} gross − $${(grossUsd - netUsd).toFixed(2)} fees. ` +
+            "This is where the bot decides to exit, not the fill price: " +
+            "the actual exit lands lower by threshold overshoot and order flight time.",
         ]);
     }
     // R-multiple: текущий ход в единицах исходного риска (+1.2R / −0.5R).

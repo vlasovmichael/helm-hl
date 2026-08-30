@@ -21,33 +21,33 @@ import { logger } from '../../../core/logger.js';
 export const TRADING_RULES = [
   {
     n: 1,
-    title: 'Меньше сделок, крупнее',
-    body: 'Комиссии — весь мой минус и сверху (на 356 сделках gross был в плюсе, net в минусе из-за комиссий). На депозите $50–75 частота убивает. Не «настрелять» сделок — брать редкие, но по правилам.',
-    metric: 'комиссии = 100%+ минуса',
+    title: 'Fewer trades, bigger size',
+    body: 'Fees are my entire loss and then some (across 356 trades gross was positive, net negative purely on fees). On a $50–75 account, frequency kills. Not "rack up trades" — take rare ones, by the rules.',
+    metric: 'fees = 100%+ of the loss',
   },
   {
     n: 2,
-    title: 'Стоп — цифрой, до входа',
-    body: 'Не могу назвать цену стопа до входа — не вхожу. Вход «в пустоте» между уровнями (как GRASS) = нет стопа = раздутый риск и ликвидация в паре процентов. Стоп ПОД уровень (лонг) / НАД уровень (шорт).',
-    metric: 'payoff 0.60 → нужен ≥1.5',
+    title: 'Stop as a number, before entry',
+    body: 'If I cannot name the stop price before entering, I do not enter. Entering "in the void" between levels (like GRASS) means no stop, bloated risk and liquidation within a couple of percent. Stop goes BELOW a level (long) / ABOVE a level (short).',
+    metric: 'payoff 0.60 → needs ≥1.5',
   },
   {
     n: 3,
-    title: 'Не брать лонги',
-    body: 'Мой эдж — шорты (net +$14 на 229 сделках). Лонги — дренаж (net −$25 на 127 сделках, payoff 0.43). Убрать лонги — книга из минуса в плюс. Лонг беру только как осознанное исключение с записью в дневник ПОЧЕМУ.',
-    metric: 'лонги −$25 / шорты +$14',
+    title: 'No longs',
+    body: 'My edge is shorts (net +$14 over 229 trades). Longs drain (net −$25 over 127 trades, payoff 0.43). Drop longs and the book flips from red to green. A long is only ever a deliberate exception, with a journal entry saying WHY.',
+    metric: 'longs −$25 / shorts +$14',
   },
   {
     n: 4,
-    title: 'Банить монеты-дыры',
-    body: 'HMSTR: 31 сделка, −$25 — больше половины всего минуса на одной монете. Если по монете накопился устойчивый минус — она в чёрном списке, не торгую, пусть даже «выглядит вкусно».',
+    title: 'Ban the black-hole coins',
+    body: 'HMSTR: 31 trades, −$25 — more than half of the total loss on a single coin. Once a coin has a steady loss on it, it is blacklisted, however tasty it looks.',
     metric: 'HMSTR −$25 (n=31)',
   },
   {
     n: 5,
-    title: 'Вошёл — выход отдал боту',
-    body: 'Мой навык — направление и вход. Дыра — выход и риск. После входа стоп/сопровождение ведёт adopt, я не дёргаю позицию руками у +1%. Дисциплина важнее ощущения «я угадал».',
-    metric: 'судить решение, не результат',
+    title: 'Once in, hand the exit to the bot',
+    body: 'My skill is direction and entry. My hole is exits and risk. After entry the stop and the babysitting belong to adopt — I do not touch the position by hand at +1%. Discipline beats the feeling of being right.',
+    metric: 'judge the decision, not the result',
   },
 ];
 
@@ -101,7 +101,7 @@ export function handleTradeBreakdown(_req, res) {
     }
 
     const overall = computeStats(trades);
-    const bySide = groupStats(trades, (r) => (r.side === 'long' || r.side === 'short' ? r.side : 'нет стороны'))
+    const bySide = groupStats(trades, (r) => (r.side === 'long' || r.side === 'short' ? r.side : 'no side'))
       .sort((a, b) => a.net - b.net);
     const byStrategy = groupStats(trades, (r) => r.strategy_id || 'carry')
       .sort((a, b) => b.n - a.n);

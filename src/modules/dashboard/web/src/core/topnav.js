@@ -15,9 +15,9 @@ const LINKS = [
   // Order Book остаётся как страница (/orderbook), но ссылку из навбара
   // убрали — стакан оператору тяжело читается, не нужен на видном месте (2026-06-28).
   { key: "statistics", href: "/statistics", label: "Statistics" },
-  { key: "oi", href: "/oi", label: "OI", title: "История open interest по всем монетам (ΔOI 24ч/1ч)" },
-  { key: "lab", href: "/lab", label: "Lab", title: "Research: реестр стратегий + закрытые вердикты" },
-  { key: "journal", href: "/journal", label: "Journal", title: "Журнал чтения графика — разметка монеты на сутки вперёд" },
+  { key: "oi", href: "/oi", label: "OI", title: "Open interest history across all coins (ΔOI 24h/1h)" },
+  { key: "lab", href: "/lab", label: "Lab", title: "Research: how positions are run + closed verdicts" },
+  { key: "journal", href: "/journal", label: "Journal", title: "Chart-reading journal — mark up a coin a day ahead" },
   { key: "ledger", href: "/ledger", label: "Ledger", title: "Monthly P&L ledger" },
 ];
 

@@ -50,7 +50,7 @@ function divRenderWatchlistBar() {
       .map((coin) => {
         const removable = !defaults.has(coin);
         return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--surface-2,rgba(255,255,255,.06));border:1px solid var(--hairline);border-radius:4px;padding:2px 6px;font-family:var(--font-mono);font-size:10px;">
-      ${coin}${removable ? `<button data-remove="${coin}" style="background:none;border:none;cursor:pointer;color:var(--text-faint);padding:0;line-height:1;font-size:11px;" title="Убрать">×</button>` : ""}
+      ${coin}${removable ? `<button data-remove="${coin}" style="background:none;border:none;cursor:pointer;color:var(--text-faint);padding:0;line-height:1;font-size:11px;" title="Remove from the list">×</button>` : ""}
     </span>`;
       })
       .join("") +
@@ -168,7 +168,7 @@ async function divFetchAll() {
   const hasContent =
     tbody && tbody.children.length > 0 && !tbody.querySelector(".empty-state");
   if (!hasContent && tbody)
-    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">загружаем все монеты…</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">loading all coins…</td></tr>`;
   try {
     const d = await fetchJson(`/api/btc-divergence/all?window=${win}`);
     if (!d?.coins) return;
@@ -178,8 +178,8 @@ async function divFetchAll() {
     if (metaEl) {
       const label =
         d.btcPct != null
-          ? `BTC ${win} ${d.btcPct > 0 ? "+" : ""}${d.btcPct.toFixed(2)}% · ${d.coins.length} монет`
-          : `${d.coins.length} монет · накапливаем историю…`;
+          ? `BTC ${win} ${d.btcPct > 0 ? "+" : ""}${d.btcPct.toFixed(2)}% · ${d.coins.length} coins`
+          : `${d.coins.length} coins · building history…`;
       metaEl.textContent = label;
       metaEl.style.color =
         d.btcPct == null
@@ -192,7 +192,7 @@ async function divFetchAll() {
     }
     if (d.coins.length === 0) {
       if (tbody)
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">накапливаем историю…</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">building history…</td></tr>`;
       return;
     }
     if (tbody) tbody.innerHTML = divRenderRows(d.coins, d.btcPct, d.hasPast);
@@ -243,7 +243,7 @@ export function renderBtcDivergence(data) {
   const windowData = _divData.windows?.[_divWindow];
   if (!windowData?.coins?.length) {
     const mins = _divWindow === "1h" ? 60 : parseInt(_divWindow);
-    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">накапливаем историю (нужно ${mins} мин)…</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">building history (needs ${mins} min)…</td></tr>`;
     return;
   }
 

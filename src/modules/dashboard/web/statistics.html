@@ -129,7 +129,7 @@
           <div
             class="card-title"
             data-num="06+"
-            title="Lifetime срезы: per-coin, long/short и по стратегии (с expectancy/payoff), плюс многолетний daily P&amp;L heatmap (листается по годам). Не зависит от селектора периода P&amp;L — всегда all-time."
+            title="Lifetime cuts: per-coin, long/short and by strategy (with expectancy/payoff), plus a multi-year daily P&amp;L heatmap (paged by year). Independent of the P&amp;L period selector — always all-time."
           >
             Insights
           </div>
@@ -193,7 +193,7 @@
               </table>
             </div>
             <div class="breakdown-block">
-              <div class="breakdown-title">По стратегии</div>
+              <div class="breakdown-title">By strategy</div>
               <table class="breakdown-table">
                 <thead>
                   <tr>
@@ -223,9 +223,9 @@
                     <th>Coin</th>
                     <th>Side</th>
                     <th class="num">P&amp;L</th>
-                    <th class="num" title="Max Favorable Excursion — пик в плюс за время сделки">MFE</th>
-                    <th class="num" title="Max Adverse Excursion — пик в минус (сколько терпел)">MAE</th>
-                    <th class="num" title="realized ÷ MFE — какую долю доступного хода забрал">Capture</th>
+                    <th class="num" title="Max Favorable Excursion — best unrealized gain during the trade">MFE</th>
+                    <th class="num" title="Max Adverse Excursion — worst unrealized loss you sat through">MAE</th>
+                    <th class="num" title="realized ÷ MFE — how much of the available move you captured">Capture</th>
                   </tr>
                 </thead>
                 <tbody id="exits-tbody"></tbody>
@@ -257,7 +257,7 @@
       <!-- 06++ / Разбор моих сделок + Мои правила -->
       <section class="card" id="sec-mytrades">
         <div class="card-header">
-          <div class="card-title" data-num="06++">Разбор моих сделок</div>
+          <div class="card-title" data-num="06++">My trade breakdown</div>
           <div class="mytrades-period" id="mytrades-period"></div>
         </div>
         <div id="mytrades-body" class="mytrades-body">

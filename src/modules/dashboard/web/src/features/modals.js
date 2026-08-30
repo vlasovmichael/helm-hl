@@ -222,12 +222,12 @@ function tradeModalHtmlFromActivity(e) {
     ${tmHeader({ coin: e.coin, side, kindLabel, strat, isManual, when })}
     ${e.kind !== "open" ? tmPnlHero(pnl) : ""}
     ${cells.length ? `<div class="tm-grid">${cells.join("")}</div>` : ""}
-    ${e.id ? `<div class="tm-section" id="tm-detail-slot"><div class="tm-section-title">Детали</div><div class="tm-sub">Загружаю…</div></div>` : ""}
+    ${e.id ? `<div class="tm-section" id="tm-detail-slot"><div class="tm-section-title">Details</div><div class="tm-sub">Loading…</div></div>` : ""}
   `;
 }
 
 function tradeDetailHtml(t) {
-  if (!t) return '<div class="tm-sub">Детали недоступны</div>';
+  if (!t) return '<div class="tm-sub">No details available</div>';
   const strat = strategyDisplayName(t.strategy_id);
   const direction = (t.side || t.direction || "long").toUpperCase();
   const entryPx = t.entry_price;
@@ -314,7 +314,7 @@ async function onActivityClick(e) {
       const slot = document.getElementById("tm-detail-slot");
       if (slot)
         slot.innerHTML =
-          '<div class="tm-sub">Не удалось загрузить детали</div>';
+          '<div class="tm-sub">Could not load details</div>';
     }
   }
 }

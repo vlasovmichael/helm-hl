@@ -61,19 +61,19 @@ function formHtml(coin = "", side = "") {
   const sideBtn = (val, label) =>
     `<button type="button" class="wi-side-btn ${side === val ? "is-on" : ""}" data-side="${val}">${label}</button>`;
   return `
-    <div class="wi-title">Разбор графика</div>
-    <div class="wi-lead">Монета + сторона → коуч разложит тренд, уровни, RSI, план со стопом/целью и где ты неправ. Это разбор структуры, <strong>не сигнал с доказанным эджем</strong> — решение и риск на тебе.</div>
+    <div class="wi-title">Chart breakdown</div>
+    <div class="wi-lead">Coin + side → the coach lays out trend, levels, RSI, a plan with stop/target and where you are wrong. Structure analysis, <strong>not a proven-edge signal</strong> — the decision and the risk are yours.</div>
     <form id="wi-form" class="wi-form" autocomplete="off">
-      <label class="wi-label">Монета (тикер Hyperliquid)</label>
-      <input id="wi-coin" class="wi-input" type="text" placeholder="напр. BTC, SOL, kBONK" value="${escapeHtml(coin)}" />
-      <label class="wi-label">Сторона (для плана входа)</label>
+      <label class="wi-label">Coin (Hyperliquid ticker)</label>
+      <input id="wi-coin" class="wi-input" type="text" placeholder="e.g. BTC, SOL, kBONK" value="${escapeHtml(coin)}" />
+      <label class="wi-label">Side (for the entry plan)</label>
       <div class="wi-sides">
         ${sideBtn("LONG", "Long")}
         ${sideBtn("SHORT", "Short")}
-        ${sideBtn("", "Без стороны")}
+        ${sideBtn("", "No side")}
       </div>
       <input type="hidden" id="wi-side" value="${escapeHtml(side)}" />
-      <button type="submit" class="wi-submit">Разобрать</button>
+      <button type="submit" class="wi-submit">Analyse</button>
       <div id="wi-error" class="wi-error" hidden></div>
     </form>`;
 }
@@ -81,18 +81,18 @@ function formHtml(coin = "", side = "") {
 // ── Loader: spinner + staged "scanning" steps ──
 function loaderHtml(coin) {
   return `
-    <div class="wi-title">Разбираю #${escapeHtml(coin.toUpperCase())}…</div>
+    <div class="wi-title">Analysing #${escapeHtml(coin.toUpperCase())}…</div>
     <div class="wi-loader">
       <span class="wi-spinner" aria-hidden="true"></span>
-      <span id="wi-loader-step" class="wi-loader-step">Тяну 15m-свечи…</span>
+      <span id="wi-loader-step" class="wi-loader-step">Fetching 15m candles…</span>
     </div>`;
 }
 
 const LOADER_STEPS = [
-  "Тяну 15m и 1h свечи…",
-  "Считаю тренд, RSI, ATR…",
-  "Ищу поддержку/сопротивление…",
-  "Складываю разбор…",
+  "Fetching 15m and 1h candles…",
+  "Computing trend, RSI, ATR…",
+  "Locating support/resistance…",
+  "Assembling the breakdown…",
 ];
 
 function fmtPrice(p) {
@@ -123,18 +123,18 @@ const COACH_TONE_ICON = {
   counter: SVG.target,
   neutral: SVG.wait,
 };
-const TREND_WORD = { up: "вверх ▲", down: "вниз ▼", flat: "флэт →" };
+const TREND_WORD = { up: "up ▲", down: "down ▼", flat: "flat →" };
 
 function resultHtml(r) {
   const sideLine = r.userSide
-    ? `<span class="wi-userside">твоя сторона: ${r.userSide}</span>`
+    ? `<span class="wi-userside">your side: ${r.userSide}</span>`
     : "";
   const head = `<div class="wi-title">#${escapeHtml(r.coin)} <span class="wi-px">$${fmtPrice(r.price)}</span> ${sideLine}</div>`;
 
   const c = r.coach;
   // Фолбэк: если coach не построился (нет свечей) — старый fade-вердикт.
   if (!c || !c.ok) return head + legacyEdgeBlock(r) +
-    `<button type="button" class="wi-again" id="wi-again">← Другая монета</button>`;
+    `<button type="button" class="wi-again" id="wi-again">← Another coin</button>`;
 
   // ── Коуч-вердикт (ведущий блок) ──
   let verdictBlock = "";
@@ -150,25 +150,25 @@ function resultHtml(r) {
         </div>
       </div>`;
   } else {
-    verdictBlock = `<div class="wi-lead">Выбери сторону (Long/Short) для разбора входа со стопом и целью. Ниже — структура графика.</div>`;
+    verdictBlock = `<div class="wi-lead">Pick a side (Long/Short) to get an entry plan with stop and target. Chart structure is below.</div>`;
   }
 
   // ── Структура: тренды / RSI / ATR ──
   const rsiCls = c.rsi14 == null ? "" : c.rsi14 >= 70 ? "off" : c.rsi14 <= 30 ? "off" : "ok";
   const structure = `
     <div class="wi-metrics">
-      <div class="wi-metric ok"><div class="wi-metric-label">Тренд 1h</div><div class="wi-metric-val">${TREND_WORD[c.htfTrend] || "—"}</div></div>
-      <div class="wi-metric ok"><div class="wi-metric-label">Тренд 15m</div><div class="wi-metric-val">${TREND_WORD[c.ltfTrend] || "—"}</div></div>
+      <div class="wi-metric ok"><div class="wi-metric-label">1h trend</div><div class="wi-metric-val">${TREND_WORD[c.htfTrend] || "—"}</div></div>
+      <div class="wi-metric ok"><div class="wi-metric-label">15m trend</div><div class="wi-metric-val">${TREND_WORD[c.ltfTrend] || "—"}</div></div>
       <div class="wi-metric ${rsiCls}"><div class="wi-metric-label">RSI 14</div><div class="wi-metric-val">${c.rsi14 != null ? c.rsi14.toFixed(0) : "—"}</div></div>
     </div>`;
 
   // ── Уровни ──
   const supLine = c.support != null
-    ? `<div><span>Поддержка</span>$${fmtPrice(c.support)} <em>(${fmtPct(-Math.abs(c.distToSupport))})</em></div>` : "";
+    ? `<div><span>Support</span>$${fmtPrice(c.support)} <em>(${fmtPct(-Math.abs(c.distToSupport))})</em></div>` : "";
   const resLine = c.resistance != null
-    ? `<div><span>Сопротивление</span>$${fmtPrice(c.resistance)} <em>(${fmtPct(Math.abs(c.distToResistance))})</em></div>` : "";
+    ? `<div><span>Resistance</span>$${fmtPrice(c.resistance)} <em>(${fmtPct(Math.abs(c.distToResistance))})</em></div>` : "";
   const levels = (supLine || resLine)
-    ? `<div class="wi-plan"><div class="wi-plan-title">Ближайшие уровни</div><div class="wi-plan-grid">${supLine}${resLine}</div></div>` : "";
+    ? `<div class="wi-plan"><div class="wi-plan-title">Nearest levels</div><div class="wi-plan-grid">${supLine}${resLine}</div></div>` : "";
 
   // ── План под сторону ──
   let plan = "";
@@ -184,15 +184,15 @@ function resultHtml(r) {
     // Риск-калькулятор размера.
     const sz = c.sizing;
     const szNote = sz
-      ? `<div class="wi-subnote wi-size">📏 При риске ${sz.riskBudgetPct}% депо ($${fmtNum(sz.riskUsd)}) и этом стопе размер должен быть <strong>$${fmtNum(sz.suggestedSizeUsd)}</strong> (депо $${fmtNum(sz.equity)}).</div>` : "";
+      ? `<div class="wi-subnote wi-size">📏 Risking ${sz.riskBudgetPct}% of the account ($${fmtNum(sz.riskUsd)}) with this stop, size should be <strong>$${fmtNum(sz.suggestedSizeUsd)}</strong> (account $${fmtNum(sz.equity)}).</div>` : "";
     plan = `
       <div class="wi-plan">
-        <div class="wi-plan-title">План для ${escapeHtml(c.plan.side)}</div>
+        <div class="wi-plan-title">Plan for ${escapeHtml(c.plan.side)}</div>
         <div class="wi-plan-grid">
-          <div><span>Стоп (${fmtPct(-Math.abs(c.plan.riskPct))})</span>${stop}</div>
-          <div><span>Цель (${c.plan.rewardPct != null ? fmtPct(Math.abs(c.plan.rewardPct)) : "—"})</span>${target}</div>
+          <div><span>Stop (${fmtPct(-Math.abs(c.plan.riskPct))})</span>${stop}</div>
+          <div><span>Target (${c.plan.rewardPct != null ? fmtPct(Math.abs(c.plan.rewardPct)) : "—"})</span>${target}</div>
           <div><span>R:R</span>${rr}</div>
-          <div><span>Неправ если ниже/выше</span>${inval}</div>
+          <div><span>Wrong if beyond</span>${inval}</div>
         </div>
         ${ssNote}
         ${szNote}
@@ -201,26 +201,26 @@ function resultHtml(r) {
 
   // Order-flow «под капотом» (OI / объём / funding).
   const flow = (c.orderFlow && c.orderFlow.length)
-    ? `<div class="wi-flow"><div class="wi-flow-title">⚙️ Под капотом (поток)</div><ul>${c.orderFlow.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>`
+    ? `<div class="wi-flow"><div class="wi-flow-title">⚙️ Under the hood (flow)</div><ul>${c.orderFlow.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>`
     : "";
 
   // ── Сценарии ──
   const caseList = (title, arr, cls) => arr && arr.length
     ? `<div class="wi-case ${cls}"><div class="wi-case-title">${title}</div><ul>${arr.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>` : "";
-  const cases = `<div class="wi-cases">${caseList("За вход", c.bull, "wi-case-bull")}${caseList("Против", c.bear, "wi-case-bear")}</div>`;
+  const cases = `<div class="wi-cases">${caseList("For the trade", c.bull, "wi-case-bull")}${caseList("Against", c.bear, "wi-case-bear")}</div>`;
 
   // ── Учёба на твоей истории (зеркало привычки) ──
   const learn = c.learn
-    ? `<div class="wi-learn"><span class="wi-learn-tag">🪞 Твоя история (${c.learn.n})</span> ${escapeHtml(c.learn.note)}<span class="wi-learn-meta">winrate ${c.learn.winRate}% · payoff ${c.learn.payoff != null ? c.learn.payoff + "×" : "—"}</span></div>`
+    ? `<div class="wi-learn"><span class="wi-learn-tag">🪞 Your history (${c.learn.n})</span> ${escapeHtml(c.learn.note)}<span class="wi-learn-meta">winrate ${c.learn.winRate}% · payoff ${c.learn.payoff != null ? c.learn.payoff + "×" : "—"}</span></div>`
     : "";
 
   // ── Вторичная честная строка: проверенный fade-эдж ──
   const edgeNote = `<div class="wi-edge-note">${r.fired
-    ? `⚡ Бонус: тут совпал и проверенный fade-эдж (${escapeHtml(r.fadeSide || "")}).`
-    : `Проверенного fade-эджа здесь нет — это разбор, не сигнал. ${escapeHtml(c.disclaimer)}`}</div>`;
+    ? `⚡ Bonus: a verified fade edge lines up here too (${escapeHtml(r.fadeSide || "")}).`
+    : `No verified edge here — this is analysis, not a signal. ${escapeHtml(c.disclaimer)}`}</div>`;
 
   return head + verdictBlock + structure + flow + levels + plan + cases + learn + edgeNote +
-    `<button type="button" class="wi-again" id="wi-again">← Другая монета</button>`;
+    `<button type="button" class="wi-again" id="wi-again">← Another coin</button>`;
 }
 
 // Старый fade-вердикт как фолбэк, если coach не построился.
@@ -231,8 +231,8 @@ function legacyEdgeBlock(r) {
     <div class="wi-verdict ${toneCls}">
       <div class="wi-verdict-icon">${icon}</div>
       <div class="wi-verdict-text">
-        <div class="wi-verdict-head">${escapeHtml(r.headline || "Нет данных для разбора")}</div>
-        <div class="wi-verdict-detail">${escapeHtml(r.detail || "Не удалось получить свечи для этой монеты.")}</div>
+        <div class="wi-verdict-head">${escapeHtml(r.headline || "Nothing to analyse")}</div>
+        <div class="wi-verdict-detail">${escapeHtml(r.detail || "Could not fetch candles for this coin.")}</div>
       </div>
     </div>`;
 }

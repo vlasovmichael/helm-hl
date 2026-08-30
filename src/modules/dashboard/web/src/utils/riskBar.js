@@ -76,12 +76,12 @@ export function riskTint({
   let phase, label, milestonePx, fracOf;
   if (!inProfit) {
     phase = "stop";
-    label = "до стопа";
+    label = "to stop";
     milestonePx = stopPrice;
     fracOf = (m) => Math.min(1, -m / risk);
   } else if (armDist != null && !armed) {
     phase = "arm";
-    label = "до храповика";
+    label = "to ratchet";
     milestonePx = isShort ? entry - armDist : entry + armDist;
     fracOf = (m) => Math.min(1, Math.max(0, m / armDist));
   } else if (trailDist != null && !trailOn) {
@@ -91,7 +91,7 @@ export function riskTint({
     const base = armed && armDist != null ? armDist : 0;
     const span = Math.max(trailDist - base, 1e-9);
     phase = "trail";
-    label = "до трейла";
+    label = "to trail";
     milestonePx = isShort ? entry - trailDist : entry + trailDist;
     fracOf = (m) => Math.min(1, Math.max(0, (m - base) / span));
   } else {
@@ -103,7 +103,7 @@ export function riskTint({
         : 0; // старт отрезка
     const span = Math.max(targetDist - base, 1e-9);
     phase = "profit";
-    label = "до профита";
+    label = "to profit";
     milestonePx = isShort ? entry - targetDist : entry + targetDist;
     fracOf = (m) => Math.min(1, Math.max(0, (m - base) / span));
   }
@@ -143,7 +143,7 @@ export function riskTint({
       sizeUsd;
     tip += ` (${fmtUsd(remUsd)})`;
   }
-  if (gapRef !== now) tip += " по пику";
+  if (gapRef !== now) tip += " at peak";
 
   return {
     inProfit,

@@ -35,9 +35,9 @@ function mockIo(ctx, overrides = {}) {
         overrides.open ?? {
           ok: true,
           message:
-            `${p.side === "short" ? "Short" : "Long"} ${p.coin} · маржа $${p.marginUsd.toFixed(2)} × ${p.leverage}x = $${p.sizeUsd.toFixed(2)} · ` +
-            `${p.orderType === "limit" ? `лимитка @ ${p.limitPx} поставлена` : "маркет исполнен"} · ` +
-            `нянька повесит стоп в течение ~15 сек`,
+            `${p.side === "short" ? "Short" : "Long"} ${p.coin} · margin $${p.marginUsd.toFixed(2)} × ${p.leverage}x = $${p.sizeUsd.toFixed(2)} · ` +
+            `${p.orderType === "limit" ? `limit @ ${p.limitPx} placed` : "market filled"} · ` +
+            `the nanny will attach a stop within ~15s`,
         }
       );
     },

@@ -50,7 +50,7 @@ function setCoin(c) {
 
 // ── WS ──
 function connect() {
-  setDot("dead", "переподключение…");
+  setDot("dead", "reconnecting…");
   try {
     ws = new WebSocket(WS_URL);
   } catch {
@@ -82,7 +82,7 @@ function subscribe() {
     ws.send(JSON.stringify({ method: "subscribe", subscription: { type: "l2Book", coin } }));
 }
 function resubscribe() {
-  setDot(ws && ws.readyState === 1 ? "live" : "dead", "переключение → " + coin);
+  setDot(ws && ws.readyState === 1 ? "live" : "dead", "switching → " + coin);
   if (ws) {
     try {
       ws.close();
@@ -181,12 +181,12 @@ function renderImbalance(bids, asks, mid) {
   const bp = (bUsd / tot) * 100;
   document.getElementById("ob-imbB").style.flexBasis = bp + "%";
   document.getElementById("ob-imbA").style.flexBasis = 100 - bp + "%";
-  document.getElementById("ob-imbBt").textContent = "биды " + bp.toFixed(0) + "% · " + fmtUsd(bUsd);
-  document.getElementById("ob-imbAt").textContent = fmtUsd(aUsd) + " · аски " + (100 - bp).toFixed(0) + "%";
+  document.getElementById("ob-imbBt").textContent = "bids " + bp.toFixed(0) + "% · " + fmtUsd(bUsd);
+  document.getElementById("ob-imbAt").textContent = fmtUsd(aUsd) + " · asks " + (100 - bp).toFixed(0) + "%";
   let h;
-  if (bp >= 62) h = '<span style="color:var(--ob-bid)">Покупатели давят</span> — фон за рост.';
-  else if (bp <= 38) h = '<span style="color:var(--ob-ask)">Продавцы давят</span> — фон за падение.';
-  else h = "Баланс — явного перевеса нет.";
+  if (bp >= 62) h = '<span style="color:var(--ob-bid)">Buyers pressing</span> — backdrop favours upside.';
+  else if (bp <= 38) h = '<span style="color:var(--ob-ask)">Sellers pressing</span> — backdrop favours downside.';
+  else h = "Balanced — no clear skew.";
   document.getElementById("ob-imbHint").innerHTML = h;
 }
 
@@ -201,14 +201,14 @@ function renderWalls(bids, asks, wallThr, mid) {
     ceilPx.textContent = fmtPx(ceil.px);
     ceilD.textContent = "+" + (((ceil.px - mid) / mid) * 100).toFixed(2) + "% · " + fmtUsd(ceil.px * ceil.sz);
   } else {
-    ceilPx.textContent = "нет";
+    ceilPx.textContent = "none";
     ceilD.textContent = "";
   }
   if (floor) {
     floorPx.textContent = fmtPx(floor.px);
     floorD.textContent = (((floor.px - mid) / mid) * 100).toFixed(2) + "% · " + fmtUsd(floor.px * floor.sz);
   } else {
-    floorPx.textContent = "нет";
+    floorPx.textContent = "none";
     floorD.textContent = "";
   }
 }
