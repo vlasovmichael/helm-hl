@@ -2,11 +2,17 @@
 //  Round-trip cache — reconstruct from HL userFills
 // ─────────────────────────────────────────────────
 // Восстанавливает ВСЕ round-trip'ы (bot/adopted/manual) из HL userFills через
-// единый движок reconstructRoundTrips. Тяжёлый запрос (userFills 60d + group) —
-// кэш 30с. Общий источник для /api/activity, /api/pnl-summary, /api/insights,
-// /api/trade-markers и debug-эндпоинта.
+// единый движок reconstructRoundTrips. Общий источник для /api/activity,
+// /api/pnl-summary, /api/insights, /api/trade-markers и debug-эндпоинта.
+//
+// Окно — с начала торговли, а не 60 дней: на коротком окне Statistics за «All»
+// показывала −$47.59 против −$156.78 в Ledger, потому что ручные сделки
+// апреля–июня в него не попадали. Стало возможно после пагинации fills
+// (userFillsByTime отдаёт максимум 2000 за запрос). Тяжело, поэтому кэш 30с.
 
 import { config } from "../../../core/config.js";
+// Та же точка отсчёта, что у Ledger: аккаунт начал торговать 8 апреля 2026.
+const TRADING_START_MS = Date.UTC(2026, 3, 1);
 import { logger } from "../../../core/logger.js";
 import { fetchUserFills, reconstructRoundTrips } from "../../userFills.js";
 import {
@@ -30,7 +36,7 @@ export async function getAllRoundTrips() {
     return cache.trades;
   }
   try {
-    const fills = await fetchUserFills(0); // 60d default
+    const fills = await fetchUserFills(TRADING_START_MS);
     // Bot trades для дедупа: все history (active + archived) + текущий open.
     const botTrades = [
       ...getHistorySince(0).map((t) => ({

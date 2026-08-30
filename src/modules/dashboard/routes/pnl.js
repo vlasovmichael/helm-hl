@@ -15,15 +15,12 @@ import { hlInfo, HL_PRIORITY } from "../../../core/hlClient.js";
 import { getAccountSummary, getPositionsCached } from "../../exchange.js";
 import { getAccountEquity } from "../../wallet.js";
 import {
-  getHistorySince,
-  getArchivedHistorySince,
-  realTradesForDisplay,
   getActivePosition,
   getHistory,
   getDayNote,
   setDayNote,
 } from "../../../core/database.js";
-import { getManualTrades, getAllRoundTrips } from "./manualTrades.js";
+import { getAllRoundTrips } from "./manualTrades.js";
 
 const PERIODS = [
   { key: "today", label: "Today" },
@@ -219,13 +216,30 @@ export async function handlePnlSummary(_req, res) {
       /* equityNow=0 → процент просадки не показываем */
     }
 
-    // Один проход — наибольший period (all). Дальше фильтруем in-memory.
-    const allDb = getHistorySince(0);
-    const allArch = getArchivedHistorySince(0);
-    const allTrades = realTradesForDisplay([...allDb, ...allArch]);
+    // ЕДИНЫЙ источник с Monthly Ledger — round-trip'ы из HL fills. Раньше
+    // бот-сделки брались из history-таблицы, а ручные из fills за 60 дней:
+    // «All» показывала −$47.59 против −$156.78 в Ledger, потому что ручные
+    // сделки апреля–июня в окно не попадали, а history после rebuild'ов
+    // неполная (живых строк 1, всё остальное в архиве). Теперь обе части
+    // приходят из одного места и по определению сходятся.
+    const roundTrips = (await getAllRoundTrips()).filter((t) => t.status === "closed");
 
-    // Manual trades (reconstructed from userFills, deduped against bot trades).
-    const manualTrades = await getManualTrades();
+    // Приводим к контракту history-строки, который ждёт computeStats:
+    // realized_pnl уже NET комиссий (t.pnl — price PnL ДО них).
+    const asHistoryRow = (t) => ({
+      coin: t.coin,
+      side: t.side,
+      realized_pnl: (t.pnl || 0) - (t.fee || 0),
+      fee_paid: t.fee || 0,
+      strategy_id: t.source === "manual" ? "manual" : t.source === "adopted" ? "adopt" : "bot",
+      entry_time: t.entryTime,
+      closed_at: t.closeTime,
+      mode: "PRODUCTION",
+    });
+
+    // «Бот» для сравнения = всё, что вёл бот сам или подхватил нянька.
+    const allTrades = roundTrips.filter((t) => t.source !== "manual").map(asHistoryRow);
+    const manualTrades = roundTrips.filter((t) => t.source === "manual");
 
     const openPos = getActivePosition();
     let unrealized = 0;
