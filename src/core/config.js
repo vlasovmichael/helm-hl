@@ -110,7 +110,11 @@ function loadConfig() {
   // Hunter хантит на более широкой вселенной, чем carry/fade (им нужна высокая ликвидность для
   // минимального slippage, Hunter'у — вариативность). Default $1M — захватывает 30–50 монет на HL
   // вместо ~12. PAPER-безопасно; для PROD (Iter C) потребуется size-cap и осторожность.
-  const minVolumeUsd = parseFloat(process.env.MIN_VOLUME_USD || '1000000');
+  // Имя сменилось вместе со снятием Hunter'а (2026-08-30). Старое читаем как
+  // фолбэк, чтобы деплой не сбросил порог на дефолт, пока .env не обновлён.
+  const minVolumeUsd = parseFloat(
+    process.env.MIN_VOLUME_USD || process.env.HUNTER_MIN_VOLUME || '1000000',
+  );
 
   // Доля баланса на позицию Hunter. SHORT и Long разделены: данные 2026-05-15
   // показали у SHORT положительное матожидание (+$0.56/сделку на 12 PROD-trades),
@@ -128,7 +132,9 @@ function loadConfig() {
 
   // Anti-trend filter: не шортим если цена N мин назад была ниже current на ≥M%
   // (значит за N мин уже был устойчивый рост — это тренд, не reversion-кандидат).
-  const trendLookbackMin = parseFloat(process.env.TREND_LOOKBACK_MIN || '15');
+  const trendLookbackMin = parseFloat(
+    process.env.TREND_LOOKBACK_MIN || process.env.HUNTER_TREND_LOOKBACK_MIN || '15',
+  );
   // HTF anti-trend filter (2026-07-22): не шортим спайк, если за 1ч цена уже
   // выросла на ≥M% — часовик ещё разгоняется, спайк = продолжение, не выдох.
   // Данные (61 live-сделка): весь минус Hunter кучкуется на входах с 1h>+5%
@@ -393,20 +399,20 @@ function loadConfig() {
   // Никогда не открывает позицию. Master-флаг default OFF.
   // Канал алертов: ntfy шлётся всегда (когда alertEnabled), TG-дубль опционален.
   // default OFF — Candy Girl живёт в ntfy-ленте вместе со Swing-сканером.
-  const candyGirlFast1h             = parseInt(process.env.CANDY_GIRL_FAST_1H  || '20', 10);
-  const candyGirlSlow1h             = parseInt(process.env.CANDY_GIRL_SLOW_1H  || '200', 10);
-  const candyGirlSlopeLookback      = parseInt(process.env.CANDY_GIRL_SLOPE_LOOKBACK || '10', 10);
+  const trendEmaFast1h             = parseInt(process.env.TREND_EMA_FAST_1H || process.env.CANDY_GIRL_FAST_1H  || '20', 10);
+  const trendEmaSlow1h             = parseInt(process.env.TREND_EMA_SLOW_1H || process.env.CANDY_GIRL_SLOW_1H  || '200', 10);
+  const trendSlopeLookback      = parseInt(process.env.TREND_SLOPE_LOOKBACK || process.env.CANDY_GIRL_SLOPE_LOOKBACK || '10', 10);
   // 4h higher-timeframe confluence: сигнал валиден только если 4h-тренд совпадает
   // с 1h-трендом. EMA20/50 на 4h (≈8 дней истории), легче чем EMA200 на 1h.
   // Логирование сигналов в БД + авто-резолв TP-before-SL (замер точности).
-  if (!Number.isInteger(candyGirlFast1h) || candyGirlFast1h < 2 || candyGirlFast1h >= candyGirlSlow1h) {
-    throw new Error(`CANDY_GIRL_FAST_1H must be integer in [2, CANDY_GIRL_SLOW_1H). Got: "${process.env.CANDY_GIRL_FAST_1H}"`);
+  if (!Number.isInteger(trendEmaFast1h) || trendEmaFast1h < 2 || trendEmaFast1h >= trendEmaSlow1h) {
+    throw new Error(`TREND_EMA_FAST_1H must be integer in [2, TREND_EMA_SLOW_1H). Got: "${process.env.TREND_EMA_FAST_1H || process.env.CANDY_GIRL_FAST_1H}"`);
   }
-  if (!Number.isInteger(candyGirlSlow1h) || candyGirlSlow1h < 10 || candyGirlSlow1h > 400) {
-    throw new Error(`CANDY_GIRL_SLOW_1H must be integer in [10, 400]. Got: "${process.env.CANDY_GIRL_SLOW_1H}"`);
+  if (!Number.isInteger(trendEmaSlow1h) || trendEmaSlow1h < 10 || trendEmaSlow1h > 400) {
+    throw new Error(`TREND_EMA_SLOW_1H must be integer in [10, 400]. Got: "${process.env.TREND_EMA_SLOW_1H || process.env.CANDY_GIRL_SLOW_1H}"`);
   }
-  if (!Number.isInteger(candyGirlSlopeLookback) || candyGirlSlopeLookback < 1) {
-    throw new Error(`CANDY_GIRL_SLOPE_LOOKBACK must be positive integer. Got: "${process.env.CANDY_GIRL_SLOPE_LOOKBACK}"`);
+  if (!Number.isInteger(trendSlopeLookback) || trendSlopeLookback < 1) {
+    throw new Error(`TREND_SLOPE_LOOKBACK must be positive integer. Got: "${process.env.TREND_SLOPE_LOOKBACK || process.env.CANDY_GIRL_SLOPE_LOOKBACK}"`);
   }
 
   if (isNaN(riskPctPerTrade) || riskPctPerTrade <= 0 || riskPctPerTrade > 0.1) {
@@ -511,9 +517,9 @@ function loadConfig() {
       screenTradesPerDay,
       screenNotionalUsd,
       // ── Candy Girl радар (signal-only) ──
-      candyGirlFast1h,
-      candyGirlSlow1h,
-      candyGirlSlopeLookback,
+      trendEmaFast1h,
+      trendEmaSlow1h,
+      trendSlopeLookback,
       riskBasedSizing,
       riskSizingShadow,
       riskPctPerTrade,

@@ -17,7 +17,7 @@ import { TICK_INTERVAL_MS, state } from "../../../app/state.js";
 import { computeBreadthFlush } from "../../hotMoversSetup.js";
 import { reportBreadthFlush } from "../../../app/toastBridge.js";
 import { getHourlyCandles, getFifteenMinCandles } from "../../candleCache.js";
-import { classifyTrend } from "../../candyGirlEma.js";
+import { classifyTrend } from "../../trendEma.js";
 import { analyzeChart } from "../../chartCoach.js";
 
 // ─────────────────────────────────────────────────
@@ -136,9 +136,9 @@ async function enrichVolMult(items) {
 // evaluateSetup (сервер/ntfy) гасят actionable у fade ПО тренду.
 // 1h-свечи кэшируются 5 мин в candleCache → доп. _htfCache (60с) лишь срезает
 // повторный расчёт EMA на каждый WS-кадр (TTL движков 3с).
-const HTF_FAST = config.trading.candyGirlFast1h;
-const HTF_SLOW = config.trading.candyGirlSlow1h;
-const HTF_SLOPE = config.trading.candyGirlSlopeLookback;
+const HTF_FAST = config.trading.trendEmaFast1h;
+const HTF_SLOW = config.trading.trendEmaSlow1h;
+const HTF_SLOPE = config.trading.trendSlopeLookback;
 const HTF_LOOKBACK_HOURS = HTF_SLOW + HTF_SLOPE + 5;
 const HTF_TTL_MS = 60_000;
 const _htfCache = new Map(); // coin → { ts, trend }

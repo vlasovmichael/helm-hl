@@ -1,187 +1,128 @@
-# HL Funding Scanner
+# Helm
 
-Autonomous funding-rate arbitrage bot for [Hyperliquid](https://hyperliquid.xyz). Shorts coins with elevated positive funding to collect hourly payments, with a secondary strategy that captures extreme funding spikes before they fade.
+A trading workbench for [Hyperliquid](https://hyperliquid.xyz): I enter by hand, the bot babysits
+the exit and keeps the books.
 
-Built to run unattended on a VPS with a small deposit ($50-100). Every decision gate is fee-aware: the bot will refuse a trade if projected funding can't cover round-trip costs.
+There are **no automatic entry strategies** any more. Every one that used to live here — carry,
+fade, Hunter (short/long/+OI), Candy Girl, Fade-high-ER, Hot Movers, Swing — was measured on real
+fills and removed once the numbers said there was no edge. What remains is the part that survived
+measurement: a nanny that protects a manual position, a ledger that tells the truth from on-chain
+fills, and read-only views that show data rather than signals.
 
-## How It Works
+Runs unattended on a small VPS against a small deposit. Read
+[FREEZE.md](FREEZE.md) before proposing a new strategy — it explains why that is usually the wrong idea.
 
-The bot runs a 15-second tick loop:
+## What it does
 
-```
-Scout  →  Coordinator  →  Executor
- scan       decide         trade
-```
+**Adopt (the nanny).** Picks up a position I opened by hand and immediately places a reduce-only
+stop on the exchange, plus a limit order at the target. It never opens anything itself. If the stop
+cannot be placed, the position is *not* adopted and an urgent push says so — the bot refuses to
+pretend a position is protected when it isn't.
 
-**Scout** fetches live market data from Hyperliquid (funding rates, predicted funding, prices), applies EMA smoothing (fast 3min / slow 15min), and filters through a liquidity whitelist (top-N by 24h volume).
+**Ledger.** Monthly P&L rebuilt from `userFillsByTime`, split into bot / adopted / manual, with fees
+and funding broken out. Click a month to expand a Mon–Sun calendar of daily results with weekly
+subtotals. Past months are frozen in a snapshot; the current month is recomputed live.
 
-**Coordinator** routes decisions between two strategies:
+**Risk rails.** Daily stop-loss (net of fees, from fills), circuit breaker after consecutive losses,
+notional cap, leverage cap, blacklist. These gate the trade ticket, not just the bot.
 
-| Strategy | Signal | Hold Time | Entry Condition |
-|----------|--------|-----------|-----------------|
-| **Carry** (grandfather) | Stable high funding | Hours to days | APY > threshold, fee-gate < 24h breakeven |
-| **Fade** | Extreme spike about to drop | 30-120 min | APY > 200%, predicted drop > 40%, fee-gate < 2h |
+**Views.** Screen (coins ranked by friction, not by movement), OI history, Coin of the day, the
+chart-reading journal, and a coach that breaks a chart down 4h → 1h → 5m. All of them are explicitly
+labelled as analysis, never as a proven-edge signal.
 
-Single position slot. Carry has priority. If a position is open, only the strategy that opened it can manage or close it.
-
-**Executor** handles paper and production trades, with circuit breaker, drawdown guard, volatility filter, and OI cap detection.
-
-## Defensive Gates
-
-The bot is conservative by design. Every entry must pass:
-
-- **Fee-gate**: `hours_to_breakeven(apy) <= max_horizon` (won't enter if funding can't cover 0.1% round-trip)
-- **Liquidity whitelist**: only top-N coins by 24h notional volume (default: top 50, $10M floor)
-- **Predicted funding filter**: carry skips coins where predicted rate drops >30%; fade specifically targets them
-- **Dynamic min-hold**: position must be held long enough for funding to cover its own fees
-- **Funding-gate**: blocks soft exits within 10 min of hourly funding payout
-- **Delist hysteresis**: 3 consecutive ticks (45s) before closing on "disappeared" coin + 30min cooldown
-- **Circuit breaker**: pauses after 3 consecutive losses
-- **Max drawdown**: freezes new entries if equity drops >X% from session start
-
-## Quick Start
-
-```bash
-# Clone and install
-git clone https://github.com/youruser/hl-funding-scanner.git
-cd hl-funding-scanner
-npm install
-
-# Configure
-cp .env.example .env
-# Edit .env: set PUBLIC_WALLET_ADDRESS, adjust thresholds
-
-# Run in paper mode (no real trades)
-npm start
-
-# Run tests
-npm test
-```
-
-### Docker (recommended for production)
-
-```bash
-docker-compose up -d --build
-
-# Logs
-docker-compose logs -f --tail 100
-
-# Dashboard
-# http://localhost:3010
-```
-
-## Configuration
-
-All settings via environment variables (see `.env.example`):
-
-### Core Trading
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `TRADING_MODE` | `PAPER` | `PAPER` or `PRODUCTION` |
-| `ENTRY_APY_THRESHOLD` | `40` | Minimum APY to enter (carry) |
-| `MIN_APY_THRESHOLD` | `20` | Exit when slow EMA drops below this |
-| `EXIT_BUFFER` | `5` | Effective exit = MIN_APY - buffer |
-| `LEVERAGE` | `1` | Position leverage (1 = no leverage) |
-| `FAKE_BALANCE` | _(empty)_ | Virtual balance for paper testing |
-
-### Fade Strategy
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `FADE_ENABLED` | `true` | Enable/disable fade strategy |
-| `FADE_MAX_HOLD_MINUTES` | `120` | Hard time-stop |
-| `FADE_MIN_CURRENT_APY` | `200` | Minimum current APY for fade entry |
-| `FADE_MIN_DROP_PCT` | `40` | Minimum predicted funding drop (%) |
-
-### Risk Management
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MAX_DRAWDOWN_PCT` | `10` | Freeze new entries at -X% drawdown |
-| `CB_MAX_LOSSES` | `3` | Circuit breaker: max consecutive losses |
-| `CB_PAUSE_HOURS` | `2` | Pause duration after circuit breaker trips |
-| `LIQUID_TOP_N` | `50` | Liquidity whitelist size |
-| `LIQUID_MIN_VOLUME` | `10000000` | $10M 24h volume floor |
-
-### Notifications
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `TELEGRAM_BOT_TOKEN` | _(empty)_ | Telegram bot token |
-| `TELEGRAM_CHAT_ID` | _(empty)_ | Telegram chat ID |
-| `SILENT_START_HOUR` | `22` | Silent mode start (no sound) |
-| `SILENT_END_HOUR` | `9` | Silent mode end |
+**Taxes.** PIT-38 summary in PLN, fed by the same fills as the ledger.
 
 ## Architecture
 
 ```
-src/
-  app/
-    tick.js          # Main 15s loop
-    alerts.js        # Anomaly, FOMO, PnL, daily/weekly/monthly recaps
-    lifecycle.js     # Startup, shutdown, state persistence
-    state.js         # Shared mutable state + constants
-    integrity.js     # Detects positions closed externally
-    status.js        # Status collector for Telegram /status
-  core/
-    config.js        # ENV parsing + validation
-    database.js      # SQLite (better-sqlite3), positions + history
-    logger.js        # Winston, env-aware (silent in tests)
-    universe.js      # Shared tradeable set cache
-  modules/
-    scout.js         # Market data, EMA, liquidity whitelist
-    strategist.js    # Carry strategy (grandfather)
-    strategistFade.js # Fade strategy (predicted funding spike)
-    coordinator.js   # Routes between strategies, single slot
-    executor/        # Paper + production trade execution
-    reporter.js      # Telegram notifications + callback polling
-    dashboard/       # Express + vanilla JS status dashboard
-    wallet.js        # Balance fetching
-    exchange.js      # Hyperliquid SDK wrapper
-    volatility.js    # Price volatility filter
+tick (15s)
+  ├─ daily risk        net-of-fees day P&L → alert + entry gate
+  ├─ integrity         did something close on the exchange behind our back?
+  ├─ orphan check      new manual position → adopt it (stop first, then DB)
+  ├─ adopt supervise   trail / breakeven ratchet on every adopted position
+  └─ scan              market data for the dashboard views
+
+ws exit loop (2s)      runs adopted positions on live WS prices, so exits do not
+                       wait for the 15s tick
 ```
 
-### Database
+The executor is an **exit-only** path: `execute()` handles CLOSE, and OPEN is refused with a warning.
+Orders are placed through `executor/triggers.js`.
 
-SQLite with two tables:
+Source of truth is always Hyperliquid fills, never the local `positions` table — the DB is a mirror
+and mirrors drift (see the incident notes in the code).
 
-- **positions**: open/closed positions with `strategy_id` (`carry` | `fade`)
-- **history**: closed trades (auto-archived to `data/history_archive.json`)
-
-Schema migration runs automatically on startup.
-
-### Telegram Bot
-
-The bot sends notifications for:
-- Position open/close/rotate
-- Anomaly alerts (APY drops >30% in one tick)
-- FOMO alerts (better coin available but rotation not worth the fees)
-- PnL alerts (unrealized PnL > 3% of equity)
-- Daily recap (21:00), weekly (Mondays), monthly (1st)
-- Circuit breaker / drawdown events
-
-Interactive: press the "Status" button or send `/status` for a live snapshot.
-
-## Realistic Expectations
-
-This bot is fee-aware and won't lose money on fees. But returns scale linearly with deposit:
-
-| Deposit | Estimated Daily (active market) | Notes |
-|---------|--------------------------------|-------|
-| $50 | $0.02 - $0.05 | Mostly idle in calm markets |
-| $100 | $0.05 - $0.12 | Catches 1-2 trades/week |
-| $500 | $0.25 - $0.60 | Starts to be meaningful |
-| $1,000 | $0.50 - $1.20 | Target range for $1/day |
-
-In quiet funding regimes (APY < 36% across all liquid coins), the bot will sit idle. This is correct behavior, not a bug.
-
-## Tests
-
-50 unit tests covering both strategies and the coordinator:
+## Quick start
 
 ```bash
-npm test
+npm install
+cp .env.example .env      # set PUBLIC_WALLET_ADDRESS at minimum
+
+npm test                  # 379 tests
+npm run build:dash        # build the dashboard front-end
+npm start                 # run the bot + dashboard on :3010
 ```
 
-Tests use `node:test` + `node:assert/strict` (zero test dependencies). Logger is silenced via `NODE_ENV=test`.
+Front-end development with hot reload:
 
-## License
+```bash
+npm run dev:dash          # vite on :5173, proxies /api to :3010
+```
 
-MIT
+### Docker (production)
+
+```bash
+docker compose up -d --build
+docker compose logs -f --tail 100
+```
+
+The dashboard lives behind a Cloudflare tunnel; a second login layer switches on when
+`DASHBOARD_USER` and `DASHBOARD_PASS` are set.
+
+## Pages
+
+| URL | What it is |
+|-----|------------|
+| `/` | Equity, active position, Screen, activity |
+| `/ledger` | Monthly P&L + daily calendar + tax summary |
+| `/statistics` | Lifetime cuts: per coin, per side, MFE/MAE, daily heatmap |
+| `/oi` | Nanny panel, Coin of the day, OI history |
+| `/journal` | Chart-reading drill: mark up a coin a day ahead, review it the next day |
+| `/lab` | Running forward tests and closed verdicts |
+| `/orderbook`, `/orderbook-sim` | Live book, and a trainer for execution cost |
+
+Old `/page.html` addresses answer with a 301 to the clean URL.
+
+## Configuration
+
+Everything is environment variables; `.env.example` carries the full list with comments.
+The ones that matter most:
+
+| Variable | Default | What it controls |
+|----------|---------|------------------|
+| `PUBLIC_WALLET_ADDRESS` | — | Required. The account the bot reads and trades. |
+| `HL_AGENT_PRIVATE_KEY` | — | Agent wallet (recommended — it cannot withdraw). |
+| `ADOPT_ENABLED` | `true` | The nanny. Off means manual positions stay unprotected. |
+| `ADOPT_STOP_PCT` | `5` | Stop distance when ATR is unavailable. |
+| `ADOPT_TP_RR` | `1` | Target as a multiple of risk. |
+| `DAILY_LOSS_LIMIT_ENABLED` | `true` | Daily stop: blocks new entries until midnight. |
+| `WALLET_LEVERAGE_CAP` | — | Hard cap above whatever the exchange allows. |
+| `NTFY_*` | — | Push notifications; quiet hours are respected. |
+
+## Testing
+
+```bash
+npm test        # node:test, no framework
+npm run lint    # eslint
+```
+
+`tests/imports.test.js` walks every relative import in `src/` and `tests/` and fails if one does not
+resolve. It exists because a dangling import survived 378 green tests and would have taken the bot
+down on start.
+
+## What this project is not
+
+It is not a source of income, and it is not looking for a strategy. Fees were 100% of the historical
+loss; the response was fewer and larger trades by hand, with the bot doing the part I am bad at —
+holding a stop and not touching the position. Numbers that could support a claim of edge get a
+forward test with a pre-registered decision date, and most of them close negative. That is the point.
