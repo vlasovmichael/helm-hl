@@ -129,7 +129,7 @@ function resultHtml(r) {
   const sideLine = r.userSide
     ? `<span class="wi-userside">your side: ${r.userSide}</span>`
     : "";
-  const head = `<div class="wi-title">#${escapeHtml(r.coin)} <span class="wi-px">$${fmtPrice(r.price)}</span> ${sideLine}</div>`;
+  const head = `<div class="wi-title">#${escapeHtml(r.coin)} <span class="wi-px">${fmtPrice(r.price)}</span> ${sideLine}</div>`;
 
   const c = r.coach;
   // Фолбэк: если coach не построился (нет свечей) — старый fade-вердикт.
@@ -164,9 +164,9 @@ function resultHtml(r) {
 
   // ── Уровни ──
   const supLine = c.support != null
-    ? `<div><span>Support</span>$${fmtPrice(c.support)} <em>(${fmtPct(-Math.abs(c.distToSupport))})</em></div>` : "";
+    ? `<div><span>Support</span>${fmtPrice(c.support)} <em>(${fmtPct(-Math.abs(c.distToSupport))})</em></div>` : "";
   const resLine = c.resistance != null
-    ? `<div><span>Resistance</span>$${fmtPrice(c.resistance)} <em>(${fmtPct(Math.abs(c.distToResistance))})</em></div>` : "";
+    ? `<div><span>Resistance</span>${fmtPrice(c.resistance)} <em>(${fmtPct(Math.abs(c.distToResistance))})</em></div>` : "";
   const levels = (supLine || resLine)
     ? `<div class="wi-plan"><div class="wi-plan-title">Nearest levels</div><div class="wi-plan-grid">${supLine}${resLine}</div></div>` : "";
 
@@ -174,9 +174,9 @@ function resultHtml(r) {
   let plan = "";
   if (c.plan) {
     const rr = c.plan.rr != null ? `${c.plan.rr.toFixed(2)}R` : "—";
-    const stop = c.plan.stop != null ? `$${fmtPrice(c.plan.stop)}` : "—";
-    const target = c.plan.target != null ? `$${fmtPrice(c.plan.target)}` : "—";
-    const inval = c.plan.invalidation != null ? `$${fmtPrice(c.plan.invalidation)}` : "—";
+    const stop = c.plan.stop != null ? `${fmtPrice(c.plan.stop)}` : "—";
+    const target = c.plan.target != null ? `${fmtPrice(c.plan.target)}` : "—";
+    const inval = c.plan.invalidation != null ? `${fmtPrice(c.plan.invalidation)}` : "—";
     // Санити стопа vs ATR — подсветка под строкой стопа.
     const ss = c.stopSanity;
     const ssNote = ss

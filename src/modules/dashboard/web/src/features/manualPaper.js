@@ -242,7 +242,7 @@ function rowHtml(p) {
   const sub =
     p.managed && (p.stopPrice != null || p.peakPct)
       ? `<span class="mp-sub">peak ${p.peakPct ? fmtPct(p.peakPct) : "0%"}${
-          p.stopPrice != null ? ` · stop $${fmtPrice(p.stopPrice)}` : ""
+          p.stopPrice != null ? ` · stop ${fmtPrice(p.stopPrice)}` : ""
         }</span>`
       : "";
   return `
@@ -251,7 +251,7 @@ function rowHtml(p) {
       <td class="c ${sideCls}"><strong>${arrow} ${escapeHtml(p.side)}</strong></td>
       <td class="r">${p.leverage}×</td>
       <td class="r">${fmtUsd(p.sizeUsd)}</td>
-      <td class="r">$${fmtPrice(p.entryPrice)}</td>
+      <td class="r">${fmtPrice(p.entryPrice)}</td>
       <td class="r" data-mp-mark>${p.markPrice != null ? "$" + fmtPrice(p.markPrice) : "—"}</td>
       <td class="r ${pnlCls}"><strong>${pnl == null ? "—" : fmtUsd(pnl)}</strong>${
         roe == null ? "" : `<span class="mp-roe">${fmtPct(roe)}</span>`
