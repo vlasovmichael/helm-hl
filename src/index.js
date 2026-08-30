@@ -22,6 +22,7 @@ import { startWsExitLoop } from './app/wsExitTick.js';
 import { startTickWatchdog } from './app/tickWatchdog.js';
 import { startMemWatch } from './app/memWatch.js';
 import { startWatchlistAlerts } from './modules/watchlistAlerts.js';
+import { startWinnersWatch } from './modules/winnersWatch.js';
 import { sendDailyDigest } from './modules/mailDigest.js';
 import { shutdown } from './app/lifecycle.js';
 import { startToastBridge } from './app/toastBridge.js';
@@ -85,6 +86,11 @@ async function main() {
   // Watchlist-будильник: «моя монета (BTC/HYPE/SOL) задвигалась + OI подтверждает».
   // Узкий пуш только по ALERT_WATCHLIST, не сделка. WATCHLIST_ALERT_ENABLED (default on). Fail-soft.
   startWatchlistAlerts();
+
+  // «Гении Уолл-стрит» открыли/закрыли позу → холодный пуш + колокольчик.
+  // Наблюдение за замороженным списком, вердикт теста 10.11 не трогает.
+  // WINNERS_WATCH_ENABLED (default on). Fail-soft.
+  startWinnersWatch();
 
   // ── Ежедневный почтовый дайджест — 21:05 (Europe/Warsaw), после Daily Recap ──
   // Отчёт за сутки (пуши + сводка стратегий) на self-hosted Listmonk. Fail-soft:
