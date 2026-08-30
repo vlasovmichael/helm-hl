@@ -36,7 +36,9 @@ import {
   getActivePosition,
 } from '../core/database.js';
 
-const VERSION = 1;
+// v2 = в снапшот добавлена дневная разбивка (months[k].days). Снапшоты v1
+// читаются как есть — у их месяцев просто нет дней (разворот покажет прочерк).
+const VERSION = 2;
 // Аккаунт начал торговать 8 апреля 2026. Берём с 1 апреля с запасом.
 const LEDGER_START_MS = Date.UTC(2026, 3, 1);
 const SNAPSHOT_FILE = join('data', 'ledger_months.json');
@@ -51,13 +53,41 @@ function monthKey(ms) {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
 }
 
+function dayKey(ms) {
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+// Понедельник ISO-недели, в которую попал день (UTC).
+function weekKey(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  const shift = (d.getUTCDay() + 6) % 7;  // Пн=0 … Вс=6
+  d.setUTCDate(d.getUTCDate() - shift);
+  return d.toISOString().slice(0, 10);
+}
+
 function emptyMonth() {
   return {
     botPnl: 0, botFees: 0, botCount: 0, botWins: 0,
     adoptedPnl: 0, adoptedFees: 0, adoptedCount: 0, adoptedWins: 0,
     manualPnl: 0, manualFees: 0, manualCount: 0, manualWins: 0,
     funding: 0,
+    days: {},  // 'YYYY-MM-DD' → тот же бакет без .days
   };
+}
+
+function emptyDay() {
+  const d = emptyMonth();
+  delete d.days;
+  return d;
+}
+
+// Одна проводка кладётся сразу в месячный и в дневной бакет.
+function addTrade(bucket, t) {
+  const p = t.source === 'bot' ? 'bot' : t.source === 'adopted' ? 'adopted' : 'manual';
+  bucket[`${p}Pnl`] += t.pnl;
+  bucket[`${p}Fees`] += t.fee;
+  bucket[`${p}Count`] += 1;
+  if (t.pnl > 0) bucket[`${p}Wins`] += 1;
 }
 
 function totalCount(m) {
@@ -75,7 +105,7 @@ function loadSnapshot() {
   try {
     const raw = readFileSync(SNAPSHOT_FILE, 'utf-8');
     const data = JSON.parse(raw);
-    if (data?.version === VERSION && data.months && typeof data.months === 'object') {
+    if ((data?.version === VERSION || data?.version === 1) && data.months && typeof data.months === 'object') {
       return data.months;
     }
   } catch {
@@ -128,25 +158,19 @@ export async function getMonthlyLedger() {
   const trades = reconstructRoundTrips(fills, botTrades, botOidSet)
     .filter((t) => t.status === 'closed');
   const live = {};
+  const bucketsFor = (ms) => {
+    const mk = monthKey(ms);
+    if (!live[mk]) live[mk] = emptyMonth();
+    const m = live[mk];
+    const dk = dayKey(ms);
+    if (!m.days[dk]) m.days[dk] = emptyDay();
+    return [m, m.days[dk]];
+  };
   for (const t of trades) {
-    const k = monthKey(t.closeTime || t.entryTime);
-    if (!live[k]) live[k] = emptyMonth();
-    const m = live[k];
-    if (t.source === 'bot') {
-      m.botPnl += t.pnl; m.botFees += t.fee; m.botCount += 1;
-      if (t.pnl > 0) m.botWins += 1;
-    } else if (t.source === 'adopted') {
-      m.adoptedPnl += t.pnl; m.adoptedFees += t.fee; m.adoptedCount += 1;
-      if (t.pnl > 0) m.adoptedWins += 1;
-    } else {
-      m.manualPnl += t.pnl; m.manualFees += t.fee; m.manualCount += 1;
-      if (t.pnl > 0) m.manualWins += 1;
-    }
+    for (const b of bucketsFor(t.closeTime || t.entryTime)) addTrade(b, t);
   }
   for (const f of funding) {
-    const k = monthKey(f.ts);
-    if (!live[k]) live[k] = emptyMonth();
-    live[k].funding += f.usdc;
+    for (const b of bucketsFor(f.ts)) b.funding += f.usdc;
   }
 
   // 4. merge со снапшотом + заморозка прошлых месяцев.
@@ -202,6 +226,7 @@ export async function getMonthlyLedger() {
       net: round(net),
       cumulativeNet: round(runningNet),
       isCurrent: k === curKey,
+      days: buildDays(m.days),
     };
   });
 
@@ -227,6 +252,29 @@ export async function getMonthlyLedger() {
   };
   cache = { ts: Date.now(), payload };
   return payload;
+}
+
+// Дневная разбивка месяца для разворота строки. week = понедельник ISO-недели,
+// по нему фронт группирует дни и рисует недельный итог. Дни без активности не
+// отдаём — в таблице им нечего показать.
+function buildDays(days) {
+  if (!days || typeof days !== 'object') return [];
+  return Object.keys(days).sort().map((d) => {
+    const x = days[d];
+    const botNet = x.botPnl - x.botFees;
+    const adoptedNet = (x.adoptedPnl || 0) - (x.adoptedFees || 0);
+    const manualNet = x.manualPnl - x.manualFees;
+    return {
+      date: d,
+      week: weekKey(d),
+      botNet: round(botNet), botCount: x.botCount, botWins: x.botWins,
+      adoptedNet: round(adoptedNet), adoptedCount: x.adoptedCount || 0, adoptedWins: x.adoptedWins || 0,
+      manualNet: round(manualNet), manualCount: x.manualCount, manualWins: x.manualWins,
+      fees: round(x.botFees + (x.adoptedFees || 0) + x.manualFees),
+      funding: round(x.funding),
+      net: round(botNet + adoptedNet + manualNet + x.funding),
+    };
+  });
 }
 
 function emptyTotals() {

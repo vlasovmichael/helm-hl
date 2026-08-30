@@ -58,12 +58,17 @@
     color: var(--text-muted);
     margin-bottom: 6px;
   }
+  // color не фиксируем: .pos/.neg ниже слабее по специфичности и раньше
+  // проигрывали — карточки всегда были нейтральные.
   .v {
     font-family: var(--font-mono);
     font-size: 21px;
     font-weight: 600;
-    color: var(--text-primary);
     letter-spacing: -0.01em;
+
+    &.pos { color: var(--green); }
+    &.neg { color: var(--red); }
+    &.dim { color: var(--text-primary); }
   }
   .vsub {
     font-family: var(--font-mono);
@@ -172,16 +177,6 @@ tfoot td {
     font-family: var(--font-sans);
   }
 }
-.footnote {
-  margin-top: 18px;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--text-muted);
-
-  b {
-    color: var(--text-secondary);
-  }
-}
 .loading,
 .errbox {
   padding: 40px;
@@ -226,6 +221,71 @@ tfoot td {
     th,
     td {
       padding: 8px 9px;
+    }
+  }
+}
+
+/* разворот месяца → дни, сгруппированные по неделям */
+tr.expandable {
+  cursor: pointer;
+
+  &:hover {
+    background: var(--canvas-subtle);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--accent, var(--text-secondary));
+    outline-offset: -2px;
+  }
+}
+.twisty {
+  display: inline-block;
+  width: 14px;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+tr.daybreak > td {
+  padding: 0;
+  background: var(--canvas-subtle);
+  border-top: 1px solid var(--hairline);
+}
+table.daily {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-family: var(--font-mono);
+
+  th,
+  td {
+    padding: 7px 14px;
+    text-align: right;
+    white-space: nowrap;
+  }
+  th:first-child,
+  td:first-child {
+    text-align: left;
+    padding-left: 34px;
+  }
+  thead th {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-faint);
+    font-family: var(--font-sans);
+    font-weight: 600;
+    border-bottom: 1px solid var(--hairline);
+  }
+  tbody tr:not(.wk) td.day {
+    color: var(--text-muted);
+  }
+  tr.wk td {
+    background: var(--card-bg-elev);
+    border-top: 1px solid var(--hairline);
+    font-weight: 600;
+
+    &.day {
+      font-family: var(--font-sans);
+      color: var(--text-secondary);
+      padding-left: 20px;
     }
   }
 }

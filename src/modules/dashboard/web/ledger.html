@@ -65,8 +65,6 @@
         </div>
       </div>
 
-      <div class="footnote" id="footnote"></div>
-
       <!-- Tax Summary (перенесено с дашборды; рендерит app.js через /api/tax-summary) -->
       <section class="card">
         <div class="card-header">
@@ -204,9 +202,11 @@
           c
             ? `<span class="sub-meta">${w}/${c} · ${Math.round((100 * w) / c)}%</span>`
             : "";
+        const has = (m.days || []).length > 0;
         return `
-          <tr class="${m.isCurrent ? "current" : ""}">
-            <td class="month">${monthLabel(m.month)}</td>
+          <tr class="${m.isCurrent ? "current" : ""} ${has ? "expandable" : ""}"
+              ${has ? `data-month="${m.month}" tabindex="0" role="button" aria-expanded="false"` : ""}>
+            <td class="month"><span class="twisty">${has ? "▸" : ""}</span>${monthLabel(m.month)}</td>
             <td class="grp-edge ${cls(m.botNet)}">${fmt(m.botNet)}${wr(m.botWins, m.botCount)}</td>
             <td class="col-opt dim">${m.botCount || "—"}</td>
             <td class="grp-edge ${cls(m.adoptedNet)}">${m.adoptedCount ? fmt(m.adoptedNet) : "—"}${wr(m.adoptedWins, m.adoptedCount)}</td>
@@ -217,7 +217,102 @@
             <td class="col-opt ${cls(m.funding)}">${m.funding ? fmt(m.funding) : "—"}</td>
             <td class="grp-edge net-cell ${cls(m.net)}">${fmt(m.net)}</td>
             <td class="${cls(m.cumulativeNet)}">${fmt(m.cumulativeNet)}</td>
+          </tr>
+          ${has ? `<tr class="daybreak" data-days="${m.month}" hidden><td colspan="11">${daysBlock(m)}</td></tr>` : ""}`;
+      }
+
+      // ── Разворот месяца: дни, сгруппированные по ISO-неделям (Пн–Вс) ──
+      const dayLabel = (d) => {
+        const dt = new Date(d + "T00:00:00Z");
+        const wd = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
+          dt.getUTCDay()
+        ];
+        return `${wd} ${dt.getUTCDate()}`;
+      };
+      const weekLabel = (mon) => {
+        const a = new Date(mon + "T00:00:00Z");
+        const b = new Date(a);
+        b.setUTCDate(b.getUTCDate() + 6);
+        const mm = (x) =>
+          monthLabel(x.toISOString().slice(0, 7)).split(" ")[0];
+        return `${mm(a)} ${a.getUTCDate()} – ${mm(b)} ${b.getUTCDate()}`;
+      };
+
+      function dayRow(d) {
+        const trades = d.botCount + d.adoptedCount + d.manualCount;
+        return `
+          <tr>
+            <td class="day">${dayLabel(d.date)}</td>
+            <td class="dim">${trades || "—"}</td>
+            <td class="${cls(d.botNet)}">${d.botCount ? fmt(d.botNet) : "—"}</td>
+            <td class="${cls(d.adoptedNet)}">${d.adoptedCount ? fmt(d.adoptedNet) : "—"}</td>
+            <td class="${cls(d.manualNet)}">${d.manualCount ? fmt(d.manualNet) : "—"}</td>
+            <td class="neg">${d.fees ? fmt(-d.fees, false) : "—"}</td>
+            <td class="net-cell ${cls(d.net)}">${fmt(d.net)}</td>
           </tr>`;
+      }
+
+      function weekRow(mon, days) {
+        const sum = (f) => days.reduce((a, d) => a + f(d), 0);
+        const net = sum((d) => d.net);
+        const trades = sum((d) => d.botCount + d.adoptedCount + d.manualCount);
+        const wins = sum((d) => d.botWins + d.adoptedWins + d.manualWins);
+        const green = days.filter((d) => d.net > 0).length;
+        return `
+          <tr class="wk">
+            <td class="day">Week ${weekLabel(mon)}</td>
+            <td class="dim">${trades || "—"}</td>
+            <td class="dim" colspan="3">${trades ? `${wins}/${trades} win · ${green}/${days.length} зелёных дней` : ""}</td>
+            <td class="neg">${sum((d) => d.fees) ? fmt(-sum((d) => d.fees), false) : "—"}</td>
+            <td class="net-cell ${cls(net)}">${fmt(net)}</td>
+          </tr>`;
+      }
+
+      function daysBlock(m) {
+        const byWeek = new Map();
+        for (const d of m.days) {
+          if (!byWeek.has(d.week)) byWeek.set(d.week, []);
+          byWeek.get(d.week).push(d);
+        }
+        const body = [...byWeek.entries()]
+          .map(
+            ([mon, days]) => weekRow(mon, days) + days.map(dayRow).join(""),
+          )
+          .join("");
+        return `
+          <table class="daily">
+            <thead>
+              <tr>
+                <th>Day</th><th>#</th><th>Bot</th><th>Adopted</th>
+                <th>Manual</th><th>Fees</th><th>Net</th>
+              </tr>
+            </thead>
+            <tbody>${body}</tbody>
+          </table>`;
+      }
+
+      function bindExpand(host) {
+        const toggle = (tr) => {
+          const panel = host.querySelector(
+            `tr.daybreak[data-days="${tr.dataset.month}"]`,
+          );
+          if (!panel) return;
+          const open = panel.hidden;
+          panel.hidden = !open;
+          tr.setAttribute("aria-expanded", String(open));
+          tr.querySelector(".twisty").textContent = open ? "▾" : "▸";
+        };
+        host.addEventListener("click", (e) => {
+          const tr = e.target.closest("tr.expandable");
+          if (tr) toggle(tr);
+        });
+        host.addEventListener("keydown", (e) => {
+          if (e.key !== "Enter" && e.key !== " ") return;
+          const tr = e.target.closest("tr.expandable");
+          if (!tr) return;
+          e.preventDefault();
+          toggle(tr);
+        });
       }
 
       function renderTable(data) {
@@ -258,15 +353,9 @@
               </tr>
             </tfoot>
           </table>`;
-        document.getElementById("table-host").innerHTML = head;
-      }
-
-      function renderFootnote(data) {
-        const t = data.totals;
-        document.getElementById("footnote").innerHTML = `
-          <b>Bot</b> = бот открыл и закрыл сам. <b>Adopted</b> = я вошёл руками, бот подхватил и закрыл (adopt-нянька). <b>Manual</b> = и вход, и выход мои.
-          Net = price&nbsp;P&L − комиссии + funding. Прошлые месяцы заморожены в снапшоте, текущий считается вживую из fills.
-          <br/>Комиссий уплачено за период: <b>${fmt(t.fees, false)}</b> — это ключевая статья на малом депозите.`;
+        const host = document.getElementById("table-host");
+        host.innerHTML = head;
+        bindExpand(host);
       }
 
       async function load() {
@@ -283,7 +372,6 @@
           }
           renderSummary(data.totals);
           renderTable(data);
-          renderFootnote(data);
         } catch (e) {
           document.getElementById("table-host").innerHTML =
             '<div class="errbox">Ошибка загрузки: ' + e.message + "</div>";
