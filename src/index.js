@@ -16,16 +16,11 @@ import { dailyJob as taxDailyJob } from './modules/taxCollector/index.js';
 import { drainOutbox as taxDrainOutbox } from './modules/taxCollector/pusher.js';
 import { state, TICK_INTERVAL_MS, INTEGRITY_GRACE_PERIOD_MS, SHUTDOWN_TIMEOUT_MS } from './app/state.js';
 import { tick } from './app/tick.js';
-import { restoreHunterTrailIfNeeded } from './app/hunterTrailArm.js';
 import { reportRestartIfUnclean } from './app/restartWatch.js';
 import { startPriceFeed } from './core/priceFeed.js';
 import { startWsExitLoop } from './app/wsExitTick.js';
-import { startWsEntryLoop } from './app/wsEntryTick.js';
 import { startTickWatchdog } from './app/tickWatchdog.js';
 import { startMemWatch } from './app/memWatch.js';
-import { startSetupSwingAlerts } from './modules/setupScannerAlerts.js';
-import { startHotMoversAlerts } from './modules/hotMoversAlerts.js';
-import { startFadeHotAlerts } from './modules/fadeHotAlerts.js';
 import { startWatchlistAlerts } from './modules/watchlistAlerts.js';
 import { sendDailyDigest } from './modules/mailDigest.js';
 import { shutdown } from './app/lifecycle.js';
@@ -86,19 +81,6 @@ async function main() {
   // Gated на HL_WS_FEED_ENABLED. Поднимает allMids-фид + сверяет с поллингом,
   // торговую логику не трогает. Fail-soft: ошибки WS не валят бота.
   startPriceFeed();
-
-  // ── Setup Scanner Swing — entry/exit ntfy-алерты ──
-  // Контекст-пуши для ручной торговли (вход в зону / контекст против позиции).
-  // Не торгует. Gated на SETUP_SWING_ALERT_ENABLED (default on). Fail-soft.
-  startSetupSwingAlerts();
-
-  // Пуш «мувер стал enterable»: направленный Setup перешёл в чейз-зону 🎯
-  // (улетел → откатился). Не торгует. Gated на HOT_MOVERS_ALERT_ENABLED. Fail-soft.
-  startHotMoversAlerts();
-
-  // Fade-high-ER feed: ВСЕ гейтованные fade-сетапы (выдохшийся хвост в горячем рынке)
-  // в ntfy — премиум-сигналы, не сделки. Независим от paper-слота. FADEHOT_ALERT_FEED_ENABLED.
-  startFadeHotAlerts();
 
   // Watchlist-будильник: «моя монета (BTC/HYPE/SOL) задвигалась + OI подтверждает».
   // Узкий пуш только по ALERT_WATCHLIST, не сделка. WATCHLIST_ALERT_ENABLED (default on). Fail-soft.
@@ -196,26 +178,14 @@ async function main() {
     `[System] Integrity check grace period: ${INTEGRITY_GRACE_PERIOD_MS / 1000}s`,
   );
 
-  // Hunter trail restore: если armed-at-shutdown — вернуть exchange TP-trigger.
-  try {
-    await restoreHunterTrailIfNeeded();
-  } catch (err) {
-    logger.warn(`[System] Hunter trail restore failed (non-fatal): ${err.message}`);
-  }
-
   await tick();
 
   state.tickTimer = setInterval(tick, TICK_INTERVAL_MS);
 
-  // ── WS-tick exits (Stage 2) ────────────────────
-  // Считает выходы активной hunter/hunter_long позиции на живых WS-ценах между
-  // 15-сек тиками. Gated на HL_WS_EXITS_ENABLED, делит mutex с tick().
+  // ── WS-tick exits ──────────────────────────────
+  // Ведёт adopt/manual_paper позы на живых WS-ценах между 15-сек тиками:
+  // сопровождение ручной позы не должно зависеть от здоровья сканера.
   startWsExitLoop();
-
-  // ── WS-tick entries (Stage 3) ──────────────────
-  // Открывает hunter/hunter_long быстрее 15-сек скана. Gated на
-  // HL_WS_ENTRIES_ENABLED (default OFF, меняет частоту входов), mutex с tick().
-  startWsEntryLoop();
 
   // ── Сторож тика ────────────────────────────────
   // Тик может встать тихо (затор весового бюджета 2026-07-31) — тогда всё, что

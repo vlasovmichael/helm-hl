@@ -5,34 +5,15 @@
 
 import { config } from '../../core/config.js';
 import { logger } from '../../core/logger.js';
-import { state as appState } from '../../app/state.js';
-import { getAccountSummary } from '../exchange.js';
 import { invalidateAccountState } from '../../core/accountState.js';
-import { getAccountEquity } from '../wallet.js';
-import { checkVolatility } from '../volatility.js';
-import {
-  paperClose, hunterPaperOpen, hunterLongPaperOpen, fadeHotPaperOpen,
-} from './paper.js';
+import { paperClose } from './paper.js';
 import { productionClose } from './close.js';
-import {
-  productionHunterOpen, productionHunterLongOpen,
-} from './hunterOpen.js';
 import { cancelOrderFor } from '../exchange.js';
-import {
-  notifyOpenBlocked, notifyDrawdownBreached,
-} from './notifications.js';
-import {
-  getCircuitBreakerStatus, checkDrawdown,
-  CB_PAUSE_MS, isOiCapBanned, getOiCapBanRemainMs,
-} from './state.js';
-import { notify } from './hooks.js';
 
 // Re-exports для внешних модулей
 export { getRuntimeBlacklist, getStateSnapshot, getOiCapBans } from './state.js';
 export { on } from './hooks.js';
 
-// Чтобы не спамить TG алертом о drawdown — флаг на сессию
-let drawdownAlertSent = false;
 
 /**
  * Исполняет сигнал от Стратега.
@@ -67,186 +48,14 @@ async function afterMutation(resultPromise) {
   }
 }
 
-// ── Preflight: Circuit Breaker + Drawdown ──────
-
-/**
- * Защитные проверки перед открытием новой позиции.
- * @param {string} coin
- * @param {number|null} smoothedApy — APY кандидата для Volatility-фильтра. null = пропустить vol check.
- * @returns {Promise<{ allowed: boolean, reason?: string, details?: string }>}
- */
-async function preflightChecks(coin, smoothedApy = null) {
-  // 1. Circuit Breaker
-  const cb = getCircuitBreakerStatus();
-  if (cb.broken) {
-    const remainMin = Math.ceil(cb.remainMs / 60_000);
-    logger.warn(
-      `[Executor] ⛔ Circuit breaker active — ${cb.losses} losses, ${remainMin}min remaining`,
-    );
-    return {
-      allowed: false,
-      reason: 'Circuit Breaker',
-      details: `${cb.losses} убытков подряд. Пауза ещё <b>${remainMin} мин</b>.`,
-    };
-  }
-
-  // 2. Max Drawdown Guard
-  if (appState.sessionStartEquity > 0) {
-    let equity = 0;
-    try {
-      if (config.isProduction) {
-        const summary = await getAccountSummary();
-        equity = summary.equity;
-      } else {
-        // accountValue (equity), не withdrawable: открытая позиция занимает маржу,
-        // withdrawable падает до ~0 и даёт false-positive drawdown breach.
-        equity = await getAccountEquity();
-      }
-    } catch (err) {
-      logger.warn(`[Executor] Drawdown check: failed to get equity: ${err.message}`);
-      return { allowed: true };  // не блокируем при ошибке API
-    }
-
-    const dd = checkDrawdown(equity, appState.sessionStartEquity);
-    if (dd.breached) {
-      logger.error(
-        `[Executor] ⛔ MAX DRAWDOWN BREACHED: -${dd.drawdownPct.toFixed(2)}% ` +
-          `($${appState.sessionStartEquity.toFixed(2)} → $${equity.toFixed(2)})`,
-      );
-
-      if (!drawdownAlertSent) {
-        drawdownAlertSent = true;
-        await notifyDrawdownBreached({
-          equity,
-          sessionStart: appState.sessionStartEquity,
-          drawdownPct: dd.drawdownPct,
-        });
-      }
-
-      return {
-        allowed: false,
-        reason: 'Max Drawdown',
-        details: `Equity $${equity.toFixed(2)} (-${dd.drawdownPct.toFixed(2)}% от стартового). Бот заморожен до перезапуска.`,
-      };
-    }
-  }
-
-  // 3. OI Cap Ban (из стейта)
-  if (isOiCapBanned(coin)) {
-    const remainMin = Math.ceil(getOiCapBanRemainMs(coin) / 60_000);
-    logger.warn(`[Executor] ⛔ OI CAP active for #${coin} (${remainMin} мин до снятия)`);
-    return {
-      allowed: false,
-      reason: 'OI Cap reached',
-      details: `Биржа ранее отказала по OI Cap. Осталось <b>${remainMin} мин</b> до снятия бана.`,
-    };
-  }
-
-  // 4. Volatility Filter — только если стратегист передал APY кандидата
-  if (smoothedApy != null) {
-    const vol = await checkVolatility(coin, smoothedApy);
-    if (!vol.allowed) {
-      return {
-        allowed: false,
-        reason: 'Volatility',
-        details:
-          `VolIdx=<b>${vol.volIdx.toFixed(4)}</b>, требовался APY≥<b>${vol.requiredApy.toFixed(0)}%</b>, ` +
-          `фактический <b>${smoothedApy.toFixed(1)}%</b>. Монета "пампит" — пропускаем тик.`,
-      };
-    }
-    return { allowed: true, volIdx: vol.volIdx };
-  }
-
-  return { allowed: true };
-}
-
-
 // ── Роутинг paper ↔ production ─────────────────
 
+// Бот не открывает позиции сам: все автоматические стратегии сняты (2026-08-30),
+// вход всегда ручной. Executor остаётся путём ВЫХОДА — им нянька ведёт мои сделки.
 async function handleOpen(signal) {
-  const strategyId = signal.strategy_id || 'carry';
-
-  // Hunter route: отдельный путь, свой размер, SL/TP в БД.
-  if (strategyId === 'hunter') {
-    // Volatility-filter отключаем (Hunter сам ловит волатильность). Остальные гарды применяются.
-    const pre = await preflightChecks(signal.coin, null);
-    if (!pre.allowed) {
-      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
-      return { ok: false };
-    }
-    // Двойной gate: HUNTER_ENABLED=true пускает сигнал, но реальные ордера идут
-    // только с HUNTER_PROD_ENABLED=true. Без него — PAPER (даже в isProduction),
-    // иначе стратегия не набирает paper-данные перед PROD-активацией.
-    if (config.isProduction && config.trading.hunterProdEnabled) {
-      return productionHunterOpen(
-        signal.coin, signal.price, signal.spikePct, signal.sl, signal.tp, false, signal.entryFeatures,
-      );
-    }
-    if (config.isProduction) {
-      logger.info(
-        `[Executor] Hunter PROD-путь выключен (HUNTER_PROD_ENABLED=false) — сигнал #${signal.coin} идёт в PAPER.`,
-      );
-    }
-    return hunterPaperOpen(
-      signal.coin, signal.price, signal.spikePct, signal.sl, signal.tp, false, signal.entryFeatures,
-    );
-  }
-
-  // Hunter SHORT +OI route (A/B paper-двойник): PAPER-only. Та же механика, что
-  // и hunter (тот же размер/SL/TP), отличие — OI-ворота на входе (в analyzeHunter).
-  // PROD-пути нет, всегда виртуально. Тихий TG (silent=true) — paper не пингует.
-  if (strategyId === 'hunter_oi') {
-    const pre = await preflightChecks(signal.coin, null);
-    if (!pre.allowed) {
-      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
-      return { ok: false };
-    }
-    return hunterPaperOpen(
-      signal.coin, signal.price, signal.spikePct, signal.sl, signal.tp, true, signal.entryFeatures, 'hunter_oi',
-    );
-  }
-
-  // Fade-high-ER paper route: PAPER-only shadow-слот, fade выдохшегося хвоста.
-  // PROD-пути нет — open всегда виртуальный. Только защитный SL (tp=null).
-  if (strategyId === 'fadehot') {
-    const pre = await preflightChecks(signal.coin, null);
-    if (!pre.allowed) {
-      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
-      return { ok: false };
-    }
-    return fadeHotPaperOpen(
-      signal.coin, signal.price, signal.direction, signal.sl, false, signal.entryFeatures,
-    );
-  }
-
-  // Hunter Long route (Iter E.1): PAPER only. PROD путь — Iter E.3.
-  if (strategyId === 'hunter_long') {
-    const pre = await preflightChecks(signal.coin, null);
-    if (!pre.allowed) {
-      await notifyOpenBlocked({ coin: signal.coin, reason: pre.reason, details: pre.details });
-      return { ok: false };
-    }
-    // Двойной gate: HUNTER_LONG_ENABLED=true пускает сигнал, реальные ордера идут
-    // только с HUNTER_LONG_PROD_ENABLED=true. Без него — PAPER (даже в isProduction).
-    if (config.isProduction && config.trading.hunterLongProdEnabled) {
-      return productionHunterLongOpen(
-        signal.coin, signal.price, signal.dumpPct, signal.sl, signal.tp, false, signal.entryFeatures,
-      );
-    }
-    if (config.isProduction) {
-      logger.info(
-        `[Executor] Hunter Long PROD-путь выключен (HUNTER_LONG_PROD_ENABLED=false) — сигнал #${signal.coin} идёт в PAPER.`,
-      );
-    }
-    return hunterLongPaperOpen(
-      signal.coin, signal.price, signal.dumpPct, signal.sl, signal.tp, false, signal.entryFeatures,
-    );
-  }
-
-  // Carry удалён (2026-06-17) — это была единственная стратегия, попадавшая в
-  // этот fallthrough. Любой неизвестный strategy_id теперь — баг диспетчера, а
-  // не молчаливый carry-открытие реального ордера.
-  logger.warn(`[Executor] Неизвестный strategy_id="${strategyId}" для #${signal.coin} — open пропущен.`);
+  logger.warn(
+    `[Executor] OPEN #${signal.coin} проигнорирован: автоматических входов нет.`,
+  );
   return { ok: false };
 }
 

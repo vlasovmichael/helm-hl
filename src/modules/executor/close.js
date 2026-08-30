@@ -26,14 +26,6 @@ import {
 } from './state.js';
 import { reconcile } from './reconciler.js';
 import { notify } from './hooks.js';
-import {
-  consumeHunterMfeMae, clearHunterTrailState, getHunterPeakPct, recordHunterSlExternal,
-} from '../strategistHunter.js';
-import {
-  consumeHunterLongMfeMae, clearHunterLongTrailState, getHunterLongPeakPct,
-  recordHunterLongLossEvent,
-} from '../strategistHunterLong.js';
-import { setHunterCrossCooldown } from '../hunterCrossCooldown.js';
 import { clearAdoptState, getAdoptPeakPct, consumeAdoptMfeMae } from '../strategistAdopt.js';
 import { finalizeAdoptTimeCut } from '../adoptShadowTimeCut.js';
 import { finalizeAdoptShadowTrail, clearAdoptShadowTrail } from '../adoptShadowTrail.js';
@@ -42,7 +34,6 @@ import {
   notifyProductionClose, notifyCloseRejected, notifyCloseFailed,
   notifyExternalClose,
   notifyCircuitBreaker,
-  notifyHunterTrailTp, notifyHunterLongTrailTp,
 } from './notifications.js';
 
 /**
@@ -242,7 +233,7 @@ async function syncDbAfterExternalClose(position, coin, holdHours) {
   // Classify cause via userFills: matched oid → TP/SL trigger;
   // liquidation flag → liquidation; иначе manual_close (оператор закрыл руками
   // через UI до того, как бот успел отправить marketClose).
-  let classified = {
+  const classified = {
     reason: 'external_close_detected_on_exit',
     pnl: null, fee: 0, closePx: null, closedAt: null, feeSource: null,
   };
@@ -301,30 +292,6 @@ async function syncDbAfterExternalClose(position, coin, holdHours) {
       `[Executor] ✅ DB synced: #${coin} (id=${position.id}) → CLOSED | ` +
         `reason: ${classified.reason} | est. PnL: $${estimatedPnl.toFixed(4)}`,
     );
-    if (position.strategy_id === 'hunter' || position.strategy_id === 'hunter_long') {
-      setHunterCrossCooldown(position.coin);
-    }
-    // Fix C (2026-05-20): external close на hunter_long почти всегда = убыток
-    // (delist/halt/liquidation/user manual close). Ставим post-SL cooldown +
-    // инкрементим SL-streak, чтобы не войти повторно в ту же токсичную монету.
-    // Исключение: если classifier явно вернул tp_trigger → не пенализуем.
-    if (
-      position.strategy_id === 'hunter_long' &&
-      !['tp_trigger', 'hunter_long_tp', 'hunter_long_trail_tp'].includes(classified.reason)
-    ) {
-      recordHunterLongLossEvent(position.coin);
-    }
-    // Симметрия Fix C для SHORT (2026-06-12): external close на hunter SHORT —
-    // тоже почти всегда убыток (ликвидация / ручное закрытие оператором). Раньше
-    // шорт получал только cross-cooldown (60мин), без post-SL cooldown, поэтому
-    // бот мог перезашортить ту же монету через ~час (кейс HMSTR #142→#147).
-    // Ставим post-SL cooldown, кроме явного TP.
-    if (
-      position.strategy_id === 'hunter' &&
-      !['tp_trigger', 'hunter_tp'].includes(classified.reason)
-    ) {
-      recordHunterSlExternal(position.coin);
-    }
   } catch (dbErr) {
     logger.error(`[Executor] DB close failed: ${dbErr.message}`);
   }
@@ -390,37 +357,9 @@ async function finishProductionClose({
     calcPnl(position, fill.avgPx, holdHours, realFundingUsd, exitFeeRate);
 
   // ── 5. Закрываем в БД ────────────────────────
-  // Hunter: подмешиваем MFE/MAE из tick-трекера + hold_seconds.
+  // MFE/MAE + hold_seconds для разбора выходов няньки.
   let exitFeatures = null;
-  if (position.strategy_id === 'hunter') {
-    const mm = consumeHunterMfeMae(position.id);
-    exitFeatures = {
-      mfe_usd:      mm?.mfeUsd ?? null,
-      mae_usd:      mm?.maeUsd ?? null,
-      mfe_pct:      mm?.mfePct ?? null,
-      mae_pct:      mm?.maePct ?? null,
-      hold_seconds: Math.round(holdMs / 1000),
-    };
-    if (signal.reason === 'hunter_trail_tp') {
-      exitFeatures.trail_peak_pct      = signal.peakPct ?? getHunterPeakPct(position.id);
-      exitFeatures.trail_give_back_pct = signal.giveBackPct ?? null;
-    }
-    clearHunterTrailState(position.id);
-  } else if (position.strategy_id === 'hunter_long') {
-    const mm = consumeHunterLongMfeMae(position.id);
-    exitFeatures = {
-      mfe_usd:      mm?.mfeUsd ?? null,
-      mae_usd:      mm?.maeUsd ?? null,
-      mfe_pct:      mm?.mfePct ?? null,
-      mae_pct:      mm?.maePct ?? null,
-      hold_seconds: Math.round(holdMs / 1000),
-    };
-    if (signal.reason === 'hunter_long_trail_tp') {
-      exitFeatures.trail_peak_pct      = signal.peakPct ?? getHunterLongPeakPct(position.id);
-      exitFeatures.trail_give_back_pct = signal.giveBackPct ?? null;
-    }
-    clearHunterLongTrailState(position.id);
-  } else if (position.strategy_id === 'adopt') {
+  if (position.strategy_id === 'adopt') {
     const mm = consumeAdoptMfeMae(position.id);
     const sz = position.size_usd || 0;
     exitFeatures = {
@@ -448,10 +387,6 @@ async function finishProductionClose({
     exitFeatures,
   });
 
-  if (position.strategy_id === 'hunter' || position.strategy_id === 'hunter_long') {
-    setHunterCrossCooldown(position.coin);
-  }
-
   recordBotOid(fill.oid, coin, 'close', position.id);
 
   const sign = realizedPnl >= 0 ? "+" : "";
@@ -469,38 +404,12 @@ async function finishProductionClose({
 
   // ── 7. Уведомления + hooks ───────────────────
   if (!silent) {
-    if (position.strategy_id === 'hunter' && signal.reason === 'hunter_trail_tp') {
-      await notifyHunterTrailTp({
-        coin,
-        entryPrice:   position.entry_price,
-        closePrice:   fill.avgPx,
-        peakPct:      signal.peakPct ?? exitFeatures?.trail_peak_pct ?? 0,
-        giveBackPct:  signal.giveBackPct ?? exitFeatures?.trail_give_back_pct ?? 0,
-        pnl:          realizedPnl,
-        fee:          totalFee,
-        holdMinutes:  Math.round(holdHours * 60),
-        fixedTpPrice: position.tp_price,
-      });
-    } else if (position.strategy_id === 'hunter_long' && signal.reason === 'hunter_long_trail_tp') {
-      await notifyHunterLongTrailTp({
-        coin,
-        entryPrice:   position.entry_price,
-        closePrice:   fill.avgPx,
-        peakPct:      signal.peakPct ?? exitFeatures?.trail_peak_pct ?? 0,
-        giveBackPct:  signal.giveBackPct ?? exitFeatures?.trail_give_back_pct ?? 0,
-        pnl:          realizedPnl,
-        fee:          totalFee,
-        holdMinutes:  Math.round(holdHours * 60),
-        fixedTpPrice: position.tp_price,
-      });
-    } else {
-      await notifyProductionClose({
-        coin, holdHours, entryPrice: position.entry_price,
-        avgPx: fill.avgPx, slip, pricePnl, fundingPnl,
-        totalFee, realizedPnl, reason: signal.reason,
-        oid: fill.oid, side: posSide,
-      });
-    }
+    await notifyProductionClose({
+      coin, holdHours, entryPrice: position.entry_price,
+      avgPx: fill.avgPx, slip, pricePnl, fundingPnl,
+      totalFee, realizedPnl, reason: signal.reason,
+      oid: fill.oid, side: posSide,
+    });
   }
 
   // Circuit breaker: фиксируем убыток

@@ -14,31 +14,11 @@ import { getActivePosition, getActiveAdoptPositions, getHistory } from "../../..
 import { findAsset, getUniverse } from "../../../core/universe.js";
 import { getCachedAccountValueSync } from "../../../core/balanceCache.js";
 import { TICK_INTERVAL_MS, state } from "../../../app/state.js";
-import {
-  HUNTER_SPIKE_PCT,
-  HUNTER_SPIKE_WINDOW_MIN,
-  HUNTER_SL_PCT,
-  HUNTER_TP_PCT,
-} from "../../strategistHunter.js";
 import { computeBreadthFlush } from "../../hotMoversSetup.js";
 import { reportBreadthFlush } from "../../../app/toastBridge.js";
 import { getHourlyCandles, getFifteenMinCandles } from "../../candleCache.js";
 import { classifyTrend } from "../../candyGirlEma.js";
 import { analyzeChart } from "../../chartCoach.js";
-import {
-  evaluateFadeHot,
-  fadeHotZone,
-  btcRegimeFromCandles,
-  classifyWhatIf,
-  FADEHOT_MOVE_LB,
-  FADEHOT_ER_WIN,
-  FADEHOT_MOVE_THR,
-  FADEHOT_ER_MIN,
-  FADEHOT_STOP_PCT,
-  FADEHOT_TIME_STOP_MIN,
-  FADEHOT_BTC_ER_MIN,
-  FADEHOT_BTC_COIN,
-} from "../../fadeHotSignal.js";
 
 // ─────────────────────────────────────────────────
 //  OI history — буфер вынесен в core/oiHistory.js (2026-06-15)
@@ -60,13 +40,21 @@ export { OI_SNAPSHOT_MS, getOiNMinAgo };
 
 // Multi-window spike scoring (Hunter Signals A+B).
 // 2m остаётся «нативным» Hunter-окном (бот всё ещё триггерит по нему через
-// HUNTER_SPIKE_PCT=5%); здесь пороги ДЛЯ ДАШБОРДА — для ручной торговли —
+// SPIKE_PCT=5%); здесь пороги ДЛЯ ДАШБОРДА — для ручной торговли —
 // специально мягче, чтобы сигналы появлялись регулярно. Tier WEAK (0.6×)
 // = «следить», NORMAL (1×) = «торгуемо», STRONG (1.5×) = «уверенный сигнал».
 //
 // Калибровка 2026-05-08 на спокойном рынке: при 2m≥3%/5m≥4%/15m≥5%/1h≥7%
 // в любой момент почти всегда есть 5-15 WEAK-сигналов в скоупе ~65 монет.
-const HUNTER_SIGNAL_WINDOWS = [
+// Пороги витрины (не стратегии): «сколько процентов за окно считаем движением».
+// Спайк-окно 2м — историческое родное окно сканера, на нём же считается MOVE.
+const SPIKE_WINDOW_MIN = 2;
+const SPIKE_PCT = 5;
+// Ориентиры стопа/цели, которые витрина рисует к сетапу (не приказ на вход).
+const SETUP_SL_PCT = 2;
+const SETUP_TP_PCT = 3;
+
+const SIGNAL_WINDOWS = [
   { mins: 2, threshold: 3, label: "2m" },
   { mins: 5, threshold: 4, label: "5m" },
   { mins: 15, threshold: 5, label: "15m" },
@@ -183,54 +171,6 @@ async function enrichHtfTrend(items, now) {
   return items;
 }
 
-// ─── Fade-high-ER forward-вердикт («fade выдохшегося хвоста») ─────────────────
-// Правило из бэктестов (fadeHotSignal.js): |ход 30м|≥3% И Kaufman ER 4ч≥0.47 →
-// fade против хода. Это человеко-видимый forward-вход на карточке (рядом тихо
-// меряет paper-слот strategy_id='fadehot'). Тяжёлый 15m-fetch гейтим дешёвым
-// пре-фильтром по priceHistory (ход 30м): в спокойном рынке НИ ОДНА монета не
-// проходит → 0 запросов даже в always-on WS-броадкасте (2с). Вердикт кэшируем
-// 60с per-coin — повторные броадкасты переиспользуют без пересчёта/fetch.
-const FADEHOT_PREGATE_MIN     = FADEHOT_MOVE_LB * 15;                 // 30м = 2×15m
-const FADEHOT_LOOKBACK_MIN    = (FADEHOT_ER_WIN + FADEHOT_MOVE_LB + 4) * 15; // ≈5ч запас
-const FADEHOT_VERDICT_TTL_MS  = 60_000;
-const _fadeHotCache = new Map(); // coin → { ts, verdict|null }
-
-async function enrichFadeHot(items, now) {
-  await Promise.allSettled(
-    items.map(async (it) => {
-      // Дешёвый пре-гейт: |ход 30м| ≥ порога по priceHistory (без HL-запросов).
-      const past = getPriceNMinAgo(it.coin, FADEHOT_PREGATE_MIN, now);
-      if (past == null || !(past > 0)) { it.fadeHot = null; return; }
-      const move30 = ((it.price - past) / past) * 100;
-      if (Math.abs(move30) < FADEHOT_MOVE_THR) { it.fadeHot = null; return; }
-
-      const cached = _fadeHotCache.get(it.coin);
-      if (cached && now - cached.ts < FADEHOT_VERDICT_TTL_MS) {
-        it.fadeHot = cached.verdict;
-        return;
-      }
-
-      let candles = null;
-      try {
-        candles = await getFifteenMinCandles(it.coin, FADEHOT_LOOKBACK_MIN, now);
-      } catch { candles = null; }
-      const v = candles ? evaluateFadeHot(candles) : { fired: false };
-
-      let verdict = null;
-      if (v.fired && it.price != null) {
-        const { zoneLo, zoneHi, stop, stopPct } = fadeHotZone(v.side, it.price, FADEHOT_STOP_PCT);
-        verdict = {
-          fired: true, side: v.side, move: v.move, er: v.er,
-          zoneLo, zoneHi, stop, stopPct, timeStopMin: FADEHOT_TIME_STOP_MIN,
-        };
-      }
-      _fadeHotCache.set(it.coin, { ts: now, verdict });
-      it.fadeHot = verdict;
-    }),
-  );
-  return items;
-}
-
 // enrich=false → строит Hot Movers БЕЗ тяжёлых candleSnapshot (Vol× / HTF-тренд).
 // Это путь always-on WS-броадкаста: он крутится каждые 2с пока открыта любая
 // вкладка, и его candleSnapshot-шторм выжирал весовой бюджет HL → 429 рикошетом
@@ -256,7 +196,7 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
 
     const ticksNeeded = Math.max(
       2,
-      Math.ceil((HUNTER_SPIKE_WINDOW_MIN * 60_000) / TICK_INTERVAL_MS),
+      Math.ceil((SPIKE_WINDOW_MIN * 60_000) / TICK_INTERVAL_MS),
     );
 
     // Маппер одной монеты в signal-строку. Окна/тренд считаются из priceHistory
@@ -264,7 +204,7 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
     // монеты, которой нет в scout-вселенной, лишь бы был price-буфер.
     const mapSignal = (item) => {
       // Считаем спайки по всем окнам.
-      const windows = HUNTER_SIGNAL_WINDOWS.map((w) => {
+      const windows = SIGNAL_WINDOWS.map((w) => {
         const past = getPriceNMinAgo(item.coin, w.mins, now);
         if (past == null)
           return { ...w, spikePct: null, tier: null, side: null, ratio: 0 };
@@ -287,7 +227,7 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
       const trendPct =
         trendPast != null ? ((item.price - trendPast) / trendPast) * 100 : null;
       const bufLen = getBufferLength(item.coin);
-      const native2m = windows.find((w) => w.mins === HUNTER_SPIKE_WINDOW_MIN);
+      const native2m = windows.find((w) => w.mins === SPIKE_WINDOW_MIN);
       return {
         coin: item.coin,
         price: item.price,
@@ -382,11 +322,11 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
             blocked = `trend ${m.trendPct.toFixed(1)}%/${trendLookback}m`;
           }
           if (b.side === "SHORT") {
-            sl = m.price * (1 + HUNTER_SL_PCT / 100);
-            tp = m.price * (1 - HUNTER_TP_PCT / 100);
+            sl = m.price * (1 + SETUP_SL_PCT / 100);
+            tp = m.price * (1 - SETUP_TP_PCT / 100);
           } else {
-            sl = m.price * (1 - HUNTER_SL_PCT / 100);
-            tp = m.price * (1 + HUNTER_TP_PCT / 100);
+            sl = m.price * (1 - SETUP_SL_PCT / 100);
+            tp = m.price * (1 + SETUP_TP_PCT / 100);
           }
         }
       }
@@ -429,8 +369,8 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
         blocked,
         sl,
         tp,
-        slPct: sl != null ? HUNTER_SL_PCT : null,
-        tpPct: tp != null ? HUNTER_TP_PCT : null,
+        slPct: sl != null ? SETUP_SL_PCT : null,
+        tpPct: tp != null ? SETUP_TP_PCT : null,
         bufferLen: m.bufLen,
         bufferNeeded: ticksNeeded,
         isActive: activeCoins.has(m.coin),
@@ -444,7 +384,6 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
         // WS-броадкасте (каждые 2с). Фронт рисует SVG, если точек ≥2.
         spark: getPriceSpark(m.coin, 20, 24, now),
         htfTrend: null, // заполняется enrichHtfTrend (1h EMA-тренд) для fade-гейта
-        fadeHot: null,  // заполняется enrichFadeHot (forward-вердикт fade-high-ER)
       };
     });
 
@@ -482,7 +421,6 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
     // дешёвый пре-гейт по ходу 30м делает его near-zero-cost в спокойном рынке
     // (0 монет проходят → 0 fetch), а сам сигнал нужен на always-on карточке, не
     // только на /api/signals. Кап = ENRICH_CAP видимых строк.
-    await enrichFadeHot(top.slice(0, ENRICH_CAP), now);
 
     // Breadth-слив: синхронный делевередж лидеров движения (OI↓ у многих) →
     // fade против движения = лов ножа. Клиент гасит actionable у таких вердиктов.
@@ -494,13 +432,13 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
     return {
       ts: state.latestHunterAt || 0,
       thresholds: {
-        spikePct: HUNTER_SPIKE_PCT,
-        spikeWindowMin: HUNTER_SPIKE_WINDOW_MIN,
-        slPct: HUNTER_SL_PCT,
-        tpPct: HUNTER_TP_PCT,
+        spikePct: SPIKE_PCT,
+        spikeWindowMin: SPIKE_WINDOW_MIN,
+        slPct: SETUP_SL_PCT,
+        tpPct: SETUP_TP_PCT,
         trendLookbackMin: trendLookback,
         trendMaxRisePct: trendMaxRise,
-        windows: HUNTER_SIGNAL_WINDOWS.map((w) => ({
+        windows: SIGNAL_WINDOWS.map((w) => ({
           mins: w.mins,
           threshold: w.threshold,
           label: w.label,
@@ -616,42 +554,23 @@ export async function handleWhatIf(req, res) {
     const now = Date.now();
     let candles = null;
     try {
-      candles = await getFifteenMinCandles(coin, FADEHOT_LOOKBACK_MIN, now);
+      candles = await getFifteenMinCandles(coin, 100 * 15, now);
     } catch { candles = null; }
-    if (!candles || candles.length < FADEHOT_ER_WIN + 2) {
+    if (!candles || candles.length < 30) {
       return res.status(404).json({
         error: `No 15m candles for #${coin} — it may not be listed on Hyperliquid`,
         coin,
       });
     }
 
-    const v = evaluateFadeHot(candles);
-
-    // Режим рынка (горячий/холодный) — тот же гейт, что у боевого слота.
-    let regime = { btcER: null, hot: false };
-    try {
-      const btc = await getFifteenMinCandles(FADEHOT_BTC_COIN, FADEHOT_LOOKBACK_MIN, now);
-      regime = btcRegimeFromCandles(btc);
-    } catch { /* нет BTC-свечей → рынок считаем не подтверждённым */ }
-
     const price = getLatestPrice(coin) ?? candles[candles.length - 1]?.close ?? null;
-    const verdict = classifyWhatIf({
-      fired: v.fired, fadeSide: v.side, hot: regime.hot, userSide,
-    });
-
-    let plan = null;
-    if (v.fired && price != null) {
-      const { zoneLo, zoneHi, stop, stopPct } = fadeHotZone(v.side, price, FADEHOT_STOP_PCT);
-      plan = { zoneLo, zoneHi, stop, stopPct, timeStopMin: FADEHOT_TIME_STOP_MIN };
-    }
 
     // Coach: честный РАЗБОР графика (тренд/уровни/RSI/план), независимо от
     // fade-эджа. 1h-свечи для старшего тренда (ema 20/50 → нужно ≥51). Падение
     // тут не критично — coach просто будет null, остальной вердикт остаётся.
     let coach = null;
     try {
-      // Своя 15m-серия (~100 свечей) — fadehot-фетч выше слишком короткий для
-      // свинг-уровней/RSI. + 1h для старшего тренда (ema 20/50 → нужно ≥51).
+      // 1h-серия для старшего тренда (ema 20/50 → нужно ≥51 свечи).
       const [coach15m, candles1h, volMult] = await Promise.all([
         getFifteenMinCandles(coin, 100 * 15, now),
         getHourlyCandles(coin, 60, now, HL_PRIORITY.LOW),
@@ -682,18 +601,7 @@ export async function handleWhatIf(req, res) {
 
     res.json({
       coin, price, userSide,
-      fired: v.fired,
-      fadeSide: v.side,
-      move: v.move ?? null,   // ход 30м, % (сырой — показываем всегда)
-      er: v.er ?? null,       // Kaufman ER 4ч монеты (сырой)
-      btcER: regime.btcER,    // Kaufman ER 4ч BTC (режим)
-      regimeHot: regime.hot,
-      thresholds: {
-        moveThr: FADEHOT_MOVE_THR, erMin: FADEHOT_ER_MIN, btcErMin: FADEHOT_BTC_ER_MIN,
-      },
-      ...verdict,
-      plan,
-      coach,   // разбор графика (см. chartCoach.js) — главное наполнение модалки
+      coach,   // разбор графика (см. chartCoach.js) — единственное наполнение модалки
     });
   } catch (err) {
     logger.warn(`[Dashboard] /api/whatif error: ${err.message}`);

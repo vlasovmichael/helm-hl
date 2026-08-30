@@ -6,8 +6,7 @@
 // +$0.75). Этот лёгкий цикл считает выходы АКТИВНОЙ позиции на живых WS-ценах
 // (раз в HL_WS_EXIT_INTERVAL_MS, default 2с), не дожидаясь 15-сек скана.
 //
-// Scope: hunter / hunter_long (trailing-TP скальперы, где вик решает) + ВСЕ
-// adopt- и manual_paper-позы. Adopt приехал сюда 2026-07-31: его трейл и
+// Scope: ВСЕ adopt- и manual_paper-позы. Adopt приехал сюда 2026-07-31: его трейл и
 // BE-храповик жили внутри 15-сек tick(), и когда тик раздуло затором весового
 // бюджета до 5 минут, пол трейла стоял выше цены минутами (KAITO: пик +2.95%,
 // пол $1.1076, цена $1.1056 — и никакого закрытия). Сопровождение ручной позы
@@ -27,52 +26,17 @@
 
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
-import { getActivePosition } from '../core/database.js';
-import { coordinate } from '../modules/coordinator.js';
-import { execute } from '../modules/executor/index.js';
-import { processHunterTrailArm } from './hunterTrailArm.js';
 import { getLivePrice, isFeedFresh } from '../core/priceFeed.js';
 import { superviseAdoptPositions } from './adoptSupervise.js';
 import { superviseManualPaperPositions } from './manualPaperSupervise.js';
 import { state } from './state.js';
 
 // Стратегии, чьи выходы переводим на WS-тики. Остальные остаются на 15-сек tick.
-const WS_EXIT_STRATEGIES = new Set(['hunter', 'hunter_long']);
 
 // Живую цену старше этого порога считаем протухшей → не действуем (floor).
 const MAX_PRICE_AGE_MS = 10_000;
 
 let timer = null;
-let running = false;  // re-entrancy guard самого цикла (await execute может затянуться)
-
-/**
- * Один прогон fast-exit для активной позиции. Без сети в HOLD-случае.
- * Экспортируется ради тестов; в проде дёргается по таймеру.
- */
-export async function wsFastExitCheck() {
-  // Петля живёт, пока поднят фид: сопровождение adopt-поз (трейл/BE) не должно
-  // зависеть от флага hunter-выходов. Hunter-часть внутри проверяет свой флаг.
-  if (!config.trading.wsFeedEnabled) return;
-  if (running) return;
-  // Mutex с главным тиком — синхронная проверка+claim, без await между ними.
-  if (state.tickRunning || state.shuttingDown) return;
-  if (!isFeedFresh()) return;
-
-  // Claim: с этого момента 15-сек tick увидит tickRunning=true и пропустит свой
-  // прогон. JS однопоточный → между проверкой выше и присвоением ниже никто не
-  // влезет (нет await). running=true — защита от наложения самих fast-итераций.
-  running = true;
-  state.tickRunning = true;
-  state.tickRunningSince = Date.now();
-  try {
-    await fastHunterExit();
-  } catch (err) {
-    logger.warn(`[WSExit] ${err.message}`);
-  } finally {
-    state.tickRunning = false;
-    running = false;
-  }
-}
 
 // Сколько тик может держать мьютекс, прежде чем мы признаем его залипшим и
 // перестанем ждать. 60с = 4 нормальных периода: обычный тик укладывается в
@@ -131,38 +95,6 @@ function wsPriceOnly(coin) {
   return live.price;
 }
 
-/** Прежний Stage-2 путь: выход активного hunter/hunter_long слота по WS-тику. */
-async function fastHunterExit() {
-  if (!config.trading.wsExitsEnabled) return;
-  const pos = getActivePosition();
-  if (!pos) return;
-
-  const sid = pos.strategy_id || 'carry';
-  if (!WS_EXIT_STRATEGIES.has(sid)) return;
-
-  const live = getLivePrice(pos.coin);
-  if (!live) return;
-  const age = Date.now() - live.ts;
-  if (age > MAX_PRICE_AGE_MS) return;
-
-  // Синтетический one-coin срез с живой ценой. checkHunter(Long)Exit читает
-  // только item.price (peak/SL/TP — из позиции + in-memory), funding/OI в
-  // выходе не нужны → массива из {coin, price} достаточно.
-  const synth = [{ coin: pos.coin, price: live.price }];
-
-  // Тот же порядок, что в tick(): coordinate → ARM side-effect → execute.
-  const signal = await coordinate(synth, pos, synth);
-  await processHunterTrailArm(pos);
-
-  if (signal.action !== 'HOLD') {
-    logger.info(
-      `[WSExit] ${signal.reason || signal.action} #${pos.coin} @ $${live.price} ` +
-      `(WS-tick, price age ${age}ms — обогнали 15-сек скан)`,
-    );
-    await execute(signal, pos);
-  }
-}
-
 /** Поднимает fast-exit таймер. Нужен поднятый WS-фид (HL_WS_FEED_ENABLED). */
 export function startWsExitLoop() {
   if (!config.trading.wsFeedEnabled) {
@@ -175,15 +107,9 @@ export function startWsExitLoop() {
   if (timer) return;
   const ms = config.trading.wsExitIntervalMs;
   timer = setInterval(() => {
-    wsFastExitCheck().catch((err) => logger.warn(`[WSExit] loop: ${err.message}`));
     adoptFastPass().catch((err) => logger.warn(`[WSExit] adopt-loop: ${err.message}`));
   }, ms);
-  const hunterPart = config.trading.wsExitsEnabled
-    ? [...WS_EXIT_STRATEGIES].join('/')
-    : 'выключены (HL_WS_EXITS_ENABLED != true)';
-  logger.info(
-    `[WSExit] started каждые ${ms}ms | hunter-выходы: ${hunterPart} | adopt/manual_paper: всегда`,
-  );
+  logger.info(`[WSExit] started каждые ${ms}ms | ведёт adopt + manual_paper позы`);
 }
 
 /** Грейсфул-стоп (вызывается из shutdown). */

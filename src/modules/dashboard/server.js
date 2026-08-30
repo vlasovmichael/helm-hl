@@ -36,16 +36,8 @@ import { getTaxSummary } from "../taxCollector/index.js";
 import { getRuntimeBlacklist } from "../executor/index.js";
 import { TICK_INTERVAL_MS, state } from "../../app/state.js";
 import { getAdoptSkipReason } from "../../app/adoptReconcile.js";
-import {
-  HUNTER_SL_PCT,
-  HUNTER_TP_PCT,
-  getHunterPeakPct,
-  getHunterMaePct,
-  isHunterArmed,
-} from "../strategistHunter.js";
 import { getAdoptPeakPct, getAdoptMaePct } from "../strategistAdopt.js";
 import { getLastDailyRiskStatus } from "../dailyRisk.js";
-import { getCandyGirlHeartbeat, getCandyGirlSignals, getCandyGirlStats } from "../strategistCandyGirl.js";
 import { buildStrategiesPayload } from "./strategiesView.js";
 import { getNearMisses } from "../nearMisses.js";
 import {
@@ -87,7 +79,6 @@ import { handleScreen } from "./routes/screen.js";
 import { getManualTrades } from "./routes/manualTrades.js";
 import { handlePnlSummary, handleInsights, handleDayJournal, handleDayNoteSave } from "./routes/pnl.js";
 import { handleTradeBreakdown } from "./routes/tradeBreakdown.js";
-import { handleScannerApi } from "./routes/setupScanner.js";
 import { handlePositionNanny } from "./routes/positionNanny.js";
 import { handleCoinOfDay } from "./routes/coinOfDay.js";
 import { resolveOpenPicks } from "../coinOfDayLog.js";
@@ -148,71 +139,15 @@ function startOfTodayMs() {
   return d.getTime();
 }
 
-// Сводка того, как БОТ ведёт активную позицию прямо сейчас: где стоп, взведён
-// ли breakeven-храповик / трейл, какой пик. Дашборд показывает это как статус
-// (а не советы оператору) — позицией рулит бот, человек только наблюдает.
+// Сводка того, как нянька ведёт позицию прямо сейчас: где стоп, где цель,
+// какой пик. Витрина статуса, не советы.
 function buildBotManagement(position) {
   if (!position) return null;
   const entry = position.entry_price;
   if (!entry) return null;
-  const isShort = (position.side || "short").toLowerCase() === "short";
-  const sid = position.strategy_id || "carry";
+  const sid = position.strategy_id || "adopt";
 
-  // Hunter SHORT — стоп/тейк фиксированы от входа, трейл/BE в in-memory мапах.
-  if (sid === "hunter") {
-    const peakPct = getHunterPeakPct(position.id) ?? 0;
-    const beArmed =
-      config.trading.hunterBeRatchetEnabled &&
-      peakPct >= config.trading.hunterBeArmPct;
-    const trailArmed =
-      config.trading.hunterTrailEnabled &&
-      (isHunterArmed(position.id) ||
-        peakPct >= config.trading.hunterTrailArmPct);
-
-    // Живой пол: где бот РЕАЛЬНО выйдет прямо сейчас (в unrealized % от входа,
-    // плюс = прибыль). Трейл → пик−giveback; BE взведён → безубыток (floor);
-    // иначе → жёсткий −SL. Статичный «стоп −2%» врал, как только взводился
-    // храповик — оператор видел −2%, а бот уже держал безубыток (2026-06-14).
-    let floorPct, floorKind;
-    if (trailArmed) {
-      floorPct = peakPct * (1 - config.trading.hunterTrailGiveBackPct / 100);
-      floorKind = "trail";
-    } else if (beArmed) {
-      floorPct = config.trading.hunterBeFloorPct;
-      floorKind = "be";
-    } else {
-      floorPct = -HUNTER_SL_PCT;
-      floorKind = "stop";
-    }
-    // unrealized% = (entry − price)/entry·100 для шорта (зеркально для лонга).
-    // price на полу: price = entry·(1 − dir·floorPct/100), dir=+1 short / −1 long.
-    const dir = isShort ? 1 : -1;
-    const floorPrice = entry * (1 - dir * (floorPct / 100));
-
-    return {
-      strategy: sid,
-      stopPrice: entry * (1 + (isShort ? 1 : -1) * (HUNTER_SL_PCT / 100)),
-      tpPrice: entry * (1 - (isShort ? 1 : -1) * (HUNTER_TP_PCT / 100)),
-      stopPct: HUNTER_SL_PCT,
-      initialRiskPct: HUNTER_SL_PCT, // исходный риск (для R-multiple на фронте)
-      peakPct,
-      maePct: getHunterMaePct(position.id),
-      beArmed,
-      beArmPct: config.trading.hunterBeArmPct, // веха храповика (% от входа)
-      trailArmed,
-      // Веха трейла (% от входа). Взводится по ПИКУ (MFE), не по текущей цене —
-      // фронт рисует до неё полосу, когда храповик уже взят или выключен.
-      trailArmPct: config.trading.hunterTrailEnabled
-        ? config.trading.hunterTrailArmPct
-        : null,
-      floorPct, // живой пол в unrealized % (плюс = прибыль)
-      floorPrice, // цена, на которой бот закроется сейчас
-      floorKind, // 'trail' | 'be' | 'stop'
-      timeStopMin: config.trading.hunterTimeStopMin, // max-hold: фронт считает остаток от heldHours
-    };
-  }
-
-  // Прочие стратегии: показываем сохранённый стоп/тейк, если есть.
+  // Стоп/цель, которые нянька поставила на бирже.
   if (position.sl_price || position.tp_price) {
     const initialRiskPct =
       position.sl_price != null
@@ -495,16 +430,6 @@ async function getStatusData() {
     dailyRisk: getLastDailyRiskStatus(),
     // Единый обзор всех стратегий (реестр-driven) для таблицы на /strategies.
     strategies: buildStrategiesPayload(),
-    // Candy Girl — signal-only радар (1h EMA-тренд + 5m pullback-reclaim).
-    // Сигналы кормят Smart Signals и Swing-подтверждение; торгового слота нет.
-    candyGirl: config.trading.candyGirlEnabled
-      ? {
-          enabled: true,
-          heartbeat: getCandyGirlHeartbeat(),
-          signals: getCandyGirlSignals(),
-          stats: getCandyGirlStats(),
-        }
-      : null,
     ts: Date.now(),
   };
 }
@@ -1048,7 +973,6 @@ export function startDashboard() {
   app.get("/api/winners/positions", handleWinnersPositions);
   // Прогресс форварда FVG — только счётчик и даты, метрик по определению нет.
   app.get("/api/fvg-forward", handleFvgForward);
-  app.get("/api/scanner", handleScannerApi);
   app.get("/api/position-nanny", handlePositionNanny);
   app.get("/api/coin-of-day", handleCoinOfDay);
   app.get("/api/btc-divergence/all", handleBtcDivergenceAll);

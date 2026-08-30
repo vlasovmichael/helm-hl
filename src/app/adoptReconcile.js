@@ -20,15 +20,12 @@ import { logger } from '../core/logger.js';
 import { notify } from '../modules/executor/hooks.js';
 import { savePosition, updatePositionEntryTime, recordBotOid } from '../core/database.js';
 import { getAccountSummary, getLivePrice } from '../modules/exchange.js';
-import {
-  placeHunterTrigger,
-  placeHunterLongTrigger,
-} from '../modules/executor/hunterOpen.js';
+import { placeExitTrigger } from '../modules/executor/triggers.js';
 import { resolveAsset } from '../modules/executor/fill-parser.js';
 import { placeLimit } from '../modules/exchange.js';
 import { formatHlPrice } from '../modules/executor/math.js';
 import { fetchUserFills } from '../modules/userFills.js';
-import { isQuietHour } from '../modules/setupScannerAlerts.js';
+import { isQuietHour } from '../core/ntfy.js';
 import { getLastDailyRiskStatus, localDayKey } from '../modules/dailyRisk.js';
 import { atr } from '../modules/trendFollowAtr.js';
 import { getHourlyCandles } from '../modules/candleCache.js';
@@ -526,9 +523,7 @@ export async function maybeAdoptManualPosition(manualPositions) {
     // Ставим стоп ДО записи в БД: нет стопа → нет подхвата (без ложного «ведём»).
     let slOid;
     try {
-      slOid = side === 'short'
-        ? await placeHunterTrigger(coin, sz, plannedSl, 'sl', szDecimals)
-        : await placeHunterLongTrigger(coin, sz, plannedSl, 'sl', szDecimals);
+      slOid = await placeExitTrigger(coin, sz, plannedSl, 'sl', szDecimals, side);
     } catch (err) {
       logger.error(
         `[Adopt] ❌ SL placement failed for #${coin} ${side} @ $${plannedSl.toPrecision(6)}: ${err.message}. ` +
