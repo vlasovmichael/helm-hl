@@ -97,25 +97,27 @@ table.ledger {
   border-collapse: collapse;
   font-size: 13px;
 
-  th,
-  td {
+  // Все правила ниже — только для СВОИХ ячеек: внутри tr.daybreak живёт
+  // вложенная table.cal, и потомковые селекторы перекрашивали её клетки.
+  > thead > tr > th,
+  > tbody > tr > td,
+  > tfoot > tr > td {
     padding: 13px 16px;
     text-align: right;
     white-space: nowrap;
   }
-  th:first-child,
-  td:first-child {
+  > thead > tr > th:first-child,
+  > tbody > tr > td:first-child,
+  > tfoot > tr > td:first-child {
     padding-left: 20px;
-  }
-  th:last-child,
-  td:last-child {
-    padding-right: 20px;
-  }
-  th:first-child,
-  td:first-child {
     text-align: left;
   }
-  thead th {
+  > thead > tr > th:last-child,
+  > tbody > tr > td:last-child,
+  > tfoot > tr > td:last-child {
+    padding-right: 20px;
+  }
+  > thead > tr > th {
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -131,7 +133,7 @@ table.ledger {
       color: var(--text-secondary);
     }
   }
-  tbody td {
+  > tbody > tr > td {
     font-family: var(--font-mono);
     border-bottom: 1px solid var(--hairline);
     color: var(--text-secondary);
@@ -142,10 +144,10 @@ table.ledger {
       color: var(--text-primary);
     }
   }
-  tbody tr:hover td {
+  > tbody > tr:not(.daybreak):hover > td {
     background: var(--card-bg-hover);
   }
-  tbody tr.current td.month::after {
+  > tbody > tr.current > td.month::after {
     content: "live";
     font-family: var(--font-mono);
     font-size: 9px;
@@ -165,16 +167,16 @@ td.grp-edge {
 // Знак важнее «спокойного» цвета таблицы: правило table.ledger tbody td задаёт
 // color с большей специфичностью, поэтому раскраску повторяем адресно — иначе
 // вся колонка P&L остаётся серой (что и было до 30.08).
-table.ledger tbody td.pos,
-table.ledger tfoot td.pos {
+table.ledger > tbody > tr > td.pos,
+table.ledger > tfoot > tr > td.pos {
   color: var(--green);
 }
-table.ledger tbody td.neg,
-table.ledger tfoot td.neg {
+table.ledger > tbody > tr > td.neg,
+table.ledger > tfoot > tr > td.neg {
   color: var(--red);
 }
-table.ledger tbody td.dim,
-table.ledger tfoot td.dim {
+table.ledger > tbody > tr > td.dim,
+table.ledger > tfoot > tr > td.dim {
   color: var(--text-faint);
 }
 
@@ -231,8 +233,9 @@ tfoot td {
   table.ledger {
     font-size: 12px;
 
-    th,
-    td {
+    > thead > tr > th,
+    > tbody > tr > td,
+    > tfoot > tr > td {
       padding: 9px 10px;
     }
   }
@@ -249,8 +252,9 @@ tfoot td {
   table.ledger {
     font-size: 11.5px;
 
-    th,
-    td {
+    > thead > tr > th,
+    > tbody > tr > td,
+    > tfoot > tr > td {
       padding: 8px 9px;
     }
   }
@@ -281,7 +285,7 @@ tr.expandable {
   color: var(--text-faint);
   font-size: 10px;
 }
-tr.daybreak > td {
+table.ledger > tbody > tr.daybreak > td {
   padding: 14px;
   background: var(--canvas-subtle);
   border-top: 1px solid var(--hairline);
