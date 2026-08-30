@@ -120,7 +120,7 @@ function nanScale(p) {
       <div class="nan-bar">
         <div class="nan-bar-fill ${good ? "pos" : "neg"}" style="left:${from}%;width:${width}%"></div>
         <div class="nan-mark entry" style="left:${entryAt}%"></div>
-        <div class="nan-mark" style="left:${priceAt}%"></div>
+        <div class="nan-mark price" style="left:${priceAt}%"></div>
         ${label(pl.stop, "stop", pl.stop)}
         ${label(pl.target, "target", pl.target)}
       </div>
@@ -500,8 +500,7 @@ function codRenderBody() {
     <tr><td>Stop <span class="oi-muted">(place it BEFORE entry)</span></td><td>${codFmtPx(l.stop)} · ${l.riskPct.toFixed(2)}%</td></tr>
     <tr><td>Target${l.targetProjected ? ' <span class="oi-muted">(projected)</span>' : ""}</td><td>${codFmtPx(l.target)} · ${l.rewardPct.toFixed(2)}%</td></tr>
     ${l.farTarget ? `<tr><td>Far level <span class="oi-muted">(runner)</span></td><td>${codFmtPx(l.farTarget)}</td></tr>` : ""}
-    <tr><td>R:R</td><td class="${rrOk ? "cod-rr-ok" : "cod-rr-bad"}">${l.rr.toFixed(2)}</td></tr>
-    <tr><td>Time stop</td><td>${l.timeStopMin} min</td></tr>`
+    <tr><td>R:R</td><td class="${rrOk ? "cod-rr-ok" : "cod-rr-bad"}">${l.rr.toFixed(2)}</td></tr>`
     : `<tr><td colspan="2" class="oi-muted">Levels could not be built</td></tr>`;
 
   const flags = p.flags.length

@@ -38,20 +38,20 @@
     <style>
       /* ── OI history — витрина (oi- префикс, тема-нейтрально) ── */
       .oi-note {
-        color: var(--text-dim, #8a8578);
+        color: var(--text-secondary);
         font-size: 12.5px;
         line-height: 1.55;
         margin: 2px 0 0;
       }
-      .oi-note b { color: var(--text, inherit); }
-      .oi-span { font-size: 12px; color: var(--text-dim, #8a8578); font-variant-numeric: tabular-nums; }
+      .oi-note b { color: var(--text-primary); }
+      .oi-span { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 
       .oi-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
       .oi-search {
         padding: 7px 11px; border-radius: 8px;
         border: 1px solid var(--border, #2a2622);
         background: var(--panel-2, rgba(128,128,128,0.06));
-        color: var(--text, inherit); font-family: inherit; font-size: 13px;
+        color: var(--text-primary); font-family: inherit; font-size: 13px;
         text-transform: uppercase; width: 130px;
       }
 
@@ -59,7 +59,7 @@
       table.oi-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
       .oi-table th {
         text-align: right; padding: 8px 10px; font-size: 11px; font-weight: 600;
-        letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-dim, #8a8578);
+        letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-secondary);
         border-bottom: 1px solid var(--border, #2a2622); cursor: pointer; user-select: none;
         white-space: nowrap;
       }
@@ -69,7 +69,7 @@
       .oi-table th { font-size: 12px; }
       .oi-table td {
         text-align: right; padding: 8px 10px; font-size: 14.5px;
-        border-bottom: 1px solid var(--border-soft, rgba(128,128,128,0.12));
+        border-bottom: 1px solid var(--hairline));
         white-space: nowrap; font-family: "JetBrains Mono", monospace;
       }
       .oi-table td:first-child { text-align: left; font-weight: 600; font-family: inherit; }
@@ -79,7 +79,7 @@
       .oi-pos { color: #0f7a45; }
       :root[data-theme="dark"] .oi-pos { color: #2f9d63; }
       .oi-neg { color: #f0556b; }
-      .oi-muted { color: var(--text-dim, #8a8578); }
+      .oi-muted { color: var(--text-secondary); }
 
       .oi-pager {
         display: flex; align-items: center; justify-content: center; gap: 14px;
@@ -89,11 +89,11 @@
         padding: 6px 13px; border-radius: 8px; cursor: pointer;
         border: 1px solid var(--border, #2a2622);
         background: var(--panel-2, rgba(128,128,128,0.06));
-        color: var(--text, inherit); font-family: inherit; font-size: 13px; font-weight: 600;
+        color: var(--text-primary); font-family: inherit; font-size: 13px; font-weight: 600;
       }
       .oi-pager button:disabled { opacity: 0.4; cursor: default; }
       .oi-pager button:not(:disabled):hover { border-color: #5b9dff; }
-      .oi-pager .oi-pg-info { color: var(--text-dim, #8a8578); font-variant-numeric: tabular-nums; min-width: 130px; text-align: center; }
+      .oi-pager .oi-pg-info { color: var(--text-secondary); font-variant-numeric: tabular-nums; min-width: 130px; text-align: center; }
 
       .oi-detail { margin-top: 4px; }
       .oi-detail-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
@@ -102,16 +102,16 @@
       .oi-legend { display: flex; gap: 16px; font-size: 12px; margin: 6px 0 2px; }
       .oi-legend span { display: inline-flex; align-items: center; gap: 6px; }
       .oi-legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
-      .oi-empty { padding: 30px 10px; text-align: center; color: var(--text-dim, #8a8578); }
+      .oi-empty { padding: 30px 10px; text-align: center; color: var(--text-secondary); }
 
       /* ── Нянька (nan- префикс) ── */
       .nan-totals {
         display: flex; gap: 22px; flex-wrap: wrap; align-items: baseline;
         padding: 10px 14px; margin-bottom: 14px;
         border: 1px solid var(--border, #2a2622); border-radius: var(--radius-lg, 12px);
-        background: var(--bg-soft, rgba(128, 128, 128, 0.05));
+        background: var(--canvas-subtle));
       }
-      .nan-total-k { font-size: 11.5px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--text-dim, #8a8578); }
+      .nan-total-k { font-size: 11.5px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--text-secondary); }
       .nan-total-v { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; margin-left: 7px; }
 
       .nan-pos {
@@ -132,7 +132,7 @@
       .nan-status.unprotected, .nan-status.orders_unknown { color: var(--red); }
       .nan-status.stop_only { color: #c98a1a; }
       .nan-status.armed { color: var(--green); }
-      .nan-detail { font-size: 13px; line-height: 1.55; color: var(--text-dim, #8a8578); margin: 0 0 14px; }
+      .nan-detail { font-size: 13px; line-height: 1.55; color: var(--text-secondary); margin: 0 0 14px; }
 
       /* Шкала стоп → вход → цена → цель. Позиция маркеров линейна по цене. */
       .nan-scale { margin: 16px 0 18px; }
@@ -140,14 +140,18 @@
         position: relative; height: 6px; border-radius: 3px;
         background: var(--border, #2a2622);
       }
-      .nan-bar-fill { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+      /* min-width: у свежей позы цена ≈ вход, и заливка нулевой ширины делала
+         шкалу «пустой» — оставляем видимый след, чтобы было ясно: это ноль хода,
+         а не сломанный рендер. */
+      .nan-bar-fill { position: absolute; top: 0; bottom: 0; border-radius: 3px; min-width: 2px; }
       .nan-bar-fill.pos { background: var(--green); }
       .nan-bar-fill.neg { background: var(--red); }
-      .nan-mark { position: absolute; top: -5px; width: 2px; height: 16px; background: var(--text, #ddd); }
-      .nan-mark.entry { background: var(--text-dim, #8a8578); }
+      .nan-mark { position: absolute; top: -5px; width: 2px; height: 16px; background: var(--text-primary); border-radius: 1px; }
+      .nan-mark.price { top: -7px; height: 20px; box-shadow: 0 0 0 2px var(--bg); }
+      .nan-mark.entry { background: var(--text-faint); }
       .nan-tick {
         position: absolute; top: 16px; transform: translateX(-50%); white-space: nowrap;
-        font-size: 11px; font-family: "JetBrains Mono", monospace; color: var(--text-dim, #8a8578);
+        font-size: 11px; font-family: "JetBrains Mono", monospace; color: var(--text-secondary);
       }
       .nan-tick.is-start { transform: none; text-align: left; }
       .nan-tick.is-end { transform: translateX(-100%); text-align: right; }
@@ -157,11 +161,11 @@
       .nan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
       .nan-sub {
         font-size: 11.5px; letter-spacing: 0.5px; text-transform: uppercase;
-        color: var(--text-dim, #8a8578); margin: 0 0 6px;
+        color: var(--text-secondary); margin: 0 0 6px;
       }
       table.nan-t { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-      .nan-t td { padding: 6px 8px; font-size: 13.5px; border-bottom: 1px solid var(--border-soft, rgba(128, 128, 128, 0.12)); }
-      .nan-t td:first-child { color: var(--text-dim, #8a8578); }
+      .nan-t td { padding: 6px 8px; font-size: 13.5px; border-bottom: 1px solid var(--hairline)); }
+      .nan-t td:first-child { color: var(--text-secondary); }
       .nan-t td:last-child { text-align: right; font-family: "JetBrains Mono", monospace; }
       .nan-t .nan-strong td:last-child { font-weight: 700; }
 
@@ -169,11 +173,11 @@
       .nan-notes li {
         font-size: 12.5px; line-height: 1.5; padding: 7px 11px;
         border-left: 3px solid var(--border, #2a2622); border-radius: 0 6px 6px 0;
-        background: var(--bg-soft, rgba(128, 128, 128, 0.05));
-        color: var(--text-dim, #8a8578);
+        background: var(--canvas-subtle));
+        color: var(--text-secondary);
       }
-      .nan-notes li.warn { border-left-color: var(--red); color: var(--text, inherit); }
-      .nan-empty { padding: 26px 10px; text-align: center; color: var(--text-dim, #8a8578); font-size: 13.5px; }
+      .nan-notes li.warn { border-left-color: var(--red); color: var(--text-primary); }
+      .nan-empty { padding: 26px 10px; text-align: center; color: var(--text-secondary); font-size: 13.5px; }
 
       /* Пилюли и сегменты «Монеты дня» (ss- префикс остался от снятого
          Setup Scanner — карточка переиспользует его разметку). */
@@ -199,11 +203,11 @@
         padding: 7px 14px; border-radius: 999px; cursor: pointer;
         border: 1px solid var(--border, #2a2622);
         background: var(--panel-2, rgba(128, 128, 128, 0.06));
-        color: var(--text-dim, #8a8578);
+        color: var(--text-secondary);
         font-family: inherit; font-size: 13px; font-weight: 600;
       }
       .cod-tab:hover { border-color: #5b9dff; }
-      .cod-tab.active { color: var(--text, inherit); border-color: #5b9dff; background: rgba(91, 157, 255, 0.14); }
+      .cod-tab.active { color: var(--text-primary); border-color: #5b9dff; background: rgba(91, 157, 255, 0.14); }
       .cod-tab-coin { font-family: "JetBrains Mono", monospace; }
       .cod-tab-side { font-size: 10.5px; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px; color: #fff; }
       .cod-tab-side.long { background: var(--green); }
@@ -218,28 +222,28 @@
       .cod-donebadge {
         font-size: 11px; letter-spacing: 0.6px; text-transform: uppercase;
         padding: 4px 11px; border-radius: 999px; font-weight: 700;
-        background: rgba(138, 133, 120, 0.18); color: var(--text-dim, #8a8578);
+        background: rgba(138, 133, 120, 0.18); color: var(--text-secondary);
       }
       .cod-segs--short .ss-seg.on { background: var(--red); }
       .cod-segs--long  .ss-seg.on { background: var(--green); }
-      .cod-segs--muted .ss-seg.on { background: var(--text-dim, #8a8578); }
+      .cod-segs--muted .ss-seg.on { background: var(--text-secondary); }
       .cod-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 14px; }
       .cod-head-main { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
       .cod-verdict { font-size: 15px; font-weight: 700; }
       .cod-verdict.setup { color: var(--green); }
       .cod-verdict.watch { color: #c98a1a; }
-      .cod-verdict.none { color: var(--text-dim, #8a8578); }
-      .cod-detail { font-size: 13px; line-height: 1.55; color: var(--text-dim, #8a8578); margin: 6px 0 0; }
+      .cod-verdict.none { color: var(--text-secondary); }
+      .cod-detail { font-size: 13px; line-height: 1.55; color: var(--text-secondary); margin: 6px 0 0; }
       .cod-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
       .cod-sub {
         font-size: 10.5px; letter-spacing: 0.8px; text-transform: uppercase;
         color: var(--text-muted, #8a8578); margin: 0 0 8px;
       }
-      .cod-t td { padding: 6px 8px; font-size: 13.5px; border-bottom: 1px solid var(--border-soft, rgba(128, 128, 128, 0.12)); }
-      .cod-t td:first-child { color: var(--text-dim, #8a8578); }
+      .cod-t td { padding: 6px 8px; font-size: 13.5px; border-bottom: 1px solid var(--hairline)); }
+      .cod-t td:first-child { color: var(--text-secondary); }
       .cod-t td:last-child { text-align: right; font-family: "JetBrains Mono", monospace; }
       .cod-hit::before { content: "✓ "; color: var(--green); }
-      .cod-miss::before { content: "· "; color: var(--text-dim, #8a8578); }
+      .cod-miss::before { content: "· "; color: var(--text-secondary); }
       .cod-miss { opacity: 0.55; }
       .cod-levels td:last-child { font-weight: 600; }
       .cod-rr-ok { color: var(--green); }
@@ -255,10 +259,10 @@
       .cod-fwd {
         margin-top: 16px; padding: 12px 14px; border-radius: 10px;
         border: 1px dashed var(--border, #2a2622);
-        font-size: 12.5px; line-height: 1.6; color: var(--text-dim, #8a8578);
+        font-size: 12.5px; line-height: 1.6; color: var(--text-secondary);
       }
-      .cod-fwd b { color: var(--text, inherit); font-variant-numeric: tabular-nums; }
-      .cod-empty { padding: 26px 10px; text-align: center; color: var(--text-dim, #8a8578); font-size: 13.5px; }
+      .cod-fwd b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+      .cod-empty { padding: 26px 10px; text-align: center; color: var(--text-secondary); font-size: 13.5px; }
     </style>
   </head>
   <body>
