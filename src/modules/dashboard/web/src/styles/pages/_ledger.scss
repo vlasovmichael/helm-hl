@@ -162,6 +162,22 @@ table.ledger {
 td.grp-edge {
   border-left: 1px solid var(--hairline);
 }
+// Знак важнее «спокойного» цвета таблицы: правило table.ledger tbody td задаёт
+// color с большей специфичностью, поэтому раскраску повторяем адресно — иначе
+// вся колонка P&L остаётся серой (что и было до 30.08).
+table.ledger tbody td.pos,
+table.ledger tfoot td.pos {
+  color: var(--green);
+}
+table.ledger tbody td.neg,
+table.ledger tfoot td.neg {
+  color: var(--red);
+}
+table.ledger tbody td.dim,
+table.ledger tfoot td.dim {
+  color: var(--text-faint);
+}
+
 .pos {
   color: var(--green);
 }
@@ -247,7 +263,10 @@ tr.expandable {
   &:hover {
     background: var(--canvas-subtle);
   }
-  &:focus-visible {
+  // Рамку рисуем только на клавиатурном фокусе. У tr с tabindex Chrome зажигает
+  // :focus-visible и после клика мышью — строка оставалась обведённой, читалось
+  // как залипший баг. Клик гасим через .is-clicked (снимается на blur).
+  &:focus-visible:not(.is-clicked) {
     outline: 2px solid var(--text-secondary);
     outline-offset: -2px;
   }

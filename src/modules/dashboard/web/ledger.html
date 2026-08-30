@@ -310,6 +310,16 @@
           tr.setAttribute("aria-expanded", String(open));
           tr.querySelector(".twisty").textContent = open ? "▾" : "▸";
         };
+        // Клик мышью не должен оставлять фокус-рамку: помечаем строку на время
+        // взаимодействия, стиль её гасит, blur снимает метку.
+        host.addEventListener("mousedown", (e) => {
+          const tr = e.target.closest("tr.expandable");
+          if (tr) tr.classList.add("is-clicked");
+        });
+        host.addEventListener("blur", (e) => {
+          const tr = e.target.closest?.("tr.expandable");
+          if (tr) tr.classList.remove("is-clicked");
+        }, true);
         host.addEventListener("click", (e) => {
           const tr = e.target.closest("tr.expandable");
           if (tr) toggle(tr);

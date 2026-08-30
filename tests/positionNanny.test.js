@@ -128,3 +128,18 @@ test('R:R ниже единицы попадает в заметки с нужн
   assert.equal(v.plan.rr, 0.5);
   assert.ok(v.notes.some((n) => /Plan R:R 0\.50/.test(n) && /67%/.test(n)));
 });
+
+test('R и прогресс считаются от показанной цены, а не от биржевого uPnL', () => {
+  // Цена ровно на входе, но биржа отдала uPnL от mark (на дешёвых монетах mid и
+  // mark расходятся). Панель обязана показать 0R: иначе она спорит сама с собой —
+  // «+0.00%» рядом с «−0.07R» (реальный кейс PUMP, 2026-08-30).
+  const v = buildPositionView({
+    coin: 'PUMP',
+    position: { side: 'SHORT', entryPx: 0.00484, szi: -3239, notionalUsd: 15.71, unrealizedPnl: -0.04 },
+    price: 0.00484,
+    orders: [stopOrder('PUMP', 0.004991, 3239), limitOrder('PUMP', 0.004689, 3239)],
+  });
+  assert.equal(v.plan.rNow, 0, 'цена на входе → ноль R, что бы ни отдал uPnL');
+  assert.equal(v.plan.progressPct, 0);
+  assert.equal(v.position.unrealizedPnl, -0.04, 'деньги остаются биржевыми');
+});

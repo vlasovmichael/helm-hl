@@ -126,9 +126,17 @@ export function buildPositionView({ coin, position, price, orders, ordersKnown =
   const rr = riskAbsUsd != null && rewardUsd != null && rewardUsd > 0 ? rewardUsd / riskAbsUsd : null;
 
   const pnl = position.unrealizedPnl;
-  const rNow = riskAbsUsd != null && riskAbsUsd > 0 ? pnl / riskAbsUsd : null;
+  // R и прогресс считаем ОТ ПОКАЗАННОЙ ЦЕНЫ, а не от биржевого uPnL. Они
+  // приходят из разных источников: uPnL биржа считает от mark, а строка «Now» —
+  // из mid. На дешёвых монетах расхождение давало «цена на входе, +0.00%, но
+  // −0.07R» — панель спорила сама с собой. Деньги (Unrealized) остаются
+  // биржевыми: это бухгалтерия. R — про то, где я между входом и стопом.
+  const moveUsd = (isShort ? entry - price : price - entry) * sz;
+  const rNow = riskAbsUsd != null && riskAbsUsd > 0 ? moveUsd / riskAbsUsd : null;
   const progressPct =
-    rewardUsd != null && rewardUsd > 0 ? Math.max(0, Math.min(100, (pnl / rewardUsd) * 100)) : null;
+    rewardUsd != null && rewardUsd > 0
+      ? Math.max(0, Math.min(100, (moveUsd / rewardUsd) * 100))
+      : null;
 
   const toStopPct = stopPx != null ? Math.abs(pct(stopPx, price)) : null;
   const toTargetPct = targetPx != null ? Math.abs(pct(targetPx, price)) : null;

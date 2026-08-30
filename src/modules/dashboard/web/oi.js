@@ -107,8 +107,14 @@ function nanScale(p) {
   const good = isShort ? pos.price < pos.entryPx : pos.price > pos.entryPx;
   const from = Math.min(entryAt, priceAt);
   const width = Math.abs(priceAt - entryAt);
-  const label = (v, name, px) =>
-    `<span class="nan-tick" style="left:${at(v)}%"><b>${name}</b>${nanPx(px)}</span>`;
+  // Стоп и цель задают КРАЯ шкалы, поэтому по центру их подписи наполовину
+  // уезжали за карточку. Крайние метки прижимаем к своему краю, остальные
+  // центрируем как раньше.
+  const label = (v, name, px) => {
+    const x = at(v);
+    const edge = x <= 2 ? " is-start" : x >= 98 ? " is-end" : "";
+    return `<span class="nan-tick${edge}" style="left:${x}%"><b>${name}</b>${nanPx(px)}</span>`;
+  };
   return `
     <div class="nan-scale">
       <div class="nan-bar">
