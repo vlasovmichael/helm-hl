@@ -127,6 +127,10 @@
         return s;
       };
       const cls = (n) => (n > 0 ? "pos" : n < 0 ? "neg" : "dim");
+      // Цена круга в базисных пунктах от оборота: доллары не сравнимы между
+      // размерами позиции, bp — сравнимы. 4.32 bp = тейкер обеими ногами.
+      const bpNote = (bp) =>
+        bp == null ? "" : `<span class="sub-meta">${bp.toFixed(1)} bp</span>`;
       const monthLabel = (k) => {
         const [y, m] = k.split("-");
         const names = [
@@ -213,7 +217,7 @@
             <td class="col-opt dim">${m.adoptedCount || "—"}</td>
             <td class="grp-edge ${cls(m.manualNet)}">${fmt(m.manualNet)}${wr(m.manualWins, m.manualCount)}</td>
             <td class="col-opt dim">${m.manualCount || "—"}</td>
-            <td class="grp-edge neg">${m.botFees + m.adoptedFees + m.manualFees ? fmt(-(m.botFees + m.adoptedFees + m.manualFees), false) : "—"}</td>
+            <td class="grp-edge neg">${m.botFees + m.adoptedFees + m.manualFees ? fmt(-(m.botFees + m.adoptedFees + m.manualFees), false) : "—"}${bpNote(m.feesBp)}</td>
             <td class="col-opt ${cls(m.funding)}">${m.funding ? fmt(m.funding) : "—"}</td>
             <td class="grp-edge net-cell ${cls(m.net)}">${fmt(m.net)}</td>
             <td class="${cls(m.cumulativeNet)}">${fmt(m.cumulativeNet)}</td>
@@ -238,7 +242,9 @@
           <td class="cal-cell ${cls(d.net)}">
             <span class="dnum">${date.getUTCDate()}</span>
             <span class="dpnl">${fmt(d.net)}</span>
-            <span class="dsub">${n ? `${n} ${n === 1 ? "trade" : "trades"}` : "funding"}</span>
+            <span class="dsub">${n ? `${n} ${n === 1 ? "trade" : "trades"}` : "funding"}${
+              d.feesBp != null ? ` · ${d.feesBp.toFixed(1)} bp` : ""
+            }</span>
           </td>`;
       }
 

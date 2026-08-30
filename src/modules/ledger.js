@@ -36,9 +36,10 @@ import {
   getActivePosition,
 } from '../core/database.js';
 
-// v2 = в снапшот добавлена дневная разбивка (months[k].days). Снапшоты v1
-// читаются как есть — у их месяцев просто нет дней (разворот покажет прочерк).
-const VERSION = 2;
+// v3 = к дневной разбивке добавлен оборот (notional) для комиссий в bp.
+// Снапшоты v1/v2 читаются как есть: у их месяцев не будет bp, пока месяц не
+// пересчитается из fills. Ломать историю ради колонки — плохой размен.
+const VERSION = 3;
 // Аккаунт начал торговать 8 апреля 2026. Берём с 1 апреля с запасом.
 const LEDGER_START_MS = Date.UTC(2026, 3, 1);
 const SNAPSHOT_FILE = join('data', 'ledger_months.json');
@@ -71,6 +72,9 @@ function emptyMonth() {
     adoptedPnl: 0, adoptedFees: 0, adoptedCount: 0, adoptedWins: 0,
     manualPnl: 0, manualFees: 0, manualCount: 0, manualWins: 0,
     funding: 0,
+    // Оборот обеих ног — база для комиссий в bp. Комиссии в долларах на депозите
+    // $30–50 не говорят ничего; цена круга в bp сравнима между размерами.
+    notional: 0,
     days: {},  // 'YYYY-MM-DD' → тот же бакет без .days
   };
 }
@@ -87,7 +91,14 @@ function addTrade(bucket, t) {
   bucket[`${p}Pnl`] += t.pnl;
   bucket[`${p}Fees`] += t.fee;
   bucket[`${p}Count`] += 1;
+  bucket.notional += (t.sizeUsd || 0) * 2;  // вход + выход
   if (t.pnl > 0) bucket[`${p}Wins`] += 1;
+}
+
+/** Комиссии в базисных пунктах от оборота. null, если оборота не было. */
+function feesBp(feesUsd, notionalUsd) {
+  if (!(notionalUsd > 0)) return null;
+  return round((feesUsd / notionalUsd) * 10_000);
 }
 
 function totalCount(m) {
@@ -105,7 +116,7 @@ function loadSnapshot() {
   try {
     const raw = readFileSync(SNAPSHOT_FILE, 'utf-8');
     const data = JSON.parse(raw);
-    if ((data?.version === VERSION || data?.version === 1) && data.months && typeof data.months === 'object') {
+    if ([VERSION, 1, 2].includes(data?.version) && data.months && typeof data.months === 'object') {
       return data.months;
     }
   } catch {
@@ -223,6 +234,8 @@ export async function getMonthlyLedger() {
       manualCount: m.manualCount, manualWins: m.manualWins,
       manualWinRate: m.manualCount ? Math.round((100 * m.manualWins) / m.manualCount) : 0,
       funding: round(m.funding),
+      fees: round(m.botFees + (m.adoptedFees || 0) + m.manualFees),
+      feesBp: feesBp(m.botFees + (m.adoptedFees || 0) + m.manualFees, m.notional || 0),
       net: round(net),
       cumulativeNet: round(runningNet),
       isCurrent: k === curKey,
@@ -271,6 +284,7 @@ function buildDays(days) {
       adoptedNet: round(adoptedNet), adoptedCount: x.adoptedCount || 0, adoptedWins: x.adoptedWins || 0,
       manualNet: round(manualNet), manualCount: x.manualCount, manualWins: x.manualWins,
       fees: round(x.botFees + (x.adoptedFees || 0) + x.manualFees),
+      feesBp: feesBp(x.botFees + (x.adoptedFees || 0) + x.manualFees, x.notional || 0),
       funding: round(x.funding),
       net: round(botNet + adoptedNet + manualNet + x.funding),
     };
