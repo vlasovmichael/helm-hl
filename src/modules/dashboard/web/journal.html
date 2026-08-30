@@ -16,7 +16,7 @@
       content="#ffffff"
       media="(prefers-color-scheme: light)"
     />
-    <title>Helm · Журнал</title>
+    <title>Helm · Journal</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -951,8 +951,8 @@
             class="j-help-btn"
             id="helpToggle"
             type="button"
-            title="Как пользоваться журналом"
-            aria-label="Как пользоваться"
+            title="How to use the journal"
+            aria-label="How to use"
           >
             ?
           </button>
@@ -963,53 +963,52 @@
         <section class="j-card j-help" id="helpCard">
           <div class="j-help-head">
             <h2 class="j-card-title" style="margin: 0">
-              <span class="j-idx">зачем</span> Как пользоваться журналом
+              <span class="j-idx">why</span> How to use the journal
             </h2>
             <button class="j-help-x" id="helpClose" type="button">
-              Понятно, скрыть
+              Got it, hide
             </button>
           </div>
           <p class="j-help-lead">
-            Это тренажёр — научиться читать график <b>на сутки вперёд</b>. Не
-            угадывать цену (это монетка), а размечать местность и держать себя
-            от входа против тренда. Утренний лонг против падающего битка — ровно
-            та ошибка, от которой страница страхует.
+            This is a drill for learning to read a chart <b>a day ahead</b>. Not to guess
+            price (that is a coin flip), but to map the terrain and keep yourself from
+            entering against the trend. A morning long against a falling BTC is exactly
+            the mistake this page insures against.
           </p>
           <div class="j-help-steps">
             <div class="j-help-step">
-              <span class="j-idx">читаю</span>
+              <span class="j-idx">read</span>
               <div>
-                <b>Раз в день размечаешь монету.</b> Тренд 1D (куда дует ветер),
-                уровни сверху/снизу (где «стены»), два сценария «если X → A /
-                если Y → B», базовый уклон. 1–2 минуты на монету. Шкала «Пеленг»
-                вверху показывает, где цена в недельном диапазоне — у пола или у
-                потолка.
+                <b>Mark up one coin a day.</b> 1D trend (which way the wind blows),
+                levels above and below (where the walls are), two scenarios “if X → A / if
+                Y → B”, and a base bias. One or two minutes per coin. The “Bearing” scale
+                at the top shows where price sits in the weekly range — near the floor or
+                near the ceiling.
               </div>
             </div>
             <div class="j-help-step">
-              <span class="j-idx">считаю</span>
+              <span class="j-idx">size</span>
               <div>
-                <b>Перед входом — стоп и размер.</b> Вводишь вход и стоп →
-                размер считается <b>от риска</b> (теряешь ровно заданный % депо
-                при стопе), а не «сколько не жалко». Красное «уже ATR» = стоп
-                слишком тесный, вынесет фитилём.
+                <b>Stop and size before entry.</b> Enter your entry and stop → size is
+                computed <b>from risk</b> (you lose exactly the set % of the account at the
+                stop), not from “how much I can stomach”. A red “already ATR” means the stop
+                is too tight and a wick will take it out.
               </div>
             </div>
             <div class="j-help-step">
-              <span class="j-idx">проверяю</span>
+              <span class="j-idx">review</span>
               <div>
-                <b>На следующий день — разбор.</b> Какой сценарий включился?
-                Верно ли стояли уровни? Пишешь короткий вывод. Вот здесь и
-                копится насмотренность — не от чтения, а от проверки своих же
-                разметок.
+                <b>Next day, review it.</b> Which scenario fired? Were the levels right?
+                Write a short takeaway. This is where pattern recognition accumulates — not
+                from reading, but from checking your own markups.
               </div>
             </div>
           </div>
           <p class="j-help-rule">
-            Одно правило, которое экономит деньги:
-            <b>не лонгуй против тренда 1D и не шорти против него.</b> Цель
-            дрилла — не угадать направление, а натренировать разметку уровней и
-            выбор режима. 20–30 записей — и структура читается сама.
+            One rule that saves money:
+            <b>do not long against the 1D trend and do not short against it.</b> The goal
+            of the drill is not to guess direction but to train level markup and regime
+            choice. Twenty or thirty entries and structure starts reading itself.
           </p>
         </section>
 
@@ -1036,37 +1035,37 @@
             </div>
             <div class="j-legend">
               <span class="j-end lo"
-                ><small>Лоу 7д</small><span id="legLow">—</span></span
+                ><small>7d low</small><span id="legLow">—</span></span
               >
               <span class="j-read" id="rangeRead">—</span>
               <span class="j-end hi"
-                ><small>Хай 7д</small><span id="legHigh">—</span></span
+                ><small>7d high</small><span id="legHigh">—</span></span
               >
             </div>
           </div>
 
           <div class="j-meta-row">
             <div class="j-meta">
-              <span class="j-k">Тренд 7д</span
+              <span class="j-k">7d trend</span
               ><span class="j-v" id="trend200">—</span>
             </div>
             <div class="j-meta" id="vsWrap">
-              <span class="j-k">vs BTC сегодня</span
+              <span class="j-k">vs BTC today</span
               ><span class="j-v" id="vsbtc">—</span>
             </div>
           </div>
 
           <p class="j-principle">
-            Сначала ответь «тренд или боковик» — по структуре хаёв/лоёв и
-            EMA200, — и только потом смотри RSI. Не лонгуй против тренда 1D и не
-            шорти против него.
+            First answer “trend or range” — from the structure of highs and lows plus
+            EMA200 — and only then look at RSI. Do not long against the 1D trend and do
+            not short against it.
           </p>
         </section>
 
         <!-- Авто-разбор 4h/1h/5m: куда (направление) и когда (тайминг) -->
         <section class="j-card j-coach" id="coachCard">
           <h2 class="j-card-title">
-            <span class="j-idx">разбор</span> Куда и когда · 4h → 1h → 5m
+            <span class="j-idx">breakdown</span> Where and when · 4h → 1h → 5m
             <span
               class="j-status"
               id="coachStatus"
@@ -1074,7 +1073,7 @@
             ></span>
           </h2>
           <div class="j-coach-verdict neutral" id="coachVerdict">
-            <div class="j-vh">Читаю рынок…</div>
+            <div class="j-vh">Reading the market…</div>
           </div>
           <div class="j-tf-grid" id="coachTfs"></div>
           <p class="j-coach-note" id="coachNote"></p>
@@ -1083,93 +1082,93 @@
         <div class="j-cols">
           <section class="j-card">
             <h2 class="j-card-title">
-              <span class="j-idx">читаю</span> Разметка на завтра
-              <span class="j-saved" id="saved">сохранено ✓</span>
+              <span class="j-idx">read</span> Markup for tomorrow
+              <span class="j-saved" id="saved">saved ✓</span>
             </h2>
             <div class="j-field">
-              <label class="j-f">Тренд 1D</label>
+              <label class="j-f">1D trend</label>
               <div class="j-seg" id="segTrend">
-                <button data-v="up">▲ вверх</button
-                ><button data-v="range">≈ боковик</button
-                ><button data-v="down">▼ вниз</button>
+                <button data-v="up">▲ up</button
+                ><button data-v="range">≈ range</button
+                ><button data-v="down">▼ down</button>
               </div>
             </div>
             <div class="j-field">
-              <label class="j-f">Режим</label>
+              <label class="j-f">Regime</label>
               <div class="j-seg" id="segReg">
-                <button data-v="up">тренд</button
-                ><button data-v="range">диапазон</button>
+                <button data-v="up">trend</button
+                ><button data-v="range">range</button>
               </div>
             </div>
             <div class="j-field j-row2">
               <div>
-                <label class="j-f">Сопротивления сверху</label
+                <label class="j-f">Resistance above</label
                 ><input type="text" id="resAbove" placeholder="60.8k / 61.9k" />
               </div>
               <div>
-                <label class="j-f">Опоры снизу</label
+                <label class="j-f">Support below</label
                 ><input type="text" id="supBelow" placeholder="58.9k / 58.0k" />
               </div>
             </div>
             <div class="j-field">
-              <label class="j-f">Сценарий A — если…</label
+              <label class="j-f">Scenario A — if…</label
               ><textarea
                 id="scenA"
-                placeholder="держит 58k → отскок к 60.8 (продать ралли)"
+                placeholder="holds 58k → bounce to 60.8 (sell the rally)"
               ></textarea>
             </div>
             <div class="j-field">
-              <label class="j-f">Сценарий B — если…</label
+              <label class="j-f">Scenario B — if…</label
               ><textarea
                 id="scenB"
-                placeholder="теряет 58.0k на объёме → вниз к 56k"
+                placeholder="loses 58.0k on volume → down to 56k"
               ></textarea>
             </div>
             <div class="j-field j-row2">
               <div>
-                <label class="j-f">Базовый уклон</label
-                ><input type="text" id="bias" placeholder="продавать отскоки" />
+                <label class="j-f">Base bias</label
+                ><input type="text" id="bias" placeholder="sell the bounces" />
               </div>
               <div>
-                <label class="j-f">План R:R</label
-                ><input type="text" id="rr" placeholder="1:3, стоп за 61.1" />
+                <label class="j-f">Plan R:R</label
+                ><input type="text" id="rr" placeholder="1:3, stop beyond 61.1" />
               </div>
             </div>
-            <button class="j-btn" id="save">Сохранить разметку</button>
+            <button class="j-btn" id="save">Save markup</button>
           </section>
 
           <section class="j-card">
             <h2 class="j-card-title">
-              <span class="j-idx">проверяю</span> Прошлая разметка
+              <span class="j-idx">review</span> Yesterday’s markup
             </h2>
             <div id="yBody">
               <p class="j-empty">
-                Прошлой записи по этой монете ещё нет. Заполни сегодня — завтра
-                проверишь, какой сценарий включился.
+                No previous entry for this coin yet. Fill one in today and tomorrow you can
+                check which scenario fired.
               </p>
             </div>
             <div id="yGradeBox" style="display: none">
               <div class="j-field">
                 <label class="j-f"
-                  >Что включилось? Верна ли была разметка уровней?</label
+                  >Which scenario fired? Were the levels right?</label
                 ><textarea
                   id="grade"
-                  placeholder="включился B, пробил 58 как и ждал; уровень 60.8 стоял точно"
+                  placeholder="B fired, broke 58 as expected; the 60.8 level was exact"
                 ></textarea>
               </div>
-              <button class="j-btn ghost" id="saveGrade">Записать вывод</button>
+              <button class="j-btn ghost" id="saveGrade">Save the takeaway</button>
             </div>
           </section>
         </div>
 
         <section class="j-card">
           <h2 class="j-card-title">
-            <span class="j-idx">считаю</span> Стоп и размер
+            <span class="j-idx">size</span> Stop and size
             <span class="j-coin-sub" id="calcSide"></span>
           </h2>
           <div class="j-field j-calc-grid">
             <div>
-              <label class="j-f">Вход $</label
+              <label class="j-f">Entry $</label
               ><input
                 type="text"
                 id="calcEntry"
@@ -1178,7 +1177,7 @@
               />
             </div>
             <div>
-              <label class="j-f">Стоп $</label
+              <label class="j-f">Stop $</label
               ><input
                 type="text"
                 id="calcStop"
@@ -1187,7 +1186,7 @@
               />
             </div>
             <div>
-              <label class="j-f">Цель $ (опц.)</label
+              <label class="j-f">Target $ (opt.)</label
               ><input
                 type="text"
                 id="calcTarget"
@@ -1196,7 +1195,7 @@
               />
             </div>
             <div>
-              <label class="j-f">Депо $</label
+              <label class="j-f">Account $</label
               ><input
                 type="text"
                 id="calcEq"
@@ -1205,7 +1204,7 @@
               />
             </div>
             <div>
-              <label class="j-f">Риск % депо</label
+              <label class="j-f">Risk % of account</label
               ><input
                 type="text"
                 id="calcRisk"
@@ -1215,29 +1214,29 @@
             </div>
           </div>
           <button class="j-btn ghost j-calc-fill" id="calcFill" type="button">
-            Вход = текущая цена
+            Entry = current price
           </button>
           <div class="j-calc-out" id="calcOut"></div>
           <p class="j-calc-hint">
-            Сначала уровень стопа (под опорой/над сопротивлением + буфер), потом
-            размер — не наоборот. Размер считается так, чтобы при стопе потерять
-            ровно заданный риск депо.
+            Stop level first (below support / above resistance, plus a buffer), size
+            second — not the other way round. Size is computed so that hitting the stop
+            costs exactly the risk you set.
           </p>
         </section>
 
         <section class="j-card">
           <h2 class="j-card-title">
-            <span class="j-idx">журнал</span> История ·
+            <span class="j-idx">journal</span> History ·
             <span id="histCoin">BTC</span>
           </h2>
-          <div id="hist"><p class="j-empty">Пусто.</p></div>
+          <div id="hist"><p class="j-empty">Empty.</p></div>
         </section>
 
         <p class="j-footnote">
-          Цель дрилла — проверять разметку уровней и выбор режима, а не
-          угадывать направление: это монетка. 20–30 записей, и структура
-          читается на автомате. Эдж всё равно в выходе — чтение нужно, чтобы не
-          лезть против тренда и ставить осмысленные стопы.
+          The goal of the drill is to check level markup and regime choice, not to
+          guess direction — that is a coin flip. Twenty or thirty entries and structure
+          reads itself. The edge is still in the exit; reading is what keeps you from
+          fighting the trend and lets you set sensible stops.
         </p>
       </main>
     </div>

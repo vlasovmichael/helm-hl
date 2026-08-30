@@ -8,7 +8,7 @@
     />
     <meta name="theme-color" content="#0c0a09" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#f5f1ea" media="(prefers-color-scheme: light)" />
-    <title>Helm · Стакан</title>
+    <title>Helm · Order book</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -107,7 +107,7 @@
       .ob-row.bid .ob-px { color: var(--ob-bid); }
       .ob-row .ob-sz { text-align: right; color: var(--ob-txt); }
       .ob-row .ob-usd { text-align: right; color: var(--ob-dim); font-size: 11px; }
-      .ob-row.wall .ob-tag::before { content: "▮ СТЕНА"; color: var(--ob-gold); font-weight: 700; }
+      .ob-row.wall .ob-tag::before { content: "▮ WALL"; color: var(--ob-gold); font-weight: 700; }
       .ob-row.wall .ob-sz { color: #fff; font-weight: 700; }
 
       .ob-mid {
@@ -154,11 +154,11 @@
       <header>
         <div class="equity-group">
           <div class="label">Order Book</div>
-          <div class="value" style="font-size: 20px">Стакан Hyperliquid · live</div>
+          <div class="value" style="font-size: 20px">Hyperliquid order book · live</div>
         </div>
         <div class="meta-group">
           <div class="ob-hint" style="max-width: 360px; text-align: right">
-            Подтверждение уровней из реальных лимиток. Только чтение.
+            Level confirmation from real resting limit orders. Read only.
           </div>
         </div>
       </header>
@@ -166,9 +166,9 @@
       <section class="ob-terminal">
         <div class="ob-head">
           <div class="ob-tabs" id="ob-tabs"></div>
-          <input id="ob-custom" class="ob-input" placeholder="монета" maxlength="10" />
+          <input id="ob-custom" class="ob-input" placeholder="coin" maxlength="10" />
           <div class="ob-conn">
-            <span class="ob-dot" id="ob-dot"></span><span id="ob-connTxt">подключение…</span>
+            <span class="ob-dot" id="ob-dot"></span><span id="ob-connTxt">connecting…</span>
           </div>
         </div>
         <div class="ob-main">
@@ -176,42 +176,42 @@
             <div class="ob-ladder" id="ob-asks"></div>
             <div class="ob-mid">
               <span class="ob-price" id="ob-midPx">—</span>
-              <span class="ob-spread">спред <b id="ob-spread">—</b></span>
+              <span class="ob-spread">spread <b id="ob-spread">—</b></span>
             </div>
             <div class="ob-ladder ob-bids" id="ob-bids"></div>
           </div>
 
           <div class="ob-side">
-            <h3>Давление (±0.5% от центра)</h3>
+            <h3>Pressure (±0.5% around mid)</h3>
             <div class="ob-card">
               <div class="ob-imb-bar"><div class="b" id="ob-imbB"></div><div class="a" id="ob-imbA"></div></div>
-              <div class="ob-imb-legend"><span class="lb" id="ob-imbBt">биды —</span><span class="la" id="ob-imbAt">аски —</span></div>
+              <div class="ob-imb-legend"><span class="lb" id="ob-imbBt">bids —</span><span class="la" id="ob-imbAt">asks —</span></div>
               <div class="ob-hint" id="ob-imbHint" style="margin-top: 8px"></div>
             </div>
 
-            <h3>Уровни из стакана</h3>
+            <h3>Levels from the book</h3>
             <div class="ob-card">
-              <div class="ob-wallrow"><span class="lbl">Ближняя стена сверху</span><span><span class="ceiling" id="ob-ceilPx">—</span><span class="dist" id="ob-ceilD"></span></span></div>
-              <div class="ob-wallrow"><span class="lbl">Ближняя стена снизу</span><span><span class="floor" id="ob-floorPx">—</span><span class="dist" id="ob-floorD"></span></span></div>
+              <div class="ob-wallrow"><span class="lbl">Nearest wall above</span><span><span class="ceiling" id="ob-ceilPx">—</span><span class="dist" id="ob-ceilD"></span></span></div>
+              <div class="ob-wallrow"><span class="lbl">Nearest wall below</span><span><span class="floor" id="ob-floorPx">—</span><span class="dist" id="ob-floorD"></span></span></div>
               <div class="ob-hint" style="margin-top: 10px">
-                <span class="ob-gold">▮ Стена</span> = лимитка заметно крупнее соседних. Это реальный уровень, где стоят деньги.
+                <span class="ob-gold">▮ Wall</span> = a resting order much larger than its neighbours. A real level where money sits.
               </div>
             </div>
 
-            <h3>Как читать (вход и выход)</h3>
+            <h3>How to read it (entry and exit)</h3>
             <div class="ob-card ob-hint">
-              • <b>Сверху стена</b> = потолок. В лонг под ней не лезь — там продавцы (как HYPE 64.5).<br />
-              • <b>Снизу стена</b> = пол. Лонг от неё со стопом под стеной = близкий риск.<br />
-              • <b>Биды &gt;&gt; аски</b> = покупатели давят, фон за рост. И наоборот.<br />
-              • <b>Стена исчезла</b> и цена пошла сквозь = уровень пробили, можно по движению.<br />
-              • На <b>выходе</b>: видишь стену впереди — фиксируй до неё, не жди, что прошьёт.
+              • <b>Wall above</b> = ceiling. Do not long into it — that is where sellers sit (like HYPE 64.5).<br />
+              • <b>Wall below</b> = floor. A long off it with the stop under the wall keeps risk tight.<br />
+              • <b>Bids &gt;&gt; asks</b> = buyers pressing, backdrop favours upside. And vice versa.<br />
+              • <b>Wall vanished</b> and price walked through = the level broke, the move is tradable.<br />
+              • On the <b>exit</b>: if there is a wall ahead, take profit before it instead of hoping it breaks.
             </div>
           </div>
         </div>
       </section>
 
       <footer id="footer-status">
-        <span>Стакан подключается напрямую к публичному WS Hyperliquid · только чтение</span>
+        <span>The book connects straight to the public Hyperliquid WS · read only</span>
       </footer>
     </div>
 

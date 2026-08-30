@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Helm · Тренажёр стакана</title>
+<title>Helm · Order book trainer</title>
 <!--
   ТРЕНАЖЁР СТАКАНА — механика исполнения на управляемой модели.
 
@@ -120,8 +120,8 @@
 </head>
 <body>
   <header>
-    <span class="brand">⎈ Helm <small>тренажёр стакана — механика исполнения</small></span>
-    <span class="warn"><b>⚠️</b> цена здесь двигается только твоими сделками. Это модель издержек, не рынок.</span>
+    <span class="brand">⎈ Helm <small>order book trainer — execution mechanics</small></span>
+    <span class="warn"><b>⚠️</b> price here moves only from your own trades. This models cost, not the market.</span>
   </header>
 
   <main>
@@ -130,7 +130,7 @@
       <div class="ladder asks" id="asks"></div>
       <div class="mid">
         <span class="price" id="midPx">—</span>
-        <span class="spread">спред <b id="spread">—</b></span>
+        <span class="spread">spread <b id="spread">—</b></span>
       </div>
       <div class="ladder bids" id="bids"></div>
     </div>
@@ -142,53 +142,53 @@
 
     <!-- ── управление ── -->
     <div class="side">
-      <h3>Заявка</h3>
+      <h3>Order</h3>
       <div class="card">
         <div class="grid2" style="margin-bottom:10px">
-          <div><label>объём</label><input id="qty" value="150" /></div>
-          <div><label>цена (для лимитки)</label><input id="lpx" value="98.00" /></div>
+          <div><label>size</label><input id="qty" value="150" /></div>
+          <div><label>price (for a limit order)</label><input id="lpx" value="98.00" /></div>
         </div>
         <div class="grid2" style="margin-bottom:8px">
-          <button class="buy" id="mBuy">Купить маркетом</button>
-          <button class="sell" id="mSell">Продать маркетом</button>
+          <button class="buy" id="mBuy">Market buy</button>
+          <button class="sell" id="mSell">Market sell</button>
         </div>
         <div class="grid2">
-          <button id="lBuy">Лимитка на покупку</button>
-          <button id="lSell">Лимитка на продажу</button>
+          <button id="lBuy">Limit buy</button>
+          <button id="lSell">Limit sell</button>
         </div>
-        <div class="hint" style="margin-top:10px">Клик по строке стакана подставляет её цену.</div>
+        <div class="hint" style="margin-top:10px">Clicking a book row fills in its price.</div>
       </div>
 
-      <h3>Что стоила сделка</h3>
-      <div class="card" id="fillCard"><div class="empty">сделай первую сделку</div></div>
+      <h3>What the trade cost</h3>
+      <div class="card" id="fillCard"><div class="empty">make your first trade</div></div>
 
-      <h3>Сессия</h3>
+      <h3>Session</h3>
       <div class="card">
         <div class="grid2" style="margin-bottom:8px">
-          <button class="ghost" id="newCandle">Новая свеча</button>
-          <button class="ghost" id="reset">Сброс</button>
+          <button class="ghost" id="newCandle">New candle</button>
+          <button class="ghost" id="reset">Reset</button>
         </div>
-        <label class="toggle"><input type="checkbox" id="mm" checked /> маркет-мейкеры пополняют стакан</label>
+        <label class="toggle"><input type="checkbox" id="mm" checked /> market makers refill the book</label>
         <div class="hint" style="margin-top:8px">
-          Сними галочку — и стакан не восстановится. Так выглядит тонкая монета: каждая твоя сделка делает следующую дороже.
+          Untick it and the book will not refill. That is what a thin coin looks like: every trade makes the next one more expensive.
         </div>
       </div>
 
-      <h3>А как в реальности</h3>
+      <h3>And in reality</h3>
       <div class="card">
         <div class="grid2" style="margin-bottom:8px">
           <input id="realCoin" value="kSHIB" />
-          <button id="realBtn">Померить</button>
+          <button id="realBtn">Measure</button>
         </div>
-        <div id="realOut"><div class="empty">глубина живого стакана HL</div></div>
+        <div id="realOut"><div class="empty">depth of the live HL book</div></div>
       </div>
 
-      <h3>Что тут понимать</h3>
+      <h3>What to take away</h3>
       <div class="card hint">
-        • <b>Маркет-ордер</b> ест стакан снизу вверх: сначала лучшую цену, потом хуже. Средняя цена исполнения всегда хуже той, что видел до клика — это и есть <span class="gold">проскальзывание</span>.<br>
-        • <b>Чем больше объём</b>, тем глубже съел и тем хуже средняя. Удвой объём — проскальзывание вырастет больше чем вдвое.<br>
-        • <b>Лимитка</b> ничего не ест, а <span class="gold">добавляет</span> объём в стакан. Крупная лимитка = «уровень»: цена об неё тормозит, потому что её надо съесть.<br>
-        • <b>Стоп-маркет</b> — это маркет-ордер в худший момент. Вот откуда разница между «стоп на 1.5%» и реальным убытком.
+        • A <b>market order</b> eats the book from the top down: best price first, then worse. The average fill is always worse than what you saw before clicking — that is <span class="gold">slippage</span>.<br>
+        • <b>The bigger the size</b>, the deeper you eat and the worse the average. Double the size and slippage more than doubles.<br>
+        • A <b>limit order</b> eats nothing — it <span class="gold">adds</span> size to the book. A large limit order is a “level”: price stalls against it because someone has to trade through it first.<br>
+        • A <b>stop-market</b> is a market order at the worst possible moment. That is where the gap between “a 1.5% stop” and the real loss comes from.
       </div>
     </div>
   </main>
@@ -251,7 +251,7 @@ function refill() {
   for (const m of mine) addLimit(m.side === 'ask' ? 'sell' : 'buy', m.px, m.sz, true);
 }
 
-/** Маркет-ордер. Возвращает отчёт об исполнении или null. */
+/** Market order. Returns a fill report or null. */
 function marketOrder(side, size) {
   const book = side === 'buy' ? asks : bids;
   const midBefore = midPrice();
@@ -332,7 +332,7 @@ function renderLadder(el, levels, side, maxSz) {
     const row = document.createElement('div');
     row.className = `row ${side}${wall ? ' wall' : ''}${l.mine > 0 ? ' mine' : ''}${lastEaten.has(l.px) ? ' eaten' : ''}`;
     row.innerHTML =
-      `<span class="tag">${wall ? '▮ СТЕНА' : ''}</span>` +
+      `<span class="tag">${wall ? '▮ WALL' : ''}</span>` +
       `<span class="px">${px2(l.px)}</span>` +
       `<span class="sz">${Math.round(l.sz)}</span>` +
       `<div class="bar" style="width:${Math.max(3, (l.sz / maxSz) * 100)}%"></div>`;
@@ -351,7 +351,7 @@ function drawChart() {
   const all = cur ? [...candles, cur] : candles;
   if (!all.length) {
     ctx.fillStyle = '#6b7888'; ctx.font = '12px monospace'; ctx.textAlign = 'center';
-    ctx.fillText('свечи появятся после первой сделки', w / 2, h / 2);
+    ctx.fillText('candles appear after the first trade', w / 2, h / 2);
     return;
   }
   const hi = Math.max(...all.map((c) => c.h)), lo = Math.min(...all.map((c) => c.l));
@@ -387,7 +387,7 @@ function drawChart() {
     ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(w - 44, yy); ctx.stroke();
     ctx.setLineDash([]); ctx.globalAlpha = 1;
     ctx.fillStyle = '#e8b84b'; ctx.textAlign = 'left';
-    ctx.fillText('свеча формируется', 4, yy - 5);
+    ctx.fillText('candle forming', 4, yy - 5);
   }
 }
 
@@ -401,20 +401,20 @@ function render() {
 }
 
 function showFill(r, crossed) {
-  if (!r) { $('fillCard').innerHTML = '<div class="empty">ликвидности не хватило — стакан пуст</div>'; return; }
-  const dir = r.side === 'buy' ? 'покупка' : 'продажа';
+  if (!r) { $('fillCard').innerHTML = '<div class="empty">not enough liquidity — the book is empty</div>'; return; }
+  const dir = r.side === 'buy' ? 'buy' : 'sell';
   const rows = [
-    ['направление', dir, ''],
-    ['исполнено', `${Math.round(r.filled)}${r.partial ? ` (не влезло ${Math.round(r.partial)})` : ''}`, r.partial ? 'bad' : ''],
-    ['средняя цена', px2(r.avg), ''],
-    ['mid до клика', px2(r.midBefore), ''],
-    ['проскальзывание', `${px2(r.slipAbs)} / ${r.slipPct.toFixed(3)}%`, 'gold'],
-    ['стоило лишнего', usd(r.slipAbs * r.filled), 'bad'],
-    ['съедено уровней', String(r.levels), ''],
-    ['цена сдвинулась', `${r.movePct >= 0 ? '+' : ''}${r.movePct.toFixed(2)}%`, r.movePct >= 0 ? 'good' : 'bad'],
+    ['side', dir, ''],
+    ['filled', `${Math.round(r.filled)}${r.partial ? ` (${Math.round(r.partial)} unfilled)` : ''}`, r.partial ? 'bad' : ''],
+    ['average price', px2(r.avg), ''],
+    ['mid before the click', px2(r.midBefore), ''],
+    ['slippage', `${px2(r.slipAbs)} / ${r.slipPct.toFixed(3)}%`, 'gold'],
+    ['extra cost', usd(r.slipAbs * r.filled), 'bad'],
+    ['levels eaten', String(r.levels), ''],
+    ['price moved', `${r.movePct >= 0 ? '+' : ''}${r.movePct.toFixed(2)}%`, r.movePct >= 0 ? 'good' : 'bad'],
   ];
   $('fillCard').innerHTML =
-    (crossed ? '<div class="hint" style="margin-bottom:8px"><span class="gold">Лимитка пересекла спред</span> → исполнилась как маркет. Лимитка защищает от проскальзывания, только если стоит ЗА спредом.</div>' : '') +
+    (crossed ? '<div class="hint" style="margin-bottom:8px"><span class="gold">The limit order crossed the spread</span> → it filled like a market order. A limit order protects you from slippage only while it rests BEHIND the spread.' : '') +
     rows.map(([k, v, c]) => `<div class="kv"><span class="k">${k}</span><span class="v ${c}">${v}</span></div>`).join('');
 }
 
@@ -423,14 +423,14 @@ function showFill(r, crossed) {
 // ─────────────────────────────────────────────────────────────
 async function measureReal() {
   const coin = $('realCoin').value.trim();
-  $('realOut').innerHTML = '<div class="empty">запрашиваю…</div>';
+  $('realOut').innerHTML = '<div class="empty">requesting…</div>';
   try {
     const meta = await fetch('https://api.hyperliquid.xyz/info', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'meta' }),
     }).then((r) => r.json());
     const asset = meta.universe.find((a) => a.name.toUpperCase() === coin.toUpperCase());
-    if (!asset) throw new Error(`монета "${coin}" не найдена`);
+    if (!asset) throw new Error(`coin "${coin}" not found`);
 
     const cost = async (name) => {
       const b = await fetch('https://api.hyperliquid.xyz/info', {
@@ -458,12 +458,12 @@ async function measureReal() {
     const [c, btc] = await Promise.all([cost(asset.name), cost('BTC')]);
     const ratio = btc.up / c.up;
     $('realOut').innerHTML =
-      `<div class="kv"><span class="k">${asset.name} · вверх 0.5%</span><span class="v gold">${usd(c.up)}</span></div>` +
-      `<div class="kv"><span class="k">${asset.name} · вниз 0.5%</span><span class="v gold">${usd(c.down)}</span></div>` +
-      `<div class="kv"><span class="k">BTC · вверх 0.5%</span><span class="v">${usd(btc.up)}</span></div>` +
-      `<div class="hint" style="margin-top:9px">BTC глубже в <b>${ratio.toFixed(0)}×</b>. Твой размер ни там, ни там не сдвинет цену — глубина важна тебе не для входа, а для <b>стопа</b>: чем тоньше стакан, тем хуже исполнится стоп-маркет.</div>`;
+      `<div class="kv"><span class="k">${asset.name} · up 0.5%</span><span class="v gold">${usd(c.up)}</span></div>` +
+      `<div class="kv"><span class="k">${asset.name} · down 0.5%</span><span class="v gold">${usd(c.down)}</span></div>` +
+      `<div class="kv"><span class="k">BTC · up 0.5%</span><span class="v">${usd(btc.up)}</span></div>` +
+      `<div class="hint" style="margin-top:9px">BTC is <b>${ratio.toFixed(0)}×</b> deeper. Your size moves neither market — depth matters not for the entry but for the <b>stop</b>: the thinner the book, the more a stop-market costs you.</div>`;
   } catch (e) {
-    $('realOut').innerHTML = `<div class="hint"><span class="gold">не вышло:</span> ${e.message}<br>Если это CORS — открой файл через локальный сервер, не напрямую из файла.</div>`;
+    $('realOut').innerHTML = `<div class="hint"><span class="gold">failed:</span> ${e.message}<br>If this is CORS, open the file through a local server rather than straight from disk.</div>`;
   }
 }
 
@@ -478,7 +478,7 @@ $('mSell').onclick = () => { showFill(marketOrder('sell', qty()), false); render
 $('lBuy').onclick  = () => { const r = addLimit('buy', lpx(), qty()); if (r && r.crossed) showFill(r.report, true); render(); };
 $('lSell').onclick = () => { const r = addLimit('sell', lpx(), qty()); if (r && r.crossed) showFill(r.report, true); render(); };
 $('newCandle').onclick = () => { newCandle(); render(); };
-$('reset').onclick = () => { initBook(); candles = []; cur = null; lastEaten = new Set(); $('fillCard').innerHTML = '<div class="empty">сделай первую сделку</div>'; render(); };
+$('reset').onclick = () => { initBook(); candles = []; cur = null; lastEaten = new Set(); $('fillCard').innerHTML = '<div class="empty">make your first trade</div>'; render(); };
 $('mm').onchange = (e) => { mmRefill = e.target.checked; };
 $('realBtn').onclick = measureReal;
 window.addEventListener('resize', drawChart);
