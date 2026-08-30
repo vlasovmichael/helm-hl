@@ -135,7 +135,7 @@ function refreshLiquidWhitelist(universe, assetCtxs) {
  * Тот же cache-period, что и у основного liquidSet.
  */
 function refreshHunterWhitelist(universe, assetCtxs) {
-  const { hunterMinVolume, liquidCacheMs } = config.trading;
+  const { minVolumeUsd, liquidCacheMs } = config.trading;
 
   if (Date.now() - hunterCache.ts < liquidCacheMs && hunterCache.set.size > 0) {
     return hunterCache.set;
@@ -146,13 +146,13 @@ function refreshHunterWhitelist(universe, assetCtxs) {
     const coin = universe[i]?.name;
     const vol  = parseFloat(assetCtxs[i]?.dayNtlVlm ?? 0);
     if (!coin || isNaN(vol)) continue;
-    if (vol < hunterMinVolume) continue;
+    if (vol < minVolumeUsd) continue;
     set.add(coin.toUpperCase());
   }
 
   if (set.size === 0) {
     logger.warn(
-      `[Scout] Hunter whitelist: no coins passed floor $${(hunterMinVolume / 1e6).toFixed(1)}M — ` +
+      `[Scout] Hunter whitelist: no coins passed floor $${(minVolumeUsd / 1e6).toFixed(1)}M — ` +
       `keeping previous (${hunterCache.set.size} coins)`,
     );
     return hunterCache.set;
@@ -160,7 +160,7 @@ function refreshHunterWhitelist(universe, assetCtxs) {
 
   hunterCache = { ts: Date.now(), set };
   logger.info(
-    `[Scout] Hunter whitelist refreshed: ${set.size} coins | floor $${(hunterMinVolume / 1e6).toFixed(1)}M`,
+    `[Scout] Hunter whitelist refreshed: ${set.size} coins | floor $${(minVolumeUsd / 1e6).toFixed(1)}M`,
   );
 
   return set;

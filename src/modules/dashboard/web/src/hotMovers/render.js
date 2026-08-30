@@ -430,48 +430,25 @@ export function renderHotMovers(payload, fmtTime) {
     // взвешенному ходу окон с подтверждением accel/vol.
     const setup = computeMomentum(x.windows, accelKind, volKind, x.s, flush);
 
-    // ── Честный вердикт (2026-06-19) ─────────────────────────────────────────
-    // Actionable «🎯 вход» загорается ТОЛЬКО на подтверждённом эдже fade-high-ER
-    // (s.fadeHot — единственное правило, пережившее OOS, см. memory
-    // darkknight_backtest). Постоянный continuation-вердикт карточки бэктестился
-    // в МИНУС (−0.16%/30м, win 42%, 1752 сигн) → его НЕ выдаём как сделку:
-    // показываем приглушённым контекст-направлением (momentum), Enter='—'.
-    // Карточка перестаёт «продавать» проигрышный continuation как вход.
-    // Презентация-only: computeMomentum/серверный двойник/ntfy не трогаем.
+    // Честный вердикт: continuation-вердикт карточки бэктестился в МИНУС
+    // (−0.16%/30м, win 42%, 1752 сигнала), поэтому «вход» здесь не загорается
+    // никогда — только приглушённый контекст направления, Enter='—'.
     let setupCls = setup.cls;
     let setupLabel = setup.label;
     let setupTitle = setup.title;
-    let entryState = "none"; // для незанятой монеты переопределяется ниже (zone при fade-high-ER)
-    let entryTitle = "";
-    const fh = s.fadeHot;
+    const entryState = "none";
+    const entryTitle = isOpen
+      ? ""
+      : "context only — continuation backtests negative, this is not an entry";
     if (!isOpen) {
-      if (fh?.fired) {
-        // Эдж: яркий fade-пилл (сторона ПЕРЕБИВАЕТ continuation) + 🎯 вход.
-        // План (зона/стоп/выход) — в под-строке fh:COIN ниже.
-        const up = fh.side === "LONG";
-        const moveTxt = fh.move != null ? fmtPct(fh.move) : "—";
-        const erTxt = fh.er != null ? fh.er.toFixed(2) : "—";
-        setupCls = up ? "setup-fade-long" : "setup-fade-short";
-        setupLabel = `<span class="setup-pill">🔥 ${fh.side} FADE</span>`;
-        setupTitle =
-          `🎯 ЭДЖ: fade выдохшегося хвоста — ход 30м ${moveTxt} при Kaufman ER 4ч ${erTxt}. ` +
-          `Единственное правило, пережившее OOS. План входа — в строке ниже.`;
-        entryState = "zone";
-        entryTitle = `${fh.side} FADE — вход у текущей цены (выдохшийся хвост). План в строке ниже.`;
-      } else {
-        // Нет эджа: continuation = контекст, не сделка. Гасим до wait-вида,
-        // Enter='—'. Сторона/тинт строки и %-ячейки всё ещё показывают движение.
-        setupCls =
-          setup.side === "LONG" ? "setup-wait-long"
-          : setup.side === "SHORT" ? "setup-wait-short"
-          : "setup-none";
-        setupLabel = setupLabel.replace(" ●", ""); // снять STRONG-точку «вход»
-        setupTitle =
-          `Контекст-направление (momentum), НЕ сделка — continuation в минус по бэктесту. ` +
-          `Жди 🔥 fade-high-ER. · ${setup.title}`;
-        entryState = "none";
-        entryTitle = "эджа нет — continuation бэктестится в минус, ждём fade-high-ER (🔥)";
-      }
+      // Гасим до wait-вида: сторона и тинт строки всё ещё показывают движение,
+      // но Enter остаётся '—'.
+      setupCls =
+        setup.side === "LONG" ? "setup-wait-long"
+        : setup.side === "SHORT" ? "setup-wait-short"
+        : "setup-none";
+      setupLabel = setupLabel.replace(" ●", ""); // снять STRONG-точку «вход»
+      setupTitle = `Context direction (momentum), NOT a trade. · ${setup.title}`;
     }
 
     // OI delta 5m — нейтральная раскраска: OI сам по себе не хорош/плох.
@@ -572,33 +549,6 @@ export function renderHotMovers(payload, fmtTime) {
         items.push({ key: `pos:${s.coin}`, cls: "hm-pos-row", html: posInner });
     }
 
-    // Под-строка forward-сигнала «fade выдохшегося хвоста» (high-ER). Сервер
-    // (enrichFadeHot) ставит s.fadeHot когда |ход 30м|≥3% И Kaufman ER 4ч≥0.47.
-    // Это РЕДКИЙ событийный пилл (≈0.3% баров): монета+сторона+зона+стоп+выход.
-    // Рядом тихо меряет paper-слот strategy_id='fadehot'. Показываем всегда (и в
-    // открытой монете — это контр-сигнал к её позиции). `fh` объявлен выше
-    // (честный-вердикт блок) — переиспользуем, не редекларируем.
-    if (fh?.fired) {
-      const sideCls = fh.side === "SHORT" ? "fh-short" : "fh-long";
-      const zone =
-        fh.zoneLo != null && fh.zoneHi != null
-          ? `$${fmtPrice(fh.zoneLo)}–$${fmtPrice(fh.zoneHi)}`
-          : fmtPrice(s.price);
-      const erTxt = fh.er != null ? fh.er.toFixed(2) : "—";
-      const moveTxt = fh.move != null ? fmtPct(fh.move) : "—";
-      const stopTxt = fh.stop != null ? `$${fmtPrice(fh.stop)}` : "—";
-      const stopPct = fh.stopPct != null ? `${fh.stopPct}%` : "";
-      const exitTxt = fh.timeStopMin != null ? `~${Math.round(fh.timeStopMin / 60)}ч` : "~2ч";
-      const tip =
-        `Fade an exhausted tail: 30m move ${moveTxt} at Kaufman ER 4h ${erTxt} (≥0.47). ` +
-        `Fade AGAINST the move. Time-stop exit ${exitTxt} + wide stop ${stopPct}. ` +
-        `Marginal forward candidate — a paper slot measures it alongside.`;
-      const inner = `<td colspan="11">
-        <span class="hm-fh-tag ${sideCls}" title="${tip}">🔥 tail fade ${fh.side}</span>
-        <span class="hm-fh-meta">zone ${zone} · stop ${stopTxt} (${stopPct}) · exit ${exitTxt} · ER ${erTxt}</span>
-      </td>`;
-      items.push({ key: `fh:${s.coin}`, cls: "hm-fadehot-row", html: inner });
-    }
   });
 
   // Добиваем таблицу пустыми строками до HM_MAX_ROWS, чтобы высота не прыгала

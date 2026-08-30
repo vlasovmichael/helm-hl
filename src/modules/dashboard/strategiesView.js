@@ -36,59 +36,10 @@ function startOfTodayMs() {
 }
 
 /**
- * Реестр стратегий. `kind` — короткий тег стиля. `resolve()` отдаёт runtime-статус
- * (читает config-флаги + слоты). `virtual()` — снапшот compound-песочницы (или null).
- * Добавление будущей стратегии: новая запись здесь.
+ * Реестр режимов ведения. Автоматических стратегий больше нет: вход всегда
+ * ручной, бот ведёт позу (нянька) и считает бумажный журнал.
  */
 const REGISTRY = [
-  {
-    id: 'hunter',
-    label: 'Hunter SHORT',
-    kind: 'momentum · short',
-    resolve: () => {
-      const enabled = config.trading.hunterEnabled;
-      const live = config.isProduction && config.trading.hunterProdEnabled;
-      return { enabled, status: !enabled ? 'off' : live ? 'live' : 'paper' };
-    },
-  },
-  {
-    id: 'hunter_long',
-    label: 'Hunter LONG',
-    kind: 'momentum · long',
-    resolve: () => {
-      const enabled = config.trading.hunterLongEnabled;
-      const live = config.isProduction && config.trading.hunterLongProdEnabled;
-      return { enabled, status: !enabled ? 'off' : live ? 'live' : 'paper' };
-    },
-  },
-  {
-    id: 'hunter_oi',
-    label: 'Hunter SHORT +OI',
-    kind: 'momentum · short · OI-gate',
-    resolve: () => {
-      // PAPER-only A/B-двойник Hunter с OI-divergence воротами на входе.
-      const enabled = config.trading.hunterOiPaperEnabled;
-      return { enabled, status: enabled ? 'paper' : 'off' };
-    },
-  },
-  // Carry / Chill Boy / Candy Girl / Fader удалены как торговые стратегии
-  // (убыточный трек, см. memory/strategy_cull_2026_06_15.md + cull-рефактор
-  // 2026-06-17). Candy Girl остаётся radar-only (5m-сигналы для Setup Scanner ·
-  // Swing); Fader снесён целиком — его радар фронт уже не рендерил.
-  // Vapor / Hot Movers (paper) / Setup Swing (paper) / Dark Knight (TG) сняты
-  // 2026-06-24 (эджа нет за достаточную выборку — см. memory). Их история остаётся
-  // в архиве для чтения; strategistSwing/HotMovers живут как карточки/Setup Scanner.
-  {
-    id: 'fadehot',
-    label: 'Fade-high-ER',
-    kind: 'exhausted-tail · fade',
-    split: true,                              // fade бывает и SHORT (памп), и LONG (дамп)
-    resolve: () => {
-      // PAPER-only (PROD-пути нет): enabled → paper, иначе off.
-      const enabled = config.trading.fadehotPaperEnabled;
-      return { enabled, status: enabled ? 'paper' : 'off' };
-    },
-  },
   {
     id: 'manual_paper',
     label: 'Мой папер',

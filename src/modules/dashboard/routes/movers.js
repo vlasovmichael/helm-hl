@@ -181,7 +181,7 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
   try {
     const data = Array.isArray(state.latestHunter) ? state.latestHunter : [];
     const now = state.latestHunterAt || Date.now();
-    const trendLookback = config.trading.hunterTrendLookbackMin;
+    const trendLookback = config.trading.trendLookbackMin;
     const trendMaxRise = config.trading.hunterTrendMaxRisePct;
     // Активные монеты для подсветки в Hot Movers: позиция бота + все ручные
     // (HANDS-OFF) позиции. Юзер торгует руками часами — хочет видеть свою

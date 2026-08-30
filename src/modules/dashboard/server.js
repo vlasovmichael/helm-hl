@@ -50,7 +50,6 @@ import {
 } from "./auth.js";
 import { handleMarketContext } from "./routes/marketContext.js";
 import { handleOiOverview, handleOiCoin } from "./routes/oiCollector.js";
-import { handleSpikeFade } from "./routes/spikeFade.js";
 import { handleFvgForward } from "./routes/research.js";
 import { handleWinners, handleWinnersPositions } from "./routes/winners.js";
 import {
@@ -967,7 +966,6 @@ export function startDashboard() {
   app.get("/api/market-context", handleMarketContext);
   app.get("/api/oi-collector/overview", handleOiOverview);
   app.get("/api/oi-collector/coin", handleOiCoin);
-  app.get("/api/spike-fade", handleSpikeFade);
   app.get("/api/winners", handleWinners);
   // Клик по адресу в карточке «А если взять троих?» — что у него открыто сейчас.
   app.get("/api/winners/positions", handleWinnersPositions);
