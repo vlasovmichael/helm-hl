@@ -139,61 +139,61 @@ export function buildPositionView({ coin, position, price, orders, ordersKnown =
   let detail;
   if (!ordersKnown) {
     status = 'orders_unknown';
-    headline = 'Ордера с биржи не прочитались';
+    headline = 'Could not read orders from the exchange';
     detail =
-      'Не удалось получить список открытых ордеров. Защищена позиция или нет — неизвестно; ' +
-      'молчать об этом хуже, чем сказать. Проверь стоп руками в терминале.';
+      'The list of open orders could not be fetched. Whether the position is protected is unknown; ' +
+      'staying quiet about that is worse than saying it. Check the stop by hand in the terminal.';
   } else if (stopPx == null) {
     status = 'unprotected';
-    headline = 'Стопа на бирже НЕТ';
+    headline = 'There is NO stop on the exchange';
     detail =
-      'У позиции нет защитного trigger-ордера. Правило №2 из TRADING_RULES: стоп ставится ДО входа. ' +
-      'Пока его нет, размер убытка по этой сделке ничем не ограничен.';
+      'The position has no protective trigger order. Rule 2 of TRADING_RULES: the stop goes in BEFORE the entry. ' +
+      'Until it exists, the loss on this trade is unbounded.';
   } else if (targetPx == null) {
     status = 'stop_only';
-    headline = 'Стоп есть, цели нет';
+    headline = 'Stop is set, target is not';
     detail =
-      'Позиция защищена, но выхода в плюс не задано. Без лимитки-цели выход решается в моменте — ' +
-      'а по журналу именно так плюс превращается в ноль.';
+      'The position is protected but has no profit exit. Without a target limit the exit gets decided in the moment — ' +
+      'and in the journal that is exactly how green turns into flat.';
   } else {
     status = 'armed';
-    headline = 'Стоп и цель на месте';
-    detail = 'Позиция ведётся по плану. Пока цена между уровнями, делать нечего.';
+    headline = 'Stop and target are both in place';
+    detail = 'The position is running to plan. While price sits between the levels there is nothing to do.';
   }
 
   // ── заметки: считанные факты, а не советы ──
   const notes = [];
   if (stopLocksProfit) {
     notes.push(
-      `Стоп ${stopPx} уже по ту сторону входа ${entry} — он фиксирует прибыль, а не ограничивает ` +
-      'убыток. Риска по этой сделке больше нет, R считать не от чего.',
+      `The stop ${stopPx} is already past the entry ${entry} — it locks in profit rather than capping ` +
+        'a loss. There is no risk left on this trade, so there is no R to measure.',
     );
   }
   if (riskAbsUsd != null) {
     notes.push(
-      `Стоп стоит $${riskAbsUsd.toFixed(2)} — столько списывается со счёта, если цена его коснётся ` +
-      `(${riskPct.toFixed(2)}% от входа).`,
+      `The stop costs $${riskAbsUsd.toFixed(2)} — that is what leaves the account if price touches it ` +
+      `(${riskPct.toFixed(2)}% from entry).`,
     );
   }
   if (toStopPct != null && toStopPct < 1) {
-    notes.push(`До стопа ${toStopPct.toFixed(2)}% — это одна свеча на текущей волатильности.`);
+    notes.push(`${toStopPct.toFixed(2)}% to the stop — that is one candle at current volatility.`);
   }
   if (rr != null && rr < 1) {
     notes.push(
-      `R:R плана ${rr.toFixed(2)} — цель ближе стопа. Чтобы такая сделка окупалась, попадать надо ` +
-      `чаще ${(100 / (1 + rr)).toFixed(0)}% раз, а бейзлайн журнала — 59%.`,
+      `Plan R:R ${rr.toFixed(2)} — the target is closer than the stop. For this to pay you would need to be right ` +
+      `more than ${(100 / (1 + rr)).toFixed(0)}% of the time; the journal baseline is 59%.`,
     );
   }
   // Стоп/цель на часть объёма — самая тихая из ошибок: панель показывает
   // «защищено», а прикрыта половина позиции.
   if (found.stopSz > 0 && sz > 0 && found.stopSz < sz * 0.99) {
     notes.push(
-      `Стопы прикрывают ${found.stopSz} из ${sz} — остаток позиции без защиты, ` +
-      `реальный риск больше показанного.`,
+      `Stops cover ${found.stopSz} of ${sz} — the rest of the position is unprotected, ` +
+      `so the real risk is larger than shown.`,
     );
   }
-  if (found.stopCount > 1) notes.push(`Стопов несколько (${found.stopCount}) — показан ближайший к цене.`);
-  if (found.targetCount > 1) notes.push(`Целей несколько (${found.targetCount}) — показана ближайшая к цене.`);
+  if (found.stopCount > 1) notes.push(`There are several stops (${found.stopCount}) — showing the one nearest to price.`);
+  if (found.targetCount > 1) notes.push(`There are several targets (${found.targetCount}) — showing the one nearest to price.`);
 
   return {
     coin,

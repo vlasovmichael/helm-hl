@@ -86,29 +86,29 @@ const PRICE_FLAT_PCT = 0.3;
 // двусмысленность на плоском окне.
 function describeOiPriceRegime(oiUp, pricePct, htfTrend = null) {
   if (pricePct == null) {
-    return oiUp ? 'набор позиций (цена: нет данных).' : 'сброс позиций (цена: нет данных).';
+    return oiUp ? 'positions building (price: no data).' : 'positions unwinding (price: no data).';
   }
   const flat = Math.abs(pricePct) < PRICE_FLAT_PCT;
-  const px = `цена ${fmtPct(pricePct)}`;
+  const px = `price ${fmtPct(pricePct)}`;
   const htfHint =
     htfTrend === 'up' ? ' [1h ↑]' : htfTrend === 'down' ? ' [1h ↓]' : '';
   if (oiUp) {
     if (flat) {
       // Плоское 3м-окно — направление даёт ТОЛЬКО старший тренд.
       if (htfTrend === 'down')
-        return `OI↑ при плоской 3м-цене (${px}), но 1h-тренд ВНИЗ${htfHint} — вероятно новые шорты давят, НЕ бычье накопление.`;
+        return `OI↑ on a flat 3m price (${px}), but the 1h trend is DOWN${htfHint} — likely new shorts pressing, NOT bullish accumulation.`;
       if (htfTrend === 'up')
-        return `OI↑ при плоской 3м-цене (${px}), 1h-тренд вверх${htfHint} — набор лонгов по тренду, хода на 3м пока нет.`;
-      return `набор позиций при плоской 3м-цене (${px}) — копят топливо, сторона неясна (1h флэт), хода пока нет.`;
+        return `OI↑ on a flat 3m price (${px}), 1h trend up${htfHint} — longs building with the trend, no 3m move yet.`;
+      return `positions building on a flat 3m price (${px}) — fuel accumulating, side unclear (1h flat), no move yet.`;
     }
     return pricePct > 0
-      ? `новые лонги на росте (${px})${htfHint} — приток, тренд вверх.`
-      : `новые шорты на падении (${px})${htfHint} — давят вниз.`;
+      ? `new longs on the way up (${px})${htfHint} — inflow, trend up.`
+      : `new shorts on the way down (${px})${htfHint} — pressing lower.`;
   }
-  if (flat) return `тихий делеверидж при плоской 3м-цене (${px})${htfHint} — разгружаются, хода на графике может не быть (это норма).`;
+  if (flat) return `quiet deleveraging on a flat 3m price (${px})${htfHint} — positions unwinding, the chart may not move (that is normal).`;
   return pricePct > 0
-    ? `short-covering на росте (${px})${htfHint} — шорты крывают, рост может выдыхаться.`
-    : `лонгов выносит на падении (${px})${htfHint} — сброс, возможен отскок.`;
+    ? `short covering on the way up (${px})${htfHint} — shorts closing, the rally may be running out.`
+    : `longs being flushed on the way down (${px})${htfHint} — capitulation, a bounce is possible.`;
 }
 
 const STATE_FILE = 'data/watchlist_alert_state.json';
@@ -193,12 +193,12 @@ async function runOnce(now = Date.now()) {
           const regime = describeOiPriceRegime(oiUp, pricePct, htfTrend);
           logger.info(
             `[WatchlistAlerts] 📊 OI #${item.coin} ${fmtPct(oiSurgePct)}/${OI_SURGE_WINDOW_MIN}m, ` +
-              `цена ${pricePct == null ? '—' : fmtPct(pricePct)}, 1h=${htfTrend ?? '—'}`,
+              `price ${pricePct == null ? '—' : fmtPct(pricePct)}, 1h=${htfTrend ?? '—'}`,
           );
           await fireNtfy(
             `📊 OI #${item.coin} ${oiUp ? '▲' : '▼'} ${fmtPct(oiSurgePct)}`,
-            `OI ${fmtPct(oiSurgePct)} за ${OI_SURGE_WINDOW_MIN}м — ${regime}\n` +
-              `Будильник, не сделка — вход/стоп твои.`,
+            `OI ${fmtPct(oiSurgePct)} over ${OI_SURGE_WINDOW_MIN}m — ${regime}\n` +
+              `An alarm clock, not a trade — the entry and stop are yours.`,
             [oiUp ? 'green_circle' : 'red_circle'],
           );
         }
@@ -227,9 +227,9 @@ async function runOnce(now = Date.now()) {
       `[WatchlistAlerts] 👀 #${item.coin} ${fmtPct(movePct)}/${WINDOW_MIN}m, OI ${fmtPct(oiPct)}`,
     );
     await fireNtfy(
-      `👀 #${item.coin} задвигалась ${fmtPct(movePct)}`,
-      `${fmtPct(movePct)} за ${WINDOW_MIN}м, OI ${fmtPct(oiPct)} — набирают позицию.\n` +
-        `Глянь график. Это будильник, не сделка — вход/стоп твои.`,
+      `👀 #${item.coin} started moving ${fmtPct(movePct)}`,
+      `${fmtPct(movePct)} over ${WINDOW_MIN}m, OI ${fmtPct(oiPct)} — positions are being built.\n` +
+        `Take a look at the chart. An alarm clock, not a trade — the entry and stop are yours.`,
       // 👀 уже в заголовке — тег 'eyes' убран, иначе ntfy рисует двойной 👀.
       [up ? 'green_circle' : 'red_circle'],
     );
@@ -251,7 +251,7 @@ export function startWatchlistAlerts() {
     runOnce().catch((err) => logger.warn(`[WatchlistAlerts] tick failed: ${err.message}`));
   }, INTERVAL_MS);
   timer.unref?.();
-  const coinsLabel = WATCH_ALL ? '* (вся вселенная)' : WATCHLIST.join(',');
+  const coinsLabel = WATCH_ALL ? '* (whole universe)' : WATCHLIST.join(',');
   const oiSurgeLabel = OI_SURGE_ENABLED
     ? `OI-surge ±${OI_SURGE_PCT}%/${OI_SURGE_WINDOW_MIN}m (cd ${OI_SURGE_COOLDOWN_MS / 60_000}m)`
     : 'OI-surge off';

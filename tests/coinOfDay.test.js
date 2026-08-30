@@ -279,7 +279,7 @@ test('held: R считается от входа оператора, а не о�
   const v = buildHeldView({ coin: 'AAA', analysis, position: pos, pick: heldPick, price: 100 });
   assert.equal(v.plan.stopBehindEntry, false);
   assert.ok(Math.abs(v.plan.rNow - 1) < 1e-9, 'прошёл 2 при риске 2 → ровно 1R от своей цены');
-  assert.ok(v.notes.some((n) => n.includes('лучше плана')), 'расхождение входов должно быть названо');
+  assert.ok(v.notes.some((n) => n.includes('better than plan')), 'расхождение входов должно быть названо');
 });
 
 test('held: стоп плана не защищает вход → R не выдумывается', () => {
@@ -289,14 +289,14 @@ test('held: стоп плана не защищает вход → R не выд
   const v = buildHeldView({ coin: 'AAA', analysis, position: { ...heldPos, entryPx: 110 }, pick: heldPick, price: 106 });
   assert.equal(v.plan.stopBehindEntry, true);
   assert.equal(v.plan.rNow, null, 'R не считаем, когда стоп плана не защищает вход');
-  assert.ok(v.notes.some((n) => n.includes('за спиной твоего входа')));
+  assert.ok(v.notes.some((n) => n.includes('already sits behind your entry')));
 });
 
 test('held: сторона позиции против разбора → громкий статус', () => {
   const analysis = { side: 'LONG', score: 5, verdict: { tone: 'setup' }, hits: {}, features: {}, flags: [] };
   const v = buildHeldView({ coin: 'AAA', analysis, position: heldPos, pick: null, price: 99 });
   assert.equal(v.status, 'wrong_side');
-  assert.ok(v.notes.some((n) => n.includes('не по карточке')), 'без пика прогресс считать не от чего');
+  assert.ok(v.notes.some((n) => n.includes('did not come from this card')), 'без пика прогресс считать не от чего');
 });
 
 test('форвард-лог читает signals, а НЕ picks (иначе выборка смещена)', async () => {
@@ -336,14 +336,14 @@ test('отторгованная сегодня монета сворачива�
   assert.equal(v.status, 'traded_today');
   assert.equal(v.levels, undefined, 'уровней входа быть не должно');
   assert.ok(v.headline.includes('+$0.74'));
-  assert.ok(v.notes.some((n) => n.includes('отдать заработанное')), 'предупредить про повтор после плюса');
+  assert.ok(v.notes.some((n) => n.includes('give it back')), 'предупредить про повтор после плюса');
 });
 
 test('отторгованная в минус монета получает предупреждение про тильт', () => {
   const day = { pnl: -1.2, count: 2, lastCloseAt: T0, side: 'LONG' };
   const v = buildTradedTodayView({ coin: 'AAA', analysis: null, day, price: 1 });
   assert.ok(v.headline.includes('-$1.20'));
-  assert.ok(v.notes.some((n) => n.includes('тильт')));
+  assert.ok(v.notes.some((n) => n.includes('tilt')));
 });
 
 test('бумажные сделки бота не закрывают день по монете', async () => {

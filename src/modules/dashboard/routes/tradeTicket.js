@@ -245,7 +245,7 @@ async function buildPositions() {
 /** POST /api/ticket/open */
 export async function handleOpen(req, res) {
   if (!config.isProduction) {
-    return res.status(409).json({ error: "бот в PAPER-режиме — реальные ордера отключены" });
+    return res.status(409).json({ error: "the bot is in PAPER mode — real orders are disabled" });
   }
   const b = readOpenBody(req.body);
 
@@ -259,46 +259,46 @@ export async function handleOpen(req, res) {
   // десятка: биржа такой ордер отбивает, а если бы приняла — ликвидация пришла
   // бы раньше стопа няньки. Найдено 16.08.2026.
   const lev = maxLeverageFor(b.coin);
-  if (!lev) return res.status(422).json({ error: `биржа не знает тикер ${b.coin}` });
+  if (!lev) return res.status(422).json({ error: `the exchange does not know the ticker ${b.coin}` });
   if (!Number.isInteger(b.leverage) || b.leverage < 1) {
     return res.status(400).json({ error: "leverage must be a positive integer" });
   }
   if (b.leverage > lev.effective) {
     const who =
       lev.exchangeMax <= WALLET_LEVERAGE_CAP
-        ? `биржевой максимум для ${b.coin} — ${lev.exchangeMax}x`
-        : `наш потолок — ${WALLET_LEVERAGE_CAP}x (биржа даёт ${lev.exchangeMax}x)`;
-    return res.status(422).json({ error: `плечо ${b.leverage}x недопустимо: ${who}` });
+        ? `the exchange maximum for ${b.coin} is ${lev.exchangeMax}x`
+        : `our cap is ${WALLET_LEVERAGE_CAP}x (the exchange allows ${lev.exchangeMax}x)`;
+    return res.status(422).json({ error: `leverage ${b.leverage}x is not allowed: ${who}` });
   }
 
   const notional = b.marginUsd * b.leverage;
   if (notional < MIN_ORDER_USD) {
-    return res.status(422).json({ error: `минимальный ордер на бирже — $${MIN_ORDER_USD}` });
+    return res.status(422).json({ error: `the exchange minimum order is $${MIN_ORDER_USD}` });
   }
   if (notional > MAX_NOTIONAL_USD) {
-    return res.status(422).json({ error: `нотионал $${notional.toFixed(2)} > потолка $${MAX_NOTIONAL_USD}` });
+    return res.status(422).json({ error: `notional $${notional.toFixed(2)} exceeds the cap of $${MAX_NOTIONAL_USD}` });
   }
 
   // Дневной стоп запирает ВХОД. Выход не запирает никогда (см. handleClose).
   const day = getLastDailyRiskStatus();
   if (day?.halted) {
-    return res.status(423).json({ error: "дневной стоп сработал — вход закрыт до полуночи" });
+    return res.status(423).json({ error: "the daily stop fired — entries are closed until midnight" });
   }
 
   const available = await safeAvailable();
   if (b.marginUsd > available + 1e-9) {
-    return res.status(422).json({ error: `маржа $${b.marginUsd.toFixed(2)} > свободной $${available.toFixed(2)}` });
+    return res.status(422).json({ error: `margin $${b.marginUsd.toFixed(2)} exceeds the free $${available.toFixed(2)}` });
   }
 
   let szDecimals;
   try {
     ({ szDecimals } = resolveAsset(b.coin));
   } catch (err) {
-    return res.status(422).json({ error: `биржа не знает тикер ${b.coin}` });
+    return res.status(422).json({ error: `the exchange does not know the ticker ${b.coin}` });
   }
 
   const price = await resolvePrice(b.coin);
-  if (price == null) return res.status(422).json({ error: `нет живой цены для ${b.coin}` });
+  if (price == null) return res.status(422).json({ error: `no live price for ${b.coin}` });
 
   const entryPx = b.orderType === "limit" ? b.limitPx : price;
   if (b.orderType === "limit") {
@@ -307,7 +307,7 @@ export async function handleOpen(req, res) {
     // чтобы оператор не решил, что ордер поставился.
     const wouldCross = b.side === "short" ? b.limitPx < price : b.limitPx > price;
     if (wouldCross) {
-      return res.status(422).json({ error: "post-only пересекает рынок — сдвинь цену или возьми Market" });
+      return res.status(422).json({ error: "post-only would cross the market — move the price or use Market" });
     }
   }
 
@@ -331,14 +331,14 @@ export async function handleOpen(req, res) {
     sz = bumped;
   }
   if (!(sz > 0)) {
-    return res.status(422).json({ error: `размер округлился в ноль (szDecimals=${szDecimals})` });
+    return res.status(422).json({ error: `size rounded to zero (szDecimals=${szDecimals})` });
   }
 
   try {
     await setLeverage(b.coin, b.leverage);
   } catch (err) {
     logger.warn(`[TradeTicket] setLeverage(${b.coin}, ${b.leverage}) failed: ${err.message}`);
-    return res.status(502).json({ error: `не смог выставить плечо: ${err.message}` });
+    return res.status(502).json({ error: `could not set leverage: ${err.message}` });
   }
 
   const isBuy = b.side === "long";
@@ -396,7 +396,7 @@ export async function handleOpen(req, res) {
  */
 export async function handleClose(req, res) {
   if (!config.isProduction) {
-    return res.status(409).json({ error: "бот в PAPER-режиме — реальных позиций нет" });
+    return res.status(409).json({ error: "the bot is in PAPER mode — there are no real positions" });
   }
   const coin = String(req.body?.coin || "").toUpperCase().replace(/-PERP$/i, "");
   const pct = Number(req.body?.pct);
@@ -411,27 +411,27 @@ export async function handleClose(req, res) {
   try {
     positions = await getPositions();
   } catch (err) {
-    return res.status(502).json({ error: `не смог прочитать позиции: ${err.message}` });
+    return res.status(502).json({ error: `could not read positions: ${err.message}` });
   }
   const ap = (positions || []).find(
     (x) => String(x?.position?.coin || "").toUpperCase() === coin,
   );
   const szi = parseFloat(ap?.position?.szi ?? "0");
-  if (!szi) return res.status(404).json({ error: `нет открытой позиции по ${coin}` });
+  if (!szi) return res.status(404).json({ error: `no open position in ${coin}` });
 
   const side = szi < 0 ? "short" : "long";
   let szDecimals;
   try {
     ({ szDecimals } = resolveAsset(coin));
   } catch (err) {
-    return res.status(422).json({ error: `биржа не знает тикер ${coin}` });
+    return res.status(422).json({ error: `the exchange does not know the ticker ${coin}` });
   }
 
   const step = Math.pow(10, szDecimals);
   let sz = Math.floor((Math.abs(szi) * pct) / 100 * step) / step;
   // Просят 100% — закрываем ровно то, что есть, без потерь на округлении вниз.
   if (pct === 100) sz = Math.abs(szi);
-  if (!(sz > 0)) return res.status(422).json({ error: "размер закрытия округлился в ноль" });
+  if (!(sz > 0)) return res.status(422).json({ error: "the close size rounded to zero" });
 
   try {
     if (orderType === "limit") {
@@ -441,7 +441,7 @@ export async function handleClose(req, res) {
       if (price != null) {
         const wouldCross = isBuy ? limitPx > price : limitPx < price;
         if (wouldCross) {
-          return res.status(422).json({ error: "post-only пересекает рынок — сдвинь цену или возьми Market" });
+          return res.status(422).json({ error: "post-only would cross the market — move the price or use Market" });
         }
       }
       const px = formatHlPrice(limitPx, szDecimals);

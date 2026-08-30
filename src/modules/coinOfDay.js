@@ -300,77 +300,77 @@ export function analyzeCoin({ coin, price, oiUsd, fundingRate, volume24hUsd, c1h
     flags.push({
       key: 'counter_trend',
       severity: 'high',
-      text: '1ч-тренд всё ещё вверх — это контр-трендовый вход, HTF anti-trend гейт бота такую сделку заблокировал бы',
+      text: 'The 1h trend is still up — this is a counter-trend entry; the bot’s HTF anti-trend gate would have blocked it',
     });
   }
   if (!isShort && trend1h === 'down') {
-    flags.push({ key: 'counter_trend', severity: 'high', text: '1ч-тренд вниз — ловим падающий нож' });
+    flags.push({ key: 'counter_trend', severity: 'high', text: 'The 1h trend is down — this is catching a falling knife' });
   }
   if (!isShort) {
     flags.push({
       key: 'long_side',
       severity: 'high',
-      text: 'ЛОНГ против журнала: payoff лонгов 0.44 против 0.70 у шортов (декомпозиция 16.07)',
+      text: 'LONG against the journal: payoff on longs is 0.44 vs 0.70 on shorts (decomposition, Jul 16)',
     });
   }
   if (volume24hUsd != null && volume24hUsd < COD.THIN_VOL_USD) {
-    flags.push({ key: 'thin', severity: 'med', text: 'Оборот < $8M — стакан тонкий, стоп может проскользнуть' });
+    flags.push({ key: 'thin', severity: 'med', text: 'Turnover < $8M — the book is thin, the stop can slip' });
   }
   if (oiVol != null && oiVol > 1.5) {
     flags.push({
       key: 'crowded',
       severity: 'med',
-      text: `OI ${oiVol.toFixed(1)}× оборота — толпа сидит с плечом, риск сквиза против входа`,
+      text: `OI ${oiVol.toFixed(1)}× turnover — the crowd is leveraged, squeeze risk against the entry`,
     });
   }
   if (fundingApr != null && isShort && fundingApr < -20) {
-    flags.push({ key: 'funding_vs', severity: 'med', text: 'Фандинг отрицательный — за шорт платишь ты' });
+    flags.push({ key: 'funding_vs', severity: 'med', text: 'Funding is negative — you pay to hold the short' });
   }
   if (levels?.targetProjected) {
-    flags.push({ key: 'target_projected', severity: 'low', text: 'Цель спроецирована от риска (пивота 1ч по ходу нет), а не снята с графика' });
+    flags.push({ key: 'target_projected', severity: 'low', text: 'The target is projected from risk (no 1h pivot along the way), not taken off the chart' });
   }
   if (levels?.clampedRisk) {
     flags.push({
       key: 'risk_clamped',
       severity: 'med',
-      text: `Структурный стоп был ${levels.structuralRiskPct.toFixed(2)}% — прижат к ${levels.riskPct.toFixed(2)}%. Стоп не «за уровень», а по риск-лимиту: шанс выбить шумом выше`,
+      text: `The structural stop was ${levels.structuralRiskPct.toFixed(2)}% — tightened to ${levels.riskPct.toFixed(2)}%. The stop follows the risk cap, not a level`,
     });
   }
   if (levels?.farTarget) {
     flags.push({
       key: 'rr_capped',
       severity: 'med',
-      text: `Под ценой нет структуры: ближайший пивот 1ч даёт R:R ${levels.farTargetRr.toFixed(1)} — это артефакт тесного стопа, а не эдж. Цель обрезана до ${COD.MAX_RR}R (${levels.target.toPrecision(5)}); дальний уровень ${levels.farTarget.toPrecision(5)} — только для остатка позиции`,
+      text: `No structure below price: the nearest 1h pivot gives R:R ${levels.farTargetRr.toFixed(1)} — an artefact of a tight stop, not an edge. Target truncated`,
     });
   }
   if (!hits.rollover) {
     flags.push({
       key: 'no_rollover',
       severity: 'high',
-      text: `Импульс 4ч ещё НЕ развернулся (${chg4h?.toFixed(2)}%) — фейдим живой ход, а не выдохшийся. Главное отличие от сетапа`,
+      text: `4h momentum has NOT rolled over yet (${chg4h?.toFixed(2)}%) — you would be fading a live move, not an exhausted one. The key difference from the setup`,
     });
   }
   if (atr1h != null && atr1h > 3) {
-    flags.push({ key: 'wild', severity: 'low', text: `ATR(1ч) ${atr1h.toFixed(1)}% — размах большой, размер позиции резать` });
+    flags.push({ key: 'wild', severity: 'low', text: `ATR(1h) ${atr1h.toFixed(1)}% — wide range, cut the position size` });
   }
 
   // ── вердикт ──
   let verdict;
   if (!levels) {
-    verdict = { tone: 'none', headline: 'Сделки нет', detail: 'Не удалось построить уровни — нет 15m-структуры.' };
+    verdict = { tone: 'none', headline: 'No trade', detail: 'Could not build levels — no 15m structure.' };
   } else if (score >= 4 && hits.rollover && hits.structure) {
     // Разворот 4ч + слом структуры 15м — обязательны. Без них это не «хвост
     // выдохся», а фейд живого импульса: другая сделка с другой статистикой.
     verdict = {
       tone: 'setup',
-      headline: `${side} — сетап сложился (${score}/5)`,
-      detail: `Хвост выдохся: ход ${chg24h.toFixed(1)}% за сутки, ${(rangePos * 100).toFixed(0)}% диапазона 72ч, 4ч уже ${chg4h?.toFixed(2)}%. Стоп ставится ДО входа.`,
+      headline: `${side} — setup is in place (${score}/5)`,
+      detail: `The tail is exhausted: ${chg24h.toFixed(1)}% over 24h, ${(rangePos * 100).toFixed(0)}% of the 72h range, 4h already at ${chg4h?.toFixed(2)}%. Place the stop before the entry.`,
     };
   } else {
     verdict = {
       tone: 'watch',
-      headline: `${side} — наблюдение (${score}/5)`,
-      detail: 'Часть признаков не сошлась. Это кандидат в watchlist, а не готовый вход — смотри график сам.',
+      headline: `${side} — watchlist only (${score}/5)`,
+      detail: 'Some conditions did not line up. A watchlist candidate, not a ready entry — read the chart yourself.',
     };
   }
 
@@ -459,59 +459,59 @@ export function buildHeldView({ coin, analysis, position, pick, price }) {
 
   if (analysis && analysis.side !== side) {
     status = 'wrong_side';
-    headline = `Ты в ${side}, а разбор говорит ${analysis.side}`;
+    headline = `You are ${side}, the analysis says ${analysis.side}`;
     detail =
-      'Позиция против того, что сейчас показывает структура. Это не сигнал переворачиваться — ' +
-      'это повод перечитать свой план входа и решить, действует ли он ещё.';
+      'The position runs against what the structure shows now. This is not a signal to flip — ' +
+      'it is a reason to reread your entry plan and decide whether it still holds.';
   } else if (plan?.stopHit) {
     status = 'thesis_invalidated';
-    headline = 'Стоп плана пробит';
+    headline = 'Plan stop broken';
     detail =
-      `Цена ушла за стоп ${pick.stop}, с которым заходили. Тезис сломан — дальше это уже не та сделка, ` +
-      'которую открывали. Держать её можно только по новому осознанному решению, а не по инерции.';
+      `Price went beyond the ${pick.stop} stop you entered with. The thesis is broken — from here it is no longer ` +
+      'the trade you opened. Holding it requires a new, deliberate decision, not inertia.';
   } else if (plan?.targetHit) {
     status = 'target_reached';
-    headline = 'Цель плана достигнута';
-    detail = `Цена дошла до ${pick.target}. План отработан полностью — дальше идёт бонус, не сделка.`;
+    headline = 'Plan target reached';
+    detail = `Price reached ${pick.target}. The plan is fully played out — anything beyond is a bonus, not the trade.`;
   } else if (!analysis) {
     status = 'thesis_faded';
-    headline = 'Сетапа в монете больше нет';
+    headline = 'The setup in this coin is gone';
     detail =
-      'Монета уже не проходит даже входной фильтр (ход за сутки / структура). Причина, по которой ' +
-      'заходили, растворилась — выход по плану, а не по надежде.';
+      'The coin no longer passes even the entry filter (24h move / structure). The reason you entered ' +
+      'has dissolved — exit by plan, not by hope.';
   } else if (analysis.verdict.tone === 'setup') {
     status = 'thesis_intact';
-    headline = `Тезис в силе (${analysis.score}/5)`;
-    detail = 'Разбор всё ещё описывает тот же сетап. Ничего делать не надо — веди позицию по плану.';
+    headline = `Thesis intact (${analysis.score}/5)`;
+    detail = 'The analysis still describes the same setup. Nothing to do — run the position by plan.';
   } else {
     status = 'thesis_weakened';
-    headline = `Тезис ослаб (${analysis.score}/5)`;
+    headline = `Thesis weakened (${analysis.score}/5)`;
     detail =
-      'Часть признаков рассыпалась — на этой картинке движок бы уже не входил. Вход не отменяет, ' +
-      'но подтягивать стоп разумнее, чем ждать цель.';
+      'Some conditions have fallen apart — the engine would no longer enter on this picture. It does not ' +
+      'invalidate your entry, but trailing the stop beats waiting for the target.';
   }
 
   const notes = [];
   if (analysis && !analysis.hits.rollover && side === 'SHORT') {
-    notes.push('Импульс 4ч снова смотрит вверх — фейд может не доехать до цели');
+    notes.push('4h momentum points up again — the fade may not reach the target');
   }
   if (plan && plan.toStopPct < 1) {
-    notes.push(`До стопа ${plan.toStopPct.toFixed(2)}% — одна свеча на текущей волатильности`);
+    notes.push(`${plan.toStopPct.toFixed(2)}% to the stop — one candle at current volatility`);
   }
   if (!pick) {
-    notes.push('Вход был не по карточке — прогресс по плану посчитать не от чего, сверяйся со своим стопом');
+    notes.push('The entry did not come from this card — there is no plan to measure progress against, use your own stop');
   }
   if (plan?.stopBehindEntry) {
     notes.push(
-      `Стоп плана ${pick.stop} уже за спиной твоего входа ${position.entryPx} — вошёл хуже плана, ` +
-      'риск по этой сделке нужно мерить своим стопом, а не карточкиным',
+      `The plan stop ${pick.stop} already sits behind your entry ${position.entryPx} — you entered worse than the plan, ` +
+        'so measure this trade with your own stop, not the card’s',
     );
   }
   if (plan && Math.abs(plan.entryDiffPct ?? 0) > 1) {
     const better = isShort ? plan.entryDiffPct > 0 : plan.entryDiffPct < 0;
     notes.push(
-      `Твой вход ${position.entryPx} против плана ${pick.entry} (${plan.entryDiffPct > 0 ? '+' : ''}${plan.entryDiffPct.toFixed(2)}%) — ` +
-      `${better ? 'лучше плана' : 'хуже плана'}; R считается от твоей цены`,
+      `Your entry ${position.entryPx} vs the plan ${pick.entry} (${plan.entryDiffPct > 0 ? '+' : ''}${plan.entryDiffPct.toFixed(2)}%) — ` +
+        `${better ? 'better than plan' : 'worse than plan'}; R is measured from your price`,
     );
   }
 
@@ -553,14 +553,14 @@ export function buildTradedTodayView({ coin, analysis, day, price }) {
   const notes = [];
   if (analysis?.verdict?.tone === 'setup') {
     notes.push(
-      `Сетап формально всё ещё складывается (${analysis.score}/5) — но вход отсюда уже хуже: ` +
-      'лёгкая часть хода отработана, а стоп придётся ставить дальше',
+      `The setup technically still holds (${analysis.score}/5) — but entering from here is worse: ` +
+      'the easy part of the move is done and the stop has to sit further away',
     );
   }
   if (won) {
-    notes.push('Сделка закрыта в плюс. Повтор в тот же день — самый частый способ отдать заработанное');
+    notes.push('The trade closed green. A repeat on the same day is the most common way to give it back');
   } else {
-    notes.push('Сделка закрыта в минус. Отыгрываться в той же монете — это тильт, а не сетап');
+    notes.push('The trade closed red. Getting even in the same coin is tilt, not a setup');
   }
 
   return {
@@ -570,10 +570,10 @@ export function buildTradedTodayView({ coin, analysis, day, price }) {
     side: day.side || analysis?.side || null,
     status: 'traded_today',
     // Знак ПЕРЕД долларом: иначе минус уезжает внутрь ($-1.20).
-    headline: `Сегодня уже торговал: ${day.count} ${day.count === 1 ? 'сделка' : 'сделки'}, ${day.pnl < 0 ? '-' : '+'}$${Math.abs(day.pnl).toFixed(2)}`,
+    headline: `Already traded today: ${day.count} ${day.count === 1 ? 'trade' : 'trades'}, ${day.pnl < 0 ? '-' : '+'}$${Math.abs(day.pnl).toFixed(2)}`,
     detail:
-      'День по этой монете закрыт. Карточка не предлагает по ней вход повторно — ' +
-      'это защита от «ещё разок», а не оценка сетапа.',
+      'The day is closed for this coin. The card will not offer another entry — ' +
+      'that is protection against “just one more”, not a judgement on the setup.',
     notes,
     day,
     score: analysis?.score ?? null,
@@ -681,9 +681,9 @@ export async function scanCoinOfDay(marketRows, now = Date.now(), opts = {}) {
               key: 'traded_today',
               severity: 'high',
               text:
-                `Эту монету ты сегодня уже торговал (${day.count} ${day.count === 1 ? 'сделка' : 'сделки'}, ` +
-                `${day.pnl < 0 ? '-' : '+'}$${Math.abs(day.pnl).toFixed(2)}). Сетап ещё жив, но вход отсюда — ` +
-                'уже второй заход за день: по журналу минус делают дни с несколькими входами, а не отдельные сделки',
+                `You already traded this coin today (${day.count} ${day.count === 1 ? 'trade' : 'trades'}, ` +
+                `${day.pnl < 0 ? '-' : '+'}$${Math.abs(day.pnl).toFixed(2)}). The setup is still alive, but entering here ` +
+                'is a second go in one day: in the journal, losses come from multi-entry days, not single trades',
             },
             ...a.flags,
           ];

@@ -113,13 +113,13 @@ export function stopSanity({ stop, price, atr }) {
   let level, note;
   if (mult < 0.8) {
     level = "tight";
-    note = `Стоп ${mult.toFixed(1)}×ATR — внутри шума, выбьет на ровном месте. Минимум ~1 ATR.`;
+    note = `Stop ${mult.toFixed(1)}×ATR — inside the noise, it will get taken out for nothing. Use ~1 ATR minimum.`;
   } else if (mult > 3) {
     level = "wide";
-    note = `Стоп ${mult.toFixed(1)}×ATR — очень широкий: либо мельче размер, либо ближе уровень.`;
+    note = `Stop ${mult.toFixed(1)}×ATR — very wide: either size down or find a closer level.`;
   } else {
     level = "ok";
-    note = `Стоп ${mult.toFixed(1)}×ATR — за пределами шума, разумно.`;
+    note = `Stop ${mult.toFixed(1)}×ATR — outside the noise, sensible.`;
   }
   return { mult: Math.round(mult * 10) / 10, level, note };
 }
@@ -133,19 +133,19 @@ export function readOrderFlow({ priceMovePct, oiDeltaPct, volMult, funding }) {
     const up = priceMovePct > 0;
     const oiUp = oiDeltaPct > 0.3;
     const oiDn = oiDeltaPct < -0.3;
-    if (up && oiUp) lines.push(`Цена ↑ + OI ↑ ${fmtSigned(oiDeltaPct)}% — заходят новые лонги, ход подтверждён позициями.`);
-    else if (up && oiDn) lines.push(`Цена ↑ + OI ↓ ${fmtSigned(oiDeltaPct)}% — это шорты крывают (squeeze), топливо иссякает.`);
-    else if (!up && oiUp) lines.push(`Цена ↓ + OI ↑ ${fmtSigned(oiDeltaPct)}% — заходят новые шорты, давление реально.`);
-    else if (!up && oiDn) lines.push(`Цена ↓ + OI ↓ ${fmtSigned(oiDeltaPct)}% — лонги выходят/ликвидируются (капитуляция, может развернуть).`);
+    if (up && oiUp) lines.push(`Price ↑ + OI ↑ ${fmtSigned(oiDeltaPct)}% — new longs coming in, positions confirm the move.`);
+    else if (up && oiDn) lines.push(`Price ↑ + OI ↓ ${fmtSigned(oiDeltaPct)}% — shorts covering (a squeeze), the fuel is running out.`);
+    else if (!up && oiUp) lines.push(`Price ↓ + OI ↑ ${fmtSigned(oiDeltaPct)}% — new shorts coming in, the pressure is real.`);
+    else if (!up && oiDn) lines.push(`Price ↓ + OI ↓ ${fmtSigned(oiDeltaPct)}% — longs exiting or being liquidated (capitulation, can reverse).`);
   }
   if (volMult != null) {
-    if (volMult >= 1.5) lines.push(`Объём ${volMult.toFixed(1)}× среднего — есть конвикция.`);
-    else if (volMult <= 0.7) lines.push(`Объём ${volMult.toFixed(1)}× среднего — тонко, движению не верь.`);
+    if (volMult >= 1.5) lines.push(`Volume ${volMult.toFixed(1)}× average — there is conviction.`);
+    else if (volMult <= 0.7) lines.push(`Volume ${volMult.toFixed(1)}× average — thin, do not trust the move.`);
   }
   if (funding != null && Math.abs(funding) >= 0.0002) {
     const apr = funding * 24 * 365 * 100; // часовая ставка → ~годовых, грубо
-    if (funding > 0) lines.push(`Funding +${(funding * 100).toFixed(3)}% (~${apr.toFixed(0)}% годовых) — лонги платят, толпа в лонге (риск для лонга).`);
-    else lines.push(`Funding ${(funding * 100).toFixed(3)}% — шорты платят, толпа в шорте (риск для шорта).`);
+    if (funding > 0) lines.push(`Funding +${(funding * 100).toFixed(3)}% (~${apr.toFixed(0)}% APR) — longs are paying, the crowd is long (risk for a long).`);
+    else lines.push(`Funding ${(funding * 100).toFixed(3)}% — shorts are paying, the crowd is short (risk for a short).`);
   }
   return lines;
 }
@@ -181,14 +181,14 @@ export function analyzeChart({
   const nearResistance = resistance != null && atr14 != null && (resistance - price) <= 0.75 * atr14;
 
   const bull = [], bear = [];
-  if (htfTrend === "up") bull.push("Старший тренд (1h) вверх — попутный ветер для лонга.");
-  if (htfTrend === "down") bear.push("Старший тренд (1h) вниз — попутный ветер для шорта.");
-  if (ltfTrend === "up") bull.push("Локальный тренд (15m) вверх.");
-  if (ltfTrend === "down") bear.push("Локальный тренд (15m) вниз.");
-  if (nearSupport) bull.push(`Цена у поддержки $${fmt(support)} — зона отскока вверх.`);
-  if (nearResistance) bear.push(`Цена у сопротивления $${fmt(resistance)} — зона отбоя вниз.`);
-  if (rsi14 != null && rsi14 <= 30) bull.push(`RSI ${rsi14.toFixed(0)} — перепродан (отскок вероятнее).`);
-  if (rsi14 != null && rsi14 >= 70) bear.push(`RSI ${rsi14.toFixed(0)} — перекуплен (откат вероятнее).`);
+  if (htfTrend === "up") bull.push("Higher timeframe (1h) is up — tailwind for a long.");
+  if (htfTrend === "down") bear.push("Higher timeframe (1h) is down — tailwind for a short.");
+  if (ltfTrend === "up") bull.push("Local trend (15m) is up.");
+  if (ltfTrend === "down") bear.push("Local trend (15m) is down.");
+  if (nearSupport) bull.push(`Price at support $${fmt(support)} — a bounce zone.`);
+  if (nearResistance) bear.push(`Price at resistance $${fmt(resistance)} — a rejection zone.`);
+  if (rsi14 != null && rsi14 <= 30) bull.push(`RSI ${rsi14.toFixed(0)} — oversold (a bounce is more likely).`);
+  if (rsi14 != null && rsi14 >= 70) bear.push(`RSI ${rsi14.toFixed(0)} — overbought (a pullback is more likely).`);
 
   // План под сторону оператора: стоп за ближайший защищающий уровень, цель — следующий
   // встречный уровень, R = reward/risk. Если уровня нет — стоп по ATR.
@@ -217,7 +217,7 @@ export function analyzeChart({
     userSide, plan, verdict,
     sizing, stopSanity: stop, orderFlow,
     disclaimer:
-      "Это разбор структуры, не сигнал с доказанным эджем. Решение и риск — на тебе.",
+      "Structure analysis, not a proven-edge signal. The decision and the risk are yours.",
   };
 }
 
@@ -264,33 +264,33 @@ export function analyzeMultiTF({ candles4h, candles1h, candles5m, price }) {
 
   // 4h — направление (куда смотреть).
   const note4h =
-    trend4h === "up" ? "тренд вверх — ищи ЛОНГИ, шорт = против ветра"
-      : trend4h === "down" ? "тренд вниз — ищи ШОРТЫ, лонг = против ветра"
-        : "боковик — направления нет, вход без края = лотерея";
+    trend4h === "up" ? "uptrend — look for LONGS, a short fights the wind"
+      : trend4h === "down" ? "downtrend — look for SHORTS, a long fights the wind"
+        : "range — no direction, entering without an edge is a lottery";
 
   // 1h — зона входа и где стоп.
   let note1h;
-  if (nearSupport && nearResistance) note1h = `зажата между подд. $${fmt(support)} и сопр. $${fmt(resistance)} — диапазон уже ATR, сделки нет ни туда ни сюда`;
-  else if (nearSupport) note1h = `цена у поддержки $${fmt(support)} — зона лонга, стоп ПОД неё`;
-  else if (nearResistance) note1h = `цена у сопротивления $${fmt(resistance)} — зона шорта, стоп НАД неё`;
-  else note1h = `между уровнями (подд. $${fmt(support)} / сопр. $${fmt(resistance)}) — вход в пустоте, жди подхода к краю`;
+  if (nearSupport && nearResistance) note1h = `squeezed between support $${fmt(support)} and resistance $${fmt(resistance)} — the range is tighter than ATR, no trade either way`;
+  else if (nearSupport) note1h = `price at support $${fmt(support)} — long zone, stop BELOW it`;
+  else if (nearResistance) note1h = `price at resistance $${fmt(resistance)} — short zone, stop ABOVE it`;
+  else note1h = `between levels (support $${fmt(support)} / resistance $${fmt(resistance)}) — entering in the void, wait for an edge`;
 
   // 5m — тайминг: триггер в сторону bias.
   let triggerReady = false, triggerNote;
   if (bias === "LONG") {
     triggerReady = nearSupport && trend5m === "up";
     triggerNote = triggerReady
-      ? "5m развернулся вверх у поддержки — триггер есть"
-      : nearSupport ? "у поддержки, но 5m ещё не развернулся вверх — рано"
-        : "не на уровне — триггер лонга ждать у поддержки";
+      ? "5m turned up at support — the trigger is there"
+      : nearSupport ? "at support, but 5m has not turned up yet — too early"
+        : "not at a level — wait for the long trigger at support";
   } else if (bias === "SHORT") {
     triggerReady = nearResistance && trend5m === "down";
     triggerNote = triggerReady
-      ? "5m развернулся вниз у сопротивления — триггер есть"
-      : nearResistance ? "у сопротивления, но 5m ещё не развернулся вниз — рано"
-        : "не на уровне — триггер шорта ждать у сопротивления";
+      ? "5m turned down at resistance — the trigger is there"
+      : nearResistance ? "at resistance, but 5m has not turned down yet — too early"
+        : "not at a level — wait for the short trigger at resistance";
   } else {
-    triggerNote = "направление не определено — тайминг считать не от чего";
+    triggerNote = "no direction — nothing to time against";
   }
 
   // Вердикт «куда и когда».
@@ -298,8 +298,8 @@ export function analyzeMultiTF({ candles4h, candles1h, candles5m, price }) {
   if (bias === "STAND_ASIDE") {
     verdict = {
       tone: "neutral",
-      headline: "Стой в стороне — 4h и 1h спорят",
-      detail: `Старший (4h ${trTxt(trend4h)}) и средний (1h ${trTxt(trend1h)}) тренды не согласны. Куда — непонятно; лучший вход здесь = не входить и ждать, пока договорятся.`,
+      headline: "Stand aside — 4h and 1h disagree",
+      detail: `The higher (4h ${trTxt(trend4h)}) and middle (1h ${trTxt(trend1h)}) trends disagree. Direction is unclear; the best entry here is none — wait until they agree.`,
     };
   } else {
     plan = buildPlan({ userSide: bias, price, support, resistance, resistances, supports, atr14: atr1h });
@@ -315,30 +315,30 @@ export function analyzeMultiTF({ candles4h, candles1h, candles5m, price }) {
     if (triggerReady && !flat4h && !zoneConflict && rrOk) {
       verdict = {
         tone: "reasonable",
-        headline: `${bias} — условия сложились`,
-        detail: `4h за тебя, цена на уровне 1h, 5m дал триггер. Стоп за уровень ($${fmt(plan.invalidation ?? plan.stop)}), R:R ≈ ${plan.rr.toFixed(2)}. Дальше — выход отдаём боту (adopt).`,
+        headline: `${bias} — conditions line up`,
+        detail: `4h is with you, price is at a 1h level, 5m gave the trigger. Stop beyond the level ($${fmt(plan.invalidation ?? plan.stop)}), R:R ≈ ${plan.rr.toFixed(2)}. After that the exit goes to the bot (adopt).`,
       };
     } else if (triggerReady) {
       const why = [];
-      if (flat4h) why.push("4h в боковике — направления нет, наклон только от 1h");
-      if (zoneConflict) why.push(bias === "SHORT" ? `цена прямо над поддержкой $${fmt(support)} — шортить некуда` : `цена под сопротивлением $${fmt(resistance)} — лонговать некуда`);
-      if (!rrOk) why.push(`R:R ≈ ${plan.rr != null ? plan.rr.toFixed(2) : "—"} < 1.5 — цель ближе стопа`);
+      if (flat4h) why.push("4h is ranging — no direction, the bias comes from 1h alone");
+      if (zoneConflict) why.push(bias === "SHORT" ? `price sits right above support $${fmt(support)} — nowhere to short into` : `price sits under resistance $${fmt(resistance)} — nowhere to long into`);
+      if (!rrOk) why.push(`R:R ≈ ${plan.rr != null ? plan.rr.toFixed(2) : "—"} < 1.5 — the target is closer than the stop`);
       verdict = {
         tone: "counter",
-        headline: `${bias}-триггер есть, но сделки НЕТ`,
-        detail: `${why.join("; ")}. Триггер без места и математики — это не вход, пропускаем.`,
+        headline: `${bias} trigger is there, but there is NO trade`,
+        detail: `${why.join("; ")}. A trigger without location and maths is not an entry — skip it.`,
       };
     } else if (atLevel) {
       verdict = {
         tone: "counter",
-        headline: `${bias} — жди триггер на 5m`,
-        detail: `Направление (4h) и зона (1h) есть, но 5m ещё не подтвердил. Не лови нож заранее — вход по развороту 5m в сторону ${bias}.`,
+        headline: `${bias} — wait for the 5m trigger`,
+        detail: `Direction (4h) and zone (1h) are there, but 5m has not confirmed. Do not front-run it — enter on the 5m turn in the ${bias} direction.`,
       };
     } else {
       verdict = {
         tone: "neutral",
-        headline: `${bias}, но рано — цена не на уровне`,
-        detail: `Тренд за ${bias}, но цена в пустоте между уровнями 1h. Вход тут = плохой R:R. Жди подхода к ${bias === "LONG" ? "поддержке" : "сопротивлению"}.`,
+        headline: `${bias}, but early — price is not at a level`,
+        detail: `The trend favours ${bias}, but price is in the void between 1h levels. Entering here means poor R:R. Wait for it to reach ${bias === "LONG" ? "support" : "resistance"}.`,
       };
     }
   }
@@ -355,11 +355,11 @@ export function analyzeMultiTF({ candles4h, candles1h, candles5m, price }) {
     },
     verdict,
     plan,
-    disclaimer: "Разбор структуры, не сигнал с доказанным эджем. Эдж — в выходе (adopt). Вход по 4h→1h→5m, чтобы не ловить нож.",
+    disclaimer: "Structure analysis, not a proven-edge signal. The edge is in the exit (adopt). Enter via 4h→1h→5m so you do not catch a knife.",
   };
 }
 
-function trTxt(t) { return t === "up" ? "вверх" : t === "down" ? "вниз" : "боковик"; }
+function trTxt(t) { return t === "up" ? "up" : t === "down" ? "down" : "range"; }
 
 function buildPlan({ userSide, price, support, resistance, resistances, supports, atr14 }) {
   const atrStop = atr14 != null ? atr14 : price * 0.01;
@@ -405,26 +405,26 @@ function verdictFor({ userSide, htfTrend, ltfTrend, nearSupport, nearResistance,
   let tone, headline, detail;
   if (withHtf && atGoodLevel) {
     tone = "reasonable";
-    headline = `${userSide} по тренду от уровня — структурно разумно`;
-    detail = `Старший тренд за тебя, цена у защищающего уровня. Стоп за уровень, дальше пусть бежит.`;
+    headline = `${userSide} with the trend off a level — structurally sound`;
+    detail = `The higher trend is with you and price sits at a protecting level. Stop beyond the level, then let it run.`;
   } else if (againstHtf && !atGoodLevel) {
     tone = "knife";
-    headline = `${userSide} против тренда без уровня — ловишь нож`;
-    detail = `Старший тренд против тебя, и опоры рядом нет. Это контр-тренд в пустоте — высокий риск.`;
+    headline = `${userSide} against the trend with no level — catching a knife`;
+    detail = `The higher trend is against you and there is no support nearby. Counter-trend in the void — high risk.`;
   } else if (againstHtf && atGoodLevel) {
     tone = "counter";
-    headline = `${userSide} — контр-тренд отскок от уровня`;
-    detail = `Против старшего тренда, но от реального уровня. Только быстрый отскок, не разворот: бери малый кусок, стоп жёсткий.`;
+    headline = `${userSide} — counter-trend bounce off a level`;
+    detail = `Against the higher trend but off a real level. A quick bounce, not a reversal: take a small piece, keep the stop tight.`;
   } else {
     tone = "neutral";
-    headline = `${userSide} — смешанная картина`;
-    detail = `Чёткого попутного тренда или уровня под ${userSide} нет. Преимущество не выражено.`;
+    headline = `${userSide} — mixed picture`;
+    detail = `No clear tailwind trend or level supporting a ${userSide}. No pronounced advantage.`;
   }
   if (overextended) detail += wantUp
-    ? " ⚠️ RSI перекуплен — гонишься за уже ушедшим движением."
-    : " ⚠️ RSI перепродан — шортишь в дыру.";
+    ? " ⚠️ RSI overbought — you are chasing a move that already happened."
+    : " ⚠️ RSI oversold — you are shorting into a hole.";
   if (plan?.rr != null && plan.rr < 1)
-    detail += ` ⚠️ R:R ≈ ${plan.rr.toFixed(2)} — цель ближе стопа, математика против тебя.`;
+    detail += ` ⚠️ R:R ≈ ${plan.rr.toFixed(2)} — the target is closer than the stop, the maths is against you.`;
   return { tone, headline, detail };
 }
 

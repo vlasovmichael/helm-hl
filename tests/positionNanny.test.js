@@ -67,14 +67,14 @@ test('стоп в прибыли не даёт отрицательного R', 
   assert.equal(v.plan.stopLocksProfit, true);
   assert.equal(v.plan.riskUsd, null);
   assert.equal(v.plan.rNow, null);
-  assert.ok(v.notes.some((n) => /фиксирует прибыль/.test(n)));
+  assert.ok(v.notes.some((n) => /locks in profit/.test(n)));
 });
 
 test('позиция без стопа помечается unprotected, риск не выдаётся за ноль', () => {
   const v = buildPositionView({ coin: 'AAA', position: longPos, price: 102, orders: [] });
   assert.equal(v.status, 'unprotected');
   assert.equal(v.plan.riskUsd, null);
-  assert.ok(/Стопа на бирже НЕТ/.test(v.headline));
+  assert.ok(/There is NO stop on the exchange/.test(v.headline));
 });
 
 test('нечитаемые ордера — отдельный статус, а не «стопа нет»', () => {
@@ -89,7 +89,7 @@ test('частичный стоп помечается: прикрыт не ве
     coin: 'AAA', position: { ...longPos, szi: 2, notionalUsd: 200 }, price: 102,
     orders: [stopOrder('AAA', 95, 1)],
   });
-  assert.ok(v.notes.some((n) => /остаток позиции без защиты/.test(n)));
+  assert.ok(v.notes.some((n) => /the rest of the position is unprotected/.test(n)));
 });
 
 test('шорт: риск и цель считаются в обратную сторону', () => {
@@ -126,5 +126,5 @@ test('R:R ниже единицы попадает в заметки с нужн
     orders: [stopOrder('AAA', 96), limitOrder('AAA', 102)],
   });
   assert.equal(v.plan.rr, 0.5);
-  assert.ok(v.notes.some((n) => /R:R плана 0\.50/.test(n) && /67%/.test(n)));
+  assert.ok(v.notes.some((n) => /Plan R:R 0\.50/.test(n) && /67%/.test(n)));
 });

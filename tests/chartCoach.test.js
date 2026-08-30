@@ -78,8 +78,8 @@ test('stopSanity: стоп внутри ATR → tight, далеко → ok', () 
 
 test('readOrderFlow: цена↑ + OI↓ = шорт-сквиз; объём/funding', () => {
   const lines = readOrderFlow({ priceMovePct: 2, oiDeltaPct: -4, volMult: 1.8, funding: 0.0005 });
-  assert.ok(lines.some((l) => /squeeze|крыв/i.test(l)), 'распознал short squeeze');
-  assert.ok(lines.some((l) => /Объём/i.test(l)), 'есть строка объёма');
+  assert.ok(lines.some((l) => /squeeze|covering/i.test(l)), 'распознал short squeeze');
+  assert.ok(lines.some((l) => /Volume/i.test(l)), 'есть строка объёма');
   assert.ok(lines.some((l) => /Funding/i.test(l)), 'есть строка funding');
   // Слабый ход → нет OI-строки.
   assert.strictEqual(readOrderFlow({ priceMovePct: 0.05, oiDeltaPct: 5 }).length, 0);
@@ -140,7 +140,7 @@ test('analyzeMultiTF: 4h вниз + 1h вниз → bias SHORT, disclaimer пр�
   assert.strictEqual(out.ok, true);
   assert.strictEqual(out.bias, 'SHORT', 'оба тренда вниз → шорт-bias');
   assert.strictEqual(out.tf.h4.trend, 'down');
-  assert.match(out.disclaimer, /выход/i, 'напоминает: эдж в выходе');
+  assert.match(out.disclaimer, /exit/i, 'напоминает: эдж в выходе');
 });
 
 test('analyzeMultiTF: 4h и 1h спорят → STAND_ASIDE (не входить)', () => {
