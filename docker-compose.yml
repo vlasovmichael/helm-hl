@@ -104,45 +104,6 @@ services:
     networks:
       - gateway_net
 
-  # Postgres под durable execution (docs/dbos-durable-plan.md, шаг 3).
-  # ПОД ПРОФИЛЕМ: обычный `docker compose up -d` его НЕ поднимает. Включается
-  # осознанно — `docker compose --profile dbos up -d dbos-db` — когда дойдём до
-  # тени (шаг 4). До тех пор это заготовка, а не работающий сервис.
-  #
-  # Своя база, а не tax-postgres: там налоговый реестр, и мешать с ним состояние
-  # торгового бота незачем — разные бэкапы, разные последствия у потери.
-  # Замер роста: строка чекпоинта ≈ 482 байта, 2-секундная петля даёт ~21 МБ в
-  # сутки на позицию. Поэтому прополка обязательна, см. план.
-  dbos-db:
-    profiles: [dbos]
-    image: postgres:16-alpine
-    container_name: hl-dbos-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: dbos
-      # Пароль лежит в .env на сервере (сгенерирован `openssl rand -hex 32` —
-      # 32 байта энтропии, 64 символа в hex). В репо его нет и быть не должно.
-      POSTGRES_PASSWORD: ${DBOS_DB_PASSWORD}
-      POSTGRES_DB: dbos_hl
-      TZ: ${TZ:-Europe/Warsaw}
-    volumes:
-      - dbos_pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U dbos -d dbos_hl']
-      interval: 30s
-      timeout: 5s
-      retries: 5
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-    networks:
-      - gateway_net
-
-volumes:
-  dbos_pgdata:
-    name: hl_dbos_pgdata
-
 networks:
   gateway_net:
     name: gateway_net
