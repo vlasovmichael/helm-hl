@@ -84,6 +84,7 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   overflow: hidden;
+  margin-bottom: 26px;  // раньше зазор до Tax Summary держал footnote
 }
 table.ledger {
   width: 100%;
@@ -225,7 +226,7 @@ tfoot td {
   }
 }
 
-/* разворот месяца → дни, сгруппированные по неделям */
+/* разворот месяца → календарь Пн–Вс + колонка недельного итога */
 tr.expandable {
   cursor: pointer;
 
@@ -233,7 +234,7 @@ tr.expandable {
     background: var(--canvas-subtle);
   }
   &:focus-visible {
-    outline: 2px solid var(--accent, var(--text-secondary));
+    outline: 2px solid var(--text-secondary);
     outline-offset: -2px;
   }
 }
@@ -244,48 +245,101 @@ tr.expandable {
   font-size: 10px;
 }
 tr.daybreak > td {
-  padding: 0;
+  padding: 14px;
   background: var(--canvas-subtle);
   border-top: 1px solid var(--hairline);
 }
-table.daily {
+table.cal {
   width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-  font-family: var(--font-mono);
+  border-collapse: separate;
+  border-spacing: 6px;
+  table-layout: fixed;
 
-  th,
-  td {
-    padding: 7px 14px;
-    text-align: right;
-    white-space: nowrap;
-  }
-  th:first-child,
-  td:first-child {
-    text-align: left;
-    padding-left: 34px;
-  }
   thead th {
     font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.07em;
+    letter-spacing: 0.08em;
     color: var(--text-faint);
-    font-family: var(--font-sans);
     font-weight: 600;
-    border-bottom: 1px solid var(--hairline);
-  }
-  tbody tr:not(.wk) td.day {
-    color: var(--text-muted);
-  }
-  tr.wk td {
-    background: var(--card-bg-elev);
-    border-top: 1px solid var(--hairline);
-    font-weight: 600;
+    text-align: left;
+    padding: 0 0 2px 2px;
 
-    &.day {
-      font-family: var(--font-sans);
-      color: var(--text-secondary);
-      padding-left: 20px;
+    &.wk-head {
+      text-align: right;
+      padding-right: 2px;
+    }
+  }
+
+  td {
+    vertical-align: top;
+    height: 62px;
+    border-radius: var(--radius-sm, 6px);
+    padding: 6px 8px;
+    border: 1px solid var(--hairline);
+    background: var(--card-bg);
+    text-align: left;  // гасим right-align, унаследованный от table.ledger
+
+    &.out {
+      border-color: transparent;
+      background: transparent;
+    }
+    &.empty {
+      background: transparent;
+    }
+  }
+
+  .dnum {
+    display: block;
+    font-size: 10.5px;
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+  }
+  .dpnl {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+    margin-top: 3px;
+  }
+  .dsub {
+    display: block;
+    font-size: 10px;
+    color: var(--text-faint);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // знак дня/недели красит и текст, и подложку
+  td.pos {
+    border-color: color-mix(in srgb, var(--green) 40%, transparent);
+    background: color-mix(in srgb, var(--green) 12%, transparent);
+
+    .dpnl {
+      color: var(--green);
+    }
+  }
+  td.neg {
+    border-color: color-mix(in srgb, var(--red) 40%, transparent);
+    background: color-mix(in srgb, var(--red) 12%, transparent);
+
+    .dpnl {
+      color: var(--red);
+    }
+  }
+  td.dim .dpnl {
+    color: var(--text-faint);
+  }
+
+  td.cal-week {
+    background: var(--card-bg-elev);
+    border-left-width: 3px;
+    text-align: right;
+
+    &.out {
+      background: transparent;
+      border-color: transparent;
     }
   }
 }

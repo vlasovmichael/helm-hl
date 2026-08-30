@@ -221,73 +221,75 @@
           ${has ? `<tr class="daybreak" data-days="${m.month}" hidden><td colspan="11">${daysBlock(m)}</td></tr>` : ""}`;
       }
 
-      // ── Разворот месяца: дни, сгруппированные по ISO-неделям (Пн–Вс) ──
-      const dayLabel = (d) => {
-        const dt = new Date(d + "T00:00:00Z");
-        const wd = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][
-          dt.getUTCDay()
-        ];
-        return `${wd} ${dt.getUTCDate()}`;
-      };
-      const weekLabel = (mon) => {
-        const a = new Date(mon + "T00:00:00Z");
-        const b = new Date(a);
-        b.setUTCDate(b.getUTCDate() + 6);
-        const mm = (x) =>
-          monthLabel(x.toISOString().slice(0, 7)).split(" ")[0];
-        return `${mm(a)} ${a.getUTCDate()} – ${mm(b)} ${b.getUTCDate()}`;
-      };
+      // ── Разворот месяца: календарь Пн–Вс + итог недели справа ──
+      const iso = (d) => d.toISOString().slice(0, 10);
+      const cellSum = (d) =>
+        d ? d.botCount + d.adoptedCount + d.manualCount : 0;
 
-      function dayRow(d) {
-        const trades = d.botCount + d.adoptedCount + d.manualCount;
+      function dayCell(date, m, byDate) {
+        const inMonth = iso(date).slice(0, 7) === m.month;
+        if (!inMonth) return '<td class="cal-cell out"></td>';
+        const d = byDate.get(iso(date));
+        const n = cellSum(d);
+        if (!d || (!n && !d.funding)) {
+          return `<td class="cal-cell empty"><span class="dnum">${date.getUTCDate()}</span></td>`;
+        }
         return `
-          <tr>
-            <td class="day">${dayLabel(d.date)}</td>
-            <td class="dim">${trades || "—"}</td>
-            <td class="${cls(d.botNet)}">${d.botCount ? fmt(d.botNet) : "—"}</td>
-            <td class="${cls(d.adoptedNet)}">${d.adoptedCount ? fmt(d.adoptedNet) : "—"}</td>
-            <td class="${cls(d.manualNet)}">${d.manualCount ? fmt(d.manualNet) : "—"}</td>
-            <td class="neg">${d.fees ? fmt(-d.fees, false) : "—"}</td>
-            <td class="net-cell ${cls(d.net)}">${fmt(d.net)}</td>
-          </tr>`;
+          <td class="cal-cell ${cls(d.net)}">
+            <span class="dnum">${date.getUTCDate()}</span>
+            <span class="dpnl">${fmt(d.net)}</span>
+            <span class="dsub">${n ? `${n} ${n === 1 ? "trade" : "trades"}` : "funding"}</span>
+          </td>`;
       }
 
-      function weekRow(mon, days) {
-        const sum = (f) => days.reduce((a, d) => a + f(d), 0);
-        const net = sum((d) => d.net);
-        const trades = sum((d) => d.botCount + d.adoptedCount + d.manualCount);
-        const wins = sum((d) => d.botWins + d.adoptedWins + d.manualWins);
+      function weekCell(week, m, byDate) {
+        const days = week
+          .filter((date) => iso(date).slice(0, 7) === m.month)
+          .map((date) => byDate.get(iso(date)))
+          .filter(Boolean);
+        if (!days.length) return '<td class="cal-week out"></td>';
+        const net = days.reduce((a, d) => a + d.net, 0);
+        const n = days.reduce((a, d) => a + cellSum(d), 0);
         const green = days.filter((d) => d.net > 0).length;
         return `
-          <tr class="wk">
-            <td class="day">Week ${weekLabel(mon)}</td>
-            <td class="dim">${trades || "—"}</td>
-            <td class="dim" colspan="3">${trades ? `${wins}/${trades} win · ${green}/${days.length} зелёных дней` : ""}</td>
-            <td class="neg">${sum((d) => d.fees) ? fmt(-sum((d) => d.fees), false) : "—"}</td>
-            <td class="net-cell ${cls(net)}">${fmt(net)}</td>
-          </tr>`;
+          <td class="cal-week ${cls(net)}">
+            <span class="dpnl">${fmt(net)}</span>
+            <span class="dsub">${n} ${n === 1 ? "trade" : "trades"} · ${green}/${days.length} green</span>
+          </td>`;
       }
 
       function daysBlock(m) {
-        const byWeek = new Map();
-        for (const d of m.days) {
-          if (!byWeek.has(d.week)) byWeek.set(d.week, []);
-          byWeek.get(d.week).push(d);
+        const [y, mo] = m.month.split("-").map(Number);
+        const byDate = new Map(m.days.map((d) => [d.date, d]));
+        const last = new Date(Date.UTC(y, mo, 0));
+        // старт = понедельник недели, в которую попало 1-е число
+        const cur = new Date(Date.UTC(y, mo - 1, 1));
+        cur.setUTCDate(1 - ((cur.getUTCDay() + 6) % 7));
+        const rows = [];
+        while (cur <= last) {
+          const week = [];
+          for (let i = 0; i < 7; i++) {
+            const d = new Date(cur);
+            d.setUTCDate(d.getUTCDate() + i);
+            week.push(d);
+          }
+          rows.push(`
+            <tr>
+              ${week.map((d) => dayCell(d, m, byDate)).join("")}
+              ${weekCell(week, m, byDate)}
+            </tr>`);
+          cur.setUTCDate(cur.getUTCDate() + 7);
         }
-        const body = [...byWeek.entries()]
-          .map(
-            ([mon, days]) => weekRow(mon, days) + days.map(dayRow).join(""),
-          )
-          .join("");
         return `
-          <table class="daily">
+          <table class="cal">
             <thead>
               <tr>
-                <th>Day</th><th>#</th><th>Bot</th><th>Adopted</th>
-                <th>Manual</th><th>Fees</th><th>Net</th>
+                <th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th>
+                <th>Fri</th><th>Sat</th><th>Sun</th>
+                <th class="wk-head">Week</th>
               </tr>
             </thead>
-            <tbody>${body}</tbody>
+            <tbody>${rows.join("")}</tbody>
           </table>`;
       }
 
