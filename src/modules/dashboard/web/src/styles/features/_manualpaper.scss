@@ -1,27 +1,10 @@
 // ── Paper trade (Rabbit-style) — entry modal + Active-Position card bits ──
-// The modal reuses the shared .trade-modal shell (like "What if…"), but with a
-// flat, theme-aware panel: NO glass gradient. Buttons mirror the wi-* look.
+// The modal reuses the shared .trade-modal shell (like "What if…"); only the
+// width differs. Buttons mirror the wi-* look.
 @use "../core/breakpoints" as *;
 
-#mp-modal {
-  // Theme-aware, flat panel (kill the dark glass gradient from .trade-modal).
-  .trade-modal__panel {
-    background: var(--card-bg-elev);
-    border: 1px solid var(--border);
-    color: var(--text-primary);
-    box-shadow: var(--shadow);
-    width: min(380px, calc(100vw - 32px));
-  }
-  .trade-modal__close {
-    background: var(--canvas-inset);
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-
-    &:hover {
-      background: var(--card-bg-hover);
-      color: var(--text-primary);
-    }
-  }
+#mp-modal .trade-modal__panel {
+  width: min(380px, calc(100vw - 32px));
 }
 
 .mp-title {
@@ -197,4 +180,80 @@
 
   &:hover { color: var(--text-primary); border-color: var(--red); }
   &:disabled { opacity: 0.5; cursor: default; }
+}
+
+// ── Close-confirmation dialog (styled stand-in for window.confirm) ──
+#mp-confirm .trade-modal__panel {
+  width: min(360px, calc(100vw - 32px));
+}
+.mp-confirm-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.mp-confirm-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-muted);
+  border-radius: 6px;
+  background: var(--canvas-subtle);
+
+  &:last-child { grid-column: 1 / -1; }
+}
+.mp-confirm-cell-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+}
+.mp-confirm-cell-value {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+
+  &.num-pos { color: var(--green); }
+  &.num-neg { color: var(--red); }
+}
+.mp-confirm-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+
+  button {
+    flex: 1;
+    padding: 10px;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.12s var(--ease);
+
+    &:disabled { opacity: 0.6; cursor: default; }
+  }
+}
+.mp-btn-ghost {
+  border: 1px solid var(--border);
+  background: var(--canvas-inset);
+  color: var(--text-secondary);
+
+  &:hover:not(:disabled) {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
+  }
+}
+.mp-btn-danger {
+  border: 1px solid var(--red-line, var(--red));
+  background: var(--red-soft);
+  color: var(--red);
+
+  &:hover:not(:disabled) {
+    background: var(--red);
+    color: #fff;
+  }
 }

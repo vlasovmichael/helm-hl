@@ -123,29 +123,16 @@
   &__panel {
     position: relative;
     z-index: 1;
-    background:
-      radial-gradient(
-        120% 80% at 0% 0%,
-        rgba(99, 102, 241, 0.08),
-        transparent 50%
-      ),
-      radial-gradient(
-        120% 80% at 100% 100%,
-        rgba(34, 197, 94, 0.06),
-        transparent 55%
-      ),
-      linear-gradient(180deg, rgba(28, 31, 38, 0.98), rgba(20, 23, 28, 0.98));
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--card-bg-elev);
+    border: 1px solid var(--border);
     border-radius: 14px;
     padding: 22px 26px 22px;
     width: min(540px, calc(100vw - 40px));
     max-height: calc(100vh - 40px);
     overflow-y: auto;
     font-family: var(--font-mono);
-    color: var(--text, #f3f4f6);
-    box-shadow:
-      0 20px 60px rgba(0, 0, 0, 0.55),
-      0 0 0 1px rgba(255, 255, 255, 0.02) inset;
+    color: var(--text-primary);
+    box-shadow: var(--shadow);
     animation: tm-pop-in 220ms cubic-bezier(0.18, 0.89, 0.32, 1.28);
   }
   &__close {
@@ -155,9 +142,9 @@
     width: 28px;
     height: 28px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    color: var(--text-muted, #9ca3af);
+    background: var(--canvas-inset);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
     font-size: 18px;
     line-height: 1;
     cursor: pointer;
@@ -167,8 +154,8 @@
     transition: all 0.15s ease;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.1);
-      color: #fff;
+      background: var(--card-bg-hover);
+      color: var(--text-primary);
       transform: rotate(90deg);
     }
   }
@@ -207,15 +194,11 @@
   width: 44px;
   height: 44px;
   border-radius: 12px;
-  background: linear-gradient(
-    135deg,
-    rgba(99, 102, 241, 0.2),
-    rgba(34, 197, 94, 0.1)
-  );
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--grad-brand-soft);
+  border: 1px solid var(--border);
   font-size: 16px;
   font-weight: 700;
-  color: #fff;
+  color: var(--text-primary);
   letter-spacing: 0.5px;
 }
 .tm-header-text {
@@ -242,18 +225,18 @@
   letter-spacing: 0.6px;
 
   &.long {
-    background: rgba(34, 197, 94, 0.14);
-    color: #22c55e;
-    border: 1px solid rgba(34, 197, 94, 0.3);
+    background: var(--green-soft);
+    color: var(--green);
+    border: 1px solid var(--green-line);
   }
   &.short {
-    background: rgba(239, 68, 68, 0.14);
-    color: #ef4444;
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    background: var(--red-soft);
+    color: var(--red);
+    border: 1px solid var(--red-line);
   }
 }
 .tm-sub {
-  color: var(--text-muted, #9ca3af);
+  color: var(--text-muted);
   font-size: 11px;
   margin-top: 4px;
 }
@@ -267,12 +250,12 @@
   margin: 4px 0 18px;
   padding: 14px 16px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: var(--canvas-subtle);
+  border: 1px solid var(--border-muted);
 }
 .tm-pnl-hero-label {
   font-size: 10px;
-  color: var(--text-muted, #9ca3af);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.8px;
 }
@@ -283,12 +266,10 @@
   font-variant-numeric: tabular-nums;
 
   &.positive {
-    color: #22c55e;
-    text-shadow: 0 0 30px rgba(34, 197, 94, 0.25);
+    color: var(--green);
   }
   &.negative {
-    color: #ef4444;
-    text-shadow: 0 0 30px rgba(239, 68, 68, 0.25);
+    color: var(--red);
   }
 }
 
@@ -304,12 +285,12 @@
     gap: 4px;
     padding: 10px 12px;
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.04);
+    background: var(--canvas-subtle);
+    border: 1px solid var(--border-muted);
     transition: background 0.15s ease;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.04);
+      background: var(--card-bg-hover);
     }
   }
 }
@@ -318,7 +299,7 @@
 }
 .tm-cell-label {
   font-size: 9.5px;
-  color: var(--text-muted, #9ca3af);
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.7px;
   font-weight: 600;
@@ -327,31 +308,31 @@
   font-weight: 600;
   font-size: 13px;
   font-variant-numeric: tabular-nums;
-  color: var(--text, #f3f4f6);
+  color: var(--text-primary);
 
   &.muted {
-    color: var(--text-muted, #9ca3af);
+    color: var(--text-muted);
     font-weight: 500;
     font-size: 11px;
   }
   &.positive {
-    color: #22c55e;
+    color: var(--green);
   }
   &.negative {
-    color: #ef4444;
+    color: var(--red);
   }
 }
 
 .tm-section {
   margin-top: 18px;
   padding-top: 14px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--hairline);
 }
 .tm-section-title {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.8px;
-  color: var(--text-muted, #9ca3af);
+  color: var(--text-muted);
   margin-bottom: 10px;
   font-weight: 700;
 }

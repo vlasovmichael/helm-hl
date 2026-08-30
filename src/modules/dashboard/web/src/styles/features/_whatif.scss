@@ -20,25 +20,6 @@
 }
 
 #whatif-modal {
-  /* Theme-aware panel override: the shared .trade-modal__panel is hardcoded dark,
-     which made theme-token text invisible in light mode. Here we follow the theme. */
-  .trade-modal__panel {
-    background: var(--card-bg-elev);
-    border: 1px solid var(--border);
-    color: var(--text-primary);
-    box-shadow: var(--shadow);
-  }
-  .trade-modal__close {
-    background: var(--canvas-inset);
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-
-    &:hover {
-      background: var(--card-bg-hover);
-      color: var(--text-primary);
-    }
-  }
-
   .wi-title {
     font-size: 16px;
     font-weight: 700;

@@ -256,7 +256,7 @@ function rowHtml(p) {
       <td class="r ${pnlCls}"><strong>${pnl == null ? "—" : fmtUsd(pnl)}</strong>${
         roe == null ? "" : `<span class="mp-roe">${fmtPct(roe)}</span>`
       }${sub}</td>
-      <td class="c"><button type="button" class="mp-close-btn" data-mp-close-id="${p.id}" data-mp-coin="${escapeHtml(p.coin)}">Close</button></td>
+      <td class="c"><button type="button" class="mp-close-btn" data-mp-close-id="${p.id}" data-mp-coin="${escapeHtml(p.coin)}" data-mp-side="${escapeHtml(p.side)}" data-mp-lev="${p.leverage}" data-mp-size="${p.sizeUsd}" data-mp-entry="${p.entryPrice}" data-mp-mark-px="${p.markPrice ?? ""}" data-mp-pnl="${pnl ?? ""}" data-mp-roe="${roe ?? ""}">Close</button></td>
     </tr>`;
 }
 
@@ -298,26 +298,137 @@ async function refreshActive() {
   }
 }
 
+// ── Close confirmation (styled; replaces window.confirm/alert) ──
+// Держим отдельный shell от формы открытия: диалог может всплыть поверх неё.
+let confirmResolve = null;
+
+function ensureConfirm() {
+  let modal = document.getElementById("mp-confirm");
+  if (modal) return modal;
+  modal = document.createElement("div");
+  modal.id = "mp-confirm";
+  modal.className = "trade-modal";
+  modal.hidden = true;
+  modal.innerHTML = `
+    <div class="trade-modal__backdrop" data-mp-cancel></div>
+    <div class="trade-modal__panel" role="dialog" aria-modal="true" aria-label="Close paper position">
+      <button class="trade-modal__close" type="button" data-mp-cancel aria-label="Cancel">×</button>
+      <div id="mp-confirm-body"></div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener("click", (e) => {
+    if (e.target.hasAttribute("data-mp-cancel")) settleConfirm(false);
+    if (e.target.hasAttribute("data-mp-confirm")) settleConfirm(true);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !modal.hidden) settleConfirm(false);
+  });
+  return modal;
+}
+
+function hideConfirm() {
+  const modal = document.getElementById("mp-confirm");
+  if (!modal) return;
+  modal.hidden = true;
+  document.body.style.overflow = "";
+}
+
+// Отмена закрывает диалог; подтверждение — нет: пока идёт запрос, оператор видит
+// тот же диалог в busy-состоянии, а ошибка ложится прямо в него.
+function settleConfirm(ok) {
+  const modal = document.getElementById("mp-confirm");
+  if (!modal || modal.hidden) return;
+  if (!ok) hideConfirm();
+  const resolve = confirmResolve;
+  confirmResolve = null;
+  if (resolve) resolve(ok);
+}
+
+function setConfirmBusy(busyNow) {
+  const btn = document.querySelector("#mp-confirm [data-mp-confirm]");
+  const cancel = document.querySelector("#mp-confirm .mp-btn-ghost");
+  if (btn) {
+    btn.disabled = busyNow;
+    btn.textContent = busyNow ? "Closing…" : "Close position";
+  }
+  if (cancel) cancel.disabled = busyNow;
+}
+
+function confirmClose(info, errMsg) {
+  const modal = ensureConfirm();
+  const isShort = info.side === "SHORT";
+  const num = (v) => (v === "" || v == null ? null : Number(v));
+  const pnl = num(info.pnl);
+  const roe = num(info.roe);
+  const mark = num(info.mark);
+  const entry = num(info.entry);
+  const size = num(info.size);
+  const pnlCls = pnl == null ? "" : pnl >= 0 ? "num-pos" : "num-neg";
+  const cell = (label, value, cls = "") =>
+    `<div class="mp-confirm-cell"><span class="mp-confirm-cell-label">${label}</span><span class="mp-confirm-cell-value ${cls}">${value}</span></div>`;
+  document.getElementById("mp-confirm-body").innerHTML = `
+    <div class="mp-title">Close #${escapeHtml(info.coin || "")}?</div>
+    <div class="mp-lead">Closes the paper position at the current mark price. The result lands in the journal — this can't be undone.</div>
+    <div class="mp-confirm-grid">
+      ${cell("Side", `${isShort ? "▼" : "▲"} ${escapeHtml(info.side || "—")}${info.lev ? " " + info.lev + "×" : ""}`, isShort ? "num-neg" : "num-pos")}
+      ${cell("Size", size == null ? "—" : fmtUsd(size))}
+      ${cell("Entry", entry == null ? "—" : "$" + fmtPrice(entry))}
+      ${cell("Mark", mark == null ? "—" : "$" + fmtPrice(mark))}
+      ${cell("uPnL", pnl == null ? "—" : fmtUsd(pnl) + (roe == null ? "" : ` (${fmtPct(roe)})`), pnlCls)}
+    </div>
+    <div class="mp-err"${errMsg ? "" : " hidden"}>${escapeHtml(errMsg || "")}</div>
+    <div class="mp-confirm-actions">
+      <button type="button" class="mp-btn-ghost" data-mp-cancel>Keep it</button>
+      <button type="button" class="mp-btn-danger" data-mp-confirm>${errMsg ? "Retry close" : "Close position"}</button>
+    </div>`;
+  modal.hidden = false;
+  document.body.style.overflow = "hidden";
+  document.querySelector("#mp-confirm [data-mp-confirm]")?.focus();
+  return new Promise((resolve) => {
+    confirmResolve = resolve;
+  });
+}
+
 async function onCloseClick(e) {
   const btn = e.target.closest("[data-mp-close-id]");
   if (!btn) return;
   const id = Number(btn.dataset.mpCloseId);
   if (!Number.isFinite(id)) return;
-  if (!window.confirm(`Close paper position #${btn.dataset.mpCoin} at the current price?`)) return;
-  btn.disabled = true;
-  btn.textContent = "…";
-  try {
-    const res = await postJson("/api/manual-paper/close", { id });
-    if (!res?.ok) {
+  const d = btn.dataset;
+  const info = {
+    coin: d.mpCoin,
+    side: d.mpSide,
+    lev: d.mpLev,
+    size: d.mpSize,
+    entry: d.mpEntry,
+    mark: d.mpMarkPx,
+    pnl: d.mpPnl,
+    roe: d.mpRoe,
+  };
+  let err = "";
+  // Ошибку показываем в том же диалоге и даём повторить, не гоняя через alert.
+  for (;;) {
+    const ok = await confirmClose(info, err);
+    if (!ok) {
       btn.disabled = false;
       btn.textContent = "Close";
-      window.alert(res?.error || "Couldn't close.");
       return;
     }
-    refreshActive();
-  } catch {
-    btn.disabled = false;
-    btn.textContent = "Close";
+    setConfirmBusy(true);
+    btn.disabled = true;
+    btn.textContent = "…";
+    try {
+      const res = await postJson("/api/manual-paper/close", { id });
+      if (res?.ok) {
+        hideConfirm();
+        refreshActive();
+        return;
+      }
+      err = res?.error || "Couldn't close.";
+    } catch {
+      err = "Network error — the position is still open.";
+    }
+    setConfirmBusy(false);
   }
 }
 
