@@ -23,6 +23,11 @@ import { hlInfo, HL_PRIORITY } from '../core/hlClient.js';
 const CACHE_TTL_MS = 30_000;  // 30с: fills меняются редко, без смысла спамить API
 const MAX_LOOKBACK_MS = 60 * 24 * 3_600_000;  // 60d — покрывает 30d period с запасом
 
+// HL отдаёт не больше 2000 fills за запрос (старые первыми) — дальше нужна
+// пагинация по времени. 20 страниц = 40k fills, потолок с большим запасом.
+const PAGE_LIMIT = 2000;
+const MAX_PAGES = 20;
+
 // Fail-fast: userFills делит общий HL-пул с торговым путём. Держать слот 10с на
 // сломанном эндпоинте — дорого; 5с достаточно на здоровый ответ, а на 500/зависании
 // освобождает слот вдвое быстрее. Резерв HIGH в hlClient дополнительно страхует.
@@ -70,25 +75,51 @@ export async function fetchUserFills(startTime = 0, { force = false } = {}) {
   }
 
   try {
-    const data = await hlInfo(
-      {
-        type: 'userFillsByTime',
-        user: config.wallet.address,
-        startTime: effectiveStart,
-      },
-      // HIGH: fills — источник правды по PnL и матчингу adopt-ног, а не
-      // косметика. На NORMAL его отшивал весовой дедлайн (2026-07-31), причём
-      // отвал ещё и капал в предохранитель — прямой путь к слепоте.
-      { label: 'userFills', timeoutMs: FETCH_TIMEOUT_MS, priority: HL_PRIORITY.HIGH },
-    );
+    // userFillsByTime отдаёт максимум PAGE_LIMIT fills, СТАРЫЕ первыми. При
+    // широком окне (ledger просит с 1 апреля) ответ обрывается на середине
+    // истории и новые месяцы просто не доезжают (2026-08-30: ответ кончался
+    // 16 июля, текущий месяц в /api/ledger был пустой). Дочитываем страницами
+    // от времени последнего fill'а.
+    const page = [];
+    let cursor = effectiveStart;
+    for (let i = 0; i < MAX_PAGES; i++) {
+      const data = await hlInfo(
+        {
+          type: 'userFillsByTime',
+          user: config.wallet.address,
+          startTime: cursor,
+        },
+        // HIGH: fills — источник правды по PnL и матчингу adopt-ног, а не
+        // косметика. На NORMAL его отшивал весовой дедлайн (2026-07-31), причём
+        // отвал ещё и капал в предохранитель — прямой путь к слепоте.
+        { label: 'userFills', timeoutMs: FETCH_TIMEOUT_MS, priority: HL_PRIORITY.HIGH },
+      );
 
-    if (!Array.isArray(data)) {
-      logger.debug(`[userFills] unexpected response shape: ${typeof data}`);
-      return cache.fills.filter((f) => f.time >= effectiveStart);
+      if (!Array.isArray(data)) {
+        logger.debug(`[userFills] unexpected response shape: ${typeof data}`);
+        return cache.fills.filter((f) => f.time >= effectiveStart);
+      }
+
+      page.push(...data);
+      if (data.length < PAGE_LIMIT) break;
+
+      const nextCursor = Number(data[data.length - 1]?.time);
+      if (!Number.isFinite(nextCursor) || nextCursor < cursor) break;
+      cursor = nextCursor;  // не +1: fills с одинаковым ts отсеет дедуп по tid
+      if (i === MAX_PAGES - 1) {
+        logger.warn(`[userFills] достигнут потолок ${MAX_PAGES} страниц — история обрезана`);
+      }
     }
 
     consecutiveFails = 0;
-    const normalized = data.map(normalizeFill).filter(Boolean);
+    const seen = new Set();
+    const normalized = page.map(normalizeFill).filter((f) => {
+      if (!f) return false;
+      const key = f.tid ?? `${f.hash}:${f.oid}:${f.time}:${f.sz}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
     cache = { ts: now, startTime: effectiveStart, fills: normalized };
     return normalized;
   } catch (err) {
