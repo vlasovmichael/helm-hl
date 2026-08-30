@@ -37,6 +37,7 @@ import {
   hotMoversVisible,
 } from "./src/features/screen.js";
 import { renderMarketContext, updateBtcLivePrice } from "./src/features/marketContext.js";
+import { startDayDesk } from "./src/features/dayDesk.js";
 import { initModals, renderActivity } from "./src/features/modals.js";
 import { initWhatIf } from "./src/features/whatif.js";
 import { initManualPaperTrigger, initManualPaperActive } from "./src/features/manualPaper.js";
@@ -236,6 +237,7 @@ initWebSocket({ onStatus });
 tick();
 setInterval(tick, REFRESH_MS);
 startFooterTimer();
+startDayDesk();
 
 // DEV: ?mock=1 → засимулировать активную монету (risk-bar + ракета) без бэка.
 // Динамический импорт → в обычной сборке/проде модуль даже не грузится.

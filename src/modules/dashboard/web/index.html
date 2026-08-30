@@ -74,6 +74,23 @@
         <span class="mc-stats" id="mc-stats"></span>
       </div>
 
+      <!-- Day Desk — три вопроса дня: сколько уже сделал, сколько можно потерять,
+           защищены ли позы. Стоит ВЫШЕ позиций и сетапов намеренно: по разбору
+           журнала минус делают дни с несколькими входами, а не отдельные сделки,
+           поэтому первым на экране должен быть бюджет дня, а не идея. -->
+      <section class="card daydesk" id="sec-day">
+        <div class="card-header">
+          <div class="card-title" data-num="00">Today</div>
+          <div class="oi-toolbar">
+            <span class="oi-span" id="day-meta"></span>
+          </div>
+        </div>
+        <div id="day-desk" class="dd-grid">
+          <div class="dd-empty">Loading…</div>
+        </div>
+        <div id="day-rules" class="dd-rules"></div>
+      </section>
+
       <!-- 01 / Active Position -->
       <section class="card" id="sec-position">
         <div class="card-header">

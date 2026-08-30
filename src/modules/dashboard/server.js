@@ -30,6 +30,7 @@ import { getAccountSummary, getPositionsCached, getLivePriceMap } from "../excha
 import { getLivePrice as feedLivePrice, isFeedFresh } from "../../core/priceFeed.js";
 import { fetchUserFills } from "../userFills.js";
 import { getMonthlyLedger } from "../ledger.js";
+import { buildDayDesk } from "../dayDesk.js";
 import { FEE_RATE, MAKER_FEE_RATE } from "../executor/math.js";
 import { getAvailableBalance, getAccountEquity } from "../wallet.js";
 import { getTaxSummary } from "../taxCollector/index.js";
@@ -841,6 +842,17 @@ async function handleTaxSummary(req, res) {
   }
 }
 
+// Состояние дня + соблюдение правил. Отдельно от /api/status: этот срез читает
+// fills за 30 дней и стоит дороже, поэтому не едет в WS-броадкаст каждые 2с.
+async function handleDayDesk(_req, res) {
+  try {
+    res.json(await buildDayDesk());
+  } catch (err) {
+    logger.warn(`[Dashboard] /api/day-desk error: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+}
+
 async function handleLedger(_req, res) {
   try {
     const ledger = await getMonthlyLedger();
@@ -927,6 +939,7 @@ export function startDashboard() {
   app.get("/api/trade/:id", handleTradeDetail);
   app.get("/api/tax-summary", handleTaxSummary);
   app.get("/api/ledger", handleLedger);
+  app.get("/api/day-desk", handleDayDesk);
   app.get("/api/pnl-summary", handlePnlSummary);
   app.get("/api/strategies", (_req, res) => {
     try {
