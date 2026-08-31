@@ -80,6 +80,11 @@ export function findTrades(coin, bars, { rtPct = PARAMS.rtPct } = {}) {
       const d = bull ? bars[last].c - entry : entry - bars[last].c;
       r = d / risk; why = 'timeout'; held = last - hit;
     }
+    // ⚠️ widthPct — это ДИСТАНЦИЯ СТОПА в % от входа, а НЕ ширина FVG-зоны.
+    // Ширина зоны (фильтр MINW=1.6%) проверена выше как width/zTop; стоп стоит
+    // на дальнем крае зоны, поэтому эти числа разные, и в журнале регулярно
+    // встречается widthPct < 1.6% — это НЕ протечка фильтра. Имя поля менять
+    // нельзя: журнал уже накапливается, смена формата обнулит собранное.
     out.push({ coin, entryT: bars[hit].t, side, entry, stop, tgt,
       widthPct: (risk / entry) * 100, r, rNet: r - (rtPct / 100) * entry / risk, why, held });
     cooldownUntil = hit + 8;
