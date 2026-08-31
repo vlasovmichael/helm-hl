@@ -29,13 +29,13 @@ let tooltip = null;
 let lastPoints = [];
 
 const pad2 = (n) => String(n).padStart(2, "0");
-// 🚨 Время везде UTC, как в таблице ниже («TIME (UTC)») и как его отдаёт биржа.
-// Локальные getHours() расходились с таблицей ровно на смещение зоны (+2 в
-// Варшаве): график доезжал до 15:20, а верхняя строка таблицы писала 13:00, и
-// это читалось как «коллектор встал два часа назад».
+// 🚨 Время МЕСТНОЕ — и здесь, и в таблице. Пробовали UTC (как отдаёт биржа):
+// страница стала согласована сама с собой, но не с человеком — свежий снимок
+// 13:45 при 15:56 на часах читался как двухчасовое отставание коллектора.
+// Читатель один, и он сверяет экран со своими часами.
 const stamp = (sec) => {
   const d = new Date(sec * 1000);
-  return `${pad2(d.getUTCDate())}.${pad2(d.getUTCMonth() + 1)} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+  return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 };
 // Точность подписей токенов зависит от РАЗМАХА окна, а не от величины числа.
 // Фиксированный один знак печатал «4.1M» пятью тиками подряд, когда весь ряд
@@ -173,8 +173,8 @@ export async function drawOiChart(points) {
         tickMarkFormatter: (time, tickMarkType) => {
           const d = new Date(time * 1000);
           if (tickMarkType != null && tickMarkType <= 2)
-            return `${pad2(d.getUTCDate())}.${pad2(d.getUTCMonth() + 1)}`;
-          return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+            return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}`;
+          return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
         },
       },
       crosshair: {

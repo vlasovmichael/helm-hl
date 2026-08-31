@@ -84,6 +84,19 @@
       }
       .oi-sub-loud { color: #c98a1a; font-weight: 600; }
 
+      /* Метка незакрытой корзины: строка «13:00» — это час, который ещё идёт,
+         а не отставший на час снимок. */
+      .oi-live {
+        font-size: 10px; letter-spacing: 0.4px; text-transform: uppercase;
+        padding: 1px 5px; margin-left: 6px; border-radius: 4px; cursor: help;
+        background: rgba(91, 157, 255, 0.16); color: #3c7fd0; font-weight: 600;
+      }
+      :root[data-theme="dark"] .oi-live { color: #7fb4ff; }
+
+      .oi-fresh { color: #0f7a45; }
+      :root[data-theme="dark"] .oi-fresh { color: #2f9d63; }
+      .oi-stale { color: #c98a1a; font-weight: 600; }
+
       .oi-pos { color: #0f7a45; }
       :root[data-theme="dark"] .oi-pos { color: #2f9d63; }
       .oi-neg { color: #f0556b; }
@@ -430,7 +443,7 @@
         <p class="oi-note" style="margin-top: 10px">
           <b>Two scales, on purpose:</b> OI on the right, price on the left — not comparable,
           so never one axis. Price sits behind, shaded: it is context here, not the subject.
-          Hover for the exact hour and both values; times are <b>UTC</b>, same as the table.
+          Hover for the exact hour and both values; times are <b>local</b>, same as the table.
           What the shape means: lines moving <b>together</b> is ordinary churn — positions
           opened and closed as price moves, no information. Lines <b>diverging</b> is the
           readable case: OI stepping up while price stalls or drops means someone built a
@@ -442,7 +455,7 @@
           <table class="oi-table" id="oi-series">
             <thead>
               <tr>
-                <th data-key="t" title="Snapshot time in UTC — the chart axis above uses UTC too. Rows are bucket averages, so the newest row is the bucket that started at that hour.">Time (UTC)</th>
+                <th data-key="t" title="Your local time — the chart axis uses it too. Rows are bucket averages, so the newest row is the bucket for the hour that is still running.">Time · <span id="oi-tz">local</span></th>
                 <th>Price</th>
                 <th title="Open positions counted in coins. Price-free, so this is the honest answer to «did anyone actually build a position».">OI (tokens)</th>
                 <th title="tokens × price. Moves when price moves, even with zero new positions — do not read a rise here as money arriving.">OI $</th>

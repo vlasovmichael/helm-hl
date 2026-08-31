@@ -98,8 +98,31 @@ const fmtFunding = (n) => {
     `<span class="oi-sub${loud ? " oi-sub-loud" : ""}">${sub}</span>`
   );
 };
-const fmtTime = (t) =>
-  new Date(t).toISOString().slice(5, 16).replace("T", " ");
+// Местное время, не UTC: страницу читает человек, сверяющий её со своими
+// часами. На UTC-метках свежий снимок (13:45 UTC при 15:56 на часах) читался
+// как двухчасовое отставание коллектора.
+const pad2 = (n) => String(n).padStart(2, "0");
+const fmtTime = (t) => {
+  const d = new Date(t);
+  return `${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
+const TZ_LABEL = (() => {
+  try {
+    const z = Intl.DateTimeFormat().resolvedOptions().timeZone || "local";
+    return z.split("/").pop().replace(/_/g, " ");
+  } catch {
+    return "local";
+  }
+})();
+// «Сколько минут назад» — единственная подпись, которая не зависит от зоны и
+// прямо отвечает на вопрос «данные живые или встали».
+const fmtAge = (t) => {
+  const m = Math.round((Date.now() - t) / 60000);
+  if (m < 1) return "just now";
+  if (m < 90) return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  return h < 36 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`;
+};
 
 // ── Нянька (карточка 01) ──
 // Панель ведения ОТКРЫТЫХ позиций из /api/position-nanny. Пришла на смену
@@ -798,8 +821,12 @@ async function selectCoin(coin) {
   // выросшей монете он показывает приток, которого не было. Разница двух этих
   // процентов — ровно вклад цены.
   const sgn = (v) => (v > 0 ? "+" : "");
+  const stale = Date.now() - last.t > 45 * 60_000;
+  const fresh =
+    `last ${fmtTime(last.t).slice(6)} · ` +
+    `<span class="${stale ? "oi-stale" : "oi-fresh"}">${fmtAge(last.t)}</span>`;
   document.getElementById("oi-detail-sub").innerHTML =
-    `${data.rawCount} points · OI ${fmtTok(first.oi)}→${fmtTok(last.oi)} tokens ` +
+    `${data.rawCount} points · ${fresh} · OI ${fmtTok(first.oi)}→${fmtTok(last.oi)} tokens ` +
     `(${sgn(dTok)}${dTok.toFixed(1)}%) · price ${sgn(dPx)}${dPx.toFixed(1)}% ` +
     `· <span class="oi-muted">$${""}${fmtUsd(first.oiUsd).slice(1)}→${fmtUsd(last.oiUsd).slice(1)} ` +
     `(${sgn(dOi)}${dOi.toFixed(1)}%) · table avg per ${bucketH}h</span>`;
@@ -852,7 +879,11 @@ function renderSeries(pts, bucketH) {
     .map(
       (p) => `
       <tr>
-        <td>${fmtTime(p.t)}</td>
+        <td>${fmtTime(p.t)}${
+          p.t + bucketH * 3600_000 > Date.now()
+            ? ' <span class="oi-live" title="This bucket is still filling — it covers the hour that has not ended yet.">filling</span>'
+            : ""
+        }</td>
         <td>${fmtPx(p.px)}</td>
         <td>${fmtTokAt(p.oi, digits)}</td>
         <td>${fmtUsd(p.oiUsd)}</td>
@@ -873,6 +904,12 @@ document.querySelectorAll("#oi-ranges .range-btn").forEach((b) =>
     if (activeCoin) selectCoin(activeCoin);
   }),
 );
+
+// Подпись зоны в шапке таблицы: без неё «14:00» не отличить от UTC-метки.
+{
+  const tzEl = document.getElementById("oi-tz");
+  if (tzEl) tzEl.textContent = TZ_LABEL;
+}
 
 loadNanny();
 loadCoinOfDay();
