@@ -32,6 +32,23 @@ const fmtTok = (n) => {
   if (a >= 1e3) return `${(n / 1e3).toFixed(1)}K`;
   return n.toFixed(0);
 };
+// Токены с точностью под размах окна (см. тот же приём на оси графика).
+function tokenDigitsFor(values) {
+  const mn = Math.min(...values),
+    mx = Math.max(...values);
+  const unit = Math.abs(mx) >= 1e9 ? 1e9 : Math.abs(mx) >= 1e6 ? 1e6 : Math.abs(mx) >= 1e3 ? 1e3 : 1;
+  const step = (mx - mn) / unit / 8; // строк в таблице больше, чем делений на оси
+  return step > 0 ? Math.min(4, Math.max(1, Math.ceil(-Math.log10(step)))) : 1;
+}
+const fmtTokAt = (n, digits) => {
+  if (n == null || !Number.isFinite(n)) return "—";
+  const a = Math.abs(n);
+  if (a >= 1e9) return `${(n / 1e9).toFixed(digits)}B`;
+  if (a >= 1e6) return `${(n / 1e6).toFixed(digits)}M`;
+  if (a >= 1e3) return `${(n / 1e3).toFixed(digits)}K`;
+  return n.toFixed(0);
+};
+
 const fmtPx = (n) => {
   if (n == null || !Number.isFinite(n)) return "—";
   if (n >= 1000) return n.toFixed(1);
@@ -45,12 +62,41 @@ const fmtPctCell = (n) => {
   const sign = n > 0 ? "+" : "";
   return `<span class="${cls}">${sign}${n.toFixed(1)}%</span>`;
 };
+// Медиана |фандинга| по всем монетам последнего снимка. Считается из уже
+// загруженного overview — сравнивать не с чем иначе: голое «−0.2144%/ч» не
+// отвечает ни на «за какой срок», ни на «это много или норма».
+let fundingMedian = null;
+
+function setFundingMedian(coins) {
+  const abs = coins.map((c) => Math.abs(c.f)).filter(Number.isFinite).sort((a, b) => a - b);
+  fundingMedian = abs.length ? abs[Math.floor(abs.length / 2)] : null;
+}
+
+// Множитель показываем только с 5×: на обычной монете он был бы шумом в каждой
+// строке, а смысл приписки — заметить те, что стоят вразрез со всей биржей.
+const RATIO_FLOOR = 5;
+const RATIO_LOUD = 10;
+
 const fmtFunding = (n) => {
   if (n == null || !Number.isFinite(n))
     return '<span class="oi-muted">—</span>';
   const cls = n > 0 ? "oi-pos" : n < 0 ? "oi-neg" : "oi-muted";
   const sign = n > 0 ? "+" : "";
-  return `<span class="${cls}">${sign}${(n * 100).toFixed(4)}%</span>`;
+  const daily = n * 100 * 24;
+  const ratio = fundingMedian ? Math.abs(n) / fundingMedian : null;
+  const loud = ratio != null && ratio >= RATIO_LOUD;
+  // Подстрочник стоит в каждой строке, даже скучной: 233 строки с плавающей
+  // высотой сканировать глазами невозможно. Но точность по величине — иначе
+  // обычная монета печатает «−0.00%/d», что выглядит сломанным, а не спокойным.
+  const day = Math.abs(daily) < 0.1 ? "≈0%/d" : `${daily.toFixed(1)}%/d`;
+  const sub =
+    ratio != null && ratio >= RATIO_FLOOR
+      ? `${day} · ×${ratio < 10 ? ratio.toFixed(1) : Math.round(ratio)}`
+      : day;
+  return (
+    `<span class="${cls}">${sign}${(n * 100).toFixed(4)}%</span>` +
+    `<span class="oi-sub${loud ? " oi-sub-loud" : ""}">${sub}</span>`
+  );
 };
 const fmtTime = (t) =>
   new Date(t).toISOString().slice(5, 16).replace("T", " ");
@@ -618,6 +664,7 @@ async function loadOverview() {
     return;
   }
   overview = data.coins;
+  setFundingMedian(overview);
   const s = data.span;
   const dur = ((s.lastT - s.firstT) / 3600_000).toFixed(0);
   spanEl.textContent = `${data.coins.length} coins · ${s.count} snapshots · ~${dur}h history${
@@ -744,12 +791,18 @@ async function selectCoin(coin) {
   const first = pts[0],
     last = pts[pts.length - 1];
   const dOi = ((last.oiUsd - first.oiUsd) / first.oiUsd) * 100;
+  const dTok = ((last.oi - first.oi) / first.oi) * 100;
   const dPx = ((last.px - first.px) / first.px) * 100;
   const bucketH = bucketHoursFor(data.hours ?? detailHours);
+  // Токены впереди долларов намеренно: долларовый OI = токены × цена, и на
+  // выросшей монете он показывает приток, которого не было. Разница двух этих
+  // процентов — ровно вклад цены.
+  const sgn = (v) => (v > 0 ? "+" : "");
   document.getElementById("oi-detail-sub").innerHTML =
-    `${data.rawCount} points · OI ${fmtUsd(first.oiUsd)}→${fmtUsd(last.oiUsd)} ` +
-    `(${dOi > 0 ? "+" : ""}${dOi.toFixed(1)}%) · price ${dPx > 0 ? "+" : ""}${dPx.toFixed(1)}% ` +
-    `· <span class="oi-muted">table avg per ${bucketH}h</span>`;
+    `${data.rawCount} points · OI ${fmtTok(first.oi)}→${fmtTok(last.oi)} tokens ` +
+    `(${sgn(dTok)}${dTok.toFixed(1)}%) · price ${sgn(dPx)}${dPx.toFixed(1)}% ` +
+    `· <span class="oi-muted">$${""}${fmtUsd(first.oiUsd).slice(1)}→${fmtUsd(last.oiUsd).slice(1)} ` +
+    `(${sgn(dOi)}${dOi.toFixed(1)}%) · table avg per ${bucketH}h</span>`;
   drawOiChart(pts);
   renderSeries(pts, bucketH);
 }
@@ -793,13 +846,15 @@ function bucketSeries(pts, bucketH) {
 }
 
 function renderSeries(pts, bucketH) {
-  document.getElementById("oi-series-body").innerHTML = bucketSeries(pts, bucketH)
+  const buckets = bucketSeries(pts, bucketH);
+  const digits = tokenDigitsFor(buckets.map((b) => b.oi).filter(Number.isFinite));
+  document.getElementById("oi-series-body").innerHTML = buckets
     .map(
       (p) => `
       <tr>
         <td>${fmtTime(p.t)}</td>
         <td>${fmtPx(p.px)}</td>
-        <td>${fmtTok(p.oi)}</td>
+        <td>${fmtTokAt(p.oi, digits)}</td>
         <td>${fmtUsd(p.oiUsd)}</td>
         <td>${fmtFunding(p.f)}</td>
         <td class="oi-muted">${fmtUsd(p.v)}</td>

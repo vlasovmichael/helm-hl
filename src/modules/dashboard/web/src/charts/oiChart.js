@@ -4,15 +4,23 @@
 //  было видно, а КОГДА она случилась — нет. Здесь ось времени и курсор с
 //  тултипом, потому что вся ценность картинки в вопросе «в какой час набрали».
 //
-//  Шкалы намеренно РАЗНЫЕ и обе видимы: OI справа в $, цена слева. Общей шкалы
-//  у них быть не может (доллары объёма и цена монеты несопоставимы), а
-//  безымянная нормировка по min/max, как было, врала о величине расхождения.
+//  Шкалы намеренно РАЗНЫЕ и обе видимы: OI справа, цена слева. Общей шкалы у них
+//  быть не может (объём позиций и цена монеты несопоставимы), а безымянная
+//  нормировка по min/max, как было, врала о величине расхождения.
+//
+//  🚨 Линия OI идёт в ТОКЕНАХ, не в долларах. oiUsd = токены × цена, поэтому
+//  долларовый OI содержит цену внутри себя: рост цены на 10% поднимает его на
+//  10% без единой новой позиции. На таком графике расхождение линий читать
+//  нельзя — часть общего хода чисто арифметическая. Токены цены не содержат,
+//  и разошедшиеся линии на них означают ровно то, что кажется. Доллары
+//  остаются в шапке карточки и в таблице.
 // ─────────────────────────────────────────────────
 
 import { cssVar } from "../utils/format.js";
 
 const OI_COLOR = "#5b9dff";
 const PX_COLOR = "#e8b84b";
+const PX_FILL = "rgba(232, 184, 75, 0.16)";
 
 let chart = null;
 let oiSeries = null;
@@ -21,17 +29,34 @@ let tooltip = null;
 let lastPoints = [];
 
 const pad2 = (n) => String(n).padStart(2, "0");
+// 🚨 Время везде UTC, как в таблице ниже («TIME (UTC)») и как его отдаёт биржа.
+// Локальные getHours() расходились с таблицей ровно на смещение зоны (+2 в
+// Варшаве): график доезжал до 15:20, а верхняя строка таблицы писала 13:00, и
+// это читалось как «коллектор встал два часа назад».
 const stamp = (sec) => {
   const d = new Date(sec * 1000);
-  return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  return `${pad2(d.getUTCDate())}.${pad2(d.getUTCMonth() + 1)} ${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
 };
-const usd = (n) => {
+// Точность подписей токенов зависит от РАЗМАХА окна, а не от величины числа.
+// Фиксированный один знак печатал «4.1M» пятью тиками подряд, когда весь ряд
+// живёт между 4.02M и 4.09M: шкала есть, а различить деления нельзя.
+let tokDigits = 1;
+
+function setTokenDigits(values) {
+  const mn = Math.min(...values),
+    mx = Math.max(...values);
+  const unit = Math.abs(mx) >= 1e9 ? 1e9 : Math.abs(mx) >= 1e6 ? 1e6 : Math.abs(mx) >= 1e3 ? 1e3 : 1;
+  const step = (mx - mn) / unit / 5; // ~5 делений на шкале
+  tokDigits = step > 0 ? Math.min(4, Math.max(0, Math.ceil(-Math.log10(step)))) : 1;
+}
+
+const tok = (n) => {
   if (n == null || !Number.isFinite(n)) return "—";
   const a = Math.abs(n);
-  if (a >= 1e9) return `$${(n / 1e9).toFixed(2)}b`;
-  if (a >= 1e6) return `$${(n / 1e6).toFixed(2)}m`;
-  if (a >= 1e3) return `$${(n / 1e3).toFixed(1)}k`;
-  return `$${n.toFixed(0)}`;
+  if (a >= 1e9) return `${(n / 1e9).toFixed(tokDigits)}B`;
+  if (a >= 1e6) return `${(n / 1e6).toFixed(tokDigits)}M`;
+  if (a >= 1e3) return `${(n / 1e3).toFixed(tokDigits)}K`;
+  return n.toFixed(0);
 };
 const px = (n) => {
   if (n == null || !Number.isFinite(n)) return "—";
@@ -98,13 +123,13 @@ function renderTooltip(param) {
   // Проценты считаем от ПЕРВОЙ точки окна — тот же якорь, что в подзаголовке
   // карточки, иначе тултип и шапка расходятся в цифрах на одном экране.
   const base = lastPoints[0];
-  const dOi = base && oi != null ? ((oi - base.oiUsd) / base.oiUsd) * 100 : null;
+  const dOi = base && oi != null ? ((oi - base.oi) / base.oi) * 100 : null;
   const dPx = base && price != null ? ((price - base.px) / base.px) * 100 : null;
   const pct = (v) => (v == null ? "" : ` <i>${v > 0 ? "+" : ""}${v.toFixed(1)}%</i>`);
 
   tooltip.innerHTML =
     `<div class="oi-tip-t">${stamp(param.time)}</div>` +
-    `<div class="oi-tip-r"><b style="background:${OI_COLOR}"></b>OI <span>${usd(oi)}</span>${pct(dOi)}</div>` +
+    `<div class="oi-tip-r"><b style="background:${OI_COLOR}"></b>OI <span>${tok(oi)}</span>${pct(dOi)}</div>` +
     `<div class="oi-tip-r"><b style="background:${PX_COLOR}"></b>Price <span>${px(price)}</span>${pct(dPx)}</div>`;
   tooltip.style.display = "block";
 
@@ -148,8 +173,8 @@ export async function drawOiChart(points) {
         tickMarkFormatter: (time, tickMarkType) => {
           const d = new Date(time * 1000);
           if (tickMarkType != null && tickMarkType <= 2)
-            return `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}`;
-          return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+            return `${pad2(d.getUTCDate())}.${pad2(d.getUTCMonth() + 1)}`;
+          return `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
         },
       },
       crosshair: {
@@ -162,21 +187,26 @@ export async function drawOiChart(points) {
       localization: { timeFormatter: stamp },
     });
 
+    // Порядок добавления = порядок отрисовки: цена первой, чтобы лечь ПОД OI.
+    // Она здесь контекст, а не вторая героиня — заливка приглушена, линия тонкая.
+    pxSeries = chart.addAreaSeries({
+      lineColor: PX_COLOR,
+      topColor: PX_FILL,
+      bottomColor: "rgba(232, 184, 75, 0)",
+      lineWidth: 1,
+      priceScaleId: "left",
+      priceLineVisible: false,
+      lastValueVisible: false,
+      priceFormat: { type: "custom", formatter: px },
+      crosshairMarkerRadius: 3,
+    });
     oiSeries = chart.addLineSeries({
       color: OI_COLOR,
       lineWidth: 2,
       priceScaleId: "right",
       priceLineVisible: false,
       lastValueVisible: false,
-      priceFormat: { type: "custom", formatter: usd },
-    });
-    pxSeries = chart.addLineSeries({
-      color: PX_COLOR,
-      lineWidth: 2,
-      priceScaleId: "left",
-      priceLineVisible: false,
-      lastValueVisible: false,
-      priceFormat: { type: "custom", formatter: px },
+      priceFormat: { type: "custom", formatter: tok },
     });
 
     tooltip = document.createElement("div");
@@ -193,7 +223,9 @@ export async function drawOiChart(points) {
     }
   }
 
-  oiSeries.setData(toSeries(points, (p) => p.oiUsd));
+  const oiVals = points.map((p) => p.oi).filter(Number.isFinite);
+  if (oiVals.length) setTokenDigits(oiVals);
+  oiSeries.setData(toSeries(points, (p) => p.oi));
   pxSeries.setData(toSeries(points, (p) => p.px));
   // Без fitContent узкое окно (24h после 30d) рисуется внутри старого широкого
   // видимого диапазона и схлопывается в огрызок у правого края.

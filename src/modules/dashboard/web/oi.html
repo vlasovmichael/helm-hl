@@ -76,6 +76,14 @@
       .oi-table tbody tr { cursor: pointer; }
       .oi-table tbody tr:hover { background: var(--panel-2, rgba(128,128,128,0.06)); }
       .oi-table tbody tr.active { background: rgba(91, 157, 255, 0.14); }
+      /* Подстрочник фандинга: «%/сут» и во сколько раз выше медианы биржи.
+         Голая часовая ставка не отвечает ни «за какой срок», ни «это много ли». */
+      .oi-sub {
+        display: block; font-size: 11px; line-height: 1.3; margin-top: 1px;
+        color: var(--text-secondary); font-variant-numeric: tabular-nums;
+      }
+      .oi-sub-loud { color: #c98a1a; font-weight: 600; }
+
       .oi-pos { color: #0f7a45; }
       :root[data-theme="dark"] .oi-pos { color: #2f9d63; }
       .oi-neg { color: #f0556b; }
@@ -377,7 +385,7 @@
                 <th data-key="dOi1hPct" title="Same over the last hour — catches a position being built right now.">ΔOI 1h</th>
                 <th data-key="px">Price</th>
                 <th data-key="dPx24hPct" title="Price change over 24h. Read next to ΔOI: OI up with price flat is the interesting cell.">ΔPrice 24h</th>
-                <th data-key="f" title="Hourly funding rate. Positive = longs pay shorts. Values near 0.001% are noise, not a signal.">Funding/h</th>
+                <th data-key="f" title="Hourly funding, with the daily cost below it. Positive = longs pay shorts. ×N appears when a coin runs at least 5× the exchange median — that is a real crowd imbalance, and a real cost of holding.">Funding/h</th>
                 <th data-key="v" title="24h traded volume. On Hyperliquid OI above volume is normal — it is not an anomaly.">Volume 24h</th>
               </tr>
             </thead>
@@ -408,30 +416,37 @@
           <span class="oi-span" id="oi-detail-sub"></span>
         </div>
         <div class="oi-legend">
-          <span><i style="background:#5b9dff"></i> OI ($)</span>
+          <span><i style="background:#5b9dff"></i> OI (tokens)</span>
           <span><i style="background:#e8b84b"></i> Price</span>
         </div>
         <div class="oi-chart" id="oi-chart"></div>
         <p class="oi-note" style="margin-top: 12px">
-          <b>Two scales, on purpose:</b> OI in dollars on the right, price on the left —
-          they are not comparable, so they never share an axis. Hover the chart for the
-          exact hour and both values. What the shape means: lines moving <b>together</b>
-          is ordinary churn — positions opened and closed as price moves, no information.
-          Lines <b>diverging</b> is the readable case: OI stepping up while price stalls or
-          drops means someone built a position and is <b>still holding it</b>. A flat OI
-          shelf is that position sitting there; when the shelf breaks down, they left.
-          OI counts <b>both sides at once</b>, so it can never tell you long or short —
-          this page shows positioning, not direction.
+          <b>The blue line counts tokens, not dollars.</b> OI&nbsp;$ is <b>tokens × price</b>,
+          so a dollar line would carry price inside it — up 10% on price alone, with not a
+          single new position. That is arithmetic, not money arriving, and it makes the two
+          lines look related when they are not. Tokens carry no price, so what you see here
+          is the real thing. Dollars stay in the header and the table.
+        </p>
+        <p class="oi-note" style="margin-top: 10px">
+          <b>Two scales, on purpose:</b> OI on the right, price on the left — not comparable,
+          so never one axis. Price sits behind, shaded: it is context here, not the subject.
+          Hover for the exact hour and both values; times are <b>UTC</b>, same as the table.
+          What the shape means: lines moving <b>together</b> is ordinary churn — positions
+          opened and closed as price moves, no information. Lines <b>diverging</b> is the
+          readable case: OI stepping up while price stalls or drops means someone built a
+          position and is <b>still holding it</b>. A flat OI shelf is that position sitting
+          there; when the shelf breaks down, they left. OI counts <b>both sides at once</b>,
+          so it can never tell you long or short — this page shows positioning, not direction.
         </p>
         <div class="oi-table-wrap" style="margin-top: 14px">
           <table class="oi-table" id="oi-series">
             <thead>
               <tr>
-                <th data-key="t">Time (UTC)</th>
+                <th data-key="t" title="Snapshot time in UTC — the chart axis above uses UTC too. Rows are bucket averages, so the newest row is the bucket that started at that hour.">Time (UTC)</th>
                 <th>Price</th>
-                <th>OI (tokens)</th>
-                <th>OI $</th>
-                <th>Funding/h</th>
+                <th title="Open positions counted in coins. Price-free, so this is the honest answer to «did anyone actually build a position».">OI (tokens)</th>
+                <th title="tokens × price. Moves when price moves, even with zero new positions — do not read a rise here as money arriving.">OI $</th>
+                <th title="Hourly funding. Positive = longs pay shorts, negative = shorts pay longs. Anything past ±0.1%/h is a real crowd imbalance, not noise — and a real cost of holding.">Funding/h</th>
                 <th>Volume 24h</th>
               </tr>
             </thead>
