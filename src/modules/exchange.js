@@ -291,7 +291,9 @@ export async function getPositionsCached(maxAgeMs = ACCT_POSITIONS_TTL_MS) {
 export async function getFrontendOpenOrders() {
   const orders = await hlInfo(
     { type: "frontendOpenOrders", user: config.wallet.address },
-    { label: "frontend-open-orders" },
+    // HIGH: это защита позиции, а не косметика. На NORMAL дедлайн бюджета 4с,
+    // и при заторе панель показывала «стоп неизвестен» на защищённой позиции.
+    { label: "frontend-open-orders", priority: HL_PRIORITY.HIGH },
   );
   return Array.isArray(orders) ? orders : [];
 }
