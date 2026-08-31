@@ -42,6 +42,7 @@ import { initModals, renderActivity } from "./src/features/modals.js";
 import { initWhatIf } from "./src/features/whatif.js";
 import { initManualPaperTrigger, initManualPaperActive } from "./src/features/manualPaper.js";
 import { initTradeTicket } from "./src/features/tradeTicket.js";
+import { readJson as parseApi } from "./src/utils/api.js";
 
 // WS шлёт hotMovers каждые ~2с. Пока поток живой — HTTP-фолбэк /api/signals
 // в tick() не дёргаем (был бы дубликат тех же данных).
@@ -132,18 +133,22 @@ function tick() {
 // Ордера уходят на биржу через API-кошелёк бота: builder-fee 0 бп и кошелёк не
 // всплывает. Стоп и сопровождение остаются у няньки — модалка их только
 // показывает (см. features/tradeTicket.js, «граница ответственности»).
+const toLogin = () => {
+  window.location.href = "/login";
+};
+
 function initTradeButton() {
   const btn = document.getElementById("tt-trade-btn");
   if (!btn) return;
-  const post = async (path, body) => {
-    const r = await fetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (r.status === 401) window.location.href = "/login";
-    return r.json();
-  };
+  const post = async (path, body) =>
+    parseApi(
+      await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+      toLogin,
+    );
   // Закрытие позиции прямо с карточки. Делегируем с контейнера: карточки
   // перерисовываются каждый тик, вешать слушатель на кнопку бессмысленно.
   //
@@ -203,11 +208,8 @@ function initTradeButton() {
   });
 
   const ticket = initTradeTicket({
-    getContext: async (coin) => {
-      const r = await fetch(`/api/ticket/context?coin=${encodeURIComponent(coin || "")}`);
-      if (r.status === 401) window.location.href = "/login";
-      return r.json();
-    },
+    getContext: async (coin) =>
+      parseApi(await fetch(`/api/ticket/context?coin=${encodeURIComponent(coin || "")}`), toLogin),
     open: (payload) => post("/api/ticket/open", payload),
     close: (payload) => post("/api/ticket/close", payload),
   });

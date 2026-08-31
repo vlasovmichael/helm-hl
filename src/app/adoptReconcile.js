@@ -27,6 +27,7 @@ import { formatHlPrice } from '../modules/executor/math.js';
 import { fetchUserFills } from '../modules/userFills.js';
 import { isQuietHour } from '../core/ntfy.js';
 import { getLastDailyRiskStatus, localDayKey } from '../modules/dailyRisk.js';
+import { HL_PRIORITY } from '../core/hlClient.js';
 import { atr } from '../modules/trendFollowAtr.js';
 import { getHourlyCandles } from '../modules/candleCache.js';
 import { getPriceNMinAgo, getLatestPrice } from '../core/priceHistory.js';
@@ -134,13 +135,19 @@ export function isBeyondPlannedStop({ side, price, plannedSl }) {
  * ATR-режим: ATR(1h, 14) × MULT / цена, зажат в [MIN_PCT, MAX_PCT] — подстраивает
  * стоп под волатильность монеты (фейдеру нужен воздух). Фолбэк на фикс-% если
  * режим 'pct' или свечей/ATR нет.
+ *
+ * @param {string} coin
+ * @param {number} [priority] — приоритет запроса свечей. По умолчанию NORMAL
+ *   (нянька ставит настоящий стоп). Витринам дашборда, которым это число нужно
+ *   лишь показать, положено передавать LOW: их справка не должна занимать
+ *   бюджет веса перед торговым путём.
  * @returns {Promise<{ distPct:number, basis:'atr'|'pct' }>}
  */
-export async function computeStopDistPct(coin) {
+export async function computeStopDistPct(coin, priority = HL_PRIORITY.NORMAL) {
   const t = config.trading;
   if (t.adoptStopMode === 'atr') {
     try {
-      const candles = await getHourlyCandles(coin, ATR_LOOKBACK_HOURS);
+      const candles = await getHourlyCandles(coin, ATR_LOOKBACK_HOURS, Date.now(), priority);
       if (Array.isArray(candles) && candles.length >= ATR_PERIOD + 1) {
         const a = atr(candles, ATR_PERIOD);
         const lastClose = candles[candles.length - 1]?.close;

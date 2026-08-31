@@ -37,6 +37,7 @@ import { getFrontendOpenOrders } from "../../exchange.js";
 import { resolveAsset, parseFillResponse } from "../../executor/fill-parser.js";
 import { formatHlPrice, MARKET_SLIPPAGE } from "../../executor/math.js";
 import { computeStopDistPct } from "../../../app/adoptReconcile.js";
+import { HL_PRIORITY } from "../../../core/hlClient.js";
 import { getLastDailyRiskStatus } from "../../dailyRisk.js";
 import { computeTradesToday, computeCooldown } from "../../tradeGuards.js";
 import { getHistorySince, getActiveAdoptPositions, getActivePosition } from "../../../core/database.js";
@@ -66,6 +67,21 @@ function maxLeverageFor(coin) {
 // Потолок нотионала на одну ручную сделку. Защита от опечатки и от того, что
 // одна сделка съест весь депозит. Не риск-менеджмент — грубый предохранитель.
 const MAX_NOTIONAL_USD = 60;
+
+// Потолок ожидания справочного ATR-стопа в контексте модалки. Меньше секунды
+// человек не замечает; больше — форма кажется зависшей.
+const STOP_HINT_TIMEOUT_MS = 900;
+
+/** Промис с потолком ожидания. Отвал по времени — обычный reject. */
+function withTimeout(promise, ms) {
+  let timer;
+  return Promise.race([
+    promise.finally(() => clearTimeout(timer)),
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`timeout ${ms}ms`)), ms);
+    }),
+  ]);
+}
 
 /** Начало сегодняшнего дня по локальному времени процесса. */
 function startOfDay(now) {
@@ -193,13 +209,23 @@ export async function handleContext(req, res) {
     ]);
 
     // ATR-стоп няньки: показываем ТО ЖЕ число, что она реально применит.
+    //
+    // Под жёстким таймаутом. По незнакомой монете свечей в кэше нет, запрос
+    // идёт живьём и ждёт бюджета веса до 4с — а модалка всё это время не
+    // отвечала, и выбор монеты «думал» 3-5 секунд. Стоп тут справочный:
+    // нянька посчитает свой после входа, и UI умеет показать «по ATR после
+    // входа», когда числа нет. Ждать ради него нельзя.
     let stopDistPct = null;
     let stopBasis = null;
     if (coin && config.trading.adoptEnabled) {
       try {
-        ({ distPct: stopDistPct, basis: stopBasis } = await computeStopDistPct(coin));
+        ({ distPct: stopDistPct, basis: stopBasis } = await withTimeout(
+          computeStopDistPct(coin, HL_PRIORITY.LOW),
+          STOP_HINT_TIMEOUT_MS,
+        ));
       } catch {
-        /* нет ATR — модалка честно скажет «по ATR после входа» */
+        /* нет ATR или не успел — модалка честно скажет «по ATR после входа».
+           Свечи при этом догреются в кэш, и следующий заход покажет число. */
       }
     }
 

@@ -716,7 +716,27 @@ function createModal(io) {
       state.suggestOpen = false;
       state.suggestIdx = 0;
       input.value = coin;
-      loadContext().then(render); // новая монета → своя цена, ATR и плечо
+      // Рисуем СРАЗУ, не дожидаясь сети: клик по монете обязан отвечать
+      // мгновенно. Раньше здесь стоял `loadContext().then(render)`, и выбор
+      // «думал» 3-5 секунд — столько живой запрос ATR-свечей по незнакомой
+      // монете ждёт бюджета веса.
+      //
+      // Монето-зависимые поля гасим до приезда ответа: показать цену и плечо
+      // ПРЕДЫДУЩЕЙ монеты под именем новой — хуже, чем показать прочерк.
+      ctx = {
+        ...ctx,
+        price: null,
+        stopDistPct: null,
+        stopBasis: null,
+        maxLeverage: null,
+        exchangeMaxLeverage: null,
+        coinKnown: null,
+        hasPosition: false,
+        cooldown: null,
+      };
+      render();
+      clearTimeout(ctxTimer);
+      loadContext().then(softRefresh);
     };
 
     input.addEventListener("input", () => {
