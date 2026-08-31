@@ -38,6 +38,8 @@ import { resolveAsset, parseFillResponse } from "../../executor/fill-parser.js";
 import { formatHlPrice, MARKET_SLIPPAGE } from "../../executor/math.js";
 import { computeStopDistPct } from "../../../app/adoptReconcile.js";
 import { getLastDailyRiskStatus } from "../../dailyRisk.js";
+import { computeTradesToday, computeCooldown } from "../../tradeGuards.js";
+import { getHistorySince, getActiveAdoptPositions, getActivePosition } from "../../../core/database.js";
 import { getUniverse } from "../../../core/universe.js";
 
 // Биржевой минимум ордера на HL. Меньше — гарантированный отказ.
@@ -64,6 +66,64 @@ function maxLeverageFor(coin) {
 // Потолок нотионала на одну ручную сделку. Защита от опечатки и от того, что
 // одна сделка съест весь депозит. Не риск-менеджмент — грубый предохранитель.
 const MAX_NOTIONAL_USD = 60;
+
+/** Начало сегодняшнего дня по локальному времени процесса. */
+function startOfDay(now) {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+/**
+ * Сделки за сегодня против дневного бюджета. Считает так же, как витрина
+ * Screen (закрытые + открытые сейчас), чтобы цифра в UI и цифра в отказе
+ * никогда не разошлись — иначе форма говорит «3 / 5», а сервер отбивает.
+ */
+function tradesTodayStatus(now = Date.now()) {
+  const cap = config.trading.screenTradesPerDay;
+  try {
+    const closed = getHistorySince(startOfDay(now)).filter((r) => r.mode === "PRODUCTION").length;
+    const open = getActiveAdoptPositions().length + (getActivePosition() ? 1 : 0);
+    return computeTradesToday({ closed, open, cap });
+  } catch (err) {
+    // БД недоступна — счётчик не знает. Вход НЕ запираем: неизвестность не повод
+    // отобрать возможность торговать, но UI обязан сказать, что рельса не держит.
+    logger.debug(`[Guards] trades-today failed: ${err.message}`);
+    return { today: 0, cap, over: false, known: false };
+  }
+}
+
+/**
+ * Пауза после закрытия по этой монете. Ловит паттерн, где выход одной сделки и
+ * вход следующей стоят в одной секунде.
+ *
+ * Пауза считается от ЛЮБОГО закрытия, не только убыточного: после плюсовой
+ * сделки перезаход такой же горячий, а «разрешено после профита» — это
+ * правило, которое учит добирать, пока не отдашь обратно.
+ */
+function reentryCooldown(coin, now = Date.now()) {
+  const minutes = config.trading.reentryCooldownMin;
+  const want = String(coin || "").toUpperCase();
+  if (!want || !(minutes > 0)) return computeCooldown({ lastCloseAt: null, minutes, now });
+
+  let last = null;
+  try {
+    for (const r of getHistorySince(now - minutes * 60_000)) {
+      if (r.mode !== "PRODUCTION") continue;
+      if (String(r.coin || "").toUpperCase() !== want) continue;
+      if (!last || r.closed_at > last.closed_at) last = r;
+    }
+  } catch (err) {
+    logger.debug(`[Guards] reentry lookup failed: ${err.message}`);
+    return computeCooldown({ lastCloseAt: null, minutes, now });
+  }
+  return computeCooldown({
+    lastCloseAt: last?.closed_at ?? null,
+    lastPnl: last?.realized_pnl ?? null,
+    minutes,
+    now,
+  });
+}
 
 /** Свежая цена: WS-фид → fallback на кэш price-map. null если нет. */
 async function resolvePrice(coin) {
@@ -158,6 +218,8 @@ export async function handleContext(req, res) {
     }
 
     const day = getLastDailyRiskStatus();
+    const budget = tradesTodayStatus();
+    const cooldown = coin ? reentryCooldown(coin) : null;
     res.json({
       coin,
       coinKnown,
@@ -190,7 +252,12 @@ export async function handleContext(req, res) {
         netUsd: day?.netUsd ?? null,
         limitUsd: day?.limitUsd ?? config.trading.dailyLossLimitUsd,
         halted: !!day?.halted,
+        // Бюджет сделок и пауза перезахода — те же гейты, что отобьют вход.
+        tradesToday: budget.today,
+        tradesCap: budget.cap,
+        tradesOver: budget.over,
       },
+      cooldown,
       generatedAt: Date.now(),
     });
   } catch (err) {
@@ -283,6 +350,29 @@ export async function handleOpen(req, res) {
   const day = getLastDailyRiskStatus();
   if (day?.halted) {
     return res.status(423).json({ error: "the daily stop fired — entries are closed until midnight" });
+  }
+
+  // Дневной бюджет сделок. Раньше был надписью и пропустил 17 сделок за сутки.
+  const budget = tradesTodayStatus();
+  if (budget.over) {
+    return res.status(423).json({
+      error: `daily trade budget spent: ${budget.today} of ${budget.cap} — entries are closed until midnight`,
+    });
+  }
+
+  // Пауза после закрытия по этой монете. Ловит перезаход через секунду после
+  // стопа — на 31.08 такие входы дали −$6.37 при итоге дня −$4.38.
+  const cool = reentryCooldown(b.coin);
+  if (cool.blocked) {
+    const mins = Math.ceil(cool.secondsLeft / 60);
+    const outcome = cool.lastPnl == null ? "" : cool.lastPnl < 0
+      ? ` The last one closed at −$${Math.abs(cool.lastPnl).toFixed(2)}.`
+      : ` The last one closed at +$${cool.lastPnl.toFixed(2)}.`;
+    return res.status(423).json({
+      error:
+        `${b.coin} just closed — ${cool.minutes}-minute cooldown, ${mins} min left.` +
+        `${outcome} Pick another coin or wait.`,
+    });
   }
 
   const available = await safeAvailable();

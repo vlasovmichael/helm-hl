@@ -376,11 +376,17 @@ function loadConfig() {
   if (isNaN(screenMaxFrictionBp) || screenMaxFrictionBp <= 0) {
     throw new Error(`SCREEN_MAX_FRICTION_BP must be > 0. Got: "${process.env.SCREEN_MAX_FRICTION_BP}"`);
   }
-  // Счётчик сделок за день. Не гейт (входы ручные, запрещать нечего) — цифра
-  // перед глазами, чтобы двадцатый вход был осознанным, а не незаметным.
+  // Бюджет сделок за день. С 31.08.2026 это ГЕЙТ, а не счётчик: цифра перед
+  // глазами не остановила 17 сделок за сутки, показывая «14 / 5». Trade Ticket
+  // отбивает вход по достижении лимита (src/modules/tradeGuards.js).
   const screenTradesPerDay = parseInt(process.env.SCREEN_TRADES_PER_DAY || '5', 10);
   if (isNaN(screenTradesPerDay) || screenTradesPerDay <= 0) {
     throw new Error(`SCREEN_TRADES_PER_DAY must be > 0. Got: "${process.env.SCREEN_TRADES_PER_DAY}"`);
+  }
+  // Пауза после закрытия сделки по монете, минуты. 0 = выключено.
+  const reentryCooldownMin = parseInt(process.env.REENTRY_COOLDOWN_MIN || '15', 10);
+  if (isNaN(reentryCooldownMin) || reentryCooldownMin < 0) {
+    throw new Error(`REENTRY_COOLDOWN_MIN must be >= 0. Got: "${process.env.REENTRY_COOLDOWN_MIN}"`);
   }
   // Нотионал, от которого считается стоимость трения в карточке. Биржевой
   // минимум ордера — на нём и показываем, иначе цифра не про эту жизнь.
@@ -515,6 +521,7 @@ function loadConfig() {
       dailyLossLimitUsd,
       screenMaxFrictionBp,
       screenTradesPerDay,
+      reentryCooldownMin,
       screenNotionalUsd,
       // ── Candy Girl радар (signal-only) ──
       trendEmaFast1h,

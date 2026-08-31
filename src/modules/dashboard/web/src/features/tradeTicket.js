@@ -156,6 +156,18 @@ export function validateOpen(s, ctx) {
   // запрос). halted=false тут не значит «лимит цел», значит «не знаем».
   else if (ctx?.day && ctx.day.known === false) warnings.push("daily P&L unknown — the daily stop can't be enforced right now");
 
+  // Те же два гейта, что стоят на сервере. Дублируются здесь, чтобы кнопка
+  // была закрыта ДО клика: отбитый ордер уже поздно — решение принято.
+  if (ctx?.day?.tradesOver) {
+    blockers.push(
+      `daily trade budget spent (${ctx.day.tradesToday} of ${ctx.day.tradesCap}) — entries locked until midnight`,
+    );
+  }
+  if (ctx?.cooldown?.blocked) {
+    const mins = Math.ceil(ctx.cooldown.secondsLeft / 60);
+    blockers.push(`${s.coin} just closed — ${mins} min of the ${ctx.cooldown.minutes}-minute cooldown left`);
+  }
+
   if (ctx?.adoptEnabled === false) warnings.push("bot sitter is off — nobody will place a stop");
   if (ctx?.hasPosition) warnings.push(`${s.coin} position already open — this adds to it`);
 
