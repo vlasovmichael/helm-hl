@@ -98,7 +98,40 @@
       .oi-detail { margin-top: 4px; }
       .oi-detail-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
       .oi-detail-head h3 { margin: 0; font-size: 18px; }
-      .oi-chart { width: 100%; height: 200px; display: block; }
+      .oi-chart { width: 100%; height: 260px; display: block; position: relative; }
+
+      /* Тултип курсора. position:absolute внутри .oi-chart, поэтому у контейнера
+         обязателен position:relative — иначе уезжает в угол страницы. */
+      .oi-tip {
+        position: absolute; z-index: 3; pointer-events: none;
+        padding: 7px 10px; border-radius: 8px; font-size: 12px; line-height: 1.5;
+        border: 1px solid var(--border, #2a2622);
+        background: var(--card-bg, #131316);
+        color: var(--text-primary);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+        font-variant-numeric: tabular-nums; white-space: nowrap;
+      }
+      .oi-tip-t { color: var(--text-secondary); font-size: 11px; margin-bottom: 3px; }
+      .oi-tip-r { display: flex; align-items: center; gap: 6px; }
+      .oi-tip-r b { width: 9px; height: 3px; border-radius: 2px; flex: none; }
+      .oi-tip-r span { font-family: "JetBrains Mono", monospace; margin-left: auto; }
+      .oi-tip-r i { font-style: normal; color: var(--text-secondary); font-size: 11px; }
+
+      /* Заголовки с пояснением: курсор-вопрос подсказывает, что есть title. */
+      .oi-table th[title] { cursor: help; text-decoration: underline dotted 1px; text-underline-offset: 3px; }
+
+      /* Липкая колонка монеты: на узком экране таблица едет вбок, и без этого
+         непонятно, чья строка перед тобой. */
+      .oi-table th:first-child,
+      .oi-table td:first-child {
+        position: sticky; left: 0; z-index: 1;
+        background: var(--card-bg);
+      }
+      /* Подсветка строки полупрозрачная, а липкая ячейка обязана быть глухой —
+         иначе сквозь неё видно проезжающие колонки. Поэтому база непрозрачна,
+         а оттенок кладём внутренней тенью поверх неё. */
+      .oi-table tbody tr:hover td:first-child { box-shadow: inset 0 0 0 999px rgba(128, 128, 128, 0.06); }
+      .oi-table tbody tr.active td:first-child { box-shadow: inset 0 0 0 999px rgba(91, 157, 255, 0.14); }
       .oi-legend { display: flex; gap: 16px; font-size: 12px; margin: 6px 0 2px; }
       .oi-legend span { display: inline-flex; align-items: center; gap: 6px; }
       .oi-legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
@@ -339,13 +372,13 @@
             <thead>
               <tr>
                 <th data-key="coin">Coin</th>
-                <th data-key="oiUsd" class="sorted">OI $</th>
-                <th data-key="dOi24hPct">ΔOI 24h</th>
-                <th data-key="dOi1hPct">ΔOI 1h</th>
+                <th data-key="oiUsd" class="sorted" title="Dollar value of all open positions (both sides). Size of the crowd, not its direction.">OI $</th>
+                <th data-key="dOi24hPct" title="Change in open interest over 24h. Rising = money coming in; falling = positions being closed.">ΔOI 24h</th>
+                <th data-key="dOi1hPct" title="Same over the last hour — catches a position being built right now.">ΔOI 1h</th>
                 <th data-key="px">Price</th>
-                <th data-key="dPx24hPct">ΔPrice 24h</th>
-                <th data-key="f">Funding/h</th>
-                <th data-key="v">Volume 24h</th>
+                <th data-key="dPx24hPct" title="Price change over 24h. Read next to ΔOI: OI up with price flat is the interesting cell.">ΔPrice 24h</th>
+                <th data-key="f" title="Hourly funding rate. Positive = longs pay shorts. Values near 0.001% are noise, not a signal.">Funding/h</th>
+                <th data-key="v" title="24h traded volume. On Hyperliquid OI above volume is normal — it is not an anomaly.">Volume 24h</th>
               </tr>
             </thead>
             <tbody id="oi-tbody">
@@ -378,7 +411,18 @@
           <span><i style="background:#5b9dff"></i> OI ($)</span>
           <span><i style="background:#e8b84b"></i> Price</span>
         </div>
-        <svg class="oi-chart" id="oi-chart" viewBox="0 0 800 200" preserveAspectRatio="none"></svg>
+        <div class="oi-chart" id="oi-chart"></div>
+        <p class="oi-note" style="margin-top: 12px">
+          <b>Two scales, on purpose:</b> OI in dollars on the right, price on the left —
+          they are not comparable, so they never share an axis. Hover the chart for the
+          exact hour and both values. What the shape means: lines moving <b>together</b>
+          is ordinary churn — positions opened and closed as price moves, no information.
+          Lines <b>diverging</b> is the readable case: OI stepping up while price stalls or
+          drops means someone built a position and is <b>still holding it</b>. A flat OI
+          shelf is that position sitting there; when the shelf breaks down, they left.
+          OI counts <b>both sides at once</b>, so it can never tell you long or short —
+          this page shows positioning, not direction.
+        </p>
         <div class="oi-table-wrap" style="margin-top: 14px">
           <table class="oi-table" id="oi-series">
             <thead>

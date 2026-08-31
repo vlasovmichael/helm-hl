@@ -10,9 +10,10 @@ import "./src/styles/index.scss";
 import { bindTheme } from "./src/core/shell.js";
 import { mountTopnav } from "./src/core/topnav.js";
 import { fetchJson } from "./src/net/api.js";
+import { drawOiChart, clearOiChart, applyOiChartTheme } from "./src/charts/oiChart.js";
 
 mountTopnav("oi");
-bindTheme();
+bindTheme([applyOiChartTheme]);
 
 // ── форматтеры ──
 const fmtUsd = (n) => {
@@ -736,7 +737,7 @@ async function selectCoin(coin) {
   );
   if (!data.ok || !data.points.length) {
     document.getElementById("oi-detail-sub").textContent = "no history for this range";
-    document.getElementById("oi-chart").innerHTML = "";
+    clearOiChart();
     return;
   }
   const pts = data.points;
@@ -749,37 +750,8 @@ async function selectCoin(coin) {
     `${data.rawCount} points · OI ${fmtUsd(first.oiUsd)}→${fmtUsd(last.oiUsd)} ` +
     `(${dOi > 0 ? "+" : ""}${dOi.toFixed(1)}%) · price ${dPx > 0 ? "+" : ""}${dPx.toFixed(1)}% ` +
     `· <span class="oi-muted">table avg per ${bucketH}h</span>`;
-  drawChart(pts);
+  drawOiChart(pts);
   renderSeries(pts, bucketH);
-}
-
-// Dual-axis спарклайн: OI ($) синим, цена золотым. Каждая серия нормируется по
-// своему min/max — сравниваем ФОРМУ (растёт OI, а цена стоит?), не абсолют.
-function drawChart(pts) {
-  const W = 800,
-    H = 200,
-    pad = 6;
-  const xs = (i) => pad + (i / (pts.length - 1 || 1)) * (W - 2 * pad);
-  const line = (vals, color) => {
-    const mn = Math.min(...vals),
-      mx = Math.max(...vals);
-    const rng = mx - mn || 1;
-    const y = (v) => H - pad - ((v - mn) / rng) * (H - 2 * pad);
-    const d = vals
-      .map((v, i) => `${i ? "L" : "M"}${xs(i).toFixed(1)},${y(v).toFixed(1)}`)
-      .join(" ");
-    return `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linejoin="round" />`;
-  };
-  const svg = document.getElementById("oi-chart");
-  svg.innerHTML =
-    line(
-      pts.map((p) => p.oiUsd),
-      "#5b9dff",
-    ) +
-    line(
-      pts.map((p) => p.px),
-      "#e8b84b",
-    );
 }
 
 // Размер бакета таблицы: ~24 строки на любой диапазон, снап к «красивым» часам.
