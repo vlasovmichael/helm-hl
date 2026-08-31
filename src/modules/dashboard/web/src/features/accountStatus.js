@@ -11,6 +11,7 @@
 import { fmtUsd, fmtPrice, fmtPct, formatUptime, escapeHtml } from "../utils/format.js";
 import { riskTint } from "../utils/riskBar.js";
 import { updateAnimatedNumber } from "../utils/animatedNumber.js";
+import { startPriceStream, setWatchedCoins, getLivePrice, onPriceTick } from "../net/priceStream.js";
 
 // Доп. классы + inline-стиль для глубинной заливки PnL-карточки.
 // tint = riskTint(...) | null. Возвращает { cls, attr } для подстановки в HTML.
@@ -531,6 +532,106 @@ function closeBtnCls(s, p) {
   return ` ${sign} ${level}`;
 }
 
+// ── Live-цена: поток allMids поверх 2-секундного статуса ─────────────────────
+// Статус остаётся владельцем всего, кроме цены. Здесь только подменяем
+// currentPrice на свежую и перерисовываем те карточки, чьи монеты дёрнулись.
+let _liveList = [];
+let _liveBound = false;
+
+/** Позиция с самой свежей известной ценой. Нет живой — остаётся серверная. */
+function withLivePrice(p) {
+  const px = getLivePrice(p.coin);
+  return px != null ? { ...p, currentPrice: px } : p;
+}
+
+function bindPriceStream() {
+  if (_liveBound) return;
+  _liveBound = true;
+  startPriceStream();
+  onPriceTick((changed) => {
+    const container = document.getElementById("manual-positions-container");
+    if (!container || !_liveList.length) return;
+    for (const p of _liveList) {
+      if (!changed.has(String(p.coin).toUpperCase())) continue;
+      patchManualCard(container, withLivePrice(p));
+    }
+  });
+}
+
+/**
+ * Патч одной карточки на месте. Зовётся из двух мест: из статус-пакета
+ * (раз в 2с, весь набор цифр) и из live-тика цены (каждый кадр, только
+ * то, что зависит от цены). Одна функция — чтобы эти два пути не начали
+ * рисовать по-разному.
+ */
+function patchManualCard(container, p) {
+  const card = container.querySelector(`[data-mcard="${CSS.escape(p.coin)}"]`);
+  // Карточки ещё нет (пришёл тик до первой отрисовки) — просто ждём рендера.
+  if (!card) return;
+    const tint = riskTint({
+      entry: p.entryPrice,
+      now: p.currentPrice,
+      side: p.side,
+      stopPrice: p.bot?.stopPrice,
+      sizeUsd: p.sizeUsd,
+      beArmPct: p.bot?.beArmPct,
+      beArmed: p.bot?.beArmed,
+      trailArmPct: p.bot?.trailArmPct,
+      trailArmed: p.bot?.trailArmed,
+      tpPrice: p.bot?.tpPrice,
+      peakPct: p.bot?.peakPct,
+      maePct: p.bot?.maePct,
+    });
+    const sign = p.unrealizedPnl >= 0 ? "pos" : "neg";
+    const cell = card.querySelector(".pnl-tint");
+    applyTint(cell, tint, sign);
+    setPnlUsd(cell, p.unrealizedPnl);
+    const nowEl = card.querySelector("[data-mnow]");
+    if (nowEl)
+      nowEl.textContent = p.currentPrice != null ? fmtPrice(p.currentPrice) : "—";
+    // Производные метрики двигаются каждый тик (now/peak/трейл) → патчим их же.
+    const s = manualStats(p);
+    // Окраска Close идёт за R, а R меняется каждый тик — иначе кнопка
+    // застыла бы в цвете того момента, когда карточку отрисовали целиком.
+    const closeBtn = card.querySelector("[data-posclose]");
+    if (closeBtn && !closeBtn.classList.contains("is-armed")) {
+      closeBtn.className = `pos-close-btn${closeBtnCls(s, p)}`;
+    }
+    const moveEl = card.querySelector("[data-mmove]");
+    if (moveEl) {
+      moveEl.textContent = s.movePct != null ? fmtMove(s.movePct) : "—";
+      moveEl.classList.toggle("positive", s.movePct != null && s.movePct >= 0);
+      moveEl.classList.toggle("negative", s.movePct != null && s.movePct < 0);
+    }
+    // R-под-строка живёт во всех трёх слоях (spacer/base/fill) → синхроним все,
+    // чтобы бело-залитая копия не отставала от цветной (R «переливается»).
+    const subTxt = upnlSubTxt(s, p.unrealizedPnl);
+    card.querySelectorAll(".pnl-sub").forEach((el) => {
+      el.textContent = subTxt;
+    });
+    const flEl = card.querySelector("[data-mfloor]");
+    if (flEl && s.floorPrice != null) flEl.textContent = fmtPrice(s.floorPrice);
+    const flPnlEl = card.querySelector("[data-mfloorpnl]");
+    if (flPnlEl && s.floorPnl != null) {
+      flPnlEl.textContent = fmtSignedUsd2(s.floorPnl);
+      flPnlEl.classList.toggle("positive", s.floorPnl >= 0);
+      flPnlEl.classList.toggle("negative", s.floorPnl < 0);
+    }
+    // Тип пола меняется на лету (stop→BE→trail, когда взводится храповик).
+    const flBadge = card.querySelector("[data-mfloor]")
+      ?.closest(".grid-item")?.querySelector(".fl-badge");
+    const fb = FLOOR_BADGE[s.floorKind] || null;
+    if (flBadge && fb) {
+      flBadge.textContent = fb.txt;
+      flBadge.className = `fl-badge ${fb.cls}`;
+    }
+    const prev = _manualLastUpnl.get(p.coin);
+    const crossed =
+      prev != null && prev >= 0 !== p.unrealizedPnl >= 0;
+    if (crossed) flashCross(cell);
+    _manualLastUpnl.set(p.coin, p.unrealizedPnl);
+}
+
 export function renderManualPositions(list) {
   const container = document.getElementById("manual-positions-container");
   if (!container) return;
@@ -538,8 +639,16 @@ export function renderManualPositions(list) {
     container.innerHTML = "";
     _manualKeys = "";
     _manualLastUpnl.clear();
+    _liveList = [];
+    setWatchedCoins([]);
     return;
   }
+  bindPriceStream();
+  // Запоминаем ПОСЛЕДНИЙ серверный payload: тик цены перерисовывает карточку
+  // из него же, подменив только currentPrice.
+  _liveList = list;
+  setWatchedCoins(list.map((p) => p.coin));
+  list = list.map(withLivePrice);
   ensureFloorTimerStyle();
   startFloorTimerTick();
   const cls = (v) => (v >= 0 ? "positive" : "negative");
@@ -555,74 +664,7 @@ export function renderManualPositions(list) {
     .map((p) => `${p.coin}:${p.adopted ? 1 : 0}:${p.adoptResyncing ? 1 : 0}:${p.adoptSkipReason ?? ""}`)
     .join("|");
   if (keys === _manualKeys) {
-    for (const p of list) {
-      const card = container.querySelector(
-        `[data-mcard="${CSS.escape(p.coin)}"]`,
-      );
-      if (!card) continue;
-      const tint = riskTint({
-        entry: p.entryPrice,
-        now: p.currentPrice,
-        side: p.side,
-        stopPrice: p.bot?.stopPrice,
-        sizeUsd: p.sizeUsd,
-        beArmPct: p.bot?.beArmPct,
-        beArmed: p.bot?.beArmed,
-        trailArmPct: p.bot?.trailArmPct,
-        trailArmed: p.bot?.trailArmed,
-        tpPrice: p.bot?.tpPrice,
-        peakPct: p.bot?.peakPct,
-        maePct: p.bot?.maePct,
-      });
-      const sign = p.unrealizedPnl >= 0 ? "pos" : "neg";
-      const cell = card.querySelector(".pnl-tint");
-      applyTint(cell, tint, sign);
-      setPnlUsd(cell, p.unrealizedPnl);
-      const nowEl = card.querySelector("[data-mnow]");
-      if (nowEl)
-        nowEl.textContent = p.currentPrice != null ? fmtPrice(p.currentPrice) : "—";
-      // Производные метрики двигаются каждый тик (now/peak/трейл) → патчим их же.
-      const s = manualStats(p);
-      // Окраска Close идёт за R, а R меняется каждый тик — иначе кнопка
-      // застыла бы в цвете того момента, когда карточку отрисовали целиком.
-      const closeBtn = card.querySelector("[data-posclose]");
-      if (closeBtn && !closeBtn.classList.contains("is-armed")) {
-        closeBtn.className = `pos-close-btn${closeBtnCls(s, p)}`;
-      }
-      const moveEl = card.querySelector("[data-mmove]");
-      if (moveEl) {
-        moveEl.textContent = s.movePct != null ? fmtMove(s.movePct) : "—";
-        moveEl.classList.toggle("positive", s.movePct != null && s.movePct >= 0);
-        moveEl.classList.toggle("negative", s.movePct != null && s.movePct < 0);
-      }
-      // R-под-строка живёт во всех трёх слоях (spacer/base/fill) → синхроним все,
-      // чтобы бело-залитая копия не отставала от цветной (R «переливается»).
-      const subTxt = upnlSubTxt(s, p.unrealizedPnl);
-      card.querySelectorAll(".pnl-sub").forEach((el) => {
-        el.textContent = subTxt;
-      });
-      const flEl = card.querySelector("[data-mfloor]");
-      if (flEl && s.floorPrice != null) flEl.textContent = fmtPrice(s.floorPrice);
-      const flPnlEl = card.querySelector("[data-mfloorpnl]");
-      if (flPnlEl && s.floorPnl != null) {
-        flPnlEl.textContent = fmtSignedUsd2(s.floorPnl);
-        flPnlEl.classList.toggle("positive", s.floorPnl >= 0);
-        flPnlEl.classList.toggle("negative", s.floorPnl < 0);
-      }
-      // Тип пола меняется на лету (stop→BE→trail, когда взводится храповик).
-      const flBadge = card.querySelector("[data-mfloor]")
-        ?.closest(".grid-item")?.querySelector(".fl-badge");
-      const fb = FLOOR_BADGE[s.floorKind] || null;
-      if (flBadge && fb) {
-        flBadge.textContent = fb.txt;
-        flBadge.className = `fl-badge ${fb.cls}`;
-      }
-      const prev = _manualLastUpnl.get(p.coin);
-      const crossed =
-        prev != null && prev >= 0 !== p.unrealizedPnl >= 0;
-      if (crossed) flashCross(cell);
-      _manualLastUpnl.set(p.coin, p.unrealizedPnl);
-    }
+    for (const p of list) patchManualCard(container, p);
     return;
   }
   _manualKeys = keys;
