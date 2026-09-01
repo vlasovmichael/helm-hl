@@ -38,10 +38,6 @@ let started = false;
 
 const prices = new Map();       // COIN → { px, ts }
 const watched = new Set();      // монеты, на которые подписаны
-// Закреплённые монеты живут вне набора позиций: Active Position задаёт свой
-// список через setWatchedCoins, и без этого BTC гас бы каждый раз, когда
-// позиций нет или они сменились. Одна лишняя подписка — ~1 КБ/с.
-const pinned = new Set();
 const listeners = new Set();    // fn(Set<coin>) — какие монеты изменились
 let pending = new Set();        // накопленные изменения до следующего кадра
 let frame = null;
@@ -74,7 +70,6 @@ const sub = (coin, on) => ({
  */
 export function setWatchedCoins(coins) {
   const next = new Set((coins || []).map((c) => String(c).toUpperCase()).filter(Boolean));
-  for (const coin of pinned) next.add(coin);
   for (const coin of watched) {
     if (!next.has(coin)) {
       send(sub(coin, false));
@@ -87,20 +82,6 @@ export function setWatchedCoins(coins) {
       watched.add(coin);
       send(sub(coin, true));
     }
-  }
-}
-
-/**
- * Закрепить монету за собой: она остаётся подписанной независимо от того, что
- * происходит с позициями. Для витрин, которым нужна своя цена (BTC в шапке).
- */
-export function pinCoin(coin) {
-  const c = String(coin || "").toUpperCase();
-  if (!c || pinned.has(c)) return;
-  pinned.add(c);
-  if (!watched.has(c)) {
-    watched.add(c);
-    send(sub(c, true));
   }
 }
 
