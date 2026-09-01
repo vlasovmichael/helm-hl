@@ -63,17 +63,6 @@
         </div>
       </header>
 
-      <!-- Market Context — живая статистика по BTC; цвет рамки = фон (risk-on/off) -->
-      <div
-        id="market-context"
-        class="market-context unknown mc-loading"
-        title="Live BTC stats. Green frame = clear trend (RISK-ON/OFF), trade with the backdrop. Yellow = range, trading against structure is risky."
-      >
-        <span class="mc-loader" aria-hidden="true"><span class="loader-spinner"></span></span>
-        <span class="mc-head" id="mc-head"></span>
-        <span class="mc-stats" id="mc-stats"></span>
-      </div>
-
       <!-- Day Desk — три вопроса дня: сколько уже сделал, сколько можно потерять,
            защищены ли позы. Стоит ВЫШЕ позиций и сетапов намеренно: по разбору
            журнала минус делают дни с несколькими входами, а не отдельные сделки,
@@ -90,6 +79,20 @@
         </div>
         <div id="day-rules" class="dd-rules"></div>
       </section>
+
+      <!-- Market Context — живая статистика по BTC (цена по биржевому WS);
+           цвет рамки = фон (risk-on/off). Стоит вплотную НАД позициями: фон
+           рынка читается в одном движении глаза с тем, что открыто, а бюджет
+           дня (Today) остаётся первым на экране. -->
+      <div
+        id="market-context"
+        class="market-context unknown mc-loading"
+        title="Live BTC stats. Green frame = clear trend (RISK-ON/OFF), trade with the backdrop. Yellow = range, trading against structure is risky."
+      >
+        <span class="mc-loader" aria-hidden="true"><span class="loader-spinner"></span></span>
+        <span class="mc-head" id="mc-head"></span>
+        <span class="mc-stats" id="mc-stats"></span>
+      </div>
 
       <!-- 01 / Active Position -->
       <section class="card" id="sec-position">

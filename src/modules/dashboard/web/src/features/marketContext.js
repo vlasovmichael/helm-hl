@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────────
 
 import { updateAnimatedNumber } from "../utils/animatedNumber.js";
+import { startPriceStream, pinCoin, onPriceTick, getLivePrice } from "../net/priceStream.js";
 
 function fmtPrice(p) {
   if (p == null || !Number.isFinite(p)) return "—";
@@ -39,6 +40,35 @@ const STAT_CELLS = [
 ];
 
 let built = false;
+let btcStreamBound = false;
+
+// ── живая цена BTC (биржевой WS, bbo) ──
+// Раньше цена в плашке жила тактом статус-кадра — раз в 2с, число стояло и
+// прыгало. Тот же поток, что уже двигает ползунок Active Position, но с
+// оговоркой: bbo прилетает 6–10 раз в секунду, и одометр на такой частоте
+// перестаёт читаться — цифры сливаются в мельтешение. Поэтому не чаще, чем
+// раз в 250 мс: глазу этого достаточно для «живого», и число остаётся читаемым.
+//
+// Подписка ЗАКРЕПЛЁННАЯ (pinCoin): набор монет в потоке задаёт Active Position
+// по своим позициям, и без закрепления BTC гас бы, как только позиций нет.
+const BTC_MIN_INTERVAL_MS = 250;
+let _lastBtcPaintAt = 0;
+
+function bindBtcStream() {
+  if (btcStreamBound) return;
+  btcStreamBound = true;
+  startPriceStream();
+  pinCoin("BTC");
+  onPriceTick((changed) => {
+    if (!changed.has("BTC")) return;
+    const now = Date.now();
+    if (now - _lastBtcPaintAt < BTC_MIN_INTERVAL_MS) return;
+    const px = getLivePrice("BTC");
+    if (px == null) return; // поток протух — плашку добьёт статус-кадр
+    _lastBtcPaintAt = now;
+    updateBtcLivePrice(px);
+  });
+}
 
 function buildStructure(el) {
   const head = el.querySelector("#mc-head");
@@ -55,6 +85,7 @@ function buildStructure(el) {
   el.classList.add("mc-enter"); // одноразовый вход (стаггер в CSS)
   setTimeout(() => el.classList.remove("mc-enter"), 1200);
   built = true;
+  bindBtcStream();
   return true;
 }
 
