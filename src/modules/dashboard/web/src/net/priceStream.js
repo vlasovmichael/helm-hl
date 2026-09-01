@@ -175,9 +175,30 @@ function scheduleReconnect() {
   retryDelay = Math.min(retryDelay * 2, RECONNECT_MAX_MS);
 }
 
+// ── возврат во вкладку ──
+// Телефон замораживает свёрнутую вкладку и рвёт сокет, но onclose при этом
+// доходит не сразу: на резюме цена приезжала через ~5 секунд, тогда как
+// нативный кошелёк успевает за полсекунды. Всё это время ждал не сокет, а наш
+// backoff-таймер, доросший до секунд в фоне. Поэтому на возврате поднимаемся
+// немедленно и с нулевой задержкой — один коннект на разворачивание.
+function wake() {
+  if (!started || document.visibilityState !== "visible") return;
+  if (ws && ws.readyState === WebSocket.OPEN) return; // живой — не трогаем
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  retryDelay = RECONNECT_BASE_MS;
+  connect();
+}
+
 /** Поднять поток. Повторные вызовы безвредны. */
 export function startPriceStream() {
   if (started) return;
   started = true;
+  // pageshow ловит возврат из bfcache (iOS Safari), где visibilitychange
+  // может не прийти вовсе.
+  document.addEventListener("visibilitychange", wake);
+  window.addEventListener("pageshow", wake);
   connect();
 }

@@ -158,7 +158,31 @@ export function startFooterTimer() {
 }
 
 // handlers = { onStatus(data), onLogsInit(entries), onLog(entry), onDivergence() }
+// Статус-сокет просыпается по тем же правилам, что и поток цен: свёрнутая
+// вкладка замораживается, onclose доходит с задержкой, и на возврате данные
+// ждали backoff, а не сеть. Слушатель ставится один раз, handlers запоминаем —
+// initWebSocket сам их и переиспользует при переподключении.
+let wsHandlers = null;
+let wakeBound = false;
+
+function wakeWebSocket() {
+  if (document.visibilityState !== "visible" || !wsHandlers) return;
+  if (socket && socket.readyState === WebSocket.OPEN) return;
+  if (wsReconnectTimer) {
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = null;
+  }
+  wsRetryDelay = 1000;
+  initWebSocket(wsHandlers);
+}
+
 export function initWebSocket(handlers = {}) {
+  wsHandlers = handlers;
+  if (!wakeBound) {
+    wakeBound = true;
+    document.addEventListener("visibilitychange", wakeWebSocket);
+    window.addEventListener("pageshow", wakeWebSocket);
+  }
   if (wsReconnectTimer) {
     clearTimeout(wsReconnectTimer);
     wsReconnectTimer = null;
