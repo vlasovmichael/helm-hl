@@ -41,13 +41,22 @@
       letter-spacing: 0.8px;
       color: var(--text-muted);
     }
-    /* Цена крутится odometer'ом (.animated-value/.digit-reel — как Total Equity).
-       Барабаны цифр фикс-ширины в overflow:hidden → смена цены НЕ меняет ширину
-       плашки (убрали старый mc-tick padding, плодивший гор.скролл). 2026-06-29. */
+    /* Цена — как в TradingView: без анимации, цветом помечен изменившийся хвост
+       числа (2026-09-01). Одометр отсюда убран: барабаны на крупном числе
+       читаются хуже, чем статичная цифра. Ширину держит tabular-nums, чтобы
+       смена разряда не дёргала плашку — раньше это делал overflow одометра. */
     .mc-px {
       font-weight: 700;
       font-size: 23px;
       color: var(--text-primary);
+      font-variant-numeric: tabular-nums;
+
+      .mc-px-up {
+        color: var(--green);
+      }
+      .mc-px-dn {
+        color: var(--red);
+      }
     }
     .mc-24h {
       font-size: 15px;
@@ -166,9 +175,6 @@
     &.mc-enter .mc-head,
     &.mc-enter .mc-stats .mc-cell {
       animation: none;
-    }
-    .mc-px .digit-reel {
-      transition: none;
     }
   }
 }

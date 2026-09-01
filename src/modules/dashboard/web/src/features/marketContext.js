@@ -6,7 +6,6 @@
 //  Цвет рамки = светофор по фону (risk-on/off).
 // ─────────────────────────────────────────────────
 
-import { updateAnimatedNumber } from "../utils/animatedNumber.js";
 
 function fmtPrice(p) {
   if (p == null || !Number.isFinite(p)) return "—";
@@ -80,9 +79,46 @@ function setVal(el, key, html, cls) {
 // фикс-ширины (tabular-nums) в контейнере overflow:hidden → ноль горизонтального
 // сдвига (старая болячка mc-tick padding'а). 2026-06-29.
 let _lastLiveBtcAt = 0; // когда живая цена (WS, 2с) последний раз вела число
+// Цена в стиле TradingView: анимации нет вовсе, вместо неё цветом помечен
+// ХВОСТ числа, который изменился с прошлого показа. Направление задаёт цвет
+// (выше — зелёный, ниже — красный), подсветка держится до следующей смены.
+//
+// Почему не одометр (решение 01.09.2026): крутящиеся барабаны на крупном
+// числе читаются хуже, чем статичное число — глаз ловит движение вместо
+// цифры. Total Equity одометр себе оставляет: там значение меняется редко и
+// само движение как раз и есть событие.
+let _lastBtcStr = "";
+let _lastBtcPx = null;
+
 function renderBtcPrice(_el, price) {
   if (price == null) return;
-  updateAnimatedNumber("mc-px-val", fmtPrice(price));
+  const el = document.getElementById("mc-px-val");
+  if (!el) return;
+  const next = fmtPrice(price);
+  if (next === _lastBtcStr) return;
+
+  // Общий префикс сравниваем как строки: «$77,356.0» → «$77,344.2» даёт
+  // одинаковую голову «$77,3» и разный хвост. Разряды при этом не разъезжаются,
+  // потому что формат один и тот же.
+  const prev = _lastBtcStr;
+  let i = 0;
+  while (i < next.length && i < prev.length && next[i] === prev[i]) i++;
+  const dirCls = !prev ? "" : price > _lastBtcPx ? "mc-px-up" : "mc-px-dn";
+
+  el.textContent = "";
+  if (i > 0) {
+    const head = document.createElement("span");
+    head.textContent = next.slice(0, i);
+    el.appendChild(head);
+  }
+  if (i < next.length) {
+    const tail = document.createElement("span");
+    tail.className = dirCls;
+    tail.textContent = next.slice(i);
+    el.appendChild(tail);
+  }
+  _lastBtcStr = next;
+  _lastBtcPx = price;
 }
 
 export function renderMarketContext(d) {
