@@ -8,11 +8,13 @@
 //
 // GET /api/winners            — витрина теста
 // GET /api/winners/positions  — что у отобранных ОТКРЫТО прямо сейчас
+// GET /api/winners/events     — журнал: что открывали и закрывали, с исходом
 
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { logger } from "../../../core/logger.js";
 import { fetchPositions } from "../../winnersPositions.js";
+import { readEvents, summarize } from "../../winnersJournal.js";
 
 const FREEZE_FILE = join("docs", "winners-preregistration.json");
 const RESULT_FILE = join("data", "winners-forward.json");
@@ -65,6 +67,8 @@ export function handleWinners(_req, res) {
             from: forward.from,
             to: forward.to,
             days: forward.days,
+            gap: forward.gap ?? false,
+            gapNote: forward.gapNote ?? null,
             selectedMedianBp: forward.selectedMedianBp,
             controlMedianBp: forward.controlMedianBp,
             controlCount: forward.controlCount,
@@ -162,4 +166,28 @@ export async function handleWinnersPositions(_req, res) {
   // через 10 секунд, затор в пуле обычно короче этого.
   posCache = { payload, loadedAt: now, ttl: refused ? POS_RETRY_TTL_MS : POS_TTL_MS };
   res.json(payload);
+}
+
+
+// ─── журнал событий ─────────────────────────────────────────────────────────
+//
+// Пуш от winnersWatch холодный и живёт сутки в колокольчике, а витрина выше
+// показывает только открытое сейчас — закрытая поза исчезала бесследно.
+// Здесь она остаётся вместе с исходом: сколько человек снял или потерял.
+// Читаем с диска, чужую биржу не дёргаем.
+//
+// ⛔ На вердикт предзаявленного теста не влияет: тот считает
+// tools/winners.mjs track по снимкам лидерборда, дата решения 10.11.2026.
+
+export function handleWinnersEvents(req, res) {
+  const limit = Math.min(Math.max(parseInt(req.query?.limit ?? "100", 10) || 100, 1), 500);
+  const days = parseInt(req.query?.days ?? "", 10);
+  const sinceMs = Number.isFinite(days) && days > 0 ? Date.now() - days * 86_400_000 : null;
+  try {
+    const events = readEvents({ limit, sinceMs });
+    res.json({ ok: true, events, summary: summarize(events) });
+  } catch (err) {
+    logger.warn(`[Dashboard] winners events: ${String(err?.message || err)}`);
+    res.json({ ok: false, reason: String(err?.message || err) });
+  }
 }

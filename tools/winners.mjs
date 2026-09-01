@@ -206,9 +206,27 @@ function track({ quiet = false } = {}) {
   const freeze = JSON.parse(readFileSync(FREEZE_FILE, "utf8"));
   const files = listSnapshots();
 
+  // 🚨 Без двух снимков считать нечего. Раньше здесь был TypeError из join(undefined):
+  // 28.08.2026 сбор лидерборда сняли при чистке лаборатории, не заметив, что от него
+  // кормится ЖИВОЙ предзаявленный тест, и крон пять дней падал в лог, куда никто
+  // не смотрел. Падение молчит громче, чем внятный отказ.
+  if (files.length < 2) {
+    console.log(
+      `\n  ✗ снимков лидерборда ${files.length} — форвард считать не из чего.` +
+        "\n    Собирает их node tools/leaderboardSnapshot.mjs (крон 03:00), считаем мы после.\n",
+    );
+    process.exit(1);
+  }
+
   // Форвард считается ОТ снимка, на котором заморозили, а не от первого.
   const startFile = files.find((f) => f.startsWith(freeze.selectionSnapshots.to));
-  const start = loadSnapshot(startFile);
+  // 🚨 Снимка заморозки может не быть на диске — ряд 12.08→28.08 удалён вместе
+  // со сбором и в бэкап не входил, восстановить его нечем. Тогда честный ход
+  // один: считать от первого уцелевшего снимка и НАЗВАТЬ разрыв в результате,
+  // а не делать вид, что окно непрерывно. Дата решения при этом не двигается:
+  // сдвигать её под то, как легли данные, — это уже подгонка.
+  const gap = !startFile;
+  const start = loadSnapshot(startFile ?? files[0]);
   const now = loadSnapshot(files[files.length - 1]);
 
   const days = (now.capturedAt - start.capturedAt) / 864e5;
@@ -233,6 +251,12 @@ function track({ quiet = false } = {}) {
     frozenAt: freeze.frozenAt,
     from: start.date,
     to: now.date,
+    // Разрыв ряда виден прямо в результате: витрина обязана показать его рядом
+    // с цифрами, иначе «форвард 70 дней» прочитается как непрерывное наблюдение.
+    gap: gap || undefined,
+    gapNote: gap
+      ? `ряд прерван: снимки ${freeze.selectionSnapshots.to}→2026-08-28 удалены 28.08.2026 вместе со сбором, наблюдение возобновлено ${start.date}`
+      : undefined,
     days: Math.round(days * 10) / 10,
     interimDate: freeze.interimDate,
     decisionDate: freeze.decisionDate,
@@ -268,6 +292,7 @@ function track({ quiet = false } = {}) {
   if (quiet) return result;
 
   console.log(`\n  форвард ${result.from} → ${result.to} (${result.days} дн.)\n`);
+  if (gap) console.log(`  ⚠️  ${result.gapNote}\n`);
   for (const s of result.selected) {
     const fwd = s.forwardEdgeBp === null ? "не торговал" : `${s.forwardEdgeBp > 0 ? "+" : ""}${s.forwardEdgeBp} бп`;
     console.log(`    ${s.address.slice(0, 10)}…  отобран на ${s.selectionEdgeBp} бп  →  сейчас ${fwd}`);

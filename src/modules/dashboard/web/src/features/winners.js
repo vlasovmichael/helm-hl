@@ -189,6 +189,10 @@ function renderSummary(res) {
         ? f.selectedMedianBp > f.controlMedianBp
         : null;
 
+    if (f.gap)
+      rows.push(
+        `<span style="color:var(--red)">⚠ Series broken:</span> ${f.gapNote} — the window is shorter than planned, the decision date is unchanged.`,
+      );
     rows.push(
       `Forward ${f.from} → ${f.to} (${f.days} days): selected median <b style="${col(f.selectedMedianBp)}">${bp(f.selectedMedianBp)} bp</b> · ` +
       `control (${f.controlCount} addresses, same filters) <b style="${col(f.controlMedianBp)}">${bp(f.controlMedianBp)} bp</b>` +
@@ -212,6 +216,79 @@ function renderSummary(res) {
   );
 
   return rows.map((r) => `<div>${r}</div>`).join("");
+}
+
+// ─── лента событий ──────────────────────────────────────────────────────────
+//
+// Отвечает на вопрос, которого нет ни в пуше, ни в таблице выше: что человек
+// сделал и чем это кончилось. Две колонки — выиграл / проиграл — потому что
+// именно их и спрашивают; всё остальное в строке события.
+//
+// ⛔ Вердикт теста здесь по-прежнему не считается. Это чтение постфактум.
+
+const ago = (ms) => {
+  const m = Math.round(ms / 60_000);
+  if (m < 60) return `${m}m`;
+  const h = Math.round(m / 60);
+  return h < 48 ? `${h}h` : `${Math.round(h / 24)}d`;
+};
+
+const KIND = {
+  open: { mark: "▲", label: "OPEN" },
+  close: { mark: "×", label: "CLOSE" },
+  flip: { mark: "⇄", label: "FLIP" },
+};
+
+function renderLog(box, sumBox, res) {
+  const { events, summary } = res;
+  if (!events.length) {
+    box.innerHTML = `<div class="empty-state" style="padding:8px">nothing logged yet — the journal starts filling from the next event</div>`;
+    if (sumBox) sumBox.textContent = "";
+    return;
+  }
+
+  if (sumBox) {
+    // Открытия в счёт не идут: у них исхода ещё нет.
+    sumBox.innerHTML = summary.closed
+      ? `won <b style="color:var(--green)">${summary.win}</b> / lost <b style="color:var(--red)">${summary.loss}</b> · ` +
+        `net <b style="${col(summary.net)}">${usd(summary.net)}</b>`
+      : "";
+  }
+
+  const now = Date.now();
+  box.innerHTML = events
+    .map((e) => {
+      const k = KIND[e.kind] ?? KIND.open;
+      const pnl =
+        e.pnlNet === null || e.pnlNet === undefined
+          ? e.kind === "open"
+            ? ""
+            : `<span style="color:var(--text-muted)">?</span>`
+          : `<b style="${col(e.pnlNet)}">${e.pnlNet >= 0 ? "+" : ""}${usd(e.pnlNet)}</b>`;
+      const held = e.heldMs ? `<span style="color:var(--text-muted)">${ago(e.heldMs)}</span>` : "";
+      return `<div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid var(--border-subtle,rgba(128,128,128,.12))">
+        <span style="color:var(--text-muted);min-width:42px">${ago(now - e.ts)}</span>
+        <span style="min-width:52px">${k.mark} ${k.label}</span>
+        <span style="flex:1">${e.coin} <span style="color:var(--text-muted)">${e.side}${e.leverage ? ` ${e.leverage}×` : ""} ${usd(e.sizeUsd)}</span></span>
+        ${held}
+        <span style="min-width:60px;text-align:right">${pnl}</span>
+        <span style="color:var(--text-muted)" title="${e.address}">${e.address.slice(0, 6)}…</span>
+      </div>`;
+    })
+    .join("");
+}
+
+async function refreshLog() {
+  const box = document.getElementById("win-log");
+  const sumBox = document.getElementById("win-log-sum");
+  if (!box) return;
+  try {
+    const res = await fetchJson("/api/winners/events?days=7&limit=200");
+    if (!res?.ok) throw new Error(res?.reason || "no data");
+    renderLog(box, sumBox, res);
+  } catch (err) {
+    box.innerHTML = `<div class="empty-state" style="padding:8px">${err.message}</div>`;
+  }
 }
 
 export async function refreshWinners() {
@@ -246,4 +323,7 @@ export async function refreshWinners() {
   renderRows(tbody, res);
   bindToggle(tbody);
   if (stats) stats.innerHTML = renderSummary(res);
+  // Лента читается с диска и от /api/winners не зависит — её отказ не должен
+  // гасить таблицу, поэтому запускается отдельно и свои ошибки ловит сама.
+  refreshLog();
 }

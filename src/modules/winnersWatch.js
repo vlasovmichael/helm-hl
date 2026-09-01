@@ -28,6 +28,8 @@ import { join } from 'node:path';
 import { logger } from '../core/logger.js';
 import { fireNtfy } from '../core/ntfy.js';
 import { fetchPositions } from './winnersPositions.js';
+import { appendEvents } from './winnersJournal.js';
+import { hlInfo, HL_PRIORITY } from '../core/hlClient.js';
 
 const ENABLED =
   (process.env.WINNERS_WATCH_ENABLED || 'true').toLowerCase() === 'true';
@@ -84,12 +86,62 @@ const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const usd = (n) =>
   Math.abs(n) >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n.toFixed(0)}`;
 const arrow = (side) => (side === 'SHORT' ? '▼' : '▲');
+const dur = (ms) => {
+  const m = Math.round(ms / 60_000);
+  if (m < 60) return `${m}м`;
+  const h = Math.round(m / 60);
+  return h < 48 ? `${h}ч` : `${Math.round(h / 24)}д`;
+};
 
 // coin у HL уже несёт префикс площадки («xyz:GME»), поэтому в подписи он берётся
 // как есть — dex отдельно нужен только чтобы ключ не схлопнул одинаковый тикер
 // на двух площадках.
-function snapshotOf(p) {
-  return { coin: p.coin, side: p.side, sizeUsd: p.sizeUsd, entryPrice: p.entryPrice, leverage: p.leverage };
+function snapshotOf(p, since) {
+  // since = когда позиция впервые попала в срез. Точность — интервал опроса;
+  // для «держал 4 дня» этого хватает, а для «вошёл по такой-то цене» есть
+  // entryPrice от самой биржи.
+  return { coin: p.coin, side: p.side, sizeUsd: p.sizeUsd, entryPrice: p.entryPrice, leverage: p.leverage, since };
+}
+
+// ── исход закрытия ──
+// Пуш «× CLOSE QNT · был $5.0k» не отвечает на единственный вопрос, который
+// про чужую сделку и задают: он на этом заработал или потерял? Состояние счёта
+// ответа не содержит — закрытой позиции в нём уже нет. Считаем по филлам:
+// closedPnl биржа проставляет сама, комиссию вычитаем (у нас 100% тейкер, и на
+// тонких сделках она и есть весь результат).
+//
+// Вес userFillsByTime — 20 против 2 у clearinghouseState, поэтому запрос идёт
+// ТОЛЬКО когда в тике действительно что-то закрылось (≈4 раза в сутки на
+// адрес), и один на адрес, а не на монету.
+const CLOSE_LOOKBACK_MS = 30 * 60_000;
+
+async function closedPnlFor(address, coins) {
+  const out = new Map();
+  if (!coins.size) return out;
+  let fills;
+  try {
+    fills = await hlInfo(
+      { type: 'userFillsByTime', user: address, startTime: Date.now() - CLOSE_LOOKBACK_MS, aggregateByTime: true },
+      { label: 'winners/closedPnl', timeoutMs: 8_000, maxRetries: 1, priority: HL_PRIORITY.LOW },
+    );
+  } catch (err) {
+    // Исход не дождался бюджета — пишем событие без него. Пустой pnl честнее
+    // нуля: «не знаем» и «вышел в ноль» это разные вещи.
+    logger.debug(`[WinnersWatch] ${short(address)}: closedPnl пропущен (${err.message})`);
+    return out;
+  }
+  for (const f of Array.isArray(fills) ? fills : []) {
+    if (!coins.has(f?.coin)) continue;
+    const pnl = parseFloat(f.closedPnl ?? '0');
+    const fee = parseFloat(f.fee ?? '0');
+    if (!Number.isFinite(pnl)) continue;
+    const cur = out.get(f.coin) || { pnl: 0, fee: 0, fills: 0 };
+    cur.pnl += pnl;
+    cur.fee += Number.isFinite(fee) ? fee : 0;
+    cur.fills++;
+    out.set(f.coin, cur);
+  }
+  return out;
 }
 
 /**
@@ -115,6 +167,7 @@ async function tick() {
 
   let changed = false;
   const lines = [];
+  const journal = [];
 
   // По одному, а не залпом: три параллельных запроса конкурируют за один и тот
   // же LOW-бюджет и валят друг друга по дедлайну.
@@ -136,17 +189,26 @@ async function tick() {
       continue;
     }
 
-    const next = new Map(
-      account.positions
-        .filter((p) => p.sizeUsd >= MIN_NOTIONAL_USD)
-        .map((p) => [`${p.dex}|${p.coin}`, snapshotOf(p)]),
-    );
     // Первый удачный ответ по адресу запоминаем МОЛЧА, иначе всё, что у него уже
     // открыто, приехало бы пушем «только что открыл». Отметка ведётся отдельно
     // по каждому адресу: один упавший на первом тике не должен пропустить свой
     // засев из-за того, что двум другим повезло.
     const first = !known.has(address);
     const prev = known.get(address) || new Map();
+
+    const now = Date.now();
+    const next = new Map(
+      account.positions
+        .filter((p) => p.sizeUsd >= MIN_NOTIONAL_USD)
+        .map((p) => {
+          const key = `${p.dex}|${p.coin}`;
+          const was = prev.get(key);
+          // Возраст позиции переносим, пока сторона не менялась: доборы её не
+          // обнуляют, разворот — обнуляет (это уже другая сделка).
+          const since = was && was.side === p.side ? (was.since ?? now) : now;
+          return [key, snapshotOf(p, since)];
+        }),
+    );
     known.set(address, next);
     changed = true;
     if (first) {
@@ -154,16 +216,50 @@ async function tick() {
       continue;
     }
 
-    for (const ev of diff(prev, next)) {
+    const events = diff(prev, next);
+    if (!events.length) continue;
+
+    // Исход тянем одним запросом на адрес и только если что-то закрылось.
+    const closedCoins = new Set(events.filter((e) => e.kind !== 'open').map((e) => e.coin));
+    const outcomes = await closedPnlFor(address, closedCoins);
+
+    for (const ev of events) {
       const t = ev.coin;
+      const res = outcomes.get(t);
+      const pnlNet = res ? res.pnl - res.fee : null;
+      // held считаем только от нашего же наблюдения: если позиция была открыта
+      // ещё до того, как сторож её увидел, since = момент первого среза, и
+      // возраст занижен. Помечаем это флагом, а не молчим.
+      const heldMs = ev.since ? now - ev.since : null;
+
       if (ev.kind === 'open')
         lines.push(`${arrow(ev.side)} OPEN ${t} ${ev.side} · ${usd(ev.sizeUsd)}${ev.leverage ? ` · ${ev.leverage}×` : ''} · ${short(address)}`);
       else if (ev.kind === 'close')
-        lines.push(`× CLOSE ${t} ${ev.side} · был ${usd(ev.sizeUsd)} · ${short(address)}`);
+        lines.push(`× CLOSE ${t} ${ev.side} · был ${usd(ev.sizeUsd)}${pnlNet == null ? '' : ` · ${pnlNet >= 0 ? '+' : ''}${usd(pnlNet)}`}${heldMs ? ` · ${dur(heldMs)}` : ''} · ${short(address)}`);
       else
-        lines.push(`⇄ FLIP ${t} ${ev.from}→${ev.side} · ${usd(ev.sizeUsd)} · ${short(address)}`);
+        lines.push(`⇄ FLIP ${t} ${ev.from}→${ev.side} · ${usd(ev.sizeUsd)}${pnlNet == null ? '' : ` · ${pnlNet >= 0 ? '+' : ''}${usd(pnlNet)}`} · ${short(address)}`);
+
+      journal.push({
+        ts: now,
+        address,
+        kind: ev.kind,
+        coin: t,
+        dex: ev.key.split('|')[0],
+        side: ev.side,
+        from: ev.from ?? null,
+        sizeUsd: Math.round(ev.sizeUsd),
+        entryPrice: ev.entryPrice ?? null,
+        leverage: ev.leverage ?? null,
+        pnlNet: pnlNet == null ? null : Math.round(pnlNet * 100) / 100,
+        pnlGross: res ? Math.round(res.pnl * 100) / 100 : null,
+        fee: res ? Math.round(res.fee * 100) / 100 : null,
+        heldMs,
+        heldFromFirstSight: ev.kind !== 'open' ? true : undefined,
+      });
     }
   }
+
+  appendEvents(journal);
 
   if (changed) saveState();
   if (!lines.length) return;
