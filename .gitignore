@@ -48,3 +48,5 @@ data/dbos-lab/
 data/grid/
 # Кэш свечей postOnlySim — тоже восстановимый.
 data/postonly/
+data/tg-signals/
+data/entry-timing/
