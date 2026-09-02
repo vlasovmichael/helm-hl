@@ -409,21 +409,25 @@ async function getStatusData() {
     try {
       const builder = await getBuilderPositions();
       for (const p of builder.positions ?? []) {
-        // 💰 uPnL и номинал пересчитываются от ЖИВОЙ цены, а не берутся из
-        // clearinghouseState. Причина в такте: позиции крипты кэшируются 2.5с
-        // (HL_POSITIONS_TTL_MS), а чтение площадок HIP-3 идёт на LOW-приоритете
-        // и кэшируется 60с — деньги в карточке стояли минуту при живой цене.
+        // 💰 uPnL двигается между REST-обновлениями. Причина в такте: позиции
+        // крипты кэшируются 2.5с (HL_POSITIONS_TTL_MS), а чтение площадок HIP-3
+        // идёт на LOW-приоритете и кэшируется 60с — деньги в карточке стояли
+        // минуту при живой цене.
         //
-        // Это НЕ второй источник правды: считает тот же сервер, по формуле
-        // самой биржи. Проверено на xyz:NOK: szi 2.47, entry 9.826, mark 9.8299
-        // → 0.009633 у биржи против 0.00963 расчётных. Фандинг сюда не входит
-        // ни там, ни тут (он отдельно, в cumFunding).
+        // 🚨 Считаем НЕ с нуля, а от биржевого значения: uPnL биржи + дельта
+        // цены с момента того же ответа. В момент REST совпадение точное, между
+        // обновлениями — честная экстраполяция. Пересчёт «с нуля» по
+        // (mark − entry) расходился с биржей на $0.003, потому что mid из книги
+        // и markPx биржи — разные величины, а деньги в карточке обязаны
+        // сходиться с биржей (класс «зеркало ≠ биржа», 8 фиксов).
+        // Фандинг не входит ни там, ни тут — он отдельно, в cumFunding.
         const live = wsPrice(p.coin);
         const mark = live ?? p.markPrice;
         const dir = p.side === 'SHORT' ? -1 : 1;
-        const upnl = Number.isFinite(mark) && Number.isFinite(p.entryPrice)
-          ? dir * p.szi * (mark - p.entryPrice)
-          : p.unrealizedPnl;
+        const drift = Number.isFinite(live) && Number.isFinite(p.markPrice)
+          ? dir * p.szi * (live - p.markPrice)
+          : 0;
+        const upnl = p.unrealizedPnl + drift;
         manualPositions.push({
           coin: p.coin,
           side: p.side,
