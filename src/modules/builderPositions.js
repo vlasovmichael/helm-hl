@@ -24,6 +24,10 @@ const TTL_MS = 60_000;
 // бюджет занят торговыми запросами, следующая попытка через 30с упрётся в то же
 // самое. Держим последний ответ дольше и повторяем реже.
 const ERROR_TTL_MS = 120_000;
+// Пока НИ ОДНОГО успешного чтения не было (сразу после рестарта бюджет занят
+// прогревом: юниверс, whitelist, снапшоты), длинная пауза означала бы, что
+// карточка пустует две минуты на ровном месте. До первого успеха пробуем чаще.
+const COLD_RETRY_MS = 15_000;
 const WARN_EVERY_MS = 300_000;
 let cache = { payload: null, at: 0, inflight: null, failedAt: 0 };
 let lastWarnAt = 0;
@@ -62,7 +66,8 @@ export async function getBuilderPositions() {
   const now = Date.now();
   if (cache.payload && now - cache.at < TTL_MS) return cache.payload;
   // Недавний отказ — отдаём что есть и не идём в сеть.
-  if (cache.failedAt && now - cache.failedAt < ERROR_TTL_MS) return lastOrEmpty();
+  const backoff = cache.payload ? ERROR_TTL_MS : COLD_RETRY_MS;
+  if (cache.failedAt && now - cache.failedAt < backoff) return lastOrEmpty();
   // 🚨 Наружу отдаём промис, который НИКОГДА не реджектится. Раньше здесь
   // возвращался сырой `build()`, и все параллельные вызывающие (кадр статуса
   // идёт каждые 2с) получали одно и то же отклонение — позиция мигала и
