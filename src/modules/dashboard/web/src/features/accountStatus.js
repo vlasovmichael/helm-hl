@@ -647,9 +647,11 @@ export function renderManualPositions(list) {
   // Запоминаем ПОСЛЕДНИЙ серверный payload: тик цены перерисовывает карточку
   // из него же, подменив только currentPrice.
   _liveList = list;
-  // Цены builder-DEX'ов в allMids не приходят — подписка на них была бы вечным
-  // «нет цены». Их currentPrice едет марком в кадре статуса.
-  setWatchedCoins(list.filter((p) => !p.builder).map((p) => p.coin));
+  // Активы builder-DEX'ов подписываются наравне с криптой: bbo по `xyz:NOK`
+  // отдаёт ~1 кадр/с — медленнее крипты (6-10/с), но вдвое быстрее статус-кадра.
+  // Нормализация имени живёт в priceStream: префикс площадки обязан остаться
+  // строчным, иначе поток молча пустой.
+  setWatchedCoins(list.map((p) => p.coin));
   list = list.map(withLivePrice);
   ensureFloorTimerStyle();
   startFloorTimerTick();

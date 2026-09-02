@@ -23,6 +23,14 @@ import { logger } from './logger.js';
 const WS_URL  = process.env.HL_WS_URL || 'wss://api.hyperliquid.xyz/ws';
 const ENABLED = (process.env.HL_WS_FEED_ENABLED || 'false') === 'true';
 
+// Builder-DEX'ы (HIP-3). allMids без параметра `dex` их не отдаёт вовсе, и цена
+// таких позиций в статус-кадре жила марком из REST раз в минуту. Подписка
+// дешёвая: один кадр на площадку, тикеры приходят с префиксом (`xyz:NOK`).
+// 🚨 Префикс площадки ЧУВСТВИТЕЛЕН К РЕГИСТРУ и обязан остаться строчным —
+// на `XYZ:NOK` биржа молчит без ошибки (тот же класс, что строчная k в kSHIB).
+const BUILDER_DEXES = (process.env.HL_WS_BUILDER_DEXES ?? 'xyz')
+  .split(',').map((d) => d.trim().toLowerCase()).filter(Boolean);
+
 // HL закрывает idle-соединение через ~60с тишины. Пингуем чаще + считаем
 // фид «протухшим», если allMids-данных не было дольше STALE_MS.
 const PING_INTERVAL_MS = 30_000;
@@ -37,8 +45,17 @@ const RECONNECT_MAX_MS  = 30_000;
 // либо рассинхрон. Логируем такие как WARN-сэмплы (диагностика Stage 1).
 const DIVERGENCE_WARN_PCT = 0.5;
 
-// coin(UPPER) -> { price, ts }
+// coin -> { price, ts }. Ключ: обычная монета в верхнем регистре, актив
+// builder-DEX'а как `xyz:NOK` — префикс площадки строчный (см. выше).
 const prices = new Map();
+
+function normCoinKey(coin) {
+  const s = String(coin ?? '');
+  const i = s.indexOf(':');
+  return i > 0
+    ? `${s.slice(0, i).toLowerCase()}:${s.slice(i + 1).toUpperCase()}`
+    : s.toUpperCase();
+}
 
 let ws = null;
 let started = false;
@@ -63,7 +80,7 @@ let cmpMaxCoin = '';
  * @returns {{price:number, ts:number}|null}
  */
 export function getLivePrice(coin) {
-  return prices.get(String(coin).toUpperCase()) || null;
+  return prices.get(normCoinKey(coin)) || null;
 }
 
 /** Свежий ли фид: подключён и allMids приходили недавно. */
@@ -156,7 +173,7 @@ function handleMids(mids) {
   for (const [sym, raw] of Object.entries(mids)) {
     const price = parseFloat(raw);
     if (!Number.isFinite(price) || price <= 0) continue;
-    prices.set(sym.toUpperCase(), { price, ts });
+    prices.set(normCoinKey(sym), { price, ts });
     n++;
   }
   if (n > 0) {
@@ -174,8 +191,14 @@ function connect() {
   ws.on('open', () => {
     connected = true;
     reconnectAttempts = 0;
-    logger.info('[PriceFeed] ✅ connected, subscribing allMids');
+    logger.info(
+      `[PriceFeed] ✅ connected, subscribing allMids` +
+      (BUILDER_DEXES.length ? ` (+ builder: ${BUILDER_DEXES.join(', ')})` : ''),
+    );
     ws.send(JSON.stringify({ method: 'subscribe', subscription: { type: 'allMids' } }));
+    for (const dex of BUILDER_DEXES) {
+      ws.send(JSON.stringify({ method: 'subscribe', subscription: { type: 'allMids', dex } }));
+    }
 
     // Heartbeat: пинг + проверка протухания. Если allMids молчат дольше
     // STALE_MS — рвём и реконнектимся (соединение «живое», но мёртвое).

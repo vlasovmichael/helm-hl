@@ -418,9 +418,10 @@ async function getStatusData() {
           unrealizedPnl: p.unrealizedPnl,
           liquidationPrice: p.liquidationPrice,
           leverage: p.leverage,
-          // allMids не отдаёт цены builder-DEX'ов → живого стрима нет, цена
-          // приходит марком с биржи и обновляется вместе с кадром статуса.
-          currentPrice: p.markPrice,
+          // Живая цена из WS-фида (он подписан на allMids площадок), а марк из
+          // clearinghouseState — только запасной вариант, если фид ещё не
+          // прогрелся или подписки нет.
+          currentPrice: wsPrice(p.coin) ?? p.markPrice,
           entryTime: null,
           adopted: false,
           adoptResyncing: false,

@@ -42,9 +42,22 @@ const listeners = new Set();    // fn(Set<coin>) — какие монеты и�
 let pending = new Set();        // накопленные изменения до следующего кадра
 let frame = null;
 
+// 🚨 Регистр имени значим. У активов builder-DEX'ов (HIP-3) тикер приходит как
+// `xyz:NOK`, и биржа принимает подписку ТОЛЬКО со строчным префиксом площадки:
+// на `XYZ:NOK` сокет молчит — без ошибки, просто нулевой поток. Наивный
+// toUpperCase() по всему имени убивал бы live-цену у таких позиций.
+// Тот же класс, что строчная `k` в kSHIB.
+export function normCoin(coin) {
+  const s = String(coin || "");
+  const i = s.indexOf(":");
+  return i > 0
+    ? `${s.slice(0, i).toLowerCase()}:${s.slice(i + 1).toUpperCase()}`
+    : s.toUpperCase();
+}
+
 /** Живая цена монеты. null — нет данных или протухли. */
 export function getLivePrice(coin) {
-  const rec = prices.get(String(coin || "").toUpperCase());
+  const rec = prices.get(normCoin(coin));
   if (!rec || Date.now() - rec.ts > STALE_MS) return null;
   return rec.px;
 }
@@ -69,7 +82,7 @@ const sub = (coin, on) => ({
  * поток по её монете сразу гаснет, а не копится до перезагрузки вкладки.
  */
 export function setWatchedCoins(coins) {
-  const next = new Set((coins || []).map((c) => String(c).toUpperCase()).filter(Boolean));
+  const next = new Set((coins || []).map(normCoin).filter(Boolean));
   for (const coin of watched) {
     if (!next.has(coin)) {
       send(sub(coin, false));
@@ -111,7 +124,10 @@ function schedule(coin) {
 }
 
 function handleBbo(data) {
-  const coin = String(data?.coin || "").toUpperCase();
+  // Тем же нормализатором, что и подписка: биржа возвращает имя ровно в том
+  // виде, в каком его прислали (`xyz:NOK`), и upper-casing префикса разошёлся
+  // бы с ключами в `watched`.
+  const coin = normCoin(data?.coin);
   if (!coin || !watched.has(coin)) return;
   const bid = Number(data?.bbo?.[0]?.px);
   const ask = Number(data?.bbo?.[1]?.px);
