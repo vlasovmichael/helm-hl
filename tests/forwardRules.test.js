@@ -17,7 +17,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { WIDE_STOP, SESSION_REV, SQUEEZE, RULES, findWideStop } from "../tools/forwardRules.mjs";
+import { WIDE_STOP, SESSION_REV, SQUEEZE, RULES, findWideStop, findSqueeze, findSessionReversal } from "../tools/forwardRules.mjs";
 
 test("параметры правил заморожены ровно в предзаявленных значениях", () => {
   assert.deepEqual({ ...WIDE_STOP }, {
@@ -104,5 +104,35 @@ test("неоднозначный бар засчитывается как сто
     if (t.entryT >= wide[1500].t) {
       assert.notEqual(t.wide.why, "target", "на баре-обжоре цель засчитывать нельзя");
     }
+  }
+});
+
+test("вырожденный стоп не порождает сделку ни в одном правиле", () => {
+  // Прогон на 2 годах Binance (02.09.2026) вскрыл: на плоских участках ATR ≈ 0,
+  // издержки в R = стоимость круга / ширина стопа, и одна такая сделка дала
+  // rNet ≈ −32 000R — журнал становится нечитаем целиком. Стоп уже стоимости
+  // круга не торгуем ни при каком исходе, поэтому такие входы не пишутся.
+  //
+  // Ряд из одинаковых баров: диапазон нулевой, ATR нулевой.
+  const flat = [];
+  for (let i = 0; i < 3000; i++) {
+    flat.push({ t: i * 15 * 60_000, o: 100, h: 100, l: 100, c: 100 });
+  }
+  for (const [name, fn] of [
+    ["wide-stop", findWideStop],
+    ["squeeze", findSqueeze],
+    ["session-open", findSessionReversal],
+  ]) {
+    assert.deepEqual(fn("FLAT", flat), [], `${name}: плоский ряд не даёт сделок`);
+  }
+
+  // И явная проверка порога на живых сделках: любая записанная сделка обязана
+  // иметь стоп минимум вдвое шире стоимости круга.
+  const trades = findWideStop("TEST", risingBars(3000));
+  for (const t of trades) {
+    assert.ok(
+      t.narrow.riskPct >= WIDE_STOP.rtPct * 2,
+      `узкая нога ${t.narrow.riskPct}% уже двух комиссий — такая сделка не торгуема`,
+    );
   }
 });

@@ -63,11 +63,16 @@ function parsePositions(state, dex) {
     .map((p) => {
       const szi = parseFloat(p.szi ?? "0");
       const entryPx = parseFloat(p.entryPx ?? "0");
+      // Марк с биржи: allMids не отдаёт цены builder-DEX'ов, поэтому текущую
+      // цену считаем из позиции — positionValue уже посчитан по марку.
+      const posVal = parseFloat(p.positionValue ?? "NaN");
+      const markPx = Number.isFinite(posVal) && szi !== 0 ? posVal / Math.abs(szi) : null;
       const lev = p.leverage?.value != null ? parseFloat(p.leverage.value) : null;
       const liqPx = p.liquidationPx != null ? parseFloat(p.liquidationPx) : null;
       return {
         coin: p.coin,
         dex: dex || "main",
+        markPrice: markPx,
         side: szi < 0 ? "SHORT" : "LONG",
         szi: Math.abs(szi),
         entryPrice: entryPx,

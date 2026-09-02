@@ -27,6 +27,7 @@ import {
   getStrategyPnlSince,
 } from "../../core/database.js";
 import { getAccountSummary, getPositionsCached, getLivePriceMap } from "../exchange.js";
+import { getBuilderPositions } from "../builderPositions.js";
 import { getLivePrice as feedLivePrice, isFeedFresh } from "../../core/priceFeed.js";
 import { fetchUserFills } from "../userFills.js";
 import { getMonthlyLedger } from "../ledger.js";
@@ -395,6 +396,42 @@ async function getStatusData() {
       }
     } catch (err) {
       logger.warn(`[Dashboard] positions fetch failed: ${err.message}`);
+    }
+
+    // Позиции на builder-DEX'ах (HIP-3). getPositionsCached их не видит — без
+    // параметра `dex` clearinghouseState отдаёт только основной перп-DEX, и
+    // карточка Active Position молчала при непустом счёте на xyz.
+    //
+    // 🚨 Помечены `builder: true` и приходят БЕЗ управления: adopted=false,
+    // bot=null, кнопки Close нет. Нянька их не ведёт (executor не умеет
+    // адресовать активы этих площадок), и карточка обязана это показывать, а
+    // не рисовать обычную ручную позу с рабочей кнопкой закрытия.
+    try {
+      const builder = await getBuilderPositions();
+      for (const p of builder.positions ?? []) {
+        manualPositions.push({
+          coin: p.coin,
+          side: p.side,
+          szi: p.szi,
+          entryPrice: p.entryPrice,
+          sizeUsd: p.sizeUsd,
+          unrealizedPnl: p.unrealizedPnl,
+          liquidationPrice: p.liquidationPrice,
+          leverage: p.leverage,
+          // allMids не отдаёт цены builder-DEX'ов → живого стрима нет, цена
+          // приходит марком с биржи и обновляется вместе с кадром статуса.
+          currentPrice: p.markPrice,
+          entryTime: null,
+          adopted: false,
+          adoptResyncing: false,
+          adoptSkipReason: null,
+          bot: null,
+          builder: true,
+          dex: p.dex,
+        });
+      }
+    } catch (err) {
+      logger.debug(`[Dashboard] builder-dex positions failed: ${err.message}`);
     }
   }
 

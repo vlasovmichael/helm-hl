@@ -70,6 +70,22 @@ function resolve(bars, from, isLong, entry, stop, tgt, maxBars) {
 /** Издержки круга в R. rtPct — стоимость круга в % цены (тейкер туда-обратно). */
 const netR = (r, rtPct, entry, risk) => r - (rtPct / 100) * entry / risk;
 
+// ── Защита от вырожденного стопа (добавлена 02.09.2026) ─────────────────────
+// НЕ параметр гипотезы: замороженные PARAMS не тронуты, и правило не меняет
+// того, ЧТО измеряет. Это починка прибора.
+//
+// Повод: прогон на 2 годах Binance (77 монет) показал 34 пары из 36 637, где
+// ATR плоского участка ≈ 0. Издержки в R = стоимость круга / ширина стопа, и
+// при risk → 0 это даёт rNet до −32 000R на ОДНОЙ сделке. Средние по дням
+// улетали в −4.6R при стопе −1R, то есть журнал становился нечитаем целиком.
+//
+// Порог экономический, а не подобранный под результат: стоп уже стоимости
+// круга бессмысленен по построению (издержки съедают ≥1R ещё до движения), и
+// вдвое-уже — тем более. Такие входы не торгуемы ни при каком исходе.
+const MIN_RISK_OVER_RT = 2;
+const tradable = (entry, risk, rtPct) =>
+  risk > 0 && entry > 0 && (risk / entry) * 100 >= rtPct * MIN_RISK_OVER_RT;
+
 // ═════════════════════════════════════════════════════════════════════════════
 //  H1 · wide-stop-premium-4h
 // ═════════════════════════════════════════════════════════════════════════════
@@ -132,7 +148,7 @@ export function findWideStop(coin, bars) {
     // половина пары ничего не сравнивает.
     const leg = (mult) => {
       const risk = atrV * mult;
-      if (!(risk > 0)) return null;
+      if (!tradable(entry, risk, P.rtPct)) return null;
       const stop = up ? entry - risk : entry + risk;
       const tgt = up ? entry + P.rr * risk : entry - P.rr * risk;
       const res = resolve(bars, start, up, entry, stop, tgt, P.maxh);
@@ -212,7 +228,7 @@ export function findSessionReversal(coin, bars) {
     const range = hi - lo;
     const stop = isLong ? lo - P.stopBuffer * range : hi + P.stopBuffer * range;
     const risk = Math.abs(entry - stop);
-    if (!(risk > 0)) continue;
+    if (!tradable(entry, risk, P.rtPct)) continue;
     const tgt = isLong ? entry + P.rr * risk : entry - P.rr * risk;
 
     const res = resolve(bars, start, isLong, entry, stop, tgt, P.maxh);
@@ -289,7 +305,7 @@ export function findSqueeze(coin, bars) {
     if (hit < 0) continue;
     const stop = isLong ? lo : hi;                    // за противоположный край
     const risk = Math.abs(entry - stop);
-    if (!(risk > 0)) continue;
+    if (!tradable(entry, risk, P.rtPct)) continue;
     const tgt = isLong ? entry + P.rr * risk : entry - P.rr * risk;
 
     const res = resolve(bars, hit, isLong, entry, stop, tgt, P.maxh);

@@ -647,7 +647,9 @@ export function renderManualPositions(list) {
   // Запоминаем ПОСЛЕДНИЙ серверный payload: тик цены перерисовывает карточку
   // из него же, подменив только currentPrice.
   _liveList = list;
-  setWatchedCoins(list.map((p) => p.coin));
+  // Цены builder-DEX'ов в allMids не приходят — подписка на них была бы вечным
+  // «нет цены». Их currentPrice едет марком в кадре статуса.
+  setWatchedCoins(list.filter((p) => !p.builder).map((p) => p.coin));
   list = list.map(withLivePrice);
   ensureFloorTimerStyle();
   startFloorTimerTick();
@@ -661,7 +663,7 @@ export function renderManualPositions(list) {
   // обновляет только uPnL, но не бейдж (SPX висел «HANDS-OFF · MANUAL» без
   // зелёного ADOPTED, хотя нянька уже повесила стоп — 2026-06-18).
   const keys = list
-    .map((p) => `${p.coin}:${p.adopted ? 1 : 0}:${p.adoptResyncing ? 1 : 0}:${p.adoptSkipReason ?? ""}`)
+    .map((p) => `${p.coin}:${p.adopted ? 1 : 0}:${p.adoptResyncing ? 1 : 0}:${p.adoptSkipReason ?? ""}:${p.builder ? 1 : 0}`)
     .join("|");
   if (keys === _manualKeys) {
     for (const p of list) patchManualCard(container, p);
@@ -680,7 +682,12 @@ export function renderManualPositions(list) {
       // на нём уже висит стоп+трейл няньки. Не подхватил → чистый HANDS-OFF.
       // Не усыновлена → показываем ПОЧЕМУ (если бэк знает причину), чтобы не
       // лезть в логи на сервере. Усыновлена → зелёный ADOPTED.
-      const manualBadge = p.adoptResyncing
+      // Позиция на builder-DEX'е (HIP-3): бот её не ведёт в принципе, поэтому
+      // ни ADOPTED, ни «no stop: причина» тут не к месту — причина одна и она
+      // структурная.
+      const manualBadge = p.builder
+        ? `${escapeHtml(String(p.dex || "builder").toUpperCase())} DEX · <span style="color:var(--red,#cf222e)">NOT BABYSAT</span>`
+        : p.adoptResyncing
         ? `HANDS-OFF · MANUAL · <span style="color:var(--orange,#f59e0b)" title="Position side flipped — the bot closes the old DB row and re-adopts the position on the new side">RE-SYNCING ⟳</span>`
         : p.adopted
         ? `HANDS-OFF · MANUAL · <span style="color:var(--green,#22c55e)">ADOPTED</span>`
@@ -739,8 +746,14 @@ export function renderManualPositions(list) {
                обновляется в реальном времени, а пока откроешь окно и
                переключишь вкладку — рынок уезжает. Долей нет намеренно, оператор
                ими не пользуется: одна кнопка = закрыть всё по рынку. -->
-          <button type="button" class="pos-close-btn${closeBtnCls(s, p)}" data-posclose="${escapeHtml(p.coin)}"
-                  title="Close the whole position at market (taker 4.32 bp, no builder fee)"><span>Close</span></button>
+          ${
+            // На builder-DEX'ах executor закрыть не может (asset-id другой
+            // площадки) — кнопки нет, чтобы она не врала работоспособностью.
+            p.builder
+              ? '<span class="grid-inline" title="Close it on the exchange by hand — the bot cannot reach builder-DEX assets">close by hand</span>'
+              : `<button type="button" class="pos-close-btn${closeBtnCls(s, p)}" data-posclose="${escapeHtml(p.coin)}"
+                  title="Close the whole position at market (taker 4.32 bp, no builder fee)"><span>Close</span></button>`
+          }
         </div>
         <div class="data-grid">
           <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}${riskInline}</div></div>
