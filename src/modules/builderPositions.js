@@ -1,5 +1,5 @@
 import { config } from '../core/config.js';
-import { fetchPositions } from './winnersPositions.js';
+import { fetchPositions, KNOWN_BUILDER_DEXES } from './winnersPositions.js';
 
 // ─────────────────────────────────────────────────
 //  builderPositions — свои позиции на builder-DEX'ах (HIP-3)
@@ -22,7 +22,12 @@ const TTL_MS = 30_000;
 let cache = { payload: null, at: 0, inflight: null };
 
 async function build() {
-  const snap = await fetchPositions(config.wallet.address);
+  // Фолбэк обязателен: список площадок читается из userFills (вес 20), и у
+  // живого бота этот запрос на LOW-приоритете часто не пролезает в бюджет.
+  // Без фолбэка отказ молча выглядел бы как «на builder-DEX'ах ничего нет».
+  const snap = await fetchPositions(config.wallet.address, {
+    fallbackDexes: KNOWN_BUILDER_DEXES,
+  });
   // Основной DEX уже показан обычной панелью — здесь только площадки HIP-3.
   const positions = (snap.positions || []).filter((p) => p.dex && p.dex !== 'main');
   const venues = (snap.venues || []).filter((v) => v.dex && v.dex !== 'main');

@@ -85,15 +85,30 @@ function parsePositions(state, dex) {
     });
 }
 
-export async function fetchPositions(address) {
-  // Список DEX'ов не обязателен: если userFills не дождался бюджета, показываем
-  // хотя бы основной счёт, честно пометив, что смотрели не везде.
+// Известные builder-DEX'ы HL. Нужны как ФОЛБЭК: userFills весит 20 и на
+// LOW-приоритете у живого бота регулярно не пролезает в бюджет (дедлайн 1.5с).
+// Без фолбэка отказ выглядел бы как «на builder-DEX'ах пусто» — то есть врал бы
+// ровно там, ради чего обход и написан. clearinghouseState весит 2, так что
+// полный обход стоит 18 единиц против 20 у одного userFills.
+export const KNOWN_BUILDER_DEXES = Object.freeze([
+  "xyz", "flx", "vntl", "hyna", "km", "abcd", "cash", "para", "mkts",
+]);
+
+/**
+ * @param {string} address
+ * @param {{ fallbackDexes?: string[] }} [opts] — какие площадки обойти, если
+ *   список из userFills не удалось получить. По умолчанию только основной DEX.
+ */
+export async function fetchPositions(address, opts = {}) {
+  // Список DEX'ов не обязателен: если userFills не дождался бюджета, идём по
+  // фолбэку (или показываем хотя бы основной счёт), пометив partial.
   let dexes = [""];
   let partial = false;
   try {
     dexes = await dexesFor(address);
   } catch {
     partial = true;
+    if (opts.fallbackDexes?.length) dexes = ["", ...opts.fallbackDexes];
   }
 
   const positions = [];
