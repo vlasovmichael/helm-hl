@@ -330,6 +330,50 @@
       }
       .cod-fwd b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
       .cod-empty { padding: 26px 10px; text-align: center; color: var(--text-secondary); font-size: 13.5px; }
+
+      /* ── entry filter: «вход по движению» ── */
+      .ef-verdict {
+        padding: 14px 16px; border-radius: 10px;
+        border: 1px solid var(--hairline); background: var(--panel-2, rgba(128,128,128,0.05));
+      }
+      .ef-verdict.warn { border-color: var(--red); background: rgba(220, 76, 76, 0.10); }
+      .ef-verdict.calm { border-color: var(--hairline); }
+      .ef-vh {
+        font-weight: 700; font-size: 15.5px; letter-spacing: -0.01em;
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+      }
+      .ef-vd { margin-top: 7px; font-size: 13.5px; line-height: 1.6; color: var(--text-secondary); }
+      .ef-table-wrap { overflow-x: auto; margin-top: 16px; }
+      table.ef-t { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+      .ef-t th {
+        text-align: right; font-size: 12px; font-weight: 600; color: var(--text-secondary);
+        padding: 6px 10px; border-bottom: 1px solid var(--hairline); white-space: nowrap;
+      }
+      .ef-t th:first-child, .ef-t td:first-child { text-align: left; }
+      .ef-t td {
+        text-align: right; padding: 7px 10px; font-size: 13.5px;
+        border-bottom: 1px solid var(--hairline); white-space: nowrap;
+      }
+      .ef-t td:first-child { font-weight: 600; font-family: "JetBrains Mono", monospace; }
+      .ef-t tr.ef-held td { background: rgba(220, 76, 76, 0.09); }
+      .ef-side {
+        font-size: 10.5px; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px;
+        color: #fff; font-weight: 600;
+      }
+      .ef-side.long { background: #2f9e63; }
+      .ef-side.short { background: #d2564e; }
+      .ef-side.none { background: transparent; color: var(--text-secondary); }
+      .ef-lvl { font-size: 11px; letter-spacing: 0.4px; text-transform: uppercase; }
+      .ef-lvl.extreme { color: var(--red); font-weight: 700; }
+      .ef-lvl.strong { color: #c98a1a; font-weight: 600; }
+      .ef-lvl.fast { color: var(--text-secondary); }
+      .ef-lvl.quiet { color: var(--text-secondary); opacity: 0.6; }
+      .ef-fwd {
+        margin-top: 14px; padding: 10px 12px; border-radius: 8px;
+        border: 1px dashed var(--hairline); font-size: 12.5px; color: var(--text-secondary);
+      }
+      .ef-fwd b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+      .ef-empty { padding: 26px 10px; text-align: center; color: var(--text-secondary); font-size: 13.5px; }
     </style>
   </head>
   <body>
@@ -393,9 +437,34 @@
         </p>
       </section>
 
+      <section class="card" id="ef-card">
+        <div class="card-header">
+          <div class="card-title" data-num="03">Entry filter · are you buying a move that already happened</div>
+          <div class="oi-toolbar">
+            <span class="oi-span" id="ef-meta">…</span>
+            <button class="range-btn" id="ef-refresh" type="button">Refresh</button>
+          </div>
+        </div>
+        <div id="ef-body">
+          <div class="ef-empty">Loading…</div>
+        </div>
+        <div class="ef-fwd" id="ef-fwd" hidden></div>
+        <p class="oi-note" style="margin-top: 12px">
+          Answers exactly one question per coin: <b>is this side an entry into a move that
+          already happened, or against it</b>. From 650 manual trades (25.05–02.09.2026):
+          entering <b>with</b> the 15m trend returned −0.18 per trade against −0.05 entering
+          against it; an entry while the hour is down more than 5% returned <b>−0.49</b>
+          (the only slice surviving a Bonferroni correction over ~17 slices). Longs −38.77,
+          shorts +22.89. <b>It picks no coin and predicts nothing</b> — a flag means the
+          journal paid dearly for that side, and silence is not a green light. The
+          hypothesis is post-hoc, registered as <code>entry-into-continuation</code>, and is
+          judged once at 60 fresh trades — not before.
+        </p>
+      </section>
+
       <section class="card">
         <div class="card-header">
-          <div class="card-title" data-num="03">Overview · all coins</div>
+          <div class="card-title" data-num="04">Overview · all coins</div>
           <div class="oi-toolbar">
             <input id="oi-search" class="oi-search" placeholder="filter" maxlength="12" />
             <span class="oi-span" id="oi-span">…</span>
@@ -429,7 +498,7 @@
 
       <section class="card oi-detail" id="oi-detail" hidden>
         <div class="card-header">
-          <div class="card-title" data-num="04">Coin history</div>
+          <div class="card-title" data-num="05">Coin history</div>
           <div class="time-ranges" id="oi-ranges">
             <button class="range-btn" data-hours="24">24h</button>
             <button class="range-btn active" data-hours="72">3d</button>

@@ -82,6 +82,7 @@ import { handlePnlSummary, handleInsights, handleDayJournal, handleDayNoteSave }
 import { handleTradeBreakdown } from "./routes/tradeBreakdown.js";
 import { handlePositionNanny } from "./routes/positionNanny.js";
 import { handleCoinOfDay } from "./routes/coinOfDay.js";
+import { handleEntryFilter } from "./routes/entryFilter.js";
 import { resolveOpenPicks } from "../coinOfDayLog.js";
 import {
   DIVERGENCE_WATCHLIST,
@@ -1061,6 +1062,7 @@ export function startDashboard() {
   app.get("/api/forwards", handleForwards);
   app.get("/api/position-nanny", handlePositionNanny);
   app.get("/api/coin-of-day", handleCoinOfDay);
+  app.get("/api/entry-filter", handleEntryFilter);
   app.get("/api/btc-divergence/all", handleBtcDivergenceAll);
   app.get("/api/whale-watch", handleWhaleWatch);
   app.get("/api/whale-watch/batch", handleWhaleWatchBatch);
