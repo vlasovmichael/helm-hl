@@ -18,6 +18,7 @@ import { state, TICK_INTERVAL_MS, INTEGRITY_GRACE_PERIOD_MS, SHUTDOWN_TIMEOUT_MS
 import { tick } from './app/tick.js';
 import { reportRestartIfUnclean } from './app/restartWatch.js';
 import { startPriceFeed } from './core/priceFeed.js';
+import { startFillFeed } from './core/fillFeed.js';
 import { startWsExitLoop } from './app/wsExitTick.js';
 import { startTickWatchdog } from './app/tickWatchdog.js';
 import { startMemWatch } from './app/memWatch.js';
@@ -82,6 +83,19 @@ async function main() {
   // Gated на HL_WS_FEED_ENABLED. Поднимает allMids-фид + сверяет с поллингом,
   // торговую логику не трогает. Fail-soft: ошибки WS не валят бота.
   startPriceFeed();
+
+  // ── WS-фид собственных филлов ──────────────────
+  // Бот узнаёт о своей сделке в момент исполнения, а не следующим опросом:
+  // сбрасываем интервальный гард Integrity (иначе сверка ждала бы до 60с) и
+  // будим тик. tick() сам защищён флагом state.tickRunning, поэтому гонки с
+  // обычным циклом нет. Опрос остаётся страховкой на случай обрыва WS.
+  // Fail-soft: ошибки фида не валят бота.
+  startFillFeed({
+    onFill: () => {
+      state.lastIntegrityCheck = 0;
+      tick().catch((err) => logger.warn(`[FillFeed] тик после филла упал: ${err.message}`));
+    },
+  });
 
   // Watchlist-будильник: «моя монета (BTC/HYPE/SOL) задвигалась + OI подтверждает».
   // Узкий пуш только по ALERT_WATCHLIST, не сделка. WATCHLIST_ALERT_ENABLED (default on). Fail-soft.

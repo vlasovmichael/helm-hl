@@ -8,7 +8,7 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getActivePosition, getActiveAdoptPositions, closePosition as dbClosePosition } from '../core/database.js';
-import { getPositionsCached, getAccountSummary, cancelOrderFor } from '../modules/exchange.js';
+import { getPositionsCached, getAccountSummary, cancelOrderFor, getFrontendOpenOrders } from '../modules/exchange.js';
 import { fireNtfy } from '../core/ntfy.js';
 import { fetchExchangePositions } from '../modules/sync.js';
 import { fetchUserFills, classifyClose, findRoundTripForPosition } from '../modules/userFills.js';
@@ -369,6 +369,33 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
 /**
  * @returns {Promise<boolean>} true если хотя бы одна позиция была закрыта внешне
  */
+/**
+ * Монеты, у которых на бирже висят reduce-only ордера, но живой позиции нет.
+ *
+ * Reduce-only ордер существует только для закрытия позиции — если позиции нет,
+ * ордер осиротел. Именно осиротевшие ордера держат маржу и создают ложную
+ * сигнатуру «лага API» (случай 02.09.2026, четыре часа слепоты).
+ *
+ * Чистая функция: без сети и БД, чтобы тест не требовал живого кошелька.
+ *
+ * @param {Array} openOrders — ответ frontendOpenOrders
+ * @param {Array} dbPositions — строки позиций, которые проверяет Integrity
+ * @returns {string[]} монеты-сироты (в верхнем регистре)
+ */
+export function orphanReduceOnlyCoins(openOrders, dbPositions) {
+  const wanted = new Set(
+    (dbPositions || []).map((p) => String(p?.coin || '').toUpperCase()).filter(Boolean),
+  );
+  if (wanted.size === 0) return [];
+  const found = new Set();
+  for (const o of openOrders || []) {
+    const coin = String(o?.coin || '').toUpperCase();
+    if (!coin || !wanted.has(coin)) continue;
+    if (o?.reduceOnly === true || o?.isPositionTpsl === true) found.add(coin);
+  }
+  return [...found];
+}
+
 export async function integrityCheck() {
   if (!config.isProduction) return false;
 
@@ -437,17 +464,38 @@ export async function integrityCheck() {
     // маржа заблокирована → позиции есть, просто API отстал. Гасим, чтобы не
     // закрыть всё ложно. Если хотя бы одна поза в ответе есть — это не общий лаг,
     // а реальное исчезновение конкретной монеты → обрабатываем ниже.
+    //
+    // 🚨 02.09.2026: сама по себе занятая маржа лагом НЕ является. Реальный
+    // случай: поза закрылась по стопу в 18:18, её reduce-only ордера остались
+    // висеть и держали маржу — и эта эвристика четыре часа подряд читала их как
+    // «API отстал», каждую минуту откладывая закрытие строки. Круг замыкался:
+    // ордера не снимались, пока строка открыта, а строка не закрывалась, пока
+    // маржа выглядела занятой. Поэтому сначала спрашиваем ордера: reduce-only
+    // ордер без позиции — это сирота, а не лаг индексатора.
     if (
       liveOnExchange.length === 0 &&
       equity > 10 &&
       withdrawable < equity * 0.5
     ) {
+      let orphanCoins = [];
+      try {
+        orphanCoins = orphanReduceOnlyCoins(await getFrontendOpenOrders(), positionsToCheck);
+      } catch (err) {
+        // ордера не отдались — ведём себя как раньше, консервативно
+        logger.debug(`[Integrity] open-orders read failed: ${err.message}`);
+      }
+      if (orphanCoins.length === 0) {
+        logger.warn(
+          `[Integrity] ⚡ getPositions() пуст, но маржа заблокирована: ` +
+            `withdrawable=$${withdrawable.toFixed(2)} vs equity=$${equity.toFixed(2)} ` +
+            `(${((withdrawable / equity) * 100).toFixed(1)}%). Похоже на лаг API — skipping.`,
+        );
+        return false;
+      }
       logger.warn(
-        `[Integrity] ⚡ getPositions() пуст, но маржа заблокирована: ` +
-          `withdrawable=$${withdrawable.toFixed(2)} vs equity=$${equity.toFixed(2)} ` +
-          `(${((withdrawable / equity) * 100).toFixed(1)}%). Похоже на лаг API — skipping.`,
+        `[Integrity] маржа заблокирована, но это НЕ лаг API: reduce-only ордера без позиции ` +
+          `#${orphanCoins.join(', #')} — закрываю строки и снимаю сирот`,
       );
-      return false;
     }
 
     let anyClosed = false;
