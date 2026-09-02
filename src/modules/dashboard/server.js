@@ -409,19 +409,31 @@ async function getStatusData() {
     try {
       const builder = await getBuilderPositions();
       for (const p of builder.positions ?? []) {
+        // 💰 uPnL и номинал пересчитываются от ЖИВОЙ цены, а не берутся из
+        // clearinghouseState. Причина в такте: позиции крипты кэшируются 2.5с
+        // (HL_POSITIONS_TTL_MS), а чтение площадок HIP-3 идёт на LOW-приоритете
+        // и кэшируется 60с — деньги в карточке стояли минуту при живой цене.
+        //
+        // Это НЕ второй источник правды: считает тот же сервер, по формуле
+        // самой биржи. Проверено на xyz:NOK: szi 2.47, entry 9.826, mark 9.8299
+        // → 0.009633 у биржи против 0.00963 расчётных. Фандинг сюда не входит
+        // ни там, ни тут (он отдельно, в cumFunding).
+        const live = wsPrice(p.coin);
+        const mark = live ?? p.markPrice;
+        const dir = p.side === 'SHORT' ? -1 : 1;
+        const upnl = Number.isFinite(mark) && Number.isFinite(p.entryPrice)
+          ? dir * p.szi * (mark - p.entryPrice)
+          : p.unrealizedPnl;
         manualPositions.push({
           coin: p.coin,
           side: p.side,
           szi: p.szi,
           entryPrice: p.entryPrice,
-          sizeUsd: p.sizeUsd,
-          unrealizedPnl: p.unrealizedPnl,
+          sizeUsd: Number.isFinite(mark) ? p.szi * mark : p.sizeUsd,
+          unrealizedPnl: upnl,
           liquidationPrice: p.liquidationPrice,
           leverage: p.leverage,
-          // Живая цена из WS-фида (он подписан на allMids площадок), а марк из
-          // clearinghouseState — только запасной вариант, если фид ещё не
-          // прогрелся или подписки нет.
-          currentPrice: wsPrice(p.coin) ?? p.markPrice,
+          currentPrice: mark,
           entryTime: null,
           adopted: false,
           adoptResyncing: false,
