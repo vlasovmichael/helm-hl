@@ -269,6 +269,55 @@ function nanRenderPosition(p) {
     </div>`;
 }
 
+// Позиции на builder-DEX'ах (HIP-3: xyz с акциями, flx, vntl, km…). Бот их не
+// ведёт — executor не умеет адресовать активы этих площадок, поэтому стоп там
+// ставится только руками. Блок обязан говорить это прямым текстом: молчание
+// здесь читалось бы как «всё под присмотром».
+function nanRenderBuilder(b) {
+  if (!b) return "";
+  if (b.error) {
+    return `<div class="nan-builder"><p class="nan-sub">Builder DEX (HIP-3)</p>
+      <div class="nan-empty">Could not read: ${b.error}</div></div>`;
+  }
+  const list = b.positions || [];
+  if (!list.length) return "";
+  const rows = list
+    .map((p) => {
+      const pnl = nanUsdSigned(p.unrealizedPnl);
+      const lev = p.leverage == null ? "—" : `${p.leverage}x`;
+      const liq = p.liquidationPrice == null ? "—" : nanPx(p.liquidationPrice);
+      return `<tr>
+        <td><span class="nan-coin">${p.coin}</span></td>
+        <td><span class="nan-side ${p.side === "SHORT" ? "short" : "long"}">${p.side}</span></td>
+        <td>${nanPx(p.entryPrice)}</td>
+        <td>$${p.sizeUsd.toFixed(2)}</td>
+        <td>${lev}</td>
+        <td>${liq}</td>
+        <td>${pnl}</td>
+      </tr>`;
+    })
+    .join("");
+  const venues = (b.venues || [])
+    .map((v) => `${v.dex} $${(v.equity ?? 0).toFixed(2)}`)
+    .join(" · ");
+  const partial = b.partial
+    ? '<li class="warn">Venue list unavailable — some DEXes may not have been checked</li>'
+    : "";
+  return `
+    <div class="nan-builder">
+      <p class="nan-sub">Builder DEX (HIP-3) — not babysat</p>
+      <table class="nan-t nan-builder-t">
+        <tr><th>Asset</th><th>Side</th><th>Entry</th><th>Size</th><th>Lev</th><th>Liq</th><th>uPnL</th></tr>
+        ${rows}
+      </table>
+      <ul class="nan-notes">
+        <li class="warn">NO stop from the bot — these positions are managed by hand only</li>
+        <li>Separate isolated margin${venues ? `: ${venues}` : ""} — not counted in daily stop-loss</li>
+        ${partial}
+      </ul>
+    </div>`;
+}
+
 function nanRenderTotals(t) {
   if (!t || !t.count) return "";
   const risk =
@@ -296,13 +345,22 @@ async function loadNanny(force = false) {
     if (data.error) throw new Error(data.error);
     const age = data.cached ? ` · cached ${data.ageSec}s ago` : "";
     const list = data.positions || [];
-    meta.textContent = `${list.length} ${list.length === 1 ? "position" : "positions"}${age}`;
+    const builder = nanRenderBuilder(data.builder);
+    const bCount = (data.builder?.positions || []).length;
+    const total = list.length + bCount;
+    meta.textContent = `${total} ${total === 1 ? "position" : "positions"}${
+      bCount ? ` (${bCount} on builder DEX)` : ""
+    }${age}`;
     if (!list.length) {
-      body.innerHTML =
-        '<div class="nan-empty">No open positions — nothing to babysit.</div>';
+      // Пустой основной счёт ещё не значит «нет позиций»: они могут стоять
+      // целиком на HIP-3, и раньше панель в этом случае врала пустотой.
+      body.innerHTML = builder
+        ? '<div class="nan-empty">No positions on the main perp DEX.</div>' + builder
+        : '<div class="nan-empty">No open positions — nothing to babysit.</div>';
       return;
     }
-    body.innerHTML = nanRenderTotals(data.totals) + list.map(nanRenderPosition).join("");
+    body.innerHTML =
+      nanRenderTotals(data.totals) + list.map(nanRenderPosition).join("") + builder;
   } catch (err) {
     meta.textContent = "error";
     body.innerHTML = `<div class="nan-empty">Could not read positions: ${err.message}</div>`;

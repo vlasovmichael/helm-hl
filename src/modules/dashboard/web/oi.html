@@ -233,6 +233,19 @@
       .nan-notes li.warn { border-left-color: var(--red); color: var(--text-primary); }
       .nan-empty { padding: 26px 10px; text-align: center; color: var(--text-secondary); font-size: 13.5px; }
 
+      /* Позиции на builder-DEX'ах (HIP-3). Рамка красная всегда: бот их не
+         ведёт, стопа от него там нет по определению. */
+      .nan-builder {
+        border: 1px solid var(--border, #2a2622); border-left: 3px solid var(--red);
+        border-radius: var(--radius-lg, 12px); padding: 14px 18px; margin-top: 14px;
+      }
+      .nan-builder-t { width: 100%; margin-top: 8px; }
+      .nan-builder-t th {
+        font-size: 11px; letter-spacing: 0.4px; text-transform: uppercase;
+        color: var(--text-secondary); font-weight: 600; text-align: left; padding-bottom: 4px;
+      }
+      .nan-builder-t td { font-variant-numeric: tabular-nums; padding: 3px 10px 3px 0; }
+
       /* Пилюли и сегменты «Монеты дня» (ss- префикс остался от снятого
          Setup Scanner — карточка переиспользует его разметку). */
       .ss-segs { display: inline-flex; gap: 3px; }

@@ -12,6 +12,7 @@
 import { logger } from '../../../core/logger.js';
 import { getPositionsCached, getFrontendOpenOrders, getLivePriceMap } from '../../exchange.js';
 import { buildNannyView } from '../../positionNanny.js';
+import { getBuilderPositions } from '../../builderPositions.js';
 
 const TTL_MS = 30_000;
 let cache = { payload: null, at: 0, inflight: null };
@@ -66,7 +67,18 @@ async function build(now) {
     logger.warn(`[Nanny] open orders read failed: ${err.message}`);
   }
 
-  return buildNannyView({ positions, prices, orders, ordersKnown, now });
+  const view = buildNannyView({ positions, prices, orders, ordersKnown, now });
+
+  // Позиции на builder-DEX'ах (HIP-3) идут ОТДЕЛЬНЫМ блоком: бот их не ведёт,
+  // плана у них нет по определению. Отказ чтения не роняет панель — основные
+  // позиции важнее, чем полнота по площадкам.
+  try {
+    view.builder = await getBuilderPositions();
+  } catch (err) {
+    view.builder = { error: err.message };
+    logger.debug(`[Nanny] builder-dex read failed: ${err.message}`);
+  }
+  return view;
 }
 
 export async function handlePositionNanny(req, res) {
