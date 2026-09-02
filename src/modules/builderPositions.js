@@ -19,7 +19,7 @@ import { fetchPositions, KNOWN_BUILDER_DEXES } from './winnersPositions.js';
 // Маржа на каждой площадке своя и изолированная, поэтому эквити считается
 // отдельно и в дневной стоп-лосс бота не входит.
 
-const TTL_MS = 30_000;
+const TTL_MS = 60_000;
 // После отказа не долбим биржу каждые 30с: у чтения LOW-приоритет, и если
 // бюджет занят торговыми запросами, следующая попытка через 30с упрётся в то же
 // самое. Держим последний ответ дольше и повторяем реже.
@@ -27,6 +27,10 @@ const ERROR_TTL_MS = 120_000;
 const WARN_EVERY_MS = 300_000;
 let cache = { payload: null, at: 0, inflight: null, failedAt: 0 };
 let lastWarnAt = 0;
+
+/** Последний успешный ответ, а если его ещё не было — пустой с пометкой. */
+const lastOrEmpty = () =>
+  cache.payload ?? { positions: [], venues: [], equity: 0, unrealizedPnl: 0, notional: 0, error: 'read failed' };
 
 async function build() {
   // Фолбэк обязателен: список площадок читается из userFills (вес 20), и у
@@ -50,32 +54,35 @@ async function build() {
 }
 
 /**
- * Позиции на HIP-3 площадках. Не бросает: при отказе возвращает последний
- * успешный ответ (или пустой с полем `error`) — молчаливая пустота здесь
- * читалась бы как «на builder-DEX'ах ничего нет», а это ровно та ложь, ради
- * которой обход и написан.
+ * Позиции на HIP-3 площадках. НЕ бросает и НЕ отдаёт пустоту вместо данных:
+ * при отказе возвращает последний успешный ответ. Пустой список означает
+ * «площадки прочитаны, позиций нет» — и ничего больше.
  */
 export async function getBuilderPositions() {
   const now = Date.now();
   if (cache.payload && now - cache.at < TTL_MS) return cache.payload;
   // Недавний отказ — отдаём что есть и не идём в сеть.
-  if (cache.failedAt && now - cache.failedAt < ERROR_TTL_MS) {
-    return cache.payload ?? { positions: [], venues: [], equity: 0, unrealizedPnl: 0, notional: 0, error: 'read failed' };
+  if (cache.failedAt && now - cache.failedAt < ERROR_TTL_MS) return lastOrEmpty();
+  // 🚨 Наружу отдаём промис, который НИКОГДА не реджектится. Раньше здесь
+  // возвращался сырой `build()`, и все параллельные вызывающие (кадр статуса
+  // идёт каждые 2с) получали одно и то же отклонение — позиция мигала и
+  // пропадала на каждой неудаче бюджета.
+  if (!cache.inflight) {
+    cache.inflight = build()
+      .then((payload) => {
+        cache = { payload, at: Date.now(), inflight: null, failedAt: 0 };
+        return payload;
+      })
+      .catch((err) => {
+        cache.inflight = null;
+        cache.failedAt = Date.now();
+        // Раз в 5 минут, а не на каждый кадр статуса.
+        if (Date.now() - lastWarnAt > WARN_EVERY_MS) {
+          lastWarnAt = Date.now();
+          logger.warn(`[BuilderDex] чтение площадок HIP-3 не удалось: ${err.message}`);
+        }
+        return lastOrEmpty();
+      });
   }
-  if (cache.inflight) return cache.inflight;
-  cache.inflight = build();
-  try {
-    const payload = await cache.inflight;
-    cache = { payload, at: Date.now(), inflight: null, failedAt: 0 };
-    return payload;
-  } catch (err) {
-    cache.inflight = null;
-    cache.failedAt = Date.now();
-    // Раз в 5 минут, а не на каждый кадр статуса (он идёт каждые 2с).
-    if (Date.now() - lastWarnAt > WARN_EVERY_MS) {
-      lastWarnAt = Date.now();
-      logger.warn(`[BuilderDex] чтение площадок HIP-3 не удалось: ${err.message}`);
-    }
-    return cache.payload ?? { positions: [], venues: [], equity: 0, unrealizedPnl: 0, notional: 0, error: err.message };
-  }
+  return cache.inflight;
 }
