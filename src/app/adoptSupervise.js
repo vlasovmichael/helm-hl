@@ -14,6 +14,7 @@
 // getActiveAdoptPositions(). coordinator для adopt теперь возвращает HOLD.
 
 import { config } from '../core/config.js';
+import { state } from './state.js';
 import { logger } from '../core/logger.js';
 import { getActiveAdoptPositions } from '../core/database.js';
 import { analyzeAdopt, getAdoptPeakPct } from '../modules/strategistAdopt.js';
@@ -74,6 +75,11 @@ async function maybeFirePeakAlert(pos, price) {
 // из adoptTrailStore), а не оставит позу без выхода.
 const _targetTrailArmed = new Set();
 
+/** Взведён ли target-trail для позиции — нужно дашборду для Floor-чипа. */
+export function isTargetTrailArmed(positionId) {
+  return _targetTrailArmed.has(positionId);
+}
+
 export async function superviseAdoptPositions(priceFn = getLivePrice) {
   if (!config.isProduction) return 0;
   const positions = getActiveAdoptPositions();
@@ -108,7 +114,12 @@ export async function superviseAdoptPositions(priceFn = getLivePrice) {
     // ⚠️ Выключено по умолчанию (ADOPT_TARGET_TRAIL_ENABLED). Замер дал
     // +0.154R против фиксации при CI95 [−0.033, +0.378] — знак не установлен,
     // медиана против. Гипотеза adopt-target-trail, судить один раз на n=60.
-    if (config.trading.adoptTargetTrailEnabled && pos.sl_price > 0) {
+    // Правило не трогает позиции, открытые ДО старта процесса: их пик живёт
+    // только в памяти и после рестарта неизвестен, а взводиться «задним числом»
+    // на неизвестном пике значит снять лимитку и, возможно, тут же выйти по
+    // рынку. Для замера это тоже честнее — в счёт идут только полные сделки.
+    const bornAfterStart = state.botStartedAt > 0 && pos.entry_time >= state.botStartedAt;
+    if (config.trading.adoptTargetTrailEnabled && pos.sl_price > 0 && bornAfterStart) {
       try {
         const isShort = (pos.side || 'short') === 'short';
         const curR = unrealizedR({ entry: pos.entry_price, price, stopPrice: pos.sl_price, isShort });

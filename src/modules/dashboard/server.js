@@ -83,6 +83,7 @@ import { handleTradeBreakdown } from "./routes/tradeBreakdown.js";
 import { handlePositionNanny } from "./routes/positionNanny.js";
 import { handleCoinOfDay } from "./routes/coinOfDay.js";
 import { handleEntryFilter } from "./routes/entryFilter.js";
+import { isTargetTrailArmed } from "../../app/adoptSupervise.js";
 import { resolveOpenPicks } from "../coinOfDayLog.js";
 import {
   DIVERGENCE_WATCHLIST,
@@ -196,10 +197,18 @@ function buildAdoptManagement(adoptPos) {
   // Трейл выключен (ADOPT_TRAIL_ENABLED=false) → вехи «до трейла» и трейл-пола
   // не существует: показывать её значило бы рисовать событие, которого не будет.
   const trailArmed = t.adoptTrailEnabled && peakPct >= t.adoptTrailArmPct;
+  // Target-trail (лимитка снята у цели, стоп идёт за пиком) — состояние живёт
+  // в супервизоре, поэтому спрашиваем его, а не пересчитываем пороги заново.
+  const targetTrailArmed = isTargetTrailArmed(adoptPos.id);
   const beArmed = peakPct >= t.adoptBeArmPct;
 
   let floorPct, floorKind;
-  if (trailArmed) {
+  if (targetTrailArmed && adoptPos.sl_price != null) {
+    // Пол в процентах = пик минус отступ, пересчитанный из R в проценты хода.
+    const riskPct = Math.abs((entry - adoptPos.sl_price) / entry) * 100;
+    floorPct = peakPct - t.adoptTargetTrailGiveBackR * riskPct;
+    floorKind = "trail";
+  } else if (trailArmed) {
     floorPct = peakPct * (1 - t.adoptTrailGiveBackPct / 100);
     floorKind = "trail";
   } else if (beArmed) {
