@@ -241,6 +241,26 @@ setInterval(tick, REFRESH_MS);
 startFooterTimer();
 startDayDesk();
 
+// ── Вкладка вернулась из фона: доигрываем застрявшие transition'ы ──────────
+// Баг «серая полоска у плашки BTC» (03.09.2026). Смена состояния светофора
+// (unknown → wait/go) запускает transition на background и border-left-color.
+// В СКРЫТОЙ вкладке таймлайн анимаций не идёт: document.timeline.currentTime
+// стоит на нуле, transition висит в playState=running со своим стартовым
+// значением — то есть плашка остаётся с серой границей базового правила, хотя
+// класс на ней уже .wait. Возвращаешься на вкладку и видишь серую полоску.
+//
+// Лечим не отключением анимации (она к месту), а доигрыванием: на возврате
+// добиваем все висящие CSS-переходы до конечного значения. Это же чинит тот же
+// класс бага в других местах — заливка uPnL едет тем же механизмом.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState !== "visible") return;
+  for (const a of document.getAnimations()) {
+    // Только переходы: у бесконечных keyframes-анимаций finish() бросает.
+    if (a.playState !== "running" || a.constructor.name !== "CSSTransition") continue;
+    try { a.finish(); } catch { /* бесконечная — не наше дело */ }
+  }
+});
+
 // DEV: ?mock=1 → засимулировать активную монету (risk-bar + ракета) без бэка.
 // Динамический импорт → в обычной сборке/проде модуль даже не грузится.
 if (new URLSearchParams(location.search).has("mock")) {
