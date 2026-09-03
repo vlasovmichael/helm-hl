@@ -7,9 +7,10 @@
 @include until($bp-lg) {
   .bottom-nav {
     display: grid;
-    /* Кнопок ровно 3 (Pos/Movers/Setup) — divergence/whale уехали на Lab.
-       auto-flow column + auto-columns:1fr → грид сам подгоняется под число
-       кнопок (раньше было жёстко 5 → 2 пустые колонки, кнопки жались влево). */
+    /* Якорь на КАЖДУЮ секцию страницы (Today/Pos/Screen/Movers/Log) — раньше
+       их было два на пять карточек, и до Screen/Log приходилось скроллить
+       вручную. auto-flow column + auto-columns:1fr → грид сам подгоняется под
+       число кнопок (жёсткие 5 колонок оставляли пустые, кнопки жались влево). */
     grid-auto-flow: column;
     grid-auto-columns: 1fr;
     position: fixed;
@@ -31,7 +32,10 @@
     font-family: var(--font-sans);
     font-size: 11px;
     font-weight: 500;
-    padding: 6px 4px;
+    padding: 6px 2px;
+    /* 5 колонок на 320px → ярлык не должен рвать колонку. */
+    min-width: 0;
+    white-space: nowrap;
     border-radius: 6px;
     cursor: pointer;
     display: flex;
@@ -56,6 +60,21 @@
   .bottom-nav-btn[data-target="sec-position"] .nav-icon {
     -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M8 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM2 8a6 6 0 1 1 12 0A6 6 0 0 1 2 8zm6-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4z'/></svg>");
     mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M8 4a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM2 8a6 6 0 1 1 12 0A6 6 0 0 1 2 8zm6-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4z'/></svg>");
+  }
+  /* Today — календарный лист (дневная сводка). */
+  .bottom-nav-btn[data-target="sec-day"] .nav-icon {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M5 1v1.5h6V1h1.5v1.5H14a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1.5V1H5zM2.5 6.5V13.5h11V6.5h-11zm2 2h2v2h-2v-2z'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M5 1v1.5h6V1h1.5v1.5H14a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1.5V1H5zM2.5 6.5V13.5h11V6.5h-11zm2 2h2v2h-2v-2z'/></svg>");
+  }
+  /* Screen — воронка отбора монет. */
+  .bottom-nav-btn[data-target="sec-screen"] .nav-icon {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M1.5 2h13l-5 6v6l-3-1.6V8L1.5 2z'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M1.5 2h13l-5 6v6l-3-1.6V8L1.5 2z'/></svg>");
+  }
+  /* Recent Activity — строки ленты. */
+  .bottom-nav-btn[data-target="sec-activity"] .nav-icon {
+    -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M2 3h12v2H2V3zm0 4h12v2H2V7zm0 4h8v2H2v-2z'/></svg>");
+    mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='currentColor'><path d='M2 3h12v2H2V3zm0 4h12v2H2V7zm0 4h8v2H2v-2z'/></svg>");
   }
   /* Hot Movers — пламя (горячие монеты). */
   .bottom-nav-btn[data-target="sec-movers"] .nav-icon {
@@ -120,6 +139,14 @@
   .card-header {
     gap: 8px;
     margin-bottom: 12px;
+  }
+  /* Бейдж дневной цели («Today −$0.96 · −4.6% · fees $0.05 · goal 5%») на
+     десктопе живёт в одну строку (white-space:nowrap), а на телефоне это ~40
+     моно-символов = шире экрана: card-header переносит его на свою строку, но
+     сам текст не рвётся и уезжает за правый край. На узком разрешаем перенос. */
+  .daily-goal-badge {
+    white-space: normal;
+    max-width: 100%;
   }
 
   .data-grid {

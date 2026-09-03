@@ -206,9 +206,9 @@ function manualStats(p) {
     toTargetPct != null && riskPct ? toTargetPct / riskPct : null;
   // MAE: худшая просадка (unrealized %, ≤0). Бэк хранит как ≤0 (getAdoptMaePct/
   // getHunterMaePct). В под-строке uPnL показываем ИМЕННО его, когда позиция
-  // сейчас в минусе (peak в плюс там не к месту — см. upnlSubTxt).
+  // сейчас в минусе. Кормит riskTint («призрак» отката на заливке uPnL).
   const maePct = bot?.maePct != null && bot.maePct < 0 ? bot.maePct : null;
-  return { riskUsd, rMult, movePct, floorPrice, floorKind, floorPnl, peakPct, maePct, toTargetR, toTargetPct };
+  return { riskUsd, rMult, movePct, floorPrice, floorKind, floorPnl, peakPct, maePct, toTargetR, toTargetPct, tpPrice: tp };
 }
 
 // Floor-бейдж: тип защиты, который УЖЕ повесила нянька. Цветим только маленький
@@ -220,35 +220,48 @@ const FLOOR_BADGE = {
   trail: { txt: "TRAIL", cls: "fl-trail" },
 };
 
-const fmtR = (r) => `${r >= 0 ? "+" : "−"}${Math.abs(r).toFixed(2)}R`;
 const fmtSignedUsd2 = (v) => `${v >= 0 ? "+" : "−"}$${Math.abs(v).toFixed(2)}`;
 // Знак + цвет (red = против позиции) уже несут направление хода, поэтому слова
 // «против» не пишем — оно по-русски и распирало Entry·Now на третью строку.
 const fmtMove = (m) => `${m >= 0 ? "+" : "−"}${Math.abs(m).toFixed(2)}%`;
-// Текст под-строки uPnL: R-кратность + экстремум хода, ЗЕРКАЛЬНО знаку позиции.
-// В минусе показываем худшую просадку (MAE, «dip −X%») — peak в плюс там сбивал
-// (видел «−0.17R · peak +0.27%», хотя сижу в минусе). В плюсе — свой пик (MFE,
-// «peak +X%»). upnl — текущий uPnL ($), решает какую сторону показать.
-// ⚠️ Третьего куска здесь быть не может: .pnl-toprow — flex-wrap, и подстрока
-// целиком срывается на СВОЮ строку, как только перестаёт влезать рядом с «uPnL».
-// Пробовал дописывать веху («→ trail +2.00%») — карточка поехала в три строки
-// (2026-08-06). Веху показывает сам ползунок (его правый край) + тултип.
-const upnlSubTxt = (s, upnl = 0) => {
-  // В плюсе полезнее не пик, а остаток до цели — именно за ним оператор следит,
-  // решая «добирать или ждать». Пик остаётся, когда цели нет (её сняли или
-  // позиция без TP). Третьего куска здесь по-прежнему быть не может.
-  const toTarget =
-    s.toTargetR != null && s.toTargetR > 0
-      ? `до цели ${s.toTargetR.toFixed(2)}R · ${s.toTargetPct.toFixed(2)}%`
+// Остаток до цели в R — инлайн на карточке цели (см. floorCell). Без знака:
+// цель всегда впереди, минус там невозможен.
+const fmtRemR = (r) => `${r.toFixed(2)}R`;
+
+// Карточка №4 работает в двух режимах, и выбирает их ЗНАК позиции (просьба
+// оператора 03.09.2026): в минусе смотришь, где тебя высадит нянька (Floor + чип
+// HARD/BE/TRAIL), в плюсе — сколько осталось до цели. Раньше остаток жил
+// подстрокой в uPnL и на телефоне рвал карточку на три строки.
+// Режим требует ЦЕЛИ: без tpPrice (её сняли, или поза без TP) остаётся Floor,
+// даже когда позиция в плюсе — иначе карточка показала бы пустоту.
+const isTargetMode = (s, upnl) =>
+  upnl > 0 && s.tpPrice != null && s.toTargetR != null && s.toTargetR > 0;
+
+// Смена режима — это ДРУГАЯ разметка ячейки, то есть пере-сборка карточки. У
+// позиции, висящей на нуле, uPnL дрожит в обе стороны каждый кадр, и без
+// гистерезиса карточка пересобиралась бы по нескольку раз в минуту, срывая
+// transition заливки. Поэтому у нуля держим ПРЕДЫДУЩИЙ режим, пока uPnL не
+// уйдёт от нуля дальше 2% риска (без стопа — дальше полуцента).
+const _cardMode = new Map(); // coin → true(цель) | false(пол)
+function targetModeFor(p, s) {
+  const raw = isTargetMode(s, p.unrealizedPnl);
+  const band = s.riskUsd != null && s.riskUsd > 0 ? 0.02 * s.riskUsd : 0.005;
+  const prev = _cardMode.get(p.coin);
+  const inBand = prev !== undefined && Math.abs(p.unrealizedPnl ?? 0) < band;
+  // Цели нет (сняли / поза без TP) — режим цели невозможен даже по инерции.
+  const mode = s.tpPrice == null ? false : inBand ? prev : raw;
+  _cardMode.set(p.coin, mode);
+  return mode;
+}
+
+// Тултип карточки цели: остаток в % хода и в долларах (R виден инлайном).
+const targetTip = (s, p) => {
+  const usd =
+    p.sizeUsd != null && s.toTargetPct != null
+      ? (s.toTargetPct / 100) * p.sizeUsd
       : null;
-  const extreme =
-    upnl < 0
-      ? s.maePct != null
-        ? `dip −${Math.abs(s.maePct).toFixed(2)}%`
-        : ""
-      : (toTarget ??
-        (s.peakPct != null ? `peak +${s.peakPct.toFixed(2)}%` : ""));
-  return [s.rMult != null ? fmtR(s.rMult) : "", extreme].filter(Boolean).join(" · ");
+  const pct = s.toTargetPct != null ? `${s.toTargetPct.toFixed(2)}%` : "—";
+  return `To target: ${pct}${usd != null ? ` (+$${usd.toFixed(2)})` : ""}`;
 };
 
 // Текущая монета бот-позиции — чтобы понимать, патчить на месте или пере-строить.
@@ -616,12 +629,15 @@ function patchManualCard(container, p) {
       moveEl.classList.toggle("positive", s.movePct != null && s.movePct >= 0);
       moveEl.classList.toggle("negative", s.movePct != null && s.movePct < 0);
     }
-    // R-под-строка живёт во всех трёх слоях (spacer/base/fill) → синхроним все,
-    // чтобы бело-залитая копия не отставала от цветной (R «переливается»).
-    const subTxt = upnlSubTxt(s, p.unrealizedPnl);
-    card.querySelectorAll(".pnl-sub").forEach((el) => {
-      el.textContent = subTxt;
-    });
+    // Карточка цели: цена цели стоит на месте, а остаток до неё едет с ценой.
+    const tgEl = card.querySelector("[data-mtarget]");
+    if (tgEl && s.tpPrice != null) tgEl.textContent = fmtPrice(s.tpPrice);
+    const tgRemEl = card.querySelector("[data-mtargetrem]");
+    if (tgRemEl && s.toTargetR != null) {
+      tgRemEl.textContent = fmtRemR(s.toTargetR);
+      const cellEl = tgRemEl.closest(".grid-item");
+      if (cellEl) cellEl.title = `${targetTip(s, p)} · Liquidation: ${p.liquidationPrice != null ? fmtPrice(p.liquidationPrice) : "—"}`;
+    }
     const flEl = card.querySelector("[data-mfloor]");
     if (flEl && s.floorPrice != null) flEl.textContent = fmtPrice(s.floorPrice);
     const flPnlEl = card.querySelector("[data-mfloorpnl]");
@@ -678,7 +694,7 @@ export function renderManualPositions(list) {
   // обновляет только uPnL, но не бейдж (SPX висел «HANDS-OFF · MANUAL» без
   // зелёного ADOPTED, хотя нянька уже повесила стоп — 2026-06-18).
   const keys = list
-    .map((p) => `${p.coin}:${p.adopted ? 1 : 0}:${p.adoptResyncing ? 1 : 0}:${p.adoptSkipReason ?? ""}:${p.builder ? 1 : 0}`)
+    .map((p) => `${p.coin}:${p.adopted ? 1 : 0}:${p.adoptResyncing ? 1 : 0}:${p.adoptSkipReason ?? ""}:${p.builder ? 1 : 0}:${targetModeFor(p, manualStats(p)) ? "t" : "f"}`)
     .join("|");
   if (keys === _manualKeys) {
     for (const p of list) patchManualCard(container, p);
@@ -740,12 +756,17 @@ export function renderManualPositions(list) {
         s.movePct != null
           ? ` <span class="grid-inline ${s.movePct >= 0 ? "positive" : "negative"}" data-mmove>${fmtMove(s.movePct)}</span>`
           : "";
-      // Floor (живой пол выхода) вместо Liq — нянька закроет тут задолго до ликв.
-      // Ликвидацию уводим в title. Нет пола (не усыновлена) → fallback на Liq.
+      // Четвёртая карточка: в плюсе — цель, в минусе — пол выхода (см.
+      // isTargetMode). Ликвидацию уводим в title в обоих режимах. Нет ни цели,
+      // ни пола (не усыновлена) → fallback на Liq.
       const fb = FLOOR_BADGE[s.floorKind] || null;
       const ft = floorTimerParts(p);
-      const floorCell =
-        s.floorPrice != null
+      const floorCell = targetModeFor(p, s)
+        ? `<div class="grid-item${ft.cls}" title="${targetTip(s, p)} · Liquidation: ${liq}">${ft.bg}
+               <div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>To target</span>${ft.chip}</div>
+               <div class="item-value"><span data-mtarget>${fmtPrice(s.tpPrice)}</span><span class="grid-inline positive" data-mtargetrem>${fmtRemR(s.toTargetR)}</span></div>
+             </div>`
+        : s.floorPrice != null
           ? `<div class="grid-item${ft.cls}" title="Liquidation: ${liq}">${ft.bg}
                <div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>Floor${fb ? ` <span class="fl-badge ${fb.cls}">${fb.txt}</span>` : ""}</span>${ft.chip}</div>
                <div class="item-value"><span data-mfloor>${fmtPrice(s.floorPrice)}</span><span class="grid-inline ${s.floorPnl >= 0 ? "positive" : "negative"}" data-mfloorpnl>${s.floorPnl != null ? fmtSignedUsd2(s.floorPnl) : ""}</span></div>
@@ -753,8 +774,8 @@ export function renderManualPositions(list) {
           : `<div class="grid-item${ft.cls}" title="Liquidation: ${liq}">${ft.bg}<div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>Liq</span>${ft.chip}</div><div class="item-value">${liq}</div></div>`;
       return `
       <div data-mcard="${escapeHtml(p.coin)}" style="margin-top:0.75rem; padding:0.75rem; border:1px dashed var(--border); border-radius:8px;">
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:0.5rem;">
-          <span style="background:rgba(234,179,8,0.12); color:var(--yellow,#eab308); border:1px solid rgba(234,179,8,0.3); padding:2px 8px; border-radius:6px; font-size:11px; font-family:var(--font-mono); font-weight:700;">${manualBadge}</span>
+        <div class="mcard-head">
+          <span class="mcard-badge">${manualBadge}</span>
           <span class="item-value highlight">#${p.coin}</span>
           <span class="item-value ${sideCls}">${p.side}</span>
           <!-- Закрытие живёт ЗДЕСЬ, а не в модалке: на карточке цена уже
@@ -773,7 +794,7 @@ export function renderManualPositions(list) {
         <div class="data-grid">
           <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}${riskInline}</div></div>
           <div class="grid-item"><div class="item-label">Entry · Now${moveInline}</div><div class="item-value">${fmtPrice(p.entryPrice)} · <span data-mnow>${cur}</span></div></div>
-          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}`, subText: upnlSubTxt(s, p.unrealizedPnl) })}</div>
+          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}`, })}</div>
           ${floorCell}
         </div>
       </div>`;

@@ -40,6 +40,43 @@
   .tt-trade-cta { padding: 14px; }
 }
 
+// ── Шапка карточки ручной позиции: бейдж + #COIN + сторона + Close ──
+// flex-wrap обязателен: «HANDS-OFF · MANUAL · ADOPTED» это ~24 моно-символа,
+// и на телефоне бейдж один занимает всю строку. Без переноса строка распирала
+// карточку и Close уезжал за край.
+.mcard-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 0.5rem;
+}
+
+.mcard-badge {
+  background: rgba(234, 179, 8, 0.12);
+  color: var(--yellow, #eab308);
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  // Бейдж переносится по «·», а не вылезает за карточку на узком экране.
+  white-space: normal;
+  max-width: 100%;
+}
+
+// На телефоне Close уезжает на СВОЮ строку целиком: рядом с бейджем он
+// прижимался к краю и попадал под палец вместе с «#COIN» (кнопка необратимая —
+// закрывает позицию по рынку). Ширина во всю строку = промах исключён.
+@include until($bp-nav) {
+  .mcard-head .pos-close-btn {
+    flex: 1 1 100%;
+    margin-left: 0;
+    padding: 8px 14px;
+  }
+}
+
 // ── Кнопка Close на карточке ручной позиции ──
 // Цвет ведёт R (uPnL / риск до стопа), а не доллар: $1 на позиции с риском $1
 // и с риском $10 — разные события.
