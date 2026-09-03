@@ -74,6 +74,15 @@ header {
   padding-top: 4px;
 }
 
+/* Две плашки в шапке — статус WS до дашборда и здоровье данных бота. Это
+   РАЗНЫЕ вещи: WS может быть live, пока фид цен на сервере мёртв. Поэтому
+   рядом в строку, а не одна вместо другой. */
+.pill-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .status-pill {
   font-family: var(--font-sans);
   font-size: 12px;

@@ -128,7 +128,39 @@ function buildStatus() {
     // Мок-сигналы со спарклайнами (BTC/ETH/HYPE/DOGE) + синтез строки активной
     // монеты (UNI/SOL пиннятся сверху). Спарклайн в колонке Price едет вживую.
     hotMovers: { ts: Date.now(), universeSize: 50, signals: mockSignals(Date.now()) },
+    // Плашка здоровья данных: мок гоняет её по кругу ok → warn → drift → stale,
+    // иначе три из четырёх состояний видны только при настоящей аварии.
+    dataHealth: mockDataHealth(),
   };
+}
+
+// ── Мок health-плашки ───────────────────────────────────────────────────────
+// Цикл по состояниям раз в 6 секунд — чтобы глазами проверить все цвета и
+// тултип, не дожидаясь, пока фид действительно сломается.
+const MOCK_HEALTH = [
+  { overall: "ok", checks: [
+    { name: "price_feed", category: "freshness", status: "pass", detail: "кадр 1.2с назад, 24/мин" },
+    { name: "price_drift", category: "xref", status: "pass", detail: "n=920 avgΔ=0.0166% maxΔ=0.173% (#CASHCAT)" },
+    { name: "price_coverage", category: "completeness", status: "pass", detail: "1079 монет в кэше" },
+  ] },
+  { overall: "warn", checks: [
+    { name: "price_feed", category: "freshness", status: "warn", detail: "кадр 18.4с назад, 3/мин" },
+    { name: "price_drift", category: "xref", status: "pass", detail: "n=920 avgΔ=0.0210% maxΔ=0.304%" },
+    { name: "price_coverage", category: "completeness", status: "pass", detail: "1079 монет в кэше" },
+  ] },
+  { overall: "drift", checks: [
+    { name: "price_drift", category: "xref", status: "fail", detail: "n=690 avgΔ=1.8% maxΔ=4.102% (#HEMI)" },
+    { name: "price_feed", category: "freshness", status: "pass", detail: "кадр 0.9с назад, 22/мин" },
+    { name: "price_coverage", category: "completeness", status: "pass", detail: "1079 монет в кэше" },
+  ] },
+  { overall: "stale", checks: [
+    { name: "price_feed", category: "freshness", status: "fail", detail: "нет коннекта (попыток 4)" },
+    { name: "price_drift", category: "xref", status: "fail", detail: "нет обновлений 240с (ttl 180с)" },
+    { name: "price_coverage", category: "completeness", status: "warn", detail: "12 монет в кэше" },
+  ] },
+];
+function mockDataHealth() {
+  return MOCK_HEALTH[Math.floor(Date.now() / 6000) % MOCK_HEALTH.length];
 }
 
 // ── Мок Hot Movers со спарклайнами ──────────────────────────────────────────

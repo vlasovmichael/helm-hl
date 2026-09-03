@@ -321,6 +321,47 @@ export function renderHeader(status) {
     _dailyRiskHalted = halted;
     renderDailyBadge();
   }
+
+  renderHealthPill(status.dataHealth);
+}
+
+// ── Плашка здоровья данных ────────────────────────────────────────────────
+// Читает core/healthRegistry.summary(), приехавший в статус-кадре. Смысл в
+// том, чтобы состояние фидов было видно БЕЗ похода в docker logs: раньше эти
+// же числа печатались раз в минуту и жили ровно до следующей строки.
+//
+// Соответствие overall → вид плашки. Цвета переиспользуют классы ws-pill
+// (live/stale/offline), чтобы в шапке не появилось третьей цветовой системы.
+const HEALTH_VIEW = {
+  ok:    { cls: "live",    text: "Data ok" },
+  warn:  { cls: "stale",   text: "Data warn" },
+  drift: { cls: "offline", text: "Data drift" },
+  stale: { cls: "offline", text: "Data stale" },
+  fail:  { cls: "offline", text: "Data fail" },
+};
+
+function renderHealthPill(health) {
+  const pill = document.getElementById("health-pill");
+  if (!pill) return;
+  // unknown = ни один источник ещё не отчитался (или фид выключен флагом).
+  // Плашки нет вовсе: пустой серый бейдж выглядел бы как измеренное состояние.
+  const view = health && HEALTH_VIEW[health.overall];
+  if (!view) {
+    pill.hidden = true;
+    return;
+  }
+  pill.hidden = false;
+  pill.classList.remove("live", "stale", "offline");
+  pill.classList.add(view.cls);
+  const bad = (health.checks || []).filter((c) => c.status !== "pass").length;
+  pill.textContent = bad > 0 ? `${view.text} (${bad})` : view.text;
+  // Детали — в нативный тултип: одна строка на проверку, худшие сверху.
+  const order = { fail: 0, warn: 1, pass: 2 };
+  pill.title = (health.checks || [])
+    .slice()
+    .sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9))
+    .map((c) => `${c.status === "pass" ? "✓" : "⚠"} ${c.name}: ${c.detail}`)
+    .join("\n");
 }
 
 // ── Daily goal / circuit-breaker ──────────────────────────────────────────

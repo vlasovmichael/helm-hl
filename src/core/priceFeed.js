@@ -20,6 +20,7 @@
 import WebSocket from 'ws';
 import { logger } from './logger.js';
 import { resolveApiCoin } from './universe.js';
+import { note } from './healthRegistry.js';
 
 const WS_URL  = process.env.HL_WS_URL || 'wss://api.hyperliquid.xyz/ws';
 const ENABLED = (process.env.HL_WS_FEED_ENABLED || 'false') === 'true';
@@ -45,6 +46,20 @@ const RECONNECT_MAX_MS  = 30_000;
 // Раз монета двинулась >0.5% между WS и поллингом — это либо реальный вик,
 // либо рассинхрон. Логируем такие как WARN-сэмплы (диагностика Stage 1).
 const DIVERGENCE_WARN_PCT = 0.5;
+
+// ── Пороги для health-плашки (см. core/healthRegistry.js) ──────────────────
+// Два порога на дрифт, а не один: расхождение WS с поллингом на десятые доли
+// процента — норма (разные моменты сэмплирования), и если бы плашка краснела
+// на нём, её бы перестали читать за день. Красным считается только разрыв,
+// который уже не объясняется сэмплированием.
+const DRIFT_WARN_PCT  = 0.5;
+const DRIFT_FAIL_PCT  = 2.0;
+// Возраст последнего кадра allMids. STALE_MS (45с) — это уже «фид мёртв»,
+// поэтому предупреждаем заметно раньше.
+const FEED_WARN_AGE_MS = 15_000;
+// Живой фид отдаёт ~22-24 кадра в минуту. Ноль при connected=true — это ровно
+// тот тихий случай, когда сокет открыт, а данных нет (см. tick-starvation 31.07).
+const MIDS_MIN_WARN = 5;
 
 // coin -> { price, ts }. Ключ: обычная монета в верхнем регистре, актив
 // builder-DEX'а как `xyz:NOK` — префикс площадки строчный (см. выше).
@@ -338,11 +353,74 @@ function logStatus() {
     `cmp n=${cmpCount} avgΔ=${avg.toFixed(4)}% maxΔ=${cmpMaxAbsPct.toFixed(3)}%` +
     (cmpMaxCoin ? ` (#${cmpMaxCoin})` : ''),
   );
+  noteFeedHealth({ age, avg });
+
   midsUpdateCount = 0;
   cmpCount = 0;
   cmpSumAbsPct = 0;
   cmpMaxAbsPct = 0;
   cmpMaxCoin = '';
+}
+
+/**
+ * Те же числа, что ушли в лог, — в health-реестр, откуда их прочитает плашка
+ * дашборда. Считать здесь нечего: всё уже посчитано выше, дело только в том,
+ * чтобы значения пережили обнуление счётчиков и получили порог.
+ *
+ * TTL = 3 интервала: разовый пропуск замера — не повод краснеть, а три подряд
+ * означают, что statusTimer встал, и молчать об этом нельзя.
+ */
+function noteFeedHealth({ age, avg }) {
+  const ttlMs = STATUS_LOG_MS * 3;
+
+  // Свежесть кадра allMids.
+  let status, detail;
+  if (!connected) {
+    status = 'fail';
+    detail = `нет коннекта (попыток ${reconnectAttempts})`;
+  } else if (age < 0 || age > STALE_MS) {
+    status = 'fail';
+    detail = age < 0 ? 'кадров ещё не было' : `последний кадр ${(age / 1000).toFixed(0)}с назад`;
+  } else if (age > FEED_WARN_AGE_MS || midsUpdateCount < MIDS_MIN_WARN) {
+    status = 'warn';
+    detail = `кадр ${(age / 1000).toFixed(1)}с назад, ${midsUpdateCount}/мин`;
+  } else {
+    status = 'pass';
+    detail = `кадр ${(age / 1000).toFixed(1)}с назад, ${midsUpdateCount}/мин`;
+  }
+  note('price_feed', { category: 'freshness', status, detail, ttlMs });
+
+  // Дрифт WS-цены против поллинговой (сравнение делает comparePoll из scout).
+  if (cmpCount > 0) {
+    const driftStatus =
+      cmpMaxAbsPct >= DRIFT_FAIL_PCT ? 'fail'
+      : cmpMaxAbsPct >= DRIFT_WARN_PCT ? 'warn'
+      : 'pass';
+    note('price_drift', {
+      category: 'xref',
+      status: driftStatus,
+      detail:
+        `n=${cmpCount} avgΔ=${avg.toFixed(4)}% maxΔ=${cmpMaxAbsPct.toFixed(3)}%` +
+        (cmpMaxCoin ? ` (#${cmpMaxCoin})` : ''),
+      ttlMs,
+    });
+  } else {
+    // Сверок не было — сказать «дрифта нет» здесь было бы враньём.
+    note('price_drift', {
+      category: 'xref',
+      status: 'warn',
+      detail: 'сверок с поллингом не было',
+      ttlMs,
+    });
+  }
+
+  // Покрытие: сколько монет вообще держит кэш.
+  note('price_coverage', {
+    category: 'completeness',
+    status: prices.size === 0 ? 'fail' : prices.size < 50 ? 'warn' : 'pass',
+    detail: `${prices.size} монет в кэше`,
+    ttlMs,
+  });
 }
 
 /** Поднимает WS-фид. No-op, если HL_WS_FEED_ENABLED != true. */

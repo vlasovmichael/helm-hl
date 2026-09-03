@@ -18,6 +18,7 @@ import { state, TICK_INTERVAL_MS, INTEGRITY_GRACE_PERIOD_MS, SHUTDOWN_TIMEOUT_MS
 import { tick } from './app/tick.js';
 import { reportRestartIfUnclean } from './app/restartWatch.js';
 import { startPriceFeed } from './core/priceFeed.js';
+import { startHealthWatch } from './app/healthWatch.js';
 import { startFillFeed } from './core/fillFeed.js';
 import { startWsExitLoop } from './app/wsExitTick.js';
 import { startTickWatchdog } from './app/tickWatchdog.js';
@@ -83,6 +84,12 @@ async function main() {
   // Gated на HL_WS_FEED_ENABLED. Поднимает allMids-фид + сверяет с поллингом,
   // торговую логику не трогает. Fail-soft: ошибки WS не валят бота.
   startPriceFeed();
+
+  // ── Наблюдатель здоровья данных ────────────────
+  // Плашка в шапке дашборда молчалива по природе: она видна, только пока на неё
+  // смотрят. Этот наблюдатель звонит в ntfy, когда состояние держится плохим
+  // несколько минут подряд. Ничего не считает сам — читает healthRegistry.
+  startHealthWatch();
 
   // ── WS-фид собственных филлов ──────────────────
   // Бот узнаёт о своей сделке в момент исполнения, а не следующим опросом:

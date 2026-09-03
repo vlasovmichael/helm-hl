@@ -10,6 +10,7 @@ import { logger } from '../core/logger.js';
 import { getActivePosition, getActiveAdoptPositions, closePosition as dbClosePosition } from '../core/database.js';
 import { getPositionsCached, getAccountSummary, cancelOrderFor, getFrontendOpenOrders } from '../modules/exchange.js';
 import { fireNtfy } from '../core/ntfy.js';
+import { note } from '../core/healthRegistry.js';
 import { fetchExchangePositions } from '../modules/sync.js';
 import { fetchUserFills, classifyClose, findRoundTripForPosition } from '../modules/userFills.js';
 import { maybeAdoptManualPosition, reconcileProvisionalAdoptEntries, resolveManualOpenTime } from './adoptReconcile.js';
@@ -396,6 +397,28 @@ export function orphanReduceOnlyCoins(openOrders, dbPositions) {
   return [...found];
 }
 
+// ── Здоровье сверки «БД ↔ биржа» для health-плашки ─────────────────────────
+// Проверка та же, что и была; новое здесь только то, что её исход переживает
+// вызов и попадает в шапку дашборда (см. core/healthRegistry.js).
+//
+// 🚨 Ключевое различие, которого раньше не было видно: РАЗРЕШЁННОЕ расхождение
+// и ЗАВИСШЕЕ — разные вещи. Позиция, исчезнувшая с биржи и закрытая здесь же в
+// БД, — это механизм сработал, всё хорошо, хотя в логе это ERROR «EXTERNAL
+// CLOSE». А вот лаг индексатора («getPositions() пуст, но маржа занята») —
+// состояние, в котором зеркало и биржа НЕ сошлись и правды мы не знаем.
+//
+// Один такой проход — норма, API отстаёт регулярно. Но 02.09.2026 этот же путь
+// держался четыре часа подряд (сироты-ордера читались как лаг), и заметить это
+// было нечем. Поэтому лаг считается подряд: разовый — warn, затяжной — fail.
+const LAG_FAIL_STREAK = 3; // ≥3 проходов подряд (~3 мин) — это уже не «API отстал»
+let _lagStreak = 0;
+
+const HEALTH_TTL_MS = INTEGRITY_CHECK_INTERVAL_MS * 3;
+
+function noteMirror(status, detail) {
+  note('db_vs_exchange', { category: 'xref', status, detail, ttlMs: HEALTH_TTL_MS });
+}
+
 export async function integrityCheck() {
   if (!config.isProduction) return false;
 
@@ -416,7 +439,11 @@ export async function integrityCheck() {
   if (slotPos) byId.set(slotPos.id, slotPos);
   for (const p of adoptPositions) byId.set(p.id, p);
   const positionsToCheck = [...byId.values()];
-  if (positionsToCheck.length === 0) return false;
+  if (positionsToCheck.length === 0) {
+    _lagStreak = 0;
+    noteMirror('pass', 'открытых позиций нет — сверять нечего');
+    return false;
+  }
 
   try {
     const exchangePositions = await getPositionsCached();
@@ -458,7 +485,11 @@ export async function integrityCheck() {
     // Всё на месте → расхождения нет. Это НОРМА, пока открыты позиции — раньше
     // здесь срабатывал margin-guard и спамил варнингом каждые 60с (393×/9ч),
     // потому что withdrawable < 50% equity истинно всегда, когда деньги в позах.
-    if (vanished.length === 0 && reopened.length === 0) return false;
+    if (vanished.length === 0 && reopened.length === 0) {
+      _lagStreak = 0;
+      noteMirror('pass', `${positionsToCheck.length} поз(ы) на месте, расхождений нет`);
+      return false;
+    }
 
     // Лаг-сигнатура индексатора: биржа вернула ПУСТО (ни одной живой позы), а
     // маржа заблокирована → позиции есть, просто API отстал. Гасим, чтобы не
@@ -490,6 +521,12 @@ export async function integrityCheck() {
             `withdrawable=$${withdrawable.toFixed(2)} vs equity=$${equity.toFixed(2)} ` +
             `(${((withdrawable / equity) * 100).toFixed(1)}%). Похоже на лаг API — skipping.`,
         );
+        _lagStreak++;
+        noteMirror(
+          _lagStreak >= LAG_FAIL_STREAK ? 'fail' : 'warn',
+          `лаг API ${_lagStreak} проход(ов) подряд: биржа пуста, ` +
+            `но занято $${(equity - withdrawable).toFixed(2)} маржи`,
+        );
         return false;
       }
       logger.warn(
@@ -517,9 +554,21 @@ export async function integrityCheck() {
         logger.debug(`[Integrity] reopen-close #${dbPosition.coin} failed: ${err.message}`);
       }
     }
+    // Расхождение было и обработано — это механизм сработал, а не авария.
+    // Именно здесь штатный выход по полу (target-trail закрывает биржевым
+    // ордером) перестаёт выглядеть так же, как настоящий рассинхрон.
+    _lagStreak = 0;
+    const names = [...vanished, ...reopened].map((p) => `#${p.coin}`).join(', ');
+    noteMirror(
+      anyClosed ? 'pass' : 'warn',
+      anyClosed
+        ? `расхождение по ${names} закрыто в БД`
+        : `расхождение по ${names} НЕ закрылось — строка висит открытой`,
+    );
     return anyClosed;
   } catch (err) {
     logger.debug(`[Integrity] Check failed (non-critical): ${err.message}`);
+    noteMirror('warn', `сверка не прошла: ${err.message}`);
     return false;
   }
 }

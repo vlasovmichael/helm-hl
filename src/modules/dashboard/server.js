@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { readFileSync } from "node:fs";
 import { config } from "../../core/config.js";
+import { summary as healthSummary } from "../../core/healthRegistry.js";
 import { logger, getLogBuffer, subscribeLogs } from "../../core/logger.js";
 import { hlInfo, HL_PRIORITY } from "../../core/hlClient.js";
 import { getNotifications, subscribeNotifications } from "../../core/notifyLog.js";
@@ -506,6 +507,9 @@ async function getStatusData() {
     dailyRisk: getLastDailyRiskStatus(),
     // Единый обзор всех стратегий (реестр-driven) для таблицы на /strategies.
     strategies: buildStrategiesPayload(),
+    // Здоровье данных (core/healthRegistry.js) — плашка в шапке. Едет в
+    // статус-кадре, а не отдельным поллингом: считать нечего, это чтение мапы.
+    dataHealth: healthSummary(),
     ts: Date.now(),
   };
 }
@@ -546,9 +550,13 @@ function handleHealth(_req, res) {
   const position = getActivePosition();
   const httpStatus = status === "ok" || status === "booting" ? 200 : 503;
 
+  // Проверки целостности данных отдаём рядом с tick-статусом, но HTTP-код на
+  // них НЕ завязываем: Docker HEALTHCHECK перезапускает контейнер, а дрифт
+  // цены рестартом не лечится — это повод посмотреть, а не убить процесс.
   res.status(httpStatus).json({
     status,
     reasons,
+    dataHealth: healthSummary(),
     tickAgeMs,
     lastTickAt: state.lastTickAt || null,
     uptimeMs,
