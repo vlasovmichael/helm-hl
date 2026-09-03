@@ -627,6 +627,18 @@
               }
               el.classList.add("is-revealed");
               obs.unobserve(el);
+              // Вход доигран → снимаем data-reveal совсем. Атрибут держит на
+              // элементе transition по transform/opacity, а живой transition —
+              // это повод для браузера не отпускать композиторный слой. Ровно
+              // он и давал мигающую полоску на плашке BTC (см. _motion.scss).
+              var drop = function () {
+                el.removeAttribute("data-reveal");
+                el.style.removeProperty("--reveal-i");
+              };
+              el.addEventListener("transitionend", drop, { once: true });
+              // Страховка: если transitionend не придёт (вкладка в фоне —
+              // таймлайн анимаций там стоит), чистим по таймеру.
+              setTimeout(drop, 1500);
             });
           },
           { threshold: 0.08, rootMargin: "0px 0px -8% 0px" }
