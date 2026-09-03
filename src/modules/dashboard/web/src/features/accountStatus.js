@@ -240,7 +240,15 @@ const fmtRemR = (r) => `${r.toFixed(2)}R`;
 // а R убран, чтобы строка не начала снова рвать карточку на телефоне.
 // Пустая строка (а не undefined) намеренно: разметка слоёв остаётся одна и та
 // же, и патч на месте просто меняет текст, не пересобирая карточку.
-const peakSubTxt = (s) => (s.peakPct != null && s.peakPct > 0 ? `peak +${s.peakPct.toFixed(2)}%` : "");
+// ЗЕРКАЛЬНО ЗНАКУ ПОЗИЦИИ: в плюсе полезен пик (MFE) — за ним ползёт биржевой
+// пол трейла. В минусе пик не к месту, там нужна худшая просадка (MAE, «dip»):
+// видеть «−0.17R · peak +0.27%», сидя в минусе, сбивало (см. историю правки).
+const extremeSubTxt = (s, upnl = 0) => {
+  if (upnl < 0) {
+    return s.maePct != null ? `dip −${Math.abs(s.maePct).toFixed(2)}%` : "";
+  }
+  return s.peakPct != null && s.peakPct > 0 ? `peak +${s.peakPct.toFixed(2)}%` : "";
+};
 
 const isTargetMode = (s, upnl) =>
   upnl > 0 && s.tpPrice != null && s.toTargetR != null && s.toTargetR > 0;
@@ -646,9 +654,9 @@ function patchManualCard(container, p) {
       const cellEl = tgRemEl.closest(".grid-item");
       if (cellEl) cellEl.title = `${targetTip(s, p)} · Liquidation: ${p.liquidationPrice != null ? fmtPrice(p.liquidationPrice) : "—"}`;
     }
-    // Пик живёт во всех трёх слоях (spacer/base/fill) → синхроним все, иначе
-    // бело-залитая копия отстанет от цветной под краем заливки.
-    const peakTxt = peakSubTxt(s);
+    // Экстремум живёт во всех трёх слоях (spacer/base/fill) → синхроним все,
+    // иначе бело-залитая копия отстанет от цветной под краем заливки.
+    const peakTxt = extremeSubTxt(s, p.unrealizedPnl);
     card.querySelectorAll(".pnl-sub").forEach((el) => { el.textContent = peakTxt; });
     const flEl = card.querySelector("[data-mfloor]");
     if (flEl && s.floorPrice != null) flEl.textContent = fmtPrice(s.floorPrice);
@@ -806,7 +814,7 @@ export function renderManualPositions(list) {
         <div class="data-grid">
           <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}${riskInline}</div></div>
           <div class="grid-item"><div class="item-label">Entry · Now${moveInline}</div><div class="item-value">${fmtPrice(p.entryPrice)} · <span data-mnow>${cur}</span></div></div>
-          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}`, subText: peakSubTxt(s) })}</div>
+          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}`, subText: extremeSubTxt(s, p.unrealizedPnl) })}</div>
           ${floorCell}
         </div>
       </div>`;
