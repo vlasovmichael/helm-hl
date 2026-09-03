@@ -5,12 +5,13 @@ import assert from 'node:assert/strict';
 
 import {
   peakPctFromCandles,
+  lastClosedClose,
   lookbackMinutesFor,
   MAX_LOOKBACK_MIN,
 } from '../src/modules/adoptPeakTruth.js';
 
 const MIN = 60_000;
-const c = (time, high, low) => ({ time, high, low, open: high, close: low });
+const c = (time, high, low, close = low) => ({ time, high, low, open: high, close });
 
 test('нет свечей / мусорный вход → null, а не ноль', () => {
   assert.equal(peakPctFromCandles({ candles: null, entry: 100, entryTime: 0, isShort: true }), null);
@@ -112,4 +113,35 @@ test('регрессия HEMI 03.09: прокол между WS-кадрами �
   const peakR = pct / riskPct;
   assert.ok(pct > 3.1 && pct < 3.2, `ожидал ~3.12%, получил ${pct}`);
   assert.ok(peakR >= 0.9, `трейл обязан взводиться: ${peakR.toFixed(2)}R < 0.9R`);
+});
+
+// ── Закрытие последнего бара: цена, на которой принимается решение о выходе ──
+
+test('берётся close последнего ЗАКРЫТОГО бара, незакрытый игнорируется', () => {
+  const now = 3 * MIN + 30_000; // идёт бар, открывшийся в 3*MIN
+  const got = lastClosedClose(
+    [c(MIN, 105, 100, 101), c(2 * MIN, 106, 101, 104), c(3 * MIN, 120, 103, 119)],
+    now,
+  );
+  assert.deepEqual(got, { px: 104, time: 2 * MIN });
+});
+
+test('все бары ещё идут / мусор → null', () => {
+  assert.equal(lastClosedClose([c(0, 105, 100, 103)], 30_000), null);
+  assert.equal(lastClosedClose(null, 0), null);
+  assert.equal(lastClosedClose([{ time: 0, close: 0 }], 10 * MIN), null);
+});
+
+test('порядок баров не важен — берётся самый поздний закрытый', () => {
+  const now = 10 * MIN;
+  const got = lastClosedClose([c(5 * MIN, 1, 1, 55), c(MIN, 1, 1, 11), c(3 * MIN, 1, 1, 33)], now);
+  assert.equal(got.px, 55);
+});
+
+test('фитиль в пике есть, а в решении о выходе — нет', () => {
+  // Бар с глубоким фитилём вниз (SHORT): пик его видит, close — нет.
+  const bar = c(0, 101, 90, 99); // low 90, close 99
+  const now = 2 * MIN;
+  assert.equal(peakPctFromCandles({ candles: [bar], entry: 100, entryTime: 0, isShort: true }), 10);
+  assert.equal(lastClosedClose([bar], now).px, 99); // решение — по 99, не по 90
 });

@@ -16,6 +16,7 @@
 //   dir: "Open Long" | "Open Short" | "Close Long" | "Close Short" | "Long > Short" | ...
 //   closedPnl: realized PnL для этого fill (строка с float)
 
+import { getBotOidKind } from '../core/database.js';
 import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
 import { hlInfo, HL_PRIORITY } from '../core/hlClient.js';
@@ -198,8 +199,17 @@ export function classifyClose(position, fills) {
   } else if (position.hunter_tp_oid && first.oid === position.hunter_tp_oid) {
     result.reason = 'tp_trigger';
   } else {
-    // 3. Иначе — manual или внешний market close через UI.
-    result.reason = 'manual_close';
+    // 3. Ступени TP-сетки: целей может быть несколько, а в positions хранится
+    // ровно один hunter_tp_oid. Роль такого oid'а знает bot_oid_log — без этой
+    // проверки выход по ступени читался бы как «закрыл руками» и портил бы и
+    // леджер, и разбор выходов.
+    const kind = getBotOidKind(first.oid);
+    if (kind === 'tp_trigger' || kind === 'sl_trigger') {
+      result.reason = kind;
+    } else {
+      // 4. Иначе — manual или внешний market close через UI.
+      result.reason = 'manual_close';
+    }
   }
 
   // Aggregate PnL/fee/price/closedAt по всем closing fills вплоть до нулевой

@@ -380,6 +380,26 @@ export function initDB() {
  * @param {string} kind — 'open' | 'close' | 'sl_trigger' | 'tp_trigger'
  * @param {number} [positionId] — связь с позицией (опционально)
  */
+/**
+ * Роль oid'а в bot_oid_log ('sl_trigger' | 'tp_trigger' | …), либо null.
+ *
+ * Нужна классификации закрытий: в positions лежит ровно один hunter_tp_oid, а
+ * целей у позиции может быть несколько (ступени TP-сетки, см. tpGrid.js). Без
+ * этого справочника фил по ступени читался бы как ручное закрытие.
+ */
+export function getBotOidKind(oid) {
+  if (oid == null || !Number.isFinite(Number(oid))) return null;
+  try {
+    const row = getDb()
+      .prepare('SELECT kind FROM bot_oid_log WHERE oid = ?')
+      .get(Number(oid));
+    return row?.kind ?? null;
+  } catch (err) {
+    logger.warn(`[DB] getBotOidKind(${oid}) failed: ${err.message}`);
+    return null;
+  }
+}
+
 export function recordBotOid(oid, coin, kind, positionId = null) {
   if (oid == null || !Number.isFinite(Number(oid))) return;
   if (!coin) return;

@@ -79,48 +79,81 @@ export function lookbackMinutesFor(entryTime, now = Date.now()) {
   return Math.min(Math.max(ageMin, 5), MAX_LOOKBACK_MIN);
 }
 
+/**
+ * Закрытие последней ПОЛНОСТЬЮ ЗАКРЫТОЙ минутной свечи.
+ *
+ * Нужно для решения о выходе по трейлу. Пик считаем по фитилям (это честный
+ * MFE), но выходить по фитилю нельзя: цена, которую видел один принт, — это не
+ * цена, по которой можно продать. Откат от пика меряем по закрытию бара — оно
+ * пережило целую минуту торговли.
+ *
+ * Незакрытый бар отбрасываем: его close = последняя сделка, то есть тот же тик,
+ * от которого мы и уходим.
+ *
+ * @returns {{px:number, time:number}|null}
+ */
+export function lastClosedClose(candles, now = Date.now()) {
+  if (!Array.isArray(candles)) return null;
+  let best = null;
+  for (const c of candles) {
+    if (!Number.isFinite(c?.time) || !(c.close > 0)) continue;
+    if (c.time + 60_000 > now) continue; // бар ещё идёт
+    if (best == null || c.time > best.time) best = { px: c.close, time: c.time };
+  }
+  return best;
+}
+
 // Троттл на позицию: свечи спрашиваем не чаще, чем закрывается бар. Кэш свечей
 // держит свой TTL (20с), этот — про то, чтобы не дёргать getOneMinCandles на
-// каждый тик няньки по каждой позе.
+// каждый тик няньки по каждой позе. Между обновлениями отдаём ПОСЛЕДНЕЕ
+// известное значение, а не null: решение о выходе должно опираться на закрытие
+// бара в каждом тике, а не только в том, где мы сходили в сеть.
 const REFRESH_GAP_MS = 30_000;
-const lastSyncAt = new Map(); // positionId → ts
+const lastTruth = new Map(); // positionId → { at, peakPct, close }
 
-/** Сброс троттла (тесты + closeHandler). */
+/** Сброс кэша по позиции (закрылась) или целиком (тесты). */
 export function clearPeakTruth(positionId) {
-  if (positionId == null) lastSyncAt.clear();
-  else lastSyncAt.delete(positionId);
+  if (positionId == null) lastTruth.clear();
+  else lastTruth.delete(positionId);
 }
 
 /**
- * Досчитать пик позиции по свечам и вернуть его. Сети касается не чаще
- * REFRESH_GAP_MS на позицию; в остальные тики возвращает null («нечего добавить»).
+ * Правда биржи о позиции: пик хода (по фитилям) и закрытие последнего бара
+ * (для решения о выходе). Сети касается не чаще REFRESH_GAP_MS на позицию, в
+ * остальные тики отдаёт последнее известное.
  *
  * Ошибки глушим намеренно: свечной источник — УТОЧНЕНИЕ тикового, и если HL
- * недоступен или бюджет занят, правило обязано продолжить работать на тиковом
- * пике, а не упасть.
+ * недоступен или бюджет занят, правило обязано продолжить работать на тиковой
+ * цене, а не упасть.
  *
  * @param {object} position — row из positions (coin, entry_price, entry_time, side, id)
  * @param {number} [now]
- * @returns {Promise<number|null>} favorable % или null
+ * @returns {Promise<{peakPct:number|null, close:{px:number,time:number}|null}|null>}
  */
-export async function candlePeakPct(position, now = Date.now()) {
+export async function candleTruth(position, now = Date.now()) {
   const { id, coin, entry_price: entry, entry_time: entryTime } = position || {};
   if (!(entry > 0) || !Number.isFinite(entryTime)) return null;
 
-  const prev = lastSyncAt.get(id);
-  if (prev != null && now - prev < REFRESH_GAP_MS) return null;
-  lastSyncAt.set(id, now);
+  const prev = lastTruth.get(id);
+  if (prev != null && now - prev.at < REFRESH_GAP_MS) {
+    return { peakPct: prev.peakPct, close: prev.close };
+  }
 
   try {
     const candles = await getOneMinCandles(coin, lookbackMinutesFor(entryTime, now), now);
-    return peakPctFromCandles({
+    const peakPct = peakPctFromCandles({
       candles,
       entry,
       entryTime,
       isShort: (position.side || 'short') === 'short',
     });
+    const close = lastClosedClose(candles, now);
+    lastTruth.set(id, { at: now, peakPct, close });
+    return { peakPct, close };
   } catch (err) {
-    logger.debug(`[AdoptPeakTruth] #${coin} candle peak failed: ${err.message}`);
-    return null;
+    logger.debug(`[AdoptPeakTruth] #${coin} candle truth failed: ${err.message}`);
+    // Протухшее лучше пустого: закрытие бара минутной давности всё ещё честнее
+    // тика, а пик не убывает по определению.
+    return prev ? { peakPct: prev.peakPct, close: prev.close } : null;
   }
 }

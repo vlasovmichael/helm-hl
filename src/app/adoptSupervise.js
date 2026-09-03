@@ -14,13 +14,12 @@
 // getActiveAdoptPositions(). coordinator для adopt теперь возвращает HOLD.
 
 import { config } from '../core/config.js';
-import { state } from './state.js';
 import { logger } from '../core/logger.js';
 import { getActiveAdoptPositions } from '../core/database.js';
 import { analyzeAdopt, getAdoptPeakPct, notePeakPct } from '../modules/strategistAdopt.js';
 import { getLivePrice, cancelOrderFor } from '../modules/exchange.js';
 import { decideTargetTrail, unrealizedR } from '../modules/targetTrail.js';
-import { candlePeakPct, clearPeakTruth } from '../modules/adoptPeakTruth.js';
+import { candleTruth, clearPeakTruth } from '../modules/adoptPeakTruth.js';
 import { execute } from '../modules/executor/index.js';
 import { trackAdoptTimeCutTick } from '../modules/adoptShadowTimeCut.js';
 import { trackAdoptShadowTrailTick } from '../modules/adoptShadowTrail.js';
@@ -82,6 +81,11 @@ const _targetTrailArmed = new Set();
 // 09.08 выбило кучу V8, см. шапку candleCache.js).
 const _peakSynced = new Set();
 
+// Насколько старым может быть закрытие бара, на котором принимается решение о
+// выходе по трейлу. Два бара: один текущий (ещё идёт) плюс один запас на лаг
+// candleSnapshot. Дальше — источник считается протухшим.
+const TRAIL_CLOSE_MAX_AGE_MS = 3 * 60_000;
+
 /** Взведён ли target-trail для позиции — нужно дашборду для Floor-чипа. */
 export function isTargetTrailArmed(positionId) {
   return _targetTrailArmed.has(positionId);
@@ -113,14 +117,16 @@ export async function superviseAdoptPositions(priceFn = getLivePrice) {
     // Свеча рисуется по сделкам и такие фитили видит. Берём МАКСИМУМ двух
     // источников (см. notePeakPct), сеть трогаем не чаще раза в 30с на позу.
     // Стоит ДО analyzeAdopt: на пике завязан и BE-храповик, не только трейл.
+    let truth = null;
     try {
-      const cPeak = await candlePeakPct(pos);
+      truth = await candleTruth(pos);
       _peakSynced.add(pos.id);
+      const cPeak = truth?.peakPct;
       if (cPeak != null && notePeakPct(pos.id, cPeak, { persist: pos.mode === 'PRODUCTION' })) {
         logger.debug(`[Adopt] пик #${pos.coin} поднят свечами до ${cPeak.toFixed(2)}%`);
       }
     } catch (err) {
-      logger.debug(`[Adopt] candle peak #${pos.coin} failed: ${err.message}`);
+      logger.debug(`[Adopt] candle truth #${pos.coin} failed: ${err.message}`);
     }
 
     const sig = analyzeAdopt(pos, price);
@@ -138,15 +144,26 @@ export async function superviseAdoptPositions(priceFn = getLivePrice) {
     // ⚠️ Выключено по умолчанию (ADOPT_TARGET_TRAIL_ENABLED). Замер дал
     // +0.154R против фиксации при CI95 [−0.033, +0.378] — знак не установлен,
     // медиана против. Гипотеза adopt-target-trail, судить один раз на n=60.
-    // Правило не трогает позиции, открытые ДО старта процесса: их пик живёт
-    // только в памяти и после рестарта неизвестен, а взводиться «задним числом»
-    // на неизвестном пике значит снять лимитку и, возможно, тут же выйти по
-    // рынку. Для замера это тоже честнее — в счёт идут только полные сделки.
-    const bornAfterStart = state.botStartedAt > 0 && pos.entry_time >= state.botStartedAt;
-    if (config.trading.adoptTargetTrailEnabled && pos.sl_price > 0 && bornAfterStart) {
+    // Гарда «только позы, рождённые при этом процессе» СНЯТА 03.09.2026. Она
+    // стояла потому, что пик жил только в памяти и после рестарта был неизвестен
+    // — взводиться «задним числом» на неизвестном пике означало снять лимитку и,
+    // возможно, тут же выйти по рынку. Теперь пик восстанавливается из свечей за
+    // первый же тик (см. adoptPeakTruth), то есть после рестарта он ИЗВЕСТЕН и
+    // не хуже, чем был. Обоснования у гарды не осталось, а цена её была высокой:
+    // каждый деплой выключал правило до конца текущей позиции.
+    if (config.trading.adoptTargetTrailEnabled && pos.sl_price > 0) {
       try {
         const isShort = (pos.side || 'short') === 'short';
-        const curR = unrealizedR({ entry: pos.entry_price, price, stopPrice: pos.sl_price, isShort });
+        // Пик меряем по фитилям (честный MFE), а ОТКАТ — по закрытию последнего
+        // минутного бара. Причина: give-back 0.25R меньше внутриминутного
+        // размаха неликвида (HEMI 03.09: пик прыгнул с 0.82R до 2.19R одним
+        // движением), и на тиковой цене трейл закрывался бы по откату от цены,
+        // которую видел один принт. Закрытие бара пережило минуту торговли.
+        // Бар протух (нет сети дольше двух минут) → падаем на тик: выйти
+        // по чуть худшей цене лучше, чем не выйти вовсе.
+        const closeAge = truth?.close ? Date.now() - truth.close.time : Infinity;
+        const decisionPx = closeAge <= TRAIL_CLOSE_MAX_AGE_MS ? truth.close.px : price;
+        const curR = unrealizedR({ entry: pos.entry_price, price: decisionPx, stopPrice: pos.sl_price, isShort });
         const stopDistPct = (Math.abs(pos.entry_price - pos.sl_price) / pos.entry_price) * 100;
         const peakR = stopDistPct > 0 ? (getAdoptPeakPct(pos.id) ?? 0) / stopDistPct : null;
         const d = decideTargetTrail({
@@ -161,6 +178,10 @@ export async function superviseAdoptPositions(priceFn = getLivePrice) {
           // Снимаем цель ДО того, как пометить позицию взведённой: если отмена
           // не прошла, лимитка остаётся на бирже и сделка закроется как раньше —
           // это безопасный исход. Обратный порядок оставил бы позу без цели.
+          // Ступени TP-сетки при этом НЕ снимаем, и это намеренно: они ближе к
+          // рынку, чем цель, и забирают свою часть мейкером, пока трейл ведёт
+          // остаток. Ровно та связка «часть лимитками, хвост трейлом», ради
+          // которой сетка и заводилась.
           if (pos.hunter_tp_oid) await cancelOrderFor(pos.coin, pos.hunter_tp_oid);
           _targetTrailArmed.add(pos.id);
           logger.info(`[Adopt] 🎯 TARGET-TRAIL ARM #${pos.coin}: ${d.reason}`);

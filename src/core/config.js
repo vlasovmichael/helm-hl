@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { parseTpGrid } from '../modules/tpGrid.js';
 
 function requireEnv(key) {
   const value = process.env[key];
@@ -346,11 +347,21 @@ function loadConfig() {
   // дал +0.154R против фиксации при CI95 [−0.033, +0.378] — ноль внутри, а
   // медиана +0.844R (типичная сделка ХУЖЕ фиксации, среднее держат 3 выброса).
   // Гипотеза adopt-target-trail, судить один раз на 60 доехавших до цели.
+  // TP-сетка: цель лесенкой вместо одной лимитки (см. шапку tpGrid.js).
+  // Пусто = выключено. Формат «доля@R, доля@R» — сумма долей строго < 1, остаток
+  // уходит под обычную цель/трейл. Спецификацию проверяем ЗДЕСЬ и падаем на
+  // старте: кривая сетка — это неправильные ордера на живом счету, и узнать об
+  // этом на первом же усыновлении хуже, чем не подняться.
+  const adoptTpGridSpec = String(process.env.ADOPT_TP_GRID || '').trim();
   const adoptTargetTrailEnabled    = (process.env.ADOPT_TARGET_TRAIL_ENABLED || 'false').toLowerCase() === 'true';
   const adoptTargetTrailArmR       = parseFloat(process.env.ADOPT_TARGET_TRAIL_ARM_R       || '0.9');
   const adoptTargetTrailGiveBackR  = parseFloat(process.env.ADOPT_TARGET_TRAIL_GIVE_BACK_R || '0.25');
   if (isNaN(adoptTargetTrailArmR) || adoptTargetTrailArmR <= 0) {
     throw new Error(`ADOPT_TARGET_TRAIL_ARM_R must be > 0. Got: "${process.env.ADOPT_TARGET_TRAIL_ARM_R}"`);
+  }
+  const adoptTpGrid = parseTpGrid(adoptTpGridSpec);
+  if (adoptTpGrid.error) {
+    throw new Error(`ADOPT_TP_GRID: ${adoptTpGrid.error}. Got: "${adoptTpGridSpec}"`);
   }
   if (isNaN(adoptTargetTrailGiveBackR) || adoptTargetTrailGiveBackR <= 0) {
     throw new Error(`ADOPT_TARGET_TRAIL_GIVE_BACK_R must be > 0. Got: "${process.env.ADOPT_TARGET_TRAIL_GIVE_BACK_R}"`);
@@ -525,6 +536,7 @@ function loadConfig() {
       adoptTargetTrailEnabled,
       adoptTargetTrailArmR,
       adoptTargetTrailGiveBackR,
+      adoptTpGridLegs: adoptTpGrid.legs || [],
       adoptTrailArmPct,
       adoptTrailGiveBackPct,
       adoptTimecutShadowEnabled,

@@ -23,7 +23,8 @@ import { getAccountSummary, getLivePrice } from '../modules/exchange.js';
 import { placeExitTrigger } from '../modules/executor/triggers.js';
 import { resolveAsset } from '../modules/executor/fill-parser.js';
 import { placeLimit } from '../modules/exchange.js';
-import { formatHlPrice } from '../modules/executor/math.js';
+import { formatHlPrice, MIN_ORDER_USD } from '../modules/executor/math.js';
+import { buildTpGrid } from '../modules/tpGrid.js';
 import { fetchUserFills } from '../modules/userFills.js';
 import { isQuietHour } from '../core/ntfy.js';
 import { getLastDailyRiskStatus, localDayKey } from '../modules/dailyRisk.js';
@@ -566,6 +567,7 @@ export async function maybeAdoptManualPosition(manualPositions) {
     // поза без стопа. Такая позиция просто ждёт стопа или руки.
     let tpOid = null;
     let tpPrice = null;
+    const gridOids = [];   // oid'ы ступеней сетки — в bot_oid_log, см. ниже
     if (config.trading.adoptTpEnabled) {
       const tp = computeAdoptTp({
         side,
@@ -576,11 +578,54 @@ export async function maybeAdoptManualPosition(manualPositions) {
       });
       if (tp) {
         try {
+          // ── Сетка: ближние ступени ставим ПЕРВЫМИ, остаток уходит на цель ──
+          // Выключена по умолчанию (ADOPT_TP_GRID пустой). Ступени — те же
+          // reduce-only лимитки, отличается только то, что цель разложена.
+          // Провал ступени не отменяет ни цель, ни усыновление: непоставленная
+          // ступень просто оставляет больше объёма на основной цели.
+          const gridLegs = config.trading.adoptTpGridLegs || [];
+          let sizeForTp = sz;
+          if (gridLegs.length > 0) {
+            const rungs = buildTpGrid({
+              legs: gridLegs,
+              entry,
+              stopDistPct: distPct,
+              isShort: side === 'short',
+              sizeSz: sz,
+              minSz: MIN_ORDER_USD / entry,
+              roundSz: (n) => Number(n.toFixed(szDecimals ?? 0)),
+            });
+            for (const rung of rungs) {
+              try {
+                const rpx = formatHlPrice(rung.px, szDecimals);
+                const rres = await placeLimit({
+                  coin,
+                  isBuy: side === 'short',
+                  sz: rung.sz,
+                  px: rpx,
+                  tif: 'Gtc',
+                  reduceOnly: true,
+                });
+                const rst = rres?.response?.data?.statuses?.[0];
+                if (typeof rst === 'string') throw new Error(rst);
+                if (rst?.error) throw new Error(rst.error);
+                const roid = rst?.resting?.oid ?? rst?.filled?.oid ?? null;
+                sizeForTp -= rung.sz;
+                gridOids.push(roid);
+                logger.info(
+                  `[Adopt] 🪜 ступень #${coin} ${rung.r}R @ $${rpx} × ${rung.sz} | oid=${roid}`,
+                );
+              } catch (err) {
+                logger.warn(`[Adopt] ⚠️ ступень ${rung.r}R #${coin} не встала (${err.message}) — объём уходит на цель`);
+              }
+            }
+          }
+
           const px = formatHlPrice(tp.tpPrice, szDecimals);
           const res = await placeLimit({
             coin,
             isBuy: side === 'short', // закрытие шорта = BUY
-            sz,
+            sz: sizeForTp,
             px,
             tif: 'Gtc',              // цель стоит в книге до исполнения, не post-only-reject
             reduceOnly: true,
@@ -656,6 +701,11 @@ export async function maybeAdoptManualPosition(manualPositions) {
     // закрывающие, openIsBot они не поднимают.
     if (slOid) recordBotOid(slOid, coin, 'sl_trigger', id);
     if (tpOid) recordBotOid(tpOid, coin, 'tp_trigger', id);
+    // Ступени сетки — тоже 'tp_trigger'. В positions хранится ровно один
+    // hunter_tp_oid, поэтому классификация филла по ступени идёт через
+    // bot_oid_log (см. userFills.classifyClose): без этой записи выход по
+    // ступени читался бы как «закрыл руками».
+    for (const goid of gridOids) if (goid) recordBotOid(goid, coin, 'tp_trigger', id);
 
     // Усыновлено по провизорному (first-seen) времени — fill ещё не был
     // проиндексирован. Запоминаем, чтобы бэкфиллить реальный entry_time, когда
