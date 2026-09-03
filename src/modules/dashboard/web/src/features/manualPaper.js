@@ -91,7 +91,7 @@ function formHtml(prefill = {}) {
 
       <div class="mp-calc" id="mp-calc"></div>
       <div class="mp-err" id="mp-err" hidden></div>
-      <button type="submit" class="btn btn--primary btn--lg mp-submit" id="mp-submit">Open paper position</button>
+      <button type="submit" class="btn btn--primary btn--cta mp-submit" id="mp-submit">Open paper position</button>
     </form>`;
 }
 

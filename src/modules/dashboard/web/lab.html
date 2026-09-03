@@ -1,61 +1,14 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-    />
-    <meta
-      name="theme-color"
-      content="#0d1117"
-      media="(prefers-color-scheme: dark)"
-    />
-    <meta
-      name="theme-color"
-      content="#ffffff"
-      media="(prefers-color-scheme: light)"
-    />
+    <!--#head-->
     <title>Helm · Lab</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Geologica:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <script>
-      (function () {
-        try {
-          var stored = localStorage.getItem("hl-scanner-theme") || "auto";
-          var theme;
-          if (stored === "auto") {
-            theme = window.matchMedia("(prefers-color-scheme: dark)").matches
-              ? "dark"
-              : "light";
-          } else {
-            theme = stored === "light" ? "light" : "dark";
-          }
-          document.documentElement.setAttribute("data-theme", theme);
-        } catch (_) {
-          document.documentElement.setAttribute("data-theme", "dark");
-        }
-      })();
-    </script>
   </head>
   <body>
     <div class="container">
       <nav class="topnav" id="topnav" aria-label="Primary"></nav>
 
-      <header>
-        <div class="equity-group page-head">
-          <div class="label">Lab</div>
-          <div class="value page-title">Research · forward tests &amp; verdicts</div>
-        </div>
-        <div class="meta-group">
-          <div id="ws-pill" class="status-pill offline">WS connecting…</div>
-        </div>
-      </header>
+      <header id="page-header"></header>
 
       <!-- 01 / Режимы ведения позиции (реестр-driven). Перенесено
            со statistics, первой картой на Lab. Данные — из WS status-payload
@@ -132,7 +85,7 @@
           <table class="data-table" id="win-table">
             <thead>
               <tr>
-                <th title="Hyperliquid address: ▸ expands its open positions right now (coin, side, leverage, floating PnL); the link itself opens the explorer">Address</th>
+                <th title="Hyperliquid address: the arrow expands its open positions right now (coin, side, leverage, floating PnL); the link itself opens the explorer">Address</th>
                 <th class="r" title="Edge the address was selected on: profit per dollar of turnover in the month before the freeze">Selection, bp</th>
                 <th class="r" title="Edge AFTER the freeze — the only number here that means anything">Forward, bp</th>
                 <th class="r" title="Profit after the freeze">PnL</th>

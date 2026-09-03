@@ -64,7 +64,7 @@ function formHtml(coin = "", side = "") {
         ${sideBtn("", "No side")}
       </div>
       <input type="hidden" id="wi-side" value="${escapeHtml(side)}" />
-      <button type="submit" class="btn btn--primary btn--lg wi-submit">Analyse</button>
+      <button type="submit" class="btn btn--primary btn--cta wi-submit">Analyse</button>
       <div id="wi-error" class="wi-error" hidden></div>
     </form>`;
 }
@@ -177,11 +177,11 @@ function resultHtml(r) {
     // Санити стопа vs ATR — подсветка под строкой стопа.
     const ss = c.stopSanity;
     const ssNote = ss
-      ? `<div class="wi-subnote wi-ss-${ss.level}">🛡 ${escapeHtml(ss.note)}</div>` : "";
+      ? `<div class="wi-subnote wi-ss-${ss.level}">${icon("shield")} ${escapeHtml(ss.note)}</div>` : "";
     // Риск-калькулятор размера.
     const sz = c.sizing;
     const szNote = sz
-      ? `<div class="wi-subnote wi-size">📏 Risking ${sz.riskBudgetPct}% of the account ($${fmtNum(sz.riskUsd)}) with this stop, size should be <strong>$${fmtNum(sz.suggestedSizeUsd)}</strong> (account $${fmtNum(sz.equity)}).</div>` : "";
+      ? `<div class="wi-subnote wi-size">${icon("ruler")} Risking ${sz.riskBudgetPct}% of the account ($${fmtNum(sz.riskUsd)}) with this stop, size should be <strong>$${fmtNum(sz.suggestedSizeUsd)}</strong> (account $${fmtNum(sz.equity)}).</div>` : "";
     plan = `
       <div class="wi-plan">
         <div class="wi-plan-title">Plan for ${escapeHtml(c.plan.side)}</div>
@@ -198,7 +198,7 @@ function resultHtml(r) {
 
   // Order-flow «под капотом» (OI / объём / funding).
   const flow = (c.orderFlow && c.orderFlow.length)
-    ? `<div class="wi-flow"><div class="wi-flow-title">⚙️ Under the hood (flow)</div><ul>${c.orderFlow.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>`
+    ? `<div class="wi-flow"><div class="wi-flow-title">${icon("flow")} Under the hood (flow)</div><ul>${c.orderFlow.map((x) => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>`
     : "";
 
   // ── Сценарии ──
@@ -208,12 +208,12 @@ function resultHtml(r) {
 
   // ── Учёба на твоей истории (зеркало привычки) ──
   const learn = c.learn
-    ? `<div class="wi-learn"><span class="wi-learn-tag">🪞 Your history (${c.learn.n})</span> ${escapeHtml(c.learn.note)}<span class="wi-learn-meta">winrate ${c.learn.winRate}% · payoff ${c.learn.payoff != null ? c.learn.payoff + "×" : "—"}</span></div>`
+    ? `<div class="wi-learn"><span class="wi-learn-tag">${icon("history")} Your history (${c.learn.n})</span> ${escapeHtml(c.learn.note)}<span class="wi-learn-meta">winrate ${c.learn.winRate}% · payoff ${c.learn.payoff != null ? c.learn.payoff + "×" : "—"}</span></div>`
     : "";
 
   // ── Вторичная честная строка: проверенный fade-эдж ──
   const edgeNote = `<div class="wi-edge-note">${r.fired
-    ? `⚡ Bonus: a verified fade edge lines up here too (${escapeHtml(r.fadeSide || "")}).`
+    ? `${icon("spark")} Bonus: a verified fade edge lines up here too (${escapeHtml(r.fadeSide || "")}).`
     : `No verified edge here — this is analysis, not a signal. ${escapeHtml(c.disclaimer)}`}</div>`;
 
   return head + verdictBlock + structure + flow + levels + plan + cases + learn + edgeNote +

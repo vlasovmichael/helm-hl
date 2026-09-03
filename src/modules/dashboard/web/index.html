@@ -1,47 +1,8 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-    />
-    <meta
-      name="theme-color"
-      content="#0d1117"
-      media="(prefers-color-scheme: dark)"
-    />
-    <meta
-      name="theme-color"
-      content="#ffffff"
-      media="(prefers-color-scheme: light)"
-    />
+    <!--#head-->
     <title>Helm</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Geologica:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <script>
-      (function () {
-        try {
-          var stored = localStorage.getItem("hl-scanner-theme") || "auto";
-          var theme;
-          if (stored === "auto") {
-            theme = window.matchMedia("(prefers-color-scheme: dark)").matches
-              ? "dark"
-              : "light";
-          } else {
-            theme = stored === "light" ? "light" : "dark";
-          }
-          document.documentElement.setAttribute("data-theme", theme);
-        } catch (_) {
-          document.documentElement.setAttribute("data-theme", "dark");
-        }
-      })();
-    </script>
   </head>
   <body>
     <div class="container">
@@ -74,25 +35,6 @@
         </div>
       </header>
 
-      <!-- Day Desk — три вопроса дня: сколько уже сделал, сколько можно потерять,
-           защищены ли позы. Стоит ВЫШЕ позиций и сетапов намеренно: по разбору
-           журнала минус делают дни с несколькими входами, а не отдельные сделки,
-           поэтому первым на экране должен быть бюджет дня, а не идея. -->
-      <section class="card daydesk" id="sec-day">
-        <div class="card-header">
-          <div class="card-title">Today</div>
-          <div class="card-tools">
-            <span class="card-meta" id="day-meta"></span>
-          </div>
-        </div>
-        <div id="day-desk" class="dd-grid">
-          <div class="sk sk-block" style="--sk-h: 72px"></div>
-          <div class="sk sk-block" style="--sk-h: 72px"></div>
-          <div class="sk sk-block" style="--sk-h: 72px"></div>
-        </div>
-        <div id="day-rules" class="dd-rules"></div>
-      </section>
-
       <!-- Market Context — живая статистика по BTC (цена по биржевому WS);
            цвет рамки = фон (risk-on/off). Стоит вплотную НАД позициями: фон
            рынка читается в одном движении глаза с тем, что открыто, а бюджет
@@ -124,25 +66,11 @@
              и только потом открываешь ещё. -->
         <button
           id="tt-trade-btn"
-          class="tt-trade-cta"
+          class="btn btn--primary btn--cta"
           type="button"
           title="Open or close a position. Orders go straight to Hyperliquid via the API wallet — no builder fee, no wallet popup. The bot still places the stop and runs the exit."
         >
-          <svg
-            width="19"
-            height="19"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M3 17l6-6 4 4 8-8" />
-            <path d="M17 7h4v4" />
-          </svg>
-          Trade
+          <i data-icon="rising"></i>Trade
         </button>
       </section>
 
@@ -158,50 +86,22 @@
           <div class="hm-header-right">
             <span id="hm-actions-slot"></span>
             <span id="hm-tools" class="hm-tools">
-            <button
-              id="mp-paper-btn"
-              class="whatif-btn"
-              type="button"
-              title="Open a paper trade (your own paper, Rabbit-style): coin, side, leverage, size off equity. The bot doesn't trade it — you run it by hand."
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                style="vertical-align: -2px; margin-right: 4px"
+              <button
+                id="mp-paper-btn"
+                class="btn btn--sm"
+                type="button"
+                title="Open a paper trade (your own paper, Rabbit-style): coin, side, leverage, size off equity. The bot doesn't trade it — you run it by hand."
               >
-                <path d="M12 20h9" />
-                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
-              </svg>
-              Paper
-            </button>
-            <button
-              id="whatif-btn"
-              class="whatif-btn"
-              type="button"
-              title="Itchy hands? Type a coin and side — the bot checks it against the fade-high-ER edge and either backs you or stops you"
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                style="vertical-align: -2px; margin-right: 4px"
+                <i data-icon="add"></i>Paper
+              </button>
+              <button
+                id="whatif-btn"
+                class="btn btn--sm"
+                type="button"
+                title="Itchy hands? Type a coin and side — the bot checks it against the fade-high-ER edge and either backs you or stops you"
               >
-                <circle cx="11" cy="11" r="7" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              What if…
-            </button>
+                <i data-icon="help"></i>What if…
+              </button>
             </span>
             <span
               id="hot-movers-meta"
@@ -227,7 +127,7 @@
                 </th>
                 <th
                   class="c"
-                  title="Chase meter: how far price has already run IN THE TRADE DIRECTION from the short average (15m, 5m fallback). Lit only on a confirmed setup. 🎯 near the base — no chase; ⏳ stretched — let it pull back; ⛔ already gone your way — too late, wait for a retrace. You pick the 5m entry yourself."
+                  title="Chase meter: how far price has already run IN THE TRADE DIRECTION from the short average (15m, 5m fallback). Lit only on a confirmed setup. Near the base — no chase; stretched — let it pull back; already gone your way — too late, wait for a retrace. You pick the 5m entry yourself."
                 >
                   Enter
                 </th>
@@ -237,7 +137,7 @@
                 <th class="r">15m%</th>
                 <th
                   class="r"
-                  title="Acceleration: |2m| vs 5m extrapolation. ▼ = exhausting (fade), ▲ = accelerating (avoid)"
+                  title="Acceleration: |2m| vs 5m extrapolation. Down = exhausting (fade), up = accelerating (avoid)"
                 >
                   Acc
                 </th>
@@ -357,10 +257,6 @@
 
     <!-- Mobile bottom navigation: scroll-spy across main sections -->
     <nav class="bottom-nav" aria-label="Sections">
-      <button class="bottom-nav-btn" data-target="sec-day" aria-label="Today">
-        <span class="nav-icon" aria-hidden="true"></span>
-        <span>Today</span>
-      </button>
       <button
         class="bottom-nav-btn active"
         data-target="sec-position"
@@ -509,7 +405,7 @@
     </div>
     <div id="trade-modal" class="modal" hidden>
       <div class="modal__backdrop" data-close="1"></div>
-      <div class="modal__panel modal__panel--wide" role="dialog" aria-modal="true">
+      <div class="modal__panel" role="dialog" aria-modal="true">
         <div id="trade-modal-body"></div>
       </div>
     </div>

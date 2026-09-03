@@ -8,6 +8,7 @@
 // ─────────────────────────────────────────────────
 
 import { renderMarketContext } from "../features/marketContext.js";
+import { icon } from "../core/icon.js";
 
 // Живая цена BTC для плашки Market Context (random-walk в startMock) — odometer.
 let btcPx = 109240;
@@ -275,9 +276,9 @@ function panel() {
   el.innerHTML =
     '<b style="font-size: var(--fs-label);letter-spacing:.04em;opacity:.7">MOCK · UNI SHORT</b>' +
     '<div id="mock-stat" style="font-family:monospace"></div>' +
-    '<button id="mock-auto">▶ auto tour</button>' +
-    '<button id="mock-surge">🚀 sharp slide (surge)</button>' +
-    '<button id="mock-extreme">🚀 single extreme</button>';
+    `<button id="mock-auto" class="btn btn--sm">${icon("play")} auto tour</button>` +
+    `<button id="mock-surge" class="btn btn--sm">${icon("falling")} sharp slide (surge)</button>` +
+    `<button id="mock-extreme" class="btn btn--sm">${icon("falling")} single extreme</button>`;
   document.body.appendChild(el);
   for (const b of el.querySelectorAll("button"))
     b.style.cssText =
@@ -287,7 +288,9 @@ function panel() {
   const autoBtn = el.querySelector("#mock-auto");
   autoBtn.onclick = () => {
     auto = !auto;
-    autoBtn.textContent = auto ? "⏸ stop tour" : "▶ auto tour";
+    autoBtn.innerHTML = auto
+      ? `${icon("pause")} stop tour`
+      : `${icon("play")} auto tour`;
     if (auto) raf = setInterval(step, 700);
     else clearInterval(raf);
   };

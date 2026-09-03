@@ -1,4 +1,5 @@
 import "./ticket.scss";
+import { mountPageHeader } from "./src/core/pageHeader.js";
 // ─────────────────────────────────────────────────
 //  ticket.html — локальный стенд модалки Trade Ticket
 // ─────────────────────────────────────────────────
@@ -121,4 +122,11 @@ document.getElementById("theme-toggle")?.addEventListener("click", () => {
   const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
   document.documentElement.setAttribute("data-theme", next);
   localStorage.setItem("hl-scanner-theme", next);
+});
+
+mountPageHeader({
+  // Стенд открывается без навбара, поэтому свитчер темы — здесь.
+  extra: '<button id="theme-toggle" class="btn btn--sm">Theme</button>',
+  eyebrow: "Trade Ticket",
+  title: "Modal bench · mocks only, the exchange is not touched",
 });

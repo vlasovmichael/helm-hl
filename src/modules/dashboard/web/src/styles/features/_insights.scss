@@ -331,59 +331,10 @@
   cursor: help;
 }
 
-/* ──────────────────────── Day modal (разбор дня по клику в календаре) */
-.day-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-
-  &[hidden] {
-    display: none;
-  }
-}
-.day-modal__backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.55);
-}
-.day-modal__panel {
-  position: relative;
-  z-index: 1;
-  width: min(520px, 100%);
-  max-height: 88vh;
-  overflow-y: auto;
-  background: var(--card-bg);
-  border: 1px solid var(--hairline);
-  border-radius: 12px;
-  padding: 16px 18px;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-}
-.day-modal__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-.day-modal__title {
-  font-family: var(--font-mono);
-  font-size: var(--fs-base);
-  font-weight: 600;
-}
-.day-modal__close {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: var(--fs-lead);
-  cursor: pointer;
-  padding: 2px 6px;
-  &:hover {
-    color: var(--text);
-  }
-}
+/* ──────────────────────── Day modal (разбор дня по клику в календаре)
+   Оболочка, шапка и крестик — общие .modal* (core/_modals.scss). Здесь
+   остаётся только то, что есть ТОЛЬКО у этого диалога: сводка дня, таблица
+   сделок и поле заметки. */
 .day-modal__summary {
   display: flex;
   align-items: baseline;

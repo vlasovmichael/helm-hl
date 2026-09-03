@@ -7,6 +7,7 @@
 
 import { fetchJson } from "../net/api.js";
 import { emptyState } from "../core/placeholders.js";
+import { icon } from "../core/icon.js";
 
 function esc(s) {
   return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -114,7 +115,7 @@ function renderBreakdown(data) {
     <div class="mt-fee-note ${grossCls}">
       Before fees: <b>${money(o.gross)}</b> · fees: <b>−$${o.fees.toFixed(2)}</b> ·
       after fees: <b>${money(o.net)}</b>
-      ${o.gross > 0 && o.net < 0 ? "<span class=\"mt-flag\">← fees ate the entire gain</span>" : ""}
+      ${o.gross > 0 && o.net < 0 ? `<span class="mt-flag">${icon("prev")} fees ate the entire gain</span>` : ""}
     </div>
 
     <div class="mt-table-wrap">

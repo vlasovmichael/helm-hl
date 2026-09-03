@@ -428,7 +428,7 @@ function createModal(io) {
         <div class="tt-row">
           <span>Order Type</span>
           <button type="button" class="tt-row__toggle" data-toggle-type>
-            ${state.orderType === "limit" ? "Limit post-only" : "Market"} <i>⇄</i>
+            ${state.orderType === "limit" ? "Limit post-only" : "Market"} ${icon("recompute")}
           </button>
         </div>
         ${state.orderType === "limit"

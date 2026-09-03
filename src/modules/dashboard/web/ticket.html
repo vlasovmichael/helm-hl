@@ -1,48 +1,12 @@
 <!doctype html>
 <html lang="ru">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <!--#head-->
     <title>Helm · Trade Ticket (bench)</title>
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Geologica:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
-    />
-    <script>
-      (function () {
-        try {
-          var stored = localStorage.getItem("hl-scanner-theme") || "auto";
-          var theme =
-            stored === "auto"
-              ? window.matchMedia("(prefers-color-scheme: dark)").matches
-                ? "dark"
-                : "light"
-              : stored === "light"
-                ? "light"
-                : "dark";
-          document.documentElement.setAttribute("data-theme", theme);
-        } catch (_) {
-          document.documentElement.setAttribute("data-theme", "dark");
-        }
-      })();
-    </script>
   </head>
   <body>
     <div class="container">
-      <header>
-        <div class="equity-group page-head">
-          <div class="label">Trade Ticket</div>
-          <div class="value page-title">Modal bench · mocks only, the exchange is not touched</div>
-        </div>
-        <div class="meta-group">
-          <button id="theme-toggle" class="status-pill">theme</button>
-        </div>
-      </header>
+      <header id="page-header"></header>
 
       <section class="card">
         <div class="card-header"><div class="card-title">Scenarios</div></div>
@@ -84,7 +48,7 @@
           </li>
           <li>The <b>leverage</b> slider — size in coins recomputes immediately.</li>
           <li>
-            <b>Order type</b> toggles inline (Market ⇄ Limit post-only); a limit order
+            <b>Order type</b> toggles inline (Market / Limit post-only); a limit order
             gets a price field, and a price that would cross the market is caught before
             sending.
           </li>

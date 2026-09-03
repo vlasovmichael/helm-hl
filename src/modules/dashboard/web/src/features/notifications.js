@@ -9,6 +9,7 @@
 import { getNotifications } from "../net/api.js";
 import { escapeHtml, fmtSince } from "../utils/format.js";
 import { linkifyCoins } from "../utils/links.js";
+import { icon } from "../core/icon.js";
 
 const LS_KEY = "helm.notif.lastRead";
 const POLL_MS = 60_000;
@@ -67,7 +68,7 @@ function renderList() {
   list.innerHTML = items
     .map((n) => {
       const fresh = n.ts > lr ? " notif-item--fresh" : "";
-      const mail = n.emailed ? '<span class="notif-mail" title="Also sent by email">✉</span>' : "";
+      const mail = n.emailed ? `<span class="notif-mail" title="Also sent by email">${icon("mail")}</span>` : "";
       const body = (n.message || "").split("\n")[0]; // первая строка — суть
       // linkifyCoins сам экранирует текст и делает #COIN ссылкой на TradingView.
       return `

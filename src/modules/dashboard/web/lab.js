@@ -1,4 +1,5 @@
 import "./src/styles/index.scss";
+import { mountPageHeader } from "./src/core/pageHeader.js";
 // ─────────────────────────────────────────────────
 //  lab.html — research-страница: реестр стратегий + закрытые вердикты.
 //  2026-08-28: сняты «Копировать некого», «Качество исполнения», «Межбиржевое
@@ -27,6 +28,11 @@ import { refreshWinners } from "./src/features/winners.js";
 import { refreshFvgForward } from "./src/features/research.js";
 
 // ── Bootstrap ──
+mountPageHeader({
+  status: true,
+  eyebrow: "Lab",
+  title: "Research · forward tests &amp; verdicts",
+});
 mountTopnav("lab");
 bindTheme();
 // WS: таблица Strategies — данные приходят в status-payload (data.strategies).

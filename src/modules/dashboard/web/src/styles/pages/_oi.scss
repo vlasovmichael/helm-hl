@@ -91,34 +91,36 @@ table.oi-table {
   text-align: left;
   font-weight: 600;
 }
+/* Подсветка строки. Одна переменная --row-tint красит и саму строку, и
+   липкую первую ячейку — иначе они расходятся: у ячейки СВОЙ непрозрачный
+   фон (без него сквозь неё видно проезжающие колонки), и фон строки под ним
+   не виден. До 04.09.2026 это были два независимых правила с разными
+   значениями, и при наведении первая колонка подсвечивалась иначе, чем
+   остальная строка. */
 .oi-table tbody tr {
   cursor: pointer;
+  background: var(--row-tint, transparent);
   transition: background var(--dur-fast) var(--ease-out);
 }
 .oi-table tbody tr:hover {
-  background: var(--card-bg-hover);
+  --row-tint: var(--card-bg-hover);
 }
 .oi-table tbody tr.active {
-  background: var(--accent-soft);
+  --row-tint: var(--accent-soft);
 }
 
 /* Липкая колонка монеты: на узком экране таблица едет вбок, и без этого
-   непонятно, чья строка перед тобой. */
+   непонятно, чья строка перед тобой. Подсветка кладётся СЛОЕМ поверх
+   непрозрачной базы — так полупрозрачный --accent-soft даёт тот же цвет,
+   что и на обычной ячейке, но сквозь него ничего не просвечивает. */
 .oi-table th:first-child,
 .oi-table td:first-child {
   position: sticky;
   left: 0;
   z-index: 1;
-  background: var(--card-bg);
-}
-/* Подсветка строки полупрозрачная, а липкая ячейка обязана быть глухой —
-   иначе сквозь неё видно проезжающие колонки. Поэтому база непрозрачна, а
-   оттенок кладём внутренней тенью поверх неё. */
-.oi-table tbody tr:hover td:first-child {
-  box-shadow: inset 0 0 0 999px var(--card-bg-hover);
-}
-.oi-table tbody tr.active td:first-child {
-  box-shadow: inset 0 0 0 999px var(--accent-soft);
+  background:
+    linear-gradient(var(--row-tint, transparent), var(--row-tint, transparent)),
+    var(--card-bg);
 }
 
 /* Подстрочник фандинга: «%/сут» и во сколько раз выше медианы биржи. Голая

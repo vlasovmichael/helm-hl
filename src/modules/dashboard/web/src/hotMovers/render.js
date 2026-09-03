@@ -12,6 +12,7 @@
 import { escapeHtml } from "../utils/format.js";
 import { tvUrl } from "../utils/links.js";
 import { popArrow, bindArrowPopEnd, initChevronArrow } from "../utils/arrowPop.js";
+import { icon } from "../core/icon.js";
 import {
   computeMomentum,
   deriveAccelKind,
@@ -239,7 +240,7 @@ export function renderHotMovers(payload, fmtTime) {
     if (flush?.active) {
       const sharePct = Math.round((flush.share || 0) * 100);
       const word = flush.dir === "up" ? "SQUEEZE" : "FLUSH";
-      meta.innerHTML = `<span class="hm-flush-chip" title="Synchronized deleveraging across movers (${sharePct}% of top with OI↓) — fade against the move = catching a knife, muted">⚠️ ${word} ${sharePct}%</span> · ${escapeHtml(base)}`;
+      meta.innerHTML = `<span class="hm-flush-chip" title="Synchronized deleveraging across movers (${sharePct}% of top with OI down) — fade against the move = catching a knife, muted">${icon("warn")} ${word} ${sharePct}%</span> · ${escapeHtml(base)}`;
     } else {
       meta.textContent = base;
     }
@@ -383,7 +384,7 @@ export function renderHotMovers(payload, fmtTime) {
         accelInner = `<span class="num-inline-muted">${arwSvg(0)}</span>`;
         accelKind = "flat";
       } else if (a > 0 !== b > 0 && Math.abs(a) > 0.2) {
-        accelInner = '<span style="color:var(--accent)">↻ rev</span>';
+        accelInner = `<span style="color:var(--accent)">${icon("recompute")} rev</span>`;
         accelKind = "rev";
       } else {
         const expected = b * 0.4;
@@ -447,7 +448,7 @@ export function renderHotMovers(payload, fmtTime) {
         setup.side === "LONG" ? "setup-wait-long"
         : setup.side === "SHORT" ? "setup-wait-short"
         : "setup-none";
-      setupLabel = setupLabel.replace(" ●", ""); // снять STRONG-точку «вход»
+      setupLabel = setupLabel.replace(/<i class="setup-dot"[^>]*><\/i>/, ""); // снять STRONG-точку «вход»
       setupTitle = `Context direction (momentum), NOT a trade. · ${setup.title}`;
     }
 
@@ -508,11 +509,11 @@ export function renderHotMovers(payload, fmtTime) {
     // леак (контр-тренд). s.htfTrend = 'up'|'down'|'flat'|'none' из enrichHtfTrend.
     let htfChip = "";
     if (s.htfTrend === "up")
-      htfChip = `<span class="hm-htf num-inline-pos" style="margin-left:6px;font-size: var(--fs-label);font-weight:600" title="Higher timeframe 1h trend UP — longs go with it; shorts fight it">1h ↑</span>`;
+      htfChip = `<span class="hm-htf num-inline-pos" style="margin-left:6px;font-size: var(--fs-label);font-weight:600" title="Higher timeframe 1h trend UP — longs go with it; shorts fight it">1h ${icon("long")}</span>`;
     else if (s.htfTrend === "down")
-      htfChip = `<span class="hm-htf num-inline-neg" style="margin-left:6px;font-size: var(--fs-label);font-weight:600" title="Higher timeframe 1h trend DOWN — shorts go with it; longs fight it">1h ↓</span>`;
+      htfChip = `<span class="hm-htf num-inline-neg" style="margin-left:6px;font-size: var(--fs-label);font-weight:600" title="Higher timeframe 1h trend DOWN — shorts go with it; longs fight it">1h ${icon("short")}</span>`;
     else if (s.htfTrend === "flat")
-      htfChip = `<span class="hm-htf num-inline-muted" style="margin-left:6px;font-size: var(--fs-label)" title="Higher timeframe 1h trend flat — no tailwind either way">1h →</span>`;
+      htfChip = `<span class="hm-htf num-inline-muted" style="margin-left:6px;font-size: var(--fs-label)" title="Higher timeframe 1h trend flat — no tailwind either way">1h ${icon("flat")}</span>`;
 
     // Чип Vol/OI: суточный оборот ≥ открытого интереса (Vol ≥ OI). На HL это
     // редкость (норма OI>Vol, медиана ~3×), поэтому Vol≥OI = монета сегодня реально
@@ -529,7 +530,7 @@ export function renderHotMovers(payload, fmtTime) {
     }
 
     const rowHtml = `
-      <td>${isOpen ? "📍" : idx + 1}</td>
+      <td>${isOpen ? icon("pinned", { label: "Open position" }) : idx + 1}</td>
       <td><a class="signals-price hm-coin-link" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" title="Open ${escapeHtml(s.coin)} in TradingView">#${escapeHtml(s.coin)}</a>${htfChip}${oiVolChip}</td>
       ${setupCell}
       ${entryCell}
@@ -779,19 +780,50 @@ function reconcileRows(tbody, items) {
     const now = el.getBoundingClientRect().top;
     const dy = prev - now;
     if (Math.abs(dy) < 1) continue;
+
+    // Длительность зависит от пройденного пути, а не одна на всех.
+    //
+    // 🔑 Перестановка — главное событие этой таблицы, и до 04.09.2026 она была
+    // единственным, чего не было видно: строка, прыгнувшая на пять позиций,
+    // ехала ровно те же .42с, что сдвинувшаяся на одну. Глаз читает такое как
+    // «список моргнул», а не как «эта монета обогнала четыре другие».
+    //
+    // Корень, а не линейная зависимость: на длинных дистанциях линейная даёт
+    // неприятно медленный проезд, а глаз и так оценивает скорость нелинейно.
+    // На соседнюю строку (~30px) выходит ~260 мс, через всю таблицу (~180px)
+    // ~440 мс — разница читается, но короткий переезд не тормозит.
+    // Потолок 480 мс: тик Hot Movers идёт каждые 2с, и при более долгом
+    // проезде строка успевала бы поехать снова поверх незакончившейся анимации.
+    const ms = Math.round(Math.min(480, 140 + Math.sqrt(Math.abs(dy)) * 22));
+
     el.style.transition = "none";
     el.style.transform = `translateY(${dy}px)`;
-    requestAnimationFrame(() => {
-      el.style.transition = "transform .42s cubic-bezier(.22,.61,.36,1)";
+    // will-change поднимает строку на свой слой на время проезда — и СНИМАЕТСЯ
+    // после него: постоянный слой под живой ценой перерастрируется каждый тик
+    // (тот же класс бага, что дал мигающую полоску у плашки BTC).
+    el.style.willChange = "transform";
+
+    // 🚨 Здесь стоял requestAnimationFrame — и в НЕАКТИВНОЙ вкладке он не
+    // вызывался никогда: браузер не выдаёт кадры фоновой вкладке. Инверсия
+    // (transform: translateY(dy)) при этом уже применена, а снять её было
+    // некому — строки оставались визуально смещёнными до следующего тика.
+    // Проверено 04.09.2026: во вкладке без фокуса `style.transition` так и
+    // оставался "none" через 60 мс после перестановки.
+    //
+    // Тот же баг уже ловили на модалке Trade Ticket (см. tradeTicket.js) —
+    // и лечится он так же: принудительный reflow фиксирует НАЧАЛЬНОЕ
+    // состояние синхронно и от выдачи кадров не зависит.
+    void el.offsetHeight;
+    el.style.transition = `transform ${ms}ms var(--spring)`;
+    el.style.transform = "";
+    const clear = () => {
+      el.style.transition = "";
       el.style.transform = "";
-    });
-    el.addEventListener(
-      "transitionend",
-      () => {
-        el.style.transition = "";
-        el.style.transform = "";
-      },
-      { once: true },
-    );
+      el.style.willChange = "";
+    };
+    el.addEventListener("transitionend", clear, { once: true });
+    // Подстраховка: если строку перестроят до конца проезда, transitionend не
+    // придёт и will-change останется висеть навсегда.
+    setTimeout(clear, ms + 120);
   }
 }

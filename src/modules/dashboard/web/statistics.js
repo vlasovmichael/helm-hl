@@ -1,4 +1,5 @@
 import "./src/styles/statistics.scss";
+import { mountPageHeader } from "./src/core/pageHeader.js";
 // ─────────────────────────────────────────────────
 //  strategies.html — таблица стратегий, Performance-график (equity),
 //  Chill Boy, P&L Summary + Insights, Live Logs.
@@ -66,6 +67,11 @@ async function tick() {
 }
 
 // ── Bootstrap ──
+mountPageHeader({
+  status: true,
+  eyebrow: "Statistics",
+  title: "Lifetime performance",
+});
 mountTopnav("statistics");
 bindTheme([applyChartTheme]);
 bindRange(() => {

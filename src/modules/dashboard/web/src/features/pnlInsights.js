@@ -12,6 +12,7 @@
 import { fmtMoney, escapeHtml, strategyDisplayName } from "../utils/format.js";
 import { fetchJson, postJson } from "../net/api.js";
 import { icon } from "../core/icon.js";
+import * as dialog from "../core/dialog.js";
 
 let currentPnlPeriod = "today";
 let lastPnlSummary = null;
@@ -50,7 +51,9 @@ function renderPnlSummary() {
     manualCount > 0
       ? ` · ${icon("manual")} ${manualCount} manual (${fmtMoney(manualPnl)})`
       : "";
-  document.getElementById("pnl-stats").textContent =
+  // 🚨 innerHTML, а не textContent: manualNote содержит icon() — разметку.
+  // В textContent она печаталась как «<svg xmlns=…> 1 manual».
+  document.getElementById("pnl-stats").innerHTML =
     `${p.count} trade${p.count === 1 ? "" : "s"} · ${wr}${manualNote}`;
 
   const fundingEl = document.getElementById("pnl-funding");
@@ -175,8 +178,8 @@ function renderInsights() {
 
 // ── Breakdown: long/short + по стратегии (lifetime, с expectancy/payoff) ──
 function sideLabel(side) {
-  if (side === "short") return "🔴 SHORT";
-  if (side === "long") return "🟢 LONG";
+  if (side === "short") return `${icon("short")} SHORT`;
+  if (side === "long") return `${icon("long")} LONG`;
   return escapeHtml(side || "?");
 }
 
@@ -576,15 +579,21 @@ const SOURCE_LABEL = { bot: "bot", adopted: "adopt", manual: "manual" };
 
 function ensureDayModal() {
   if (dayModalEl) return dayModalEl;
+  // Шестая модалка проекта, и до 04.09.2026 единственная, что осталась вне
+  // общей: своя подложка, своя панель на 520px, свой Escape, свой замок
+  // прокрутки. Рядом с остальными она читалась как окно другого приложения.
   const el = document.createElement("div");
-  el.className = "day-modal";
+  el.className = "modal day-modal";
   el.hidden = true;
   el.innerHTML = `
-    <div class="day-modal__backdrop" data-close="1"></div>
-    <div class="day-modal__panel" role="dialog" aria-modal="true" aria-label="Day review">
-      <div class="day-modal__head">
-        <div class="day-modal__title" id="day-modal-title">—</div>
-        <button class="day-modal__close" data-close="1" aria-label="Close">✕</button>
+    <div class="modal__backdrop" data-close="1"></div>
+    <div class="modal__panel" role="dialog" aria-modal="true" aria-label="Day review">
+      <div class="modal__head">
+        <div class="modal__glyph">${icon("calendar")}</div>
+        <div class="modal__titles">
+          <div class="modal__title" id="day-modal-title">—</div>
+        </div>
+        <button class="modal__close" data-close="1" aria-label="Close">${icon("close")}</button>
       </div>
       <div class="day-modal__summary" id="day-modal-summary"></div>
       <div class="day-modal__trades" id="day-modal-trades"></div>
@@ -598,9 +607,10 @@ function ensureDayModal() {
     </div>`;
   document.body.appendChild(el);
 
-  el.querySelectorAll("[data-close]").forEach((b) =>
-    b.addEventListener("click", closeDayModal),
-  );
+  // Закрытие ведём сами: перед закрытием надо успеть автосохранить заметку.
+  el.addEventListener("click", (e) => {
+    if (e.target.closest("[data-close]")) closeDayModal();
+  });
   el.querySelector("#day-modal-save").addEventListener("click", () =>
     saveDayNote(true),
   );
@@ -617,8 +627,7 @@ async function openDayModal(date) {
     '<div class="day-modal__loading">Loading…</div>';
   el.querySelector("#day-modal-note").value = "";
   el.querySelector("#day-modal-status").textContent = "";
-  el.hidden = false;
-  document.body.style.overflow = "hidden";
+  dialog.open(el, { onClose: () => saveDayNote(false) });
 
   let data;
   try {
@@ -692,13 +701,8 @@ function flashStatus(text) {
 
 function closeDayModal() {
   if (!dayModalEl) return;
-  saveDayNote(false); // автосейв, если заметка изменилась
-  dayModalEl.hidden = true;
-  document.body.style.overflow = "";
+  // Автосейв заметки повешен на onClose диалога, поэтому здесь только закрытие.
+  // Escape, замок прокрутки и возврат фокуса — тоже core/dialog.js.
+  dialog.close(dayModalEl);
   dayModalState.date = null;
 }
-
-// Esc закрывает модалку дня (один глобальный слушатель).
-document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && dayModalEl && !dayModalEl.hidden) closeDayModal();
-});

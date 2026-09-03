@@ -13,7 +13,7 @@
   «купить маркетом» и видишь, какие уровни съедены, куда ушёл mid и во что тебе
   обошёлся вход. Причина и следствие связаны одним кликом.
 
-  ⚠️ Это НЕ симулятор рынка и не предсказывает ничего. Цена здесь двигается
+  Это НЕ симулятор рынка и не предсказывает ничего. Цена здесь двигается
   только твоими сделками. Модель объясняет ИЗДЕРЖКИ (проскальзывание, почему
   стоп-маркет в тонкой монете исполняется хуже) — то есть сантехнику, а не эдж.
 
@@ -69,7 +69,7 @@
   .row.bid .px { color: var(--bid); }
   .row .sz { text-align: right; }
   .row.mine .sz { color: var(--accent); font-weight: 700; }
-  .row.mine .sz::after { content: " ⬥"; }
+  .row.mine .sz::after { content: " (mine)"; font-size: var(--fs-micro); opacity: 0.7; }
 
   .mid {
     display: flex; align-items: center; justify-content: center; gap: 16px; height: 52px;
@@ -120,8 +120,8 @@
 </head>
 <body>
   <header>
-    <span class="brand">⎈ Helm <small>order book trainer — execution mechanics</small></span>
-    <span class="warn"><b>⚠️</b> price here moves only from your own trades. This models cost, not the market.</span>
+    <span class="brand">Helm <small>order book trainer — execution mechanics</small></span>
+    <span class="warn"><b>Note:</b> price here moves only from your own trades. This models cost, not the market.</span>
   </header>
 
   <main>
@@ -332,7 +332,7 @@ function renderLadder(el, levels, side, maxSz) {
     const row = document.createElement('div');
     row.className = `row ${side}${wall ? ' wall' : ''}${l.mine > 0 ? ' mine' : ''}${lastEaten.has(l.px) ? ' eaten' : ''}`;
     row.innerHTML =
-      `<span class="tag">${wall ? '▮ WALL' : ''}</span>` +
+      `<span class="tag">${wall ? 'WALL' : ''}</span>` +
       `<span class="px">${px2(l.px)}</span>` +
       `<span class="sz">${Math.round(l.sz)}</span>` +
       `<div class="bar" style="width:${Math.max(3, (l.sz / maxSz) * 100)}%"></div>`;

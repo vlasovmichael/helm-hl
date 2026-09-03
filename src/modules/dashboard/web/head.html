@@ -1,0 +1,43 @@
+<!--
+  Общая часть <head> всех страниц дашборда.
+
+  До 04.09.2026 эти тридцать строк были скопированы в десять .html и,
+  разумеется, разошлись: на половине страниц <meta theme-color> обещал цвет
+  #0c0a09 / #f5f1ea из первой версии палитры, которого в токенах давно нет.
+  Теперь файл один, а подставляет его vite-плагин (см. vite.config.js) по
+  метке-комментарию #head в <head> страницы.
+-->
+<meta charset="UTF-8" />
+<meta
+  name="viewport"
+  content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+/>
+<meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Geologica:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+  rel="stylesheet"
+/>
+<script>
+  // Тему ставим ДО отрисовки, иначе страница успевает мигнуть светлой.
+  // Только inline и только здесь: модуль грузится асинхронно и опоздает.
+  (function () {
+    try {
+      var stored = localStorage.getItem("hl-scanner-theme") || "auto";
+      var theme =
+        stored === "auto"
+          ? window.matchMedia("(prefers-color-scheme: dark)").matches
+            ? "dark"
+            : "light"
+          : stored === "light"
+            ? "light"
+            : "dark";
+      document.documentElement.setAttribute("data-theme", theme);
+    } catch (_) {
+      document.documentElement.setAttribute("data-theme", "dark");
+    }
+  })();
+</script>

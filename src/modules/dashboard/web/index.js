@@ -1,4 +1,5 @@
 import "./src/styles/index.scss";
+import { paintIcons } from "./src/core/icon.js";
 // ─────────────────────────────────────────────────
 //  index.html — «радар»: header/position, hot movers, market context,
 //  trade-модалка.
@@ -35,7 +36,6 @@ import {
   initScreenInteractions,
 } from "./src/features/screen.js";
 import { renderMarketContext, updateBtcLivePrice } from "./src/features/marketContext.js";
-import { startDayDesk } from "./src/features/dayDesk.js";
 import { initModals, renderActivity } from "./src/features/modals.js";
 import { initWhatIf } from "./src/features/whatif.js";
 import { initManualPaperTrigger, initManualPaperActive } from "./src/features/manualPaper.js";
@@ -215,6 +215,9 @@ function initTradeButton() {
   initScreenInteractions((coin) => ticket.open({ coin }));
 }
 
+// <i data-icon="…"> в статической разметке → настоящие svg.
+paintIcons();
+
 // ── Bootstrap ──
 mountTopnav("dashboard");
 bindTheme([]);
@@ -231,7 +234,6 @@ initWebSocket({ onStatus });
 tick();
 setInterval(tick, REFRESH_MS);
 startFooterTimer();
-startDayDesk();
 
 // ── Вкладка вернулась из фона: доигрываем застрявшие transition'ы ──────────
 // Баг «серая полоска у плашки BTC» (03.09.2026). Смена состояния светофора

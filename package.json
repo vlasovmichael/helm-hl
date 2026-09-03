@@ -11,7 +11,7 @@
     "dev:dash": "vite",
     "build:dash": "vite build",
     "preview:dash": "vite preview",
-    "test": "NODE_ENV=test node --test tests/*.test.js",
+    "test": "node scripts/checkGlyphs.mjs && NODE_ENV=test node --test tests/*.test.js",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "tui": "node tools/tui.js",

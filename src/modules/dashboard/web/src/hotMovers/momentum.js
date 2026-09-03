@@ -4,13 +4,11 @@
 //  Вынесено из main.js: pure-функции без зависимостей от состояния дашборды.
 // ─────────────────────────────────────────────────
 
-const _SVG_ARROW_DOWN = `<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px"><path d="M6 1v8M3 7l3 3 3-3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
-const _SVG_ARROW_UP = `<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px"><path d="M6 11V3M3 5l3-3 3 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>`;
-const _SVG_WAIT = `<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px;opacity:0.7"><circle cx="6" cy="6" r="4.5" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M6 4v2.5l1.5 1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/></svg>`;
-// FADE = контртренд. Иконка ⟲ (разворотная стрелка) визуально отделяет fade от
-// trend (у trend — направленная стрелка ↑/↓), чтобы «LONG TREND» нельзя было
-// спутать с «LONG FADE».
-const _SVG_FADE = `<svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true" style="display:inline-block;vertical-align:middle;margin-bottom:1px"><path d="M9.7 4.6A4 4 0 1 0 10.1 7.2" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/><path d="M9.9 1.9v2.8H7.1" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+// Иконки сетапа — из общего набора (core/icon.js). Здесь лежали четыре
+// самодельных <svg> со своим stroke-width и своей сеткой 12×12, поэтому в
+// одном ряду с иконками остального дашборда они выглядели чужими.
+// 04.09.2026.
+import { icon as glyph } from "../core/icon.js";
 
 const _MOM_WEIGHTS = { 2: 0.2, 5: 0.4, 15: 0.8, 60: 1.2 };
 
@@ -114,13 +112,13 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
     if (oiKind === "up") {
       tagText = "trend";
       why = priceUp
-        ? `price↑ + OI↑ (${oiStr}) = uptrend, new longs confirm it`
-        : `price↓ + OI↑ (${oiStr}) = downtrend, new shorts pressing`;
+        ? `price up + OI up (${oiStr}) = uptrend, new longs confirm it`
+        : `price down + OI up (${oiStr}) = downtrend, new shorts pressing`;
     } else if (oiKind === "down") {
       tagText = "fade?";
       why = priceUp
-        ? `price↑ + OI↓ (${oiStr}) = ⚠ rally on short covering, momentum may fade`
-        : `price↓ + OI↓ (${oiStr}) = ⚠ drop on deleveraging, a bounce is possible`;
+        ? `price up + OI down (${oiStr}) = rally on short covering, momentum may fade`
+        : `price down + OI down (${oiStr}) = drop on deleveraging, a bounce is possible`;
     } else {
       tagText = "trend";
       why = oiKind === "flat" ? `OI flat (${oiStr}) — OI does not confirm the move` : "OI: no data";
@@ -129,14 +127,14 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
     mode = "trend";
     side = priceUp ? "LONG" : "SHORT";
     why = priceUp
-      ? `price↑ + OI↑ (${oiStr}) = new longs, real demand`
-      : `price↓ + OI↑ (${oiStr}) = new shorts pressing`;
+      ? `price up + OI up (${oiStr}) = new longs, real demand`
+      : `price down + OI up (${oiStr}) = new shorts pressing`;
   } else if (oiKind === "down") {
     mode = "fade";
     side = priceUp ? "SHORT" : "LONG";
     why = priceUp
-      ? `price↑ + OI↓ (${oiStr}) = short covering / exhaustion`
-      : `price↓ + OI↓ (${oiStr}) = longs flushed, exhaustion`;
+      ? `price up + OI down (${oiStr}) = short covering / exhaustion`
+      : `price down + OI down (${oiStr}) = longs flushed, exhaustion`;
   } else {
     // OI флэт или нет данных — направление по движению, режим не подтверждён.
     mode = null;
@@ -149,7 +147,7 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
   if (fadeMutedByFlush(side, mode, flush)) {
     mode = null;
     const sharePct = Math.round((flush.share || 0) * 100);
-    why = `market-wide flush (${sharePct}% of the top has OI↓) — fading is unreliable, that is knife-catching`;
+    why = `market-wide flush (${sharePct}% of the top has OI down) — fading is unreliable, that is knife-catching`;
   }
 
   // Fade = ставка на ВЫДОХ. Гасим actionable, если выдоха нет: (a) движение
@@ -162,13 +160,13 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
   if (mode === "fade") {
     if (accelKind === "up") {
       mode = null;
-      why = `⛔ accelerating with the move — not exhaustion (the knife is speeding up) · ${why}`;
+      why = `Muted: accelerating with the move — not exhaustion (the knife is speeding up) · ${why}`;
     } else if (priceUp && htf === "up") {
       mode = null;
-      why = `⛔ 1h trend UP — a fade short goes against it · ${why}`;
+      why = `Muted: 1h trend UP — a fade short goes against it · ${why}`;
     } else if (!priceUp && htf === "down") {
       mode = null;
-      why = `⛔ 1h trend DOWN — a fade long goes against it · ${why}`;
+      why = `Muted: 1h trend DOWN — a fade long goes against it · ${why}`;
     }
   }
 
@@ -181,7 +179,7 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
   // заблуждение (кейс CHIP: заглушённый fade-long выглядел как trend-long).
   if (!mode) {
     return {
-      label: `<span class="setup-pill">${_SVG_WAIT} WAIT</span>`,
+      label: `<span class="setup-pill">${glyph("clock")} WAIT</span>`,
       cls: "setup-wait",
       title: `No confirmed setup · ${why}`,
       score, // величину хода сохраняем — для сортировки муверов
@@ -194,7 +192,10 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
   // fade = КОНТРтренд (иконка ⟲, обведённый пилл). Разный вид не даёт спутать
   // «LONG TREND» с «LONG FADE».
   const isFade = mode === "fade";
-  const icon = isFade ? _SVG_FADE : sideUp ? _SVG_ARROW_UP : _SVG_ARROW_DOWN;
+  // Локальная переменная НЕ `icon`: она перекрыла бы импортированную функцию.
+  const setupGlyph = isFade
+    ? glyph("recompute")
+    : glyph(sideUp ? "long" : "short");
   const modeTag = `<span style="opacity:.65;font-size: var(--fs-micro);font-weight:600"> ${(tagText ?? mode).toUpperCase()}</span>`;
   const strongCls = isFade
     ? sideUp
@@ -213,11 +214,11 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
 
   if (score >= 3) {
     // STRONG ≥6 помечаем точкой; NORMAL — обычный пилл.
-    const dot = score >= 6 ? " ●" : "";
+    const dot = score >= 6 ? '<i class="setup-dot" aria-hidden="true"></i>' : "";
     const confirm =
-      (accelKind === "up" ? "accel↑ " : "") + (volKind === "high" ? "vol↑" : "");
+      (accelKind === "up" ? "accel up " : "") + (volKind === "high" ? "vol up" : "");
     return {
-      label: `<span class="setup-pill">${icon}${side}${dot}${modeTag}</span>`,
+      label: `<span class="setup-pill">${setupGlyph}${side}${dot}${modeTag}</span>`,
       cls: strongCls,
       title:
         `${mode.toUpperCase()} ${side} (score ${score.toFixed(1)}) · ${why}` +
@@ -229,7 +230,7 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
   }
   if (score >= 1.5) {
     return {
-      label: `<span class="setup-pill">${icon}${side}${modeTag}</span>`,
+      label: `<span class="setup-pill">${setupGlyph}${side}${modeTag}</span>`,
       cls: weakCls,
       title: `Weak ${mode.toUpperCase()} ${side} (score ${score.toFixed(1)}) · ${why} — watching`,
       score,
@@ -239,7 +240,7 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
   }
   // Режим подтверждён, но хода почти нет → нейтральный WAIT.
   return {
-    label: `<span class="setup-pill">${_SVG_WAIT} WAIT</span>`,
+    label: `<span class="setup-pill">${glyph("clock")} WAIT</span>`,
     cls: "setup-wait",
     title: `Move too small — waiting for a clear setup · ${why}`,
     score,

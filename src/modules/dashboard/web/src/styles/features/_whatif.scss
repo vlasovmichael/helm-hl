@@ -1,23 +1,8 @@
 /* ──────────────────────── "What if…" — discipline brake button + modal */
 
-.whatif-btn {
-  font-family: var(--font-mono);
-  font-size: var(--fs-label);
-  font-weight: 600;
-  color: var(--text-secondary);
-  background: var(--card-bg-hover);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 3px 9px;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
-
-  &:hover {
-    color: var(--text-primary);
-    border-color: var(--accent-line);
-    background: var(--accent-soft);
-  }
-}
+/* .whatif-btn снят 04.09.2026: кнопки Paper и What if… — общий .btn.btn--sm
+   (core/_controls.scss). Свой класс отличался от остальных кнопок кеглем,
+   радиусом и шрифтом, хотя стоял в одной шапке с ними. */
 
 #whatif-modal {
   .wi-title {

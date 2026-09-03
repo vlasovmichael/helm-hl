@@ -8,7 +8,7 @@
 // ─────────────────────────────────────────────────
 
 import { fetchJson } from "../net/api.js";
-import { emptyRow, emptyState } from "../core/placeholders.js";
+import { emptyRow, emptyState, settle } from "../core/placeholders.js";
 import { icon } from "../core/icon.js";
 
 const bp = (v) => (Number.isFinite(v) ? `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}` : "—");
@@ -33,8 +33,10 @@ const VERDICT_STYLE = {
 };
 
 function renderRows(tbody, res) {
-  tbody.innerHTML = res.selected
-    .map((s) => `<tr data-addr="${s.address}" style="cursor:pointer" title="click a row — what this address holds right now">
+  settle(
+    tbody,
+    res.selected
+      .map((s) => `<tr data-addr="${s.address}" style="cursor:pointer" title="click a row — what this address holds right now">
       <td style="font-family:var(--font-mono)"><span class="win-caret" data-addr="${s.address}" style="color:var(--text-muted);padding-right:4px">${icon("collapsed")}</span><a href="https://app.hyperliquid.xyz/explorer/address/${s.address}" target="_blank" rel="noopener" style="color:inherit">${short(s.address)}</a></td>
       <td class="r">${bp(s.selectionEdgeBp)}</td>
       <td class="r" style="${col(s.forwardEdgeBp)}">${s.forwardEdgeBp === null ? "<span style='color:var(--text-muted)'>no trades</span>" : bp(s.forwardEdgeBp)}</td>
@@ -42,7 +44,8 @@ function renderRows(tbody, res) {
       <td class="r">${s.forwardVolume === null ? "—" : usd(s.forwardVolume)}</td>
     </tr>
     <tr class="win-pos" data-pos-for="${s.address}" hidden><td colspan="5" style="padding:0"></td></tr>`)
-    .join("");
+      .join(""),
+  );
 }
 
 // ─── что у адреса открыто прямо сейчас ──────────────────────────────────────
@@ -238,7 +241,7 @@ const ago = (ms) => {
 const KIND = {
   open: { mark: icon("long"), label: "OPEN" },
   close: { mark: "×", label: "CLOSE" },
-  flip: { mark: "⇄", label: "FLIP" },
+  flip: { mark: icon("recompute"), label: "FLIP" },
 };
 
 function renderLog(box, sumBox, res) {

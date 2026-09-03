@@ -23,6 +23,7 @@ import {
   ArrowUp,
   Ban,
   Bot,
+  Calendar,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -36,20 +37,27 @@ import {
   ExternalLink,
   Eye,
   Hand,
+  History,
   Info,
   Minus,
+  Mail,
   Pause,
+  Pin,
   Play,
   Plus,
   RefreshCw,
   RotateCcw,
+  Ruler,
   Search,
+  Settings,
+  Shield,
   Snowflake,
   Target,
   TrendingDown,
   TrendingUp,
   TriangleAlert,
   X,
+  Zap,
 } from "lucide";
 
 const MAP = {
@@ -81,6 +89,7 @@ const MAP = {
   external: ExternalLink,
   eye: Eye,
   clock: Clock,
+  calendar: Calendar,
   pause: Pause,
   play: Play,
 
@@ -95,11 +104,33 @@ const MAP = {
 
   bot: Bot,
   manual: Hand,
+
+  // Открытая позиция в списке: булавка на месте порядкового номера — «эта
+  // строка закреплена наверху, потому что она твоя».
+  pinned: Pin,
+  // Проверка стопа на вменяемость (не съест ли его обычный шум).
+  shield: Shield,
+  // Расчёт размера позиции от риска.
+  ruler: Ruler,
+  // Что под капотом: OI, объём, фандинг.
+  flow: Settings,
+  // Твоя собственная история по монете — зеркало привычки.
+  history: History,
+  // Совпало с проверенным эджем — бонус, а не основание.
+  spark: Zap,
+  mail: Mail,
 };
 
 /**
  * Разметка одной иконки. Возвращает строку — чтобы вставать в те же шаблонные
  * литералы, где раньше стоял глиф, без переписывания рендера на DOM-узлы.
+ *
+ * 🚨 РЕЗУЛЬТАТ — РАЗМЕТКА, а не текст. Он может уходить ТОЛЬКО в innerHTML
+ * (напрямую или через шаблонную строку, которая туда попадёт). Присвоение в
+ * `textContent` печатает пользователю сырой `<svg xmlns=…>` — так 04.09.2026
+ * сломались подстрочник P&L Summary и «7D TREND» в журнале. Проверяй сток,
+ * когда добавляешь icon() в существующую строку: раньше там мог лежать глиф,
+ * которому textContent был не страшен.
  *
  * Размер и цвет НЕ задаются здесь: `width/height: 1em` + `currentColor` в CSS
  * (.icon) означают, что иконка сама подстраивается под кегль и цвет строки,

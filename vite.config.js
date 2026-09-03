@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 // Дашборда — multi-page, без фреймворка, чистые ES-модули.
@@ -10,7 +11,30 @@ const webRoot = resolve(__dirname, "src/modules/dashboard/web");
 // См. web/src/net/websocket.js → import.meta.env.DEV.
 const API_TARGET = process.env.DASHBOARD_DEV_TARGET || "http://localhost:3010";
 
+/**
+ * Общий <head> для всех страниц: подставляет web/head.html на место метки
+ * `<!--#head-->`. Плагин, а не копипаст в десяти .html, — потому что копипаст
+ * уже разошёлся (theme-color на половине страниц врал цветом из первой
+ * версии палитры). Работает и в деве, и в сборке: transformIndexHtml с
+ * `order: "pre"` отрабатывает до того, как Vite начнёт разбирать ссылки.
+ */
+function sharedHead() {
+  const file = resolve(webRoot, "head.html");
+  return {
+    name: "helm-shared-head",
+    transformIndexHtml: {
+      order: "pre",
+      handler(html) {
+        return html.includes("<!--#head-->")
+          ? html.replace("<!--#head-->", readFileSync(file, "utf8"))
+          : html;
+      },
+    },
+  };
+}
+
 export default defineConfig({
+  plugins: [sharedHead()],
   root: webRoot,
   publicDir: "static",
   base: "/",

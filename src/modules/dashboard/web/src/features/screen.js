@@ -13,6 +13,8 @@
 //
 // Серверная часть и обоснование порога — routes/screen.js.
 
+import { settle } from "../core/placeholders.js";
+
 const fmtPct = (v, d = 2) =>
   v == null || !Number.isFinite(v) ? "—" : (v >= 0 ? "+" : "") + v.toFixed(d) + "%";
 
@@ -154,7 +156,11 @@ function renderRows() {
     return;
   }
 
-  tbody.innerHTML = rows
+  // settle(), а не innerHTML: вход проиграется ровно один раз — на первой
+  // подстановке поверх скелетона, и не будет играть на каждом поллинге.
+  settle(
+    tbody,
+    rows
     .map((c) => {
       const short = c.chg15mPct ?? c.chg1hPct;
       const shortLabel = c.chg15mPct != null ? "15m" : c.chg1hPct != null ? "1h" : "";
@@ -179,7 +185,8 @@ function renderRows() {
         `</tr>`
       );
     })
-    .join("");
+      .join(""),
+  );
   tbody.dataset.filled = "1";
   paintSortIndicators();
 }

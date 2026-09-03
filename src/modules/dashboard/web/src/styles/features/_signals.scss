@@ -236,37 +236,23 @@
   border-color: var(--red-line);
   position: relative;
 }
-/* «Против» мягко пульсирует — сигнал внимания (движ развернулся). Кольцо несёт
-   статичный ::after, пульсируем его opacity (GPU-слой), а НЕ анимируем box-shadow
-   на самом чипе — box-shadow репейнтит каждый кадр. 2026-06-30. */
+/* «Против» — движение развернулось. Раньше кольцо мигало бесконечным
+   hmAlignPulse.
+   🚨 Это СОСТОЯНИЕ, а не событие: пока движ развёрнут, оно просто есть, и
+   мигать ему нечего. В таблице живых цен вечный пульс тянул взгляд на себя
+   каждые 1.4с и соревновался с тем, что реально меняется — с числами.
+   Осталось стоячее кольцо: заметно, и не отвлекает. 04.09.2026. */
 .hm-align-bad::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   box-shadow: 0 0 0 2px var(--red-soft);
-  opacity: 0;
   pointer-events: none;
-  will-change: opacity;
-  animation: hmAlignPulse 1.4s ease-in-out infinite;
 }
 .hm-align-flat {
   color: var(--text-muted);
   border-color: var(--border);
-}
-@keyframes hmAlignPulse {
-  0%,
-  100% {
-    opacity: 0;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .hm-align-bad::after {
-    animation: none;
-  }
 }
 /* Hot Movers — под-строка с данными открытой позиции (пиннутая монета). */
 /* Клик по строке монеты переключает встроенный график — кликабельный аффорданс. */
@@ -423,27 +409,13 @@
     stroke: none;
   }
 }
-/* zone = actionable вход: лёгкий пульс прицела, чтобы притягивал взгляд. */
-.hm-entry-zone .hm-eico-zone {
-  animation: hmZonePulse 1.6s ease-in-out infinite;
-  transform-origin: 50% 50%;
-}
-/* Только transform:scale (композитно). filter:drop-shadow убран — репейнтил SVG
-   каждый кадр. Прицел и так притягивает взгляд пульсом масштаба. 2026-06-30. */
-@keyframes hmZonePulse {
-  0%,
-  100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.12);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .hm-entry-zone .hm-eico-zone {
-    animation: none;
-  }
-}
+/* zone = actionable вход. Раньше прицел бесконечно пульсировал масштабом
+   (hmZonePulse 1.6s infinite).
+   🚨 Снято 04.09.2026 по той же причине, что и кольцо «против»: «монета в зоне
+   входа» — это состояние строки, оно держится минутами, а пульс обещает
+   событие, которого нет. Своего правила здесь больше нет: прицел и так
+   единственный зелёный значок в колонке (см. .hm-entry-zone .hm-entry-icon
+   выше) — этого хватает, чтобы его найти глазом. */
 /* Активная монета: ОДНА стрелка ↑ (персистентный узел, см. mountDirArrows),
    поворачивается по направлению цены (up=0° / mid=90° / down=180°) с плавным
    tween и сменой цвета. */
@@ -819,6 +791,19 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     margin-right: 3px;
     flex-shrink: 0;
   }
+  /* STRONG-метка сетапа (score ≥6). Раньше это был глиф ● прямо в подписи:
+     он сидит на базовой линии, а не по центру строчных, и в моно-ряду
+     выглядел съехавшим вниз. Свой узел выравнивается по центру. */
+  .setup-dot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    margin-left: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    vertical-align: middle;
+  }
+
   .setup-pill {
     display: inline-flex;
     align-items: center;
@@ -843,11 +828,14 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
    цвет цены + цвет процентов + тонкая левая кромка ТОЛЬКО на заметном
    движении (mid ≥0.6% / strong ≥1.5%) + flash при изменении цены.
    Слабые движения (<0.6%) — строка чистая, ничего не отвлекает. */
+/* Токены, а не rgba(34,197,94,.5): захардкоженные значения подбирались под
+   тёмный фон и на светлой теме давали блёклую кромку. --pnl-up/--pnl-down —
+   биржевые up/down, они определены в обеих темах. */
 .signals-table tr.row-up.row-heat-mid td:first-child {
-  box-shadow: inset 2px 0 0 rgba(34, 197, 94, 0.5);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--pnl-up) 55%, transparent);
 }
 .signals-table tr.row-down.row-heat-mid td:first-child {
-  box-shadow: inset 2px 0 0 rgba(239, 68, 68, 0.5);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--pnl-down) 55%, transparent);
 }
 .signals-table tr.row-up.row-heat-strong td:first-child {
   box-shadow: inset 3px 0 0 var(--green);
@@ -877,30 +865,37 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
 }
 
 /* Биржевые flash-вспышки на ячейке цены при изменении (зелёный вверх / красный вниз). */
+/* Вспышка цены. Это НАСТОЯЩЕЕ событие (цена изменилась), поэтому анимация
+   здесь уместна и остаётся. Цвета — биржевые up/down из токенов, а не
+   захардкоженные rgba: на светлой теме зелень #22c55e при 55% давала мутное
+   пятно, потому что подбиралась под тёмный фон. */
 @keyframes hmFlashUp {
-  0% {
-    background: rgba(34, 197, 94, 0.55);
+  from {
+    background: color-mix(in srgb, var(--pnl-up) 42%, transparent);
   }
-  100% {
+  to {
     background: transparent;
   }
 }
 @keyframes hmFlashDown {
-  0% {
-    background: rgba(239, 68, 68, 0.55);
+  from {
+    background: color-mix(in srgb, var(--pnl-down) 42%, transparent);
   }
-  100% {
+  to {
     background: transparent;
   }
 }
 .signals-table td.hm-price-cell {
   border-radius: 4px;
 }
+/* Вдвое дольше самого долгого перехода интерфейса: вспышка обязана пережить
+   взгляд, скользнувший по таблице, но выведена из шкалы, а не выдумана
+   отдельным числом. */
 .signals-table td.hm-price-cell.hm-flash-up {
-  animation: hmFlashUp 0.75s ease-out;
+  animation: hmFlashUp calc(var(--dur-slow) * 2) var(--ease-out);
 }
 .signals-table td.hm-price-cell.hm-flash-down {
-  animation: hmFlashDown 0.75s ease-out;
+  animation: hmFlashDown calc(var(--dur-slow) * 2) var(--ease-out);
 }
 @include reduced-motion {
   .signals-table td.hm-price-cell.hm-flash-up,
@@ -909,40 +904,45 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   }
 }
 
-/* ── Hot Movers: FLIP-анимации строк ──
-   Перестановку (глайд на новое место) ставит JS инлайн-трансформом; здесь —
-   только въезд новой монеты и угасание ушедшей. Трансформы на <tr> работают
-   в современных браузерах. */
+/* ── Hot Movers: вход, уход, перестановка ─────────────────────────────
+   Три события у строки, и все три идут по ОДНОЙ вертикальной оси: монета
+   приходит сверху (оттуда, где голова списка), уходит вниз, переезжает по
+   вертикали. До 04.09.2026 уход был вбок на 18px — строка улетала в сторону
+   без всякой на то причины, и это читалось как два разных механизма.
+
+   Анимируются только opacity и transform. Из входа убран `background`:
+   он не композитится, а таблица и так перерисовывает цены каждые две
+   секунды — фон в кейфреймах давал перерисовку строки каждый кадр.
+
+   Сама перестановка (FLIP) ставится инлайном из JS — там длительность
+   зависит от пройденного расстояния, см. reconcileRows(). */
 @keyframes hmRowEnter {
-  0% {
+  from {
     opacity: 0;
     transform: translateY(-10px);
-    background: var(--accent-soft);
   }
-  60% {
+  to {
     opacity: 1;
-  }
-  100% {
-    opacity: 1;
+    /* 🚨 none, а не translateY(0): нулевой transform держит строку на
+       отдельном композиторном слое навсегда, а внутри неё живая цена. */
     transform: none;
-    background: transparent;
   }
 }
 @keyframes hmRowLeave {
-  0% {
+  from {
     opacity: 1;
     transform: none;
   }
-  100% {
+  to {
     opacity: 0;
-    transform: translateX(18px);
+    transform: translateY(6px);
   }
 }
 .hm-table tbody tr.hm-enter {
-  animation: hmRowEnter 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+  animation: hmRowEnter var(--dur-slow) var(--spring);
 }
 .hm-table tbody tr.hm-leaving {
-  animation: hmRowLeave 0.35s ease-in forwards;
+  animation: hmRowLeave var(--dur) var(--ease-out) forwards;
   pointer-events: none;
 }
 @include reduced-motion {

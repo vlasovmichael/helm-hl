@@ -1,4 +1,5 @@
 import "./src/styles/orderbook.scss";
+import { mountPageHeader } from "./src/core/pageHeader.js";
 // ─────────────────────────────────────────────────
 //  orderbook.html — живой стакан Hyperliquid (DOM-лесенка).
 //  Коннектится НАПРЯМУЮ к публичному WS HL (как web/src/net/orderbook.js),
@@ -10,6 +11,12 @@ import "./src/styles/orderbook.scss";
 import { bindTheme } from "./src/core/shell.js";
 import { mountTopnav } from "./src/core/topnav.js";
 
+mountPageHeader({
+  eyebrow: "Order Book",
+  title: "Hyperliquid order book · live",
+  note:
+    "Level confirmation from real resting limit orders. Read only.",
+});
 mountTopnav("orderbook");
 bindTheme();
 

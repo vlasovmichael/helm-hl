@@ -111,6 +111,26 @@
   font-size: var(--fs-base);
 }
 
+/* Полоса действия — главное действие карточки или диалога, во всю ширину.
+   До 04.09.2026 такая полоса была только у «Trade» (.tt-trade-cta), а
+   «Open paper position» и «Analyse» в своих диалогах оставались обычными
+   кнопками: одно и то же по смыслу действие выглядело двумя разными
+   контролами. Форма одна, цвет задаёт модификатор (--primary по умолчанию). */
+.btn--cta {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 var(--sp-4);
+  border-radius: var(--radius-lg);
+  font-size: var(--fs-lead);
+  font-weight: 700;
+  gap: var(--sp-2);
+
+  .icon {
+    width: 20px;
+    height: 20px;
+  }
+}
+
 .btn--icon {
   width: var(--ctl-h);
   min-height: var(--ctl-h);

@@ -33,14 +33,53 @@ export function skeletonText(lines = 3) {
  */
 export function emptyState({ glyph = "info", title, hint = "" }) {
   return `
-    <div class="empty">
+    <div class="empty-state">
       ${icon(glyph)}
-      <div class="empty__title">${title}</div>
-      ${hint ? `<div class="empty__hint">${hint}</div>` : ""}
+      <div class="empty-state__title">${title}</div>
+      ${hint ? `<div class="empty-state__hint">${hint}</div>` : ""}
     </div>`;
 }
 
 /** То же в строку таблицы: колонки уже есть, поэтому одна ячейка на всю ширину. */
 export function emptyRow(cols, { glyph = "info", title, hint = "" }) {
   return `<tr><td colspan="${cols}">${emptyState({ glyph, title, hint })}</td></tr>`;
+}
+
+/**
+ * Подставляет готовое содержимое на место скелетона — с коротким входом.
+ *
+ * Смысл: подмена скелетона данными — самое частое событие во всём дашборде,
+ * и до 04.09.2026 это была жёсткая склейка: моргнуло и стало другим. Событие
+ * происходит РОВНО ОДИН РАЗ на блок (дальше идёт поллинг, где ничего не
+ * «приезжает»), поэтому его стоит показать — и поэтому же анимация здесь не
+ * может стать шумом.
+ *
+ * 🚨 Вход играет ТОЛЬКО если на месте действительно стоял скелетон. Иначе
+ * каждый десятисекундный тик перерисовывал бы таблицу с анимацией, и живые
+ * цены дёргались бы под курсором. Проверка `querySelector('.sk')` — и есть
+ * то самое «движение от события, а не по таймеру».
+ */
+export function settle(el, html) {
+  if (!el) return;
+  const wasWaiting = !!el.querySelector(".sk");
+
+  // 🚨 Класс снимаем ВСЕГДА и до подстановки. innerHTML заменяет детей, а
+  // класс живёт на родителе: если его не снять, новые дети унаследуют вход и
+  // таблица будет проигрывать анимацию на КАЖДОМ десятисекундном поллинге —
+  // ровно тот шум, ради отсутствия которого settle() и заведён.
+  el.classList.remove("is-settling");
+  el.innerHTML = html;
+  if (!wasWaiting) return;
+
+  // Без принудительного reflow браузер не видит смены состояния и вход не
+  // проигрывается (класс снят и возвращён в одном кадре).
+  void el.offsetWidth;
+  el.classList.add("is-settling");
+  // Убрать класс, как только вход доигран: дальше он только мешает — и
+  // следующему settle(), и композитору.
+  el.addEventListener(
+    "animationend",
+    () => el.classList.remove("is-settling"),
+    { once: true },
+  );
 }

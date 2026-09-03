@@ -1,6 +1,7 @@
 import "./src/styles/oi.scss";
 import { icon, paintIcons } from "./src/core/icon.js";
-import { emptyRow } from "./src/core/placeholders.js";
+import { emptyRow, settle } from "./src/core/placeholders.js";
+import { mountPageHeader } from "./src/core/pageHeader.js";
 // ─────────────────────────────────────────────────
 //  oi.html — витрина истории open interest (все монеты).
 //  Читает /api/oi-collector/* (данные от tools/oiCollector.mjs). Сверху —
@@ -14,6 +15,12 @@ import { mountTopnav } from "./src/core/topnav.js";
 import { fetchJson } from "./src/net/api.js";
 import { drawOiChart, clearOiChart, applyOiChartTheme } from "./src/charts/oiChart.js";
 
+mountPageHeader({
+  eyebrow: "Open Interest",
+  title: "OI history · all coins",
+  note:
+    "Long-term OI snapshot (HL has no historical API). Rising OI on a flat price = leverage building up. <b>This is data, not a signal.</b>",
+});
 mountTopnav("oi");
 bindTheme([applyOiChartTheme]);
 
@@ -228,7 +235,7 @@ function codRenderTradedToday(p) {
     <tr><td>24h move</td><td>${codSigned(f.chg24h, 1)}</td></tr>
     <tr><td>Last 4h</td><td>${codSigned(f.chg4h)}</td></tr>
     <tr><td>Position in the 72h range</td><td>${(f.rangePos * 100).toFixed(0)}%</td></tr>
-    <tr><td>1h trend</td><td>${f.trend1h === "up" ? "↑ up" : f.trend1h === "down" ? "↓ down" : "→ range"}</td></tr>`
+    <tr><td>1h trend</td><td>${f.trend1h === "up" ? `${icon("rising")} up` : f.trend1h === "down" ? `${icon("falling")} down` : `${icon("flat")} range`}</td></tr>`
     : `<tr><td colspan="2" class="oi-muted">The coin no longer passes the entry filter</td></tr>`;
 
   return `
@@ -292,7 +299,7 @@ function codRenderHeld(p) {
     <tr><td>Position in the 72h range</td><td>${(f.rangePos * 100).toFixed(0)}%</td></tr>
     <tr><td>15m structure</td><td>${f.structLegs} ${p.side === "SHORT" ? "lower-high" : "higher-low"}</td></tr>
     <tr><td>Volume now / peak</td><td>${f.volDecay == null ? "—" : `${(f.volDecay * 100).toFixed(0)}%`}</td></tr>
-    <tr><td>1h trend</td><td>${f.trend1h === "up" ? "↑ up" : f.trend1h === "down" ? "↓ down" : "→ range"}</td></tr>`
+    <tr><td>1h trend</td><td>${f.trend1h === "up" ? `${icon("rising")} up` : f.trend1h === "down" ? `${icon("falling")} down` : `${icon("flat")} range`}</td></tr>`
     : `<tr><td colspan="2" class="oi-muted">The coin no longer passes the entry filter</td></tr>`;
 
   const notes = (p.notes || []).concat((p.flags || []).map((x) => x.text));
@@ -338,10 +345,10 @@ function codRenderBody() {
   const tabs = codAllTabs();
   if (!tabs.length) {
     const others = codData?.others?.length ?? 0;
-    body.innerHTML = `<div class="empty">
+    body.innerHTML = `<div class="empty-state">
       ${icon("pause")}
-      <div class="empty__title">No setup today</div>
-      <div class="empty__hint">
+      <div class="empty-state__title">No setup today</div>
+      <div class="empty-state__hint">
         No coin reached ${codData?.thresholds?.SHOW_MIN_SCORE ?? 3}/5.
         ${others ? `Candidates reviewed: ${others} — each fell short.` : ""}
         Skipping the day is a decision too.
@@ -352,11 +359,11 @@ function codRenderBody() {
   const p = tabs.find((x) => x.coin === codActive) || tabs[0];
   codActive = p.coin;
   if (p.tradedToday) {
-    body.innerHTML = codRenderTradedToday(p);
+    settle(body, codRenderTradedToday(p));
     return;
   }
   if (p.held) {
-    body.innerHTML = codRenderHeld(p);
+    settle(body, codRenderHeld(p));
     return;
   }
   const f = p.features;
@@ -381,7 +388,7 @@ function codRenderBody() {
     <tr><td>ATR(1h) · ER(24h)</td><td>${f.atr1hPct == null ? "—" : `${f.atr1hPct.toFixed(2)}%`} · ${f.er24 == null ? "—" : f.er24.toFixed(2)}</td></tr>
     <tr><td>OI / 24h turnover</td><td>${fmtUsd(f.oiUsd)} / ${fmtUsd(f.volume24hUsd)}${f.oiVolRatio != null ? ` (${f.oiVolRatio.toFixed(2)}×)` : ""}</td></tr>
     <tr><td>Funding APR</td><td>${f.fundingApr == null ? "—" : `${f.fundingApr >= 0 ? "+" : ""}${f.fundingApr.toFixed(0)}%`}</td></tr>
-    <tr><td>1h trend</td><td>${f.trend1h === "up" ? "↑ up" : f.trend1h === "down" ? "↓ down" : "→ range"}</td></tr>`;
+    <tr><td>1h trend</td><td>${f.trend1h === "up" ? `${icon("rising")} up` : f.trend1h === "down" ? `${icon("falling")} down` : `${icon("flat")} range`}</td></tr>`;
 
   const levelRows = l
     ? `
@@ -396,7 +403,9 @@ function codRenderBody() {
     ? `<ul class="cod-flags">${p.flags.map((fl) => `<li class="${fl.severity}">${fl.text}</li>`).join("")}</ul>`
     : `<p class="cod-detail">The engine found no obvious red flags — which does not make the setup safe.</p>`;
 
-  body.innerHTML = `
+  settle(
+    body,
+    `
     <div class="cod-head">
       <div class="cod-head-main">
         ${p.dayContext ? '<span class="cod-donebadge">already traded today</span>' : ""}
@@ -423,7 +432,8 @@ function codRenderBody() {
         <p class="cod-sub" style="margin-top:16px">What argues against</p>
         ${flags}
       </div>
-    </div>`;
+    </div>`,
+  );
 }
 
 // Форвард-лог. Главное число здесь — excess (ход монеты минус ход BTC за то же
@@ -479,10 +489,10 @@ async function loadCoinOfDay(force = false) {
   } catch (err) {
     meta.textContent = "error";
     document.getElementById("cod-body").innerHTML =
-      `<div class="empty">
+      `<div class="empty-state">
         ${icon("danger")}
-        <div class="empty__title">Scan failed</div>
-        <div class="empty__hint">${err.message}. Press Recompute to try again.</div>
+        <div class="empty-state__title">Scan failed</div>
+        <div class="empty-state__hint">${err.message}. Press Recompute to try again.</div>
       </div>`;
   }
 }
@@ -504,10 +514,10 @@ function efRenderBody(data) {
   const body = document.getElementById("ef-body");
   const rows = data.rows || [];
   if (!rows.length) {
-    body.innerHTML = `<div class="empty">
+    body.innerHTML = `<div class="empty-state">
       ${icon("clock")}
-      <div class="empty__title">Not enough price history yet</div>
-      <div class="empty__hint">The filter needs about an hour of ticks after a restart before it can judge a move.</div>
+      <div class="empty-state__title">Not enough price history yet</div>
+      <div class="empty-state__hint">The filter needs about an hour of ticks after a restart before it can judge a move.</div>
     </div>`;
     return;
   }
@@ -553,7 +563,9 @@ function efRenderBody(data) {
     })
     .join("");
 
-  body.innerHTML = `
+  settle(
+    body,
+    `
     <div class="ef-verdict ${verdict.cls}">
       <div class="ef-vh">${verdict.head}</div>
       <div class="ef-vd">${verdict.detail}</div>
@@ -570,7 +582,8 @@ function efRenderBody(data) {
         </thead>
         <tbody>${trs}</tbody>
       </table>
-    </div>`;
+    </div>`,
+  );
 }
 
 function efRenderForward(data) {
@@ -594,10 +607,10 @@ async function loadEntryFilter() {
     efRenderForward(data);
   } catch (err) {
     meta.textContent = "error";
-    document.getElementById("ef-body").innerHTML = `<div class="empty">
+    document.getElementById("ef-body").innerHTML = `<div class="empty-state">
       ${icon("danger")}
-      <div class="empty__title">Could not load the filter</div>
-      <div class="empty__hint">${err.message}. Press Refresh to try again.</div>
+      <div class="empty-state__title">Could not load the filter</div>
+      <div class="empty-state__hint">${err.message}. Press Refresh to try again.</div>
     </div>`;
   }
 }
@@ -685,7 +698,9 @@ function renderTable() {
   if (page < 0) page = 0;
   const start = page * PAGE_SIZE;
   const pageRows = rows.slice(start, start + PAGE_SIZE);
-  tbody.innerHTML = pageRows
+  settle(
+    tbody,
+    pageRows
     .map(
       (r) => `
       <tr data-coin="${r.coin}"${r.coin === activeCoin ? ' class="active"' : ""}>
@@ -699,7 +714,8 @@ function renderTable() {
         <td class="oi-muted">${fmtUsd(r.v)}</td>
       </tr>`,
     )
-    .join("");
+      .join(""),
+  );
   tbody.querySelectorAll("tr[data-coin]").forEach((tr) =>
     tr.addEventListener("click", () => selectCoin(tr.dataset.coin)),
   );

@@ -112,7 +112,9 @@ async function loadAnchor() {
     currentAtrPct = atrPctOf(D); renderCalc();
     const first = D[0].c, last = cur.c; const t = G("trend200");
     const dir = last > first * 1.01 ? [`${icon("rising")} up`, "j-up"] : last < first * 0.99 ? [`${icon("falling")} down`, "j-down"] : [`${icon("flat")} range`, ""];
-    t.textContent = dir[0]; t.className = "j-v " + dir[1];
+    // 🚨 innerHTML, а не textContent: icon() возвращает РАЗМЕТКУ, и в
+    // textContent она печаталась пользователю как «<svg xmlns=…> up».
+    t.innerHTML = dir[0]; t.className = "j-v " + dir[1];
     renderVsBtc(dchg, btcd);
     conn.textContent = wsAlive ? "HL · live (WS)" : "HL · updated " + new Date().toLocaleTimeString("en-GB", { timeZone: "Europe/Warsaw", hour: "2-digit", minute: "2-digit" });
   } catch (err) {
@@ -176,7 +178,11 @@ function renderVsBtc(dchg, btcd) {
 // ── авто-разбор 4h/1h/5m «куда и когда» ──
 const mkCandles = (arr) => (Array.isArray(arr) ? arr.map((k) => ({ open: +k.o, high: +k.h, low: +k.l, close: +k.c })) : []);
 const BIAS_TXT = { LONG: "bias: LONG", SHORT: "bias: SHORT", STAND_ASIDE: "stand aside" };
-const TF_TREND = { up: ["↑ up", "up"], down: ["↓ down", "down"], flat: ["→ range", "flat"] };
+const TF_TREND = {
+  up: [`${icon("rising")} up`, "up"],
+  down: [`${icon("falling")} down`, "down"],
+  flat: [`${icon("flat")} range`, "flat"],
+};
 function tfCell(tf, role, d) {
   const tr = TF_TREND[d.trend] || TF_TREND.flat;
   const bits = [];

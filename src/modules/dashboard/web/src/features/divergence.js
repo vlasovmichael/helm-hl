@@ -9,7 +9,8 @@ import { fmtPrice, fmtNotional } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 import { isActiveCoin } from "../state/activeCoins.js";
 import { getWhalePositions } from "./whaleWatch.js";
-import { emptyRow, skeletonRows } from "../core/placeholders.js";
+import { emptyRow, settle, skeletonRows } from "../core/placeholders.js";
+import { icon } from "../core/icon.js";
 
 let _divData = null;
 let _divWindow = "15m";
@@ -139,11 +140,11 @@ function divRenderRows(coins, btcPct, hasPast) {
         const parts = [];
         if (shortSum > 0)
           parts.push(
-            `<span style="color:var(--red);font-weight:700">↓${fmtNotional(shortSum)}</span>`,
+            `<span style="color:var(--red);font-weight:700">${icon("short")}${fmtNotional(shortSum)}</span>`,
           );
         if (longSum > 0)
           parts.push(
-            `<span style="color:var(--green);font-weight:700">↑${fmtNotional(longSum)}</span>`,
+            `<span style="color:var(--green);font-weight:700">${icon("long")}${fmtNotional(longSum)}</span>`,
           );
         whaleCell = parts.join(" ");
       }
@@ -206,7 +207,7 @@ async function divFetchAll() {
         });
       return;
     }
-    if (tbody) tbody.innerHTML = divRenderRows(d.coins, d.btcPct, d.hasPast);
+    if (tbody) settle(tbody, divRenderRows(d.coins, d.btcPct, d.hasPast));
   } catch {
     /* silent */
   } finally {
@@ -288,7 +289,7 @@ export function renderBtcDivergence(data) {
             : "var(--text-muted)";
   }
 
-  tbody.innerHTML = divRenderRows(coins, btcPct, hasPast);
+  settle(tbody, divRenderRows(coins, btcPct, hasPast));
 }
 
 export function initDivergenceUi() {
