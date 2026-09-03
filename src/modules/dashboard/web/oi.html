@@ -158,94 +158,6 @@
       .oi-legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
       .oi-empty { padding: 30px 10px; text-align: center; color: var(--text-secondary); }
 
-      /* ── Нянька (nan- префикс) ── */
-      .nan-totals {
-        display: flex; gap: 22px; flex-wrap: wrap; align-items: baseline;
-        padding: 10px 14px; margin-bottom: 14px;
-        border: 1px solid var(--border, #2a2622); border-radius: var(--radius-lg, 12px);
-        background: var(--canvas-subtle));
-      }
-      .nan-total-k { font-size: 11.5px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--text-secondary); }
-      .nan-total-v { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; margin-left: 7px; }
-
-      .nan-pos {
-        border: 1px solid var(--border, #2a2622); border-left-width: 3px;
-        border-radius: var(--radius-lg, 12px); padding: 16px 18px; margin-bottom: 14px;
-      }
-      /* Цвет рамки = срочность, а не сторона сделки: панель про «что горит». */
-      .nan-pos--unprotected, .nan-pos--orders_unknown { border-left-color: var(--red); }
-      .nan-pos--stop_only { border-left-color: #c98a1a; }
-      .nan-pos--armed { border-left-color: var(--green); }
-
-      .nan-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
-      .nan-coin { font-family: "JetBrains Mono", monospace; font-size: 18px; font-weight: 700; }
-      .nan-side { font-size: 10.5px; letter-spacing: 0.5px; padding: 3px 9px; border-radius: 999px; color: #fff; }
-      .nan-side.long { background: var(--green); }
-      .nan-side.short { background: var(--red); }
-      .nan-status { font-size: 14px; font-weight: 700; margin-left: auto; }
-      .nan-status.unprotected, .nan-status.orders_unknown { color: var(--red); }
-      .nan-status.stop_only { color: #c98a1a; }
-      .nan-status.armed { color: var(--green); }
-      .nan-detail { font-size: 13px; line-height: 1.55; color: var(--text-secondary); margin: 0 0 14px; }
-
-      /* Шкала стоп → вход → цена → цель. Позиция маркеров линейна по цене. */
-      .nan-scale { margin: 16px 0 18px; }
-      .nan-bar {
-        position: relative; height: 6px; border-radius: 3px;
-        background: var(--border, #2a2622);
-      }
-      /* min-width: у свежей позы цена ≈ вход, и заливка нулевой ширины делала
-         шкалу «пустой» — оставляем видимый след, чтобы было ясно: это ноль хода,
-         а не сломанный рендер. */
-      .nan-bar-fill { position: absolute; top: 0; bottom: 0; border-radius: 3px; min-width: 2px; }
-      .nan-bar-fill.pos { background: var(--green); }
-      .nan-bar-fill.neg { background: var(--red); }
-      .nan-mark { position: absolute; top: -5px; width: 2px; height: 16px; background: var(--text-primary); border-radius: 1px; }
-      .nan-mark.price { top: -7px; height: 20px; box-shadow: 0 0 0 2px var(--bg); }
-      .nan-mark.entry { background: var(--text-faint); }
-      .nan-tick {
-        position: absolute; top: 16px; transform: translateX(-50%); white-space: nowrap;
-        font-size: 11px; font-family: "JetBrains Mono", monospace; color: var(--text-secondary);
-      }
-      .nan-tick.is-start { transform: none; text-align: left; }
-      .nan-tick.is-end { transform: translateX(-100%); text-align: right; }
-      .nan-tick b { display: block; font-size: 10px; letter-spacing: 0.4px; text-transform: uppercase; font-weight: 600; }
-      .nan-scale-pad { height: 34px; }
-
-      .nan-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
-      .nan-sub {
-        font-size: 11.5px; letter-spacing: 0.5px; text-transform: uppercase;
-        color: var(--text-secondary); margin: 0 0 6px;
-      }
-      table.nan-t { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-      .nan-t td { padding: 6px 8px; font-size: 13.5px; border-bottom: 1px solid var(--hairline)); }
-      .nan-t td:first-child { color: var(--text-secondary); }
-      .nan-t td:last-child { text-align: right; font-family: "JetBrains Mono", monospace; }
-      .nan-t .nan-strong td:last-child { font-weight: 700; }
-
-      .nan-notes { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 7px; }
-      .nan-notes li {
-        font-size: 12.5px; line-height: 1.5; padding: 7px 11px;
-        border-left: 3px solid var(--border, #2a2622); border-radius: 0 6px 6px 0;
-        background: var(--canvas-subtle));
-        color: var(--text-secondary);
-      }
-      .nan-notes li.warn { border-left-color: var(--red); color: var(--text-primary); }
-      .nan-empty { padding: 26px 10px; text-align: center; color: var(--text-secondary); font-size: 13.5px; }
-
-      /* Позиции на builder-DEX'ах (HIP-3). Рамка красная всегда: бот их не
-         ведёт, стопа от него там нет по определению. */
-      .nan-builder {
-        border: 1px solid var(--border, #2a2622); border-left: 3px solid var(--red);
-        border-radius: var(--radius-lg, 12px); padding: 14px 18px; margin-top: 14px;
-      }
-      .nan-builder-t { width: 100%; margin-top: 8px; }
-      .nan-builder-t th {
-        font-size: 11px; letter-spacing: 0.4px; text-transform: uppercase;
-        color: var(--text-secondary); font-weight: 600; text-align: left; padding-bottom: 4px;
-      }
-      .nan-builder-t td { font-variant-numeric: tabular-nums; padding: 3px 10px 3px 0; }
-
       /* Пилюли и сегменты «Монеты дня» (ss- префикс остался от снятого
          Setup Scanner — карточка переиспользует его разметку). */
       .ss-segs { display: inline-flex; gap: 3px; }
@@ -374,6 +286,7 @@
       }
       .ef-fwd b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
       .ef-empty { padding: 26px 10px; text-align: center; color: var(--text-secondary); font-size: 13.5px; }
+    
     </style>
   </head>
   <body>
@@ -393,29 +306,9 @@
         </div>
       </header>
 
-      <section class="card" id="nan-card">
-        <div class="card-header">
-          <div class="card-title" data-num="01">Nanny · open positions and their plan</div>
-          <div class="oi-toolbar">
-            <span class="oi-span" id="nan-meta">…</span>
-            <button class="range-btn" id="nan-refresh" type="button">Refresh</button>
-          </div>
-        </div>
-        <div id="nan-body">
-          <div class="nan-empty">Loading…</div>
-        </div>
-        <p class="oi-note" style="margin-top: 12px">
-          Shows <b>facts about positions that are already open</b>: is there a stop on
-          the exchange, what it costs in dollars, where you are in R. Stop and target are
-          read <b>from the exchange</b>, not from our database — the DB can hold values the
-          exchange does not (the dead API-wallet incident). It suggests no entries and
-          predicts nothing.
-        </p>
-      </section>
-
       <section class="card" id="cod-card">
         <div class="card-header">
-          <div class="card-title" data-num="02">Coin of the day · fading an exhausted tail</div>
+          <div class="card-title" data-num="01">Coin of the day · fading an exhausted tail</div>
           <div class="oi-toolbar">
             <span class="oi-span" id="cod-meta">…</span>
             <button class="range-btn" id="cod-refresh" type="button">Recompute</button>
@@ -439,7 +332,7 @@
 
       <section class="card" id="ef-card">
         <div class="card-header">
-          <div class="card-title" data-num="03">Entry filter · are you buying a move that already happened</div>
+          <div class="card-title" data-num="02">Entry filter · are you buying a move that already happened</div>
           <div class="oi-toolbar">
             <span class="oi-span" id="ef-meta">…</span>
             <button class="range-btn" id="ef-refresh" type="button">Refresh</button>
@@ -464,7 +357,7 @@
 
       <section class="card">
         <div class="card-header">
-          <div class="card-title" data-num="04">Overview · all coins</div>
+          <div class="card-title" data-num="03">Overview · all coins</div>
           <div class="oi-toolbar">
             <input id="oi-search" class="oi-search" placeholder="filter" maxlength="12" />
             <span class="oi-span" id="oi-span">…</span>
@@ -498,7 +391,7 @@
 
       <section class="card oi-detail" id="oi-detail" hidden>
         <div class="card-header">
-          <div class="card-title" data-num="05">Coin history</div>
+          <div class="card-title" data-num="04">Coin history</div>
           <div class="time-ranges" id="oi-ranges">
             <button class="range-btn" data-hours="24">24h</button>
             <button class="range-btn active" data-hours="72">3d</button>
