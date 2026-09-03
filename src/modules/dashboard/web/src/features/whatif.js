@@ -12,30 +12,22 @@
 
 import { escapeHtml } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
+import * as dialog from "../core/dialog.js";
+import { icon } from "../core/icon.js";
 
 let busy = false;
 
-// ── Inline line-SVG icons (stroke=currentColor → colored by verdict class) ──
-const SVG = {
-  check:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 4.5-5"/></svg>',
-  ban:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg>',
-  snow:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/><line x1="18.4" y1="5.6" x2="5.6" y2="18.4"/></svg>',
-  wait:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="10" y1="9" x2="10" y2="15"/><line x1="14" y1="9" x2="14" y2="15"/></svg>',
-  target:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.7" fill="currentColor" stroke="none"/></svg>',
-};
-
-// verdict → icon. tone (pat/smack/neutral) drives the card tint via class.
+// Вердикт → иконка. Тон (pat/smack/neutral) красит карточку через класс.
+//
+// До 04.09.2026 здесь лежали пять инлайновых <svg>, набранных руками: у них
+// был свой stroke-width и своя оптическая плотность, поэтому в одном ряду с
+// иконками из общего набора они выглядели чужими. Теперь общий набор.
 const VERDICT_ICON = {
-  aligned: SVG.check,
-  against: SVG.ban,
-  cold: SVG.snow,
-  "no-signal": SVG.wait,
-  edge: SVG.target,
+  aligned: "check",
+  against: "blocked",
+  cold: "cold",
+  "no-signal": "pause",
+  edge: "target",
 };
 
 const TONE_CLS = { pat: "wi-pat", smack: "wi-smack", neutral: "wi-neutral" };
@@ -44,28 +36,27 @@ function openModal(html) {
   const modal = document.getElementById("whatif-modal");
   const body = document.getElementById("whatif-modal-body");
   if (!modal || !body) return;
-  body.innerHTML = html;
-  modal.hidden = false;
-  document.body.style.overflow = "hidden";
-}
-
-function closeModal() {
-  const modal = document.getElementById("whatif-modal");
-  if (!modal) return;
-  modal.hidden = true;
-  document.body.style.overflow = "";
+  body.innerHTML =
+    dialog.head({
+      glyph: "target",
+      title: "What if…",
+      sub: "Checks a coin against the live edge — it does not look for one",
+    }) + html;
+  dialog.open(modal);
 }
 
 // ── Start form: coin field + optional side toggle + submit ──
 function formHtml(coin = "", side = "") {
   const sideBtn = (val, label) =>
     `<button type="button" class="wi-side-btn ${side === val ? "is-on" : ""}" data-side="${val}">${label}</button>`;
+  // 🚨 Своего заголовка у формы нет: его несёт шапка диалога (dialog.head).
+  // Раньше здесь стоял <div class="wi-title">Chart breakdown</div>, и в окне
+  // оказывалось два заголовка подряд про одно и то же.
   return `
-    <div class="wi-title">Chart breakdown</div>
     <div class="wi-lead">Coin + side → the coach lays out trend, levels, RSI, a plan with stop/target and where you are wrong. Structure analysis, <strong>not a proven-edge signal</strong> — the decision and the risk are yours.</div>
     <form id="wi-form" class="wi-form" autocomplete="off">
       <label class="wi-label">Coin (Hyperliquid ticker)</label>
-      <input id="wi-coin" class="wi-input" type="text" placeholder="e.g. BTC, SOL, kBONK" value="${escapeHtml(coin)}" />
+      <input id="wi-coin" class="wi-input" data-autofocus type="text" placeholder="e.g. BTC, SOL, kBONK" value="${escapeHtml(coin)}" />
       <label class="wi-label">Side (for the entry plan)</label>
       <div class="wi-sides">
         ${sideBtn("LONG", "Long")}
@@ -73,7 +64,7 @@ function formHtml(coin = "", side = "") {
         ${sideBtn("", "No side")}
       </div>
       <input type="hidden" id="wi-side" value="${escapeHtml(side)}" />
-      <button type="submit" class="wi-submit">Analyse</button>
+      <button type="submit" class="btn btn--primary btn--lg wi-submit">Analyse</button>
       <div id="wi-error" class="wi-error" hidden></div>
     </form>`;
 }
@@ -118,12 +109,16 @@ const COACH_TONE_CLS = {
   neutral: "wi-neutral",
 };
 const COACH_TONE_ICON = {
-  reasonable: SVG.check,
-  knife: SVG.ban,
-  counter: SVG.target,
-  neutral: SVG.wait,
+  reasonable: "check",
+  knife: "blocked",
+  counter: "target",
+  neutral: "pause",
 };
-const TREND_WORD = { up: "up ▲", down: "down ▼", flat: "flat →" };
+const TREND_WORD = {
+  up: `up ${icon("rising")}`,
+  down: `down ${icon("falling")}`,
+  flat: `flat ${icon("flat")}`,
+};
 
 function resultHtml(r) {
   const sideLine = r.userSide
@@ -134,16 +129,18 @@ function resultHtml(r) {
   const c = r.coach;
   // Фолбэк: если coach не построился (нет свечей) — старый fade-вердикт.
   if (!c || !c.ok) return head + legacyEdgeBlock(r) +
-    `<button type="button" class="wi-again" id="wi-again">← Another coin</button>`;
+    `<button type="button" class="btn btn--ghost wi-again" id="wi-again">${icon("prev")} Another coin</button>`;
 
   // ── Коуч-вердикт (ведущий блок) ──
   let verdictBlock = "";
   if (c.verdict) {
     const toneCls = COACH_TONE_CLS[c.verdict.tone] || "wi-neutral";
-    const icon = COACH_TONE_ICON[c.verdict.tone] || SVG.wait;
+    // Локальная переменная НЕ `icon`: она бы перекрыла импортированную
+    // функцию icon() в этой же области видимости.
+    const glyph = COACH_TONE_ICON[c.verdict.tone] || "pause";
     verdictBlock = `
       <div class="wi-verdict ${toneCls}">
-        <div class="wi-verdict-icon">${icon}</div>
+        <div class="wi-verdict-icon">${icon(glyph)}</div>
         <div class="wi-verdict-text">
           <div class="wi-verdict-head">${escapeHtml(c.verdict.headline)}</div>
           <div class="wi-verdict-detail">${escapeHtml(c.verdict.detail)}</div>
@@ -220,16 +217,16 @@ function resultHtml(r) {
     : `No verified edge here — this is analysis, not a signal. ${escapeHtml(c.disclaimer)}`}</div>`;
 
   return head + verdictBlock + structure + flow + levels + plan + cases + learn + edgeNote +
-    `<button type="button" class="wi-again" id="wi-again">← Another coin</button>`;
+    `<button type="button" class="btn btn--ghost wi-again" id="wi-again">${icon("prev")} Another coin</button>`;
 }
 
 // Старый fade-вердикт как фолбэк, если coach не построился.
 function legacyEdgeBlock(r) {
   const toneCls = TONE_CLS[r.tone] || TONE_CLS.neutral;
-  const icon = VERDICT_ICON[r.verdict] || SVG.wait;
+  const glyph = VERDICT_ICON[r.verdict] || "pause";
   return `
     <div class="wi-verdict ${toneCls}">
-      <div class="wi-verdict-icon">${icon}</div>
+      <div class="wi-verdict-icon">${icon(glyph)}</div>
       <div class="wi-verdict-text">
         <div class="wi-verdict-head">${escapeHtml(r.headline || "Nothing to analyse")}</div>
         <div class="wi-verdict-detail">${escapeHtml(r.detail || "Could not fetch candles for this coin.")}</div>
@@ -276,22 +273,19 @@ async function runCheck(coin, side) {
 }
 
 export function initWhatIf() {
+  // Закрытие, Escape, замок прокрутки и возврат фокуса — core/dialog.js.
+  const modal = document.getElementById("whatif-modal");
+  if (modal) dialog.bindClose(modal);
+
   document.addEventListener("click", (e) => {
     // Open the form.
     if (e.target.closest("#whatif-btn")) {
       openModal(formHtml());
-      setTimeout(() => document.getElementById("wi-coin")?.focus(), 0);
-      return;
-    }
-    // Close (backdrop / ×).
-    if (e.target.closest("#whatif-modal [data-close]")) {
-      closeModal();
       return;
     }
     // Back to the form.
     if (e.target.closest("#wi-again")) {
       openModal(formHtml());
-      setTimeout(() => document.getElementById("wi-coin")?.focus(), 0);
       return;
     }
     // Side toggle.
@@ -317,9 +311,5 @@ export function initWhatIf() {
       return;
     }
     runCheck(coin, side);
-  });
-
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeModal();
   });
 }

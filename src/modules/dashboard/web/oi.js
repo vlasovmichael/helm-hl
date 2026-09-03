@@ -1,4 +1,6 @@
-import "./src/styles/index.scss";
+import "./src/styles/oi.scss";
+import { icon, paintIcons } from "./src/core/icon.js";
+import { emptyRow } from "./src/core/placeholders.js";
 // ─────────────────────────────────────────────────
 //  oi.html — витрина истории open interest (все монеты).
 //  Читает /api/oi-collector/* (данные от tools/oiCollector.mjs). Сверху —
@@ -299,7 +301,7 @@ function codRenderHeld(p) {
     <div class="cod-head">
       <div class="cod-head-main">
         <span class="cod-heldbadge">in position</span>
-        <span class="ss-badge ss-badge--${p.side.toLowerCase()}">${p.side === "SHORT" ? "▼" : "▲"} ${p.side}</span>
+        <span class="ss-badge ss-badge--${p.side.toLowerCase()}">${icon(p.side === "SHORT" ? "short" : "long")} ${p.side}</span>
         <span class="ss-coin">${p.coin}</span>
       </div>
       <div class="cod-verdict ${st.cls}">${p.headline}</div>
@@ -336,10 +338,14 @@ function codRenderBody() {
   const tabs = codAllTabs();
   if (!tabs.length) {
     const others = codData?.others?.length ?? 0;
-    body.innerHTML = `<div class="cod-empty">
-      No setup today — no coin reached ${codData?.thresholds?.SHOW_MIN_SCORE ?? 3}/5.
-      ${others ? `Candidates reviewed: ${others}, each fell short.` : ""}
-      <br />Skipping the day is a decision too.
+    body.innerHTML = `<div class="empty">
+      ${icon("pause")}
+      <div class="empty__title">No setup today</div>
+      <div class="empty__hint">
+        No coin reached ${codData?.thresholds?.SHOW_MIN_SCORE ?? 3}/5.
+        ${others ? `Candidates reviewed: ${others} — each fell short.` : ""}
+        Skipping the day is a decision too.
+      </div>
     </div>`;
     return;
   }
@@ -360,7 +366,7 @@ function codRenderBody() {
   const hitRows = Object.entries(COD_HIT_LABEL)
     .map(
       ([k, label]) =>
-        `<tr><td class="${p.hits[k] ? "cod-hit" : "cod-miss"}">${label}</td><td>${p.hits[k] ? "yes" : "no"}</td></tr>`,
+        `<tr><td class="${p.hits[k] ? "cod-hit" : "cod-miss"}">${icon(p.hits[k] ? "check" : "flat")}${label}</td><td>${p.hits[k] ? "yes" : "no"}</td></tr>`,
     )
     .join("");
 
@@ -394,7 +400,7 @@ function codRenderBody() {
     <div class="cod-head">
       <div class="cod-head-main">
         ${p.dayContext ? '<span class="cod-donebadge">already traded today</span>' : ""}
-        <span class="ss-badge ss-badge--${p.side.toLowerCase()}">${p.side === "SHORT" ? "▼" : "▲"} ${p.side}</span>
+        <span class="ss-badge ss-badge--${p.side.toLowerCase()}">${icon(p.side === "SHORT" ? "short" : "long")} ${p.side}</span>
         <span class="ss-coin">${p.coin}</span>
         ${codSegs(p.score, p.side)}
         <span class="oi-muted" style="font-size:13px">${p.score}/5</span>
@@ -473,7 +479,11 @@ async function loadCoinOfDay(force = false) {
   } catch (err) {
     meta.textContent = "error";
     document.getElementById("cod-body").innerHTML =
-      `<div class="cod-empty">Scan failed: ${err.message}</div>`;
+      `<div class="empty">
+        ${icon("danger")}
+        <div class="empty__title">Scan failed</div>
+        <div class="empty__hint">${err.message}. Press Recompute to try again.</div>
+      </div>`;
   }
 }
 
@@ -494,7 +504,11 @@ function efRenderBody(data) {
   const body = document.getElementById("ef-body");
   const rows = data.rows || [];
   if (!rows.length) {
-    body.innerHTML = `<div class="ef-empty">No price history buffered yet — the filter needs about an hour of ticks after a restart.</div>`;
+    body.innerHTML = `<div class="empty">
+      ${icon("clock")}
+      <div class="empty__title">Not enough price history yet</div>
+      <div class="empty__hint">The filter needs about an hour of ticks after a restart before it can judge a move.</div>
+    </div>`;
     return;
   }
 
@@ -522,10 +536,10 @@ function efRenderBody(data) {
   const trs = rows
     .map((r) => {
       const side = r.blockedSide
-        ? `<span class="ef-side ${r.blockedSide.toLowerCase()}">${r.blockedSide}</span>`
+        ? `<span class="ef-side ${r.blockedSide.toLowerCase()}">${icon(r.blockedSide === "SHORT" ? "short" : "long")}${r.blockedSide}</span>`
         : `<span class="ef-side none">—</span>`;
       const pos = r.position
-        ? `<span class="ef-side ${r.position.side.toLowerCase()}">${r.position.side}</span>`
+        ? `<span class="ef-side ${r.position.side.toLowerCase()}">${icon(r.position.side === "SHORT" ? "short" : "long")}${r.position.side}</span>`
         : `<span class="oi-muted">—</span>`;
       return `<tr class="${r.holdingBlocked ? "ef-held" : ""}">
         <td>${r.coin}</td>
@@ -580,7 +594,11 @@ async function loadEntryFilter() {
     efRenderForward(data);
   } catch (err) {
     meta.textContent = "error";
-    document.getElementById("ef-body").innerHTML = `<div class="ef-empty">Failed: ${err.message}</div>`;
+    document.getElementById("ef-body").innerHTML = `<div class="empty">
+      ${icon("danger")}
+      <div class="empty__title">Could not load the filter</div>
+      <div class="empty__hint">${err.message}. Press Refresh to try again.</div>
+    </div>`;
   }
 }
 
@@ -596,11 +614,27 @@ let detailHours = 72;
 
 // ── обзор ──
 async function loadOverview() {
-  const data = await fetchJson("/api/oi-collector/overview");
   const spanEl = document.getElementById("oi-span");
+  let data;
+  try {
+    data = await fetchJson("/api/oi-collector/overview");
+  } catch (err) {
+    // Без этого catch запрос падал молча, и скелетон таблицы мигал вечно —
+    // «ещё грузится» было не отличить от «дашборда не отвечает».
+    document.getElementById("oi-tbody").innerHTML = emptyRow(8, {
+      glyph: "danger",
+      title: "Overview did not load",
+      hint: `${err.message}. Reload the page to try again.`,
+    });
+    spanEl.textContent = "";
+    return;
+  }
   if (!data.ok) {
-    document.getElementById("oi-tbody").innerHTML =
-      '<tr><td colspan="8" class="oi-empty">No collector data yet. The first snapshot appears within 15 minutes of startup.</td></tr>';
+    document.getElementById("oi-tbody").innerHTML = emptyRow(8, {
+      glyph: "clock",
+      title: "No collector data yet",
+      hint: "The first snapshot appears within 15 minutes of startup.",
+    });
     spanEl.textContent = "";
     return;
   }
@@ -637,9 +671,11 @@ function renderTable() {
   if (filter) rows = rows.filter((r) => r.coin.toUpperCase().includes(filter));
   rows = sortRows(rows);
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="8" class="oi-empty">Nothing found${
-      filter ? ` for “${filter}”` : ""
-    }</td></tr>`;
+    tbody.innerHTML = emptyRow(8, {
+      glyph: "search",
+      title: filter ? `No coin matches “${filter}”` : "No coins in the snapshot",
+      hint: filter ? "Clear the filter to see the full list." : "",
+    });
     pager.hidden = true;
     return;
   }
@@ -667,10 +703,15 @@ function renderTable() {
   tbody.querySelectorAll("tr[data-coin]").forEach((tr) =>
     tr.addEventListener("click", () => selectCoin(tr.dataset.coin)),
   );
-  // маркер сортировки в шапке
+  // Маркер сортировки: иконка в потоке заголовка. Раньше это был глиф в
+  // ::after (" ▾"/" ▴") — у них разная оптическая масса, и колонка дёргалась
+  // при смене направления; заодно шапка не могла показать, ЧТО сортируется,
+  // если направление совпадало со стрелкой соседней колонки.
   document.querySelectorAll("#oi-table thead th").forEach((th) => {
-    th.classList.toggle("sorted", th.dataset.key === sortKey);
-    th.classList.toggle("asc", th.dataset.key === sortKey && sortAsc);
+    const on = th.dataset.key === sortKey;
+    th.classList.toggle("sorted", on);
+    th.querySelector(".icon")?.remove();
+    if (on) th.insertAdjacentHTML("beforeend", icon(sortAsc ? "sortAsc" : "sortDesc"));
   });
   // пейджер
   pager.hidden = pages <= 1;
@@ -812,10 +853,10 @@ function renderSeries(pts, bucketH) {
     .join("");
 }
 
-document.querySelectorAll("#oi-ranges .range-btn").forEach((b) =>
+document.querySelectorAll("#oi-ranges .seg__btn").forEach((b) =>
   b.addEventListener("click", () => {
     document
-      .querySelectorAll("#oi-ranges .range-btn")
+      .querySelectorAll("#oi-ranges .seg__btn")
       .forEach((r) => r.classList.remove("active"));
     b.classList.add("active");
     detailHours = Number(b.dataset.hours);
@@ -830,6 +871,9 @@ document.querySelectorAll("#oi-ranges .range-btn").forEach((b) =>
 }
 
 document.getElementById("ef-refresh")?.addEventListener("click", () => loadEntryFilter());
+
+// <i data-icon="…"> в статической разметке → настоящие svg.
+paintIcons();
 
 loadCoinOfDay();
 loadEntryFilter();

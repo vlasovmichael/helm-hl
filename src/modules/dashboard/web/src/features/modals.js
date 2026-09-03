@@ -15,6 +15,8 @@ import {
   fmtNotional,
 } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
+import * as dialog from "../core/dialog.js";
+import { icon } from "../core/icon.js";
 
 let lastActivityEvents = [];
 
@@ -130,20 +132,9 @@ function openHelpModal(key) {
   const body = document.getElementById("help-modal-body");
   if (!content || !modal || !body) return;
   body.innerHTML =
-    `<div class="help-modal__title">${content.title}</div>` +
-    (content.lead
-      ? `<div class="help-modal__lead">${content.lead}</div>`
-      : "") +
-    content.sections.map(renderHelpSection).join("");
-  modal.hidden = false;
-  document.body.style.overflow = "hidden";
-}
-
-function closeHelpModal() {
-  const modal = document.getElementById("help-modal");
-  if (!modal) return;
-  modal.hidden = true;
-  document.body.style.overflow = "";
+    dialog.head({ glyph: "help", title: content.title, sub: content.lead || "" }) +
+    `<div class="modal__body">${content.sections.map(renderHelpSection).join("")}</div>`;
+  dialog.open(modal);
 }
 
 // ── Trade detail modal ─────────────────────────────────────────────────
@@ -152,24 +143,23 @@ function openTradeModal(html) {
   const body = document.getElementById("trade-modal-body");
   if (!modal || !body) return;
   body.innerHTML = html;
-  modal.hidden = false;
-  document.body.style.overflow = "hidden";
-}
-function closeTradeModal() {
-  const modal = document.getElementById("trade-modal");
-  if (!modal) return;
-  modal.hidden = true;
-  document.body.style.overflow = "";
+  dialog.open(modal);
 }
 
 function tmHeader({ coin, side, kindLabel, strat, isManual, when }) {
   const sideClass = side === "LONG" ? "long" : side === "SHORT" ? "short" : "";
   const sideChip = side
-    ? `<span class="tm-side-chip ${sideClass}">${side === "LONG" ? "▲" : "▼"} ${side}</span>`
+    ? `<span class="tm-side-chip ${sideClass}">${icon(side === "LONG" ? "long" : "short")} ${side}</span>`
     : "";
-  // strategyDisplayName('manual') уже отдаёт '🖐 Manual' — не дублируем эмодзи.
+  // strategyDisplayName('manual') уже отдаёт значок ладони — не дублируем.
   const stratText =
-    isManual && !/manual/i.test(strat) ? `${strat} · 🖐 Manual` : strat;
+    isManual && !/manual/i.test(strat)
+      ? `${strat} · ${icon("manual")} Manual`
+      : strat;
+  // Шапка та же по устройству, что и dialog.head(): слева опознавательный
+  // знак, в середине заголовок с подзаголовком, справа крестик на том же
+  // месте. Только вместо кружка с иконкой — тикер монеты: в диалоге про
+  // сделку опознаёт именно он.
   return `
     <div class="tm-header">
       <div class="tm-coin-badge">${coin.slice(0, 4)}</div>
@@ -177,6 +167,9 @@ function tmHeader({ coin, side, kindLabel, strat, isManual, when }) {
         <div class="tm-title">${kindLabel} #${coin} ${sideChip}</div>
         <div class="tm-sub">${stratText} · ${when}</div>
       </div>
+      <button type="button" class="modal__close" data-close="1" aria-label="Close">
+        ${icon("close")}
+      </button>
     </div>
   `;
 }
@@ -319,28 +312,19 @@ async function onActivityClick(e) {
   }
 }
 
-// Один делегированный listener на обе модалки + activity-клик + Escape.
+// Закрытие (крестик, подложка, Escape, замок прокрутки, возврат фокуса) —
+// в core/dialog.js. Здесь остаётся только ОТКРЫТИЕ: что за чем показывать.
 export function initModals() {
+  ["trade-modal", "help-modal"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) dialog.bindClose(el);
+  });
   document.addEventListener("click", (e) => {
-    if (e.target.closest("#trade-modal [data-close]")) {
-      closeTradeModal();
-      return;
-    }
-    if (e.target.closest("#help-modal [data-close]")) {
-      closeHelpModal();
-      return;
-    }
     const helpBtn = e.target.closest(".help-btn[data-help]");
     if (helpBtn) {
       openHelpModal(helpBtn.dataset.help);
       return;
     }
     if (e.target.closest("#activity-container")) onActivityClick(e);
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") {
-      closeTradeModal();
-      closeHelpModal();
-    }
   });
 }

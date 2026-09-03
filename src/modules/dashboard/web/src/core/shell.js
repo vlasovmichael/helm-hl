@@ -31,10 +31,10 @@ export function fmtTime(ts) {
 
 // onRange(hours) — страница пере-тикает с новым окном.
 export function bindRange(onRange) {
-  document.querySelectorAll(".range-btn[data-hours]").forEach((b) =>
+  document.querySelectorAll(".seg__btn[data-hours]").forEach((b) =>
     b.addEventListener("click", () => {
       document
-        .querySelectorAll(".range-btn[data-hours]")
+        .querySelectorAll(".seg__btn[data-hours]")
         .forEach((r) => r.classList.remove("active"));
       b.classList.add("active");
       currentRangeHours = b.dataset.hours;
@@ -113,7 +113,7 @@ function setWsState(next) {
 function renderWsPill() {
   const pill = document.getElementById("ws-pill");
   if (!pill) return;
-  pill.classList.remove("live", "stale", "offline");
+  pill.classList.remove("live", "stale", "offline", "is-connecting");
   if (wsState === "live") {
     pill.classList.add("live");
     pill.textContent = "WS live";
@@ -121,12 +121,13 @@ function renderWsPill() {
     pill.classList.add("stale");
     const age = Math.floor((Date.now() - lastSuccessAt) / 1000);
     pill.textContent = `WS stale ${age}s`;
-  } else if (wsState === "reconnecting") {
-    pill.classList.add("offline");
-    pill.textContent = "WS reconnecting…";
   } else {
-    pill.classList.add("offline");
-    pill.textContent = "WS connecting…";
+    // connecting и reconnecting — одно состояние для глаза: «связи нет, идёт
+    // попытка». Многоточие снято, ожидание показывает расходящееся кольцо
+    // (.is-connecting в core/_chrome.scss) — оно видно с другого конца стола.
+    pill.classList.add("offline", "is-connecting");
+    pill.textContent =
+      wsState === "reconnecting" ? "WS reconnecting" : "WS connecting";
   }
 }
 
@@ -143,7 +144,7 @@ export function renderFooter() {
     if (footer) {
       const age = Math.floor((Date.now() - lastSuccessAt) / 1000);
       footer.textContent =
-        age > 15 ? `⚠ Stale (${age}s)` : `Syncing live · WS active`;
+        age > 15 ? `Stale (${age}s)` : `Syncing live · WS active`;
     }
   }
   if (wsState === "live" && Date.now() - lastSuccessAt > 10_000) {

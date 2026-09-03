@@ -8,6 +8,7 @@ import { escapeHtml } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 import { createMorphIcon } from "../core/iconMorph.js";
 import { PLAYBACK_ICONS } from "../core/icons.js";
+import { emptyState } from "../core/placeholders.js";
 
 const LOG_BUFFER_MAX = 1000;
 const logsState = {
@@ -76,7 +77,21 @@ function renderLogs() {
   countEl.textContent = `${filtered.length} / ${logsState.buffer.length} lines`;
 
   if (filtered.length === 0) {
+    // Два разных «пусто», и раньше оба показывали одну строку «Waiting for
+    // logs…»: при активном фильтре она врала — логи-то шли, просто ни один
+    // не подходил под запрос.
     list.innerHTML = "";
+    empty.innerHTML = logsState.buffer.length
+      ? emptyState({
+          glyph: "search",
+          title: "Nothing matches",
+          hint: "No line in the buffer matches the search and level filter.",
+        })
+      : emptyState({
+          glyph: "clock",
+          title: "Waiting for logs",
+          hint: "Lines appear here as the bot writes them.",
+        });
     empty.style.display = "block";
     return;
   }
@@ -154,6 +169,11 @@ export function bindLogsUi() {
       renderLogs();
     });
   }
+  // Первый рендер сразу при инициализации: без него до прихода первой строки
+  // на месте ленты стоял пустой чёрный прямоугольник — состояние, которое ни
+  // о чём не сообщает.
+  renderLogs();
+
   // Detect manual scroll up → auto-pause autoscroll until user clicks resume or scrolls back to bottom
   if (viewport) {
     viewport.addEventListener("scroll", () => {

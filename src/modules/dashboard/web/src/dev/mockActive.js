@@ -273,7 +273,7 @@ function panel() {
     "background:var(--card-bg,#fff);border:1px solid var(--border,#ccc);border-radius:10px;padding:10px 12px;" +
     "font:12px/1.3 system-ui;box-shadow:0 6px 24px rgba(0,0,0,.18);min-width:180px";
   el.innerHTML =
-    '<b style="font-size:11px;letter-spacing:.04em;opacity:.7">MOCK · UNI SHORT</b>' +
+    '<b style="font-size: var(--fs-label);letter-spacing:.04em;opacity:.7">MOCK · UNI SHORT</b>' +
     '<div id="mock-stat" style="font-family:monospace"></div>' +
     '<button id="mock-auto">▶ auto tour</button>' +
     '<button id="mock-surge">🚀 sharp slide (surge)</button>' +

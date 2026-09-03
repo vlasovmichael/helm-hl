@@ -280,42 +280,7 @@ export function initScreenInteractions(openTicket) {
 // прячем, а не удаляем, и по умолчанию скрыта. Пока скрыта — фронт не ходит в
 // /api/signals и не рендерит строки (WS-кадр всё равно приходит, но его
 // hotMovers просто игнорируется).
-const HM_KEY = "hl-scanner-hotmovers-open";
-
-export function hotMoversVisible() {
-  try {
-    return localStorage.getItem(HM_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-export function initHotMoversToggle() {
-  const btn = document.getElementById("hm-toggle");
-  const sec = document.getElementById("sec-movers");
-  if (!btn || !sec) return;
-
-  const apply = (on) => {
-    sec.classList.toggle("is-collapsed", !on);
-    btn.setAttribute("aria-expanded", on ? "true" : "false");
-    btn.querySelector(".hm-toggle__label").textContent = on
-      ? "Hide Hot Movers table"
-      : "Show Hot Movers table";
-    // Кнопки Paper и What-if живут в шапке Hot Movers и нужны оператору всегда —
-    // при сворачивании они переезжают в шапку экрана, а не исчезают.
-    const host = document.getElementById(on ? "hm-actions-slot" : "screen-actions-slot");
-    const tools = document.getElementById("hm-tools");
-    if (host && tools && tools.parentElement !== host) host.appendChild(tools);
-  };
-
-  apply(hotMoversVisible());
-  btn.addEventListener("click", () => {
-    const on = !(btn.getAttribute("aria-expanded") === "true");
-    try {
-      localStorage.setItem(HM_KEY, on ? "1" : "0");
-    } catch {
-      /* приватное окно — переключатель работает до перезагрузки */
-    }
-    apply(on);
-  });
-}
+// 04.09.2026: тумблер «Show/Hide Hot Movers table» снят. Он прятал карточку
+// целиком и переносил кнопки Paper/What-if между двумя шапками — то есть одна
+// и та же кнопка жила то здесь, то там, и найти её было делом привычки.
+// Карточка теперь просто стоит под Active Position и всегда открыта.

@@ -14,7 +14,10 @@
   cursor: pointer;
   border-radius: 50%;
   opacity: 0.55;
-  transition: all 0.15s ease;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 
   &:hover {
     opacity: 1;
@@ -36,7 +39,7 @@
   }
 }
 .help-section-title {
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 700;
   color: var(--text);
   margin-bottom: 8px;
@@ -45,7 +48,7 @@
   letter-spacing: 0.04em;
 }
 .help-section-sub {
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text-muted);
   margin-bottom: 10px;
   line-height: 1.5;
@@ -53,7 +56,7 @@
 .help-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--fs-small);
 
   th,
   td {
@@ -65,7 +68,7 @@
   th {
     font-weight: 600;
     color: var(--text-muted);
-    font-size: 11px;
+    font-size: var(--fs-label);
     text-transform: uppercase;
   }
   tr:last-child td {
@@ -78,13 +81,13 @@
 }
 .help-modal {
   &__title {
-    font-size: 18px;
+    font-size: var(--fs-h3);
     font-weight: 700;
     margin-bottom: 4px;
     font-family: var(--font-sans);
   }
   &__lead {
-    font-size: 12px;
+    font-size: var(--fs-small);
     color: var(--text-muted);
     margin-bottom: 18px;
     line-height: 1.5;
@@ -92,7 +95,7 @@
 }
 @include until($bp-md) {
   .help-table {
-    font-size: 11px;
+    font-size: var(--fs-label);
 
     th,
     td {
@@ -101,66 +104,192 @@
   }
 }
 
-/* ── Trade modal ──────────────────────────────────────────── */
-.trade-modal {
+/* ── Диалог ────────────────────────────────────────────────────────────
+   Одна оболочка на все модалки дашборда: help, детали сделки, what-if,
+   ручной папер, trade ticket. До 04.09.2026 форма была общей, а содержимое
+   у каждой своё — свои заголовки, своя кнопка закрытия, свой ряд действий.
+   Поэтому здесь описаны не только подложка и панель, но и внутренние блоки
+   (__head / __body / __actions): «привести к одному виду» — это про них.
+
+   Поведение (Escape, замок прокрутки, ловушка фокуса, возврат фокуса)
+   живёт в core/dialog.js. Разметку и поведение развели намеренно: пять
+   реализаций расходились именно в поведении, не в стилях.
+   ────────────────────────────────────────────────────────────────────── */
+.modal {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
+  display: grid;
+  /* minmax(0, 1fr), а не автодорожка: иначе колонка раздувается под
+     min-content панели (длинная строка таблицы внутри), и `width` панели
+     считается уже от раздутой дорожки — окно оказывается шире экрана. */
+  grid-template-columns: minmax(0, 1fr);
+  /* safe center: обычный center у грида с прокруткой обрезает ВЕРХ панели,
+     если она выше экрана, — до заголовка не долистать. */
+  place-items: safe center;
+  padding: var(--sp-5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 
   &[hidden] {
     display: none;
   }
+
   &__backdrop {
-    position: absolute;
+    position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.65);
-    animation: tm-fade-in 180ms ease-out;
+    background: rgba(1, 4, 9, 0.62);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+    animation: modal-fade-in var(--dur) var(--ease-out);
   }
+
   &__panel {
     position: relative;
     z-index: 1;
+    width: min(540px, 100%);
+    max-width: 100%;
+    padding: var(--sp-6);
     background: var(--card-bg-elev);
     border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 22px 26px 22px;
-    width: min(540px, calc(100vw - 40px));
-    max-height: calc(100vh - 40px);
-    overflow-y: auto;
-    font-family: var(--font-mono);
-    color: var(--text-primary);
+    border-radius: var(--radius-lg);
     box-shadow: var(--shadow);
-    animation: tm-pop-in 220ms cubic-bezier(0.18, 0.89, 0.32, 1.28);
+    color: var(--text-primary);
+    animation: modal-rise var(--dur-slow) var(--spring);
+
+    &:focus {
+      outline: none;
+    }
   }
+  /* Шире — только там, где внутри таблица (детали сделки, trade ticket). */
+  &__panel--wide {
+    width: min(760px, 100%);
+  }
+
+  /* Закрытие: иконка, не «×». Поворот на ховере — единственная вольность
+     во всём диалоге, и она отрабатывает смысл: крестик доворачивается до
+     креста. Панель на 44px справа не подпирается — кнопка в потоке шапки. */
   &__close {
-    position: absolute;
-    top: 10px;
-    right: 12px;
+    flex: none;
+    margin-left: auto;
     width: 28px;
     height: 28px;
-    border-radius: 50%;
-    background: var(--canvas-inset);
-    border: 1px solid var(--border);
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
     color: var(--text-muted);
-    font-size: 18px;
-    line-height: 1;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.15s ease;
+    transition:
+      background var(--dur-fast) var(--ease-out),
+      color var(--dur-fast) var(--ease-out),
+      transform var(--dur) var(--spring);
 
     &:hover {
       background: var(--card-bg-hover);
       color: var(--text-primary);
       transform: rotate(90deg);
     }
+    &:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .icon {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  /* ── Шапка ── */
+  &__head {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-4);
+  }
+  /* Кружок с иконкой слева от заголовка. Он же несёт тон диалога: у
+     подтверждения закрытия позиции — красный, у справки — акцентный. */
+  &__glyph {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--accent-soft);
+    color: var(--accent);
+
+    .icon {
+      width: 16px;
+      height: 16px;
+    }
+  }
+  &__titles {
+    min-width: 0;
+  }
+  &__title {
+    font-family: var(--font-display);
+    font-size: var(--fs-h3);
+    font-weight: 600;
+    letter-spacing: var(--ls-tight);
+    line-height: 1.25;
+  }
+  &__sub {
+    margin-top: 2px;
+    font-size: var(--fs-small);
+    color: var(--text-secondary);
+  }
+
+  /* ── Тело ──
+     🚨 Никакого overflow здесь. Прокрутку длинного диалога берёт на себя
+     подложка (.modal — overflow-y: auto), иначе всё, что всплывает ИЗ
+     диалога — подсказки монет в trade ticket — обрезается его краем. */
+  &__body {
+    min-width: 0;
+    font-size: var(--fs-base);
+    line-height: 1.55;
+  }
+
+  /* ── Ряд действий ──
+     Главное действие справа: последнее по чтению = следующее по действию.
+     На узком экране колонка, и главное — сверху (палец у большого пальца). */
+  &__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--sp-2);
+    margin-top: var(--sp-5);
+  }
+
+  /* Тон: красит кружок шапки. Больше ничего — красная рамка вокруг всего
+     диалога кричит громче, чем нужно даже для необратимого действия. */
+  &--danger &__glyph {
+    background: var(--red-soft);
+    color: var(--red);
+  }
+  &--warn &__glyph {
+    background: var(--warn-soft);
+    color: var(--warn);
   }
 }
-@keyframes tm-fade-in {
+
+@media (max-width: 30rem) {
+  .modal {
+    padding: var(--sp-3);
+  }
+  .modal__panel {
+    padding: var(--sp-4);
+  }
+  .modal__actions {
+    flex-direction: column-reverse;
+
+    .btn {
+      width: 100%;
+    }
+  }
+}
+
+@keyframes modal-fade-in {
   from {
     opacity: 0;
   }
@@ -168,62 +297,84 @@
     opacity: 1;
   }
 }
-@keyframes tm-pop-in {
-  0% {
+@keyframes modal-rise {
+  from {
     opacity: 0;
-    transform: translateY(12px) scale(0.96);
+    transform: translateY(14px) scale(0.97);
   }
-  100% {
+  to {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: none;
   }
 }
 
-/* Header block */
+/* Панель не «прилетает», если человек просил не двигать интерфейс. Подложка
+   всё равно проявляется — без неё диалог возникает из ниоткуда. */
+@media (prefers-reduced-motion: reduce) {
+  .modal__panel,
+  .modal__backdrop {
+    animation-duration: 1ms;
+  }
+}
+
+/* ── Детали сделки ─────────────────────────────────────────────────────
+   Живёт внутри .modal__panel и подчиняется его шапке. Своей типографики у
+   блока больше нет: до 04.09.2026 панель целиком была набрана моно (включая
+   связный текст), а кегли шли россыпью 9.5 / 10 / 11 / 13 / 17 / 24.
+   Теперь моно ровно там, где цифры, а размеры — из шкалы.
+   ────────────────────────────────────────────────────────────────────── */
 .tm-header {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 16px;
-  padding-right: 38px; /* room for close btn */
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-4);
 }
+/* Тикер монеты крупно: в списке сделок именно он опознаёт, что открыто. */
 .tm-coin-badge {
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 44px;
   height: 44px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--grad-brand-soft);
   border: 1px solid var(--border);
-  font-size: 16px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-lead);
   font-weight: 700;
   color: var(--text-primary);
-  letter-spacing: 0.5px;
 }
 .tm-header-text {
   flex: 1;
   min-width: 0;
 }
 .tm-title {
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  font-weight: 600;
+  letter-spacing: var(--ls-tight);
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
 }
 .tm-side-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--sp-1);
   padding: 2px 9px;
-  border-radius: 999px;
-  font-size: 10px;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-sans);
+  font-size: var(--fs-micro);
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: var(--ls-wide);
 
+  .icon {
+    width: 11px;
+    height: 11px;
+  }
   &.long {
     background: var(--green-soft);
     color: var(--green);
@@ -236,33 +387,35 @@
   }
 }
 .tm-sub {
-  color: var(--text-muted);
-  font-size: 11px;
-  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: var(--fs-small);
+  margin-top: 3px;
 }
 
-/* PnL hero */
+/* Итог сделки — единственное число, ради которого диалог открывают. */
 .tm-pnl-hero {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 12px;
-  margin: 4px 0 18px;
-  padding: 14px 16px;
-  border-radius: 10px;
+  gap: var(--sp-3);
+  margin: 0 0 var(--sp-5);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius);
   background: var(--canvas-subtle);
   border: 1px solid var(--border-muted);
 }
 .tm-pnl-hero-label {
-  font-size: 10px;
-  color: var(--text-muted);
+  font-size: var(--fs-label);
+  color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.8px;
+  letter-spacing: var(--ls-wide);
+  font-weight: 600;
 }
 .tm-pnl-hero-value {
-  font-size: 24px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-h2);
   font-weight: 700;
-  letter-spacing: -0.5px;
+  letter-spacing: var(--ls-tight);
   font-variant-numeric: tabular-nums;
 
   &.positive {
@@ -273,47 +426,45 @@
   }
 }
 
-/* Detail grid */
+/* Сетка «подпись → значение». Ячейка не кликается, поэтому и не подсвечивается
+   на ховере: подсветка обещала бы действие, которого нет. */
 .tm-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: var(--sp-2);
 
   .tm-cell {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 10px 12px;
-    border-radius: 8px;
+    gap: var(--sp-1);
+    padding: var(--sp-2) var(--sp-3);
+    border-radius: var(--radius-sm);
     background: var(--canvas-subtle);
     border: 1px solid var(--border-muted);
-    transition: background 0.15s ease;
-
-    &:hover {
-      background: var(--card-bg-hover);
-    }
   }
 }
 .tm-cell.full {
   grid-column: 1 / -1;
 }
 .tm-cell-label {
-  font-size: 9.5px;
-  color: var(--text-muted);
+  font-size: var(--fs-micro);
+  color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.7px;
+  letter-spacing: var(--ls-wide);
   font-weight: 600;
 }
 .tm-cell-value {
+  font-family: var(--font-mono);
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
 
   &.muted {
-    color: var(--text-muted);
+    font-family: var(--font-sans);
+    color: var(--text-secondary);
     font-weight: 500;
-    font-size: 11px;
+    font-size: var(--fs-small);
   }
   &.positive {
     color: var(--green);
@@ -324,33 +475,29 @@
 }
 
 .tm-section {
-  margin-top: 18px;
-  padding-top: 14px;
+  margin-top: var(--sp-5);
+  padding-top: var(--sp-4);
   border-top: 1px solid var(--hairline);
 }
 .tm-section-title {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: var(--text-muted);
-  margin-bottom: 10px;
+  letter-spacing: var(--ls-wide);
+  color: var(--text-secondary);
+  margin-bottom: var(--sp-3);
   font-weight: 700;
 }
 
 @include until($bp-sm) {
-  .trade-modal__panel {
-    padding: 18px 18px 16px;
-  }
   .tm-pnl-hero-value {
-    font-size: 20px;
+    font-size: var(--fs-h3);
   }
   .tm-coin-badge {
     width: 38px;
     height: 38px;
-    font-size: 14px;
+    font-size: var(--fs-base);
   }
   .tm-grid {
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 }

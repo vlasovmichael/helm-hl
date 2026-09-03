@@ -7,7 +7,7 @@
 .tk-lead {
   max-width: 72ch;
   margin: -4px 0 18px;
-  font-size: 13px;
+  font-size: var(--fs-body);
   line-height: 1.65;
   color: var(--text-muted);
 
@@ -30,10 +30,14 @@
   font-family: inherit;
   text-align: left;
   cursor: pointer;
-  transition: all 0.15s var(--ease);
+  /* Перечисляем свойства: `transition: all` анимирует и геометрию тоже. */
+  transition:
+    border-color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
 
-  b { font-size: 14px; font-weight: 700; }
-  span { font-size: 11px; color: var(--text-faint); }
+  b { font-size: var(--fs-base); font-weight: 700; }
+  span { font-size: var(--fs-label); color: var(--text-faint); }
 
   &:hover {
     border-color: var(--accent-line);
@@ -44,7 +48,7 @@
 .tk-list {
   margin: 0;
   padding-left: 18px;
-  font-size: 13px;
+  font-size: var(--fs-body);
   line-height: 1.75;
   color: var(--text-muted);
 

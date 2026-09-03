@@ -177,7 +177,7 @@ export function hmPosHintInner(coin) {
   // Близость ликвидации — единственный «алерт», и тот информативный.
   if (liq && now) {
     const liqDist = (Math.abs(now - liq) / now) * 100;
-    if (liqDist < 8) chips.push(["danger", `⚠️ liq. in ${liqDist.toFixed(1)}%`]);
+    if (liqDist < 8) chips.push(["danger", `liq. in ${liqDist.toFixed(1)}%`]);
   }
   // Нет действий бота и ликв не близко → под-строка не нужна: метка активной
   // монеты остаётся на самой строке (📍 + бейдж), P&L смотри в Active Position.

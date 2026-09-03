@@ -1,4 +1,4 @@
-import "./src/styles/index.scss";
+import "./src/styles/orderbook.scss";
 // ─────────────────────────────────────────────────
 //  orderbook.html — живой стакан Hyperliquid (DOM-лесенка).
 //  Коннектится НАПРЯМУЮ к публичному WS HL (как web/src/net/orderbook.js),

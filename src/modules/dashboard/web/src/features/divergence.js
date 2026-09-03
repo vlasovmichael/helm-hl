@@ -9,6 +9,7 @@ import { fmtPrice, fmtNotional } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 import { isActiveCoin } from "../state/activeCoins.js";
 import { getWhalePositions } from "./whaleWatch.js";
+import { emptyRow, skeletonRows } from "../core/placeholders.js";
 
 let _divData = null;
 let _divWindow = "15m";
@@ -49,13 +50,13 @@ function divRenderWatchlistBar() {
     list
       .map((coin) => {
         const removable = !defaults.has(coin);
-        return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--surface-2,rgba(255,255,255,.06));border:1px solid var(--hairline);border-radius:4px;padding:2px 6px;font-family:var(--font-mono);font-size:10px;">
-      ${coin}${removable ? `<button data-remove="${coin}" style="background:none;border:none;cursor:pointer;color:var(--text-faint);padding:0;line-height:1;font-size:11px;" title="Remove from the list">×</button>` : ""}
+        return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--surface-2,rgba(255,255,255,.06));border:1px solid var(--hairline);border-radius:4px;padding:2px 6px;font-family:var(--font-mono);font-size: var(--fs-micro);">
+      ${coin}${removable ? `<button data-remove="${coin}" style="background:none;border:none;cursor:pointer;color:var(--text-faint);padding:0;line-height:1;font-size: var(--fs-label);" title="Remove from the list">×</button>` : ""}
     </span>`;
       })
       .join("") +
     `<span style="display:inline-flex;align-items:center;gap:3px;">
-    <input id="div-add-input" placeholder="+ COIN" style="width:60px;background:transparent;border:1px dashed var(--hairline);border-radius:4px;padding:2px 5px;font-family:var(--font-mono);font-size:10px;color:inherit;outline:none;" maxlength="10" autocomplete="off" spellcheck="false"/>
+    <input id="div-add-input" placeholder="+ COIN" style="width:60px;background:transparent;border:1px dashed var(--hairline);border-radius:4px;padding:2px 5px;font-family:var(--font-mono);font-size: var(--fs-micro);color:inherit;outline:none;" maxlength="10" autocomplete="off" spellcheck="false"/>
   </span>`;
 
   bar.querySelector("#div-add-input")?.addEventListener("keydown", (e) => {
@@ -165,10 +166,14 @@ async function divFetchAll() {
   _divAllFetching = true;
   const win = _divWindow === "all" ? "15m" : _divWindow;
   const tbody = document.getElementById("div-tbody");
+  // Скелетон — это НЕ содержимое: если в теле стоят .sk-row, таблицу надо
+  // считать пустой, иначе перезапрос не покажет ожидание.
   const hasContent =
-    tbody && tbody.children.length > 0 && !tbody.querySelector(".empty-state");
+    tbody &&
+    tbody.children.length > 0 &&
+    !tbody.querySelector(".empty-state, .sk-row");
   if (!hasContent && tbody)
-    tbody.innerHTML = `<tr><td colspan="6" class="empty-state">loading all coins…</td></tr>`;
+    tbody.innerHTML = skeletonRows(6, 5);
   try {
     const d = await fetchJson(`/api/btc-divergence/all?window=${win}`);
     if (!d?.coins) return;
@@ -191,8 +196,14 @@ async function divFetchAll() {
               : "var(--text-muted)";
     }
     if (d.coins.length === 0) {
+      // Ответ пришёл и он пустой — это уже не ожидание, а состояние: истории
+      // цен ещё не набралось. Скелетон здесь врал бы, что данные едут.
       if (tbody)
-        tbody.innerHTML = `<tr><td colspan="6" class="empty-state">building history…</td></tr>`;
+        tbody.innerHTML = emptyRow(6, {
+          glyph: "clock",
+          title: "Building price history",
+          hint: "Divergence needs a window of ticks after a restart before it can compare anything.",
+        });
       return;
     }
     if (tbody) tbody.innerHTML = divRenderRows(d.coins, d.btcPct, d.hasPast);
@@ -242,8 +253,13 @@ export function renderBtcDivergence(data) {
   const watchlist = divGetWatchlist();
   const windowData = _divData.windows?.[_divWindow];
   if (!windowData?.coins?.length) {
-    const mins = _divWindow === "1h" ? 60 : parseInt(_divWindow);
-    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">building history (needs ${mins} min)…</td></tr>`;
+    // Кадр пришёл, но окна в нём нет — истории ещё не набралось. Это
+    // состояние, а не ожидание: скелетон обещал бы данные, которых пока нет.
+    tbody.innerHTML = emptyRow(5, {
+      glyph: "clock",
+      title: "Building price history",
+      hint: `Nothing to compare over ${_divWindow} yet — the buffer fills as ticks arrive.`,
+    });
     return;
   }
 
@@ -281,7 +297,7 @@ document.getElementById("div-tabs")?.addEventListener("click", (e) => {
   if (!btn) return;
   _divWindow = btn.dataset.window;
   document
-    .querySelectorAll("#div-tabs .range-btn")
+    .querySelectorAll("#div-tabs .seg__btn")
     .forEach((b) => b.classList.toggle("active", b === btn));
   divRefresh();
 });

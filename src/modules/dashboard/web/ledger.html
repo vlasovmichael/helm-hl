@@ -8,12 +8,12 @@
     />
     <meta
       name="theme-color"
-      content="#0c0a09"
+      content="#0d1117"
       media="(prefers-color-scheme: dark)"
     />
     <meta
       name="theme-color"
-      content="#f5f1ea"
+      content="#ffffff"
       media="(prefers-color-scheme: light)"
     />
     <title>Ledger · Helm</title>
@@ -52,27 +52,37 @@
           <h1>Monthly Ledger</h1>
           <div class="sub">
             Source: Hyperliquid on-chain fills · since
-            <span id="start-date">…</span>
+            <span id="start-date"><span class="sk sk-num"></span></span>
           </div>
         </div>
       </div>
 
-      <div class="summary-grid" id="summary"></div>
+      <div class="summary-grid" id="summary">
+        <div class="sk sk-block" style="--sk-h: 82px"></div>
+        <div class="sk sk-block" style="--sk-h: 82px"></div>
+        <div class="sk sk-block" style="--sk-h: 82px"></div>
+        <div class="sk sk-block" style="--sk-h: 82px"></div>
+      </div>
 
       <div class="table-card">
         <div id="table-host">
-          <div class="loading">Loading fills from Hyperliquid…</div>
+          <div class="sk-text" style="padding: var(--sp-4) 0">
+            <span class="sk sk-line"></span>
+            <span class="sk sk-line"></span>
+            <span class="sk sk-line"></span>
+            <span class="sk sk-line"></span>
+          </div>
         </div>
       </div>
 
       <!-- Tax Summary (перенесено с дашборды; рендерит app.js через /api/tax-summary) -->
       <section class="card">
         <div class="card-header">
-          <div class="card-title" data-num="">
+          <div class="card-title">
             Tax Summary
             <span
               style="
-                font-size: 14px;
+                font-size: var(--fs-base);
                 color: var(--text-muted);
                 font-family: var(--font-mono);
                 font-style: normal;
@@ -107,12 +117,9 @@
     </div>
 
     <!-- Trade detail modal (для кликов по Recent Activity) -->
-    <div id="trade-modal" class="trade-modal" hidden>
-      <div class="trade-modal__backdrop" data-close="1"></div>
-      <div class="trade-modal__panel" role="dialog" aria-modal="true">
-        <button class="trade-modal__close" data-close="1" aria-label="Close">
-          ×
-        </button>
+    <div id="trade-modal" class="modal" hidden>
+      <div class="modal__backdrop" data-close="1"></div>
+      <div class="modal__panel modal__panel--wide" role="dialog" aria-modal="true">
         <div id="trade-modal-body"></div>
       </div>
     </div>
@@ -376,6 +383,20 @@
         bindExpand(host);
       }
 
+      // Скрипт страницы — не модуль, импортировать placeholders.js неоткуда,
+      // поэтому разметка .empty собрана здесь руками. Классы те же, что у
+      // остальных пустых состояний дашборда (core/_loaders.scss).
+      function showEmpty(title, hint) {
+        document.getElementById("table-host").innerHTML =
+          '<div class="empty"><div class="empty__title">' +
+          title +
+          '</div><div class="empty__hint">' +
+          hint +
+          "</div></div>";
+        // Скелетоны сводки обещали числа, которых уже не будет.
+        document.getElementById("summary").innerHTML = "";
+      }
+
       async function load() {
         try {
           const r = await fetch("/api/ledger");
@@ -384,15 +405,19 @@
           document.getElementById("start-date").textContent =
             data.startDate || "—";
           if (!data.live || !data.months.length) {
-            document.getElementById("table-host").innerHTML =
-              '<div class="errbox">No data (bot is in PAPER mode or fills are unavailable).</div>';
+            showEmpty(
+              "No on-chain fills to show",
+              "The bot is in PAPER mode, or Hyperliquid returned no fills for this wallet.",
+            );
             return;
           }
           renderSummary(data.totals);
           renderTable(data);
         } catch (e) {
-          document.getElementById("table-host").innerHTML =
-            '<div class="errbox">Failed to load: ' + e.message + "</div>";
+          showEmpty(
+            "Ledger did not load",
+            e.message + ". Reload the page to try again.",
+          );
         }
       }
       load();

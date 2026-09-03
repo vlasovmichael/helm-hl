@@ -8,12 +8,12 @@
     />
     <meta
       name="theme-color"
-      content="#0c0a09"
+      content="#0d1117"
       media="(prefers-color-scheme: dark)"
     />
     <meta
       name="theme-color"
-      content="#f5f1ea"
+      content="#ffffff"
       media="(prefers-color-scheme: light)"
     />
     <title>Helm</title>
@@ -50,13 +50,21 @@
       <header data-edition="">
         <div class="equity-group">
           <div class="label">Total Equity</div>
-          <div class="value animated-value" id="equity-value">$0.00</div>
-          <div class="delta" id="equity-delta">—</div>
+          <!-- 🚨 Не «$0.00»: до первого кадра это НЕ ноль на счету, а
+               отсутствие данных, и выглядели они одинаково. -->
+          <div class="value animated-value" id="equity-value">
+            <span class="sk sk-num sk-num--lg"></span>
+          </div>
+          <div class="delta" id="equity-delta"><span class="sk sk-chip"></span></div>
         </div>
         <div class="meta-group">
           <div class="pill-row">
             <div id="ws-pill" class="status-pill offline">WS connecting…</div>
-            <div id="health-pill" class="status-pill" hidden></div>
+            <!-- Плашка здоровья фидов. Пока состояние неизвестно — скелетон,
+                 а не пустое место: дырка в шапке читалась как «всё хорошо». -->
+            <div id="health-pill" class="status-pill is-loading">
+              <span class="sk sk-chip"></span>
+            </div>
           </div>
           <div class="meta-info">
             <span id="uptime-val">Uptime: —</span>
@@ -72,13 +80,15 @@
            поэтому первым на экране должен быть бюджет дня, а не идея. -->
       <section class="card daydesk" id="sec-day">
         <div class="card-header">
-          <div class="card-title" data-num="00">Today</div>
-          <div class="oi-toolbar">
-            <span class="oi-span" id="day-meta"></span>
+          <div class="card-title">Today</div>
+          <div class="card-tools">
+            <span class="card-meta" id="day-meta"></span>
           </div>
         </div>
         <div id="day-desk" class="dd-grid">
-          <div class="dd-empty">Loading…</div>
+          <div class="sk sk-block" style="--sk-h: 72px"></div>
+          <div class="sk sk-block" style="--sk-h: 72px"></div>
+          <div class="sk sk-block" style="--sk-h: 72px"></div>
         </div>
         <div id="day-rules" class="dd-rules"></div>
       </section>
@@ -100,7 +110,7 @@
       <!-- 01 / Active Position -->
       <section class="card" id="sec-position">
         <div class="card-header">
-          <div class="card-title" data-num="01">Active Position</div>
+          <div class="card-title">Active Position</div>
           <div id="daily-goal-badge" class="daily-goal-badge" hidden></div>
         </div>
         <div id="position-container"></div>
@@ -136,71 +146,11 @@
         </button>
       </section>
 
-      <!-- 01.4 / Screen — монеты, отобранные по цене входа, + бюджет дня.
-           Заменяет Hot Movers в роли «куда смотреть»: отбор идёт по трению
-           (спред + комиссии), а не по движению. Обоснование и порог —
-           routes/screen.js. Предсказаний здесь нет и быть не должно. -->
-      <section class="card" id="sec-screen">
-        <div class="card-header">
-          <div
-            class="card-title"
-            data-num="01.4"
-            title="Coins where entering is cheap. «Friction» = what share of your risk budget the round trip (book spread + two taker fees) eats. These are NOT signals: the list is filtered by cost of entry, movement is shown as fact — the call is yours."
-          >
-            Screen
-          </div>
-          <div class="scr-header-right">
-            <span id="screen-actions-slot"></span>
-            <span id="screen-meta" class="scr-meta"></span>
-          </div>
-        </div>
-        <div id="screen-budget" class="scr-budget"></div>
-        <div class="u-scroll-x">
-          <table class="data-table scr-table">
-            <thead>
-              <tr>
-                <th data-sort="coin" title="Sort by ticker">Coin</th>
-                <th class="r" data-sort="price" title="Sort by price">Price</th>
-                <th
-                  class="r"
-                  data-sort="move"
-                  title="Short-window move from the bot's live price buffer (15m, falls back to 1h). Sort by size of move."
-                >
-                  Move
-                </th>
-                <th class="r" data-sort="chg24h" title="Sort by 24h change">24h</th>
-                <th
-                  class="r"
-                  data-sort="friction"
-                  title="What share of your risk budget the round trip eats: book spread + two taker fees (4.32 bp each). Small print is the raw spread. Sort cheapest first."
-                >
-                  Friction
-                </th>
-                <th
-                  class="r"
-                  data-sort="mine"
-                  title="Your own track record on this coin: net P&L, number of trades and winrate. Not a prediction about the market — a fact about you."
-                >
-                  Mine
-                </th>
-                <th class="r" data-sort="volume" title="Sort by 24h volume">Volume</th>
-              </tr>
-            </thead>
-            <tbody id="screen-tbody">
-              <tr>
-                <td colspan="7" class="empty-state">Building screen…</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
       <!-- 01.5 / Hot Movers — live price spikes + OI delta -->
       <section class="card" id="sec-movers">
         <div class="card-header">
           <div
             class="card-title"
-            data-num="01.5"
             title="Coins with the largest price moves. Setup is a context direction (dump → SHORT, pump → LONG) — NOT a trade: continuation backtests negative."
           >
             Hot Movers
@@ -256,30 +206,13 @@
             <span
               id="hot-movers-meta"
               style="
-                font-size: 11px;
+                font-size: var(--fs-label);
                 font-family: var(--font-mono);
                 color: var(--text-muted);
               "
             ></span>
           </div>
         </div>
-        <button
-          type="button"
-          id="hm-toggle"
-          class="hm-toggle"
-          aria-expanded="false"
-          aria-controls="hm-collapsible"
-          title="The spike list across the whole exchange is the «twenty entries a day» technique — hidden by default. Paper and What if… stay available either way."
-        >
-          <span class="hm-toggle__label">Show Hot Movers table</span>
-          <span class="hm-toggle__chev" aria-hidden="true">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M6 9l6 6 6-6" />
-            </svg>
-          </span>
-        </button>
-        <div class="hm-collapsible" id="hm-collapsible">
         <div class="u-scroll-x hm-scroll-wrap">
           <table class="data-table signals-table hm-table">
             <thead>
@@ -320,14 +253,74 @@
               </tr>
             </thead>
             <tbody id="hot-movers-tbody">
-              <tr>
-                <td colspan="11" class="empty-state">
-                  Waiting for price history…
-                </td>
-              </tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
             </tbody>
           </table>
         </div>
+      </section>
+
+      <!-- 01.4 / Screen — монеты, отобранные по цене входа, + бюджет дня.
+           Заменяет Hot Movers в роли «куда смотреть»: отбор идёт по трению
+           (спред + комиссии), а не по движению. Обоснование и порог —
+           routes/screen.js. Предсказаний здесь нет и быть не должно. -->
+      <section class="card" id="sec-screen">
+        <div class="card-header">
+          <div
+            class="card-title"
+            title="Coins where entering is cheap. «Friction» = what share of your risk budget the round trip (book spread + two taker fees) eats. These are NOT signals: the list is filtered by cost of entry, movement is shown as fact — the call is yours."
+          >
+            Screen
+          </div>
+          <div class="scr-header-right">
+            <span id="screen-actions-slot"></span>
+            <span id="screen-meta" class="scr-meta"></span>
+          </div>
+        </div>
+        <div id="screen-budget" class="scr-budget"></div>
+        <div class="u-scroll-x">
+          <table class="data-table scr-table">
+            <thead>
+              <tr>
+                <th data-sort="coin" title="Sort by ticker">Coin</th>
+                <th class="r" data-sort="price" title="Sort by price">Price</th>
+                <th
+                  class="r"
+                  data-sort="move"
+                  title="Short-window move from the bot's live price buffer (15m, falls back to 1h). Sort by size of move."
+                >
+                  Move
+                </th>
+                <th class="r" data-sort="chg24h" title="Sort by 24h change">24h</th>
+                <th
+                  class="r"
+                  data-sort="friction"
+                  title="What share of your risk budget the round trip eats: book spread + two taker fees (4.32 bp each). Small print is the raw spread. Sort cheapest first."
+                >
+                  Friction
+                </th>
+                <th
+                  class="r"
+                  data-sort="mine"
+                  title="Your own track record on this coin: net P&L, number of trades and winrate. Not a prediction about the market — a fact about you."
+                >
+                  Mine
+                </th>
+                <th class="r" data-sort="volume" title="Sort by 24h volume">Volume</th>
+              </tr>
+            </thead>
+            <tbody id="screen-tbody">
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+            </tbody>
+          </table>
         </div>
       </section>
 
@@ -336,7 +329,7 @@
            веса Hyperliquid не тратит, к 429 отношения не имеет. -->
       <section class="card" id="sec-activity">
         <div class="card-header">
-          <div class="card-title" data-num="">Recent Activity</div>
+          <div class="card-title">Recent Activity</div>
         </div>
         <div id="bans-strip"></div>
         <div id="activity-container">
@@ -508,30 +501,21 @@
         });
       })();
     </script>
-    <div id="help-modal" class="trade-modal" hidden>
-      <div class="trade-modal__backdrop" data-close="1"></div>
-      <div class="trade-modal__panel" role="dialog" aria-modal="true">
-        <button class="trade-modal__close" data-close="1" aria-label="Close">
-          ×
-        </button>
+    <div id="help-modal" class="modal" hidden>
+      <div class="modal__backdrop" data-close="1"></div>
+      <div class="modal__panel" role="dialog" aria-modal="true">
         <div id="help-modal-body"></div>
       </div>
     </div>
-    <div id="trade-modal" class="trade-modal" hidden>
-      <div class="trade-modal__backdrop" data-close="1"></div>
-      <div class="trade-modal__panel" role="dialog" aria-modal="true">
-        <button class="trade-modal__close" data-close="1" aria-label="Close">
-          ×
-        </button>
+    <div id="trade-modal" class="modal" hidden>
+      <div class="modal__backdrop" data-close="1"></div>
+      <div class="modal__panel modal__panel--wide" role="dialog" aria-modal="true">
         <div id="trade-modal-body"></div>
       </div>
     </div>
-    <div id="whatif-modal" class="trade-modal" hidden>
-      <div class="trade-modal__backdrop" data-close="1"></div>
-      <div class="trade-modal__panel" role="dialog" aria-modal="true">
-        <button class="trade-modal__close" data-close="1" aria-label="Close">
-          ×
-        </button>
+    <div id="whatif-modal" class="modal" hidden>
+      <div class="modal__backdrop" data-close="1"></div>
+      <div class="modal__panel" role="dialog" aria-modal="true">
         <div id="whatif-modal-body"></div>
       </div>
     </div>

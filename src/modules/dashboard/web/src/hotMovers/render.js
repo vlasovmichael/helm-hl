@@ -508,11 +508,11 @@ export function renderHotMovers(payload, fmtTime) {
     // леак (контр-тренд). s.htfTrend = 'up'|'down'|'flat'|'none' из enrichHtfTrend.
     let htfChip = "";
     if (s.htfTrend === "up")
-      htfChip = `<span class="hm-htf num-inline-pos" style="margin-left:6px;font-size:11px;font-weight:600" title="Higher timeframe 1h trend UP — longs go with it; shorts fight it">1h ↑</span>`;
+      htfChip = `<span class="hm-htf num-inline-pos" style="margin-left:6px;font-size: var(--fs-label);font-weight:600" title="Higher timeframe 1h trend UP — longs go with it; shorts fight it">1h ↑</span>`;
     else if (s.htfTrend === "down")
-      htfChip = `<span class="hm-htf num-inline-neg" style="margin-left:6px;font-size:11px;font-weight:600" title="Higher timeframe 1h trend DOWN — shorts go with it; longs fight it">1h ↓</span>`;
+      htfChip = `<span class="hm-htf num-inline-neg" style="margin-left:6px;font-size: var(--fs-label);font-weight:600" title="Higher timeframe 1h trend DOWN — shorts go with it; longs fight it">1h ↓</span>`;
     else if (s.htfTrend === "flat")
-      htfChip = `<span class="hm-htf num-inline-muted" style="margin-left:6px;font-size:11px" title="Higher timeframe 1h trend flat — no tailwind either way">1h →</span>`;
+      htfChip = `<span class="hm-htf num-inline-muted" style="margin-left:6px;font-size: var(--fs-label)" title="Higher timeframe 1h trend flat — no tailwind either way">1h →</span>`;
 
     // Чип Vol/OI: суточный оборот ≥ открытого интереса (Vol ≥ OI). На HL это
     // редкость (норма OI>Vol, медиана ~3×), поэтому Vol≥OI = монета сегодня реально
@@ -525,7 +525,7 @@ export function renderHotMovers(payload, fmtTime) {
         `Daily turnover is ${volOi.toFixed(1)}× open interest: 24h vol ${fmtUsdShort(s.vol24hUsd)} ≥ OI ${fmtUsdShort(s.oiUsd)}. ` +
         `On HL it is usually the other way round (OI>Vol), so this is rare: the coin is churning today — ` +
         `money moving in and out rather than sitting.`;
-      oiVolChip = `<span class="hm-oivol" style="margin-left:6px;font-size:11px;font-weight:600" title="${escapeHtml(tip)}">Vol ${volOi.toFixed(1)}× OI</span>`;
+      oiVolChip = `<span class="hm-oivol" style="margin-left:6px;font-size: var(--fs-label);font-weight:600" title="${escapeHtml(tip)}">Vol ${volOi.toFixed(1)}× OI</span>`;
     }
 
     const rowHtml = `

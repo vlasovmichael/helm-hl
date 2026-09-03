@@ -1,4 +1,205 @@
-/* ──────────────────────── Loaders */
+// ─────────────────────────────────────────────────────────────────────
+//  Загрузка и пустота.
+//
+//  Правило: у блока с асинхронными данными ТРИ состояния, и все три должны
+//  быть нарисованы.
+//    loading — скелетон формы будущего содержимого. Не спиннер: спиннер
+//              говорит «жду», скелетон ещё и «вот столько приедет и такой
+//              формы» — макет не прыгает, когда данные встают на место;
+//    empty   — данных нет и не будет прямо сейчас. Это ОТДЕЛЬНОЕ состояние,
+//              и оно объясняет, почему пусто, а не оставляет дыру;
+//    ready   — данные.
+//
+//  🚨 Пустой блок — не состояние. До 04.09.2026 плашка здоровья фидов при
+//  неизвестном состоянии просто пряталась (`pill.hidden = true`), и в шапке
+//  оставалась дырка, неотличимая от «всё хорошо». То же было у карточек /oi
+//  и у таблиц. Скелетон честнее: он занимает место, которое займут данные.
+// ─────────────────────────────────────────────────────────────────────
+
+/* ── Скелетон ──────────────────────────────────────────────────────── */
+
+/* Общая шкура: бегущий блик слева направо. Держим в одном месте, чтобы у
+   всех скелетонов дашборда совпадала фаза ощущения — одна скорость, один
+   контраст. */
+@mixin skeleton-skin {
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-base) 0%,
+    var(--skeleton-shine) 50%,
+    var(--skeleton-base) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.sk {
+  @include skeleton-skin;
+  display: block;
+  border-radius: var(--radius-sm);
+  /* Скелетон — это «здесь пока ничего»: текст выделять и читать нечего. */
+  user-select: none;
+  color: transparent;
+}
+
+/* Строка текста. Высота от кегля, а не фиксированная: скелетон подписи и
+   скелетон заголовка должны отличаться так же, как отличается текст. */
+.sk-line {
+  height: 0.85em;
+  border-radius: 4px;
+}
+/* Последняя строка абзаца короче — так абзац читается абзацем, а не блоком. */
+.sk-line:last-child:not(:only-child) {
+  width: 62%;
+}
+
+.sk-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+/* Число: моно-ширина, чтобы на месте скелетона встало ровно столько же.
+   Высота 0.72em, а не 1em: у крупной цифры реальная высота — это высота
+   прописной, и слаб в целый кегль выглядел тяжелее числа, которое заменяет. */
+.sk-num {
+  /* inline-block, а не block от .sk: скелетон числа часто стоит ВНУТРИ строки
+     («Source: … since ▮▮▮»), и блочный уводил его на следующую строку. */
+  display: inline-block;
+  height: 0.72em;
+  width: 5ch;
+  border-radius: 4px;
+  vertical-align: 0.02em;
+}
+.sk-num--lg {
+  width: 7ch;
+}
+
+.sk-pill {
+  display: inline-block;
+  height: var(--ctl-h-sm);
+  width: 92px;
+  border-radius: var(--radius-pill);
+}
+
+.sk-chip {
+  display: inline-block;
+  height: 20px;
+  width: 64px;
+  border-radius: var(--radius-pill);
+}
+
+/* Прямоугольник под график. Высоту задаёт вызывающий блок через --sk-h:
+   график на /oi 260px, спарклайн в карточке 64px. */
+.sk-block {
+  height: var(--sk-h, 120px);
+  border-radius: var(--radius);
+}
+
+/* ── Скелетон таблицы ──────────────────────────────────────────────────
+   Рисуется реальными <tr>/<td>, а не одним прямоугольником поверх: тогда
+   ширины колонок уже посчитаны, и при подстановке данных шапка не съезжает. */
+.sk-row td {
+  padding: var(--sp-2) var(--sp-3);
+}
+.sk-row .sk {
+  height: 0.9em;
+}
+/* Ступенчатая длина «ячеек» — иначе таблица-скелетон выглядит штрихкодом. */
+.sk-row td:nth-child(odd) .sk {
+  width: 72%;
+}
+.sk-row td:nth-child(even) .sk {
+  width: 48%;
+}
+.sk-row td:first-child .sk {
+  width: 56px;
+}
+/* Задержка по строкам: блик идёт волной сверху вниз, а не мигает всем сразу. */
+.sk-row:nth-child(2) .sk {
+  animation-delay: 90ms;
+}
+.sk-row:nth-child(3) .sk {
+  animation-delay: 180ms;
+}
+.sk-row:nth-child(4) .sk {
+  animation-delay: 270ms;
+}
+.sk-row:nth-child(5) .sk {
+  animation-delay: 360ms;
+}
+.sk-row:nth-child(n + 6) .sk {
+  animation-delay: 450ms;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Без движения скелетон остаётся, но перестаёт мигать: форма будущего
+   содержимого полезна и неподвижной, а мерцание для части людей — симптом. */
+@media (prefers-reduced-motion: reduce) {
+  .sk,
+  .skeleton-row {
+    animation: none;
+    background: var(--skeleton-base);
+  }
+}
+
+/* ── Пустое состояние ──────────────────────────────────────────────────
+   Не «нет данных», а: что именно пусто, почему и что с этим делать.
+   Иконка приглушена до предела — это не сообщение об ошибке. */
+.empty {
+  /* Явно свой шрифт и кегль: пустое состояние часто стоит внутри ячейки
+     таблицы, а та набрана моно с табличными цифрами — объяснение в моно
+     читается как вывод программы, а не как обращение к человеку. */
+  font-family: var(--font-sans);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: var(--sp-8) var(--sp-4);
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+
+  .icon {
+    width: 22px;
+    height: 22px;
+    color: var(--text-faint);
+    stroke-width: 1.5;
+  }
+  &__title {
+    color: var(--text-primary);
+    font-weight: 600;
+    font-size: var(--fs-base);
+  }
+  &__hint {
+    max-width: 46ch;
+    line-height: 1.55;
+  }
+  /* Компактный вариант — внутрь карточки, где на пустоту нет 60px. */
+  &--inline {
+    flex-direction: row;
+    justify-content: flex-start;
+    padding: var(--sp-3) 0;
+    text-align: left;
+  }
+}
+
+/* Пустое состояние на месте строк таблицы — .empty-state (core/_datagrid.scss):
+   колонки уже посчитаны, поэтому там одна ячейка на всю ширину, а не .empty.
+   Второго класса под то же самое не заводим. */
+
+/* ── Спиннер ────────────────────────────────────────────────────────────
+   Остаётся ровно для одного случая: ДЕЙСТВИЕ пользователя выполняется
+   (нажал «Recompute», отправил форму). Ожидание данных при открытии
+   страницы — это скелетон, не спиннер. */
 .local-loader {
   position: absolute;
   inset: 0;
@@ -8,7 +209,7 @@
   background: var(--card-bg);
   z-index: 10;
   border-radius: var(--radius);
-  transition: opacity 0.2s;
+  transition: opacity var(--dur) var(--ease-out);
 
   &.hidden {
     opacity: 0;
@@ -24,52 +225,63 @@
   border-radius: 50%;
   animation: spinner-rotate 0.8s linear infinite;
 }
+.loader-spinner--sm {
+  width: 14px;
+  height: 14px;
+  border-width: 1.5px;
+}
 @keyframes spinner-rotate {
   to {
     transform: rotate(360deg);
   }
 }
 
+/* Кнопка в работе: подпись остаётся на месте (ширина не прыгает), поверх
+   ложится спиннер, повторное нажатие исключено самим disabled. */
+.btn.is-busy {
+  position: relative;
+  color: transparent;
+  pointer-events: none;
+
+  &::after {
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid var(--border-strong);
+    border-top-color: var(--text-primary);
+    border-radius: 50%;
+    animation: spinner-rotate 0.8s linear infinite;
+  }
+}
+
+/* ── Старые имена ──────────────────────────────────────────────────────
+   .skeleton-row / .activity-skeleton / .card-skeleton остались в activity и
+   P&L Summary. Переводить их на .sk нечего — форма та же, поэтому просто
+   разделяем шкуру. */
+.skeleton-row {
+  @include skeleton-skin;
+  height: 20px;
+  border-radius: 4px;
+}
 .activity-skeleton {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 4px 0;
+  gap: var(--sp-2);
+  padding: var(--sp-1) 0;
 }
-.skeleton-row {
-  height: 20px;
-  border-radius: 4px;
-  background: linear-gradient(
-    90deg,
-    var(--skeleton-base) 0%,
-    var(--skeleton-shine) 50%,
-    var(--skeleton-base) 100%
-  );
-  background-size: 200% 100%;
-  animation: skeleton-shimmer 1.4s ease-in-out infinite;
-}
-
-/* Скелетон-оверлей карточки (P&L Summary): прячется при первом рендере данных. */
 .card-skeleton {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--sp-3);
   background: var(--card-bg);
   z-index: 10;
-  transition: opacity 0.2s;
+  transition: opacity var(--dur) var(--ease-out);
 
   &.hidden {
     opacity: 0;
     pointer-events: none;
-  }
-}
-@keyframes skeleton-shimmer {
-  0% {
-    background-position: 200% 0;
-  }
-  100% {
-    background-position: -200% 0;
   }
 }

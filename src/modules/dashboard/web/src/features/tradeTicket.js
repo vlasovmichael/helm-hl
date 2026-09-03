@@ -24,6 +24,8 @@
 // гонять его локально на моках (ticket.html), не касаясь биржи.
 
 import { escapeHtml, fmtUsd, fmtPrice } from "../utils/format.js";
+import * as dialog from "../core/dialog.js";
+import { icon } from "../core/icon.js";
 
 // Биржевой минимум ордера на HL. Меньше — отказ, поэтому это блокер, а не
 // предупреждение (Rabby показывает ровно его же красным).
@@ -276,21 +278,21 @@ function createModal(io) {
   function ensureDom() {
     if (el) return el;
     el = document.createElement("div");
-    el.className = "trade-modal tt-modal";
+    el.className = "modal tt-modal";
     el.hidden = true;
     el.innerHTML = `
-      <div class="trade-modal__backdrop" data-tt-close></div>
-      <div class="trade-modal__panel tt-panel" role="dialog" aria-modal="true" aria-label="Position">
-        <button class="trade-modal__close" type="button" data-tt-close aria-label="Close">×</button>
+      <div class="modal__backdrop" data-tt-close></div>
+      <div class="modal__panel tt-panel" role="dialog" aria-modal="true" aria-label="Position">
+        <button class="modal__close" type="button" data-tt-close aria-label="Close">${icon("close")}</button>
         <div class="tt-panel__body"></div>
       </div>`;
     document.body.appendChild(el);
     bodyEl = el.querySelector(".tt-panel__body");
+    // Закрытие ведём сами: у листа есть выезд вниз, и прятать его надо ПОСЛЕ
+    // анимации. Замок прокрутки, Escape и возврат фокуса при этом всё равно
+    // приходят из core/dialog.js — они общие для всех диалогов.
     el.addEventListener("click", (e) => {
-      if (e.target.hasAttribute("data-tt-close")) close();
-    });
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && !el.hidden) close();
+      if (e.target.closest("[data-tt-close]")) close();
     });
     return el;
   }
@@ -873,7 +875,7 @@ function createModal(io) {
     loadContext().then(() => {
       if (el && !el.hidden) softRefresh();
     });
-    el.hidden = false;
+    dialog.open(el, { onClose: () => el.classList.remove("is-open") });
     // Чтобы анимация проигралась, браузер должен сначала зафиксировать
     // НАЧАЛЬНОЕ состояние (opacity 0 + сдвиг), и только потом получить класс.
     // Раньше тут был requestAnimationFrame — и это давало невидимую модалку:
@@ -882,7 +884,6 @@ function createModal(io) {
     // делает то же самое синхронно и от кадров не зависит.
     void el.offsetHeight;
     el.classList.add("is-open");
-    document.body.style.overflow = "hidden";
     startPricePoll();
   }
 
@@ -910,9 +911,9 @@ function createModal(io) {
     stopPricePoll(); // иначе опрос цены продолжается на закрытой модалке
     if (closeAfter) { clearTimeout(closeAfter); closeAfter = null; } // закрыли раньше таймера
     el.classList.remove("is-open");
-    document.body.style.overflow = "";
-    // Ждём выезд панели вниз, потом прячем.
-    setTimeout(() => { el.hidden = true; }, 200);
+    // Ждём выезд панели вниз, потом прячем: dialog.close() снимет замок
+    // прокрутки и вернёт фокус на кнопку, с которой лист открывали.
+    setTimeout(() => dialog.close(el), 200);
   }
 
   return { open, close, refresh: async () => { await loadContext(); if (el && !el.hidden) render(); }, _state: state, _setContext(n) { ctx = { ...ctx, ...n }; if (el && !el.hidden) render(); } };

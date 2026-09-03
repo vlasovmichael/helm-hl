@@ -30,7 +30,7 @@
     border: none;
     color: var(--text-muted);
     font-family: var(--font-sans);
-    font-size: 11px;
+    font-size: var(--fs-label);
     font-weight: 500;
     padding: 6px 2px;
     /* 5 колонок на 320px → ярлык не должен рвать колонку. */
@@ -42,7 +42,10 @@
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    transition: all 0.12s var(--ease);
+    transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
     min-height: 48px;
   }
   .bottom-nav-btn .nav-icon {
@@ -112,7 +115,7 @@
     padding-bottom: 20px;
   }
   .equity-group .value {
-    font-size: 36px;
+    font-size: var(--fs-hero-sm);
   }
 
   .meta-group {
@@ -161,12 +164,12 @@
     height: 440px !important;
   }
 
-  .time-ranges {
+  .seg {
     width: 100%;
   }
-  .time-ranges .range-btn {
+  .seg .seg__btn {
     flex: 1;
-    padding: 7px 8px;
+    min-height: var(--ctl-h);
   }
 
   .activity-item {
@@ -198,7 +201,7 @@
 
   .logs-viewport {
     height: 280px;
-    font-size: 11px;
+    font-size: var(--fs-label);
   }
   .log-row {
     grid-template-columns: 56px 46px 1fr;
@@ -236,10 +239,10 @@
     padding: 12px 14px;
   }
   .grid-item .item-value {
-    font-size: 18px;
+    font-size: var(--fs-h3);
   }
   .activity-item {
-    font-size: 12px;
+    font-size: var(--fs-small);
   }
 }
 

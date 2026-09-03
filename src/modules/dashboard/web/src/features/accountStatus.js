@@ -305,6 +305,11 @@ export function renderHeader(status) {
     const pct = (profit / status.sessionStartEquity) * 100;
     deltaEl.textContent = `${profit >= 0 ? "+" : "-"}${fmtUsd(Math.abs(profit))} (${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%) session`;
     deltaEl.className = `delta ${profit >= 0 ? "positive" : "negative"}`;
+  } else {
+    // Кадр пришёл, но точки отсчёта сессии в нём нет. Скелетон снимаем всё
+    // равно: он обещает данные, которые уже не приедут, и мигал бы вечно.
+    deltaEl.textContent = "session —";
+    deltaEl.className = "delta";
   }
   document.getElementById("uptime-val").textContent =
     `Uptime: ${formatUptime(status.uptimeMin)}`;
@@ -344,13 +349,21 @@ function renderHealthPill(health) {
   const pill = document.getElementById("health-pill");
   if (!pill) return;
   // unknown = ни один источник ещё не отчитался (или фид выключен флагом).
-  // Плашки нет вовсе: пустой серый бейдж выглядел бы как измеренное состояние.
+  //
+  // 🚨 До 04.09.2026 плашка в этом случае пряталась целиком (`hidden = true`),
+  // и в шапке оставалась дырка, неотличимая от «всё хорошо». Теперь два разных
+  // состояния и оба нарисованы: пока ждём — скелетон (форма будущей плашки),
+  // если фид выключен насовсем — плашка «Data —» приглушённым тоном.
   const view = health && HEALTH_VIEW[health.overall];
   if (!view) {
-    pill.hidden = true;
+    if (!pill.classList.contains("is-loading")) {
+      pill.classList.add("is-loading");
+      pill.innerHTML = '<span class="sk sk-chip"></span>';
+      pill.title = "Waiting for the first health report";
+    }
     return;
   }
-  pill.hidden = false;
+  pill.classList.remove("is-loading");
   pill.classList.remove("live", "stale", "offline");
   pill.classList.add(view.cls);
   const bad = (health.checks || []).filter((c) => c.status !== "pass").length;
@@ -360,7 +373,9 @@ function renderHealthPill(health) {
   pill.title = (health.checks || [])
     .slice()
     .sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9))
-    .map((c) => `${c.status === "pass" ? "✓" : "⚠"} ${c.name}: ${c.detail}`)
+    // 🚨 Это нативный тултип (атрибут title) — там только текст, svg не
+    // отрисуется. Поэтому статус словом, а не значком.
+    .map((c) => `${c.status === "pass" ? "OK  " : "BAD "} ${c.name}: ${c.detail}`)
     .join("\n");
 }
 
@@ -516,7 +531,7 @@ export function renderPosition(pos) {
   const sideCls = side === "SHORT" ? "negative" : "positive";
   container.innerHTML = `
     <div class="data-grid">
-      <div class="grid-item"><div class="item-label">Coin · Side</div><div class="item-value highlight">#${pos.coin} <span class="${sideCls}" style="font-size:11px; font-weight:700; padding:2px 6px; border-radius:4px; margin-left:4px;">${side}</span></div></div>
+      <div class="grid-item"><div class="item-label">Coin · Side</div><div class="item-value highlight">#${pos.coin} <span class="${sideCls}" style="font-size: var(--fs-label); font-weight:700; padding:2px 6px; border-radius:4px; margin-left:4px;">${side}</span></div></div>
       <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(pos.sizeUsd)}</div></div>
       <div class="grid-item"><div class="item-label">Entry</div><div class="item-value">${fmtPrice(pos.entryPrice)}</div></div>
       <div class="grid-item"><div class="item-label">APY · Held</div><div id="pos-apyheld" class="item-value">${fmtPct(pos.entryApy)} · ${pos.heldHours.toFixed(1)}h</div></div>
@@ -565,7 +580,7 @@ function ensureFloorTimerStyle() {
     ".floor-timer-bg{position:absolute;inset:0;transform-origin:left center;" +
     "background:linear-gradient(90deg,rgba(234,179,8,0.22),rgba(234,179,8,0.06));" +
     "animation:floorTimerDeplete 900s linear forwards;pointer-events:none;z-index:0}" +
-    ".floor-timer-chip{margin-left:6px;font-size:11px;font-family:var(--font-mono);color:var(--yellow,#eab308);font-weight:600}" +
+    ".floor-timer-chip{margin-left:6px;font-size: var(--fs-label);font-family:var(--font-mono);color:var(--yellow,#eab308);font-weight:600}" +
     ".floor-timer-chip:empty{display:none}";
   document.head.appendChild(st);
 }
@@ -875,11 +890,11 @@ export function renderBans(status) {
   }
   strip.classList.add("bans-strip");
   strip.innerHTML =
-    '<div style="font-size:10px; color:var(--text-muted,#888); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">Runtime bans</div>' +
+    '<div style="font-size: var(--fs-micro); color:var(--text-muted,#888); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">Runtime bans</div>' +
     status.runtimeBans
       .map(
         (c) =>
-          `<div style="display:inline-block; background:rgba(239,68,68,0.1); color:var(--red); border:1px solid rgba(239,68,68,0.2); padding:3px 8px; border-radius:5px; font-size:10px; font-family:var(--font-mono); font-weight:600; margin:0 6px 4px 0;">#${c}</div>`,
+          `<div style="display:inline-block; background:rgba(239,68,68,0.1); color:var(--red); border:1px solid rgba(239,68,68,0.2); padding:3px 8px; border-radius:5px; font-size: var(--fs-micro); font-family:var(--font-mono); font-weight:600; margin:0 6px 4px 0;">#${c}</div>`,
       )
       .join("");
 }

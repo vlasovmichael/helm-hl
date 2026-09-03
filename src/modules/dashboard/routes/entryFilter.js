@@ -59,19 +59,22 @@ export function classify({ trend1h, trend15m }) {
   const fast = t15 != null && Math.abs(t15) >= EF.STRONG_15M;
 
   if (!strong && !fast) {
+    // 🚨 Текст уезжает в карточку на /oi, где вся страница английская.
+    // До 04.09.2026 эти три строки были русскими — единственный русский на
+    // всей странице, и выглядели как чужая вставка.
     return { level: 'quiet', blockedSide: null, allowedSide: null,
-             text: 'Спокойно: сильного движения нет, фильтр молчит' };
+             text: 'Quiet: no strong move, the filter says nothing' };
   }
   const dir = (strong ? t1 : t15) > 0 ? 'LONG' : 'SHORT';   // сторона «по движению»
   const level = extreme ? 'extreme' : strong ? 'strong' : 'fast';
-  const move = strong ? `${t1 > 0 ? '+' : ''}${t1.toFixed(1)}% за час` : `${t15 > 0 ? '+' : ''}${t15.toFixed(1)}% за 15 мин`;
+  const move = strong ? `${t1 > 0 ? '+' : ''}${t1.toFixed(1)}% in an hour` : `${t15 > 0 ? '+' : ''}${t15.toFixed(1)}% in 15 min`;
   return {
     level,
     blockedSide: dir,
     allowedSide: dir === 'LONG' ? 'SHORT' : 'LONG',
     text: extreme
-      ? `${move} — худший срез журнала (−0.49 на сделку). Вход в ${dir} = вход в уже случившееся`
-      : `${move} — вход в ${dir} идёт по движению; в журнале это −0.18 против −0.05 у входа против`,
+      ? `${move} — the journal's worst slice (−0.49 per trade). Entering ${dir} is entering a move that already happened`
+      : `${move} — entering ${dir} goes with the move; in the journal that returned −0.18 against −0.05 for entering against it`,
   };
 }
 

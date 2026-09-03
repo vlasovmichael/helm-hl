@@ -6,8 +6,8 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#0c0a09" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#f5f1ea" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <title>Statistics · Helm</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -50,13 +50,13 @@
       <!-- 06 / P&L Summary (вкл. per-strategy breakdown #pnl-strategy) -->
       <section class="card" id="sec-pnl">
         <div class="card-header">
-          <div class="card-title" data-num="06">P&amp;L Summary</div>
-          <div class="time-ranges" id="pnl-periods">
-            <button class="range-btn active" data-period="today">Today</button>
-            <button class="range-btn" data-period="yesterday">Yesterday</button>
-            <button class="range-btn" data-period="d7">7d</button>
-            <button class="range-btn" data-period="d30">30d</button>
-            <button class="range-btn" data-period="all">All</button>
+          <div class="card-title">P&amp;L Summary</div>
+          <div class="seg" id="pnl-periods">
+            <button class="seg__btn active" type="button" data-period="today">Today</button>
+            <button class="seg__btn" type="button" data-period="yesterday">Yesterday</button>
+            <button class="seg__btn" type="button" data-period="d7">7d</button>
+            <button class="seg__btn" type="button" data-period="d30">30d</button>
+            <button class="seg__btn" type="button" data-period="all">All</button>
           </div>
         </div>
         <div id="pnl-summary-container" class="u-rel">
@@ -135,18 +135,17 @@
         <div class="card-header">
           <div
             class="card-title"
-            data-num="06+"
             title="Lifetime cuts: per-coin, long/short and by strategy (with expectancy/payoff), plus a multi-year daily P&amp;L heatmap (paged by year). Independent of the P&amp;L period selector — always all-time."
           >
             Insights
           </div>
-          <div class="time-ranges" id="insights-tabs">
-            <button class="range-btn active" data-tab="per-coin">
+          <div class="seg" id="insights-tabs">
+            <button class="seg__btn active" type="button" data-tab="per-coin">
               Per-coin
             </button>
-            <button class="range-btn" data-tab="breakdown">Breakdown</button>
-            <button class="range-btn" data-tab="exits">Exit quality</button>
-            <button class="range-btn" data-tab="heatmap">Heatmap</button>
+            <button class="seg__btn" type="button" data-tab="breakdown">Breakdown</button>
+            <button class="seg__btn" type="button" data-tab="exits">Exit quality</button>
+            <button class="seg__btn" type="button" data-tab="heatmap">Heatmap</button>
           </div>
         </div>
         <div id="insights-container" class="u-rel">
@@ -264,7 +263,7 @@
       <!-- 06++ / Разбор моих сделок + Мои правила -->
       <section class="card" id="sec-mytrades">
         <div class="card-header">
-          <div class="card-title" data-num="06++">My trade breakdown</div>
+          <div class="card-title">My trade breakdown</div>
           <div class="mytrades-period" id="mytrades-period"></div>
         </div>
         <div id="mytrades-body" class="mytrades-body">
@@ -280,17 +279,17 @@
       <!-- 07 / Performance (Equity Chart) -->
       <section class="card">
         <div class="card-header">
-          <div class="card-title" data-num="07">Performance</div>
+          <div class="card-title">Performance</div>
           <div class="equity-pill" id="equity-pill" hidden>
             <span class="equity-pill-value" id="equity-pill-value">$0.00</span>
             <span class="equity-pill-delta" id="equity-pill-delta">+0.00%</span>
           </div>
-          <div class="time-ranges">
-            <button class="range-btn" data-hours="1">1h</button>
-            <button class="range-btn active" data-hours="24">24h</button>
-            <button class="range-btn" data-hours="168">7d</button>
-            <button class="range-btn" data-hours="720">30d</button>
-            <button class="range-btn" data-hours="0">All</button>
+          <div class="seg">
+            <button class="seg__btn" type="button" data-hours="1">1h</button>
+            <button class="seg__btn active" type="button" data-hours="24">24h</button>
+            <button class="seg__btn" type="button" data-hours="168">7d</button>
+            <button class="seg__btn" type="button" data-hours="720">30d</button>
+            <button class="seg__btn" type="button" data-hours="0">All</button>
           </div>
         </div>
         <div class="chart-container" id="chart-container">
@@ -304,25 +303,25 @@
       <!-- 03 / Live Logs -->
       <section class="card" id="sec-logs">
         <div class="card-header">
-          <div class="card-title" data-num="03">Live Logs</div>
+          <div class="card-title">Live Logs</div>
           <div class="logs-controls">
             <input
               type="search"
               id="logs-search"
-              placeholder="Search…"
+              class="field"
+              placeholder="Search logs"
+              aria-label="Search logs"
               autocomplete="off"
               spellcheck="false"
             />
-            <div class="logs-filters" id="logs-filters">
-              <button class="logs-filter-btn active" data-level="all">
-                All
-              </button>
-              <button class="logs-filter-btn" data-level="info">Info</button>
-              <button class="logs-filter-btn" data-level="warn">Warn</button>
-              <button class="logs-filter-btn" data-level="error">Err</button>
+            <div class="seg logs-filters" id="logs-filters" role="group" aria-label="Log level">
+              <button class="seg__btn logs-filter-btn active" type="button" data-level="all">All</button>
+              <button class="seg__btn logs-filter-btn" type="button" data-level="info">Info</button>
+              <button class="seg__btn logs-filter-btn" type="button" data-level="warn">Warn</button>
+              <button class="seg__btn logs-filter-btn" type="button" data-level="error">Err</button>
             </div>
             <button
-              class="logs-pause-btn"
+              class="btn btn--icon logs-pause-btn"
               id="logs-pause"
               type="button"
               title="Pause autoscroll"
@@ -333,7 +332,7 @@
           </div>
         </div>
         <div class="logs-viewport" id="logs-viewport">
-          <div class="logs-empty" id="logs-empty">Waiting for logs…</div>
+          <div class="logs-empty" id="logs-empty"></div>
           <div class="logs-list" id="logs-list"></div>
         </div>
         <div class="logs-meta" id="logs-meta">

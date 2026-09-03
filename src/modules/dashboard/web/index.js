@@ -33,8 +33,6 @@ import {
 import {
   renderScreen,
   initScreenInteractions,
-  initHotMoversToggle,
-  hotMoversVisible,
 } from "./src/features/screen.js";
 import { renderMarketContext, updateBtcLivePrice } from "./src/features/marketContext.js";
 import { startDayDesk } from "./src/features/dayDesk.js";
@@ -66,15 +64,13 @@ function onStatus(data) {
   // Живая цена BTC в плашку Market Context (≤2с, из WS-кадра) — не ждём 10с-поллинг.
   updateBtcLivePrice(data.btcLivePrice);
   // Hot Movers из WS (≤2с) вместо 10с-поллинга; HTTP /api/signals в tick() = фолбэк.
-  // Таблица скрыта → не рендерим её вовсе: кадр всё равно приходит (он общий для
-  // всех панелей), но перестраивать 30 строк в невидимом DOM смысла нет.
-  if (data.hotMovers?.signals && hotMoversVisible()) {
+  if (data.hotMovers?.signals) {
     renderHotMovers(data.hotMovers, fmtTime);
     lastWsHotMoversAt = Date.now();
   }
   // Живой спин стрелки активной монеты в Hot Movers (≤2с) — после рендера, чтобы
   // спин ставился на уже смонтированный узел и не сбрасывался перестроением строк.
-  if (hotMoversVisible()) updateHotMoversLiveArrow();
+  updateHotMoversLiveArrow();
 }
 
 // Каждая панель рисуется САМА, как только пришли её данные. Раньше здесь стоял
@@ -98,10 +94,9 @@ function tick() {
       renderScreen({ ok: false, reason: "dashboard unreachable", message: err?.message }),
     );
 
-  // Фолбэк /api/signals только если WS не присылал hotMovers недавно И таблица
-  // раскрыта — скрытая карточка не должна дёргать сеть.
+  // Фолбэк /api/signals только если WS не присылал hotMovers недавно.
   const wsHotFresh = Date.now() - lastWsHotMoversAt < WS_HOTMOVERS_FRESH_MS;
-  if (!wsHotFresh && hotMoversVisible()) {
+  if (!wsHotFresh) {
     paint(fetchJson("/api/signals?limit=30"), (d) => {
       if (d?.signals) renderHotMovers(d, fmtTime);
     });
@@ -229,9 +224,6 @@ initWhatIf();
 initManualPaperTrigger("mp-paper-btn");
 initManualPaperActive();
 initTradeButton();
-// Переключатель Hot Movers ПОСЛЕ инициализации Paper/What-if: он переносит их
-// кнопки между шапками, и слушатели должны быть уже навешены на сами узлы.
-initHotMoversToggle();
 // BTC Divergence + Whale Watch вынесены на /lab.html — их HL-поллинг
 // (candleSnapshot/metaAndAssetCtxs) грузится только когда открыта Lab, а не на
 // торговом дашборде (разгрузка весового бюджета HL, защита от 429). 2026-06-17.

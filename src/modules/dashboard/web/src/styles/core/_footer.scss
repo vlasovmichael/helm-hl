@@ -5,7 +5,7 @@ footer {
   border-top: 1px solid var(--border);
   text-align: center;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-family: var(--font-mono);
   display: flex;
   justify-content: space-between;
@@ -20,10 +20,13 @@ footer {
   color: var(--text-muted);
   text-decoration: none;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-small);
   padding: 4px 10px;
   border-radius: 4px;
-  transition: all 0.12s var(--ease);
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
 .logout-link:hover {
   color: var(--accent);

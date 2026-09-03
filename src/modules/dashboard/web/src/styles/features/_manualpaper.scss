@@ -1,27 +1,27 @@
 // ── Paper trade (Rabbit-style) — entry modal + Active-Position card bits ──
-// The modal reuses the shared .trade-modal shell (like "What if…"); only the
+// The modal reuses the shared .modal shell (like "What if…"); only the
 // width differs. Buttons mirror the wi-* look.
 @use "../core/breakpoints" as *;
 
-#mp-modal .trade-modal__panel {
+#mp-modal .modal__panel {
   width: min(380px, calc(100vw - 32px));
 }
 
 .mp-title {
-  font-size: 16px;
+  font-size: var(--fs-lead);
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 4px;
 }
 .mp-lead {
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text-muted);
   line-height: 1.45;
   margin-bottom: 14px;
 }
 .mp-label {
   display: block;
-  font-size: 12px;
+  font-size: var(--fs-small);
   font-weight: 600;
   color: var(--text-muted);
   margin: 12px 0 5px;
@@ -35,7 +35,7 @@
   background: var(--canvas-inset);
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: var(--fs-base);
   text-transform: uppercase;
   outline: none;
 
@@ -57,10 +57,13 @@
   background: var(--canvas-inset);
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.12s var(--ease);
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 
   &:hover { color: var(--text-primary); }
 
@@ -79,7 +82,7 @@
 .mp-lev-hint {
   font-weight: 400;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-label);
 }
 .mp-range {
   width: 100%;
@@ -91,7 +94,7 @@
   padding: 9px 11px;
   border-radius: 6px;
   background: var(--accent-soft);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text-secondary);
   line-height: 1.5;
 
@@ -99,7 +102,7 @@
 }
 .mp-err {
   margin: 6px 0;
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--red);
 
   &[hidden] { display: none; }
@@ -113,7 +116,7 @@
   background: var(--accent);
   color: #fff;
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: var(--fs-base);
   font-weight: 700;
   cursor: pointer;
 
@@ -133,7 +136,7 @@
   justify-content: space-between;
   gap: 8px;
   margin: 0 0 6px;
-  font-size: 11px;
+  font-size: var(--fs-label);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -146,7 +149,7 @@
   color: var(--text-muted, var(--text-secondary));
 }
 .mp-active-table {
-  font-size: 13px;
+  font-size: var(--fs-body);
 
   // P&L / side coloring (num-pos/num-neg only style inside .signals-table).
   .num-pos,
@@ -158,12 +161,12 @@
 // ── management card bits ──
 .mp-roe {
   display: block;
-  font-size: 11px;
+  font-size: var(--fs-label);
   opacity: 0.8;
 }
 .mp-sub {
   display: block;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 400;
   color: var(--text-muted, var(--text-secondary));
   opacity: 0.85;
@@ -174,16 +177,19 @@
   border-radius: var(--radius);
   background: var(--card-bg, var(--bg));
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: var(--fs-small);
   cursor: pointer;
-  transition: all 0.12s var(--ease);
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 
   &:hover { color: var(--text-primary); border-color: var(--red); }
   &:disabled { opacity: 0.5; cursor: default; }
 }
 
 // ── Close-confirmation dialog (styled stand-in for window.confirm) ──
-#mp-confirm .trade-modal__panel {
+#mp-confirm .modal__panel {
   width: min(360px, calc(100vw - 32px));
 }
 .mp-confirm-grid {
@@ -204,14 +210,14 @@
   &:last-child { grid-column: 1 / -1; }
 }
 .mp-confirm-cell-label {
-  font-size: 9.5px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--text-muted);
 }
 .mp-confirm-cell-value {
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
@@ -229,10 +235,13 @@
     padding: 10px;
     border-radius: 6px;
     font-family: var(--font-mono);
-    font-size: 13px;
+    font-size: var(--fs-body);
     font-weight: 700;
     cursor: pointer;
-    transition: all 0.12s var(--ease);
+    transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 
     &:disabled { opacity: 0.6; cursor: default; }
   }

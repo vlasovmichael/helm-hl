@@ -195,7 +195,7 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
   // «LONG TREND» с «LONG FADE».
   const isFade = mode === "fade";
   const icon = isFade ? _SVG_FADE : sideUp ? _SVG_ARROW_UP : _SVG_ARROW_DOWN;
-  const modeTag = `<span style="opacity:.65;font-size:9px;font-weight:600"> ${(tagText ?? mode).toUpperCase()}</span>`;
+  const modeTag = `<span style="opacity:.65;font-size: var(--fs-micro);font-weight:600"> ${(tagText ?? mode).toUpperCase()}</span>`;
   const strongCls = isFade
     ? sideUp
       ? "setup-fade-long"

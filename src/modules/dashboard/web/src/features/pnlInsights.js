@@ -11,6 +11,7 @@
 
 import { fmtMoney, escapeHtml, strategyDisplayName } from "../utils/format.js";
 import { fetchJson, postJson } from "../net/api.js";
+import { icon } from "../core/icon.js";
 
 let currentPnlPeriod = "today";
 let lastPnlSummary = null;
@@ -47,7 +48,7 @@ function renderPnlSummary() {
   const wr = p.count > 0 ? `${p.winRate.toFixed(0)}% win` : "—";
   const manualNote =
     manualCount > 0
-      ? ` · 🖐 ${manualCount} manual (${fmtMoney(manualPnl)})`
+      ? ` · ${icon("manual")} ${manualCount} manual (${fmtMoney(manualPnl)})`
       : "";
   document.getElementById("pnl-stats").textContent =
     `${p.count} trade${p.count === 1 ? "" : "s"} · ${wr}${manualNote}`;
@@ -453,9 +454,9 @@ function renderHeatmap() {
   const nextDis = year >= maxYear ? "disabled" : "";
   grid.innerHTML = `
     <div class="heatmap-nav">
-      <button class="heatmap-year-btn" data-dir="-1" ${prevDis} aria-label="Previous year">‹</button>
+      <button class="btn btn--icon btn--sm heatmap-year-btn" type="button" data-dir="-1" ${prevDis} aria-label="Previous year">${icon("prev")}</button>
       <span class="heatmap-year">${year}</span>
-      <button class="heatmap-year-btn" data-dir="1" ${nextDis} aria-label="Next year">›</button>
+      <button class="btn btn--icon btn--sm heatmap-year-btn" type="button" data-dir="1" ${nextDis} aria-label="Next year">${icon("next")}</button>
     </div>
     <div class="heatmap-months">${months.join("")}</div>`;
 
@@ -493,11 +494,11 @@ export function renderTax(tax) {
 export function initPnlInsights({ fmtTime } = {}) {
   if (typeof fmtTime === "function") _fmtTime = fmtTime;
 
-  document.querySelectorAll("#pnl-periods .range-btn").forEach((b) =>
+  document.querySelectorAll("#pnl-periods .seg__btn").forEach((b) =>
     b.addEventListener("click", () => {
       if (b.dataset.period === currentPnlPeriod) return;
       document
-        .querySelectorAll("#pnl-periods .range-btn")
+        .querySelectorAll("#pnl-periods .seg__btn")
         .forEach((r) => r.classList.remove("active"));
       b.classList.add("active");
       currentPnlPeriod = b.dataset.period;
@@ -505,11 +506,11 @@ export function initPnlInsights({ fmtTime } = {}) {
     }),
   );
 
-  document.querySelectorAll("#insights-tabs .range-btn").forEach((b) =>
+  document.querySelectorAll("#insights-tabs .seg__btn").forEach((b) =>
     b.addEventListener("click", () => {
       if (b.dataset.tab === currentInsightsTab) return;
       document
-        .querySelectorAll("#insights-tabs .range-btn")
+        .querySelectorAll("#insights-tabs .seg__btn")
         .forEach((r) => r.classList.remove("active"));
       b.classList.add("active");
       currentInsightsTab = b.dataset.tab;
@@ -592,7 +593,7 @@ function ensureDayModal() {
         placeholder="What went well / where you slipped / did you follow the plan…"></textarea>
       <div class="day-modal__foot">
         <span class="day-modal__status" id="day-modal-status"></span>
-        <button class="range-btn" id="day-modal-save" type="button">Save</button>
+        <button class="btn btn--primary" type="button" id="day-modal-save">Save</button>
       </div>
     </div>`;
   document.body.appendChild(el);
@@ -673,7 +674,7 @@ async function saveDayNote(explicit = false) {
   try {
     await postJson("/api/day-journal", { date: dayModalState.date, note });
     dayModalState.loadedNote = note;
-    flashStatus("Saved ✓");
+    flashStatus("Saved");
   } catch {
     flashStatus("Save error");
   }

@@ -7,6 +7,7 @@
 
 import { escapeHtml, fmtNotional, fmtSince } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
+import { icon } from "../core/icon.js";
 
 // Колбэк «китовые позиции обновились» — main.js вешает на него renderBtcDivergence.
 let onPositionsUpdated = () => {};
@@ -68,9 +69,9 @@ function wwRenderChips() {
     .map((w, i) => {
       const short = `${w.address.slice(0, 6)}…${w.address.slice(-4)}`;
       const labelDiffersFromShort = w.label !== short;
-      return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--bg-header);border:1px solid var(--hairline);border-radius:4px;padding:2px 7px;font-family:var(--font-mono);font-size:10px;color:var(--text-muted)" title="${escapeHtml(w.address)}">
-      ${escapeHtml(w.label)}${labelDiffersFromShort ? ` <span style="opacity:.5;font-size:9px">${short}</span>` : ""}
-      <button data-ww-remove="${i}" style="background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:11px;padding:0 0 0 3px;line-height:1" title="Remove">×</button>
+      return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--bg-header);border:1px solid var(--hairline);border-radius:4px;padding:2px 7px;font-family:var(--font-mono);font-size: var(--fs-micro);color:var(--text-muted)" title="${escapeHtml(w.address)}">
+      ${escapeHtml(w.label)}${labelDiffersFromShort ? ` <span style="opacity:.5;font-size: var(--fs-micro)">${short}</span>` : ""}
+      <button data-ww-remove="${i}" style="background:none;border:none;color:var(--text-faint);cursor:pointer;font-size: var(--fs-label);padding:0 0 0 3px;line-height:1" title="Remove">×</button>
     </span>`;
     })
     .join("");
@@ -197,31 +198,31 @@ function renderWhaleWatch(results) {
       let deltaBadge = "";
       if (d) {
         if (d.type === "opened") {
-          deltaBadge = `<span style="margin-left:4px;background:var(--green);color:#000;font-size:9px;font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">NEW</span>`;
+          deltaBadge = `<span style="margin-left:4px;background:var(--green);color:#000;font-size: var(--fs-micro);font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">NEW</span>`;
         } else if (d.type === "closed" || p._closed) {
-          deltaBadge = `<span style="margin-left:4px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
+          deltaBadge = `<span style="margin-left:4px;background:var(--red);color:#fff;font-size: var(--fs-micro);font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
         } else if (d.type === "size_up") {
           const diff = (d.sizeUsd ?? 0) - (d.prevSizeUsd ?? 0);
-          deltaBadge = `<span style="margin-left:4px;color:var(--green);font-size:9px;font-weight:700;vertical-align:middle">+${fmtNotional(diff)}</span>`;
+          deltaBadge = `<span style="margin-left:4px;color:var(--green);font-size: var(--fs-micro);font-weight:700;vertical-align:middle">+${fmtNotional(diff)}</span>`;
         } else if (d.type === "size_down") {
           const diff = (d.sizeUsd ?? 0) - (d.prevSizeUsd ?? 0);
-          deltaBadge = `<span style="margin-left:4px;color:var(--red);font-size:9px;font-weight:700;vertical-align:middle">${fmtNotional(diff)}</span>`;
+          deltaBadge = `<span style="margin-left:4px;color:var(--red);font-size: var(--fs-micro);font-weight:700;vertical-align:middle">${fmtNotional(diff)}</span>`;
         }
       } else if (p._closed) {
-        deltaBadge = `<span style="margin-left:4px;background:var(--red);color:#fff;font-size:9px;font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
+        deltaBadge = `<span style="margin-left:4px;background:var(--red);color:#fff;font-size: var(--fs-micro);font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
       }
 
       const sinceStr = p._closed ? "—" : fmtSince(p.firstSeenAt);
       const rowOpacity = p._closed ? "opacity:.5;" : "";
       return `<tr style="${rowOpacity}">
-      <td style="color:var(--text-muted);font-size:12px">${escapeHtml(p.label)}</td>
+      <td style="color:var(--text-muted);font-size: var(--fs-small)">${escapeHtml(p.label)}</td>
       <td style="font-weight:700">${escapeHtml(p.coin)}</td>
       <td class="r" style="color:${sideColor};font-weight:700">${p.side}</td>
       <td class="r">${fmtNotional(p.sizeUsd)}${deltaBadge}</td>
       <td class="r" style="color:var(--text-muted)">${levStr}</td>
       <td class="r">${fmtPnlColored(p.unrealizedPnl)}</td>
       <td class="r" style="color:var(--text-muted)">${escapeHtml(entryStr)}</td>
-      <td class="r" style="color:var(--text-faint);font-size:11px">${sinceStr}</td>
+      <td class="r" style="color:var(--text-faint);font-size: var(--fs-label)">${sinceStr}</td>
     </tr>`;
     })
     .join("");
@@ -373,7 +374,7 @@ async function fetchAndRenderLeaderboard() {
       .map((r, idx) => {
         const short = `${r.address.slice(0, 6)}…${r.address.slice(-4)}`;
         const nameStr = r.displayName
-          ? `${escapeHtml(r.displayName)} <span style="opacity:.5;font-size:10px">${short}</span>`
+          ? `${escapeHtml(r.displayName)} <span style="opacity:.5;font-size: var(--fs-micro)">${short}</span>`
           : short;
         const roi = Number.isFinite(r.roi30d)
           ? `${(r.roi30d * 100).toFixed(1)}%`
@@ -382,11 +383,11 @@ async function fetchAndRenderLeaderboard() {
         const pnlSign = r.pnl30d >= 0 ? "+" : "";
         const alreadyAdded = watchedAddresses.has(r.address.toLowerCase());
         const addBtn = alreadyAdded
-          ? `<button disabled style="font-size:10px;padding:2px 7px;border:1px solid var(--hairline);border-radius:4px;background:none;color:var(--text-faint);cursor:default">✓</button>`
-          : `<button data-lb-add="${escapeHtml(r.address)}" data-lb-name="${escapeHtml(r.displayName || short)}" style="font-size:10px;padding:2px 7px;border:1px solid var(--hairline);border-radius:4px;background:none;color:var(--text-muted);cursor:pointer">+ Add</button>`;
+          ? `<button disabled style="font-size: var(--fs-micro);padding:2px 7px;border:1px solid var(--hairline);border-radius:4px;background:none;color:var(--text-faint);cursor:default">${icon("check")}</button>`
+          : `<button data-lb-add="${escapeHtml(r.address)}" data-lb-name="${escapeHtml(r.displayName || short)}" style="font-size: var(--fs-micro);padding:2px 7px;border:1px solid var(--hairline);border-radius:4px;background:none;color:var(--text-muted);cursor:pointer">+ Add</button>`;
         return `<tr>
-        <td style="color:var(--text-faint);font-size:11px">${idx + 1}</td>
-        <td style="font-family:var(--font-mono);font-size:11px">${nameStr}</td>
+        <td style="color:var(--text-faint);font-size: var(--fs-label)">${idx + 1}</td>
+        <td style="font-family:var(--font-mono);font-size: var(--fs-label)">${nameStr}</td>
         <td class="r">${fmtNotional(r.accountValue)}</td>
         <td class="r" style="color:${pnlColor}">${pnlSign}${fmtNotional(r.pnl30d)}</td>
         <td class="r" style="color:${pnlColor}">${roi}</td>
@@ -408,7 +409,7 @@ async function fetchAndRenderLeaderboard() {
           wwSaveList(list);
         }
         btn.disabled = true;
-        btn.textContent = "✓";
+        btn.innerHTML = icon("check");
         btn.style.color = "var(--text-faint)";
         btn.style.cursor = "default";
         fetchWhaleWatch();

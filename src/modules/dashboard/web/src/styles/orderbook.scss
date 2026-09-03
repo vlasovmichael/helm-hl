@@ -1,0 +1,6 @@
+//  orderbook.html — терминал стакана. Из features нужен только сам
+//  features/orderbook (сетка «книга + боковая панель» на дашборде) плюс
+//  страница; неймспейсы разводим явно — имена файлов совпадают.
+@use "core";
+@use "features/orderbook" as ob-feature;
+@use "pages/orderbook" as ob-page;

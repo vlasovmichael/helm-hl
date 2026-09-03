@@ -28,7 +28,8 @@ test('обвал за час помечает SHORT и поднимает уро
   const v = classify({ trend1h: -6.1, trend15m: -1.0 });
   assert.equal(v.blockedSide, 'SHORT');
   assert.equal(v.level, 'extreme');
-  assert.match(v.text, /худший срез/);
+  // Текст карточки английский (страница /oi английская целиком).
+  assert.match(v.text, /worst slice/);
 });
 
 test('спокойный фон: фильтр молчит и НЕ называет разрешённую сторону', () => {

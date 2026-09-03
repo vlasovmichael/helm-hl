@@ -10,7 +10,7 @@
 /* ──────────────────────── Hunter Signals */
 .signals-meta {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text-muted);
 }
 .hm-flush-chip {
@@ -45,13 +45,13 @@
   width: 100%;
   border-collapse: collapse;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--fs-body);
 
   th {
     text-align: left;
     font-weight: 600;
     color: var(--text-muted);
-    font-size: 12px;
+    font-size: var(--fs-small);
     padding: 9px 10px;
     border-bottom: 1px solid var(--border);
     background: var(--canvas-subtle);
@@ -145,7 +145,7 @@
 .hm-active-badge {
   display: inline-block;
   margin-left: 6px;
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.04em;
   padding: 0 5px;
@@ -160,7 +160,7 @@
 .hm-align {
   display: inline-block;
   margin-left: 6px;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.02em;
   padding: 0 6px;
@@ -279,7 +279,7 @@
 }
 .hm-pos-row td {
   padding: 3px 10px 7px 30px !important;
-  font-size: 11.5px;
+  font-size: var(--fs-label);
   font-family: var(--font-mono);
   color: var(--text-secondary);
   /* Нейтральный фон вместо --accent-soft: синий фон душил синий тег BOT.
@@ -292,7 +292,7 @@
    на любом фоне (раньше цветной текст на одноцветном фоне сливался). */
 .hm-pos-tag {
   display: inline-block;
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.04em;
   padding: 1px 6px;
@@ -339,7 +339,7 @@
    ручной вход (рядом меряет paper-слот fadehot). */
 .hm-fadehot-row td {
   padding: 3px 10px 7px 30px !important;
-  font-size: 11.5px;
+  font-size: var(--fs-label);
   font-family: var(--font-mono);
   color: var(--text-secondary);
   background: var(--canvas-inset);
@@ -348,7 +348,7 @@
 }
 .hm-fh-tag {
   display: inline-block;
-  font-size: 9.5px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.03em;
   padding: 1px 6px;
@@ -389,7 +389,7 @@
   justify-content: center;
   width: 30px;
   height: 26px;
-  font-size: 19px;
+  font-size: var(--fs-h3);
   line-height: 1;
   border-radius: 7px;
   border: 1px solid transparent;
@@ -401,7 +401,7 @@
 }
 .hm-entry-none .hm-entry-icon {
   opacity: 0.4;
-  font-size: 15px;
+  font-size: var(--fs-base);
   color: var(--text-muted);
 }
 /* Line-SVG иконки Enter — stroke по currentColor (цвет из .hm-entry-${state}). */
@@ -448,7 +448,7 @@
    поворачивается по направлению цены (up=0° / mid=90° / down=180°) с плавным
    tween и сменой цвета. */
 .hm-dir .hm-entry-icon {
-  font-size: 18px;
+  font-size: var(--fs-h3);
   font-weight: 700;
   border-color: transparent;
 }
@@ -473,7 +473,7 @@
   .hm-entry-icon {
     width: 26px;
     height: 24px;
-    font-size: 17px;
+    font-size: var(--fs-lead);
   }
 }
 /* Candy Girl signal rows — лёгкий tint по направлению. */
@@ -503,10 +503,10 @@
   width: 100%;
   border-collapse: collapse;
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: var(--fs-base);
 
   th {
-    font-size: 10px;
+    font-size: var(--fs-micro);
     font-weight: 600;
     letter-spacing: 0.07em;
     text-transform: uppercase;
@@ -551,7 +551,7 @@
   &::after {
     content: " ⇅";
     opacity: 0.3;
-    font-size: 9px;
+    font-size: var(--fs-micro);
   }
 }
 .ww-sort-active {
@@ -571,7 +571,7 @@
   display: inline-block;
   padding: 1px 8px;
   border-radius: 2em;
-  font-size: 11px;
+  font-size: var(--fs-label);
   font-weight: 500;
   border: 1px solid currentColor;
   line-height: 18px;
@@ -739,7 +739,7 @@
    —     = нет данных */
 .signals-table td.hm-setup {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-label);
   font-weight: 700;
   white-space: nowrap;
   text-align: center;
@@ -973,7 +973,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   padding: 28px 0;
   text-align: center;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--fs-body);
 }
 .hm-status-spinner {
   display: inline-block;
@@ -1046,20 +1046,20 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     order: 1;
     flex: 0 0 auto;
     width: auto;
-    font-size: 12px;
+    font-size: var(--fs-small);
     color: var(--text-muted);
   }
   .hm-table tr.hm-main td:nth-child(2) {
     order: 2;
     flex: 1 1 auto;
-    font-size: 14px;
+    font-size: var(--fs-base);
     font-weight: 700;
   }
   .hm-table tr.hm-main td.hm-price-cell {
     order: 3;
     flex: 0 0 auto;
     margin-left: auto;
-    font-size: 13.5px;
+    font-size: var(--fs-body);
     text-align: right;
   }
   /* В card-вёрстке ячейка ужимается под контент → иннеру не нужна вся ширина
@@ -1129,7 +1129,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   .hm-table tr.hm-main td[data-w]::before {
     content: attr(data-w);
     display: block;
-    font-size: 8.5px;
+    font-size: var(--fs-micro);
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -1187,17 +1187,10 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   margin-right: 6px;
   vertical-align: middle;
 }
-@keyframes pulse-dot {
-  0%,
-  100% {
-    opacity: 0.4;
-    transform: scale(0.85);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.15);
-  }
-}
+/* @keyframes pulse-dot удалён 04.09.2026: на него никто не ссылался — им
+   когда-то мигала зелёная точка в .signals-meta. Мигающая точка ничего не
+   добавляла к слову рядом с ней, а в таблице с живыми ценами тянула взгляд
+   на себя. */
 
 /* ──────────────────────── Hunter Signals — mobile card layout
    Table → stacked cards. Each row becomes a 3-row grid. No horizontal scroll. */
@@ -1209,7 +1202,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   }
   .signals-table {
     display: block;
-    font-size: 12px;
+    font-size: var(--fs-small);
   }
   .signals-table thead {
     display: none;
@@ -1232,23 +1225,20 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     padding: 11px 12px;
     background: var(--card-bg);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    border-left-width: 3px;
+    border-radius: var(--radius-sm);
   }
+  /* Сторона красит рамку карточки-строки целиком. Раньше это была полоска
+     border-left: на карточном (мобильном) виде она шла по всей высоте
+     развёрнутой строки и перевешивала сам сигнал. */
   .signals-table tr.row-short {
-    border-left-color: var(--red);
+    border-color: var(--red-line);
   }
   .signals-table tr.row-long {
-    border-left-color: var(--green);
+    border-color: var(--green-line);
   }
   .signals-table tr.is-active {
-    border-left-color: var(--accent);
+    border-color: var(--accent-line);
     background: var(--accent-soft);
-  }
-  /* Empty-state row: span the whole "card" */
-  .signals-table tr:has(td[colspan]) {
-    display: block;
-    border-left-width: 1px;
   }
 
   .signals-table td {
@@ -1266,25 +1256,25 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   .signals-table td:nth-child(1) {
     grid-area: rank;
     color: var(--text-muted);
-    font-size: 11px;
+    font-size: var(--fs-label);
     font-weight: 600;
   }
   .signals-table td:nth-child(2) {
     grid-area: pair;
     font-weight: 700;
-    font-size: 13px;
+    font-size: var(--fs-body);
     color: var(--text-primary);
   }
   .signals-table td:nth-child(3) {
     grid-area: price;
     text-align: right;
     font-weight: 600;
-    font-size: 13px;
+    font-size: var(--fs-body);
   }
   .signals-table td:nth-child(4),
   .signals-table td:nth-child(5) {
     /* Spike / Trend — keep coloured pill but inline */
-    font-size: 11px;
+    font-size: var(--fs-label);
   }
   .signals-table td:nth-child(4) {
     grid-area: spike;
@@ -1326,12 +1316,12 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   .signals-table td:nth-child(6) {
     grid-area: suggest;
     text-align: right;
-    font-size: 11px;
+    font-size: var(--fs-label);
   }
   .signals-table td:nth-child(7) {
     grid-area: sltp;
     color: var(--text-muted);
-    font-size: 11px;
+    font-size: var(--fs-label);
     padding-top: 4px !important;
     border-top: 1px solid var(--hairline);
   }
@@ -1369,13 +1359,13 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     padding: 0;
     border: none;
     white-space: normal;
-    font-size: 12px;
+    font-size: var(--fs-small);
     display: block;
   }
   /* Coin — bold, top-left */
   #div-table td:nth-child(1) {
     grid-area: coin;
-    font-size: 13px;
+    font-size: var(--fs-body);
     font-weight: 700;
   }
   /* Price — hidden */
@@ -1385,12 +1375,12 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   /* Change% — middle-left */
   #div-table td:nth-child(3) {
     grid-area: chg;
-    font-size: 11px;
+    font-size: var(--fs-label);
   }
   /* vs BTC — bottom-left */
   #div-table td:nth-child(4) {
     grid-area: rel;
-    font-size: 11px;
+    font-size: var(--fs-label);
     text-align: left;
   }
   /* Signal — top-right, badge-style */
@@ -1408,7 +1398,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     align-items: flex-end;
     justify-content: center;
     gap: 2px;
-    font-size: 11px;
+    font-size: var(--fs-label);
     min-width: 60px;
   }
 }
@@ -1418,7 +1408,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   #ww-table th,
   #ww-table td {
     padding: 6px 6px;
-    font-size: 12px;
+    font-size: var(--fs-small);
   }
   /* Hide Lev column on small screens */
   #ww-table th:nth-child(5),
@@ -1428,7 +1418,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   /* Since column: shorter text */
   #ww-table th:nth-child(8),
   #ww-table td:nth-child(8) {
-    font-size: 10px;
+    font-size: var(--fs-micro);
   }
 }
 
@@ -1455,7 +1445,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   gap: 3px;
   margin-left: 6px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-label);
 }
 .setup-live-px {
   color: var(--text-secondary);

@@ -9,11 +9,19 @@ html {
   scroll-behavior: smooth;
 }
 
+/* 🚨 Атрибут hidden прячет элемент правилом БРАУЗЕРА `display: none`, у которого
+   специфичность нулевая: любой наш `.oi-pager { display: flex }` его молча
+   перебивает, и «скрытый» пейджер остаётся на экране. Проверено на /oi
+   04.09.2026: пейджер висел под пустой таблицей. Поэтому — явно и с !important. */
+[hidden] {
+  display: none !important;
+}
+
 body {
   background-color: var(--bg);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: var(--fs-base);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -45,13 +53,13 @@ body {
     .tape-equity {
       font-family: var(--font-mono);
       font-weight: 700;
-      font-size: 18px;
+      font-size: var(--fs-h3);
       letter-spacing: -0.02em;
       font-variant-numeric: tabular-nums;
     }
     .tape-delta {
       font-family: var(--font-mono);
-      font-size: 11px;
+      font-size: var(--fs-label);
       font-weight: 600;
       padding: 2px 8px;
       border-radius: 999px;
@@ -72,7 +80,7 @@ body {
     }
     .tape-mode {
       font-family: var(--font-mono);
-      font-size: 10px;
+      font-size: var(--fs-micro);
       font-weight: 700;
       letter-spacing: 0.06em;
       color: var(--accent);

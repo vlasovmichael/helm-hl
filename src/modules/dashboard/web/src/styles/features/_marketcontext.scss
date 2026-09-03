@@ -18,8 +18,7 @@
   min-width: 0;
   overflow-x: clip;
   border: 1px solid var(--border);
-  border-left: 3px solid var(--border-strong);
-  border-radius: 10px;
+  border-radius: var(--radius);
   background: var(--card-bg-elev);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.2px;
@@ -29,11 +28,11 @@
      Механика: смена класса светофора (unknown → wait/go) запускает переход, а
      он живёт на таймлайне анимаций документа. Стоит вкладке уйти в фон —
      таймлайн замирает, переход виснет на СТАРТОВОМ значении, то есть на сером
-     border-left базового правила, хотя класс на элементе уже .wait. Проверено
-     на живой странице: класс `market-context wait`, а border-left-color =
-     --border-strong; клон с теми же классами рядом красится верно.
+     базовом цвете, хотя класс на элементе уже .wait.
      Плашка меняет состояние раз в несколько минут — плавность тут не стоит
-     целого класса багов, который нельзя ни воспроизвести, ни отладить. */
+     целого класса багов, который нельзя ни воспроизвести, ни отладить.
+     04.09.2026: полоска слева убрана вовсе, состояние красит всю плашку —
+     у этого бага больше нет и поверхности, на которой он был виден. */
 
   /* Шапка: BTC цена + 24h */
   .mc-head {
@@ -44,7 +43,7 @@
 
     .mc-sym {
       font-weight: 700;
-      font-size: 14px;
+      font-size: var(--fs-base);
       letter-spacing: 0.8px;
       color: var(--text-muted);
     }
@@ -54,7 +53,7 @@
        смена разряда не дёргала плашку — раньше это делал overflow одометра. */
     .mc-px {
       font-weight: 700;
-      font-size: 23px;
+      font-size: var(--fs-h2);
       color: var(--text-primary);
       font-variant-numeric: tabular-nums;
 
@@ -66,12 +65,12 @@
       }
     }
     .mc-24h {
-      font-size: 15px;
+      font-size: var(--fs-base);
       font-weight: 600;
       i {
         color: var(--text-muted);
         font-style: normal;
-        font-size: 11px;
+        font-size: var(--fs-label);
         font-weight: 500;
       }
       &.up {
@@ -98,14 +97,14 @@
 
       i {
         font-style: normal;
-        font-size: 10.5px;
+        font-size: var(--fs-micro);
         letter-spacing: 0.5px;
         text-transform: uppercase;
         color: var(--text-muted);
       }
       b {
         font-weight: 600;
-        font-size: 16px;
+        font-size: var(--fs-lead);
         color: var(--text-secondary);
         border-radius: 4px;
 
@@ -121,11 +120,11 @@
 
   /* Светофор: зелёный = чёткий фонд (RISK-ON/OFF), жёлтый = MIXED. */
   &.go {
-    border-left-color: var(--green-line);
+    border-color: var(--green-line);
     background: var(--green-soft);
   }
   &.wait {
-    border-left-color: var(--warn);
+    border-color: var(--warn);
     background: var(--warn-soft);
   }
 

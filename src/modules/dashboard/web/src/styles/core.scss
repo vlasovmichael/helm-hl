@@ -6,6 +6,7 @@
 // ─────────────────────────────────────────────────────────────
 @use "core/tokens";
 @use "core/base";
+@use "core/controls";
 @use "core/chrome";
 @use "core/datagrid";
 @use "core/loaders";
@@ -16,3 +17,5 @@
 @use "core/modals";
 @use "core/motion";
 @use "core/utilities";
+// tone — только миксины (@mixin), сам по себе CSS не печатает; подключается
+// через `@use "../core/tone" as *;` в тех файлах, где красят блок по смыслу.

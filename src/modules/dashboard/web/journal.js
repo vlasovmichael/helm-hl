@@ -1,4 +1,5 @@
-import "./src/styles/index.scss";
+import "./src/styles/journal.scss";
+import { icon, paintIcons } from "./src/core/icon.js";
 // ─────────────────────────────────────────────────
 //  journal.html — журнал чтения графика (дрилл «на сутки вперёд»).
 //  Читает свечи/цену HL напрямую (publicWS/REST), ничего не торгует.
@@ -110,7 +111,7 @@ async function loadAnchor() {
     renderRail(price, lo, hi, cur);
     currentAtrPct = atrPctOf(D); renderCalc();
     const first = D[0].c, last = cur.c; const t = G("trend200");
-    const dir = last > first * 1.01 ? ["▲ up", "j-up"] : last < first * 0.99 ? ["▼ down", "j-down"] : ["≈ range", ""];
+    const dir = last > first * 1.01 ? [`${icon("rising")} up`, "j-up"] : last < first * 0.99 ? [`${icon("falling")} down`, "j-down"] : [`${icon("flat")} range`, ""];
     t.textContent = dir[0]; t.className = "j-v " + dir[1];
     renderVsBtc(dchg, btcd);
     conn.textContent = wsAlive ? "HL · live (WS)" : "HL · updated " + new Date().toLocaleTimeString("en-GB", { timeZone: "Europe/Warsaw", hour: "2-digit", minute: "2-digit" });
@@ -181,7 +182,7 @@ function tfCell(tf, role, d) {
   const bits = [];
   if (d.rsi != null) bits.push("RSI " + d.rsi);
   if (d.atrPct != null) bits.push("ATR " + d.atrPct + "%");
-  if (d.triggerReady != null) bits.push(d.triggerReady ? "trigger ✓" : "no trigger");
+  if (d.triggerReady != null) bits.push(d.triggerReady ? `trigger ${icon("check")}` : "no trigger");
   const sub = bits.length ? `<div class="j-tf-sub">${bits.join(" · ")}</div>` : "";
   return `<div class="j-tf">
     <div class="j-tf-head"><span><span class="j-tf-tf">${tf}</span> <span class="j-tf-role">${role}</span></span><span class="j-tf-trend ${tr[1]}">${tr[0]}</span></div>
@@ -249,7 +250,7 @@ function renderHist() {
   if (!days.length) { h.innerHTML = '<p class="j-empty">Empty.</p>'; return; }
   h.innerHTML = days.map((d) => {
     const x = e[d];
-    return `<details class="j-log-item"><summary><span class="j-date">${d}</span> ${pill(x.trend)} ${x.bias ? '<span style="color:var(--text-secondary)">' + x.bias.slice(0, 42) + (x.bias.length > 42 ? "…" : "") + "</span>" : ""} ${x.grade ? '<span class="j-done">✓ reviewed</span>' : ""}</summary>
+    return `<details class="j-log-item"><summary><span class="j-date">${d}</span> ${pill(x.trend)} ${x.bias ? '<span style="color:var(--text-secondary)">' + x.bias.slice(0, 42) + (x.bias.length > 42 ? "…" : "") + "</span>" : ""} ${x.grade ? `<span class="j-done">${icon("check")} reviewed</span>` : ""}</summary>
       <div class="j-log-body">
         <div class="j-kv"><b>Above</b> <span class="j-mono">${x.resAbove || "—"}</span> · <b>Below</b> <span class="j-mono">${x.supBelow || "—"}</span></div>
         <div class="j-kv"><b>A:</b> ${x.scenA || "—"}</div><div class="j-kv"><b>B:</b> ${x.scenB || "—"}</div>
@@ -263,7 +264,7 @@ G("save").onclick = () => { entries(coin)[todayKey()] = { ...(entries(coin)[toda
 // ── вкладки монет ──
 function renderTabs() {
   G("tabs").innerHTML = allCoins().map((c) =>
-    `<button class="j-tab${c === coin ? " active" : ""}" data-coin="${c}">${c}${COINS.includes(c) ? "" : `<span class="j-rm" data-rm="${c}" title="Remove">×</span>`}</button>`,
+    `<button class="j-tab${c === coin ? " active" : ""}" data-coin="${c}">${c}${COINS.includes(c) ? "" : `<span class="j-rm" data-rm="${c}" title="Remove">${icon("close")}</span>`}</button>`,
   ).join("") + `<button class="j-tab j-addbtn" id="addCoin" title="Add a coin">+</button>`;
 }
 function showAddInput() {
@@ -320,7 +321,7 @@ function renderCalc() {
   if (currentAtrPct != null) {
     atrNote = stopDist < currentAtrPct
       ? `<small style="color:var(--red)">already ATR(1D)≈${currentAtrPct.toFixed(2)}% — a wick will take it out</small>`
-      : `<small style="color:var(--green)">wider than ATR(1D)≈${currentAtrPct.toFixed(2)}% ✓</small>`;
+      : `<small style="color:var(--green)">wider than ATR(1D)≈${currentAtrPct.toFixed(2)}% ${icon("check")}</small>`;
   }
   rows.push(`<div class="j-calc-row"><b>Distance to stop</b><span class="v">${stopDist.toFixed(2)}%${atrNote}</span></div>`);
   // размер от риска
@@ -375,3 +376,6 @@ function switchCoin(c) {
 wireHelp();
 wireCalc();
 switchCoin("BTC");
+
+// <i data-icon="…"> в статической разметке → настоящие svg.
+paintIcons();

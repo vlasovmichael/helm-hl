@@ -6,6 +6,7 @@
 // приходят из того же ответа (единый источник), чтобы цифры и выводы не разъехались.
 
 import { fetchJson } from "../net/api.js";
+import { emptyState } from "../core/placeholders.js";
 
 function esc(s) {
   return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -76,7 +77,11 @@ function renderBreakdown(data) {
   }
 
   if (data.empty || !data.overall) {
-    body.innerHTML = `<div class="mt-empty-note">No closed real trades yet — the table appears once trades are done.</div>`;
+    body.innerHTML = emptyState({
+      glyph: "clock",
+      title: "No closed trades yet",
+      hint: "The breakdown appears once a real trade is opened and closed.",
+    });
     return;
   }
 
@@ -145,6 +150,11 @@ export async function tickTradeBreakdown() {
     renderBreakdown(data);
   } catch (err) {
     const body = document.getElementById("mytrades-body");
-    if (body) body.innerHTML = `<div class="mt-empty-note">Could not load the breakdown: ${esc(err.message)}</div>`;
+    if (body)
+      body.innerHTML = emptyState({
+        glyph: "danger",
+        title: "Breakdown did not load",
+        hint: `${esc(err.message)}. Reload the page to try again.`,
+      });
   }
 }

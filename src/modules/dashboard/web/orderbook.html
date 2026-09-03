@@ -6,8 +6,8 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#0c0a09" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#f5f1ea" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <title>Helm · Order book</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -34,118 +34,6 @@
         }
       })();
     </script>
-    <style>
-      /* ── Order-book terminal — тёмный самодостаточный блок (ob- префикс) ── */
-      .ob-terminal {
-        --ob-panel: #11161f;
-        --ob-panel-2: #161d29;
-        --ob-line: #1e2735;
-        --ob-txt: #c9d4e3;
-        --ob-dim: #6b7888;
-        --ob-bid: #2bbf73;
-        --ob-bid-bg: rgba(43, 191, 115, 0.12);
-        --ob-bid-wall: rgba(43, 191, 115, 0.3);
-        --ob-ask: #f0556b;
-        --ob-ask-bg: rgba(240, 85, 107, 0.12);
-        --ob-ask-wall: rgba(240, 85, 107, 0.3);
-        --ob-accent: #5b9dff;
-        --ob-gold: #e8b84b;
-        background: #0b0e13;
-        color: var(--ob-txt);
-        border: 1px solid var(--ob-line);
-        border-radius: 14px;
-        overflow: hidden;
-        font-family: "JetBrains Mono", "SF Mono", Menlo, monospace;
-        font-size: 13px;
-      }
-      .ob-head {
-        display: flex;
-        align-items: center;
-        gap: 14px;
-        padding: 12px 16px;
-        border-bottom: 1px solid var(--ob-line);
-        background: var(--ob-panel);
-        flex-wrap: wrap;
-      }
-      .ob-tabs { display: flex; gap: 6px; }
-      .ob-tab {
-        padding: 6px 14px; border: 1px solid var(--ob-line); border-radius: 7px;
-        background: var(--ob-panel-2); color: var(--ob-dim); cursor: pointer;
-        font-weight: 600; letter-spacing: 0.5px; transition: all 0.12s;
-      }
-      .ob-tab:hover { color: var(--ob-txt); border-color: #2c3a4f; }
-      .ob-tab.active { color: #fff; background: var(--ob-accent); border-color: var(--ob-accent); }
-      .ob-input {
-        width: 90px; padding: 6px 10px; border: 1px solid var(--ob-line); border-radius: 7px;
-        background: var(--ob-panel-2); color: var(--ob-txt);
-        font-family: inherit; font-size: 13px; text-transform: uppercase;
-      }
-      .ob-input.active { color: #fff; border-color: var(--ob-accent); background: rgba(91, 157, 255, 0.18); font-weight: 600; }
-      .ob-conn { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--ob-dim); }
-      .ob-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ob-dim); }
-      .ob-dot.live { background: var(--ob-bid); box-shadow: 0 0 8px var(--ob-bid); }
-      .ob-dot.dead { background: var(--ob-ask); }
-
-      .ob-main { display: grid; grid-template-columns: 1fr 320px; gap: 1px; background: var(--ob-line); }
-      .ob-col { background: #0b0e13; display: flex; flex-direction: column; min-width: 0; }
-      .ob-ladder { overflow-y: auto; max-height: 360px; }
-      .ob-ladder.ob-bids { max-height: 360px; }
-      .ob-row {
-        position: relative; display: grid; grid-template-columns: 1fr 110px 90px 70px;
-        align-items: center; height: 22px; padding: 0 14px;
-        font-variant-numeric: tabular-nums; white-space: nowrap;
-      }
-      .ob-row .ob-bar { position: absolute; top: 1px; bottom: 1px; right: 0; border-radius: 3px; z-index: 0; }
-      .ob-row.ask .ob-bar { background: var(--ob-ask-bg); }
-      .ob-row.bid .ob-bar { background: var(--ob-bid-bg); }
-      .ob-row.wall.ask .ob-bar { background: var(--ob-ask-wall); }
-      .ob-row.wall.bid .ob-bar { background: var(--ob-bid-wall); }
-      .ob-row > span { position: relative; z-index: 1; }
-      .ob-row .ob-tag { color: var(--ob-dim); font-size: 11px; text-align: left; }
-      .ob-row .ob-px { text-align: right; font-weight: 600; }
-      .ob-row.ask .ob-px { color: var(--ob-ask); }
-      .ob-row.bid .ob-px { color: var(--ob-bid); }
-      .ob-row .ob-sz { text-align: right; color: var(--ob-txt); }
-      .ob-row .ob-usd { text-align: right; color: var(--ob-dim); font-size: 11px; }
-      .ob-row.wall .ob-tag::before { content: "▮ WALL"; color: var(--ob-gold); font-weight: 700; }
-      .ob-row.wall .ob-sz { color: #fff; font-weight: 700; }
-
-      .ob-mid {
-        display: flex; align-items: center; justify-content: center; gap: 16px;
-        height: 46px; background: var(--ob-panel);
-        border-top: 1px solid var(--ob-line); border-bottom: 1px solid var(--ob-line);
-      }
-      .ob-mid .ob-price { font-size: 22px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
-      .ob-mid .ob-spread { color: var(--ob-dim); }
-      .ob-mid .ob-spread b { color: var(--ob-gold); }
-
-      .ob-side { background: var(--ob-panel); padding: 16px; overflow-y: auto; }
-      .ob-side h3 { margin: 0 0 10px; font-size: 11px; letter-spacing: 1.5px; color: var(--ob-dim); text-transform: uppercase; font-weight: 600; }
-      .ob-card { background: var(--ob-panel-2); border: 1px solid var(--ob-line); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
-
-      .ob-imb-bar { height: 26px; border-radius: 6px; overflow: hidden; display: flex; margin: 8px 0 6px; }
-      .ob-imb-bar .b { background: linear-gradient(90deg, var(--ob-bid), #1f8f55); }
-      .ob-imb-bar .a { background: linear-gradient(90deg, #c23a4f, var(--ob-ask)); }
-      .ob-imb-legend { display: flex; justify-content: space-between; font-size: 12px; }
-      .ob-imb-legend .lb { color: var(--ob-bid); font-weight: 700; }
-      .ob-imb-legend .la { color: var(--ob-ask); font-weight: 700; }
-
-      .ob-wallrow { display: flex; align-items: baseline; justify-content: space-between; padding: 7px 0; border-bottom: 1px dashed var(--ob-line); }
-      .ob-wallrow:last-child { border-bottom: none; }
-      .ob-wallrow .lbl { color: var(--ob-dim); font-size: 12px; }
-      .ob-wallrow .ceiling { color: var(--ob-ask); font-weight: 700; }
-      .ob-wallrow .floor { color: var(--ob-bid); font-weight: 700; }
-      .ob-wallrow .dist { font-size: 11px; color: var(--ob-dim); margin-left: 6px; }
-
-      .ob-hint { color: var(--ob-dim); font-size: 11.5px; line-height: 1.6; }
-      .ob-hint b { color: var(--ob-txt); }
-      .ob-gold { color: var(--ob-gold); }
-
-      @media (max-width: 760px) {
-        .ob-main { grid-template-columns: 1fr; }
-        .ob-side { border-top: 1px solid var(--ob-line); }
-      }
-    </style>
   </head>
   <body>
     <div class="container">
@@ -173,12 +61,34 @@
         </div>
         <div class="ob-main">
           <div class="ob-col">
-            <div class="ob-ladder" id="ob-asks"></div>
+            <div class="ob-ladder" id="ob-asks">
+              <div class="ob-row"><span class="sk" style="height:8px;width:62%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:48%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:71%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:55%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:66%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:44%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:58%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:50%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:68%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:52%"></span></div>
+            </div>
             <div class="ob-mid">
               <span class="ob-price" id="ob-midPx">—</span>
               <span class="ob-spread">spread <b id="ob-spread">—</b></span>
             </div>
-            <div class="ob-ladder ob-bids" id="ob-bids"></div>
+            <div class="ob-ladder ob-bids" id="ob-bids">
+              <div class="ob-row"><span class="sk" style="height:8px;width:62%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:48%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:71%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:55%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:66%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:44%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:58%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:50%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:68%"></span></div>
+              <div class="ob-row"><span class="sk" style="height:8px;width:52%"></span></div>
+            </div>
           </div>
 
           <div class="ob-side">
@@ -194,7 +104,7 @@
               <div class="ob-wallrow"><span class="lbl">Nearest wall above</span><span><span class="ceiling" id="ob-ceilPx">—</span><span class="dist" id="ob-ceilD"></span></span></div>
               <div class="ob-wallrow"><span class="lbl">Nearest wall below</span><span><span class="floor" id="ob-floorPx">—</span><span class="dist" id="ob-floorD"></span></span></div>
               <div class="ob-hint" style="margin-top: 10px">
-                <span class="ob-gold">▮ Wall</span> = a resting order much larger than its neighbours. A real level where money sits.
+                <span class="ob-gold">WALL</span> = a resting order much larger than its neighbours. A real level where money sits.
               </div>
             </div>
 

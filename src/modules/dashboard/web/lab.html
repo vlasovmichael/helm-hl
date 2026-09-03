@@ -8,12 +8,12 @@
     />
     <meta
       name="theme-color"
-      content="#0c0a09"
+      content="#0d1117"
       media="(prefers-color-scheme: dark)"
     />
     <meta
       name="theme-color"
-      content="#f5f1ea"
+      content="#ffffff"
       media="(prefers-color-scheme: light)"
     />
     <title>Helm · Lab</title>
@@ -64,12 +64,11 @@
         <div class="card-header">
           <div
             class="card-title"
-            data-num=""
             title="How positions are run, in one place. Live trades real money; Paper accumulates stats in a shadow slot, separate from production."
           >
             How positions are run
           </div>
-          <div class="time-ranges" id="strategies-summary"></div>
+          <div class="seg" id="strategies-summary"></div>
         </div>
         <div class="strat-table-wrap">
           <table class="strat-table" id="strategies-table">
@@ -91,11 +90,11 @@
               </tr>
             </thead>
             <tbody id="strategies-tbody">
-              <tr class="strat-skel-row"><td colspan="13"><div class="skeleton-row" style="width:70%"></div></td></tr>
-              <tr class="strat-skel-row"><td colspan="13"><div class="skeleton-row" style="width:85%"></div></td></tr>
-              <tr class="strat-skel-row"><td colspan="13"><div class="skeleton-row" style="width:60%"></div></td></tr>
-              <tr class="strat-skel-row"><td colspan="13"><div class="skeleton-row" style="width:78%"></div></td></tr>
-              <tr class="strat-skel-row"><td colspan="13"><div class="skeleton-row" style="width:66%"></div></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
             </tbody>
           </table>
         </div>
@@ -116,7 +115,6 @@
         <div class="card-header">
           <div
             class="card-title"
-            data-num="01.8"
             title="Question: decile medians say nothing about the three best addresses inside a decile. Here the list of three was frozen IN ADVANCE (2026-08-13) and is checked forward."
           >
             Wall Street geniuses
@@ -124,7 +122,7 @@
           <span
             id="win-meta"
             style="
-              font-size: 11px;
+              font-size: var(--fs-label);
               font-family: var(--font-mono);
               color: var(--text-muted);
             "
@@ -142,7 +140,10 @@
               </tr>
             </thead>
             <tbody id="win-tbody">
-              <tr><td colspan="5" class="empty-state">…</td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
             </tbody>
           </table>
         </div>
@@ -150,7 +151,7 @@
           id="win-stats"
           style="
             margin-top: 8px;
-            font-size: 11px;
+            font-size: var(--fs-label);
             font-family: var(--font-mono);
             color: var(--text-muted);
             line-height: 1.6;
@@ -166,7 +167,7 @@
               display: flex;
               justify-content: space-between;
               align-items: baseline;
-              font-size: 11px;
+              font-size: var(--fs-label);
               font-family: var(--font-mono);
               color: var(--text-muted);
             "
@@ -180,7 +181,7 @@
               margin-top: 6px;
               max-height: 260px;
               overflow-y: auto;
-              font-size: 11px;
+              font-size: var(--fs-label);
               font-family: var(--font-mono);
             "
           ></div>
@@ -196,7 +197,6 @@
         <div class="card-header">
           <div
             class="card-title"
-            data-num="01.9"
             title="Preregistered forward tests. Each one is evaluated exactly once, when its own stop rule is met. No interim metrics are shown — that is the point."
           >
             Forward tests
@@ -204,14 +204,18 @@
           <span
             id="fvg-meta"
             style="
-              font-size: 11px;
+              font-size: var(--fs-label);
               font-family: var(--font-mono);
               color: var(--text-muted);
             "
           ></span>
         </div>
-        <div id="fvg-body" style="font-family: var(--font-mono); font-size: 12px">
-          <div class="empty-state">…</div>
+        <div id="fvg-body" style="font-family: var(--font-mono); font-size: var(--fs-small)">
+          <div class="sk-text">
+            <span class="sk sk-line"></span>
+            <span class="sk sk-line"></span>
+            <span class="sk sk-line"></span>
+          </div>
         </div>
       </section>
 

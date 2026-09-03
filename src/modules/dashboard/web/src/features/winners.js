@@ -8,6 +8,8 @@
 // ─────────────────────────────────────────────────
 
 import { fetchJson } from "../net/api.js";
+import { emptyRow, emptyState } from "../core/placeholders.js";
+import { icon } from "../core/icon.js";
 
 const bp = (v) => (Number.isFinite(v) ? `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}` : "—");
 const col = (v) =>
@@ -33,7 +35,7 @@ const VERDICT_STYLE = {
 function renderRows(tbody, res) {
   tbody.innerHTML = res.selected
     .map((s) => `<tr data-addr="${s.address}" style="cursor:pointer" title="click a row — what this address holds right now">
-      <td style="font-family:var(--font-mono)"><span class="win-caret" data-addr="${s.address}" style="color:var(--text-muted);padding-right:4px;font-size:10px">▸</span><a href="https://app.hyperliquid.xyz/explorer/address/${s.address}" target="_blank" rel="noopener" style="color:inherit">${short(s.address)}</a></td>
+      <td style="font-family:var(--font-mono)"><span class="win-caret" data-addr="${s.address}" style="color:var(--text-muted);padding-right:4px">${icon("collapsed")}</span><a href="https://app.hyperliquid.xyz/explorer/address/${s.address}" target="_blank" rel="noopener" style="color:inherit">${short(s.address)}</a></td>
       <td class="r">${bp(s.selectionEdgeBp)}</td>
       <td class="r" style="${col(s.forwardEdgeBp)}">${s.forwardEdgeBp === null ? "<span style='color:var(--text-muted)'>no trades</span>" : bp(s.forwardEdgeBp)}</td>
       <td class="r" style="${col(s.forwardPnl)}">${s.forwardPnl === null ? "—" : usd(s.forwardPnl)}</td>
@@ -129,7 +131,7 @@ function renderAccount(acc) {
     </tr>`)
     .join("");
 
-  return `<div style="padding:6px 10px;font-size:11px;font-family:var(--font-mono)">
+  return `<div style="padding:6px 10px;font-size: var(--fs-label);font-family:var(--font-mono)">
     <div style="color:var(--text-muted);margin-bottom:4px">${head}</div>
     <table class="data-table" style="margin:0">
       <thead><tr>
@@ -157,11 +159,11 @@ function bindToggle(tbody) {
     const cell = row.firstElementChild;
     if (!row.hidden) {
       row.hidden = true;
-      if (caret) caret.textContent = "▸";
+      if (caret) caret.innerHTML = icon("collapsed");
       return;
     }
     row.hidden = false;
-    if (caret) caret.textContent = "▾";
+    if (caret) caret.innerHTML = icon("expanded");
     // Скелетон, а не «…»: при заторе в пуле ответ приходит через секунду-две,
     // и за это время строка должна выглядеть загружающейся, а не сломанной.
     // Класс общий с остальным дашбордом (_loaders.scss).
@@ -191,7 +193,7 @@ function renderSummary(res) {
 
     if (f.gap)
       rows.push(
-        `<span style="color:var(--red)">⚠ Series broken:</span> ${f.gapNote} — the window is shorter than planned, the decision date is unchanged.`,
+        `<span style="color:var(--red)">${icon("warn")} Series broken:</span> ${f.gapNote} — the window is shorter than planned, the decision date is unchanged.`,
       );
     rows.push(
       `Forward ${f.from} → ${f.to} (${f.days} days): selected median <b style="${col(f.selectedMedianBp)}">${bp(f.selectedMedianBp)} bp</b> · ` +
@@ -211,7 +213,7 @@ function renderSummary(res) {
     `it must beat the control AND clear +${res.successEdgeBp} bp, otherwise the hypothesis is closed.`,
   );
   rows.push(
-    "⚠️ Even a confirmation ≠ money: market makers cannot be copied (their profit is the spread), " +
+    "Even a confirmation ≠ money: market makers cannot be copied (their profit is the spread), " +
     "fills are only visible after the fact, and on a thin edge fees eat the result first.",
   );
 
@@ -234,7 +236,7 @@ const ago = (ms) => {
 };
 
 const KIND = {
-  open: { mark: "▲", label: "OPEN" },
+  open: { mark: icon("long"), label: "OPEN" },
   close: { mark: "×", label: "CLOSE" },
   flip: { mark: "⇄", label: "FLIP" },
 };
@@ -242,7 +244,11 @@ const KIND = {
 function renderLog(box, sumBox, res) {
   const { events, summary } = res;
   if (!events.length) {
-    box.innerHTML = `<div class="empty-state" style="padding:8px">nothing logged yet — the journal starts filling from the next event</div>`;
+    box.innerHTML = emptyState({
+      glyph: "clock",
+      title: "Nothing logged yet",
+      hint: "The journal starts filling from the next event.",
+    });
     if (sumBox) sumBox.textContent = "";
     return;
   }
@@ -287,7 +293,7 @@ async function refreshLog() {
     if (!res?.ok) throw new Error(res?.reason || "no data");
     renderLog(box, sumBox, res);
   } catch (err) {
-    box.innerHTML = `<div class="empty-state" style="padding:8px">${err.message}</div>`;
+    box.innerHTML = emptyState({ glyph: "danger", title: "Could not load", hint: err.message });
   }
 }
 
@@ -297,9 +303,12 @@ export async function refreshWinners() {
   const stats = document.getElementById("win-stats");
   if (!tbody) return;
 
-  const fail = (msg) => {
-    if (meta) meta.textContent = msg;
-    tbody.innerHTML = `<tr><td colspan="5" class="empty-state">${msg}</td></tr>`;
+  // Каждый отказ объясняется своими словами. Раньше все три печатали одну и
+  // ту же короткую строку и в шапку, и в таблицу — «no data» одинаково
+  // означало и «сеть легла», и «список ещё не заморожен».
+  const fail = (metaText, { glyph, title, hint }) => {
+    if (meta) meta.textContent = metaText;
+    tbody.innerHTML = emptyRow(5, { glyph, title, hint });
     if (stats) stats.innerHTML = "";
   };
 
@@ -307,11 +316,27 @@ export async function refreshWinners() {
   try {
     res = await fetchJson("/api/winners");
   } catch {
-    fail("no connection");
+    fail("no connection", {
+      glyph: "danger",
+      title: "Dashboard is not answering",
+      hint: "The frozen list could not be read. Reload the page to try again.",
+    });
     return;
   }
   if (!res?.ok) {
-    fail(res?.reason === "not-frozen" ? "list not frozen" : "no data");
+    if (res?.reason === "not-frozen") {
+      fail("list not frozen", {
+        glyph: "clock",
+        title: "The list is not frozen yet",
+        hint: "Addresses are picked and locked once; until then there is nothing to measure forward.",
+      });
+    } else {
+      fail("no data", {
+        glyph: "info",
+        title: "No data for this window",
+        hint: "Nothing has been recorded for the frozen addresses yet.",
+      });
+    }
     return;
   }
 

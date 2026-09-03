@@ -25,7 +25,7 @@
   padding: 4px 10px;
   border-radius: 999px;
   font-family: var(--font-mono, "JetBrains Mono", monospace);
-  font-size: 12px;
+  font-size: var(--fs-small);
   line-height: 1;
   background: var(--surface-2, rgba(127, 127, 127, 0.08));
   border: 1px solid var(--border, rgba(127, 127, 127, 0.18));
@@ -67,7 +67,7 @@
   margin-bottom: 6px;
   border-radius: 6px;
   background: var(--canvas-inset, rgba(127, 127, 127, 0.06));
-  font-size: 12px;
+  font-size: var(--fs-small);
   line-height: 1.4;
 
   &[hidden] { display: none; }
@@ -79,7 +79,7 @@
   .cr-neutral { color: var(--text-secondary); }
   .cr-meta {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--fs-label);
     color: var(--text-muted);
   }
 }

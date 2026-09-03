@@ -3,90 +3,28 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+/* Поиск и фильтр уровня — общие .field и .seg (core/_controls.scss). Своих
+   стилей у них здесь больше нет: до 04.09.2026 логи держали собственный
+   инпут и собственный сегментный ряд, отличавшиеся от таких же контролов на
+   /oi и в шапках карточек высотой, радиусом и кеглем. */
 .logs-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-2);
   flex-wrap: wrap;
 
-  input[type="search"] {
-    background: var(--card-bg);
-    border: 1px solid var(--border);
-    color: var(--text-primary);
+  .field {
     font-family: var(--font-mono);
-    font-size: 13px;
-    padding: 6px 10px;
-    border-radius: 6px;
     width: 200px;
-    outline: none;
-    transition:
-      border-color 0.12s,
-      box-shadow 0.12s;
-
-    &::placeholder {
-      color: var(--text-muted);
-    }
-    &:focus {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-soft);
-    }
   }
 }
 
-.logs-filters {
-  display: inline-flex;
-  background: var(--canvas-subtle);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 2px;
-  gap: 0;
-}
-.logs-filter-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 500;
-  padding: 5px 11px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.12s var(--ease);
-
-  &:hover {
-    color: var(--text-primary);
-  }
-  &.active {
-    background: var(--card-bg);
-    color: var(--text-primary);
-    border: 1px solid var(--border);
-    margin: -1px;
-  }
-}
-
-.logs-pause-btn {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  font-size: 12px;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.12s var(--ease);
-
-  &:hover {
-    color: var(--accent);
-    border-color: var(--accent-line);
-  }
-  &.active {
-    background: var(--accent-soft);
-    color: var(--accent);
-    border-color: var(--accent-line);
-  }
+/* Кнопка паузы — общий .btn--icon; здесь только «включено»: пауза автоскролла
+   это состояние, а не наведение. */
+.logs-pause-btn.active {
+  color: var(--accent);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
 }
 
 .logs-viewport {
@@ -98,7 +36,7 @@
   border-radius: var(--radius);
   padding: 6px 0;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--fs-body);
   line-height: 1.55;
   scroll-behavior: smooth;
 
@@ -126,7 +64,6 @@
   grid-template-columns: 64px 52px 1fr;
   gap: 8px;
   padding: 2px 12px;
-  border-left: 2px solid transparent;
   white-space: pre-wrap;
   word-break: break-word;
 
@@ -139,7 +76,7 @@
 }
 .log-level {
   font-weight: 700;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   letter-spacing: 0.04em;
   align-self: center;
   text-align: center;
@@ -161,9 +98,10 @@
   color: var(--accent);
   background: var(--accent-soft);
 }
+// Уровень строки виден по бейджу LEVEL и по цвету текста — этого достаточно
+// в моношрифтовой ленте, где строки идут вплотную. Полоска слева добавляла
+// третий носитель того же смысла и на длинных переносах рвалась.
 .log-warn {
-  border-left-color: var(--warn);
-
   .log-level {
     color: var(--warn);
     background: var(--warn-soft);
@@ -173,7 +111,6 @@
   }
 }
 .log-error {
-  border-left-color: var(--red);
   background: var(--red-soft);
 
   .log-level {
@@ -198,7 +135,7 @@
   text-align: center;
   color: var(--text-muted);
   font-family: var(--font-sans);
-  font-size: 14px;
+  font-size: var(--fs-base);
 }
 
 .logs-meta {
@@ -206,7 +143,7 @@
   justify-content: space-between;
   margin-top: 8px;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text-muted);
 }
 #logs-status {

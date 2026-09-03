@@ -2,22 +2,22 @@
 // Первый блок дашборда: он про ограничения, а не про идеи, поэтому визуально
 // спокойный — цвет появляется только когда что-то нарушено.
 
-.daydesk {
-  .card-title[data-num="00"]::before {
-    content: none; // «00» как номер карточки не нужен — это шапка дня
-  }
-}
+// 04.09.2026: атрибут data-num снят со всех карточек. Правила
+// `.card-title::before { content: attr(data-num) }` в проекте давно нет —
+// номера не рисовались вообще, а этот блок глушил уже несуществующий ::before.
+// Заодно и по смыслу: карточки дашборда — это панели, а не шаги процесса,
+// нумеровать их значит обещать порядок, которого нет.
 
 .dd-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
-  gap: 10px;
-}
+  gap: var(--sp-3);
 
-.dd-empty {
-  color: var(--text-muted);
-  font-size: 13px;
-  padding: 8px 2px;
+  /* Пустое состояние и скелетоны — поперёк всей сетки, а не в одну колонку:
+     иначе объяснение висит узкой полосой слева. */
+  > .empty {
+    grid-column: 1 / -1;
+  }
 }
 
 .dd-tile {
@@ -36,7 +36,7 @@
 }
 
 .dd-k {
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -45,7 +45,7 @@
 
 .dd-v {
   font-family: var(--font-mono);
-  font-size: 21px;
+  font-size: var(--fs-h2);
   font-weight: 600;
   letter-spacing: -0.015em;
   color: var(--text-primary);
@@ -57,13 +57,13 @@
 }
 
 .dd-of {
-  font-size: 14px;
+  font-size: var(--fs-base);
   color: var(--text-faint);
   font-weight: 500;
 }
 
 .dd-sub {
-  font-size: 11.5px;
+  font-size: var(--fs-label);
   color: var(--text-faint);
   line-height: 1.4;
 }
@@ -93,14 +93,14 @@
 }
 
 .dd-rules-title {
-  font-size: 12.5px;
+  font-size: var(--fs-small);
   font-weight: 600;
   color: var(--text-secondary);
 }
 
 .dd-rules-score {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-label);
   padding: 2px 9px;
   border-radius: var(--radius-pill);
   background: var(--canvas-subtle);
@@ -112,7 +112,7 @@
 
 .dd-rules-n {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-label);
   color: var(--text-faint);
   margin-left: auto;
 }
@@ -130,36 +130,44 @@
   gap: 2px 8px;
   padding: 9px 12px;
   border: 1px solid var(--hairline);
-  border-left: 2px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--card-bg);
 
-  &.is-ok { border-left-color: var(--green); }
-  &.is-off { border-left-color: var(--red); }
+  // Состояние правила красит плашку целиком, а не полоской слева: полоска
+  // висела в стороне от текста, который она оценивает, и на скруглённом
+  // углу обрезалась по-разному сверху и снизу.
+  &.is-ok {
+    border-color: var(--green-line);
+    background: var(--green-soft);
+  }
+  &.is-off {
+    border-color: var(--red-line);
+    background: var(--red-soft);
+  }
 }
 
 .dd-rule-n {
   grid-area: n;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-label);
   color: var(--text-faint);
 }
 
 .dd-rule-t {
   grid-area: t;
-  font-size: 12.5px;
+  font-size: var(--fs-small);
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .dd-rule-m {
   grid-area: m;
-  font-size: 11px;
+  font-size: var(--fs-label);
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
 
 .dd-rules-empty {
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text-faint);
 }

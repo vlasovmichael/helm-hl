@@ -111,8 +111,11 @@ export function strategyDisplayName(sid) {
   if (sid === "candy_girl") return "Candy Girl";
   if (sid === "vapor") return "Vapor";
   if (sid === "fadehot") return "Fade-high-ER";
-  if (sid === "adopt" || sid === "adopted") return "🤲 Adopted";
-  if (sid === "bot") return "🤖 Bot";
-  if (sid === "manual") return "🖐 Manual";
+  // 🚨 Только текст. Значок «кто вёл сделку» рисует вызывающий код через
+  // icon("bot" | "manual"): эмодзи здесь означали, что имя стратегии нельзя
+  // ни выровнять по колонке, ни покрасить — цветной растр темы не знает.
+  if (sid === "adopt" || sid === "adopted") return "Adopted";
+  if (sid === "bot") return "Bot";
+  if (sid === "manual") return "Manual";
   return sid || "Unknown";
 }

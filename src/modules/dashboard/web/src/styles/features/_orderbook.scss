@@ -30,12 +30,12 @@
 }
 .orderbook-label {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-label);
   color: var(--text-muted);
   white-space: nowrap;
 
   @include until($bp-md) {
-    font-size: 10px;
+    font-size: var(--fs-micro);
   }
 }
 
@@ -58,7 +58,10 @@
   border-radius: 10px;
   text-decoration: none;
   color: var(--text);
-  transition: all 0.18s ease;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
   position: relative;
 
   &:hover {
@@ -73,27 +76,27 @@
     margin-bottom: 6px;
   }
   &__name {
-    font-size: 15px;
+    font-size: var(--fs-base);
     font-weight: 700;
     font-family: var(--font-sans);
     letter-spacing: 0.01em;
 
     &::after {
       content: " ↗";
-      font-size: 11px;
+      font-size: var(--fs-label);
       color: var(--text-muted);
       font-weight: 400;
       margin-left: 4px;
     }
   }
   &__sub {
-    font-size: 12px;
+    font-size: var(--fs-small);
     color: var(--text-muted);
     font-family: var(--font-mono);
     margin-bottom: 8px;
   }
   &__tag {
-    font-size: 11px;
+    font-size: var(--fs-label);
     color: var(--accent);
     text-transform: uppercase;
     letter-spacing: 0.06em;

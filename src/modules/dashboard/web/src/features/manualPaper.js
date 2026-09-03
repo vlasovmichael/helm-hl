@@ -7,11 +7,13 @@
 //  Active Position card (index); the archive lands in the Strategies table.
 //
 // The modal injects its own DOM into body (works on both index and lab without
-// touching HTML) and reuses the shared .trade-modal shell — flat, theme-aware
+// touching HTML) and reuses the shared .modal shell — flat, theme-aware
 // panel like "What if…". REST: GET/POST /api/manual-paper(/open|/close).
 
 import { escapeHtml, fmtUsd, fmtPct, fmtPrice } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
+import * as dialog from "../core/dialog.js";
+import { icon } from "../core/icon.js";
 
 let busy = false;
 let lastEquity = 0;
@@ -44,29 +46,22 @@ function ensureModal() {
   if (modal) return modal;
   modal = document.createElement("div");
   modal.id = "mp-modal";
-  modal.className = "trade-modal";
+  modal.className = "modal";
   modal.hidden = true;
   modal.innerHTML = `
-    <div class="trade-modal__backdrop" data-mp-close></div>
-    <div class="trade-modal__panel" role="dialog" aria-modal="true" aria-label="New paper trade">
-      <button class="trade-modal__close" type="button" data-mp-close aria-label="Close">×</button>
+    <div class="modal__backdrop" data-close></div>
+    <div class="modal__panel" role="dialog" aria-modal="true" aria-label="New paper trade">
       <div class="mp-body" id="mp-body"></div>
     </div>`;
   document.body.appendChild(modal);
-  modal.addEventListener("click", (e) => {
-    if (e.target.hasAttribute("data-mp-close")) closeModal();
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && !modal.hidden) closeModal();
-  });
+  // Закрытие, Escape, замок прокрутки, возврат фокуса — core/dialog.js.
+  dialog.bindClose(modal);
   return modal;
 }
 
 function closeModal() {
   const m = document.getElementById("mp-modal");
-  if (!m) return;
-  m.hidden = true;
-  document.body.style.overflow = "";
+  if (m) dialog.close(m);
 }
 
 function formHtml(prefill = {}) {
@@ -74,16 +69,19 @@ function formHtml(prefill = {}) {
   const side = prefill.side === "short" ? "short" : "long";
   const sideBtn = (val, label) =>
     `<button type="button" class="mp-side-btn mp-side-${val} ${side === val ? "is-on" : ""}" data-side="${val}">${label}</button>`;
-  return `
-    <div class="mp-title">New paper trade</div>
-    <div class="mp-lead">Like Rabbit, but on paper. Entry at the current price. The bot manages the exit (ATR stop + breakeven ratchet + trail), same as adopt — you can also close it yourself anytime.</div>
+  return dialog.head({
+    glyph: "add",
+    title: "New paper trade",
+    sub: "Entry at the current price; the bot manages the exit",
+  }) + `
+    <div class="mp-lead">Like Rabbit, but on paper. The bot manages the exit (ATR stop + breakeven ratchet + trail), same as adopt — you can also close it yourself anytime.</div>
     <form id="mp-form" autocomplete="off">
       <label class="mp-label">Coin</label>
-      <input id="mp-coin" class="mp-input" type="text" list="mp-coin-list" placeholder="e.g. BTC, SOL, kBONK" value="${escapeHtml(coin.toUpperCase())}" autocomplete="off" spellcheck="false" />
+      <input id="mp-coin" class="mp-input" data-autofocus type="text" list="mp-coin-list" placeholder="e.g. BTC, SOL, kBONK" value="${escapeHtml(coin.toUpperCase())}" autocomplete="off" spellcheck="false" />
       <datalist id="mp-coin-list"></datalist>
 
       <label class="mp-label">Side</label>
-      <div class="mp-sides">${sideBtn("long", "▲ Long")}${sideBtn("short", "▼ Short")}</div>
+      <div class="mp-sides">${sideBtn("long", `${icon("long")} Long`)}${sideBtn("short", `${icon("short")} Short`)}</div>
 
       <label class="mp-label">Leverage: <span id="mp-lev-val">${DEFAULT_LEV}×</span> <span class="mp-lev-hint" id="mp-lev-hint"></span></label>
       <input id="mp-lev" class="mp-range" type="range" min="1" max="${WALLET_LEV_CAP}" step="1" value="${DEFAULT_LEV}" />
@@ -93,7 +91,7 @@ function formHtml(prefill = {}) {
 
       <div class="mp-calc" id="mp-calc"></div>
       <div class="mp-err" id="mp-err" hidden></div>
-      <button type="submit" class="mp-submit" id="mp-submit">Open paper position</button>
+      <button type="submit" class="btn btn--primary btn--lg mp-submit" id="mp-submit">Open paper position</button>
     </form>`;
 }
 
@@ -147,8 +145,7 @@ function populateCoins(coins) {
 async function openModal(prefill = {}) {
   const modal = ensureModal();
   document.getElementById("mp-body").innerHTML = formHtml(prefill);
-  modal.hidden = false;
-  document.body.style.overflow = "hidden";
+  dialog.open(modal);
 
   // Equity for the slider + coin list (autocomplete) + per-coin max leverage.
   try {
@@ -176,7 +173,6 @@ async function openModal(prefill = {}) {
   document.getElementById("mp-lev").addEventListener("input", recalc);
   document.getElementById("mp-size").addEventListener("input", recalc);
   form.addEventListener("submit", onSubmit);
-  document.getElementById("mp-coin").focus();
 }
 
 async function onSubmit(e) {
@@ -234,7 +230,7 @@ let listTimer = null;
 function rowHtml(p) {
   const isShort = p.side === "SHORT";
   const sideCls = isShort ? "num-neg" : "num-pos";
-  const arrow = isShort ? "▼" : "▲";
+  const arrow = icon(isShort ? "short" : "long");
   const pnl = p.unrealized;
   const pnlCls = pnl == null ? "" : pnl >= 0 ? "num-pos" : "num-neg";
   const roe = p.roePct;
@@ -277,7 +273,7 @@ async function refreshActive() {
       <div class="mp-active">
         <div class="mp-active-head">
           <span>Paper positions · paper</span>
-          <span class="mp-active-meta">${used}/${max} · ${managed ? "🤖 bot manages exit" : "bot hands-off"}</span>
+          <span class="mp-active-meta">${used}/${max} · ${managed ? `${icon("bot")} bot manages exit` : "bot hands-off"}</span>
         </div>
         <div class="u-scroll-x">
           <table class="data-table mp-active-table">
@@ -307,19 +303,22 @@ function ensureConfirm() {
   if (modal) return modal;
   modal = document.createElement("div");
   modal.id = "mp-confirm";
-  modal.className = "trade-modal";
+  modal.className = "modal";
   modal.hidden = true;
+  modal.className = "modal modal--danger";
   modal.innerHTML = `
-    <div class="trade-modal__backdrop" data-mp-cancel></div>
-    <div class="trade-modal__panel" role="dialog" aria-modal="true" aria-label="Close paper position">
-      <button class="trade-modal__close" type="button" data-mp-cancel aria-label="Cancel">×</button>
+    <div class="modal__backdrop" data-mp-cancel></div>
+    <div class="modal__panel" role="dialog" aria-modal="true" aria-label="Close paper position">
       <div id="mp-confirm-body"></div>
     </div>`;
   document.body.appendChild(modal);
   modal.addEventListener("click", (e) => {
-    if (e.target.hasAttribute("data-mp-cancel")) settleConfirm(false);
-    if (e.target.hasAttribute("data-mp-confirm")) settleConfirm(true);
+    if (e.target.closest("[data-mp-cancel]")) settleConfirm(false);
+    if (e.target.closest("[data-mp-confirm]")) settleConfirm(true);
   });
+  // Escape здесь не просто закрывает, а РАЗРЕШАЕТ промис отказом — иначе
+  // вызывающий код навсегда останется ждать ответа. Поэтому свой обработчик,
+  // а не dialog.bindClose: у диалога-вопроса есть возвращаемое значение.
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !modal.hidden) settleConfirm(false);
   });
@@ -328,9 +327,7 @@ function ensureConfirm() {
 
 function hideConfirm() {
   const modal = document.getElementById("mp-confirm");
-  if (!modal) return;
-  modal.hidden = true;
-  document.body.style.overflow = "";
+  if (modal) dialog.close(modal);
 }
 
 // Отмена закрывает диалог; подтверждение — нет: пока идёт запрос, оператор видит
@@ -366,24 +363,26 @@ function confirmClose(info, errMsg) {
   const pnlCls = pnl == null ? "" : pnl >= 0 ? "num-pos" : "num-neg";
   const cell = (label, value, cls = "") =>
     `<div class="mp-confirm-cell"><span class="mp-confirm-cell-label">${label}</span><span class="mp-confirm-cell-value ${cls}">${value}</span></div>`;
-  document.getElementById("mp-confirm-body").innerHTML = `
-    <div class="mp-title">Close #${escapeHtml(info.coin || "")}?</div>
-    <div class="mp-lead">Closes the paper position at the current mark price. The result lands in the journal — this can't be undone.</div>
+  document.getElementById("mp-confirm-body").innerHTML =
+    dialog.head({
+      glyph: "warn",
+      title: `Close #${escapeHtml(info.coin || "")}?`,
+      sub: "This can't be undone",
+    }) + `
+    <div class="mp-lead">Closes the paper position at the current mark price. The result lands in the journal.</div>
     <div class="mp-confirm-grid">
-      ${cell("Side", `${isShort ? "▼" : "▲"} ${escapeHtml(info.side || "—")}${info.lev ? " " + info.lev + "×" : ""}`, isShort ? "num-neg" : "num-pos")}
+      ${cell("Side", `${icon(isShort ? "short" : "long")} ${escapeHtml(info.side || "—")}${info.lev ? " " + info.lev + "×" : ""}`, isShort ? "num-neg" : "num-pos")}
       ${cell("Size", size == null ? "—" : fmtUsd(size))}
       ${cell("Entry", entry == null ? "—" : "$" + fmtPrice(entry))}
       ${cell("Mark", mark == null ? "—" : "$" + fmtPrice(mark))}
       ${cell("uPnL", pnl == null ? "—" : fmtUsd(pnl) + (roe == null ? "" : ` (${fmtPct(roe)})`), pnlCls)}
     </div>
     <div class="mp-err"${errMsg ? "" : " hidden"}>${escapeHtml(errMsg || "")}</div>
-    <div class="mp-confirm-actions">
-      <button type="button" class="mp-btn-ghost" data-mp-cancel>Keep it</button>
-      <button type="button" class="mp-btn-danger" data-mp-confirm>${errMsg ? "Retry close" : "Close position"}</button>
+    <div class="modal__actions">
+      <button type="button" class="btn btn--ghost mp-btn-ghost" data-mp-cancel>Keep it</button>
+      <button type="button" class="btn btn--danger" data-mp-confirm data-autofocus>${errMsg ? "Retry close" : "Close position"}</button>
     </div>`;
-  modal.hidden = false;
-  document.body.style.overflow = "hidden";
-  document.querySelector("#mp-confirm [data-mp-confirm]")?.focus();
+  dialog.open(modal);
   return new Promise((resolve) => {
     confirmResolve = resolve;
   });

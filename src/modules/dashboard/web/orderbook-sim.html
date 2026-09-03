@@ -32,7 +32,7 @@
   * { box-sizing: border-box; }
   html, body {
     margin: 0; height: 100%; background: var(--bg); color: var(--txt);
-    font-family: "SF Mono","JetBrains Mono","Menlo",monospace; font-size: 13px;
+    font-family: "SF Mono","JetBrains Mono","Menlo",monospace; font-size: var(--fs-body);
   }
   body { display: flex; flex-direction: column; }
 
@@ -42,7 +42,7 @@
   }
   .brand { font-weight: 700; letter-spacing: .5px; }
   .brand small { color: var(--dim); font-weight: 400; margin-left: 6px; }
-  .warn { margin-left: auto; color: var(--dim); font-size: 11.5px; }
+  .warn { margin-left: auto; color: var(--dim); font-size: var(--fs-label); }
   .warn b { color: var(--gold); }
 
   main { flex: 1; display: grid; grid-template-columns: 380px 1fr 340px; gap: 1px; background: var(--line); min-height: 0; }
@@ -63,7 +63,7 @@
   .row.wall.bid .bar { background: var(--bid-wall); }
   .row.eaten .bar { background: rgba(232,184,75,.35); }
   .row > span { position: relative; z-index: 1; }
-  .row .tag { color: var(--gold); font-size: 10px; font-weight: 700; }
+  .row .tag { color: var(--gold); font-size: var(--fs-micro); font-weight: 700; }
   .row .px { text-align: right; font-weight: 600; }
   .row.ask .px { color: var(--ask); }
   .row.bid .px { color: var(--bid); }
@@ -75,28 +75,28 @@
     display: flex; align-items: center; justify-content: center; gap: 16px; height: 52px;
     background: var(--panel); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
   }
-  .mid .price { font-size: 24px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
-  .mid .spread { color: var(--dim); font-size: 12px; }
+  .mid .price { font-size: var(--fs-h2); font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; }
+  .mid .spread { color: var(--dim); font-size: var(--fs-small); }
   .mid .spread b { color: var(--gold); }
 
   .chartwrap { flex: 1; position: relative; padding: 14px; min-height: 0; }
   canvas { width: 100%; height: 100%; display: block; }
 
   .side { background: var(--panel); padding: 16px; overflow-y: auto; }
-  .side h3 { margin: 0 0 9px; font-size: 10.5px; letter-spacing: 1.5px; color: var(--dim); text-transform: uppercase; font-weight: 600; }
+  .side h3 { margin: 0 0 9px; font-size: var(--fs-micro); letter-spacing: 1.5px; color: var(--dim); text-transform: uppercase; font-weight: 600; }
   .card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 13px; margin-bottom: 14px; }
 
-  label { display: block; color: var(--dim); font-size: 11px; margin-bottom: 4px; }
+  label { display: block; color: var(--dim); font-size: var(--fs-label); margin-bottom: 4px; }
   input {
     width: 100%; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px;
-    background: var(--bg); color: var(--txt); font-family: inherit; font-size: 13px;
+    background: var(--bg); color: var(--txt); font-family: inherit; font-size: var(--fs-body);
   }
   input:focus { outline: none; border-color: var(--accent); }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   button {
     padding: 9px 10px; border: 1px solid var(--line); border-radius: 7px;
     background: var(--panel-2); color: var(--txt); font-family: inherit;
-    font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all .12s;
+    font-size: var(--fs-small); font-weight: 600; cursor: pointer; transition: all .12s;
   }
   button:hover { border-color: #2c3a4f; color: #fff; }
   button.buy { background: rgba(43,191,115,.16); border-color: var(--bid); color: var(--bid); }
@@ -107,15 +107,15 @@
 
   .kv { display: flex; justify-content: space-between; align-items: baseline; padding: 5px 0; border-bottom: 1px dashed var(--line); }
   .kv:last-child { border-bottom: none; }
-  .kv .k { color: var(--dim); font-size: 11.5px; }
+  .kv .k { color: var(--dim); font-size: var(--fs-label); }
   .kv .v { font-weight: 700; font-variant-numeric: tabular-nums; }
   .v.bad { color: var(--ask); } .v.good { color: var(--bid); } .v.gold { color: var(--gold); }
 
-  .hint { color: var(--dim); font-size: 11.5px; line-height: 1.65; }
+  .hint { color: var(--dim); font-size: var(--fs-label); line-height: 1.65; }
   .hint b { color: var(--txt); } .hint .gold { color: var(--gold); }
-  .toggle { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 11.5px; cursor: pointer; }
+  .toggle { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: var(--fs-label); cursor: pointer; }
   .toggle input { width: auto; }
-  .empty { color: var(--dim); font-size: 11.5px; text-align: center; padding: 10px 0; }
+  .empty { color: var(--dim); font-size: var(--fs-label); text-align: center; padding: 10px 0; }
 </style>
 </head>
 <body>

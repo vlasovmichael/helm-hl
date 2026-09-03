@@ -8,6 +8,7 @@
 
 import { escapeHtml, fmtMoney, fmtUsd, fmtPrice } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
+import { icon } from "../core/icon.js";
 
 const _stratExpanded = new Set(); // id'шники развёрнутых строк (переживают re-render)
 let _lastStrategies = null;
@@ -133,9 +134,9 @@ function stratTradesBlock(s) {
   const pager =
     pages > 1
       ? `<div class="strat-pager">` +
-        `<button class="strat-pg-btn" data-uid="${s.uid}" data-strategy="${s.id}" data-side="${s.side || ""}" data-mode="${tc.mode}" data-page="${tc.page - 1}" ${tc.page <= 0 ? "disabled" : ""}>‹</button>` +
+        `<button class="strat-pg-btn" data-uid="${s.uid}" data-strategy="${s.id}" data-side="${s.side || ""}" data-mode="${tc.mode}" data-page="${tc.page - 1}" ${tc.page <= 0 ? "disabled" : ""} aria-label="Previous page">${icon("prev")}</button>` +
         `<span class="strat-pg-info">${tc.page + 1}/${pages} · ${tc.total} trades</span>` +
-        `<button class="strat-pg-btn" data-uid="${s.uid}" data-strategy="${s.id}" data-side="${s.side || ""}" data-mode="${tc.mode}" data-page="${tc.page + 1}" ${tc.page >= pages - 1 ? "disabled" : ""}>›</button>` +
+        `<button class="strat-pg-btn" data-uid="${s.uid}" data-strategy="${s.id}" data-side="${s.side || ""}" data-mode="${tc.mode}" data-page="${tc.page + 1}" ${tc.page >= pages - 1 ? "disabled" : ""} aria-label="Next page">${icon("next")}</button>` +
         `</div>`
       : `<div class="strat-pg-info">${tc.total} trade${tc.total === 1 ? "" : "s"}</div>`;
   return (
@@ -186,7 +187,7 @@ function stratDetail(s) {
     const rows = sigs
       .map((sig) => {
         const dir = (sig.direction || "").toUpperCase();
-        const arrow = dir === "LONG" ? "▲" : dir === "SHORT" ? "▼" : "•";
+        const arrow = dir === "LONG" ? icon("long") : dir === "SHORT" ? icon("short") : icon("flat");
         const dcls = dir === "LONG" ? "strat-pos" : dir === "SHORT" ? "strat-neg" : "strat-dim";
         return (
           `<tr><td class="strat-dt-coin">${escapeHtml(sig.coin || "")}</td>` +
@@ -260,7 +261,7 @@ function stratRowHtml(s, planned, opts = {}) {
   const main =
     `<tr class="strat-row${famCls}${dim}${expanded ? " is-expanded" : ""}" data-id="${s.uid}"${famAttr} tabindex="0">` +
     `<td class="strat-col-name"><div class="strat-name">${escapeHtml(s.label)} ` +
-    `<span class="strat-caret">${expanded ? "▾" : "▸"}</span></div>` +
+    `<span class="strat-caret">${icon(expanded ? "expanded" : "collapsed")}</span></div>` +
     `<div class="strat-kind">${escapeHtml(s.kind || "")}</div></td>` +
     `<td><span class="strat-pill ${st.cls}">${st.label}</span></td>` +
     `<td>${pos}</td>` +

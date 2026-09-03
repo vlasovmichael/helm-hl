@@ -137,7 +137,7 @@ $cards: ":is(#sec-candygirl)";
     #cb-stats-inline {
       display: block;
       margin: 4px 0 0 !important;
-      font-size: 10.5px;
+      font-size: var(--fs-micro);
     }
   }
   #cb-watchlist-body,

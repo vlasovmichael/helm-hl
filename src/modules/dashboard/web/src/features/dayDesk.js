@@ -9,6 +9,7 @@
 // сделки на этом экране не появляется вовсе — она ниже, в Screen.
 
 import { fetchJson } from "../net/api.js";
+import { emptyState } from "../core/placeholders.js";
 
 const REFRESH_MS = 60_000;
 
@@ -131,12 +132,22 @@ export async function renderDayDesk() {
   let d;
   try {
     d = await fetchJson("/api/day-desk");
-  } catch {
-    host.innerHTML = `<div class="dd-empty">Day desk unavailable.</div>`;
+  } catch (err) {
+    // Сеть отвалилась — это не «сегодня нечего показать», а «спросить не у
+    // кого». Раньше оба случая печатали одну строку «Day desk unavailable.»
+    host.innerHTML = emptyState({
+      glyph: "danger",
+      title: "Day desk is not answering",
+      hint: `${err.message}. The budget of the day is unknown right now — treat the limit as unenforced.`,
+    });
     return;
   }
   if (!d || d.error) {
-    host.innerHTML = `<div class="dd-empty">Day desk unavailable.</div>`;
+    host.innerHTML = emptyState({
+      glyph: "clock",
+      title: "No day desk data yet",
+      hint: "Numbers appear once the first trade or status frame of the day lands.",
+    });
     return;
   }
 

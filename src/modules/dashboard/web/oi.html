@@ -1,13 +1,13 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <meta name="theme-color" content="#0c0a09" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#f5f1ea" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <title>OI · Helm</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -35,259 +35,6 @@
         }
       })();
     </script>
-    <style>
-      /* ── OI history — витрина (oi- префикс, тема-нейтрально) ── */
-      .oi-note {
-        color: var(--text-secondary);
-        font-size: 12.5px;
-        line-height: 1.55;
-        margin: 2px 0 0;
-      }
-      .oi-note b { color: var(--text-primary); }
-      .oi-span { font-size: 12px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
-
-      .oi-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-      .oi-search {
-        padding: 7px 11px; border-radius: 8px;
-        border: 1px solid var(--border, #2a2622);
-        background: var(--panel-2, rgba(128,128,128,0.06));
-        color: var(--text-primary); font-family: inherit; font-size: 13px;
-        text-transform: uppercase; width: 130px;
-      }
-
-      .oi-table-wrap { overflow-x: auto; }
-      table.oi-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-      .oi-table th {
-        text-align: right; padding: 8px 10px; font-size: 11px; font-weight: 600;
-        letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-secondary);
-        border-bottom: 1px solid var(--border, #2a2622); cursor: pointer; user-select: none;
-        white-space: nowrap;
-      }
-      .oi-table th:first-child { text-align: left; }
-      .oi-table th.sorted::after { content: " ▾"; }
-      .oi-table th.sorted.asc::after { content: " ▴"; }
-      .oi-table th { font-size: 12px; }
-      .oi-table td {
-        text-align: right; padding: 8px 10px; font-size: 14.5px;
-        border-bottom: 1px solid var(--hairline));
-        white-space: nowrap; font-family: "JetBrains Mono", monospace;
-      }
-      .oi-table td:first-child { text-align: left; font-weight: 600; font-family: inherit; }
-      .oi-table tbody tr { cursor: pointer; }
-      .oi-table tbody tr:hover { background: var(--panel-2, rgba(128,128,128,0.06)); }
-      .oi-table tbody tr.active { background: rgba(91, 157, 255, 0.14); }
-      /* Подстрочник фандинга: «%/сут» и во сколько раз выше медианы биржи.
-         Голая часовая ставка не отвечает ни «за какой срок», ни «это много ли». */
-      .oi-sub {
-        display: block; font-size: 11px; line-height: 1.3; margin-top: 1px;
-        color: var(--text-secondary); font-variant-numeric: tabular-nums;
-      }
-      .oi-sub-loud { color: #c98a1a; font-weight: 600; }
-
-      /* Метка незакрытой корзины: строка «13:00» — это час, который ещё идёт,
-         а не отставший на час снимок. */
-      .oi-live {
-        font-size: 10px; letter-spacing: 0.4px; text-transform: uppercase;
-        padding: 1px 5px; margin-left: 6px; border-radius: 4px; cursor: help;
-        background: rgba(91, 157, 255, 0.16); color: #3c7fd0; font-weight: 600;
-      }
-      :root[data-theme="dark"] .oi-live { color: #7fb4ff; }
-
-      .oi-fresh { color: #0f7a45; }
-      :root[data-theme="dark"] .oi-fresh { color: #2f9d63; }
-      .oi-stale { color: #c98a1a; font-weight: 600; }
-
-      .oi-pos { color: #0f7a45; }
-      :root[data-theme="dark"] .oi-pos { color: #2f9d63; }
-      .oi-neg { color: #f0556b; }
-      .oi-muted { color: var(--text-secondary); }
-
-      .oi-pager {
-        display: flex; align-items: center; justify-content: center; gap: 14px;
-        padding: 12px 4px 2px; font-size: 13px;
-      }
-      .oi-pager button {
-        padding: 6px 13px; border-radius: 8px; cursor: pointer;
-        border: 1px solid var(--border, #2a2622);
-        background: var(--panel-2, rgba(128,128,128,0.06));
-        color: var(--text-primary); font-family: inherit; font-size: 13px; font-weight: 600;
-      }
-      .oi-pager button:disabled { opacity: 0.4; cursor: default; }
-      .oi-pager button:not(:disabled):hover { border-color: #5b9dff; }
-      .oi-pager .oi-pg-info { color: var(--text-secondary); font-variant-numeric: tabular-nums; min-width: 130px; text-align: center; }
-
-      .oi-detail { margin-top: 4px; }
-      .oi-detail-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
-      .oi-detail-head h3 { margin: 0; font-size: 18px; }
-      .oi-chart { width: 100%; height: 260px; display: block; position: relative; }
-
-      /* Тултип курсора. position:absolute внутри .oi-chart, поэтому у контейнера
-         обязателен position:relative — иначе уезжает в угол страницы. */
-      .oi-tip {
-        position: absolute; z-index: 3; pointer-events: none;
-        padding: 7px 10px; border-radius: 8px; font-size: 12px; line-height: 1.5;
-        border: 1px solid var(--border, #2a2622);
-        background: var(--card-bg, #131316);
-        color: var(--text-primary);
-        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
-        font-variant-numeric: tabular-nums; white-space: nowrap;
-      }
-      .oi-tip-t { color: var(--text-secondary); font-size: 11px; margin-bottom: 3px; }
-      .oi-tip-r { display: flex; align-items: center; gap: 6px; }
-      .oi-tip-r b { width: 9px; height: 3px; border-radius: 2px; flex: none; }
-      .oi-tip-r span { font-family: "JetBrains Mono", monospace; margin-left: auto; }
-      .oi-tip-r i { font-style: normal; color: var(--text-secondary); font-size: 11px; }
-
-      /* Заголовки с пояснением: курсор-вопрос подсказывает, что есть title. */
-      .oi-table th[title] { cursor: help; text-decoration: underline dotted 1px; text-underline-offset: 3px; }
-
-      /* Липкая колонка монеты: на узком экране таблица едет вбок, и без этого
-         непонятно, чья строка перед тобой. */
-      .oi-table th:first-child,
-      .oi-table td:first-child {
-        position: sticky; left: 0; z-index: 1;
-        background: var(--card-bg);
-      }
-      /* Подсветка строки полупрозрачная, а липкая ячейка обязана быть глухой —
-         иначе сквозь неё видно проезжающие колонки. Поэтому база непрозрачна,
-         а оттенок кладём внутренней тенью поверх неё. */
-      .oi-table tbody tr:hover td:first-child { box-shadow: inset 0 0 0 999px rgba(128, 128, 128, 0.06); }
-      .oi-table tbody tr.active td:first-child { box-shadow: inset 0 0 0 999px rgba(91, 157, 255, 0.14); }
-      .oi-legend { display: flex; gap: 16px; font-size: 12px; margin: 6px 0 2px; }
-      .oi-legend span { display: inline-flex; align-items: center; gap: 6px; }
-      .oi-legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
-      .oi-empty { padding: 30px 10px; text-align: center; color: var(--text-secondary); }
-
-      /* Пилюли и сегменты «Монеты дня» (ss- префикс остался от снятого
-         Setup Scanner — карточка переиспользует его разметку). */
-      .ss-segs { display: inline-flex; gap: 3px; }
-      .ss-seg {
-        width: 17px; height: 5px; border-radius: 3px;
-        background: var(--border-strong, rgba(128,128,128,0.3));
-      }
-      .ss-badge {
-        font-size: 14px; font-weight: 700; letter-spacing: 0.3px;
-        padding: 5px 13px; border-radius: var(--radius-pill); color: #fff; white-space: nowrap;
-      }
-      .ss-badge--long  { background: var(--green); }
-      .ss-badge--short { background: var(--red); }
-      .ss-badge--none  { background: var(--text-muted, #8a8578); }
-      .ss-coin {
-        font-size: 26px; font-weight: 700; letter-spacing: -0.5px;
-        color: var(--text-primary, inherit); font-family: var(--font-mono);
-      }
-      .cod-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 14px; }
-      .cod-tab {
-        display: inline-flex; align-items: center; gap: 8px;
-        padding: 7px 14px; border-radius: 999px; cursor: pointer;
-        border: 1px solid var(--border, #2a2622);
-        background: var(--panel-2, rgba(128, 128, 128, 0.06));
-        color: var(--text-secondary);
-        font-family: inherit; font-size: 13px; font-weight: 600;
-      }
-      .cod-tab:hover { border-color: #5b9dff; }
-      .cod-tab.active { color: var(--text-primary); border-color: #5b9dff; background: rgba(91, 157, 255, 0.14); }
-      .cod-tab-coin { font-family: "JetBrains Mono", monospace; }
-      .cod-tab-side { font-size: 10.5px; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px; color: #fff; }
-      .cod-tab-side.long { background: var(--green); }
-      .cod-tab-side.short { background: var(--red); }
-      .cod-tab--held { border-color: #5b9dff; }
-      .cod-tab-held, .cod-heldbadge {
-        font-size: 10px; letter-spacing: 0.6px; text-transform: uppercase;
-        padding: 2px 8px; border-radius: 999px;
-        background: rgba(91, 157, 255, 0.18); color: #5b9dff; font-weight: 700;
-      }
-      .cod-heldbadge { font-size: 11px; padding: 4px 11px; }
-      .cod-donebadge {
-        font-size: 11px; letter-spacing: 0.6px; text-transform: uppercase;
-        padding: 4px 11px; border-radius: 999px; font-weight: 700;
-        background: rgba(138, 133, 120, 0.18); color: var(--text-secondary);
-      }
-      .cod-segs--short .ss-seg.on { background: var(--red); }
-      .cod-segs--long  .ss-seg.on { background: var(--green); }
-      .cod-segs--muted .ss-seg.on { background: var(--text-secondary); }
-      .cod-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 14px; }
-      .cod-head-main { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-      .cod-verdict { font-size: 15px; font-weight: 700; }
-      .cod-verdict.setup { color: var(--green); }
-      .cod-verdict.watch { color: #c98a1a; }
-      .cod-verdict.none { color: var(--text-secondary); }
-      .cod-detail { font-size: 13px; line-height: 1.55; color: var(--text-secondary); margin: 6px 0 0; }
-      .cod-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; }
-      .cod-sub {
-        font-size: 10.5px; letter-spacing: 0.8px; text-transform: uppercase;
-        color: var(--text-muted, #8a8578); margin: 0 0 8px;
-      }
-      .cod-t td { padding: 6px 8px; font-size: 13.5px; border-bottom: 1px solid var(--hairline)); }
-      .cod-t td:first-child { color: var(--text-secondary); }
-      .cod-t td:last-child { text-align: right; font-family: "JetBrains Mono", monospace; }
-      .cod-hit::before { content: "✓ "; color: var(--green); }
-      .cod-miss::before { content: "· "; color: var(--text-secondary); }
-      .cod-miss { opacity: 0.55; }
-      .cod-levels td:last-child { font-weight: 600; }
-      .cod-rr-ok { color: var(--green); }
-      .cod-rr-bad { color: var(--red); }
-      .cod-flags { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 7px; }
-      .cod-flags li {
-        font-size: 12.5px; line-height: 1.5; padding: 8px 11px; border-radius: 8px;
-        border-left: 3px solid var(--text-muted, #8a8578);
-        background: var(--panel-2, rgba(128, 128, 128, 0.06));
-      }
-      .cod-flags li.high { border-left-color: var(--red); }
-      .cod-flags li.med { border-left-color: #c98a1a; }
-      .cod-fwd {
-        margin-top: 16px; padding: 12px 14px; border-radius: 10px;
-        border: 1px dashed var(--border, #2a2622);
-        font-size: 12.5px; line-height: 1.6; color: var(--text-secondary);
-      }
-      .cod-fwd b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
-      .cod-empty { padding: 26px 10px; text-align: center; color: var(--text-secondary); font-size: 13.5px; }
-
-      /* ── entry filter: «вход по движению» ── */
-      .ef-verdict {
-        padding: 14px 16px; border-radius: 10px;
-        border: 1px solid var(--hairline); background: var(--panel-2, rgba(128,128,128,0.05));
-      }
-      .ef-verdict.warn { border-color: var(--red); background: rgba(220, 76, 76, 0.10); }
-      .ef-verdict.calm { border-color: var(--hairline); }
-      .ef-vh {
-        font-weight: 700; font-size: 15.5px; letter-spacing: -0.01em;
-        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-      }
-      .ef-vd { margin-top: 7px; font-size: 13.5px; line-height: 1.6; color: var(--text-secondary); }
-      .ef-table-wrap { overflow-x: auto; margin-top: 16px; }
-      table.ef-t { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-      .ef-t th {
-        text-align: right; font-size: 12px; font-weight: 600; color: var(--text-secondary);
-        padding: 6px 10px; border-bottom: 1px solid var(--hairline); white-space: nowrap;
-      }
-      .ef-t th:first-child, .ef-t td:first-child { text-align: left; }
-      .ef-t td {
-        text-align: right; padding: 7px 10px; font-size: 13.5px;
-        border-bottom: 1px solid var(--hairline); white-space: nowrap;
-      }
-      .ef-t td:first-child { font-weight: 600; font-family: "JetBrains Mono", monospace; }
-      .ef-t tr.ef-held td { background: rgba(220, 76, 76, 0.09); }
-      .ef-side {
-        font-size: 10.5px; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 999px;
-        color: #fff; font-weight: 600;
-      }
-      .ef-side.long { background: #2f9e63; }
-      .ef-side.short { background: #d2564e; }
-      .ef-side.none { background: transparent; color: var(--text-secondary); }
-      .ef-lvl { font-size: 11px; letter-spacing: 0.4px; text-transform: uppercase; }
-      .ef-lvl.extreme { color: var(--red); font-weight: 700; }
-      .ef-lvl.strong { color: #c98a1a; font-weight: 600; }
-      .ef-lvl.fast { color: var(--text-secondary); }
-      .ef-lvl.quiet { color: var(--text-secondary); opacity: 0.6; }
-      .ef-fwd {
-        margin-top: 14px; padding: 10px 12px; border-radius: 8px;
-        border: 1px dashed var(--hairline); font-size: 12.5px; color: var(--text-secondary);
-      }
-      .ef-fwd b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
-      .ef-empty { padding: 26px 10px; text-align: center; color: var(--text-secondary); font-size: 13.5px; }
-    
-    </style>
   </head>
   <body>
     <div class="container">
@@ -308,15 +55,38 @@
 
       <section class="card" id="cod-card">
         <div class="card-header">
-          <div class="card-title" data-num="01">Coin of the day · fading an exhausted tail</div>
-          <div class="oi-toolbar">
-            <span class="oi-span" id="cod-meta">…</span>
-            <button class="range-btn" id="cod-refresh" type="button">Recompute</button>
+          <div class="card-title">Coin of the day · fading an exhausted tail</div>
+          <div class="card-tools">
+            <span class="card-meta" id="cod-meta"></span>
+            <button class="btn btn--sm" id="cod-refresh" type="button">
+              <i data-icon="recompute"></i>Recompute
+            </button>
           </div>
         </div>
         <div class="cod-tabs" id="cod-tabs" hidden></div>
         <div id="cod-body">
-          <div class="cod-empty">Loading…</div>
+          <!-- Скелетон формы карточки: заголовок + бейдж стороны + две
+               колонки таблицы. Пока данных нет, место под них уже занято —
+               при подстановке макет не прыгает. -->
+          <div class="cod-head">
+            <div class="cod-head-main">
+              <span class="sk sk-num sk-num--lg"></span>
+              <span class="sk sk-pill"></span>
+            </div>
+            <span class="sk sk-chip"></span>
+          </div>
+          <div class="cod-grid">
+            <div class="sk-text">
+              <span class="sk sk-line"></span>
+              <span class="sk sk-line"></span>
+              <span class="sk sk-line"></span>
+            </div>
+            <div class="sk-text">
+              <span class="sk sk-line"></span>
+              <span class="sk sk-line"></span>
+              <span class="sk sk-line"></span>
+            </div>
+          </div>
         </div>
         <div class="cod-fwd" id="cod-fwd" hidden></div>
         <p class="oi-note" style="margin-top: 12px">
@@ -332,14 +102,22 @@
 
       <section class="card" id="ef-card">
         <div class="card-header">
-          <div class="card-title" data-num="02">Entry filter · are you buying a move that already happened</div>
-          <div class="oi-toolbar">
-            <span class="oi-span" id="ef-meta">…</span>
-            <button class="range-btn" id="ef-refresh" type="button">Refresh</button>
+          <div class="card-title">Entry filter · are you buying a move that already happened</div>
+          <div class="card-tools">
+            <span class="card-meta" id="ef-meta"></span>
+            <button class="btn btn--sm" id="ef-refresh" type="button">
+              <i data-icon="refresh"></i>Refresh
+            </button>
           </div>
         </div>
         <div id="ef-body">
-          <div class="ef-empty">Loading…</div>
+          <div class="ef-verdict">
+            <div class="sk sk-line" style="width: 46%"></div>
+          </div>
+          <div class="sk-text" style="margin-top: var(--sp-4)">
+            <span class="sk sk-line"></span>
+            <span class="sk sk-line"></span>
+          </div>
         </div>
         <div class="ef-fwd" id="ef-fwd" hidden></div>
         <p class="oi-note" style="margin-top: 12px">
@@ -357,10 +135,17 @@
 
       <section class="card">
         <div class="card-header">
-          <div class="card-title" data-num="03">Overview · all coins</div>
-          <div class="oi-toolbar">
-            <input id="oi-search" class="oi-search" placeholder="filter" maxlength="12" />
-            <span class="oi-span" id="oi-span">…</span>
+          <div class="card-title">Overview · all coins</div>
+          <div class="card-tools">
+            <input
+              id="oi-search"
+              class="field field--ticker"
+              type="search"
+              placeholder="Filter by coin"
+              aria-label="Filter by coin"
+              maxlength="12"
+            />
+            <span class="card-meta" id="oi-span"></span>
           </div>
         </div>
         <div class="oi-table-wrap">
@@ -378,30 +163,39 @@
               </tr>
             </thead>
             <tbody id="oi-tbody">
-              <tr><td colspan="8" class="oi-empty">Loading…</td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
             </tbody>
           </table>
         </div>
         <div class="oi-pager" id="oi-pager" hidden>
-          <button id="oi-prev" type="button">‹ Prev</button>
+          <button class="btn btn--sm" id="oi-prev" type="button">
+            <i data-icon="prev"></i>Prev
+          </button>
           <span class="oi-pg-info" id="oi-pg-info"></span>
-          <button id="oi-next" type="button">Next ›</button>
+          <button class="btn btn--sm" id="oi-next" type="button">
+            Next<i data-icon="next"></i>
+          </button>
         </div>
       </section>
 
       <section class="card oi-detail" id="oi-detail" hidden>
         <div class="card-header">
-          <div class="card-title" data-num="04">Coin history</div>
-          <div class="time-ranges" id="oi-ranges">
-            <button class="range-btn" data-hours="24">24h</button>
-            <button class="range-btn active" data-hours="72">3d</button>
-            <button class="range-btn" data-hours="168">7d</button>
-            <button class="range-btn" data-hours="720">30d</button>
+          <div class="card-title">Coin history</div>
+          <div class="seg" id="oi-ranges" role="group" aria-label="Range">
+            <button class="seg__btn" type="button" data-hours="24">24h</button>
+            <button class="seg__btn active" type="button" data-hours="72">3d</button>
+            <button class="seg__btn" type="button" data-hours="168">7d</button>
+            <button class="seg__btn" type="button" data-hours="720">30d</button>
           </div>
         </div>
         <div class="oi-detail-head">
           <h3 id="oi-detail-coin">—</h3>
-          <span class="oi-span" id="oi-detail-sub"></span>
+          <span class="card-meta" id="oi-detail-sub"></span>
         </div>
         <div class="oi-legend">
           <span><i style="background:#5b9dff"></i> OI (tokens)</span>

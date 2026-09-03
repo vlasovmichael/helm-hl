@@ -5,7 +5,7 @@
 
 /* Per-coin table */
 .per-coin-meta {
-  font-size: 11px;
+  font-size: var(--fs-label);
   color: var(--text-muted);
   margin-bottom: 8px;
   font-family: var(--font-mono);
@@ -20,13 +20,13 @@
 .per-coin-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--fs-small);
   font-family: var(--font-mono);
 
   th {
     text-align: left;
     font-weight: 600;
-    font-size: 10px;
+    font-size: var(--fs-micro);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--text-muted);
@@ -94,7 +94,7 @@
   }
 }
 .breakdown-title {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -104,13 +104,13 @@
 .breakdown-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--fs-small);
   font-family: var(--font-mono);
 
   th {
     text-align: left;
     font-weight: 600;
-    font-size: 10px;
+    font-size: var(--fs-micro);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--text-muted);
@@ -148,7 +148,7 @@
 
 /* Heatmap */
 .heatmap-meta {
-  font-size: 11px;
+  font-size: var(--fs-label);
   color: var(--text-muted);
   margin-bottom: 10px;
   font-family: var(--font-mono);
@@ -168,34 +168,13 @@
 }
 .heatmap-year {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--fs-body);
   font-weight: 600;
   min-width: 48px;
   text-align: center;
   color: var(--text-primary);
 }
-.heatmap-year-btn {
-  background: var(--canvas-subtle);
-  border: 1px solid var(--hairline);
-  color: var(--text-primary);
-  border-radius: 6px;
-  width: 26px;
-  height: 26px;
-  cursor: pointer;
-  font-size: 15px;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &:hover:not(:disabled) {
-    border-color: var(--accent);
-  }
-  &:disabled {
-    opacity: 0.35;
-    cursor: default;
-  }
-}
+/* .heatmap-year-btn — общий .btn.btn--icon.btn--sm, своих стилей нет. */
 
 /* 12 месячных блоков, перенос по ширине карточки */
 .heatmap-months {
@@ -212,12 +191,12 @@
 }
 .heatmap-month-name {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-label);
   color: var(--text-muted);
 }
 .heatmap-month-pnl {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   &.pos {
     color: var(--green);
   }
@@ -291,7 +270,7 @@
   align-items: center;
   gap: 4px;
   margin-top: 8px;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   color: var(--text-muted);
   font-family: var(--font-mono);
 
@@ -309,7 +288,7 @@
 
 /* Exit quality (MFE/MAE excursion) */
 .exits-meta {
-  font-size: 11px;
+  font-size: var(--fs-label);
   color: var(--text-muted);
   margin-bottom: 10px;
   font-family: var(--font-mono);
@@ -331,7 +310,7 @@
   text-align: center;
 }
 .exits-card-val {
-  font-size: 20px;
+  font-size: var(--fs-h3);
   font-weight: 600;
   font-family: var(--font-mono);
   color: var(--text-primary);
@@ -344,7 +323,7 @@
   color: var(--red);
 }
 .exits-card-lbl {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
@@ -391,14 +370,14 @@
 }
 .day-modal__title {
   font-family: var(--font-mono);
-  font-size: 15px;
+  font-size: var(--fs-base);
   font-weight: 600;
 }
 .day-modal__close {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 16px;
+  font-size: var(--fs-lead);
   cursor: pointer;
   padding: 2px 6px;
   &:hover {
@@ -410,32 +389,32 @@
   align-items: baseline;
   gap: 8px;
   font-family: var(--font-mono);
-  font-size: 18px;
+  font-size: var(--fs-h3);
   font-weight: 700;
   margin-bottom: 12px;
 
   .day-modal__sub {
-    font-size: 11px;
+    font-size: var(--fs-label);
     font-weight: 400;
     color: var(--text-muted);
   }
 }
 .day-modal__loading {
-  font-size: 12px;
+  font-size: var(--fs-small);
   color: var(--text-muted);
   padding: 10px 0;
 }
 .day-modal__table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: var(--fs-small);
   margin-bottom: 14px;
 
   th {
     text-align: left;
     font-weight: 500;
     color: var(--text-muted);
-    font-size: 10px;
+    font-size: var(--fs-micro);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     padding: 4px 6px;
@@ -452,13 +431,13 @@
 }
 .day-modal__src {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--fs-label);
 }
 .day-side {
   display: inline-block;
   padding: 1px 6px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.03em;
 
@@ -473,7 +452,7 @@
 }
 .day-modal__note-lbl {
   display: block;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
@@ -487,7 +466,7 @@
   border-radius: 8px;
   padding: 8px 10px;
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--fs-body);
   color: var(--text);
   &:focus {
     outline: none;
@@ -502,6 +481,6 @@
   margin-top: 10px;
 }
 .day-modal__status {
-  font-size: 11px;
+  font-size: var(--fs-label);
   color: var(--text-muted);
 }

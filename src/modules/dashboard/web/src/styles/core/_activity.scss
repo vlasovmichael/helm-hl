@@ -5,7 +5,7 @@
   gap: 10px;
   padding: 11px 0;
   border-bottom: 1px solid var(--hairline);
-  font-size: 14px;
+  font-size: var(--fs-base);
 
   &:last-child {
     border-bottom: none;
@@ -24,7 +24,7 @@
 .activity-time {
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--fs-body);
   flex-shrink: 0;
 }
 .activity-coin {
@@ -54,7 +54,7 @@
 }
 
 .activity-kind {
-  font-size: 11px;
+  font-size: var(--fs-label);
   font-weight: 500;
   padding: 1px 7px;
   border-radius: 2em;
@@ -78,7 +78,7 @@
 
 /* Источник сделки: bot / adopted / manual */
 .src-badge {
-  font-size: 9px;
+  font-size: var(--fs-micro);
   font-family: var(--font-mono);
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -110,7 +110,7 @@
 
 /* Сторона позиции */
 .side-chip {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-family: var(--font-mono);
   font-weight: 700;
   padding: 1px 6px;
@@ -130,7 +130,7 @@
 .activity-meta {
   color: var(--text-muted);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--fs-small);
   white-space: nowrap;
   flex-shrink: 0;
   margin-left: auto;

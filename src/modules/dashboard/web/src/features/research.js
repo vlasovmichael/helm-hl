@@ -11,6 +11,7 @@
 
 import { fetchJson } from "../net/api.js";
 import { escapeHtml } from "../utils/format.js";
+import { emptyState } from "../core/placeholders.js";
 
 export async function refreshFvgForward() {
   const body = document.getElementById("fvg-body");
@@ -21,11 +22,19 @@ export async function refreshFvgForward() {
   try {
     res = await fetchJson("/api/forwards");
   } catch {
-    body.innerHTML = `<div class="empty-state">no connection</div>`;
+    body.innerHTML = emptyState({
+      glyph: "danger",
+      title: "Dashboard is not answering",
+      hint: "Forward tests could not be read. Reload the page to try again.",
+    });
     return;
   }
   if (!res?.ok || !Array.isArray(res.items)) {
-    body.innerHTML = `<div class="empty-state">no data</div>`;
+    body.innerHTML = emptyState({
+      glyph: "clock",
+      title: "No forward tests registered",
+      hint: "A test shows up here once a hypothesis is registered with a stop rule.",
+    });
     return;
   }
 

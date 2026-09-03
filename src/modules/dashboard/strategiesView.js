@@ -42,7 +42,7 @@ function startOfTodayMs() {
 const REGISTRY = [
   {
     id: 'manual_paper',
-    label: 'Мой папер',
+    label: 'My paper',
     kind: 'manual · paper journal',
     split: true,                              // ручные бумажные входы бывают и long, и short
     resolve: () => {
