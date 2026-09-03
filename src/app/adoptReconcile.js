@@ -678,6 +678,7 @@ export async function maybeAdoptManualPosition(manualPositions) {
         side,
         entry_equity:  entryEquity,
         sl_price:      plannedSl,
+        initial_sl_price: plannedSl,   // эталон 1R: пол поедет, эта цифра — нет
         tp_price:      tpPrice,
         hunter_sl_oid: slOid,        // → classifyClose пометит 'sl_trigger' при срабатывании
         hunter_tp_oid: tpOid,        // → и 'tp_trigger', когда сработает цель

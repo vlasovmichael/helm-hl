@@ -88,3 +88,60 @@ export function trailFloorPrice({ entry, stopPrice, isShort, peakR, giveBackR, a
   const floorR = peakR - giveBackR;
   return isShort ? entry - floorR * risk : entry + floorR * risk;
 }
+
+/**
+ * Надо ли переставлять биржевой стоп — и куда.
+ *
+ * ПОЧЕМУ ПОЛ ЖИВЁТ НА БИРЖЕ, А НЕ В ПАМЯТИ БОТА. Старый трейл держал уровень
+ * числом и сверял его на тике. Замер по 127 закрытиям: при пороге отдачи 30%
+ * медиана фактической отдачи 40%, p90 — 68%. То есть «locked +$0.50» приносил
+ * $0.30, а в худшей десятой части $0.16. Это НЕ проскальзывание (стоп по замеру
+ * исполняется в 5.6 бп от триггера) и не комиссия (4.3 бп): цена отдавала своё
+ * между осмотрами, и ловить её было нечем — на этом уровне не стояло ордера.
+ * Ордер на бирже исполняется, даже если бот лежит, и «locked» перестаёт быть
+ * обещанием: это цена, которую видно в интерфейсе HL.
+ *
+ * ХРАПОВИК. Пол двигается ТОЛЬКО в мою сторону. Опустить его вниз нельзя ни при
+ * каком откате: это увеличило бы риск задним числом.
+ *
+ * ШАГ. Переставляем, только если новый уровень лучше текущего минимум на
+ * minStepPct от входа. Каждая перестановка — это отмена и постановка ордера,
+ * то есть два запроса и короткое окно, когда на бирже два стопа сразу
+ * (безопасно: оба reduce-only). Дёргать их на каждый тик незачем.
+ *
+ * @param {object} p
+ * ⚠️ 1R СЧИТАЕТСЯ ОТ ЭТАЛОНА (initialStopPrice), а не от текущего стопа. Пол
+ * едет, и если мерить R от него, шкала съезжает после первой же перестановки:
+ * порог взвода, отдача и «locked» начинают мерить в разных единицах. Тест
+ * «храповик» ловит ровно это.
+ *
+ * @param {number} p.entry
+ * @param {number} p.stopPrice          — текущий стоп (он же текущий пол)
+ * @param {number} [p.initialStopPrice] — стоп на входе; эталон шкалы R
+ * @param {boolean} p.isShort
+ * @param {number} p.peakR         — пик хода в R
+ * @param {number} p.giveBackR     — отступ пола от пика, в R
+ * @param {number} p.minStepPct    — минимальный шаг перестановки, % от входа
+ * @returns {{move:false}|{move:true, px:number, fromR:number, toR:number}}
+ */
+export function decideFloorMove({
+  entry, stopPrice, initialStopPrice, isShort, peakR, giveBackR, minStepPct,
+}) {
+  const risk = riskDistance({ entry, stopPrice: initialStopPrice ?? stopPrice });
+  if (risk == null || !(stopPrice > 0)) return { move: false };
+  if (![peakR, giveBackR, minStepPct].every((v) => Number.isFinite(v))) return { move: false };
+
+  const targetFloorR = peakR - giveBackR;
+  const px = isShort ? entry - targetFloorR * risk : entry + targetFloorR * risk;
+  if (!(px > 0)) return { move: false };
+
+  // Куда двигать: в мою сторону = ВНИЗ для шорта, ВВЕРХ для лонга.
+  const better = isShort ? px < stopPrice : px > stopPrice;
+  if (!better) return { move: false };
+
+  const stepPct = (Math.abs(px - stopPrice) / entry) * 100;
+  if (stepPct < minStepPct) return { move: false };
+
+  const curR = (isShort ? entry - stopPrice : stopPrice - entry) / risk;
+  return { move: true, px, fromR: curR, toR: targetFloorR };
+}

@@ -353,11 +353,19 @@ function loadConfig() {
   // старте: кривая сетка — это неправильные ордера на живом счету, и узнать об
   // этом на первом же усыновлении хуже, чем не подняться.
   const adoptTpGridSpec = String(process.env.ADOPT_TP_GRID || '').trim();
+  // Пол трейла БИРЖЕВЫМ ордером: бот не закрывает позу сам, а переставляет
+  // стоп за пиком (см. decideFloorMove). Выключено по умолчанию — правило
+  // меняет способ выхода, а не только его цену.
+  const adoptTrailFloorOrder   = (process.env.ADOPT_TRAIL_FLOOR_ORDER || 'false').toLowerCase() === 'true';
+  const adoptTrailFloorStepPct = parseFloat(process.env.ADOPT_TRAIL_FLOOR_STEP_PCT || '0.25');
   const adoptTargetTrailEnabled    = (process.env.ADOPT_TARGET_TRAIL_ENABLED || 'false').toLowerCase() === 'true';
   const adoptTargetTrailArmR       = parseFloat(process.env.ADOPT_TARGET_TRAIL_ARM_R       || '0.9');
   const adoptTargetTrailGiveBackR  = parseFloat(process.env.ADOPT_TARGET_TRAIL_GIVE_BACK_R || '0.25');
   if (isNaN(adoptTargetTrailArmR) || adoptTargetTrailArmR <= 0) {
     throw new Error(`ADOPT_TARGET_TRAIL_ARM_R must be > 0. Got: "${process.env.ADOPT_TARGET_TRAIL_ARM_R}"`);
+  }
+  if (isNaN(adoptTrailFloorStepPct) || adoptTrailFloorStepPct <= 0) {
+    throw new Error(`ADOPT_TRAIL_FLOOR_STEP_PCT must be > 0. Got: "${process.env.ADOPT_TRAIL_FLOOR_STEP_PCT}"`);
   }
   const adoptTpGrid = parseTpGrid(adoptTpGridSpec);
   if (adoptTpGrid.error) {
@@ -537,6 +545,8 @@ function loadConfig() {
       adoptTargetTrailArmR,
       adoptTargetTrailGiveBackR,
       adoptTpGridLegs: adoptTpGrid.legs || [],
+      adoptTrailFloorOrder,
+      adoptTrailFloorStepPct,
       adoptTrailArmPct,
       adoptTrailGiveBackPct,
       adoptTimecutShadowEnabled,

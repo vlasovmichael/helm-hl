@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-const { decideTargetTrail, unrealizedR, riskDistance, trailFloorPrice } =
+const { decideTargetTrail, unrealizedR, riskDistance, trailFloorPrice, decideFloorMove } =
   await import('../src/modules/targetTrail.js');
 
 const ARM = 0.9, GB = 0.25;
@@ -69,4 +69,62 @@ test('пол трейла в цене считается от пика, и то�
   assert.equal(trailFloorPrice({ entry: 100, stopPrice: 96, isShort: false, peakR: 1.5, giveBackR: GB, armed: true }), 105);
   // шорт зеркально: 100 − 1.25×4 = 95
   assert.equal(trailFloorPrice({ entry: 100, stopPrice: 104, isShort: true, peakR: 1.5, giveBackR: GB, armed: true }), 95);
+});
+
+// ── Пол биржевым ордером: когда двигать стоп и куда ─────────────────────────
+// Уровень живёт ОРДЕРОМ на бирже, а не числом в памяти: замер 127 закрытий
+// показал, что при пороге отдачи 30% фактическая медиана была 40%, p90 — 68%,
+// потому что цену между осмотрами ловить было нечем.
+
+// initialStopPrice — эталон 1R (= 2), он НЕ меняется, когда пол едет вверх.
+const FLOOR = {
+  entry: 100, stopPrice: 98, initialStopPrice: 98,
+  isShort: false, giveBackR: 0.25, minStepPct: 0.25,
+};
+
+test('пол не двигается, пока новый уровень не лучше текущего', () => {
+  // peak 1R → floor 0.75R = 101.5 > стоп 98 → двигаем.
+  assert.equal(decideFloorMove({ ...FLOOR, peakR: 1 }).move, true);
+  // peak 0.2R → floor −0.05R = 99.9 всё ещё выше 98 → тоже двигаем (в мою сторону).
+  assert.equal(decideFloorMove({ ...FLOOR, peakR: 0.2 }).move, true);
+  // peak 0 → floor −0.25R = 99.5 > 98 → двигаем. А вот ниже стопа — нет:
+  assert.equal(decideFloorMove({ ...FLOOR, peakR: -2 }).move, false);
+});
+
+test('храповик: пол НИКОГДА не опускается', () => {
+  // Стоп уже подтянут к 101, пик откатился — вниз не возвращаемся.
+  const d = decideFloorMove({ ...FLOOR, stopPrice: 101, peakR: 1 }); // floor 0.75R = 101.5
+  assert.equal(d.move, true);
+  assert.equal(d.px, 101.5, '1R остаётся 2 даже когда стоп уехал на 101');
+  const back = decideFloorMove({ ...FLOOR, stopPrice: 101.5, peakR: 0.5 }); // floor 0.25R = 100.5
+  assert.equal(back.move, false, 'опускать пол нельзя ни при каком откате');
+});
+
+test('шаг: мелкие подвижки не дёргают ордер', () => {
+  // Стоп 101.4, целевой пол 101.5 → шаг 0.1% < 0.25% → не трогаем.
+  assert.equal(decideFloorMove({ ...FLOOR, stopPrice: 101.4, peakR: 1 }).move, false);
+  // Тот же уровень при шаге 0.05% → двигаем.
+  assert.equal(decideFloorMove({ ...FLOOR, stopPrice: 101.4, peakR: 1, minStepPct: 0.05 }).move, true);
+});
+
+test('SHORT: пол опускается, а не поднимается', () => {
+  const base = { entry: 100, initialStopPrice: 102, isShort: true, giveBackR: 0.25, minStepPct: 0.25 };
+  const d = decideFloorMove({ ...base, stopPrice: 102, peakR: 1 });
+  assert.equal(d.move, true);
+  assert.equal(d.px, 98.5); // риск 2 → floor 0.75R ниже входа
+  const back = decideFloorMove({ ...base, stopPrice: 98.5, peakR: 0.5 });
+  assert.equal(back.move, false);
+});
+
+test('новый пол совпадает с trailFloorPrice — одна арифметика, не две', () => {
+  const args = { entry: 100, stopPrice: 98, initialStopPrice: 98, isShort: false, peakR: 2, giveBackR: 0.25 };
+  const shown = trailFloorPrice({ ...args, armed: true });
+  const moved = decideFloorMove({ ...args, minStepPct: 0.25 });
+  assert.equal(moved.px, shown, 'UI и ордер обязаны показывать один уровень');
+});
+
+test('мусорный вход → не двигаем', () => {
+  assert.equal(decideFloorMove({ ...FLOOR, initialStopPrice: 100, peakR: 1 }).move, false); // риск 0
+  assert.equal(decideFloorMove({ ...FLOOR, peakR: NaN }).move, false);
+  assert.equal(decideFloorMove({ ...FLOOR, minStepPct: NaN, peakR: 1 }).move, false);
 });

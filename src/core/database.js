@@ -72,6 +72,16 @@ export function initDB() {
     logger.info('[DB] Migration: added tp_price to positions');
   }
 
+  // Migration: initial_sl_price — стоп НА МОМЕНТ ВХОДА, эталон шкалы R.
+  // Понадобился трейлу-полу: он двигает sl_price за пиком, и если R считать от
+  // текущего стопа, шкала съезжает после первой же перестановки (порог взвода,
+  // отдача и «locked» начинают мерить в разных единицах). 1R обязан остаться
+  // тем расстоянием, которым он был на входе.
+  if (!posColumns.find(c => c.name === 'initial_sl_price')) {
+    db.exec('ALTER TABLE positions ADD COLUMN initial_sl_price REAL');
+    logger.info('[DB] Migration: added initial_sl_price to positions');
+  }
+
   // Migration (Iter C): hunter_sl_oid / hunter_tp_oid — id'шники trigger-ордеров на бирже.
   // Заполняются только для hunter PROD-позиций. Используются reconciler'ом для определения,
   // какой именно триггер сработал (или для cancel'ов при soft-exit).
@@ -548,10 +558,13 @@ export function savePosition(data) {
     entry_hour_utc:       null,
     ...data,
   };
+  // 1R = дистанция вход→стоп НА ВХОДЕ. Трейл-пол двигает sl_price, поэтому
+  // эталон обязан лежать отдельно; кто его не передал — берём текущий стоп.
+  if (row.initial_sl_price == null) row.initial_sl_price = row.sl_price ?? null;
   const stmt = getDb().prepare(`
     INSERT INTO positions (
       coin, size_usd, entry_price, entry_apy, entry_time, mode,
-      strategy_id, sl_price, tp_price, entry_equity, leverage, side,
+      strategy_id, sl_price, initial_sl_price, tp_price, entry_equity, leverage, side,
       hunter_sl_oid, hunter_tp_oid,
       entry_spike_pct, entry_trend_15m_pct, entry_trend_1h_pct,
       entry_funding_rate, entry_volume_24h_usd, entry_oi_usd,
@@ -559,7 +572,7 @@ export function savePosition(data) {
     )
     VALUES (
       @coin, @size_usd, @entry_price, @entry_apy, @entry_time, @mode,
-      @strategy_id, @sl_price, @tp_price, @entry_equity, @leverage, @side,
+      @strategy_id, @sl_price, @initial_sl_price, @tp_price, @entry_equity, @leverage, @side,
       @hunter_sl_oid, @hunter_tp_oid,
       @entry_spike_pct, @entry_trend_15m_pct, @entry_trend_1h_pct,
       @entry_funding_rate, @entry_volume_24h_usd, @entry_oi_usd,
@@ -574,6 +587,16 @@ export function savePosition(data) {
  * Обновляет id'шники Hunter trigger-ордеров для активной позиции.
  * Используется productionHunterOpen после placeOrder триггеров.
  */
+/**
+ * Подвинуть записанный стоп позиции. Нужен трейлу-полу: уровень живёт биржевым
+ * ордером, и БД обязана совпадать с ним, иначе R и «locked» на карточке будут
+ * считаться от устаревшей цены.
+ */
+export function updatePositionStop(id, slPrice) {
+  if (!(slPrice > 0)) return;
+  getDb().prepare('UPDATE positions SET sl_price = ? WHERE id = ?').run(slPrice, id);
+}
+
 export function updateHunterTriggerOids(id, { hunter_sl_oid, hunter_tp_oid }) {
   getDb()
     .prepare('UPDATE positions SET hunter_sl_oid = ?, hunter_tp_oid = ? WHERE id = ?')

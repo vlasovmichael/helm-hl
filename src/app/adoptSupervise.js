@@ -15,16 +15,18 @@
 
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
-import { getActiveAdoptPositions } from '../core/database.js';
+import { getActiveAdoptPositions, updateHunterTriggerOids, updatePositionStop, recordBotOid } from '../core/database.js';
 import { analyzeAdopt, getAdoptPeakPct, notePeakPct } from '../modules/strategistAdopt.js';
-import { getLivePrice, cancelOrderFor } from '../modules/exchange.js';
-import { decideTargetTrail, unrealizedR } from '../modules/targetTrail.js';
+import { getLivePrice, cancelOrderFor, getPositions } from '../modules/exchange.js';
+import { decideTargetTrail, unrealizedR, decideFloorMove } from '../modules/targetTrail.js';
 import { candleTruth, clearPeakTruth } from '../modules/adoptPeakTruth.js';
 import { setTradeWatch, getTradeExtremes, resetTradeExtremes } from '../core/priceFeed.js';
 import { execute } from '../modules/executor/index.js';
 import { trackAdoptTimeCutTick } from '../modules/adoptShadowTimeCut.js';
 import { trackAdoptShadowTrailTick } from '../modules/adoptShadowTrail.js';
 import { fireAdoptNtfy } from './adoptReconcile.js';
+import { placeExitTrigger } from '../modules/executor/triggers.js';
+import { resolveAsset } from '../modules/executor/fill-parser.js';
 
 // Пик-алерт: систематизация дискрец-выхода (оператор закрывает 63% adopt-поз рукой,
 // capture 68% MFE) — звонок в момент решения вместо оракула. Условие: пик ≥
@@ -90,6 +92,63 @@ const TRAIL_CLOSE_MAX_AGE_MS = 3 * 60_000;
 /** Взведён ли target-trail для позиции — нужно дашборду для Floor-чипа. */
 export function isTargetTrailArmed(positionId) {
   return _targetTrailArmed.has(positionId);
+}
+
+/**
+ * Переставить биржевой стоп за пиком. Возвращает true, если двигали.
+ *
+ * ПОРЯДОК ВАЖЕН: сначала ставим НОВЫЙ стоп, потом снимаем старый. В окне между
+ * ними на бирже два reduce-only стопа — это безопасно (сработает один, второй
+ * закроет уже нулевую позу и станет пустышкой). Обратный порядок оставил бы
+ * позицию без пола на время сетевого запроса, а это единственный момент, когда
+ * она вообще может остаться без защиты.
+ *
+ * Размер берём С БИРЖИ, а не из БД: после частичного исполнения цели позиция
+ * меньше записанной, и стоп на старый размер — это тот самый дрейф зеркала.
+ */
+async function maybeMoveFloor(pos, peakR) {
+  const isShort = (pos.side || 'short') === 'short';
+  const d = decideFloorMove({
+    entry: pos.entry_price,
+    stopPrice: pos.sl_price,
+    initialStopPrice: pos.initial_sl_price ?? pos.sl_price,
+    isShort,
+    peakR,
+    giveBackR: config.trading.adoptTargetTrailGiveBackR,
+    minStepPct: config.trading.adoptTrailFloorStepPct,
+  });
+  if (!d.move) return false;
+
+  try {
+    const positions = await getPositions();
+    const found = (positions || []).find(
+      (x) => String(x?.position?.coin || '').toUpperCase() === String(pos.coin).toUpperCase(),
+    );
+    const sz = Math.abs(parseFloat(found?.position?.szi ?? '0'));
+    if (!(sz > 0)) return false; // позы на бирже нет — двигать нечего
+
+    const { szDecimals } = resolveAsset(pos.coin);
+    const newOid = await placeExitTrigger(pos.coin, sz, d.px, 'sl', szDecimals, pos.side || 'short');
+    const oldOid = pos.hunter_sl_oid;
+    if (oldOid) {
+      try { await cancelOrderFor(pos.coin, oldOid); } catch (err) {
+        logger.warn(`[Adopt] старый стоп #${pos.coin} oid=${oldOid} не снялся: ${err.message}`);
+      }
+    }
+    recordBotOid(newOid, pos.coin, 'sl_trigger', pos.id);
+    updateHunterTriggerOids(pos.id, { hunter_sl_oid: newOid, hunter_tp_oid: pos.hunter_tp_oid });
+    updatePositionStop(pos.id, d.px);
+    pos.sl_price = d.px;
+    pos.hunter_sl_oid = newOid;
+    logger.info(
+      `[Adopt] 🪜 ПОЛ #${pos.coin} поднят ${d.fromR.toFixed(2)}R → ${d.toR.toFixed(2)}R ` +
+      `@ $${d.px.toPrecision(6)} (пик ${peakR.toFixed(2)}R) | oid=${newOid}`,
+    );
+    return true;
+  } catch (err) {
+    logger.warn(`[Adopt] перестановка пола #${pos.coin} failed: ${err.message}`);
+    return false;
+  }
 }
 
 export async function superviseAdoptPositions(priceFn = getLivePrice) {
@@ -191,10 +250,14 @@ export async function superviseAdoptPositions(priceFn = getLivePrice) {
         // которую видел один принт. Закрытие бара пережило минуту торговли.
         // Бар протух (нет сети дольше двух минут) → падаем на тик: выйти
         // по чуть худшей цене лучше, чем не выйти вовсе.
+        // Эталон 1R — стоп НА ВХОДЕ. Пол едет, и мерить R от него нельзя:
+        // после первой перестановки порог взвода и отдача считались бы в
+        // разных единицах (см. decideFloorMove).
+        const refStop = pos.initial_sl_price ?? pos.sl_price;
+        const stopDistPct = (Math.abs(pos.entry_price - refStop) / pos.entry_price) * 100;
         const closeAge = truth?.close ? Date.now() - truth.close.time : Infinity;
         const decisionPx = closeAge <= TRAIL_CLOSE_MAX_AGE_MS ? truth.close.px : price;
-        const curR = unrealizedR({ entry: pos.entry_price, price: decisionPx, stopPrice: pos.sl_price, isShort });
-        const stopDistPct = (Math.abs(pos.entry_price - pos.sl_price) / pos.entry_price) * 100;
+        const curR = unrealizedR({ entry: pos.entry_price, price: decisionPx, stopPrice: refStop, isShort });
         const peakR = stopDistPct > 0 ? (getAdoptPeakPct(pos.id) ?? 0) / stopDistPct : null;
         const d = decideTargetTrail({
           currentR: curR,
@@ -215,12 +278,20 @@ export async function superviseAdoptPositions(priceFn = getLivePrice) {
           if (pos.hunter_tp_oid) await cancelOrderFor(pos.coin, pos.hunter_tp_oid);
           _targetTrailArmed.add(pos.id);
           logger.info(`[Adopt] 🎯 TARGET-TRAIL ARM #${pos.coin}: ${d.reason}`);
-        } else if (d.action === 'CLOSE') {
+        } else if (d.action === 'CLOSE' && !config.trading.adoptTrailFloorOrder) {
           logger.info(`[Adopt] 🎯 TARGET-TRAIL CLOSE #${pos.coin}: ${d.reason}`);
           await execute({ action: 'CLOSE', reason: 'adopt_target_trail', strategy_id: 'adopt' }, pos);
           _targetTrailArmed.delete(pos.id);
           closed++;
           continue;
+        }
+
+        // ── Пол ордером: бот не закрывает, а двигает стоп за пиком ──────────
+        // Закрытие остаётся за биржей. Это и делает «locked» честным: уровень
+        // становится ордером, который исполнится, даже если бот лежит, а не
+        // числом, которое некому проверить между тиками (см. decideFloorMove).
+        if (config.trading.adoptTrailFloorOrder && _targetTrailArmed.has(pos.id)) {
+          await maybeMoveFloor(pos, peakR);
         }
       } catch (err) {
         logger.warn(`[Adopt] target-trail #${pos.coin} failed: ${err.message}`);
