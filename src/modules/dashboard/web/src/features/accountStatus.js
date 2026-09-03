@@ -234,6 +234,14 @@ const fmtRemR = (r) => `${r.toFixed(2)}R`;
 // подстрокой в uPnL и на телефоне рвал карточку на три строки.
 // Режим требует ЦЕЛИ: без tpPrice (её сняли, или поза без TP) остаётся Floor,
 // даже когда позиция в плюсе — иначе карточка показала бы пустоту.
+// Пик хода (MFE) в под-строке uPnL. Вернули 03.09.2026 по просьбе оператора: за
+// пиком теперь ползёт биржевой пол трейла, и цифра, от которой он считается,
+// должна быть на виду. Только пик — остаток до цели уехал на карточку цели,
+// а R убран, чтобы строка не начала снова рвать карточку на телефоне.
+// Пустая строка (а не undefined) намеренно: разметка слоёв остаётся одна и та
+// же, и патч на месте просто меняет текст, не пересобирая карточку.
+const peakSubTxt = (s) => (s.peakPct != null && s.peakPct > 0 ? `peak +${s.peakPct.toFixed(2)}%` : "");
+
 const isTargetMode = (s, upnl) =>
   upnl > 0 && s.tpPrice != null && s.toTargetR != null && s.toTargetR > 0;
 
@@ -638,6 +646,10 @@ function patchManualCard(container, p) {
       const cellEl = tgRemEl.closest(".grid-item");
       if (cellEl) cellEl.title = `${targetTip(s, p)} · Liquidation: ${p.liquidationPrice != null ? fmtPrice(p.liquidationPrice) : "—"}`;
     }
+    // Пик живёт во всех трёх слоях (spacer/base/fill) → синхроним все, иначе
+    // бело-залитая копия отстанет от цветной под краем заливки.
+    const peakTxt = peakSubTxt(s);
+    card.querySelectorAll(".pnl-sub").forEach((el) => { el.textContent = peakTxt; });
     const flEl = card.querySelector("[data-mfloor]");
     if (flEl && s.floorPrice != null) flEl.textContent = fmtPrice(s.floorPrice);
     const flPnlEl = card.querySelector("[data-mfloorpnl]");
@@ -794,7 +806,7 @@ export function renderManualPositions(list) {
         <div class="data-grid">
           <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}${riskInline}</div></div>
           <div class="grid-item"><div class="item-label">Entry · Now${moveInline}</div><div class="item-value">${fmtPrice(p.entryPrice)} · <span data-mnow>${cur}</span></div></div>
-          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}`, })}</div>
+          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}`, subText: peakSubTxt(s) })}</div>
           ${floorCell}
         </div>
       </div>`;
