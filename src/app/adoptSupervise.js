@@ -20,6 +20,7 @@ import { analyzeAdopt, getAdoptPeakPct, notePeakPct } from '../modules/strategis
 import { getLivePrice, cancelOrderFor } from '../modules/exchange.js';
 import { decideTargetTrail, unrealizedR } from '../modules/targetTrail.js';
 import { candleTruth, clearPeakTruth } from '../modules/adoptPeakTruth.js';
+import { setTradeWatch, getTradeExtremes, resetTradeExtremes } from '../core/priceFeed.js';
 import { execute } from '../modules/executor/index.js';
 import { trackAdoptTimeCutTick } from '../modules/adoptShadowTimeCut.js';
 import { trackAdoptShadowTrailTick } from '../modules/adoptShadowTrail.js';
@@ -99,6 +100,11 @@ export async function superviseAdoptPositions(priceFn = getLivePrice) {
   for (const id of [..._peakAlerted]) if (!activeIds.has(id)) _peakAlerted.delete(id);
   for (const id of [..._targetTrailArmed]) if (!activeIds.has(id)) _targetTrailArmed.delete(id);
   for (const id of [..._peakSynced]) if (!activeIds.has(id)) { _peakSynced.delete(id); clearPeakTruth(id); }
+  // Поток сделок по монетам под нянькой: точный пик без единого запроса к API.
+  // setTradeWatch идемпотентен и сам отписывается от ушедших монет.
+  try { setTradeWatch(positions.map((p) => p.coin)); } catch (err) {
+    logger.debug(`[Adopt] setTradeWatch failed: ${err.message}`);
+  }
   if (positions.length === 0) return 0;
 
   let closed = 0;
@@ -117,6 +123,30 @@ export async function superviseAdoptPositions(priceFn = getLivePrice) {
     // Свеча рисуется по сделкам и такие фитили видит. Берём МАКСИМУМ двух
     // источников (см. notePeakPct), сеть трогаем не чаще раза в 30с на позу.
     // Стоит ДО analyzeAdopt: на пике завязан и BE-храповик, не только трейл.
+    // ── Пик по СДЕЛКАМ: мгновенно, без запросов ───────────────────────────
+    // Сделки приходят по WS в реальном времени, поэтому касание уровня видно
+    // сразу, а не через полминуты, как со свечами. Именно этой секунды не
+    // хватило трейлу на ARB 03.09: он взвёлся ПОСЛЕ того, как лимитка забрала
+    // позу. Экстремумы копятся с момента подписки; всё, что было до неё,
+    // закрывают свечи ниже — оба источника вливаются одним max'ом.
+    // Первый осмотр позиции: чистим экстремумы монеты. Подписка живёт по МОНЕТЕ,
+    // а позиции по ней сменяют друг друга — без сброса новая поза унаследовала бы
+    // пик предыдущей и взвела трейл на чужом движении.
+    if (!_peakSynced.has(pos.id)) {
+      try { resetTradeExtremes(pos.coin); } catch { /* noop */ }
+    }
+    try {
+      const ext = getTradeExtremes(pos.coin);
+      if (ext) {
+        const isShort = (pos.side || 'short') === 'short';
+        const px = isShort ? ext.lo : ext.hi;
+        const pct = ((isShort ? pos.entry_price - px : px - pos.entry_price) / pos.entry_price) * 100;
+        if (pct > 0) notePeakPct(pos.id, pct, { persist: pos.mode === 'PRODUCTION' });
+      }
+    } catch (err) {
+      logger.debug(`[Adopt] trade peak #${pos.coin} failed: ${err.message}`);
+    }
+
     let truth = null;
     try {
       truth = await candleTruth(pos);

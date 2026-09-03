@@ -19,6 +19,7 @@
 
 import WebSocket from 'ws';
 import { logger } from './logger.js';
+import { resolveApiCoin } from './universe.js';
 
 const WS_URL  = process.env.HL_WS_URL || 'wss://api.hyperliquid.xyz/ws';
 const ENABLED = (process.env.HL_WS_FEED_ENABLED || 'false') === 'true';
@@ -65,6 +66,21 @@ let reconnectAttempts = 0;
 let reconnectTimer = null;
 let pingTimer = null;
 let statusTimer = null;
+// ── Подписка на СДЕЛКИ по монетам, которые ведёт нянька ────────────────────
+// Зачем отдельно от allMids: мид приходит ~22 раза в минуту, и мгновенное
+// касание уровня между кадрами в него не попадает. 03.09.2026 это дважды
+// стоило трейла: на HEMI он не взвёлся вовсе, на ARB взвёлся через секунду
+// ПОСЛЕ того, как лимитка уже забрала позицию (пик показывал 0.91R, когда
+// цена была на 1.25R). Лимитка лежит в книге и ловит всё — теперь и мы.
+//
+// Свечи эту дыру тоже закрывают, но с задержкой до полуминуты (троттл + TTL).
+// Поток сделок даёт ту же правду мгновенно и без единого запроса к API.
+//
+// Держим не сами сделки, а running-экстремумы по монете: список сделок на
+// ликвидной монете — это мегабайты в минуту, а нужен из них максимум и минимум.
+const tradeExtremes = new Map(); // coin → { hi, lo, at, since }
+let watchedTradeCoins = new Set();
+
 let lastMidsAt = 0;          // ts последнего allMids-апдейта
 let midsUpdateCount = 0;     // счётчик апдейтов с последнего status-лога
 
@@ -182,6 +198,69 @@ function handleMids(mids) {
   }
 }
 
+/** Отправить (или снять) подписку на сделки по монете. */
+function sendTradeSub(coin, on) {
+  if (ws?.readyState !== WebSocket.OPEN) return;
+  try {
+    ws.send(JSON.stringify({
+      method: on ? 'subscribe' : 'unsubscribe',
+      subscription: { type: 'trades', coin: resolveApiCoin(coin) },
+    }));
+  } catch (err) {
+    logger.debug(`[PriceFeed] trades ${on ? 'sub' : 'unsub'} #${coin} failed: ${err.message}`);
+  }
+}
+
+/** Обновить running-экстремумы по пришедшим сделкам. */
+function handleTrades(trades) {
+  const now = Date.now();
+  for (const t of trades) {
+    const coin = normCoinKey(t?.coin);
+    const px = parseFloat(t?.px);
+    if (!coin || !Number.isFinite(px) || px <= 0) continue;
+    const prev = tradeExtremes.get(coin);
+    if (!prev) {
+      tradeExtremes.set(coin, { hi: px, lo: px, at: now, since: now });
+    } else {
+      if (px > prev.hi) prev.hi = px;
+      if (px < prev.lo) prev.lo = px;
+      prev.at = now;
+    }
+  }
+}
+
+/**
+ * Задать набор монет, по которым нужен поток сделок (позиции под нянькой).
+ * Идемпотентно: подписываемся только на новые, отписываемся от ушедших и
+ * ЧИСТИМ их экстремумы — карта не должна копить закрытые позиции.
+ */
+export function setTradeWatch(coins) {
+  const next = new Set((coins || []).filter(Boolean).map(normCoinKey));
+  for (const coin of next) if (!watchedTradeCoins.has(coin)) sendTradeSub(coin, true);
+  for (const coin of watchedTradeCoins) {
+    if (!next.has(coin)) {
+      sendTradeSub(coin, false);
+      tradeExtremes.delete(coin);
+    }
+  }
+  watchedTradeCoins = next;
+}
+
+/**
+ * Экстремумы цены СДЕЛОК по монете с момента подписки.
+ * @returns {{hi:number, lo:number, since:number, at:number}|null}
+ */
+export function getTradeExtremes(coin) {
+  const e = tradeExtremes.get(normCoinKey(coin));
+  return e ? { hi: e.hi, lo: e.lo, since: e.since, at: e.at } : null;
+}
+
+/** Сброс (тесты + смена позиции по той же монете). */
+export function resetTradeExtremes(coin) {
+  if (coin == null) tradeExtremes.clear();
+  else tradeExtremes.delete(normCoinKey(coin));
+}
+
 function connect() {
   if (stopping) return;
   logger.info(`[PriceFeed] connecting → ${WS_URL}`);
@@ -199,6 +278,10 @@ function connect() {
     for (const dex of BUILDER_DEXES) {
       ws.send(JSON.stringify({ method: 'subscribe', subscription: { type: 'allMids', dex } }));
     }
+    // Реконнект сбрасывает подписки на стороне биржи — восстанавливаем свои.
+    // Экстремумы при этом НЕ обнуляем: пик не убывает, а дыру в потоке за время
+    // разрыва закроют свечи (adoptPeakTruth).
+    for (const coin of watchedTradeCoins) sendTradeSub(coin, true);
 
     // Heartbeat: пинг + проверка протухания. Если allMids молчат дольше
     // STALE_MS — рвём и реконнектимся (соединение «живое», но мёртвое).
@@ -223,6 +306,8 @@ function connect() {
     }
     if (msg.channel === 'allMids' && msg.data?.mids) {
       handleMids(msg.data.mids);
+    } else if (msg.channel === 'trades' && Array.isArray(msg.data)) {
+      handleTrades(msg.data);
     }
     // pong / subscriptionResponse — игнорируем (heartbeat-ack).
   });
