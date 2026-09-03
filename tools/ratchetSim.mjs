@@ -78,6 +78,52 @@ function simulate(t, armR) {
 }
 
 const fm = (v, n = 2) => (v >= 0 ? "+" : "") + v.toFixed(n);
+
+/**
+ * Идея оператора (03.09.2026): не трейлить с начала сделки, а СНЯТЬ лимитку-цель в
+ * момент, когда цена к ней подходит, и вместо неё повесить трейл — вдруг после
+ * цели движение продолжается и фиксация режет прибыль.
+ *
+ * Проверяем ровно это: доводим сделку по плану до цели, а дальше вместо взятия
+ * +1R включаем трейл с отступом trailR (в долях исходного риска) от нового пика.
+ * Возвращает R сделки; null — если цель не достигнута (такие сделки идентичны
+ * в обоих сценариях и в сравнение не идут).
+ */
+function simulateTrailAfterTarget(t, trailR) {
+  const rows = candles[t.coin];
+  if (!rows?.length) return null;
+  const long = t.side === "long";
+  const e = t.entry_price;
+  const risk = e * (STOP_PCT / 100);
+  const stop0 = long ? e - risk : e + risk;
+  const target = long ? e + risk * RR : e - risk * RR;
+
+  let reached = false, peak = null, stop = stop0;
+  for (const [ts, , hi, lo, close] of rows) {
+    if (ts < t.entry_time) continue;
+    if (ts > t.entry_time + 72 * 3600_000) break;
+    const hitStop = long ? lo <= stop : hi >= stop;
+    if (!reached) {
+      if (hitStop) return null;                       // до цели не дожила — сценарии равны
+      const hitTarget = long ? hi >= target : lo <= target;
+      if (!hitTarget) continue;
+      reached = true;
+      peak = target;                                  // от цели и начинаем вести
+      stop = long ? peak - risk * trailR : peak + risk * trailR;
+      continue;
+    }
+    if (hitStop) {                                    // трейл выбил
+      return (long ? stop - e : e - stop) / risk;
+    }
+    peak = long ? Math.max(peak, hi) : Math.min(peak, lo);
+    stop = long ? peak - risk * trailR : peak + risk * trailR;
+    var lastClose = close;
+  }
+  if (!reached) return null;
+  const px = lastClose ?? target;
+  return (long ? px - e : e - px) / risk;
+}
+
 const modes = [["без храповика", null], ...ARMS.map((a) => [`храповик на ${a}R`, a])];
 
 console.log(`\n═══ храповик: ${trades.length} реальных входов adopt за ${DAYS} дней ═══`);
@@ -108,3 +154,22 @@ if (factR.length) {
   console.log(`\n  ФАКТ (как закрыл оператор)  ${String(factR.length).padStart(3)}${" ".repeat(28)}${fm(sum, 1).padStart(9)}  ${fm(sum / factR.length, 3).padStart(10)}`);
 }
 console.log();
+
+// ── трейл вместо лимитки, включаемый на подходе к цели ──────────────────────
+{
+  const trails = [0.25, 0.5, 0.75, 1.0];
+  const reachedIds = trades.filter((t) => simulateTrailAfterTarget(t, 0.25) != null);
+  console.log(`── если снимать лимитку у цели и дальше вести трейлом ──`);
+  console.log(`   сделок, реально доехавших до цели: ${reachedIds.length} из ${trades.length}`);
+  if (reachedIds.length) {
+    console.log(`   фиксация на цели даёт ровно ${fm(RR, 2)}R на каждой такой сделке = ${fm(RR * reachedIds.length, 1)}R\n`);
+    console.log("   отступ трейла   средний R   сумма R   лучше фиксации?");
+    for (const tr of trails) {
+      const rs = reachedIds.map((t) => simulateTrailAfterTarget(t, tr)).filter((r) => r != null);
+      const sum = rs.reduce((a, b) => a + b, 0);
+      const diff = sum - RR * rs.length;
+      console.log(`   ${String(tr).padEnd(14)} ${fm(sum / rs.length, 3).padStart(9)} ${fm(sum, 1).padStart(9)}   ${fm(diff, 1)}R`);
+    }
+  }
+  console.log();
+}

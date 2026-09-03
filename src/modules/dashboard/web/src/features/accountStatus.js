@@ -197,11 +197,18 @@ function manualStats(p) {
       ? (bot.floorPct / 100) * p.sizeUsd
       : null;
   const peakPct = bot?.peakPct != null && bot.peakPct > 0 ? bot.peakPct : null;
+  // Сколько ещё до цели — в R и в процентах хода. Просьба оператора (03.09.2026):
+  // «R 1:1.2» на глаз не читается, нужна цифра «осталось столько-то».
+  const tp = bot?.tpPrice ?? null;
+  const toTargetPct =
+    tp && now ? ((isShort ? now - tp : tp - now) / now) * 100 : null;
+  const toTargetR =
+    toTargetPct != null && riskPct ? toTargetPct / riskPct : null;
   // MAE: худшая просадка (unrealized %, ≤0). Бэк хранит как ≤0 (getAdoptMaePct/
   // getHunterMaePct). В под-строке uPnL показываем ИМЕННО его, когда позиция
   // сейчас в минусе (peak в плюс там не к месту — см. upnlSubTxt).
   const maePct = bot?.maePct != null && bot.maePct < 0 ? bot.maePct : null;
-  return { riskUsd, rMult, movePct, floorPrice, floorKind, floorPnl, peakPct, maePct };
+  return { riskUsd, rMult, movePct, floorPrice, floorKind, floorPnl, peakPct, maePct, toTargetR, toTargetPct };
 }
 
 // Floor-бейдж: тип защиты, который УЖЕ повесила нянька. Цветим только маленький
@@ -227,14 +234,20 @@ const fmtMove = (m) => `${m >= 0 ? "+" : "−"}${Math.abs(m).toFixed(2)}%`;
 // Пробовал дописывать веху («→ trail +2.00%») — карточка поехала в три строки
 // (2026-08-06). Веху показывает сам ползунок (его правый край) + тултип.
 const upnlSubTxt = (s, upnl = 0) => {
+  // В плюсе полезнее не пик, а остаток до цели — именно за ним оператор следит,
+  // решая «добирать или ждать». Пик остаётся, когда цели нет (её сняли или
+  // позиция без TP). Третьего куска здесь по-прежнему быть не может.
+  const toTarget =
+    s.toTargetR != null && s.toTargetR > 0
+      ? `до цели ${s.toTargetR.toFixed(2)}R · ${s.toTargetPct.toFixed(2)}%`
+      : null;
   const extreme =
     upnl < 0
       ? s.maePct != null
         ? `dip −${Math.abs(s.maePct).toFixed(2)}%`
         : ""
-      : s.peakPct != null
-        ? `peak +${s.peakPct.toFixed(2)}%`
-        : "";
+      : (toTarget ??
+        (s.peakPct != null ? `peak +${s.peakPct.toFixed(2)}%` : ""));
   return [s.rMult != null ? fmtR(s.rMult) : "", extreme].filter(Boolean).join(" · ");
 };
 

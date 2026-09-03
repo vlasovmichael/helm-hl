@@ -340,6 +340,21 @@ function loadConfig() {
   // Альтернатива: отступ = R_MULT × исходный риск. Только лог, торговлю не трогает;
   // решение — по стоп-правилу гипотезы (n ≥ 60 пар), не раньше. Default on = это лог.
   const adoptTrailShadowEnabled = (process.env.ADOPT_TRAIL_SHADOW_ENABLED || 'true').toLowerCase() === 'true';
+
+  // Target-trail (03.09.2026): на подходе к цели снять reduce-only лимитку и
+  // дальше вести стоп за ценой. ⚠️ ВЫКЛЮЧЕН по умолчанию: замер на 46 сделках
+  // дал +0.154R против фиксации при CI95 [−0.033, +0.378] — ноль внутри, а
+  // медиана +0.844R (типичная сделка ХУЖЕ фиксации, среднее держат 3 выброса).
+  // Гипотеза adopt-target-trail, судить один раз на 60 доехавших до цели.
+  const adoptTargetTrailEnabled    = (process.env.ADOPT_TARGET_TRAIL_ENABLED || 'false').toLowerCase() === 'true';
+  const adoptTargetTrailArmR       = parseFloat(process.env.ADOPT_TARGET_TRAIL_ARM_R       || '0.9');
+  const adoptTargetTrailGiveBackR  = parseFloat(process.env.ADOPT_TARGET_TRAIL_GIVE_BACK_R || '0.25');
+  if (isNaN(adoptTargetTrailArmR) || adoptTargetTrailArmR <= 0) {
+    throw new Error(`ADOPT_TARGET_TRAIL_ARM_R must be > 0. Got: "${process.env.ADOPT_TARGET_TRAIL_ARM_R}"`);
+  }
+  if (isNaN(adoptTargetTrailGiveBackR) || adoptTargetTrailGiveBackR <= 0) {
+    throw new Error(`ADOPT_TARGET_TRAIL_GIVE_BACK_R must be > 0. Got: "${process.env.ADOPT_TARGET_TRAIL_GIVE_BACK_R}"`);
+  }
   const adoptShadowTrailR       = parseFloat(process.env.ADOPT_SHADOW_TRAIL_R || '0.25');
   if (isNaN(adoptShadowTrailR) || adoptShadowTrailR <= 0) {
     throw new Error(`ADOPT_SHADOW_TRAIL_R must be > 0. Got: "${process.env.ADOPT_SHADOW_TRAIL_R}"`);
@@ -507,6 +522,9 @@ function loadConfig() {
       closeLimitWaitMs,
       closeLimitPollMs,
       adoptTrailEnabled,
+      adoptTargetTrailEnabled,
+      adoptTargetTrailArmR,
+      adoptTargetTrailGiveBackR,
       adoptTrailArmPct,
       adoptTrailGiveBackPct,
       adoptTimecutShadowEnabled,

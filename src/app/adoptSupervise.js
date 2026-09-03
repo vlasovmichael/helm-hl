@@ -17,7 +17,8 @@ import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getActiveAdoptPositions } from '../core/database.js';
 import { analyzeAdopt, getAdoptPeakPct } from '../modules/strategistAdopt.js';
-import { getLivePrice } from '../modules/exchange.js';
+import { getLivePrice, cancelOrderFor } from '../modules/exchange.js';
+import { decideTargetTrail, unrealizedR } from '../modules/targetTrail.js';
 import { execute } from '../modules/executor/index.js';
 import { trackAdoptTimeCutTick } from '../modules/adoptShadowTimeCut.js';
 import { trackAdoptShadowTrailTick } from '../modules/adoptShadowTrail.js';
@@ -67,12 +68,19 @@ async function maybeFirePeakAlert(pos, price) {
  *   фолбэк не нужен и вреден (лишний вес → затор бюджета).
  * @returns {Promise<number>} число закрытых этим проходом поз
  */
+// Позиции, у которых лимитка уже снята и работает трейл. In-memory: после
+// рестарта позиция считается невзведённой, но её лимитки на бирже уже нет —
+// поэтому трейл просто взведётся заново на следующем тике (peak восстановится
+// из adoptTrailStore), а не оставит позу без выхода.
+const _targetTrailArmed = new Set();
+
 export async function superviseAdoptPositions(priceFn = getLivePrice) {
   if (!config.isProduction) return 0;
   const positions = getActiveAdoptPositions();
   // Прополка peak-alert метки: позиция закрылась → id из Set (иначе копит мусор).
   const activeIds = new Set(positions.map((p) => p.id));
   for (const id of [..._peakAlerted]) if (!activeIds.has(id)) _peakAlerted.delete(id);
+  for (const id of [..._targetTrailArmed]) if (!activeIds.has(id)) _targetTrailArmed.delete(id);
   if (positions.length === 0) return 0;
 
   let closed = 0;
@@ -96,6 +104,43 @@ export async function superviseAdoptPositions(priceFn = getLivePrice) {
     try { trackAdoptShadowTrailTick(pos, price); } catch (err) {
       logger.debug(`[Adopt] shadow trail tick #${pos.coin} failed: ${err.message}`);
     }
+    // ── Target-trail: на подходе к цели снять лимитку и вести стоп за ценой ──
+    // ⚠️ Выключено по умолчанию (ADOPT_TARGET_TRAIL_ENABLED). Замер дал
+    // +0.154R против фиксации при CI95 [−0.033, +0.378] — знак не установлен,
+    // медиана против. Гипотеза adopt-target-trail, судить один раз на n=60.
+    if (config.trading.adoptTargetTrailEnabled && pos.sl_price > 0) {
+      try {
+        const isShort = (pos.side || 'short') === 'short';
+        const curR = unrealizedR({ entry: pos.entry_price, price, stopPrice: pos.sl_price, isShort });
+        const stopDistPct = (Math.abs(pos.entry_price - pos.sl_price) / pos.entry_price) * 100;
+        const peakR = stopDistPct > 0 ? (getAdoptPeakPct(pos.id) ?? 0) / stopDistPct : null;
+        const d = decideTargetTrail({
+          currentR: curR,
+          peakR,
+          armed: _targetTrailArmed.has(pos.id),
+          armR: config.trading.adoptTargetTrailArmR,
+          giveBackR: config.trading.adoptTargetTrailGiveBackR,
+        });
+
+        if (d.action === 'ARM') {
+          // Снимаем цель ДО того, как пометить позицию взведённой: если отмена
+          // не прошла, лимитка остаётся на бирже и сделка закроется как раньше —
+          // это безопасный исход. Обратный порядок оставил бы позу без цели.
+          if (pos.hunter_tp_oid) await cancelOrderFor(pos.coin, pos.hunter_tp_oid);
+          _targetTrailArmed.add(pos.id);
+          logger.info(`[Adopt] 🎯 TARGET-TRAIL ARM #${pos.coin}: ${d.reason}`);
+        } else if (d.action === 'CLOSE') {
+          logger.info(`[Adopt] 🎯 TARGET-TRAIL CLOSE #${pos.coin}: ${d.reason}`);
+          await execute({ action: 'CLOSE', reason: 'adopt_target_trail', strategy_id: 'adopt' }, pos);
+          _targetTrailArmed.delete(pos.id);
+          closed++;
+          continue;
+        }
+      } catch (err) {
+        logger.warn(`[Adopt] target-trail #${pos.coin} failed: ${err.message}`);
+      }
+    }
+
     if (sig.action === 'HOLD') {
       // Пик-алерт (best-effort): звонок оператору у пика, пока трейл ещё не сработал.
       try { await maybeFirePeakAlert(pos, price); } catch (err) {
