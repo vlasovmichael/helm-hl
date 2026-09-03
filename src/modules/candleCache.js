@@ -190,6 +190,65 @@ export function clearFiveMinCache() {
   cache5m.clear();
 }
 
+// ── 1-минутные свечи (правда биржи о ПИКЕ хода, см. adoptPeakTruth.js) ──────
+// Зачем отдельный кэш с самым коротким TTL: пик adopt-позы считался по WS-мидам
+// (allMids, ~22 кадра/мин), и быстрый прокол между кадрами в него не попадал —
+// 03.09.2026 target-trail не взвёлся на HEMI, хотя цена сходила на 1.25R и это
+// подтверждено филлом лимитки. Low/high 1m-свечи такие проколы видят.
+// TTL 20с: 1m-свеча закрывается раз в минуту, чаще спрашивать незачем, а позиций
+// под няньку максимум одна-две — весовой бюджет это не двигает.
+// 🚨 HL держит 5000 баров НА ИНТЕРВАЛ: на 1m это ~3.5 суток истории. Дольше
+// живущую позу свечами не восстановить, поэтому lookback тут всегда короткий.
+const ONE_MIN_TTL_MS   = 20_000;
+const ONE_MIN_INTERVAL = '1m';
+const cache1m = new Map();   // coin → { fetchedAt, candles, inflight }
+
+/**
+ * Получает 1m свечи для монеты. Зеркало getFiveMinCandles, свой кэш + interval.
+ *
+ * @param {string} coin
+ * @param {number} lookbackMinutes — сколько минут истории нужно
+ * @param {number} [now=Date.now()]
+ * @param {number} [priority=HL_PRIORITY.NORMAL] — путь торговый: пик решает выход
+ * @returns {Promise<Array<{open,high,low,close,time}>|null>}
+ */
+export async function getOneMinCandles(coin, lookbackMinutes, now = Date.now(), priority = HL_PRIORITY.NORMAL) {
+  markAccess(cache1m, coin, now);
+  const cached = cache1m.get(coin);
+  if (cached && now - cached.fetchedAt < ONE_MIN_TTL_MS) {
+    return cached.candles;
+  }
+  if (cached?.inflight) {
+    try { return await cached.inflight; } catch { return null; }
+  }
+
+  const startTime = now - lookbackMinutes * 60_000;
+  const promise = hlInfo(
+    {
+      type: 'candleSnapshot',
+      req:  { coin: resolveApiCoin(coin), interval: ONE_MIN_INTERVAL, startTime, endTime: now },
+    },
+    { label: `candleCache1m/${coin}`, priority },
+  ).then((data) => {
+    const candles = parseCandles(data);
+    cache1m.set(coin, { fetchedAt: Date.now(), lastAccess: Date.now(), candles, inflight: null });
+    return candles;
+  }).catch((err) => onFetchFail(cache1m, coin, err, 'CandleCache1m'));
+
+  cache1m.set(coin, { ...(cached || {}), inflight: promise });
+  return promise;
+}
+
+/** Прямая инжекция 1m-свечей (тесты). */
+export function seedOneMinCache(coin, candles, now = Date.now()) {
+  cache1m.set(coin, { fetchedAt: now, lastAccess: now, candles, inflight: null });
+}
+
+/** Очистить 1m-кэш (тесты). */
+export function clearOneMinCache() {
+  cache1m.clear();
+}
+
 // ── 15-минутные свечи (для fade-high-ER сигнала, см. fadeHotSignal.js) ───────
 // Сигнал считает ход за 30м (2×15m) и Kaufman ER за 4ч (16×15m) → нужна 15m-
 // история. 15m-свеча закрывается раз в 15 мин → TTL 90с: свежесть последнего
@@ -297,10 +356,11 @@ export function clearFourHourCache() {
 }
 
 // ── Подметалка ──────────────────────────────────────────────────────────────
-// Регистрируем все четыре карты в одном месте (после их объявления), чтобы
+// Регистрируем все карты в одном месте (после их объявления), чтобы
 // вытеснение было общим и никакой пятый кэш не завёлся мимо него.
 CACHES.push(
   { name: '1h',  store: cache },
+  { name: '1m',  store: cache1m },
   { name: '5m',  store: cache5m },
   { name: '15m', store: cache15m },
   { name: '4h',  store: cache4h },

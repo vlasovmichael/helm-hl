@@ -17,9 +17,10 @@ import { config } from '../core/config.js';
 import { state } from './state.js';
 import { logger } from '../core/logger.js';
 import { getActiveAdoptPositions } from '../core/database.js';
-import { analyzeAdopt, getAdoptPeakPct } from '../modules/strategistAdopt.js';
+import { analyzeAdopt, getAdoptPeakPct, notePeakPct } from '../modules/strategistAdopt.js';
 import { getLivePrice, cancelOrderFor } from '../modules/exchange.js';
 import { decideTargetTrail, unrealizedR } from '../modules/targetTrail.js';
+import { candlePeakPct, clearPeakTruth } from '../modules/adoptPeakTruth.js';
 import { execute } from '../modules/executor/index.js';
 import { trackAdoptTimeCutTick } from '../modules/adoptShadowTimeCut.js';
 import { trackAdoptShadowTrailTick } from '../modules/adoptShadowTrail.js';
@@ -75,6 +76,12 @@ async function maybeFirePeakAlert(pos, price) {
 // из adoptTrailStore), а не оставит позу без выхода.
 const _targetTrailArmed = new Set();
 
+// Позиции, по которым свечной пик уже спрашивали хоть раз — только чтобы
+// снять троттл в adoptPeakTruth, когда позиция закрылась (иначе его карта
+// копит id закрытых поз, а несмываемая Map — ровно тот механизм, которым
+// 09.08 выбило кучу V8, см. шапку candleCache.js).
+const _peakSynced = new Set();
+
 /** Взведён ли target-trail для позиции — нужно дашборду для Floor-чипа. */
 export function isTargetTrailArmed(positionId) {
   return _targetTrailArmed.has(positionId);
@@ -87,6 +94,7 @@ export async function superviseAdoptPositions(priceFn = getLivePrice) {
   const activeIds = new Set(positions.map((p) => p.id));
   for (const id of [..._peakAlerted]) if (!activeIds.has(id)) _peakAlerted.delete(id);
   for (const id of [..._targetTrailArmed]) if (!activeIds.has(id)) _targetTrailArmed.delete(id);
+  for (const id of [..._peakSynced]) if (!activeIds.has(id)) { _peakSynced.delete(id); clearPeakTruth(id); }
   if (positions.length === 0) return 0;
 
   let closed = 0;
@@ -98,6 +106,22 @@ export async function superviseAdoptPositions(priceFn = getLivePrice) {
       logger.debug(`[Adopt] supervise getLivePrice #${pos.coin} failed: ${err.message}`);
     }
     if (!Number.isFinite(price) || price <= 0) continue; // нет цены → ждём след. тик
+
+    // ── Пик по свечам биржи, до всех решений ──────────────────────────────
+    // Тиковый пик считается по allMids (~22 кадра/мин) и пропускает проколы:
+    // 03.09 из-за этого не взвёлся target-trail на HEMI, хотя ход был 1.25R.
+    // Свеча рисуется по сделкам и такие фитили видит. Берём МАКСИМУМ двух
+    // источников (см. notePeakPct), сеть трогаем не чаще раза в 30с на позу.
+    // Стоит ДО analyzeAdopt: на пике завязан и BE-храповик, не только трейл.
+    try {
+      const cPeak = await candlePeakPct(pos);
+      _peakSynced.add(pos.id);
+      if (cPeak != null && notePeakPct(pos.id, cPeak, { persist: pos.mode === 'PRODUCTION' })) {
+        logger.debug(`[Adopt] пик #${pos.coin} поднят свечами до ${cPeak.toFixed(2)}%`);
+      }
+    } catch (err) {
+      logger.debug(`[Adopt] candle peak #${pos.coin} failed: ${err.message}`);
+    }
 
     const sig = analyzeAdopt(pos, price);
     // Shadow time-cut: measurement-only, реальный выход не трогает. После

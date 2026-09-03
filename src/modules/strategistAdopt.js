@@ -78,6 +78,29 @@ export function clearAdoptState(positionId) {
   clearAdoptTrail(positionId); // снять персист, иначе орфан доживёт до TTL
 }
 
+/**
+ * Влить пик из ВНЕШНЕГО источника (свечи биржи, см. adoptPeakTruth.js).
+ *
+ * Тиковый пик считается по allMids и пропускает проколы между кадрами —
+ * 03.09.2026 из-за этого не взвёлся target-trail. Берём максимум двух
+ * источников: понижать пик нельзя никогда (MFE не убывает по определению), а
+ * повышать — ровно то, ради чего источник и заведён.
+ *
+ * Персист — по тем же правилам, что и тиковый пик: пишем на диск, только когда
+ * пик дорос до порога, который на что-то влияет.
+ *
+ * @returns {boolean} — двинулся ли пик
+ */
+export function notePeakPct(positionId, pct, { persist = false } = {}) {
+  if (positionId == null || !Number.isFinite(pct) || pct <= 0) return false;
+  restoreFromDiskOnce();
+  const prev = peakPctMap.get(positionId) ?? 0;
+  if (pct <= prev) return false;
+  peakPctMap.set(positionId, pct);
+  if (persist && pct >= PERSIST_FROM_PCT) setAdoptTrail(positionId, { peak: pct });
+  return true;
+}
+
 /** Текущий peak unrealized% (для exitFeatures при close). */
 export function getAdoptPeakPct(positionId) {
   restoreFromDiskOnce();
