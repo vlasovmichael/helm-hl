@@ -13,6 +13,7 @@ import { config } from "../../core/config.js";
 import { summary as healthSummary } from "../../core/healthRegistry.js";
 import { logger, getLogBuffer, subscribeLogs } from "../../core/logger.js";
 import { hlInfo, HL_PRIORITY } from "../../core/hlClient.js";
+import { resolveApiCoin } from "../../core/universe.js";
 import { getNotifications, subscribeNotifications } from "../../core/notifyLog.js";
 import {
   getActivePosition,
@@ -1165,7 +1166,7 @@ export function startDashboard() {
       const promise = hlInfo(
         {
           type: "candleSnapshot",
-          req: { coin, interval, startTime: now - windowMs, endTime: now },
+          req: { coin: resolveApiCoin(coin), interval, startTime: now - windowMs, endTime: now },
         },
         { label: "dash/candles", timeoutMs: 5000, maxRetries: 2, priority: HL_PRIORITY.LOW },
       );

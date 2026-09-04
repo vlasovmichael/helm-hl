@@ -11,6 +11,7 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { hlInfo } from '../core/hlClient.js';
+import { resolveApiCoin } from '../core/universe.js';
 
 // Порог "штиля": если VolIdx < 0.003 (0.3% за 15 мин) — штрафа нет.
 const VOL_IDX_NORMAL_THRESHOLD = 0.003;
@@ -32,7 +33,7 @@ async function fetchCandles(coin) {
   return hlInfo(
     {
       type: 'candleSnapshot',
-      req: { coin, interval: '1m', startTime, endTime: now },
+      req: { coin: resolveApiCoin(coin), interval: '1m', startTime, endTime: now },
     },
     { label: `volatility/${coin}` },
   );

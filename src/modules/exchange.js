@@ -23,6 +23,19 @@ import {
   getLivePrice as feedGetLivePrice,
   isFeedFresh,
 } from "../core/priceFeed.js";
+import { resolveApiCoin } from "../core/universe.js";
+
+/**
+ * Символ перпа для SDK. Внутри бот держит монеты в UPPERCASE, но HL требует
+ * ТОЧНОЕ имя из universe — у k-монет оно со строчной k (kPEPE), иначе биржа
+ * отвечает "No position found for KPEPE-PERP". См. resolveApiCoin().
+ *
+ * @param {string} coin
+ * @returns {string}
+ */
+function perpSymbol(coin) {
+  return `${resolveApiCoin(coin)}-PERP`;
+}
 
 // TTL коалесцирования срезов аккаунта. Balance/positions зовутся 6–12×/тик
 // разными потребителями; в этом окне они делят один сетевой фетч. Короткое —
@@ -167,7 +180,7 @@ export async function setLeverage(coin, leverage = 1, marginMode = "isolated") {
     return;
   }
 
-  const symbol = `${coin}-PERP`;
+  const symbol = perpSymbol(coin);
 
   try {
     await retryWithBackoff(
@@ -558,7 +571,7 @@ export async function getLivePrice(coin) {
  * @returns {Promise<Object>} — сырой результат SDK (со statuses)
  */
 export function openMarket(coin, isBuy, sz, slippage) {
-  return getExchange().custom.marketOpen(`${coin}-PERP`, isBuy, sz, undefined, slippage);
+  return getExchange().custom.marketOpen(perpSymbol(coin), isBuy, sz, undefined, slippage);
 }
 
 /**
@@ -569,7 +582,7 @@ export function openMarket(coin, isBuy, sz, slippage) {
  * @returns {Promise<Object>} — сырой результат SDK
  */
 export function closeMarket(coin, sz, slippage) {
-  return getExchange().custom.marketClose(`${coin}-PERP`, sz, undefined, slippage);
+  return getExchange().custom.marketClose(perpSymbol(coin), sz, undefined, slippage);
 }
 
 /**
@@ -587,7 +600,7 @@ export function closeMarket(coin, sz, slippage) {
  */
 export function placeTrigger({ coin, isBuy, sz, px, tpsl, reduceOnly = true, isMarket = true }) {
   return getExchange().exchange.placeOrder({
-    coin: `${coin}-PERP`,
+    coin: perpSymbol(coin),
     is_buy: isBuy,
     sz,
     limit_px: px,
@@ -610,7 +623,7 @@ export function placeTrigger({ coin, isBuy, sz, px, tpsl, reduceOnly = true, isM
  */
 export function placeLimit({ coin, isBuy, sz, px, tif = 'Alo', reduceOnly = true }) {
   return getExchange().exchange.placeOrder({
-    coin: `${coin}-PERP`,
+    coin: perpSymbol(coin),
     is_buy: isBuy,
     sz,
     limit_px: px,
@@ -626,7 +639,7 @@ export function placeLimit({ coin, isBuy, sz, px, tif = 'Alo', reduceOnly = true
  * @returns {Promise<Object>}
  */
 export function cancelOrderFor(coin, oid) {
-  return getExchange().exchange.cancelOrder({ coin: `${coin}-PERP`, o: oid });
+  return getExchange().exchange.cancelOrder({ coin: perpSymbol(coin), o: oid });
 }
 
 /**
@@ -635,7 +648,7 @@ export function cancelOrderFor(coin, oid) {
  * @returns {Promise<Object>} — сырой L2Book SDK
  */
 export function getOrderBook(coin) {
-  return getExchange().info.getL2Book(`${coin}-PERP`);
+  return getExchange().info.getL2Book(perpSymbol(coin));
 }
 
 /**
