@@ -14,9 +14,8 @@ export function initDB() {
 
   // WAL-mode: читатели не блокируют писателей
   db.pragma('journal_mode = WAL');
-  // synchronous=FULL: fsync на каждый commit. После corruption 2026-05-25
-  // (equity_snapshots побилась после рестарта контейнера) — NORMAL оставлял
-  // окно где SIGTERM мог попасть между write и fsync. FULL это окно закрывает.
+  // synchronous=FULL: fsync на каждый commit. 🚨 NORMAL оставляет окно, где
+  // SIGTERM попадает между write и fsync — база бьётся при рестарте контейнера.
   db.pragma('synchronous = FULL');
   db.pragma('foreign_keys = ON');
 
@@ -72,19 +71,15 @@ export function initDB() {
     logger.info('[DB] Migration: added tp_price to positions');
   }
 
-  // Migration: initial_sl_price — стоп НА МОМЕНТ ВХОДА, эталон шкалы R.
-  // Понадобился трейлу-полу: он двигает sl_price за пиком, и если R считать от
-  // текущего стопа, шкала съезжает после первой же перестановки (порог взвода,
-  // отдача и «locked» начинают мерить в разных единицах). 1R обязан остаться
-  // тем расстоянием, которым он был на входе.
+  // initial_sl_price — стоп НА МОМЕНТ ВХОДА, эталон шкалы R. 🚨 Считать R от
+  // текущего sl_price нельзя: трейл двигает его за пиком, и шкала съезжает.
   if (!posColumns.find(c => c.name === 'initial_sl_price')) {
     db.exec('ALTER TABLE positions ADD COLUMN initial_sl_price REAL');
     logger.info('[DB] Migration: added initial_sl_price to positions');
   }
 
-  // Migration (Iter C): hunter_sl_oid / hunter_tp_oid — id'шники trigger-ордеров на бирже.
-  // Заполняются только для hunter PROD-позиций. Используются reconciler'ом для определения,
-  // какой именно триггер сработал (или для cancel'ов при soft-exit).
+  // hunter_sl_oid / hunter_tp_oid — id'шники trigger-ордеров на бирже: по ним
+  // reconciler понимает, какой триггер сработал, и отменяет при soft-exit.
   if (!posColumns.find(c => c.name === 'hunter_sl_oid')) {
     db.exec('ALTER TABLE positions ADD COLUMN hunter_sl_oid INTEGER');
     logger.info('[DB] Migration: added hunter_sl_oid to positions');
@@ -94,25 +89,22 @@ export function initDB() {
     logger.info('[DB] Migration: added hunter_tp_oid to positions');
   }
 
-  // Migration: entry_equity — equity аккаунта в момент OPEN.
-  // Используется в integrity.js для корректной оценки PnL при external close
-  // (старая формула equity − size_usd была математически неверной).
+  // entry_equity — equity аккаунта в момент OPEN. По нему integrity.js
+  // оценивает PnL при external close.
   if (!posColumns.find(c => c.name === 'entry_equity')) {
     db.exec('ALTER TABLE positions ADD COLUMN entry_equity REAL');
     logger.info('[DB] Migration: added entry_equity to positions');
   }
 
-  // Migration: leverage — плечо позиции (для личного paper-журнала manual_paper:
-  // ROE% = price-move% × leverage). Nullable: бот-стратегии его не задают.
+  // leverage — плечо позиции: ROE% = price-move% × leverage. Nullable, боту
+  // не нужно.
   if (!posColumns.find(c => c.name === 'leverage')) {
     db.exec('ALTER TABLE positions ADD COLUMN leverage REAL');
     logger.info('[DB] Migration: added leverage to positions');
   }
 
-  // Migration: side — направление позиции ('short' | 'long').
-  // Carry (удалён 2026-06-17) исторически шортил всегда; default 'short'
-  // сохраняет совместимость со всеми существующими записями. Текущие стратегии
-  // задают side явно при открытии.
+  // side — направление позиции ('short' | 'long'). Default 'short' — ради
+  // старых записей, стратегии задают его явно.
   if (!posColumns.find(c => c.name === 'side')) {
     db.exec("ALTER TABLE positions ADD COLUMN side TEXT NOT NULL DEFAULT 'short' CHECK (side IN ('short', 'long'))");
     logger.info('[DB] Migration: added side to positions');
@@ -122,9 +114,8 @@ export function initDB() {
     logger.info('[DB] Migration: added side to history');
   }
 
-  // Migration: Hunter entry features — фичи рынка в момент OPEN, для будущего
-  // dynamic position sizing / leverage scoring. Все nullable; заполняются только
-  // hunter-стратегией. Зеркалятся в обе таблицы, чтобы переживать close.
+  // Hunter entry features — фичи рынка в момент OPEN. Nullable, зеркалятся в
+  // обе таблицы, чтобы пережить close.
   const hunterEntryCols = [
     ['entry_spike_pct',      'REAL'],  // спайк %/2мин (триггер сигнала)
     ['entry_trend_15m_pct',  'REAL'],  // anti-trend rise за hunterTrendLookbackMin
@@ -163,9 +154,8 @@ export function initDB() {
     }
   }
 
-  // Migration 2026-05-13: history.entry_time для slot utilization dashboard.
-  // Backfill: для hunter-сделок берём closed_at - hold_seconds*1000; для carry/fade
-  // (где hold_seconds NULL) оставляем NULL — UI отрисует "—".
+  // history.entry_time для utilization в дашборде. Где hold_seconds NULL —
+  // остаётся NULL, UI отрисует «—».
   if (!histColumns.find(c => c.name === 'entry_time')) {
     db.exec('ALTER TABLE history ADD COLUMN entry_time INTEGER');
     db.exec(`
@@ -176,8 +166,8 @@ export function initDB() {
     logger.info('[DB] Migration: added entry_time to history (+ backfilled from hold_seconds)');
   }
 
-  // Migration 2026-05-13: funding_collected — best-effort split funding vs price PnL.
-  // Заполняется при close из HL userFunding API (см. closePosition). Старые записи: NULL.
+  // funding_collected — best-effort разделение funding и ценового PnL,
+  // берётся при close из userFunding API.
   if (!histColumns.find(c => c.name === 'funding_collected')) {
     db.exec('ALTER TABLE history ADD COLUMN funding_collected REAL');
     logger.info('[DB] Migration: added funding_collected to history');
@@ -223,11 +213,10 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS setup_snapshots_ts_idx ON setup_snapshots (ts);
   `);
 
-  // Bot order id log — для точной фильтрации bot vs manual fills в dashboard'е.
-  // Раньше использовали time-based bot window, но bot.entry_time ≠ фактический
-  // fill.time (skew 100-1000ms), из-за чего pre-entry fills бота проскакивали
-  // в manual reconstruction (PURR incident 2026-05-22). Теперь сохраняем каждый
-  // фактический oid, который бот разместил/получил из ответа placeOrder.
+  // Bot order id log — отделяет ботовские fills от ручных в дашборде.
+  // 🚨 По времени входа это не работает: bot.entry_time расходится с fill.time
+  // на 100–1000мс, и ботовские fills утекают в ручную реконструкцию. Пишем
+  // каждый фактический oid из ответа placeOrder.
   db.exec(`
     CREATE TABLE IF NOT EXISTS bot_oid_log (
       oid       INTEGER PRIMARY KEY,
@@ -240,9 +229,8 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS bot_oid_log_coin_ts_idx ON bot_oid_log (coin, ts);
   `);
 
-  // Candy Girl signal log — каждый записанный радар-сигнал + авто-резолв
-  // (дошёл до TP раньше SL = win, наоборот = loss, ни то ни другое за timeout =
-  // timeout). Нужно чтобы реально измерить точность радара, а не гадать.
+  // Candy Girl signal log — сигнал + авто-резолв (TP раньше SL = win, наоборот
+  // = loss, ни то ни другое за таймаут = timeout). Точность радара меряется тут.
   db.exec(`
     CREATE TABLE IF NOT EXISTS candy_signals (
       id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -264,10 +252,9 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS candy_signals_ts_idx ON candy_signals (ts);
   `);
 
-  // Shadow exits (2026-06-14) — measurement-only сравнение реального выхода
-  // Hunter'а с альтернативными (time-decay TP, chandelier ATR-trail). Одна строка
-  // на закрытую позицию. НЕ влияет на торговлю; питает сравнение в /strategies.
-  // position_id = PK → INSERT OR REPLACE идемпотентен при повторном finalize.
+  // Shadow exits — measurement-only сравнение реального выхода с альтернативными
+  // (time-decay TP, chandelier ATR-trail). Строка на закрытую позицию, питает
+  // /strategies. position_id = PK → INSERT OR REPLACE идемпотентен.
   db.exec(`
     CREATE TABLE IF NOT EXISTS shadow_exits (
       position_id  INTEGER PRIMARY KEY,
@@ -291,9 +278,8 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS shadow_exits_closed_idx ON shadow_exits (closed_at);
   `);
 
-  // Day journal (2026-06-26) — заметка дня для разбора по клику в календаре
-  // Insights (Tradezella-style). Одна строка на локальную дату YYYY-MM-DD.
-  // Чисто журнал рефлексии: НЕ влияет на торговлю, сделки берутся из fills.
+  // Day journal — заметка дня для разбора по клику в календаре Insights.
+  // Строка на локальную дату YYYY-MM-DD, на торговлю не влияет.
   db.exec(`
     CREATE TABLE IF NOT EXISTS day_journal (
       date       TEXT    PRIMARY KEY,
@@ -302,14 +288,8 @@ export function initDB() {
     );
   `);
 
-  // Coin of the day (2026-07-26 … 2026-08-29) — АРХИВ ЗАКРЫТОГО ЗАМЕРА.
-  // Карточка «Монета дня» снята 29.08.2026: реплей (n=103) дал −0.046R
-  // [−0.209 … +0.116] против бейзлайнов −0.027R / −0.003R, форвард (n=33) дал
-  // +0.09R при разбросе ±0.28R. Оба замера показали один дефект конструкции:
-  // гейт R:R ≥ 1.5 требовал полтора риска, а таймаут 2ч закрывал раньше — цель
-  // достигнута 1 раз из 103 и 2 раза из 33.
-  // Таблица НЕ удаляется: это сами данные замера, по которым принято решение.
-  // Писателей у неё больше нет — только чтение через SQL, если понадобится
+  // Coin of the day — АРХИВ закрытого замера. Писателей нет, таблица оставлена
+  // ради самих данных: по ним принято решение снять карточку.
   // перепроверить вывод. Два последних пика остались в статусе open: резолвер
   // снят вместе с карточкой, дорезолвивать замороженный лог смысла нет.
   db.exec(`
@@ -337,7 +317,7 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS coin_of_day_status_idx ON coin_of_day_picks (status);
   `);
 
-  // Форвард-лог «Монеты дня», версия 2 (30.08.2026). Старая таблица выше —
+  // Форвард-лог «Монеты дня», версия 2. Старая таблица выше —
   // архив закрытого замера, её не трогаем.
   //
   // 🚨 Мерим ДРУГОЕ. Версия 1 писала исход по стопу/цели и упиралась в таймаут
@@ -688,7 +668,7 @@ export function closePosition(id, data) {
       mfe_pct:      exit.mfe_pct      ?? null,
       mae_pct:      exit.mae_pct      ?? null,
       hold_seconds: exit.hold_seconds ?? null,
-      // Dashboard P&L breakdown (2026-05-13): entry_time для slot utilization,
+      // Dashboard P&L breakdown: entry_time для slot utilization,
       // funding_collected — для funding-vs-price split (best-effort, может быть null).
       entry_time:        position.entry_time,
       funding_collected: data.funding_collected ?? null,
@@ -717,7 +697,7 @@ export function getActivePosition() {
   // у них свой multi-slot аксессор getActiveAdoptPositions(). Иначе свежая adopt-поза
   // с бОльшим id перехватывала слот (ORDER BY id DESC) и осиротляла реальную позу
   // бота — она выпадала из ownedCoins и бот бросал её как «ничейную ручную»
-  // (incident WLD+INJ 2026-06-15). strategy_id IS NULL = легаси carry, оставляем.
+  //. strategy_id IS NULL = легаси carry, оставляем.
   return getDb()
     .prepare("SELECT * FROM positions WHERE status = ? AND mode = ? AND (strategy_id IS NULL OR strategy_id != 'adopt') ORDER BY id DESC LIMIT 1")
     .get('OPEN', mode);
@@ -784,7 +764,7 @@ export function getActivePaperCoins() {
 // Держим 3 года: Performance-график «All» должен показывать ВСЮ жизнь счёта
 // (депозиты-ступеньки, пики вроде $115). Строка снапшота ~16 байт, 288/день ×
 // 3 года ≈ 315k строк ≈ пара МБ — пренебрежимо. Раньше было 35 дней и обрезало
-// старые пики (2026-07-21).
+// старые пики.
 const EQUITY_SNAPSHOT_RETENTION_MS = 1095 * 24 * 3_600_000; // 3 года
 
 /**
@@ -897,7 +877,7 @@ export function setDayNote(date, note) {
  * Сделки стратегии/режима из ОБОИХ источников: live-таблица history + архив
  * (data/history_archive.json). Auto-Cleanup при простое бота чистит live-таблицу
  * (см. archiveAndClearHistory), поэтому статистика стратегий обязана читать архив,
- * иначе трек-рекорд обнуляется при каждом простое (инцидент 2026-06-14). Дедуп по
+ * иначе трек-рекорд обнуляется при каждом простое. Дедуп по
  * id на случай гонки архивации. Отсортировано closed_at ASC (старые → новые).
  */
 function getStrategyHistoryMerged(strategyId, mode, side = null) {
@@ -965,7 +945,7 @@ export function getStrategyStats(strategyId, mode, side = null) {
   for (const r of rows) {
     // realized_pnl УЖЕ net of fees (calcPnl/calcPaperClose: realizedPnl =
     // pricePnl + fundingPnl − totalFee). fee_paid лежит рядом справочно — вычитать
-    // его повторно нельзя, иначе комиссия учитывается дважды (фикс 2026-06-19).
+    // его повторно нельзя, иначе комиссия учитывается дважды.
     const net = (r.realized_pnl || 0);
     sumNet += net;
     if (net > 0) { wins++; sumWin += net; } else { losses++; sumLoss += net; }

@@ -2,15 +2,13 @@ import { config } from '../core/config.js';
 import { getCachedBalance } from '../core/balanceCache.js';
 import { hlInfo, HL_PRIORITY } from '../core/hlClient.js';
 
-// HL 2026-05-23 migration: unified account стал default'ом. Source of truth
-// баланса — spotClearinghouseState. clearinghouseState (perp) теперь by
-// design $0 без открытых позиций. Полная история — memory/hl_unified_migration_2026_05_23.md
+// 🚨 Source of truth баланса — spotClearinghouseState: perp-часть unified-
+// аккаунта by design $0 без открытых позиций.
 //
-// Контракт balanceCache не меняем — те же поля {accountValue, withdrawable,
-// unrealizedPnl}, просто считаем их из новых источников:
-//   accountValue  = spot.USDC.total + perp.unrealizedPnl
-//   withdrawable  = spot.USDC.total - spot.USDC.hold
-//   unrealizedPnl = perp.marginSummary.totalUnrealizedPnl
+// Поля balanceCache {accountValue, withdrawable, unrealizedPnl} считаются так:
+// accountValue = spot.USDC.total + perp.unrealizedPnl
+// withdrawable = spot.USDC.total - spot.USDC.hold
+// unrealizedPnl = perp.marginSummary.totalUnrealizedPnl
 async function fetchUnifiedBalance() {
   const [perp, spot] = await Promise.all([
     hlInfo(

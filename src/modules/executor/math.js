@@ -40,9 +40,9 @@ export function roundDown(value, decimals) {
  *   2) ≤ (MAX_DECIMALS − szDecimals) десятичных знаков (MAX_DECIMALS=6 для перпов)
  *   3) Integer цены разрешены всегда.
  *
- * Использовать для триггер-цен SL/TP в `placeOrder` — иначе биржа отвечает
- * "Order has invalid price" на низкопрайсовых монетах (REZ инцидент 2026-05-11
- * где `entry * 1.02` давало 7 значащих цифр).
+ * 🚨 Обязательно для триггер-цен SL/TP в `placeOrder`: на низкопрайсовых
+ * монетах `entry * 1.02` даёт 7 значащих цифр, и биржа отвечает
+ * "Order has invalid price".
  *
  * @param {number} price
  * @param {number} szDecimals — sz-decimals из universe для этой монеты
@@ -124,7 +124,7 @@ export function calcRiskSize(equity, price, sl, szDecimals, riskPct, capUsd) {
  *     volIdx=0.015 (hot)   → ×0.40 (floor)
  *
  * Применяется к carry на open, чтобы lose-trade на VVV-классе монет не съедал
- * несколько win-trades. См. memory + история сделок 2026-05-13.
+ * несколько win-trades. См. memory + история сделок.
  *
  * @param {number} volIdx
  * @param {number} penalty

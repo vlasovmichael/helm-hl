@@ -156,7 +156,7 @@ function round2(n) {
 }
 
 // Контрагент для tax_outbox. Был захардкожен 'Binance' — с приходом Kraken
-// (29.08.2026) это стало враньём в бухгалтерской выгрузке, а поправить постфактум
+// это стало враньём в бухгалтерской выгрузке, а поправить постфактум
 // нечем: в outbox уходит только имя, без ссылки на источник.
 function counterpartyOf(source) {
   if (typeof source === 'string' && source.startsWith('kraken')) return 'Kraken';

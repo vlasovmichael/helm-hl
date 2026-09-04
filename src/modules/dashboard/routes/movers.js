@@ -21,7 +21,7 @@ import { classifyTrend } from "../../trendEma.js";
 import { analyzeChart } from "../../chartCoach.js";
 
 // ─────────────────────────────────────────────────
-//  OI history — буфер вынесен в core/oiHistory.js (2026-06-15)
+// OI history — буфер вынесен в core/oiHistory.js
 // ─────────────────────────────────────────────────
 // Снапшот берётся из state.latestHunter каждые OI_SNAPSHOT_MS (таймер в
 // server.js lifecycle зовёт takeOiSnapshot). getOiNMinAgo/OI_SNAPSHOT_MS
@@ -55,8 +55,6 @@ export { OI_SNAPSHOT_MS, getOiNMinAgo };
 // специально мягче, чтобы сигналы появлялись регулярно. Tier WEAK (0.6×)
 // = «следить», NORMAL (1×) = «торгуемо», STRONG (1.5×) = «уверенный сигнал».
 //
-// Калибровка 2026-05-08 на спокойном рынке: при 2m≥3%/5m≥4%/15m≥5%/1h≥7%
-// в любой момент почти всегда есть 5-15 WEAK-сигналов в скоупе ~65 монет.
 // Пороги витрины (не стратегии): «сколько процентов за окно считаем движением».
 // Спайк-окно 2м — историческое родное окно сканера, на нём же считается MOVE.
 const SPIKE_WINDOW_MIN = 2;
@@ -82,14 +80,10 @@ function computeTier(absPct, threshold) {
 }
 
 // Volume multiplier cache for Hot Movers: (5min recent vol) / (avg 5min vol over last hour).
-// 2026-05-25: TTL поднят 30s → 120s. Vol-mult — медленный показатель (mean of last hour);
-// 30s давал шторм candleSnapshot-запросов с каждого тика дашборда + 429.
 const volMultCache = new Map(); // coin -> { ts, mult }
-// 5 мин (было 2): Vol× — косметика, 5-мин свежести хватает. Главный источник
-// 429-бурстов — РОТАЦИЯ топ-листа (новая монета → холодный candleSnapshot);
-// длиннее TTL = монета, мелькнувшая в топе, переиспользует кэш вместо нового
-// тяжёлого запроса. Это разгружает общий лимит HL, по которому рикошетом
-// тормозились торговые чтения (get-positions/balance ловили 429-кулдаун). 2026-06-16.
+// 🚨 TTL держим длинным: Vol× — косметика, а короткий кэш даёт шторм
+// candleSnapshot при каждой ротации топ-листа и 429 рикошетом по торговым
+// чтениям.
 const VOL_MULT_TTL_MS = 300_000;
 
 // Сколько монет обогащать тяжёлыми candleSnapshot (volMult) + 1h-свечами (htf).
@@ -187,7 +181,7 @@ async function enrichHtfTrend(items, now) {
 // вкладка, и его candleSnapshot-шторм выжирал весовой бюджет HL → 429 рикошетом
 // в торговые чтения (get-positions/balance). Без enrich payload делает 0 запросов
 // к HL (всё из state.latestHunter + priceHistory + oiHistory). Vol×/HTF остаются
-// доступны по запросу через /api/signals (enrich=true) для отдельной страницы. 2026-06-17.
+// доступны по запросу через /api/signals (enrich=true) для отдельной страницы..
 async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
   try {
     const data = Array.isArray(state.latestHunter) ? state.latestHunter : [];
@@ -196,13 +190,13 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
     const trendMaxRise = config.trading.hunterTrendMaxRisePct;
     // Активные монеты для подсветки в Hot Movers: позиция бота + все ручные
     // (HANDS-OFF) позиции. Юзер торгует руками часами — хочет видеть свою
-    // монету выделенной во всех лентах (2026-06-09).
+    // монету выделенной во всех лентах.
     const activeCoin = getActivePosition()?.coin ?? null;
     const activeCoins = new Set(state.manualPositionCoins);
     if (activeCoin) activeCoins.add(activeCoin);
     // Усыновлённые (adopt) позы — отдельный мульти-слот, при adopt монета уходит
     // из manualPositionCoins и не равна main-slot. Без явного пина её строка
-    // приходила пустой («—») и не дотягивалась окнами (2026-06-18, см. scout.js).
+    // приходила пустой («—») и не дотягивалась окнами (см. scout.js).
     for (const p of getActiveAdoptPositions()) activeCoins.add(p.coin);
 
     const ticksNeeded = Math.max(
@@ -257,7 +251,7 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
     // благовала всеми «—» (фронт синтезировал пустую строку). Это «пропадание
     // активной строки», которое чинили много раз: предыдущие фиксы дотягивали
     // активную монету ТОЛЬКО если она уже в `data`. Здесь добиваем настоящую
-    // строку из price-буфера, даже когда scout её не видит (2026-06-16).
+    // строку из price-буфера, даже когда scout её не видит.
     const enrichedCoins = new Set(enriched.map((e) => e.coin));
     for (const coin of activeCoins) {
       if (enrichedCoins.has(coin)) continue;
@@ -284,7 +278,7 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
     // ниже limit), монета вылетала из top → фронт синтезировал строку из одной
     // цены и весь ряд позиции превращался в «—». Это худший момент терять данные
     // (оператор как раз держит эту монету). Дотягиваем её сюда с полными окнами,
-    // даже если по моменту она глубоко внизу (2026-06-14).
+    // даже если по моменту она глубоко внизу.
     // ── Фокус витрины: только свои монеты (HOT_MOVERS_COINS) ─────────────────
     // Смысл не в гейте входа, а во внимании: остальная движуха соблазняет
     // торговать монеты, по которым нет ни истории, ни понимания. Пусто = вся
@@ -355,7 +349,7 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
       // OI / 24h-объём: характер монеты, НЕ таймер. Высокий ратио = позиции
       // залегли при низком обороте (крауд/неликвид → топливо для сквиза). На HL
       // OI>Vol — норма (медиана ~3×), значим только верхний хвост (≳9, верхние
-      // 10%). Фронт зажигает пассивный чип по порогу. 2026-06-29.
+      // 10%). Фронт зажигает пассивный чип по порогу..
       const oiVolRatio = oiNow > 0 && vol24h > 0 ? oiNow / vol24h : null;
       const { oiDelta5m, oiDelta15m } = oiDeltas(m.coin, oiNow, now);
 

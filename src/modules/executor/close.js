@@ -209,11 +209,9 @@ async function syncDbAfterExternalClose(position, coin, holdHours) {
     const hasEntry = Number.isFinite(position.entry_equity) && position.entry_equity > 0;
     const equityOk = Number.isFinite(equity) && equity > 0;
 
-    // Guard: API/indexer-glitch может вернуть implausibly low equity
-    // (был кейс TON id=61 2026-05-12: TP реально дал +$0.80, а equity
-    // на момент reconcile показала $0.5x → estPnl получился −$24.48).
-    // Если equity < половины entry_equity — это почти всегда glitch,
-    // настоящий трейд физически не мог уронить equity на 50%+ при lev≤1x.
+    // 🚨 Глитч индексатора отдаёт неправдоподобно низкую equity, и оценка PnL
+    // улетает в десятки долларов минуса. equity < половины entry_equity — почти
+    // всегда глитч: при lev≤1x сделка физически не роняет депо вдвое.
     if (hasEntry && equityOk && equity >= position.entry_equity * 0.5) {
       estimatedPnl = equity - position.entry_equity;
     } else if (hasEntry && equityOk) {

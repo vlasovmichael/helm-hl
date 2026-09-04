@@ -2,10 +2,9 @@
 //  Balance Diagnostics — periodic snapshot (unified mode)
 // ─────────────────────────────────────────────────
 // Печатает компактный срез баланса каждые N минут.
-// После миграции HL 2026-05-23 (см. memory/hl_unified_migration_2026_05_23.md):
-//   - Source of truth = spot.USDC (total / hold)
-//   - perp.clearinghouseState полезен только для unrealizedPnl и позиций
-//   - "MANUAL SWAP REQUIRED" алерт удалён: свапа в unified mode не существует
+// Unified-аккаунт:
+// - source of truth = spot.USDC (total / hold)
+// - perp.clearinghouseState полезен только для unrealizedPnl и позиций
 //
 // Вызывается из tick.js. PROD-only. Дросселируется через state.
 

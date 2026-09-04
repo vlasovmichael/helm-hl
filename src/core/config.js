@@ -10,12 +10,10 @@ function requireEnv(key) {
 }
 
 function loadConfig() {
-  // Глобальный paper-режим (TRADING_MODE=PAPER|PRODUCTION) удалён 2026-06-20.
-  // Прод всегда живой. «Paper» осталось только в двух местах: (а) тест-харнесс
-  // под NODE_ENV=test (симуляция без реальных ордеров), (б) per-position
-  // shadow-слоты A/B (mode='PAPER', напр. hunter_oi/fadehot). Поэтому isProduction
-  // теперь = «не тестовый прогон». Реальные ордера дополнительно гейтятся
-  // *_PROD_ENABLED-флагами, так что локальный запуск без них ордеров не шлёт.
+  // isProduction = «не тестовый прогон»: глобального paper-режима нет, прод
+  // всегда живой. Реальные ордера дополнительно гейтятся *_PROD_ENABLED, так
+  // что локальный запуск без них ордеров не шлёт.
+  // 🚨 NODE_ENV=test в проде превратит бота в симулятор — не ставить.
   const isProduction = process.env.NODE_ENV !== 'test';
   const mode = isProduction ? 'PRODUCTION' : 'PAPER';
 
@@ -39,7 +37,6 @@ function loadConfig() {
 
   const walletAddress = requireEnv('PUBLIC_WALLET_ADDRESS');
 
-  // AGGRESSIVE_MODE/AGG_* preset удалён 2026-06-20 (carry-эпоха, не потреблялся).
   const minApy   = parseFloat(process.env.MIN_APY_THRESHOLD   || '30');
   const entryApy = parseFloat(process.env.ENTRY_APY_THRESHOLD || '60');
   const leverage = parseFloat(process.env.LEVERAGE             || '1');
@@ -72,131 +69,45 @@ function loadConfig() {
 
   // ── Strategy constants (funding / exit math, shared) ──
   const roundTrip             = parseFloat(process.env.ROUND_TRIP              || '0.001');
-  // carry-эпоха (maxPayback/maxBreakeven/negativeFunding/delist*/minEntryApyFloor/
-  // predictedDrop/fundingGate) удалена 2026-06-20 — поля не потреблялись живым кодом.
 
-  // Fade strategy удалена 2026-06-15 (0 сделок за трек, deprecated с 12 мая).
-
-
-  // ── Market Regime: per-coin velocity entry gate (Iter A) ──
-  // Защита от «шорта в зелёный рынок»: перед OPEN смотрим, что монета сделала
-  // за последние N минут. Если выросла > pump% (для short) или упала > pump%
-  // (для long) — skip entry. Default off — включается флагом.
-    (process.env.MARKET_REGIME_VELOCITY_ENABLED || 'false').toLowerCase() === 'true';
-  // Bucket 1: быстрый спайк (default 30мин/3%)
-  // Bucket 2: медленный pump→plateau (default 2ч/5%). XMR/TON-паттерн: pump за 2ч, потом
-  // плато → 30-мин bucket пропускает, нужен второй уровень. Set MARKET_REGIME_LOOKBACK2_MIN=0
-  // чтобы отключить второй bucket.
-
-
-  // ── Market Regime: BTC regime entry gate (Iter B) ──
-  // Глобальный гейт: если BTC pumpнул > pct за последние N мин — блокируем
-  // новые short-входы (рынок зелёный). Симметрично: BTC dumpнул > pct → блокируем
-  // long-входы. Дополняет per-coin velocity gate (Iter A): coin может стоять
-  // ровно, но BTC тащит весь рынок — short в зелёный рынок плохая идея.
-  // Default off — включается флагом.
-    (process.env.MARKET_REGIME_BTC_ENABLED || 'false').toLowerCase() === 'true';
-
-
-  // ── Sniper-Hunter strategy (Volatility Spike Mean-Reversion) ──
-  // Default false: включить вручную через HUNTER_ENABLED=true, когда будем готовы тестировать в PAPER.
-  // Iter C: отдельный двойной gate для PROD-пути Hunter'а. Даже если HUNTER_ENABLED=true,
-  // в isProduction режиме реальные ордера НЕ отправляются пока HUNTER_PROD_ENABLED=true.
-  // Позволяет собирать PAPER-сигналы на боевом боте без риска реального исполнения.
-
-  // Hunter-only leverage: умножает РАЗМЕР позиции (а не только маржинальный буфер).
-  // На балансе $100 при utilization=0.5: 1x → $50 поза, 3x → $150, 5x → $250.
-  // SL=2% при 5x = −5% от баланса; ликвидационный буфер уменьшается пропорционально.
-  // Default 1 = поведение Iter C без изменений. Изолировано от carry/fade — там всегда 1x.
-  // Hunter хантит на более широкой вселенной, чем carry/fade (им нужна высокая ликвидность для
-  // минимального slippage, Hunter'у — вариативность). Default $1M — захватывает 30–50 монет на HL
-  // вместо ~12. PAPER-безопасно; для PROD (Iter C) потребуется size-cap и осторожность.
-  // Имя сменилось вместе со снятием Hunter'а (2026-08-30). Старое читаем как
-  // фолбэк, чтобы деплой не сбросил порог на дефолт, пока .env не обновлён.
+  // Минимальный объём монеты, ниже — не торгуем. HUNTER_MIN_VOLUME читаем как
+  // фолбэк: без него деплой со старым .env сбросит порог на дефолт.
   const minVolumeUsd = parseFloat(
     process.env.MIN_VOLUME_USD || process.env.HUNTER_MIN_VOLUME || '1000000',
   );
-
-  // Доля баланса на позицию Hunter. SHORT и Long разделены: данные 2026-05-15
-  // показали у SHORT положительное матожидание (+$0.56/сделку на 12 PROD-trades),
-  // у Long — отрицательное. Поэтому SHORT поднимаем стадийно, Long держим
-  // консервативно. Итоговый нотиональный множитель к балансу = util × hunterLeverage.
-  // Сайзинг от ВСЕГО депо (equity), а не от свободного остатка. Когда у оператора
-  // открыта ручная поза, она ест свободное → бот раньше ужимался дважды (брал
-  // util от уменьшенного остатка). Теперь бот целит util от полного депо, но
-  // НЕ больше свободной маржи (потолок) — стабильный размер «половина депо», и
-  // свободные деньги не простаивают. Когда других поз нет, free=equity → размер
-  // тот же, что раньше (см. executor/sizing.js equityCappedNotional). Kill-switch.
-  // Минимальная доля от НОРМАЛЬНОГО размера бота, ниже которой он не открывает
-  // (защита от «пыли», когда свободной маржи мало из-за открытых ручных поз).
-  // 0.5 = «бери ≥50% обычной позы или жди». Не привязано к $ — масштаб под депо.
 
   // Anti-trend filter: не шортим если цена N мин назад была ниже current на ≥M%
   // (значит за N мин уже был устойчивый рост — это тренд, не reversion-кандидат).
   const trendLookbackMin = parseFloat(
     process.env.TREND_LOOKBACK_MIN || process.env.HUNTER_TREND_LOOKBACK_MIN || '15',
   );
-  // HTF anti-trend filter (2026-07-22): не шортим спайк, если за 1ч цена уже
-  // выросла на ≥M% — часовик ещё разгоняется, спайк = продолжение, не выдох.
-  // Данные (61 live-сделка): весь минус Hunter кучкуется на входах с 1h>+5%
-  // (n=20, −$8.14, WR 40%). Гейт на 1h переводит ожидание из −0.08 в плюс.
-  // 0/Infinity → фильтр выключен. Окно фиксировано 60мин (HUNTER_TREND_1H_MIN).
-  // Post-SL cooldown: после SL Hunter блокирует эту монету на N минут.
-  // Защита от паттерна APE 17:27→17:56→18:23 — повторные входы по более высокой цене.
-  // Time-stop: позиция Hunter не должна висеть вечно. Mean-reversion обычно отрабатывает
-  // за минуты-десятки. Если за HUNTER_TIME_STOP_MIN ни SL ни TP — закрываем по market.
+  // HTF anti-trend filter: не шортим спайк, если за 1ч цена уже выросла на ≥M%
+  // — часовик ещё разгоняется, спайк = продолжение, а не выдох.
+  // 0/Infinity → выключен, окно фиксировано 60мин (HUNTER_TREND_1H_MIN).
 
   if (isNaN(trendLookbackMin) || trendLookbackMin <= 0 || trendLookbackMin > 20) {
     throw new Error(`TREND_LOOKBACK_MIN must be in (0, 20]. Got: "${process.env.TREND_LOOKBACK_MIN}"`);
   }
 
-  // ── Hunter trailing TP (Iter D) ──
-  // Trail заменяет fixed TP-trigger когда unrealized пересекает ARM_PCT.
-  // ARM_PCT < HUNTER_TP_PCT (3%) — arm раньше, чтобы успеть cancel exchange TP.
-  // GIVE_BACK_PCT — доля peak'а, которую готовы отдать обратно перед close.
-  // SHADOW_LOG: если true — логируем "would-have-trailed" события даже когда
-  // основной флаг false. Используется для оценки эффекта до PROD-активации.
-  // Uncap TP при взведённом трейле: если true, фикс-TP (+3%) НЕ закрывает позу,
-  // когда трейл armed — поза едет на трейле сколько угодно (выход только по
-  // откату giveback/SL/BE). false = текущее поведение (потолок +3% остаётся).
-  // Дефолт false: наблюдаем shadow-лог [Hunter UNCAP-SHADOW] на ≥15 сделках.
+  // SL safety-buffer: софтверный hunter_sl при ЖИВОМ биржевом триггере
+  // (hunter_sl_oid) — страховка, а не дублёр. Market-close на тике исполняется
+  // хуже resting-триггера, поэтому софт-стоп ждёт, пока цена уйдёт ЗА sl_price
+  // на N% — это признак, что биржевой триггер не сработал.
+  // В paper триггера нет → буфер игнорируется (strategistHunter checkHunterExit).
 
+  // Shadow exits: measurement-only. Пишем would-be P&L альтернативных выходов
+  // (time-decay TP + chandelier ATR-trail) в shadow_exits на каждом close, НЕ
+  // трогая реальные выходы. Агрегат в /strategies. Default on — это лог.
 
-  // Iter D3: breakeven храповик. Как только peak unrealized% ≥ ARM, взводим —
-  // и больше не даём unrealized% уйти ≤ FLOOR (0 = безубыток). Ловит "ушёл в
-  // плюс → развернулся в минус" (кейс ZEC: peak +3% → полный SL −2%). Порог
-  // ARM ниже trail-arm, чтобы ловить и небольшие подарки. Проверяется ВЫШЕ SL.
+  // ── Hunter Long entry filters ──
+  // Min-OI / min-volume гард: отсекаем low-liquidity монеты, склонные к
+  // halt/delist. Null → пропуск (graceful при сбое scout'а), число ниже порога
+  // → continue + лог.
+  // Consecutive-SL ban: после N подряд SL'ов на одной монете (в окне
+  // WINDOW_HOURS) — длинный бан BAN_HOURS поверх минутного postSlCooldown.
 
-
-  // SL safety-buffer (2026-06-19): софтверный hunter_sl при ЖИВОМ биржевом
-  // триггере (hunter_sl_oid) — страховка, а не дублёр. Живые данные: софт-стоп
-  // закрывает в среднем хуже биржевого (−1.61 vs −1.24, n=7+13), т.к. market-close
-  // на тике медленнее resting-триггера. Буфер заставляет софт-стоп ждать, пока
-  // цена уйдёт ЗА sl_price на N% (= признак, что биржевой триггер не исполнился).
-  // В paper триггера нет → буфер игнорируется (см. strategistHunter checkHunterExit).
-
-  // Shadow exits (2026-06-14): measurement-only. Мерим would-be P&L альтернативных
-  // выходов (time-decay TP + chandelier ATR-trail) и пишем в shadow_exits на каждом
-  // close, НЕ трогая реальные выходы. Агрегат в /strategies. Default on — это лог.
-
-  // ── Hunter Long (Iter E.1) — Long-after-dump, зеркало Hunter SHORT ──
-  // Default false: PAPER-only включается отдельно. Заняла слот после Fade soft-kill.
-  // Все параметры зеркальны HUNTER_* но с собственными дефолтами под dump-сторону:
-  // anti-trend агрессивнее (6% vs 8%) — дампы чаще = real news (delist/scam).
-  // Iter E.3: PROD-gate, mirror HUNTER_PROD_ENABLED. Реальные ордера на бирже
-  // только при HUNTER_LONG_PROD_ENABLED=true в isProduction режиме.
-
-  // ── Hunter Long entry filters (2026-05-20: после анализа Hunter LONG −$1.93/12tr) ──
-  // Min-OI / min-volume гард: отсекаем low-liquidity монеты, склонные к halt/delist.
-  // TST −$1.80 (external_close) — кейс-мотивация. Null → пропуск (deg. graceful при
-  // API-сбоях scout'а), число ниже порога → continue + лог.
-  // Consecutive-SL ban: после N подряд SL'ов на одной монете (в окне WINDOW_HOURS)
-  // ставим длинный бан BAN_HOURS. Защита от serial-loser паттерна (SAGA ×2 SL 2026-05-14).
-  // Стандартный postSlCooldown остаётся базовой защитой (минуты), это — добавка поверх.
-
-  // Cross-strategy cooldown: после ЛЮБОГО close (SHORT или LONG) монета на N минут
-  // запрещена для второй Hunter-стратегии. Защита от подбора ножа после успешного
-  // шорта (SAGA 2026-05-13: SHORT TP +$1.13 → LONG ×2 SL).
+  // Cross-strategy cooldown: после ЛЮБОГО close монета на N минут запрещена для
+  // второй Hunter-стратегии — иначе за успешным шортом идёт подбор ножа.
 
 
   // ── Риск на сделку в % от депо ────────────────────────────────────────────
@@ -230,11 +141,9 @@ function loadConfig() {
   }
 
   // ── Выход лимиткой (post-only) вместо маркета ──────────────────────────────
-  // Замер 14.08.2026: 1440 из 1440 закрытий ушли тейкером, медиана спреда 15.98 бп,
-  // и на комиссии+спред пришлось ~69% всего минуса. Поэтому бот сначала кладёт
-  // reduce-only Alo на СВОЮ сторону книги и ждёт; не налилось за CLOSE_LIMIT_WAIT_MS —
-  // отменяет и добивает маркетом. Фолбэк обязателен: выход, который «может не
-  // исполниться», — это не выход, а надежда.
+  // Бот кладёт reduce-only Alo на свою сторону книги и ждёт; не налилось за
+  // CLOSE_LIMIT_WAIT_MS — отменяет и добивает маркетом. 🚨 Фолбэк обязателен:
+  // выход, который «может не исполниться», — это не выход.
   const closeLimitEnabled = (process.env.CLOSE_LIMIT_ENABLED || 'true').toLowerCase() === 'true';
   const closeLimitWaitMs  = parseInt(process.env.CLOSE_LIMIT_WAIT_MS  || '20000', 10);
   const closeLimitPollMs  = parseInt(process.env.CLOSE_LIMIT_POLL_MS  || '2000', 10);
@@ -246,30 +155,16 @@ function loadConfig() {
   }
 
   // ── Adopt Mode — бот-нянька на ручные входы (plans/adopt-mode-plan.md) ──
-  // Юзер открывает позу руками → бот подхватывает её в свободный слот как
-  // strategy_id='adopt' и СРАЗУ ставит реальный reduce-only стоп на бирже
-  // (чинит главный леак: держал лузеров до нуля). Храповик/трейл — следующим шагом.
+  // Ручная поза подхватывается в свободный слот как strategy_id='adopt', бот
+  // сразу ставит реальный reduce-only стоп на бирже.
   const adoptEnabled          = (process.env.ADOPT_ENABLED || 'false').toLowerCase() === 'true';
-  // «Бумажный adopt»: бот ведёт ВЫХОД личных бумажных поз (manual_paper) той же
-  // механикой, что реальный adopt (ATR-стоп при открытии + BE-храповик + трейл,
-  // analyzeAdopt). Без реальных денег — тренировка выходной логики на своих входах.
+  // «Бумажный adopt»: выход бумажных поз (manual_paper) ведётся той же
+  // механикой, что реальный adopt, но без денег.
   const manualPaperAdoptEnabled = (process.env.MANUAL_PAPER_ADOPT_ENABLED || 'true').toLowerCase() === 'true';
-  // Hunter SHORT +OI (A/B paper-двойник, 2026-06-19) — точная копия боевого
-  // Hunter SHORT, отличие РОВНО одно: OI-divergence ворота на входе. Шортит памп,
-  // только если рост OI за 15м ≤ HUNTER_OI_DIV_MAX_PCT (большой рост OI = свежие
-  // лонги = пробой, не выдох → не шортим). PAPER-only, независимый слот
-  // strategy_id='hunter_oi'. Своё cooldown-состояние живёт в hunterOiPaperTick —
-  // НЕ пишет в боевые cooldown'ы Hunter (бумага не блокирует живые входы).
-  // OI-ворота на БОЕВОМ Hunter SHORT (2026-07-06, по A/B: 35 сд hunter_oi
-  // +0.73%/сд против 0.30% у hunter без ворот). true → оба live-входных пути
-  // (coordinator 15-сек скан + WS-тик) фильтруют по ΔOI15м ≤ HUNTER_OI_DIV_MAX_PCT.
-  // Paper-слот hunter (без ворот) остаётся A/B-контролем.
-  // Fade-high-ER paper — PAPER-only shadow-слот, forward-валидация правила
-  // fade выдохшегося хвоста (см. fadeHotSignal.js / memory fadehot_build_plan).
-  // 6ч по умолчанию: ловит нормальные ручные входы (даже если бот заметил их не
-  // сразу — был в другой монете или рестартился), но всё ещё отсекает древние
-  // забытые orphan'ы/carry-ноги. Был 10мин — оказался миной (cooldown истекал
-  // позже окна, поза не усыновлялась никогда). 2026-06-16.
+  // Максимальный возраст позы, которую ещё можно усыновить. 6ч ловит ручные
+  // входы, даже если бот их заметил не сразу, и отсекает древние orphan'ы.
+  // 🚨 Короткое окно (были 10мин) — мина: cooldown истекает позже окна, и поза
+  // не усыновляется никогда.
   const adoptMaxAgeMin        = parseFloat(process.env.ADOPT_MAX_AGE_MIN        || '360');
   // Жёсткий стоп: ATR-режим подстраивает дистанцию под волатильность монеты
   // (фейдеру нужен воздух — фикс-% либо душит, либо болтается). dist = ATR(1h,14)
@@ -284,11 +179,8 @@ function loadConfig() {
   // меньше стоп-дистанции). FLOOR 0 = безубыток.
   const adoptBeArmPct         = parseFloat(process.env.ADOPT_BE_ARM_PCT         || '1.5');
   const adoptBeFloorPct       = parseFloat(process.env.ADOPT_BE_FLOOR_PCT       || '0');
-  // Трейл выключен 23.08.2026 по решению оператора: за 127 закрытий adopt_trail_tp
-  // медиана отдачи от пика = 40% при пороге 30% (p90 = 68%), а худший случай
-  // закрылся с пика +2.86% в минус −0.72%. Правило «дать прибыли тянуться» на
-  // практике превращалось в «отдать её обратно». Флаг оставлен, чтобы вернуть
-  // поведение одной переменной, а не откатом кода.
+  // ⛔ Трейл выключен: отдавал обратно ~40% пика вместо обещанных 30%.
+  // Флаг оставлен, чтобы вернуть поведение переменной, а не откатом кода.
   const adoptTrailEnabled     = (process.env.ADOPT_TRAIL_ENABLED || 'false').toLowerCase() === 'true';
   const adoptTrailArmPct      = parseFloat(process.env.ADOPT_TRAIL_ARM_PCT      || '2');
   const adoptTrailGiveBackPct = parseFloat(process.env.ADOPT_TRAIL_GIVE_BACK_PCT || '30');
@@ -322,11 +214,8 @@ function loadConfig() {
   if (isNaN(adoptTrailGiveBackPct) || adoptTrailGiveBackPct <= 0 || adoptTrailGiveBackPct >= 100) {
     throw new Error(`ADOPT_TRAIL_GIVE_BACK_PCT must be in (0, 100). Got: "${process.env.ADOPT_TRAIL_GIVE_BACK_PCT}"`);
   }
-  // Time-cut SHADOW (2026-07-02): measurement-only. Анализ 131 adopt-сделки: 23
-  // стопа съели ~$70 при общем +$47, и НИ ОДИН стоп не видел MFE ≥1% — позы
-  // умирали часами, не зеленея. Модель: не показала MFE ≥ GREEN_PCT за MIN минут
-  // → would-be выход по текущей цене. Пишем в shadow_exits, торговлю НЕ трогаем;
-  // решение о живом включении — по месяцу данных. Default on — это лог.
+  // Time-cut SHADOW: measurement-only. Не показала MFE ≥ GREEN_PCT за MIN минут
+  // → would-be выход по текущей цене, пишем в shadow_exits. Торговлю не трогает.
   const adoptTimecutShadowEnabled = (process.env.ADOPT_TIMECUT_SHADOW_ENABLED || 'true').toLowerCase() === 'true';
   const adoptTimecutMin           = parseFloat(process.env.ADOPT_TIMECUT_MIN       || '75');
   const adoptTimecutGreenPct      = parseFloat(process.env.ADOPT_TIMECUT_GREEN_PCT || '0.3');
@@ -336,17 +225,12 @@ function loadConfig() {
   if (isNaN(adoptTimecutGreenPct) || adoptTimecutGreenPct <= 0) {
     throw new Error(`ADOPT_TIMECUT_GREEN_PCT must be > 0. Got: "${process.env.ADOPT_TIMECUT_GREEN_PCT}"`);
   }
-  // Теневой трейл (2026-08-15, гипотеза adopt-trail-025r). Текущий трейл отдаёт
-  // долю ПИКА, поэтому на малом пике буфер схлопывается в шум (разбор ACE 14.08).
-  // Альтернатива: отступ = R_MULT × исходный риск. Только лог, торговлю не трогает;
-  // решение — по стоп-правилу гипотезы (n ≥ 60 пар), не раньше. Default on = это лог.
+  // Теневой трейл (гипотеза adopt-trail-025r): отступ = R_MULT × исходный риск
+  // вместо доли пика, которая на малом пике схлопывается в шум. Только лог.
   const adoptTrailShadowEnabled = (process.env.ADOPT_TRAIL_SHADOW_ENABLED || 'true').toLowerCase() === 'true';
 
-  // Target-trail (03.09.2026): на подходе к цели снять reduce-only лимитку и
-  // дальше вести стоп за ценой. ⚠️ ВЫКЛЮЧЕН по умолчанию: замер на 46 сделках
-  // дал +0.154R против фиксации при CI95 [−0.033, +0.378] — ноль внутри, а
-  // медиана +0.844R (типичная сделка ХУЖЕ фиксации, среднее держат 3 выброса).
-  // Гипотеза adopt-target-trail, судить один раз на 60 доехавших до цели.
+  // Target-trail: на подходе к цели снять reduce-only лимитку и вести стоп за
+  // ценой. ⛔ ВЫКЛЮЧЕН — типичная сделка выходила хуже простой фиксации.
   // TP-сетка: цель лесенкой вместо одной лимитки (см. шапку tpGrid.js).
   // Пусто = выключено. Формат «доля@R, доля@R» — сумма долей строго < 1, остаток
   // уходит под обычную цель/трейл. Спецификацию проверяем ЗДЕСЬ и падаем на
@@ -378,7 +262,7 @@ function loadConfig() {
   if (isNaN(adoptShadowTrailR) || adoptShadowTrailR <= 0) {
     throw new Error(`ADOPT_SHADOW_TRAIL_R must be > 0. Got: "${process.env.ADOPT_SHADOW_TRAIL_R}"`);
   }
-  // Пик-алерт (2026-07-02): систематизация дискрец-выхода. Юзер закрывает 63%
+  // Пик-алерт: систематизация дискрец-выхода. Юзер закрывает 63%
   // adopt-поз рукой (capture 68% MFE) — даём звонок в момент решения: пик ≥ MFE_PCT
   // (p75 его шортов ≈2.5%) и откат ≥ GIVEBACK_PCT от пика. GIVEBACK строго МЕНЬШЕ
   // ADOPT_TRAIL_GIVE_BACK_PCT (30) — иначе трейл закроет раньше звонка.
@@ -392,27 +276,25 @@ function loadConfig() {
     throw new Error(`ADOPT_PEAK_ALERT_GIVEBACK_PCT must be in (0, ADOPT_TRAIL_GIVE_BACK_PCT). Got: "${process.env.ADOPT_PEAK_ALERT_GIVEBACK_PCT}"`);
   }
 
-  // ── Daily loss limit (2026-07-02) — дневной стоп-лосс по fills ──
-  // Аудит 60д: 8 худших дней = −$130 при общем −$83. День достиг −LIMIT$ net →
-  // urgent-алерт + гейт новых авто-входов + тильт-алерт на усыновления до
-  // полуночи. Няньку/выходы НЕ трогает (вход без стопа хуже лимита).
+  // ── Daily loss limit — дневной стоп-лосс по fills ──
+  // День достиг −LIMIT$ net → urgent-алерт, гейт новых авто-входов и тильт-алерт
+  // на усыновления до полуночи. 🚨 Няньку и выходы не трогает: вход без стопа
+  // хуже, чем превышенный лимит.
   const dailyLossLimitEnabled = (process.env.DAILY_LOSS_LIMIT_ENABLED || 'true').toLowerCase() === 'true';
   const dailyLossLimitUsd     = parseFloat(process.env.DAILY_LOSS_LIMIT_USD || '5');
   if (isNaN(dailyLossLimitUsd) || dailyLossLimitUsd <= 0) {
     throw new Error(`DAILY_LOSS_LIMIT_USD must be > 0. Got: "${process.env.DAILY_LOSS_LIMIT_USD}"`);
   }
 
-  // ── Screen (экран торгуемых монет, 2026-08-23) ──
+  // ── Screen (экран торгуемых монет) ──
   // Порог трения: монета попадает на экран по цене входа, а не по движению.
-  // 25бп ≈ 89 монет из 177 с живой книгой — TRUMP/ZEC/PENGU внутри, PURR(29бп)
-  // и HMSTR(52бп) снаружи. Разбор 703 сделок: комиссии = $27 из $35 убытка.
+  // 25бп ≈ половина вселенной с живой книгой.
   const screenMaxFrictionBp = parseFloat(process.env.SCREEN_MAX_FRICTION_BP || '25');
   if (isNaN(screenMaxFrictionBp) || screenMaxFrictionBp <= 0) {
     throw new Error(`SCREEN_MAX_FRICTION_BP must be > 0. Got: "${process.env.SCREEN_MAX_FRICTION_BP}"`);
   }
-  // Бюджет сделок за день. С 31.08.2026 это ГЕЙТ, а не счётчик: цифра перед
-  // глазами не остановила 17 сделок за сутки, показывая «14 / 5». Trade Ticket
-  // отбивает вход по достижении лимита (src/modules/tradeGuards.js).
+  // Бюджет сделок за день. Это ГЕЙТ, а не счётчик: Trade Ticket отбивает вход
+  // по достижении лимита (src/modules/tradeGuards.js).
   const screenTradesPerDay = parseInt(process.env.SCREEN_TRADES_PER_DAY || '5', 10);
   if (isNaN(screenTradesPerDay) || screenTradesPerDay <= 0) {
     throw new Error(`SCREEN_TRADES_PER_DAY must be > 0. Got: "${process.env.SCREEN_TRADES_PER_DAY}"`);
@@ -435,16 +317,10 @@ function loadConfig() {
   const riskPctPerTrade  = parseFloat(process.env.RISK_PCT_PER_TRADE || '0.01');
 
   // ── Candy Girl — SIGNAL-ONLY радар (1h EMA-тренд + 5m pullback-reclaim) ──
-  // ⚠️ НЕ стратегия: радар алертов для ручной торговли. План: memory/candy_girl_idea.md.
-  // Никогда не открывает позицию. Master-флаг default OFF.
-  // Канал алертов: ntfy шлётся всегда (когда alertEnabled), TG-дубль опционален.
-  // default OFF — Candy Girl живёт в ntfy-ленте вместе со Swing-сканером.
+  // 🚨 НЕ стратегия: только алерты в ntfy, позицию не открывает никогда.
   const trendEmaFast1h             = parseInt(process.env.TREND_EMA_FAST_1H || process.env.CANDY_GIRL_FAST_1H  || '20', 10);
   const trendEmaSlow1h             = parseInt(process.env.TREND_EMA_SLOW_1H || process.env.CANDY_GIRL_SLOW_1H  || '200', 10);
   const trendSlopeLookback      = parseInt(process.env.TREND_SLOPE_LOOKBACK || process.env.CANDY_GIRL_SLOPE_LOOKBACK || '10', 10);
-  // 4h higher-timeframe confluence: сигнал валиден только если 4h-тренд совпадает
-  // с 1h-трендом. EMA20/50 на 4h (≈8 дней истории), легче чем EMA200 на 1h.
-  // Логирование сигналов в БД + авто-резолв TP-before-SL (замер точности).
   if (!Number.isInteger(trendEmaFast1h) || trendEmaFast1h < 2 || trendEmaFast1h >= trendEmaSlow1h) {
     throw new Error(`TREND_EMA_FAST_1H must be integer in [2, TREND_EMA_SLOW_1H). Got: "${process.env.TREND_EMA_FAST_1H || process.env.CANDY_GIRL_FAST_1H}"`);
   }
@@ -458,11 +334,6 @@ function loadConfig() {
   if (isNaN(riskPctPerTrade) || riskPctPerTrade <= 0 || riskPctPerTrade > 0.1) {
     throw new Error(`RISK_PCT_PER_TRADE must be in (0, 0.1]. Got: "${process.env.RISK_PCT_PER_TRADE}"`);
   }
-
-
-  // Iter E.2: trailing TP для Hunter Long (PAPER). Зеркало HUNTER_TRAIL_*.
-  // ARM_PCT < HUNTER_LONG_TP_PCT — иначе fixed TP сработает раньше trail.
-
 
   const maxDrawdownPct = parseFloat(process.env.MAX_DRAWDOWN_PCT || '10');
   const cbMaxLosses    = parseInt(process.env.CB_MAX_LOSSES      || '3', 10);
@@ -484,15 +355,9 @@ function loadConfig() {
     );
   }
 
-  // ── WS price feed (Stage 1 shadow / Stage 2 exits) ─────────
-  // wsFeedEnabled — поднимает allMids WS-фид (тень: кэш + сверка с поллингом).
-  // wsExitsEnabled — выходы активной hunter/hunter_long позиции считаются на
-  //   WS-тиках (не раз в 15с). Требует включённого фида. Default OFF — включать
-  //   только после суток наблюдения тени (см. ws_price_feed_plan.md).
+  // WS-фид allMids: выходы считаются на тиках, а не раз в 15с.
   const wsFeedEnabled     = (process.env.HL_WS_FEED_ENABLED    || 'false').toLowerCase() === 'true';
   const wsExitIntervalMs  = parseInt(process.env.HL_WS_EXIT_INTERVAL_MS  || '2000', 10);
-  // Stage 3: входы на WS-тиках (быстрее 15с). Поведение-меняющая — default OFF,
-  // требует wsFeedEnabled. См. ws_price_feed_plan.md.
 
   return {
     mode,
@@ -609,8 +474,7 @@ function loadConfig() {
 
     // ── Почта (self-hosted Listmonk /api/tx) ──
     // Зеркалит горячие ntfy-пуши в письмо + ежедневный дайджест. Fail-soft:
-    // если url/creds/template/to не заданы — mail.js тихо no-op (как ntfy).
-    // Тот же Listmonk, что у atlas / appointment_tg_bot (example.com).
+    // без url/creds/template/to mail.js тихо no-op.
     mail: {
       listmonkUrl: process.env.LISTMONK_URL || '',
       user:        process.env.LISTMONK_USER || '',

@@ -12,9 +12,8 @@ export const SLIPPAGE_BAN_TTL_MS   = 10 * 60_000;  // 10 мин
 export const REENTRY_COOLDOWN_MS   = 15 * 60_000;  // 15 мин
 export const REJECTED_ALERT_TTL_MS = 30 * 60_000;  // 30 мин
 // OI cap bans используют exponential backoff: 6ч → 12ч → 24ч (cap).
-// OI на потолке биржи — структурный признак неликвида, не транзиентный шум:
-// 30-мин бан был слишком коротким (инцидент TST 2026-05-19 — бан истёк, монета
-// зашла снова через 3ч и мгновенно вылетела по SL на 2% проскальзывании).
+// OI на потолке биржи — структурный признак неликвида, а не транзиентный шум:
+// после короткого бана монета заходит снова и вылетает по SL на проскальзывании.
 // Счётчик сбрасывается если за OI_CAP_REPEAT_RESET_MS не было новых rejection.
 export const OI_CAP_BAN_BASE_MS      = 6  * 3_600_000;     // tier 1
 export const OI_CAP_BAN_MAX_MS       = 24 * 3_600_000;     // tier ≥3 (cap)
@@ -53,9 +52,9 @@ export function getLastRejectedAlert(coin) { return rejectedAlertMap.get(coin); 
  * Банит монету по OI cap с exponential backoff: 30м → 1ч → 2ч → 4ч (cap).
  * Используется когда биржа отказала в открытии из-за переполненного OI.
  *
- * Why: малокапы типа SAGA повторно бьются об cap (см. инцидент 2026-05-12,
- * 3 rejection'а за сутки). 30-минутного бана недостаточно. Счётчик сбрасывается
- * если за OI_CAP_REPEAT_RESET_MS (24ч) не было нового OI cap события.
+ * Малокапы бьются об cap повторно, по несколько раз за сутки — получаса бана
+ * мало. Счётчик сбрасывается, если за OI_CAP_REPEAT_RESET_MS (24ч) не было
+ * нового OI cap события.
  *
  * @returns {{ count: number, ttlMs: number }} tier и фактический TTL — для лога/notify.
  */
@@ -108,7 +107,7 @@ export function getOiCapBans() {
 /**
  * Сериализует активные OI-cap бан для bot_state.json. Только не-протухшие.
  * Используется чтобы пережить рестарт — иначе монеты типа SAGA с постоянным
- * OI-cap получают новый шанс каждые 1-2 мин (см. инцидент 2026-05-12).
+ * OI-cap получают новый шанс каждые 1-2 мин.
  *
  * Возвращает { bans: { coin: exp }, repeat: { coin: { count, lastBannedAt } } }.
  * Repeat-счётчики сериализуются в свежем окне OI_CAP_REPEAT_RESET_MS — иначе при

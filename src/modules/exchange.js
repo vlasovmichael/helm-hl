@@ -101,7 +101,7 @@ export async function initExchange() {
 
 /**
  * Проверяет, что подключение работает: запрашиваем баланс.
- * HL unified mode (2026-05-23): primary source = spotClearinghouseState.
+ * HL unified mode: primary source = spotClearinghouseState.
  */
 async function verifyConnection() {
   const spotUsdc = await retryWithBackoff(
@@ -343,14 +343,13 @@ export async function fetchSpotUsdcBalance() {
 }
 
 /**
- * Fetcher для balanceCache. HL 2026-05-23: unified-by-default → primary
- * source баланса = spotClearinghouseState. clearinghouseState (perp)
- * остаётся только для unrealized PnL по открытым позициям. Контракт
- * кэша {accountValue, withdrawable, unrealizedPnl} прежний, поменялись
- * только источники:
- *   accountValue  = spot.USDC.total + perp.unrealizedPnl
- *   withdrawable  = spot.USDC.total - spot.USDC.hold
- *   unrealizedPnl = perp.marginSummary.totalUnrealizedPnl
+ * Fetcher для balanceCache. 🚨 Источник баланса — spotClearinghouseState:
+ * perp-часть unified-аккаунта by design $0 без открытых позиций и годится
+ * только для unrealized PnL. Контракт кэша {accountValue, withdrawable,
+ * unrealizedPnl}:
+ * accountValue = spot.USDC.total + perp.unrealizedPnl
+ * withdrawable = spot.USDC.total - spot.USDC.hold
+ * unrealizedPnl = perp.marginSummary.totalUnrealizedPnl
  */
 async function fetchBalanceFromSdk() {
   // Оба чтения идут через hlInfo (единый rate-limiter + внутренний retry).
@@ -481,7 +480,7 @@ async function fetchLivePriceMap() {
     { type: "metaAndAssetCtxs" },
     // HIGH: цена — торговое чтение (выходы/стопы считаются от неё). NORMAL
     // ставил её в общую очередь со свечами дашборда, и при заторе бюджета
-    // цена приезжала через минуты (инцидент 2026-07-31).
+    // цена приезжала через минуты.
     { label: "exchange/livePriceMap", timeoutMs: 10_000, priority: HL_PRIORITY.HIGH },
   );
   const [meta, ctxs] = data ?? [];

@@ -2,15 +2,13 @@
 //  Balance Cache — защита от API-глитчей Hyperliquid
 // ─────────────────────────────────────────────────
 //
-// HL 2026-05-23: после миграции на unified-by-default primary source —
-// spotClearinghouseState. Контракт кэша не менялся, но смысл полей сейчас:
-//   accountValue  = spot.USDC.total + perp.unrealizedPnl
-//   withdrawable  = spot.USDC.total - spot.USDC.hold
-//   unrealizedPnl = perp.marginSummary.totalUnrealizedPnl
-// См. memory/hl_unified_migration_2026_05_23.md.
+// Источник правды — spotClearinghouseState (unified-аккаунт):
+// accountValue = spot.USDC.total + perp.unrealizedPnl
+// withdrawable = spot.USDC.total - spot.USDC.hold
+// unrealizedPnl = perp.marginSummary.totalUnrealizedPnl
 //
-// Hyperliquid индексатор иногда "залипает" и возвращает 0 на одном или
-// обоих endpoint'ах — при этом на счёте реально есть деньги. Если верить:
+// 🚨 Индексатор HL иногда залипает и отдаёт 0 при живых деньгах на счету.
+// Если ему верить:
 //   - drawdown-гард орёт -100% и блокирует все OPEN,
 //   - Auto-Cleanup затирает baseline,
 //   - в PROD бот может счесть позицию закрытой и наоткрывать лишних.

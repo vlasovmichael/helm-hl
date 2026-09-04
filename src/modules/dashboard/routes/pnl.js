@@ -311,7 +311,7 @@ export async function handlePnlSummary(_req, res) {
         // Price-only PnL = realized_pnl − funding_collected. Если funding_collected NULL
         // (старые записи) — fallback: показываем total как есть, отдельно period funding.
         pricePnl: stats.totalPnl,
-        // Bot vs manual split (2026-05-13): bot = bot-only stats, manual = reconstructed.
+        // Bot vs manual split: bot = bot-only stats, manual = reconstructed.
         bot: {
           pnl: botStats.totalPnl,
           count: botStats.count,

@@ -102,7 +102,7 @@ export async function saveBotState(activePosition, reason) {
  *
  * Why: до этого фикса bot_state.json писался только на SIGTERM → при крэше
  * (kill -9, OOM) терялись oi_cap_bans и другое сериализуемое состояние,
- * 64.7h stale на рестарте 2026-05-12.
+ * 64.7h stale на рестарте.
  */
 export async function flushBotStatePeriodic() {
   const now = Date.now();
@@ -213,10 +213,9 @@ export async function shutdown(signal) {
 
   if (state.db) {
     try {
-      // TRUNCATE-чекпоинт: сливаем WAL в основной файл и зануляем .wal перед
-      // закрытием. Защита от corruption 2026-05-25: без явного чекпоинта
-      // SIGTERM мог оставить .wal с незакоммиченными страницами, recovery
-      // при следующем старте находил несогласованное состояние.
+      // TRUNCATE-чекпоинт: сливаем WAL в основной файл и зануляем.wal перед
+      // закрытием. 🚨 Без явного чекпоинта SIGTERM оставляет.wal с
+      // незакоммиченными страницами — база бьётся на следующем старте.
       state.db.pragma('wal_checkpoint(TRUNCATE)');
       state.db.close();
       logger.info('[System] ✅ Database closed (WAL truncated)');

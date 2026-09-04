@@ -1,6 +1,6 @@
 // makeHistoryCoverage: дедуп display-лент (/api/activity, /api/trade-markers)
 // против БД-истории. ЕДИНЫЙ источник правды для bot+adopted — таблица history;
-// fills-реконструкция нужна только для чисто ручных трейдов. Баг (DYDX 2026-06-23):
+// fills-реконструкция нужна только для чисто ручных трейдов. Баг:
 // adopted-поза живёт И в history, И в fills (вход — ручной fill). Если reconstruct
 // не успел пометить ногу `adopted` (entry_time не бэкфилнут / нет бот-OID), та же
 // сделка задваивалась в ленте — `close` из history + `manual_close` из fills.

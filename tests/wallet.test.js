@@ -30,7 +30,7 @@ const axiosModule = await import('axios');
 const wallet = await import('../src/modules/wallet.js');
 const balanceCache = await import('../src/core/balanceCache.js');
 
-// HL 2026-05-23: unified mode → fetcher делает 2 запроса (perp + spot).
+// Unified-аккаунт: fetcher делает 2 запроса (perp + spot).
 // Мок различает по полю `type` в body. Контракт wallet.js теперь:
 //   accountValue  = spot.USDC.total + perp.uPnl
 //   withdrawable  = spot.USDC.total - spot.USDC.hold

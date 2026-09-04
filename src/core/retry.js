@@ -18,18 +18,16 @@ import { logger } from './logger.js';
  *   - 401/403 (авторизация)
  *   - Любая бизнес-логика (insufficient margin, unknown asset, etc.)
  *
- * @param {Function}  fn              — async функция для выполнения
- * @param {Object}    [opts]
- * @param {number}    [opts.maxRetries=3]    — максимум попыток
- * @param {number}    [opts.baseDelayMs=1000] — начальная задержка (удваивается)
- * @param {number}    [opts.maxDelayMs=10000] — потолок задержки
- * @param {string}    [opts.label='']        — метка для логов
- * @param {boolean}   [opts.quiet=false]     — косметика (LOW-приоритет): ретраи
- *                    логируем на debug, а не warn/error — чтобы блипы Vol×/htf
- *                    не выглядели в логе как авария (они сами дожёвываются/гасятся
- *                    в null). Торговый путь остаётся громким.
- * @returns {Promise<any>}            — результат fn()
- * @throws {Error}                    — если все попытки исчерпаны
+ * @param {Function} fn — async функция для выполнения
+ * @param {Object} [opts]
+ * @param {number} [opts.maxRetries=3] — максимум попыток
+ * @param {number} [opts.baseDelayMs=1000] — начальная задержка (удваивается)
+ * @param {number} [opts.maxDelayMs=10000] — потолок задержки
+ * @param {string} [opts.label=''] — метка для логов
+ * @param {boolean} [opts.quiet=false] — косметика: ретраи логируем на
+ * debug, а не warn/error. Торговый путь остаётся громким.
+ * @returns {Promise<any>} — результат fn
+ * @throws {Error} — если все попытки исчерпаны
  */
 export async function retryWithBackoff(fn, opts = {}) {
   const {
@@ -106,9 +104,8 @@ export async function retryWithBackoff(fn, opts = {}) {
  */
 function isRetryable(err) {
   // ── Не дождались весового бюджета HL ───────────
-  // Дедлайн ждать И означает «отвались, не мешай». Ретрай встал бы в ту же
-  // очередь второй раз и вернул бы ровно ту проблему, ради которой дедлайн
-  // и вводился (затор бюджета 2026-07-31).
+  // Дедлайн ждать И означает «отвались, не мешай»: ретрай встанет в ту же
+  // очередь второй раз и вернёт затор, ради которого дедлайн и вводился.
   if (err.isWeightTimeout) return false;
 
   // ── Сетевые ошибки (axios / node:http) ─────────

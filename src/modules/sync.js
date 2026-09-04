@@ -125,9 +125,9 @@ async function loadBotState() {
  * @returns {Promise<Array<{ coin, szi, entryPx, positionValue, unrealizedPnl }>>}
  */
 export async function fetchExchangePositions() {
-  // Сырые assetPositions через коалесцирующий слой — orphanCheck зовётся каждый
-  // тик (при ADOPT_ENABLED), и раньше это был отдельный clearinghouseState +
-  // шумный лог на каждый тик. Теперь делит срез с integrity/dashboard в окне TTL.
+  // Сырые assetPositions через коалесцирующий слой: orphanCheck зовётся каждый
+  // тик, и свой clearinghouseState на каждый вызов был бы лишним — делим срез
+  // с integrity/dashboard в окне TTL.
   try {
     const assetPositions = await getPositionsCached();
     if (!Array.isArray(assetPositions)) return [];
@@ -290,7 +290,7 @@ export async function handleOrphaned(exchangePos) {
   appState.manualPositionCoins.add(exchangePos.coin);
   appState.manualWarningThrottle.set(exchangePos.coin, Date.now());
 
-  // TG-уведомление о ручной позиции на старте убрано (2026-06-09): ручная
+  // TG-уведомление о ручной позиции на старте убрано: ручная
   // торговля — основной режим оператора, поза видна на дашборде/бирже. Лог выше
   // остаётся для диагностики.
 
@@ -411,11 +411,9 @@ async function checkLeverageSettings() {
         (w) => `⚠️ #${w.coin}: ${w.value}x ${w.type}`,
       );
 
-      // 03.09.2026: пуш убран по просьбе оператора — он торгует руками и сам
-      // выбирает плечо, поэтому алерт прилетал на КАЖДОМ старте бота и был
-      // шумом, а не сигналом (см. гигиену алертов). Факт остаётся в логах:
-      // при не-1x isolated реальный риск позиции отличается от заложенного
-      // в расчёт размера, и это нужно видеть при разборе.
+      // Без пуша: плечо оператор выбирает сам, и алерт прилетал бы на каждом
+      // старте. Факт остаётся в логах — при не-1x isolated реальный риск
+      // позиции отличается от заложенного в расчёт размера.
       logger.warn(
         `[Sync] leverage не 1x isolated: ${lines.join(' · ')} — ` +
         `размер позиции считался от другого риска`,

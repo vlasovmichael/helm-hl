@@ -79,7 +79,7 @@ async function tickBody() {
         // Equity-снапшот для Performance-графика. Ручная торговля — основной
         // режим оператора (часами держит монету руками), и тик тут делает return
         // ДО runBalanceDiag() в конце. Без этого Performance молчит весь
-        // HANDS-OFF и схлопывается в одну «живую» точку (2026-06-09).
+        // HANDS-OFF и схлопывается в одну «живую» точку.
         await runBalanceDiag();
       } catch (err) {
         logger.debug(`[Tick] HANDS-OFF scan failed: ${err.message}`);

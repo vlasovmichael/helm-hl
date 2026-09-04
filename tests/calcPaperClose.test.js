@@ -1,6 +1,6 @@
 // Тесты чистой функции calcPaperClose (математика funding − fees, maker vs taker
 // exitFeeRate). Раньше жили вместе с decideSniperAction (Sniper Mode удалён
-// 2026-06-17), оставлены ради покрытия maker-exit ветки exitFeeRate.
+//), оставлены ради покрытия maker-exit ветки exitFeeRate.
 //
 // Запуск: npm test
 

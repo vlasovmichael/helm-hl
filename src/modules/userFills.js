@@ -76,11 +76,9 @@ export async function fetchUserFills(startTime = 0, { force = false } = {}) {
   }
 
   try {
-    // userFillsByTime отдаёт максимум PAGE_LIMIT fills, СТАРЫЕ первыми. При
-    // широком окне (ledger просит с 1 апреля) ответ обрывается на середине
-    // истории и новые месяцы просто не доезжают (2026-08-30: ответ кончался
-    // 16 июля, текущий месяц в /api/ledger был пустой). Дочитываем страницами
-    // от времени последнего fill'а.
+    // 🚨 userFillsByTime отдаёт максимум PAGE_LIMIT fills, СТАРЫЕ первыми: на
+    // широком окне ответ обрывается на середине истории и свежие месяцы просто
+    // не доезжают. Дочитываем страницами от времени последнего fill'а.
     const page = [];
     let cursor = effectiveStart;
     for (let i = 0; i < MAX_PAGES; i++) {
@@ -91,7 +89,7 @@ export async function fetchUserFills(startTime = 0, { force = false } = {}) {
           startTime: cursor,
         },
         // HIGH: fills — источник правды по PnL и матчингу adopt-ног, а не
-        // косметика. На NORMAL его отшивал весовой дедлайн (2026-07-31), причём
+        // косметика. На NORMAL его отшивал весовой дедлайн, причём
         // отвал ещё и капал в предохранитель — прямой путь к слепоте.
         { label: 'userFills', timeoutMs: FETCH_TIMEOUT_MS, priority: HL_PRIORITY.HIGH },
       );
@@ -241,9 +239,8 @@ export function classifyClose(position, fills) {
  *                 entry точно матчит bot-history (усыновление).
  *   - 'manual'  — и вход, и выход мои.
  *
- * ЕДИНЫЙ источник правды для дашборда (Activity/Insights) и Monthly Ledger —
- * раньше у Ledger была своя копия этой логики (ledger.js reconstructAllTrades),
- * которая отстала от net-position фикса и теряла/иначе классифицировала деньги.
+ * 🚨 ЕДИНЫЙ источник правды для дашборда (Activity/Insights) и Ledger. Вторая
+ * копия этой логики неизбежно отстаёт и начинает терять деньги.
  *
  * Группировка: позиция на бирже = знаковая сумма ВСЕХ fills (бот + ручные),
  * заякоренная startPosition первого fill (ловит позы, открытые до 60d-окна HL).
@@ -274,7 +271,7 @@ export function reconstructRoundTrips(fills, botTrades, botOidSet = null) {
     });
   }
 
-  // OID-based фильтр (2026-05-22): новые bot fills имеют oid в bot_oid_log →
+  // OID-based фильтр: новые bot fills имеют oid в bot_oid_log →
   // фильтруются точно. Без legacy time-based window'а: bot.entry_time лагает
   // относительно фактического fill.time (PURR incident — 518ms skew).
   const useOidFilter = botOidSet instanceof Set && botOidSet.size > 0;
@@ -301,13 +298,10 @@ export function reconstructRoundTrips(fills, botTrades, botOidSet = null) {
     return ranges.some((r) => Math.abs(r.entry - entryTime) <= ENTRY_MATCH_MS);
   }
 
-  // Матч adopted по ВРЕМЕНИ ЗАКРЫТИЯ. entry_time усыновлённой позы в history
-  // приблизителен и бэкфилится с лагом (fill ещё не проиндексирован в момент
-  // adopt), поэтому isBotOwnedEntry мог промахнуться → ручной выход adopted-позы
-  // классифицировался как 'manual' и задваивался в лентах (инцидент DYDX
-  // 2026-06-23). Но closed_at в history для adopt/external = реальное время ноги
-  // из тех же fills (integrity: leg.closedAt), значит совпадает с lastCloseTime
-  // round-trip'а с точностью до округления. Это надёжный ключ.
+  // Матч adopted по ВРЕМЕНИ ЗАКРЫТИЯ. 🚨 Матчить по входу нельзя: entry_time
+  // усыновлённой позы бэкфилится с лагом, и выход adopted-позы уезжает в
+  // 'manual', задваиваясь в лентах. closed_at для adopt/external — реальное
+  // время ноги из тех же fills, значит совпадает с lastCloseTime round-trip'а.
   const CLOSE_MATCH_MS = 5000;
   function isBotRecordedClose(coin, closeTime) {
     if (!Number.isFinite(closeTime)) return false;
@@ -329,9 +323,8 @@ export function reconstructRoundTrips(fills, botTrades, botOidSet = null) {
   }
 
   // Группируем ВСЕ fills по coin (бот + ручные). Позиция на бирже = знаковая
-  // сумма всех fills, поэтому бот-закрытие усыновлённой позы естественно обнуляет
-  // net и схлопывает ногу — без фантомных «висящих» ног (XPL incident
-  // 2026-06-17: −$7.36 не закрывался на adopt_trail_tp).
+  // сумма всех fills, поэтому бот-закрытие усыновлённой позы обнуляет net и
+  // схлопывает ногу — фантомных «висящих» ног не остаётся.
   const byCoin = new Map();
   for (const f of fills) {
     if (!f.coin) continue;
@@ -420,7 +413,7 @@ export function reconstructRoundTrips(fills, botTrades, botOidSet = null) {
  * (та же монета + сторона + ближайшее время входа). Нужно при external-close,
  * чтобы записать РЕАЛЬНУЮ ногу, а не сумму всех fills с момента входа: при флипе
  * (short→long той же монеты) classifyClose складывал обе ноги в одну цифру, и
- * минусовая нога пропадала из history (см. adopt flip-merge баг 2026-06-18).
+ * минусовая нога пропадала из history.
  *
  * Классификация source здесь не нужна — берём чистое net-zero разбиение, поэтому
  * botTrades/botOidSet можно не передавать.
@@ -442,13 +435,11 @@ export function findRoundTripForPosition(position, fills) {
   );
   if (legs.length === 0) return null;
 
-  // Дизамбигуация ноги. entry_time усыновлённой позы НЕнадёжен: бэкфилится с лагом,
-  // а при флипе/повторном заходе якорится к времени закрытия ПРЕДЫДУЩЕЙ ноги
-  // (инцидент KAITO 2026-07-13: два adopt-лонга получили ОДИН entry_time =
-  // closed_at шорта → оба матчились в первый лонг: первый задвоился, второй
-  // — победный +$0.75 — потерялся). entry_price из DB точный → матчим по ЦЕНЕ
-  // входа; entry_time лишь тай-брейк и единственный ключ для поз, открытых до
-  // 60d-окна HL (там entryPrice реконструированной ноги = 0).
+  // Дизамбигуация ноги. 🚨 entry_time усыновлённой позы НЕнадёжен: бэкфилится
+  // с лагом, а при флипе или повторном заходе якорится к времени закрытия
+  // ПРЕДЫДУЩЕЙ ноги — две позы получают один entry_time, и одна из них
+  // теряется. entry_price из DB точный → матчим по ЦЕНЕ входа; entry_time лишь
+  // тай-брейк и единственный ключ для поз, открытых до 60d-окна HL.
   const wantPx = Number(position.entry_price);
   const PX_TOL = 0.005; // 0.5% — покрывает slippage DB entry_price vs avg fill-px
   let best = null;

@@ -187,7 +187,7 @@ function buildBotManagement(position) {
 // То же, что buildBotManagement, но для ручного входа под adopt-нянькой.
 // Логика выхода у adopt зеркальна Hunter (трейл пик−giveback / BE-безубыток /
 // жёсткий resting-SL на бирже), пороги — из adopt-конфига. Даёт оператору тот же
-// живой пол для ручной позиции, что и для бот-сделки (2026-06-14).
+// живой пол для ручной позиции, что и для бот-сделки.
 function buildAdoptManagement(adoptPos) {
   if (!adoptPos) return null;
   const entry = adoptPos.entry_price;
@@ -264,18 +264,12 @@ function buildAdoptManagement(adoptPos) {
   };
 }
 
-// HL 2026-05-23: unified-by-default. Раньше дашборд отдельно дёргал
-// spotClearinghouseState чтобы показать "Wallet Total", потому что perp
-// accountValue не включал spot. Теперь getAccountSummary() / wallet.js
-// уже считают всё через spot (см. memory/hl_unified_migration_2026_05_23.md),
-// отдельный snapshot не нужен.
-
 async function getStatusData() {
   // adopt — это ручной вход под няней (multi-slot), а не бот-сделка. Его место
   // в manual-секции с пометкой ADOPTED, а не в главной карточке. Главную карточку
   // оставляем только настоящей бот-стратегии (hunter/carry/...). getActivePosition()
   // отдаёт самый свежий OPEN-слот, и им запросто оказывается adopt — отсюда раньше
-  // «как будто бот сам открыл». (2026-06-13)
+  // «как будто бот сам открыл».
   const slotPos = getActivePosition();
   const isAdoptSlot = !!slotPos && (slotPos.strategy_id || "carry") === "adopt";
   const position = isAdoptSlot ? null : slotPos;
@@ -381,8 +375,8 @@ async function getStatusData() {
         const livePrice = wsPrice(p.coin);
         // Расхождение DB-строки adopt с ЖИВОЙ позой по стороне = оператор флипнул
         // (short→long), а integrity ещё не переусыновил. Старое управление
-        // (стоп/пик) от мёртвой стороны показывать НЕЛЬЗЯ — иначе карточка врёт
-        // (LIT-инцидент 2026-06-18: лонг с ярлыком ADOPTED вёл стоп от шорта).
+        // (стоп/пик) от мёртвой стороны показывать НЕЛЬЗЯ: карточка покажет
+        // лонг со стопом от шорта.
         const adoptPos = adoptByCoin.get(normCoin(p.coin));
         const liveSideLower = szi < 0 ? "short" : "long";
         const adoptResyncing =
@@ -480,7 +474,7 @@ async function getStatusData() {
 
   // Живая цена BTC из WS-фида (allMids) — чтобы плашка Market Context обновляла
   // цену каждые 2с (кадр статуса), а не ждала 10с-поллинг /api/market-context.
-  // null → фронт оставит последнюю из поллинга. 2026-06-29.
+  // null → фронт оставит последнюю из поллинга..
   const btcLivePrice = feedLivePrice("BTC")?.price ?? null;
 
   return {
@@ -1353,7 +1347,7 @@ export function stopDashboard() {
       resolve();
     };
 
-    // ── Почему тут явный terminate, а не просто close (2026-08-11) ────────
+    // ── Почему тут явный terminate, а не просто close ────────
     // server.close() перестаёт ПРИНИМАТЬ соединения, но ЖДЁТ закрытия уже
     // открытых. Вкладка дашборда держит WebSocket бессрочно, а wss.close()
     // живых клиентов не рвёт — поэтому колбэк server.close() не срабатывал

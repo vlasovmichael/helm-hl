@@ -344,22 +344,21 @@ export async function scan() {
     );
   }
 
-  // Монета открытой позиции обязана оставаться в scoutData, даже если её funding
-  // ушёл в минус (fast ≤ 0) или просела ликвидность. Иначе Стратег теряет current
-  // в сценарии Б, считает позицию «пропавшей» и закрывает её как delisted (кейс
-  // HYPE 2026-05-15). APY/liquidity-фильтры гейтят ВХОД, а не управление открытой
-  // позицией — её надо видеть, чтобы штатно выйти (negative_funding).
+  // 🚨 Монета открытой позиции обязана оставаться в scoutData, даже если её
+  // funding ушёл в минус или просела ликвидность: иначе Стратег теряет current,
+  // считает позицию пропавшей и закрывает её как delisted. APY/liquidity-фильтры
+  // гейтят ВХОД, а не управление открытой позицией.
   const activeCoin = (getActivePosition()?.coin || '').toUpperCase();
   // Paper shadow-слоты нуждаются в свежей цене для SL/TP / exit-check. Без
   // этого, если coin выпадает из hunterSet/liquidSet, exit-check получает
-  // item=undefined и пропускает SL/TP (инцидент BTC id=90, 2026-05-22).
+  // item=undefined и пропускает SL/TP.
   // Пинним ВСЕ активные paper-коины — независимые слоты сосуществуют.
   const activePaperCoins = getActivePaperCoins();
   // Живые/ручные позы (бот + adopt/HANDS-OFF) пинним в hunter-scope так же, как
   // paper. Иначе монета, которую оператор ДЕРЖИТ, но которой нет в hunterSet (ниже
   // volume-floor), выпадает из скана → для неё не копится priceHistory → окна
   // Hot Movers вечно «—» (синтез-строка фронта). Корень «пропадающих цифр
-  // активной монеты», который чинили на стороне вывода, а не скана (2026-06-15).
+  // активной монеты», который чинили на стороне вывода, а не скана.
   const heldLiveCoins = new Set();
   if (activeCoin) heldLiveCoins.add(activeCoin);
   for (const c of state.manualPositionCoins) heldLiveCoins.add(String(c).toUpperCase());
@@ -367,7 +366,7 @@ export async function scan() {
   // УДАЛЯЕТСЯ из state.manualPositionCoins (integrity), и не является main-slot
   // getActivePosition. Без явного пина их priceHistory переставал наполняться →
   // окна Hot Movers усыновлённой монеты вечно «—». Это и есть «пропадающие цифры
-  // активной монеты» — теперь чиним в КОРНЕ скана, а не в фолбэке вывода (2026-06-18).
+  // активной монеты» — теперь чиним в КОРНЕ скана, а не в фолбэке вывода.
   for (const p of getActiveAdoptPositions()) heldLiveCoins.add(String(p.coin).toUpperCase());
 
   const results       = [];  // для carry/fade (узкая liquid-вселенная)
@@ -435,7 +434,7 @@ export async function scan() {
       // OI==0 от HL = пустой/мигающий фид (дохлые/тонкие перпы, ~55 монет
       // отдают openInterest "0.0"). Считаем нулём = «нет данных» → null, иначе
       // OI-дельта делит против нулевой базы и выдаёт нонсенс типа −200%
-      // (физически OI не падает >100%). 2026-06-29.
+      // (физически OI не падает >100%)..
       const oiUsd       = Number.isFinite(oiCoin) && oiCoin > 0 ? oiCoin * price : null;
       // prevDayPx — «цена сутки назад» от самой биржи. Нужна «Монете дня» как
       // дешёвый префильтр кандидатов (кто вообще ходил за сутки) БЕЗ шторма
@@ -461,7 +460,7 @@ export async function scan() {
     // isHeld: главная активная поза ИЛИ любой активный paper-коин. CandyGirl
     // exit-check читает scoutData (не hunterData), поэтому held paper-coin
     // обязан попасть и сюда — иначе SL/TP пропускаются и сыплется
-    // "#COIN нет в scoutData" (SUI 2026-06-03).
+    // "#COIN нет в scoutData".
     const isHeld = coinUpper === activeCoin || isHeldPaper;
     if (liquidSet.size > 0 && !liquidSet.has(coinUpper) && !isHeld) {
       skippedIlliquid++;
