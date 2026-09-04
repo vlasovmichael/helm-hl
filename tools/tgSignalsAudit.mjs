@@ -27,7 +27,7 @@ const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 
 const num = (k, d) => { const v = arg(k, null); return v === null ? d : parseFloat(v); };
 const has = (k) => process.argv.includes(`--${k}`);
 
-const CHANNEL = arg("channel", "Channel A");
+const CHANNEL = arg("channel", "");
 const DAYS = num("days", 60);
 const HORIZON_H = num("horizon", 24);
 const ENTRY_H = num("entry-window", 4);

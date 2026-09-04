@@ -1,4 +1,6 @@
-# Channel B (t.me/Channel B) — прогон, 18.08.2026
+# Канал B — прогон, 18.08.2026
+
+> Канал обезличен: см. пояснение в channel-a-signals-audit.md.
 
 **Вывод: эджа нет, брать нельзя.** 1447 сигналов 2023–2026 по реальным ценам
 Binance-фьючерсов дают **−0.057 R на сделку** (CI95 [−0.086, −0.028]), суммарно
@@ -7,9 +9,9 @@ Binance-фьючерсов дают **−0.057 R на сделку** (CI95 [−0
 ## Данные
 
 - `tools/tg-dump/dump.cjs` — вся история канала: 23 034 сообщения, 2017-11 → 2026-08.
-- `tools/tg-dump/parse_channel-b.cjs` → 1462 фьючерсных сигнала (2023+), 96 % лонги.
+- `tools/tg-dump/parse.cjs` → 1462 фьючерсных сигнала (2023+), 96 % лонги.
   Споты 2018–2020 («BUY #MDA UNDER 20500») не брал: монеты делистнуты.
-- `tools/tg-dump/backtest_channel-b.cjs` → 15m-свечи фьючерсов, окно 14 дней,
+- `tools/tg-dump/backtest.cjs` → 15m-свечи фьючерсов, окно 14 дней,
   вход по открытию следующей свечи после поста, комиссия 10 бп round-trip,
   при касании стопа и цели в одном баре считаем стоп (пессимистично).
 
@@ -61,7 +63,7 @@ R:R = 0.23. При таком раскладе даже 78 % попаданий 
 
 ```
 cd tools/tg-dump
-OUT_FILE=result_channel-b.json node dump.cjs "@Channel B"
-node parse_channel-b.cjs
-node backtest_channel-b.cjs
+OUT_FILE=result.json node dump.cjs "@<channel>"
+node parse.cjs
+node backtest.cjs
 ```

@@ -5,14 +5,18 @@
 //  и листается назад через ?before=<id>. Нужны только текст, id и время поста —
 //  картинки не тянем, разбор идёт по тексту.
 //
-//  Запуск:  node tools/tgSignalsFetch.mjs Channel A [--max-pages 200]
+//  Запуск:  node tools/tgSignalsFetch.mjs <channel> [--max-pages 200]
 //  Пишет:   data/tg-signals/<channel>.raw.json   [{id, ts, text}]
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { writeFileSync, mkdirSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-const CHANNEL = process.argv[2] || "Channel A";
+const CHANNEL = process.argv[2];
+if (!CHANNEL) {
+  console.error("Укажи канал: node tools/tgSignalsFetch.mjs <channel>");
+  process.exit(1);
+}
 const argN = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? +process.argv[i + 1] : d; };
 const MAX_PAGES = argN("max-pages", 300);
 const DIR = join("data", "tg-signals");
