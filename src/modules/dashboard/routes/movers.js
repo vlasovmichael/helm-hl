@@ -11,7 +11,7 @@ import { logger } from "../../../core/logger.js";
 import { hlInfo, HL_PRIORITY } from "../../../core/hlClient.js";
 import { getPriceNMinAgo, getBufferLength, getLatestPrice, getPriceSpark } from "../../../core/priceHistory.js";
 import { getActivePosition, getActiveAdoptPositions, getHistory } from "../../../core/database.js";
-import { findAsset, getUniverse } from "../../../core/universe.js";
+import { findAsset, getUniverse, resolveApiCoin } from "../../../core/universe.js";
 import { getCachedAccountValueSync } from "../../../core/balanceCache.js";
 import { TICK_INTERVAL_MS, state } from "../../../app/state.js";
 import { computeBreadthFlush } from "../../hotMoversSetup.js";
@@ -92,7 +92,7 @@ async function fetchVolMult(coin) {
   if (cached && Date.now() - cached.ts < VOL_MULT_TTL_MS) return cached.mult;
   try {
     const stripped = String(coin).replace(/-PERP$/i, "").replace(/^@/, "");
-    const hlCoin = /^k[A-Z]/.test(stripped) ? stripped : stripped.toUpperCase();
+    const hlCoin = resolveApiCoin(stripped);
     const data = await hlInfo(
       {
         type: "candleSnapshot",
