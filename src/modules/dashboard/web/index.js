@@ -262,7 +262,15 @@ document.addEventListener("visibilitychange", () => {
 {
   const mock = new URLSearchParams(location.search).get("mock");
   if (mock === "hm") {
-    import("./src/dev/mockHotMovers.js").then((m) => m.startHotMoversMock());
+    // &pos=SOL,BTC — открытые позиции: с ними у строк появляются под-строки,
+    // на которых и проверяется высота карточки.
+    const pos = (new URLSearchParams(location.search).get("pos") || "")
+      .split(",")
+      .map((c) => c.trim().toUpperCase())
+      .filter(Boolean);
+    import("./src/dev/mockHotMovers.js").then((m) =>
+      m.startHotMoversMock({ positions: pos }),
+    );
   } else if (mock != null) {
     import("./src/dev/mockActive.js").then((m) => m.startMock({ onStatus }));
   }

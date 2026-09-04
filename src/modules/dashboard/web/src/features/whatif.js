@@ -33,9 +33,8 @@ const VERDICT_ICON = {
 
 const TONE_CLS = { pat: "wi-pat", smack: "wi-smack", neutral: "wi-neutral" };
 
-// Оболочку, шапку и крестик даёт ядро (core/dialog.js) — здесь только тело.
-// Форма, «сканирую…» и разбор — три ТЕЛА одного диалога, поэтому переоткрытия
-// нет: show() переставляет содержимое в уже открытом окне.
+// Оболочку и шапку даёт ядро (core/dialog.js) — здесь только тело. Форма,
+// загрузка и разбор — три тела одного окна, show() их переставляет.
 function openModal(body) {
   dialog.show({
     id: "whatif-modal",

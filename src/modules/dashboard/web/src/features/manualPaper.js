@@ -49,11 +49,7 @@ function closeModal() {
 function formHtml(prefill = {}) {
   const coin = prefill.coin || "";
   const side = prefill.side === "short" ? "short" : "long";
-  // Форма собрана из тех же карточек, что «Open Position» (core/ui.js →
-  // card/slider/segmented/field). До 04.09.2026 здесь была своя вёрстка с
-  // подписями-строчками и голыми range: два диалога, открывающие позицию —
-  // настоящую и бумажную — выглядели как из разных приложений, хотя человек
-  // жмёт их по очереди и сравнивает.
+  // Форма из тех же карточек, что «Open Position» (core/ui.js).
   return `
     <div class="mp-lead">Like Rabbit, but on paper. The bot manages the exit (ATR stop + breakeven ratchet + trail), same as adopt — you can also close it yourself anytime.</div>
     <form id="mp-form" autocomplete="off">
@@ -142,8 +138,7 @@ function applyCoinLeverageCap() {
   if (hint) {
     // Show the binding constraint: the coin's HL cap when it's the lower one,
     // otherwise the wallet's practical cap.
-    // Подпись стоит ВСЕГДА (как «up to 3x» в Open Position): пустая строка на
-    // месте ограничения читается как «ограничения нет», а оно есть всегда.
+    // Подпись стоит всегда: пустое место читается как «ограничения нет».
     if (coin && Number.isFinite(coinMax) && coinMax < WALLET_LEV_CAP)
       hint.textContent = `${coin} caps at ${coinMax}x`;
     else hint.textContent = `up to ${cap}x`;
@@ -166,7 +161,7 @@ function recalc() {
   paintSlider(levEl());
   paintSlider(sizeEl());
 
-  // Строки-факты — как в «Open Position»: слева что, справа сколько.
+  // Строки-факты: слева что, справа сколько.
   const calc = document.getElementById("mp-calc");
   if (calc) {
     calc.innerHTML = lastEquity > 0
@@ -367,9 +362,8 @@ function ensureConfirm() {
     if (e.target.closest("[data-mp-cancel]")) settleConfirm(false);
     if (e.target.closest("[data-mp-confirm]")) settleConfirm(true);
   });
-  // Escape здесь не просто закрывает, а РАЗРЕШАЕТ промис отказом — иначе
-  // вызывающий код навсегда останется ждать ответа. Поэтому свой обработчик,
-  // а не bindClose ядра: у диалога-вопроса есть возвращаемое значение.
+  // 🚨 Escape тут разрешает промис отказом, иначе вызывающий код навсегда
+  // останется ждать ответа — поэтому свой обработчик, а не bindClose.
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !modal.hidden) settleConfirm(false);
   });

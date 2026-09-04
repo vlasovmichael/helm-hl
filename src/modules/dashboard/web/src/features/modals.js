@@ -140,10 +140,11 @@ function openHelpModal(key) {
 }
 
 // ── Trade detail modal ─────────────────────────────────────────────────
-// У разбора сделки шапка своя — тикер вместо кружка с иконкой (см. tmHeader),
-// поэтому тело кладётся в оболочку целиком, без head() ядра.
+// Шапка своя — тикер вместо кружка с иконкой (tmHeader), поэтому тело кладём
+// в оболочку целиком, без head() ядра.
 function openTradeModal(html) {
-  const modal = dialog.shell("trade-modal", { wide: true });
+  // Ширина обычная (420px, как у «Open Position»): двум колонкам ячеек хватает.
+  const modal = dialog.shell("trade-modal");
   const panel = modal.querySelector(".modal__panel");
   (panel.querySelector(".modal__content") || panel).innerHTML = html;
   dialog.open(modal);
@@ -217,11 +218,20 @@ function tradeModalHtmlFromActivity(e) {
   return `
     ${tmHeader({ coin: e.coin, side, kindLabel, strat, isManual, when })}
     ${e.kind !== "open" ? tmPnlHero(pnl) : ""}
-    ${cells.length ? `<div class="tm-grid">${cells.join("")}</div>` : ""}
-    ${e.id ? `<div class="tm-section" id="tm-detail-slot"><div class="tm-section-title">Details</div><div class="tm-sub">Loading…</div></div>` : ""}
+    ${
+      // Сводка из строки активности — только когда деталей не будет: иначе
+      // те же Entry/Close/Size показывались дважды подряд.
+      e.id
+        ? `<div class="tm-section" id="tm-detail-slot">${tradeDetailSkeleton()}</div>`
+        : cells.length
+          ? `<div class="tm-grid">${cells.join("")}</div>`
+          : ""
+    }
   `;
 }
 
+// Тело деталей: ячейки + таймлайн. 🚨 БЕЗ шапки и hero — вставляется внутрь
+// уже открытого диалога, где они есть; вторая пара давала скачок высоты.
 function tradeDetailHtml(t) {
   if (!t) return '<div class="tm-sub">No details available</div>';
   const strat = strategyDisplayName(t.strategy_id);
@@ -273,8 +283,7 @@ function tradeDetailHtml(t) {
     );
 
   return `
-    ${tmHeader({ coin: t.coin, side: direction, kindLabel: "TRADE", strat, isManual, when: `id ${t.id}` })}
-    ${tmPnlHero(pnl)}
+    <div class="tm-section-title">Details</div>
     <div class="tm-grid">${cells.join("")}</div>
     <div class="tm-section">
       <div class="tm-section-title">Timeline</div>
@@ -284,6 +293,20 @@ function tradeDetailHtml(t) {
       </div>
     </div>
   `;
+}
+
+// Скелетон той же формы, что придёт: место занято сразу, подстановка данных
+// не меняет высоту диалога.
+function tradeDetailSkeleton() {
+  const cell = () =>
+    `<div class="tm-cell"><span class="sk sk-line" style="width:42%"></span><span class="sk sk-num"></span></div>`;
+  return `
+    <div class="tm-section-title">Details</div>
+    <div class="tm-grid">${Array.from({ length: 8 }, cell).join("")}</div>
+    <div class="tm-section">
+      <div class="tm-section-title">Timeline</div>
+      <div class="tm-grid">${cell()}${cell()}</div>
+    </div>`;
 }
 
 function fmtPx(v) {
@@ -304,8 +327,7 @@ async function onActivityClick(e) {
     try {
       const r = await fetchJson(`/api/trade/${evt.id}`);
       const slot = document.getElementById("tm-detail-slot");
-      if (slot && r?.trade)
-        slot.outerHTML = `<div class="tm-section">${tradeDetailHtml(r.trade)}</div>`;
+      if (slot && r?.trade) slot.innerHTML = tradeDetailHtml(r.trade);
     } catch (err) {
       const slot = document.getElementById("tm-detail-slot");
       if (slot)
@@ -315,8 +337,7 @@ async function onActivityClick(e) {
   }
 }
 
-// Закрытие (крестик, подложка, Escape, замок прокрутки, возврат фокуса) —
-// в core/dialog.js. Здесь остаётся только ОТКРЫТИЕ: что за чем показывать.
+// Закрытие (крестик, подложка, Escape, фокус) — в core/dialog.js.
 export function initModals() {
   ["trade-modal", "help-modal"].forEach((id) => {
     const el = document.getElementById(id);

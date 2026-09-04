@@ -10,6 +10,7 @@ import { getNotifications } from "../net/api.js";
 import { fmtSince } from "../utils/format.js";
 import { linkifyCoins } from "../utils/links.js";
 import { icon } from "../core/icon.js";
+import { classifyNotif } from "./notifyTone.js";
 
 const LS_KEY = "helm.notif.lastRead";
 const POLL_MS = 60_000;
@@ -70,12 +71,11 @@ function renderList() {
       const fresh = n.ts > lr ? " notif-item--fresh" : "";
       const mail = n.emailed ? `<span class="notif-mail" title="Also sent by email">${icon("mail")}</span>` : "";
       const body = stripEmoji((n.message || "").split("\n")[0]); // первая строка — суть
-      // Та же классификация, что у тоста: одно событие выглядит одинаково и в
-      // тосте, и в списке — иначе колокольчик читается как другой продукт.
-      const { glyph } = classifyNotif(n);
+      // Та же классификация, что у тоста.
+      const { glyph, kind } = classifyNotif(n);
       // linkifyCoins сам экранирует текст и делает #COIN ссылкой на TradingView.
       return `
-        <div class="notif-item${fresh}">
+        <div class="notif-item${fresh} notif-item--${kind}">
           <div class="notif-item-head">
             <span class="notif-item-ico">${icon(glyph)}</span>
             <span class="notif-item-title">${linkifyCoins(stripEmoji(n.title))}</span>
@@ -135,79 +135,9 @@ function flyToBell(el) {
   setTimeout(done, 700); // страховка, если transitionend не прилетит
 }
 
-// Иконка события — ключ из общего набора (core/icon.js). Раньше здесь лежали
-// шесть контуров, набранных руками под viewBox 24: у них был свой stroke-width,
-// и рядом с иконками остального дашборда они читались как из другого набора.
-const NOTIF_ICON = {
-  ok: "check",
-  danger: "danger",
-  warn: "warn",
-  up: "rising",
-  down: "falling",
-  info: "info",
-};
-
-// Явная сторона сделки — только когда в тексте есть слово LONG/SHORT (fade-алерты,
-// филлы). Тогда показываем цветную пилюлю. Для радара OI/move это не «сторона».
-function toastSide(item) {
-  const t = `${item.title || ""} ${item.message || ""}`;
-  if (/\bshort\b/i.test(t)) return "short";
-  if (/\blong\b/i.test(t)) return "long";
-  return null;
-}
-
-// Направление движения — из ntfy-тегов. Даёт иконку-тренд.
-function toastDir(item) {
-  const tags = Array.isArray(item.tags) ? item.tags : [];
-  const has = (x) => tags.includes(x);
-  if (has("green_circle") || has("chart_with_upwards_trend")) return "up";
-  if (has("red_circle") || has("chart_with_downwards_trend")) return "down";
-  return null;
-}
-
-// Схема B: цвет = СОБЫТИЕ (стоп/цель/пауза/инфо), сторону несёт бейдж +
-// иконка-тренд. Вход (opened/filled) — нейтральный инфо, а не «успех».
-//
-// Одна функция на тост и на список в колокольчике: одно и то же событие в двух
-// местах обязано выглядеть одинаково.
-function classifyNotif(item) {
-  const tags = Array.isArray(item.tags) ? item.tags : [];
-  const has = (t) => tags.includes(t);
-  const text = `${item.title || ""} ${item.message || ""}`.toLowerCase();
-  const side = toastSide(item);
-  const dir = toastDir(item) || (side === "long" ? "up" : side === "short" ? "down" : null);
-
-  let kind = "info";
-  if ((item.priority ?? 3) >= 4 || has("rotating_light") || has("warning") ||
-      /\bstop|\bsl\b|liquidat|error|fail|drawdown|circuit|breaker|external/.test(text)) {
-    kind = "danger";
-  } else if (has("white_check_mark") || has("heavy_check_mark") ||
-      /target|\btp\b|profit|\bwin\b|\+\$/.test(text)) {
-    kind = "ok";
-  } else if (has("snowflake") || /\bwarn|stale|cooldown|paused|\bcold\b|skip/.test(text)) {
-    kind = "warn";
-  }
-
-  const cls = kind === "ok" ? "toast--ok" : kind === "danger" ? "toast--danger"
-    : kind === "warn" ? "toast--warn" : "";
-
-  // Иконка события важнее тренда (стоп — тревога, а не «вниз»). Тренд остаётся
-  // только у нейтральных инфо-пушей (входы, радар движения).
-  const glyph =
-    kind !== "info" ? NOTIF_ICON[kind]
-    : dir === "up" ? NOTIF_ICON.up
-    : dir === "down" ? NOTIF_ICON.down
-    : NOTIF_ICON.info;
-
-  return { kind, cls, glyph, side };
-}
-
-// Тексты пушей приходят из ntfy, а там заголовок начинается с эмодзи и ещё
-// пара встречается внутри строки. В дашборде эмодзи нет: они рисуются цветным
-// растром мимо темы и мимо веса шрифта, а смысл уже несёт иконка-чип слева.
-//
-// 🚨 Чистим ОБА места — и тост, и список в колокольчике. До 04.09.2026 стриппер
-// стоял только на тосте, поэтому в панели эмодзи оставались.
+// Заголовки ntfy приходят с эмодзи; в дашборде их нет — цветной растр мимо
+// темы и веса шрифта, а смысл несёт иконка слева.
+// 🚨 Чистим ОБА места — и тост, и список в колокольчике.
 const EMOJI = /[\p{Extended_Pictographic}\u{FE0F}\u{20E3}]/gu;
 
 function stripEmoji(s) {

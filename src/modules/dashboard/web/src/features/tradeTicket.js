@@ -218,8 +218,7 @@ function coinAmount(n) {
   return n.toPrecision(3);
 }
 
-// Маркер строки — иконка из общего набора, а не глиф в list-style: у ⚠
-// текстового шрифта другой вес и другая высота, чем у остальных иконок листа.
+// Маркер строки — иконка из общего набора: у текстового ⚠ другой вес.
 function listBlock(cls, items, glyph = "") {
   return `<ul class="${cls}" ${items.length ? "" : "hidden"}>${items
     .map((x) => `<li>${glyph ? icon(glyph) : ""}<span>${escapeHtml(x)}</span></li>`)
@@ -436,10 +435,8 @@ function createModal(io) {
         </div>
         <div class="tt-row">
           <span>Order Type</span>
-          <!-- Иконка тут одна на оба состояния и означает «поменять» — так было
-               до 04.09.2026 (глиф ⇄), так и осталось, только контуром из общего
-               набора. Разные иконки под маркет и лимитку пробовали: тип ордера
-               и так написан словом рядом, а картинка начинала спорить с ним. -->
+          <!-- Одна иконка «поменять» на оба состояния: тип ордера написан
+               словом рядом, разные картинки с ним спорят. -->
           <button type="button" class="tt-row__toggle" data-toggle-type
                   title="${state.orderType === "limit" ? "Limit post-only — switch to market" : "Market — switch to limit post-only"}">
             ${state.orderType === "limit" ? "Limit post-only" : "Market"} ${icon("swap")}
@@ -892,8 +889,7 @@ function createModal(io) {
     loadContext().then(() => {
       if (el && !el.hidden) softRefresh();
     });
-    // Появление ведёт ядро (core/dialog.js): класс is-open, reflow перед ним и
-    // ожидание ухода панели при закрытии — теперь общие для всех диалогов.
+    // Появление и уход ведёт ядро (core/dialog.js).
     dialog.open(el);
     startPricePoll();
   }
