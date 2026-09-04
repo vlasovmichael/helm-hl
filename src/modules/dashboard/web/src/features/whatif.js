@@ -33,17 +33,18 @@ const VERDICT_ICON = {
 
 const TONE_CLS = { pat: "wi-pat", smack: "wi-smack", neutral: "wi-neutral" };
 
-function openModal(html) {
-  const modal = document.getElementById("whatif-modal");
-  const body = document.getElementById("whatif-modal-body");
-  if (!modal || !body) return;
-  body.innerHTML =
-    dialog.head({
-      glyph: "target",
-      title: "What if…",
-      sub: "Checks a coin against the live edge — it does not look for one",
-    }) + html;
-  dialog.open(modal);
+// Оболочку, шапку и крестик даёт ядро (core/dialog.js) — здесь только тело.
+// Форма, «сканирую…» и разбор — три ТЕЛА одного диалога, поэтому переоткрытия
+// нет: show() переставляет содержимое в уже открытом окне.
+function openModal(body) {
+  dialog.show({
+    id: "whatif-modal",
+    wide: true,
+    glyph: "target",
+    title: "What if…",
+    sub: "Checks a coin against the live edge — it does not look for one",
+    body,
+  });
 }
 
 // ── Start form: coin field + optional side toggle + submit ──
@@ -285,7 +286,7 @@ async function runCheck(coin, side) {
 
 export function initWhatIf() {
   // Закрытие, Escape, замок прокрутки и возврат фокуса — core/dialog.js.
-  const modal = document.getElementById("whatif-modal");
+  const modal = dialog.shell("whatif-modal", { wide: true });
   if (modal) dialog.bindClose(modal);
 
   document.addEventListener("click", (e) => {

@@ -107,7 +107,16 @@ table.oi-table {
 .oi-table tbody tr {
   cursor: pointer;
   background: var(--row-tint, transparent);
-  transition: background var(--dur-fast) var(--ease-out);
+}
+/* 🚨 Плавного перехода у подсветки строки тут быть НЕ МОЖЕТ. Первая колонка
+   липкая, и тон ей задаёт слой background-image (градиент из --row-tint) —
+   картинка, а не цвет: она переключается мгновенно и не умеет плавно. Строка
+   же плавно перекрашивалась за 120 мс, и на каждом наведении колонка монеты
+   загоралась раньше остального ряда. Ровно это и читалось как «ховер у разных
+   полей». Меняем разом и сразу — у обоих. */
+.oi-table tbody tr,
+.oi-table tbody tr > td {
+  transition: none;
 }
 .oi-table tbody tr:hover {
   --row-tint: var(--card-bg-hover);

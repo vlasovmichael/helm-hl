@@ -128,21 +128,24 @@ function renderHelpSection(s) {
 
 function openHelpModal(key) {
   const content = HELP_CONTENT[key];
-  const modal = document.getElementById("help-modal");
-  const body = document.getElementById("help-modal-body");
-  if (!content || !modal || !body) return;
-  body.innerHTML =
-    dialog.head({ glyph: "help", title: content.title, sub: content.lead || "" }) +
-    `<div class="modal__body">${content.sections.map(renderHelpSection).join("")}</div>`;
-  dialog.open(modal);
+  if (!content) return;
+  dialog.show({
+    id: "help-modal",
+    wide: true,
+    glyph: "help",
+    title: content.title,
+    sub: content.lead || "",
+    body: content.sections.map(renderHelpSection).join(""),
+  });
 }
 
 // ── Trade detail modal ─────────────────────────────────────────────────
+// У разбора сделки шапка своя — тикер вместо кружка с иконкой (см. tmHeader),
+// поэтому тело кладётся в оболочку целиком, без head() ядра.
 function openTradeModal(html) {
-  const modal = document.getElementById("trade-modal");
-  const body = document.getElementById("trade-modal-body");
-  if (!modal || !body) return;
-  body.innerHTML = html;
+  const modal = dialog.shell("trade-modal", { wide: true });
+  const panel = modal.querySelector(".modal__panel");
+  (panel.querySelector(".modal__content") || panel).innerHTML = html;
   dialog.open(modal);
 }
 

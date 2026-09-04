@@ -41,28 +41,9 @@ async function postJson(path, body) {
   return r.json();
 }
 
-// ── Modal DOM (singleton) ──
-function ensureModal() {
-  let modal = document.getElementById("mp-modal");
-  if (modal) return modal;
-  modal = document.createElement("div");
-  modal.id = "mp-modal";
-  modal.className = "modal";
-  modal.hidden = true;
-  modal.innerHTML = `
-    <div class="modal__backdrop" data-close></div>
-    <div class="modal__panel" role="dialog" aria-modal="true" aria-label="New paper trade">
-      <div class="mp-body" id="mp-body"></div>
-    </div>`;
-  document.body.appendChild(modal);
-  // Закрытие, Escape, замок прокрутки, возврат фокуса — core/dialog.js.
-  dialog.bindClose(modal);
-  return modal;
-}
-
+// Оболочки диалогов больше нет: её строит ядро (core/dialog.js → shell/show).
 function closeModal() {
-  const m = document.getElementById("mp-modal");
-  if (m) dialog.close(m);
+  dialog.close(dialog.shell("mp-modal"));
 }
 
 function formHtml(prefill = {}) {
@@ -73,11 +54,7 @@ function formHtml(prefill = {}) {
   // подписями-строчками и голыми range: два диалога, открывающие позицию —
   // настоящую и бумажную — выглядели как из разных приложений, хотя человек
   // жмёт их по очереди и сравнивает.
-  return dialog.head({
-    glyph: "add",
-    title: "New paper trade",
-    sub: "Entry at the current price; the bot manages the exit",
-  }) + `
+  return `
     <div class="mp-lead">Like Rabbit, but on paper. The bot manages the exit (ATR stop + breakeven ratchet + trail), same as adopt — you can also close it yourself anytime.</div>
     <form id="mp-form" autocomplete="off">
       ${segmented({
@@ -208,9 +185,13 @@ function populateCoins(coins) {
 }
 
 async function openModal(prefill = {}) {
-  const modal = ensureModal();
-  document.getElementById("mp-body").innerHTML = formHtml(prefill);
-  dialog.open(modal);
+  dialog.show({
+    id: "mp-modal",
+    glyph: "add",
+    title: "New paper trade",
+    sub: "Entry at the current price; the bot manages the exit",
+    body: formHtml(prefill),
+  });
 
   // Equity for the slider + coin list (autocomplete) + per-coin max leverage.
   try {
@@ -379,26 +360,16 @@ async function refreshActive() {
 let confirmResolve = null;
 
 function ensureConfirm() {
-  let modal = document.getElementById("mp-confirm");
-  if (modal) return modal;
-  modal = document.createElement("div");
-  modal.id = "mp-confirm";
-  modal.className = "modal";
-  modal.hidden = true;
-  modal.className = "modal modal--danger";
-  modal.innerHTML = `
-    <div class="modal__backdrop" data-mp-cancel></div>
-    <div class="modal__panel" role="dialog" aria-modal="true" aria-label="Close paper position">
-      <div id="mp-confirm-body"></div>
-    </div>`;
-  document.body.appendChild(modal);
+  const modal = dialog.shell("mp-confirm");
+  if (modal.dataset.mpBound) return modal;
+  modal.dataset.mpBound = "1";
   modal.addEventListener("click", (e) => {
     if (e.target.closest("[data-mp-cancel]")) settleConfirm(false);
     if (e.target.closest("[data-mp-confirm]")) settleConfirm(true);
   });
   // Escape здесь не просто закрывает, а РАЗРЕШАЕТ промис отказом — иначе
   // вызывающий код навсегда останется ждать ответа. Поэтому свой обработчик,
-  // а не dialog.bindClose: у диалога-вопроса есть возвращаемое значение.
+  // а не bindClose ядра: у диалога-вопроса есть возвращаемое значение.
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !modal.hidden) settleConfirm(false);
   });
@@ -406,8 +377,7 @@ function ensureConfirm() {
 }
 
 function hideConfirm() {
-  const modal = document.getElementById("mp-confirm");
-  if (modal) dialog.close(modal);
+  dialog.close(dialog.shell("mp-confirm"));
 }
 
 // Отмена закрывает диалог; подтверждение — нет: пока идёт запрос, оператор видит
@@ -432,7 +402,7 @@ function setConfirmBusy(busyNow) {
 }
 
 function confirmClose(info, errMsg) {
-  const modal = ensureConfirm();
+  ensureConfirm();
   const isShort = info.side === "SHORT";
   const num = (v) => (v === "" || v == null ? null : Number(v));
   const pnl = num(info.pnl);
@@ -443,12 +413,13 @@ function confirmClose(info, errMsg) {
   const pnlCls = pnl == null ? "" : pnl >= 0 ? "num-pos" : "num-neg";
   const cell = (label, value, cls = "") =>
     `<div class="mp-confirm-cell"><span class="mp-confirm-cell-label">${label}</span><span class="mp-confirm-cell-value ${cls}">${value}</span></div>`;
-  document.getElementById("mp-confirm-body").innerHTML =
-    dialog.head({
-      glyph: "warn",
-      title: `Close #${escapeHtml(info.coin || "")}?`,
-      sub: "This can't be undone",
-    }) + `
+  dialog.show({
+    id: "mp-confirm",
+    tone: "danger",
+    glyph: "warn",
+    title: `Close #${escapeHtml(info.coin || "")}?`,
+    sub: "This can't be undone",
+    body: `
     <div class="mp-lead">Closes the paper position at the current mark price. The result lands in the journal.</div>
     <div class="mp-confirm-grid">
       ${cell("Side", `${icon(isShort ? "short" : "long")} ${escapeHtml(info.side || "—")}${info.lev ? " " + info.lev + "×" : ""}`, isShort ? "num-neg" : "num-pos")}
@@ -457,12 +428,15 @@ function confirmClose(info, errMsg) {
       ${cell("Mark", mark == null ? "—" : "$" + fmtPrice(mark))}
       ${cell("uPnL", pnl == null ? "—" : fmtUsd(pnl) + (roe == null ? "" : ` (${fmtPct(roe)})`), pnlCls)}
     </div>
-    <div class="mp-err"${errMsg ? "" : " hidden"}>${escapeHtml(errMsg || "")}</div>
-    <div class="modal__actions">
-      ${button({ label: "Keep it", variant: "ghost", attrs: { "data-mp-cancel": true } })}
-      ${button({ label: errMsg ? "Retry close" : "Close position", variant: "danger", attrs: { "data-mp-confirm": true, "data-autofocus": true } })}
-    </div>`;
-  dialog.open(modal);
+    <div class="mp-err"${errMsg ? "" : " hidden"}>${escapeHtml(errMsg || "")}</div>`,
+    actions:
+      button({ label: "Keep it", variant: "ghost", attrs: { "data-mp-cancel": true } }) +
+      button({
+        label: errMsg ? "Retry close" : "Close position",
+        variant: "danger",
+        attrs: { "data-mp-confirm": true, "data-autofocus": true },
+      }),
+  });
   return new Promise((resolve) => {
     confirmResolve = resolve;
   });

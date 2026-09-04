@@ -255,8 +255,15 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-// DEV: ?mock=1 → засимулировать активную монету (risk-bar + ракета) без бэка.
-// Динамический импорт → в обычной сборке/проде модуль даже не грузится.
-if (new URLSearchParams(location.search).has("mock")) {
-  import("./src/dev/mockActive.js").then((m) => m.startMock({ onStatus }));
+// DEV-моки без бэка. Динамический импорт → в проде модули даже не грузятся.
+//   ?mock=1  — активная монета (risk-bar + ракета);
+//   ?mock=hm — тики Hot Movers: порядок монет меняется каждые 2с, на этом
+//              смотрят движение таблицы (живые тики иначе только с бэка).
+{
+  const mock = new URLSearchParams(location.search).get("mock");
+  if (mock === "hm") {
+    import("./src/dev/mockHotMovers.js").then((m) => m.startHotMoversMock());
+  } else if (mock != null) {
+    import("./src/dev/mockActive.js").then((m) => m.startMock({ onStatus }));
+  }
 }

@@ -72,10 +72,10 @@ function renderList() {
       const body = stripEmoji((n.message || "").split("\n")[0]); // первая строка — суть
       // Та же классификация, что у тоста: одно событие выглядит одинаково и в
       // тосте, и в списке — иначе колокольчик читается как другой продукт.
-      const { glyph, cls } = classifyNotif(n);
+      const { glyph } = classifyNotif(n);
       // linkifyCoins сам экранирует текст и делает #COIN ссылкой на TradingView.
       return `
-        <div class="notif-item${fresh}${cls ? ` ${cls}` : ""}">
+        <div class="notif-item${fresh}">
           <div class="notif-item-head">
             <span class="notif-item-ico">${icon(glyph)}</span>
             <span class="notif-item-title">${linkifyCoins(stripEmoji(n.title))}</span>

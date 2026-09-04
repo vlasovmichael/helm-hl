@@ -892,15 +892,9 @@ function createModal(io) {
     loadContext().then(() => {
       if (el && !el.hidden) softRefresh();
     });
-    dialog.open(el, { onClose: () => el.classList.remove("is-open") });
-    // Чтобы анимация проигралась, браузер должен сначала зафиксировать
-    // НАЧАЛЬНОЕ состояние (opacity 0 + сдвиг), и только потом получить класс.
-    // Раньше тут был requestAnimationFrame — и это давало невидимую модалку:
-    // в неактивной вкладке кадры не выдаются, callback не вызывался никогда,
-    // класс не вешался, панель оставалась на opacity 0. Принудительный reflow
-    // делает то же самое синхронно и от кадров не зависит.
-    void el.offsetHeight;
-    el.classList.add("is-open");
+    // Появление ведёт ядро (core/dialog.js): класс is-open, reflow перед ним и
+    // ожидание ухода панели при закрытии — теперь общие для всех диалогов.
+    dialog.open(el);
     startPricePoll();
   }
 
@@ -927,10 +921,7 @@ function createModal(io) {
     if (!el) return;
     stopPricePoll(); // иначе опрос цены продолжается на закрытой модалке
     if (closeAfter) { clearTimeout(closeAfter); closeAfter = null; } // закрыли раньше таймера
-    el.classList.remove("is-open");
-    // Ждём выезд панели вниз, потом прячем: dialog.close() снимет замок
-    // прокрутки и вернёт фокус на кнопку, с которой лист открывали.
-    setTimeout(() => dialog.close(el), 200);
+    dialog.close(el);
   }
 
   return { open, close, refresh: async () => { await loadContext(); if (el && !el.hidden) render(); }, _state: state, _setContext(n) { ctx = { ...ctx, ...n }; if (el && !el.hidden) render(); } };

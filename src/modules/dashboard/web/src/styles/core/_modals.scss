@@ -135,13 +135,15 @@
     display: none;
   }
 
+  /* Подложка: просто затемнение, без backdrop-filter. Размытие заставляет
+     браузер перерисовывать всё, что под диалогом, — на карточках с живой
+     ценой это работа каждый тик ради чистой декорации. */
   &__backdrop {
     position: fixed;
     inset: 0;
     background: rgba(1, 4, 9, 0.62);
-    backdrop-filter: blur(3px);
-    -webkit-backdrop-filter: blur(3px);
-    animation: modal-fade-in var(--dur) var(--ease-out);
+    opacity: 0;
+    transition: opacity var(--dur) var(--ease-out);
   }
 
   /* ── Ширина ───────────────────────────────────────────────────────────
@@ -167,11 +169,26 @@
     border-radius: 18px;
     box-shadow: var(--shadow);
     color: var(--text-primary);
-    animation: modal-rise var(--dur-slow) var(--spring);
+    /* Вход и уход — переходы по классу .is-open, который вешает ядро
+       (core/dialog.js). Именно переход, а не @keyframes: keyframes играет
+       только на появление, и любой диалог, кроме trade ticket, пропадал
+       рывком. Теперь оба конца одинаковые у всех. */
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+    transition:
+      opacity var(--dur) var(--ease-out),
+      transform var(--dur-slow) var(--ease-out);
 
     &:focus {
       outline: none;
     }
+  }
+  &.is-open &__backdrop {
+    opacity: 1;
+  }
+  &.is-open &__panel {
+    opacity: 1;
+    transform: none;
   }
   &__panel--wide {
     --modal-w: 560px;
@@ -431,17 +448,9 @@
     width: 100%;
     max-height: 92vh;
     border-radius: 20px 20px 0 0;
-    animation-name: modal-sheet-up;
-  }
-}
-@keyframes modal-sheet-up {
-  from {
-    opacity: 0;
+    /* Лист уезжает вниз целиком, а не «складывается»: на телефоне это тот же
+       жест, что у нижних листов системы. */
     transform: translateY(100%);
-  }
-  to {
-    opacity: 1;
-    transform: none;
   }
 }
 
@@ -460,31 +469,15 @@
   }
 }
 
-@keyframes modal-fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-@keyframes modal-rise {
-  from {
-    opacity: 0;
-    transform: translateY(14px) scale(0.97);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* Панель не «прилетает», если человек просил не двигать интерфейс. Подложка
-   всё равно проявляется — без неё диалог возникает из ниоткуда. */
+/* Панель не «прилетает», если человек просил не двигать интерфейс. Появление
+   остаётся мгновенным, но остаётся: без него диалог возникает из ниоткуда. */
 @media (prefers-reduced-motion: reduce) {
   .modal__panel,
   .modal__backdrop {
-    animation-duration: 1ms;
+    transition-duration: 1ms;
+  }
+  .modal__panel {
+    transform: none;
   }
 }
 

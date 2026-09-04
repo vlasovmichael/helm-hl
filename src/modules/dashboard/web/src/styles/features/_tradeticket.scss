@@ -123,50 +123,17 @@
 }
 
 .tt-modal {
-  // Лист, а не карточка по центру: этот диалог — единственный, где идёт
-  // ДЕЙСТВИЕ (ордер), и на телефоне он обязан быть у большого пальца.
-  // Поэтому у него свой выезд снизу, а не общий modal-rise.
-  align-items: center;
-
+  // Своей анимации и своей ширины у листа больше нет: появление, уход и
+  // мобильный лист снизу — общие (core/_modals.scss + core/dialog.js). Здесь
+  // осталось то, что у этого диалога действительно своё: прокрутка внутри
+  // панели (форма длинная) и крестик в углу — заголовок у листа по центру,
+  // в общей шапке ему места нет.
   .modal__panel {
-    background: var(--card-bg-elev);
-    border: 1px solid var(--border);
-    color: var(--text-primary);
-    box-shadow: var(--shadow);
     max-height: calc(100vh - 40px);
     overflow-y: auto;
     padding: 0;
-    border-radius: 18px;
-
-    // Выезд снизу + лёгкий масштаб — как нижний лист в мобильном кошельке.
-    transform: translateY(16px) scale(0.98);
-    opacity: 0;
-    // Свой transition вместо общего modal-rise: панель должна уметь и уезжать,
-    // а @keyframes играет только на входе.
-    animation: none;
-    transition:
-      transform var(--dur-slow) var(--spring),
-      opacity var(--dur) var(--ease-out);
-  }
-  &.is-open .modal__panel {
-    transform: translateY(0) scale(1);
-    opacity: 1;
   }
 
-  .modal__backdrop {
-    // Просто затемнение, без backdrop-filter: размытие заставляет браузер
-    // перерисовывать всё, что под модалкой, — на карточках с живыми ценами
-    // это лишняя работа каждый тик, а выигрыш чисто декоративный.
-    // Затемнение подняли с 0.5 до 0.6 — без блюра фон должен глушиться сильнее.
-    background: rgba(1, 4, 9, 0.62);
-    opacity: 0;
-    animation: none;
-    transition: opacity var(--dur) var(--ease-out);
-  }
-  &.is-open .modal__backdrop { opacity: 1; }
-
-  // Крестик лежит прямо в панели, а не в общей шапке (у листа своя вёрстка
-  // заголовка по центру), поэтому позиционируется абсолютно.
   .modal__close {
     position: absolute;
     top: 12px;
@@ -176,18 +143,10 @@
     color: var(--text-faint);
   }
 
-  // На узком экране панель прижимается к низу — большим пальцем до кнопки ближе.
   @include until($bp-md) {
-    align-items: flex-end;
-    padding: 0;
-
     .modal__panel {
-      width: 100%;
       max-height: 92vh;
-      border-radius: 20px 20px 0 0;
-      transform: translateY(100%);
     }
-    &.is-open .modal__panel { transform: translateY(0); }
   }
 }
 
