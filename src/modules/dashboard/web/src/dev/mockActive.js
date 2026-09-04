@@ -140,24 +140,24 @@ function buildStatus() {
 // тултип, не дожидаясь, пока фид действительно сломается.
 const MOCK_HEALTH = [
   { overall: "ok", checks: [
-    { name: "price_feed", category: "freshness", status: "pass", detail: "кадр 1.2с назад, 24/мин" },
+    { name: "price_feed", category: "freshness", status: "pass", detail: "frame 1.2s ago, 24/min" },
     { name: "price_drift", category: "xref", status: "pass", detail: "n=920 avgΔ=0.0166% maxΔ=0.173% (#CASHCAT)" },
-    { name: "price_coverage", category: "completeness", status: "pass", detail: "1079 монет в кэше" },
+    { name: "price_coverage", category: "completeness", status: "pass", detail: "1079 coins cached" },
   ] },
   { overall: "warn", checks: [
-    { name: "price_feed", category: "freshness", status: "warn", detail: "кадр 18.4с назад, 3/мин" },
+    { name: "price_feed", category: "freshness", status: "warn", detail: "frame 18.4s ago, 3/min" },
     { name: "price_drift", category: "xref", status: "pass", detail: "n=920 avgΔ=0.0210% maxΔ=0.304%" },
-    { name: "price_coverage", category: "completeness", status: "pass", detail: "1079 монет в кэше" },
+    { name: "price_coverage", category: "completeness", status: "pass", detail: "1079 coins cached" },
   ] },
   { overall: "drift", checks: [
     { name: "price_drift", category: "xref", status: "fail", detail: "n=690 avgΔ=1.8% maxΔ=4.102% (#HEMI)" },
-    { name: "price_feed", category: "freshness", status: "pass", detail: "кадр 0.9с назад, 22/мин" },
-    { name: "price_coverage", category: "completeness", status: "pass", detail: "1079 монет в кэше" },
+    { name: "price_feed", category: "freshness", status: "pass", detail: "frame 0.9s ago, 22/min" },
+    { name: "price_coverage", category: "completeness", status: "pass", detail: "1079 coins cached" },
   ] },
   { overall: "stale", checks: [
-    { name: "price_feed", category: "freshness", status: "fail", detail: "нет коннекта (попыток 4)" },
-    { name: "price_drift", category: "xref", status: "fail", detail: "нет обновлений 240с (ttl 180с)" },
-    { name: "price_coverage", category: "completeness", status: "warn", detail: "12 монет в кэше" },
+    { name: "price_feed", category: "freshness", status: "fail", detail: "no connection (4 attempts)" },
+    { name: "price_drift", category: "xref", status: "fail", detail: "no updates for 240s (ttl 180s)" },
+    { name: "price_coverage", category: "completeness", status: "warn", detail: "12 coins cached" },
   ] },
 ];
 function mockDataHealth() {

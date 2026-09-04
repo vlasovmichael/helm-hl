@@ -64,7 +64,7 @@ export function summary() {
     const status = expired ? 'fail' : c.status;
     const category = expired ? 'freshness' : c.category;
     const detail = expired
-      ? `нет обновлений ${Math.round(ageMs / 1000)}с (ttl ${Math.round(c.ttlMs / 1000)}с)`
+      ? `no updates for ${Math.round(ageMs / 1000)}s (ttl ${Math.round(c.ttlMs / 1000)}s)`
       : c.detail;
     counts[status]++;
     out.push({ name, category, status, detail, ageMs, stale: expired });

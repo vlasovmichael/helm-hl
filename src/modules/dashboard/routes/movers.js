@@ -533,11 +533,11 @@ function computeSelfLeak(limit = 60) {
 
     let note;
     if (avgLoserMae != null && avgLoserMae >= 6)
-      note = `Твои минусовые трипы в среднем доходят до −${avgLoserMae.toFixed(1)}% (MAE) — это «стоп не стоял». Поставь стоп ДО входа.`;
+      note = `Your losing round-trips run to −${avgLoserMae.toFixed(1)}% (MAE) on average — that is what "no stop was set" looks like. Place the stop BEFORE the entry.`;
     else if (payoff != null && payoff < 1)
-      note = `Payoff ${payoff.toFixed(2)}× — средний плюс меньше среднего минуса. Тяни прибыль / режь убыток быстрее.`;
+      note = `Payoff ${payoff.toFixed(2)}× — the average win is smaller than the average loss. Hold winners longer, cut losers sooner.`;
     else
-      note = `Дисциплина по истории в норме: payoff ${payoff != null ? payoff.toFixed(2) + "×" : "—"}, MAE лузеров −${avgLoserMae != null ? avgLoserMae.toFixed(1) : "—"}%.`;
+      note = `Discipline looks fine on history: payoff ${payoff != null ? payoff.toFixed(2) + "×" : "—"}, losers' MAE −${avgLoserMae != null ? avgLoserMae.toFixed(1) : "—"}%.`;
 
     return {
       n: rows.length,

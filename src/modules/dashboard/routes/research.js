@@ -69,7 +69,7 @@ export const handleFvgForward = served("fvg", () => {
     // возраст последней записи — чтобы молчащий коллектор было видно сразу,
     // а не через месяц при разборе
     staleHours: lastT ? (Date.now() - lastT) / 3_600_000 : null,
-    decisionRule: `оценка ровно один раз при n=${FVG_TARGET}`,
+    decisionRule: `evaluated exactly once, at n=${FVG_TARGET}`,
   };
 });
 
@@ -141,5 +141,5 @@ export const handleForwards = served("forwards", () => {
       minRegimeShare: MIN_REGIME_SHARE,
     };
   });
-  return { items, decisionRule: "каждая оценивается ровно один раз, по своим условиям из реестра" };
+  return { items, decisionRule: "each one is evaluated exactly once, on its own terms from the registry" };
 });

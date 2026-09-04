@@ -397,16 +397,16 @@ function noteFeedHealth({ age, avg }) {
   let status, detail;
   if (!connected) {
     status = 'fail';
-    detail = `нет коннекта (попыток ${reconnectAttempts})`;
+    detail = `no connection (${reconnectAttempts} attempts)`;
   } else if (age < 0 || age > STALE_MS) {
     status = 'fail';
-    detail = age < 0 ? 'кадров ещё не было' : `последний кадр ${(age / 1000).toFixed(0)}с назад`;
+    detail = age < 0 ? 'no frame yet' : `last frame ${(age / 1000).toFixed(0)}s ago`;
   } else if (age > FEED_WARN_AGE_MS || midsUpdateCount < MIDS_MIN_WARN) {
     status = 'warn';
-    detail = `кадр ${(age / 1000).toFixed(1)}с назад, ${midsUpdateCount}/мин`;
+    detail = `frame ${(age / 1000).toFixed(1)}s ago, ${midsUpdateCount}/min`;
   } else {
     status = 'pass';
-    detail = `кадр ${(age / 1000).toFixed(1)}с назад, ${midsUpdateCount}/мин`;
+    detail = `frame ${(age / 1000).toFixed(1)}s ago, ${midsUpdateCount}/min`;
   }
   note('price_feed', { category: 'freshness', status, detail, ttlMs });
 
@@ -429,7 +429,7 @@ function noteFeedHealth({ age, avg }) {
     note('price_drift', {
       category: 'xref',
       status: 'warn',
-      detail: 'сверок с поллингом не было',
+      detail: 'no cross-checks against polling yet',
       ttlMs,
     });
   }
@@ -438,7 +438,7 @@ function noteFeedHealth({ age, avg }) {
   note('price_coverage', {
     category: 'completeness',
     status: prices.size === 0 ? 'fail' : prices.size < 50 ? 'warn' : 'pass',
-    detail: `${prices.size} монет в кэше`,
+    detail: `${prices.size} coins cached`,
     ttlMs,
   });
 }

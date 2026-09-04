@@ -433,7 +433,7 @@ export async function integrityCheck() {
   const positionsToCheck = [...byId.values()];
   if (positionsToCheck.length === 0) {
     _lagStreak = 0;
-    noteMirror('pass', 'открытых позиций нет — сверять нечего');
+    noteMirror('pass', 'no open positions — nothing to cross-check');
     return false;
   }
 
@@ -479,7 +479,7 @@ export async function integrityCheck() {
     // потому что withdrawable < 50% equity истинно всегда, когда деньги в позах.
     if (vanished.length === 0 && reopened.length === 0) {
       _lagStreak = 0;
-      noteMirror('pass', `${positionsToCheck.length} поз(ы) на месте, расхождений нет`);
+      noteMirror('pass', `${positionsToCheck.length} position(s) in place, no drift`);
       return false;
     }
 
@@ -514,8 +514,8 @@ export async function integrityCheck() {
         _lagStreak++;
         noteMirror(
           _lagStreak >= LAG_FAIL_STREAK ? 'fail' : 'warn',
-          `лаг API ${_lagStreak} проход(ов) подряд: биржа пуста, ` +
-            `но занято $${(equity - withdrawable).toFixed(2)} маржи`,
+          `API lag, ${_lagStreak} pass(es) in a row: exchange empty, ` +
+            `yet $${(equity - withdrawable).toFixed(2)} of margin is held`,
         );
         return false;
       }
@@ -552,13 +552,13 @@ export async function integrityCheck() {
     noteMirror(
       anyClosed ? 'pass' : 'warn',
       anyClosed
-        ? `расхождение по ${names} закрыто в БД`
-        : `расхождение по ${names} НЕ закрылось — строка висит открытой`,
+        ? `drift on ${names} closed in the DB`
+        : `drift on ${names} did NOT close — the row is still open`,
     );
     return anyClosed;
   } catch (err) {
     logger.debug(`[Integrity] Check failed (non-critical): ${err.message}`);
-    noteMirror('warn', `сверка не прошла: ${err.message}`);
+    noteMirror('warn', `cross-check failed: ${err.message}`);
     return false;
   }
 }

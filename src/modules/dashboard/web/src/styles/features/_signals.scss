@@ -1576,3 +1576,51 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     display: none;
   }
 }
+
+// ── Лента событий «Wall Street geniuses» ────────────────────────────────
+// Лента живёт под таблицей выбранных адресов и раньше была самодельным
+// flex-списком с инлайн-стилями на каждой строке. Теперь это та же .table,
+// что и таблица выше в этой карточке: одна порода на весь дашборд.
+.win-log-block {
+  margin-top: var(--sp-3);
+}
+
+#win-log-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--sp-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  color: var(--text-muted);
+}
+
+// Лента длиннее карточки: прокрутка внутри блока, шапка таблицы остаётся
+// на месте (.table--sticky-head).
+.win-log-scroll {
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+// Вторичное в строке — сторона, плечо, объём, адрес, возраст. Красит только
+// исход (зелёный/красный), остальное молчит.
+.win-log-dim {
+  color: var(--text-muted);
+}
+
+// Возраст события — первая колонка, а её вес задаёт .table (td:first-child):
+// имя строки в системе весомее остальных ячеек. Здесь остаётся только запрет
+// переноса, чтобы «15m» не ломалось пополам на телефоне.
+.win-log-age {
+  white-space: nowrap;
+}
+
+// Иконка вида события идёт вплотную к слову — это одна метка, а не два столбца.
+.win-log-kind {
+  white-space: nowrap;
+
+  .icon {
+    vertical-align: -2px;
+    margin-right: 3px;
+  }
+}

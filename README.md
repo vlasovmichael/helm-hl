@@ -58,7 +58,7 @@ and mirrors drift (see the incident notes in the code).
 npm install
 cp .env.example .env      # set PUBLIC_WALLET_ADDRESS at minimum
 
-npm test                  # 379 tests
+npm test                  # 510 tests + interface guards
 npm run build:dash        # build the dashboard front-end
 npm start                 # run the bot + dashboard on :3010
 ```
@@ -119,6 +119,33 @@ npm run lint    # eslint
 `tests/imports.test.js` walks every relative import in `src/` and `tests/` and fails if one does not
 resolve. It exists because a dangling import survived 378 green tests and would have taken the bot
 down on start.
+
+`npm test` also runs three guards over the dashboard before the tests: imports resolve
+(`checkImports`), icons come from `icon()` rather than emoji (`checkGlyphs`), and every surface a
+browser can show is in English (`checkUiLanguage`).
+
+## A note on language
+
+The interface, the documentation and this README are in English. Code comments, log lines and the
+operator's push alerts are in Russian: they are the author's own working notes, written to be read
+at 3am, and translating them would cost their precision. `npm test` keeps the split honest — it
+fails if Russian text reaches a surface the browser can render.
+
+## Disclaimer
+
+This software places real orders with real money on a live exchange, using a private key you supply.
+It is published as a record of an engineering process, not as a product and not as a trading
+recommendation. There is no edge here to copy: the strategies were measured and removed.
+
+- No warranty of any kind. You run it at your own risk, and you own every loss it produces.
+- Nothing here is financial advice. The author is not a licensed advisor.
+- Use an **agent wallet** (`HL_AGENT_PRIVATE_KEY`) — it cannot withdraw funds. Never put a
+  withdrawal-capable key in `.env`.
+- The defaults are tuned for a small deposit run by one person. They are not safe defaults for size.
+
+## License
+
+[Apache-2.0](LICENSE). Copyright 2026 Michael Vlasov.
 
 ## What this project is not
 

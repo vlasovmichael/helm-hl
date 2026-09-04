@@ -21,6 +21,9 @@ import { buildStrategiesPayload } from './dashboard/strategiesView.js';
 
 const DAY_MS = 86_400_000;
 
+// Внешний адрес дашборды (за прокси). Пусто — письмо идёт без ссылки.
+const PUBLIC_URL = (process.env.DASHBOARD_PUBLIC_URL || '').replace(/\/$/, '');
+
 // «Мои» сделки = решение принимал я (нянька-adopt / чистая рука), не автономный бот.
 const MY_SOURCES = new Set(['adopted', 'manual']);
 
@@ -155,7 +158,10 @@ export async function buildDigestHtml(now = Date.now(), tripsOverride = null) {
     // Подпись
     `<div style="font-size:13px;color:${C.faint};line-height:1.6;margin-top:18px">` +
     `Numbers come from HL fills (the same source as the dashboard Ledger), not from the history table. Trade review lives in the journal. ` +
-    `<a href="https://dashboard.example.com/journal" style="color:${C.accent};text-decoration:none">Open the journal →</a></div>` +
+    // Ссылка на журнал появляется, только если известен внешний адрес дашборды:
+    // внутренний http://hl-paper-scanner:3010 из письма не открыть.
+    (PUBLIC_URL ? `<a href="${PUBLIC_URL}/journal" style="color:${C.accent};text-decoration:none">Open the journal →</a>` : '') +
+    `</div>` +
 
     `</div>`
   );

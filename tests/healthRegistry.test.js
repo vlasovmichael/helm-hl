@@ -61,7 +61,7 @@ test('молчание писателя протухает в fail, а не ос
   const s = summary();
   assert.equal(s.checks[0].status, 'fail');
   assert.equal(s.checks[0].stale, true);
-  assert.match(s.checks[0].detail, /нет обновлений/);
+  assert.match(s.checks[0].detail, /no updates for/);
   // Протухшее — это всегда «источник замолчал», то есть freshness.
   assert.equal(s.overall, 'stale');
 });

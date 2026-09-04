@@ -97,7 +97,7 @@ function simulateTrailAfterTarget(t, trailR) {
   const stop0 = long ? e - risk : e + risk;
   const target = long ? e + risk * RR : e - risk * RR;
 
-  let reached = false, peak = null, stop = stop0;
+  let reached = false, peak = null, stop = stop0, lastClose = null;
   for (const [ts, , hi, lo, close] of rows) {
     if (ts < t.entry_time) continue;
     if (ts > t.entry_time + 72 * 3600_000) break;
@@ -116,7 +116,7 @@ function simulateTrailAfterTarget(t, trailR) {
     }
     peak = long ? Math.max(peak, hi) : Math.min(peak, lo);
     stop = long ? peak - risk * trailR : peak + risk * trailR;
-    var lastClose = close;
+    lastClose = close;
   }
   if (!reached) return null;
   const px = lastClose ?? target;

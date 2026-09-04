@@ -8,7 +8,7 @@
 // ─────────────────────────────────────────────────
 
 import { fetchJson } from "../net/api.js";
-import { emptyRow, emptyState, settle } from "../core/placeholders.js";
+import { emptyRow, settle } from "../core/placeholders.js";
 import { icon } from "../core/icon.js";
 
 const bp = (v) => (Number.isFinite(v) ? `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}` : "—");
@@ -30,9 +30,9 @@ const short = (addr) => `${addr.slice(0, 8)}…${addr.slice(-4)}`;
 // записанных файлах — переводим на месте, чтобы «verdict: рано» не всплывал
 // в англоязычном интерфейсе. Новые прогоны пишут сразу по-английски.
 const VERDICT_EN = {
-  "рано": "too early",
-  "подтверждено": "confirmed",
-  "не подтверждено": "not confirmed",
+  "рано": "too early", // i18n-ok: ключ — значение из старых файлов, а не текст экрана
+  "подтверждено": "confirmed", // i18n-ok
+  "не подтверждено": "not confirmed", // i18n-ok
 };
 
 const VERDICT_STYLE = {
@@ -250,6 +250,10 @@ const ago = (ms) => {
   return h < 48 ? `${h}h` : `${Math.round(h / 24)}d`;
 };
 
+// Колонок в таблице лога — столько же в скелетоне разметки (lab.html) и в
+// colspan пустого состояния.
+const LOG_COLS = 6;
+
 const KIND = {
   open: { mark: icon("long"), label: "OPEN" },
   close: { mark: icon("close"), label: "CLOSE" },
@@ -259,11 +263,14 @@ const KIND = {
 function renderLog(box, sumBox, res) {
   const { events, summary } = res;
   if (!events.length) {
-    box.innerHTML = emptyState({
-      glyph: "clock",
-      title: "Nothing logged yet",
-      hint: "The journal starts filling from the next event.",
-    });
+    settle(
+      box,
+      emptyRow(LOG_COLS, {
+        glyph: "clock",
+        title: "Nothing logged yet",
+        hint: "The journal starts filling from the next event.",
+      }),
+    );
     if (sumBox) sumBox.textContent = "";
     return;
   }
@@ -277,26 +284,30 @@ function renderLog(box, sumBox, res) {
   }
 
   const now = Date.now();
-  box.innerHTML = events
-    .map((e) => {
-      const k = KIND[e.kind] ?? KIND.open;
-      const pnl =
-        e.pnlNet === null || e.pnlNet === undefined
-          ? e.kind === "open"
-            ? ""
-            : `<span style="color:var(--text-muted)">?</span>`
-          : `<b style="${col(e.pnlNet)}">${e.pnlNet >= 0 ? "+" : ""}${usd(e.pnlNet)}</b>`;
-      const held = e.heldMs ? `<span style="color:var(--text-muted)">${ago(e.heldMs)}</span>` : "";
-      return `<div style="display:flex;gap:8px;padding:3px 0;border-bottom:1px solid var(--border-subtle,rgba(128,128,128,.12))">
-        <span style="color:var(--text-muted);min-width:42px">${ago(now - e.ts)}</span>
-        <span style="min-width:52px">${k.mark} ${k.label}</span>
-        <span style="flex:1">${e.coin} <span style="color:var(--text-muted)">${e.side}${e.leverage ? ` ${e.leverage}×` : ""} ${usd(e.sizeUsd)}</span></span>
-        ${held}
-        <span style="min-width:60px;text-align:right">${pnl}</span>
-        <span style="color:var(--text-muted)" data-card="${e.address}">${e.address.slice(0, 6)}…</span>
-      </div>`;
-    })
-    .join("");
+  settle(
+    box,
+    events
+      .map((e) => {
+        const k = KIND[e.kind] ?? KIND.open;
+        // У открытия исхода ещё нет — пусто; «?» значит «закрылось, а размер
+        // сделки посчитать не вышло», и это разные состояния.
+        const pnl =
+          e.pnlNet === null || e.pnlNet === undefined
+            ? e.kind === "open"
+              ? ""
+              : `<span class="win-log-dim">?</span>`
+            : `<b style="${col(e.pnlNet)}">${e.pnlNet >= 0 ? "+" : ""}${usd(e.pnlNet)}</b>`;
+        return `<tr class="win-log-row is-${e.kind}">
+        <td class="win-log-age">${ago(now - e.ts)}</td>
+        <td class="win-log-kind">${k.mark} ${k.label}</td>
+        <td>${e.coin} <span class="win-log-dim">${e.side}${e.leverage ? ` ${e.leverage}×` : ""} ${usd(e.sizeUsd)}</span></td>
+        <td class="num num-muted">${e.heldMs ? ago(e.heldMs) : "—"}</td>
+        <td class="num">${pnl}</td>
+        <td class="win-log-dim" data-card="${e.address}">${e.address.slice(0, 6)}…</td>
+      </tr>`;
+      })
+      .join(""),
+  );
 }
 
 async function refreshLog() {
@@ -308,7 +319,7 @@ async function refreshLog() {
     if (!res?.ok) throw new Error(res?.reason || "no data");
     renderLog(box, sumBox, res);
   } catch (err) {
-    box.innerHTML = emptyState({ glyph: "danger", title: "Could not load", hint: err.message });
+    settle(box, emptyRow(LOG_COLS, { glyph: "danger", title: "Could not load", hint: err.message }));
   }
 }
 

@@ -113,31 +113,30 @@
         <!-- Лента событий: пуш от winnersWatch холодный и живёт сутки, а
              таблица выше показывает только открытое сейчас. Здесь закрытая
              позиция остаётся вместе с исходом. -->
-        <div style="margin-top: 10px">
-          <div
-            id="win-log-head"
-            style="
-              display: flex;
-              justify-content: space-between;
-              align-items: baseline;
-              font-size: var(--fs-label);
-              font-family: var(--font-mono);
-              color: var(--text-muted);
-            "
-          >
+        <div class="win-log-block">
+          <div id="win-log-head">
             <span>What they did (last 7 days)</span>
             <span id="win-log-sum"></span>
           </div>
-          <div
-            id="win-log"
-            style="
-              margin-top: 6px;
-              max-height: 260px;
-              overflow-y: auto;
-              font-size: var(--fs-label);
-              font-family: var(--font-mono);
-            "
-          ></div>
+          <div class="win-log-scroll">
+            <table class="table table--compact table--sticky-head" id="win-log-table">
+              <thead>
+                <tr>
+                  <th data-card="How long ago the event happened">Age</th>
+                  <th data-card="OPEN — position opened; CLOSE — closed; FLIP — closed and reopened on the other side">Event</th>
+                  <th data-card="Coin, side, leverage and notional at the moment of the event">Position</th>
+                  <th class="num" data-card="How long the position was held before it closed">Held</th>
+                  <th class="num" data-card="Realised result net of fees; an open position has no result yet">Net</th>
+                  <th data-card="Which of the three frozen addresses did it">Address</th>
+                </tr>
+              </thead>
+              <tbody id="win-log">
+                <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+                <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+                <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 

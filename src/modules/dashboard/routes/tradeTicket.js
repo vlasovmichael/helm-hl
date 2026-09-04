@@ -435,8 +435,8 @@ export async function handleOpen(req, res) {
     if (bumpedMargin > available + 1e-9) {
       return res.status(422).json({
         error:
-          `размер округляется до $${(sz * entryPx).toFixed(2)} — ниже минимума $${MIN_ORDER_USD}. ` +
-          `Для ${b.coin} на ${b.leverage}x нужна маржа от $${bumpedMargin.toFixed(2)}, свободно $${available.toFixed(2)}`,
+          `size rounds down to $${(sz * entryPx).toFixed(2)} — below the $${MIN_ORDER_USD} minimum. ` +
+          `${b.coin} at ${b.leverage}x needs at least $${bumpedMargin.toFixed(2)} of margin, $${available.toFixed(2)} available`,
       });
     }
     sz = bumped;

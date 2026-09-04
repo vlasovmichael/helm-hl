@@ -1365,13 +1365,13 @@ export function stopDashboard() {
       }
       wss.close();
     }
-    server.close(() => finish("соединения закрыты"));
+    server.close(() => finish("connections closed"));
     // Keep-alive HTTP-сокеты держат сервер так же, как WS. Node 18.2+.
     server.closeAllConnections?.();
 
     // Страховка: что бы ни удерживало сокет, shutdown обязан идти дальше.
     // Зависнуть здесь дороже, чем недозакрыть сервер, который через секунду
     // умрёт вместе с процессом.
-    setTimeout(() => finish("по таймауту"), DASHBOARD_STOP_TIMEOUT_MS).unref();
+    setTimeout(() => finish("timed out"), DASHBOARD_STOP_TIMEOUT_MS).unref();
   });
 }

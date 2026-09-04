@@ -167,12 +167,12 @@ export async function handleOpen(req, res) {
     // (BE-храповик + трейл). Fail-soft: не смогли посчитать стоп — открываем без
     // него (мягкий выход всё равно отработает).
     let slPrice = null;
-    let slLabel = "без стопа";
+    let slLabel = "no stop";
     if (config.trading.manualPaperAdoptEnabled) {
       try {
         const { distPct, basis } = await computeStopDistPct(coin);
         slPrice = side === "short" ? price * (1 + distPct / 100) : price * (1 - distPct / 100);
-        slLabel = `SL @ ${slPrice.toPrecision(6)} (−${distPct.toFixed(2)}% ${basis === "atr" ? "ATR" : "фикс"})`;
+        slLabel = `SL @ ${slPrice.toPrecision(6)} (−${distPct.toFixed(2)}% ${basis === "atr" ? "ATR" : "fixed"})`;
       } catch (e) {
         logger.warn(`[manualPaper] stop calc #${coin} failed: ${e.message} — открываю без жёсткого стопа`);
       }
