@@ -1016,8 +1016,8 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     gap: 7px 10px;
     padding: 11px 12px 12px;
     border-bottom: 1px solid var(--border);
-    /* Единая высота карточки → 8 рядов (реальные + добивочные) стабильны, секция
-       не прыгает при смене числа монет (как ряды на десктопе). */
+    /* Единая высота карточки-ряда: секция не прыгает при смене числа монет
+       (как ряды на десктопе). Сколько их — решает rowTarget в render.js. */
     min-height: var(--hm-card-min-h, 150px);
     box-sizing: border-box;
   }

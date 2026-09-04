@@ -85,8 +85,19 @@ function ensureRowClick(tbody) {
   });
 }
 
-// Сколько монет максимум в таблице (открытые позиции — сверх лимита, всегда).
+// Потолок ленты: сколько монет максимум влезает в таблицу.
 const HM_MAX_ROWS = 8;
+
+// Сколько строк карточка держит по высоте. Это НЕ всегда потолок: при сужении
+// витрины (HOT_MOVERS_COINS) лента отдаёт 3 монеты, и резервировать 8 строк —
+// это пять пустых полос под таблицей. Считаем от focusCount (из конфига
+// сервера), а не от числа приехавших строк: провал в фиде на один тик не должен
+// дёргать высоту. Открытые позиции идут сверх фокуса, поэтому берём максимум.
+function hmRowTarget(payload, shownRows) {
+  const focus = payload?.focusCount || 0;
+  if (focus <= 0) return HM_MAX_ROWS; // фильтра нет — вся вселенная, потолок
+  return Math.min(HM_MAX_ROWS, Math.max(focus, shownRows));
+}
 
 // ── Прогресс загрузки монет: детерминантная полоска «по времени» ──
 // Точного % бэкенд не шлёт (снапшот приходит целиком), поэтому полоску ведём по
@@ -200,6 +211,7 @@ export function renderHotMovers(payload, fmtTime) {
     .filter((x) => !isActiveCoin(x.s.coin))
     .slice(0, slots);
   const enriched = [...activeRows, ...restRows];
+  const rowTarget = hmRowTarget(payload, enriched.length);
 
   const activeShown = activeRows.length;
   if (!payload?.ts) {
@@ -552,9 +564,9 @@ export function renderHotMovers(payload, fmtTime) {
     startHmProgress();
   } else {
     finishHmProgress();
-    // Есть хотя бы одна монета → добиваем пустыми строками до HM_MAX_ROWS,
-    // чтобы высота карточки не прыгала при малом числе монет.
-    const placeholdersNeeded = Math.max(0, HM_MAX_ROWS - enriched.length);
+    // Есть хотя бы одна монета → добиваем пустыми строками до целевого числа
+    // строк, чтобы высота карточки не прыгала при малом числе монет.
+    const placeholdersNeeded = Math.max(0, rowTarget - enriched.length);
     for (let i = 0; i < placeholdersNeeded; i++) {
       items.push({
         key: `ph:${i}`,
@@ -566,19 +578,19 @@ export function renderHotMovers(payload, fmtTime) {
 
   reconcileRows(tbody, items);
   mountDirArrows(tbody);
-  stabilizeHeight(tbody);
+  stabilizeHeight(tbody, rowTarget);
 }
 
 let _hmFixedH = 0; // последняя выставленная высота обёртки (анти-трэшинг layout)
 
 // Гасим прыжок высоты карточки: основные строки добиты плейсхолдерами до
-// HM_MAX_ROWS, высота обёртки = thead + HM_MAX_ROWS строк. Меряем, а не
-// хардкодим: иконки Enter и кегль делают строку выше.
+// rowTarget, высота обёртки = thead + rowTarget строк. Меряем, а не хардкодим:
+// иконки Enter и кегль делают строку выше.
 //
 // 🚨 Под-строки открытых позиций (`pos:`) входят в расчёт: без них карточка
 // получала прокрутку ровно когда позиция открыта, и строка позиции уезжала
 // под её нижний край.
-function stabilizeHeight(tbody) {
+function stabilizeHeight(tbody, rowTarget) {
   const wrap = tbody.closest(".hm-scroll-wrap");
   if (!wrap) return;
   const table = tbody.parentElement; // <table>, внутри thead+tbody
@@ -597,7 +609,7 @@ function stabilizeHeight(tbody) {
   for (const tr of tbody.querySelectorAll(".hm-pos-row, .hm-fadehot-row")) {
     subH += tr.offsetHeight;
   }
-  const target = headH + rowH * HM_MAX_ROWS + subH;
+  const target = headH + rowH * Math.max(1, rowTarget) + subH;
   if (Math.abs(target - _hmFixedH) > 1) {
     wrap.style.height = `${target}px`;
     _hmFixedH = target;

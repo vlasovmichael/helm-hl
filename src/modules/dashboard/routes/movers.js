@@ -465,6 +465,10 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
         })),
       },
       universeSize: data.length,
+      // Сколько монет витрина ОБЯЗАНА показать (0 = фильтра нет, вся вселенная).
+      // Фронт считает по нему высоту карточки: из конфига, а не из числа
+      // приехавших строк — иначе провал в фиде на один тик дёргал бы высоту.
+      focusCount: config.trading.hotMoversCoins.size,
       activeCoin,
       marketFlush,
       count: top.length,
