@@ -516,6 +516,15 @@ function loadConfig() {
           .map((s) => s.trim().toUpperCase())
           .filter(Boolean),
       ),
+      // Витрина Hot Movers: сузить ленту до своих монет. Пусто = вся вселенная.
+      // Не гейт входа — фильтр внимания: остальная движуха просто не рисуется.
+      // Монеты с открытой позой всё равно доезжают до ленты (см. movers.js).
+      hotMoversCoins:    new Set(
+        (process.env.HOT_MOVERS_COINS || '')
+          .split(',')
+          .map((s) => s.trim().toUpperCase())
+          .filter(Boolean),
+      ),
       roundTrip,
       liquidTopN,
       liquidMinVolume,

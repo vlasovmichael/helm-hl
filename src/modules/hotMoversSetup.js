@@ -26,6 +26,20 @@ export function deriveOiKind({ oiDelta15m, oiDelta5m } = {}) {
   return null;
 }
 
+/**
+ * Фокус витрины: оставить только «свои» монеты. Пустой focus = не фильтруем
+ * (вся вселенная, как было до 04.09.2026). Монета с ОТКРЫТОЙ позой проходит
+ * всегда — терять строку активной позиции нельзя, это чинили много раз.
+ *
+ * @param {Array<{coin:string}>} rows
+ * @param {Set<string>} focusCoins
+ * @param {Set<string>} activeCoins
+ */
+export function applyFocusCoins(rows, focusCoins, activeCoins) {
+  if (!focusCoins || focusCoins.size === 0) return rows;
+  return rows.filter((m) => focusCoins.has(m.coin) || activeCoins.has(m.coin));
+}
+
 // ── Breadth-детектор «слива» (риск-офф / ликвид. каскад) ──────────────────────
 // HL не даёт фид ликвидаций, поэтому каскад ловим косвенно: здоровый «выдох» —
 // локальный, а каскад/делевередж — ШИРОКИЙ (много топ-муверов синхронно льётся с

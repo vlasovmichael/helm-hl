@@ -14,7 +14,7 @@ import { getActivePosition, getActiveAdoptPositions, getHistory } from "../../..
 import { findAsset, getUniverse, resolveApiCoin } from "../../../core/universe.js";
 import { getCachedAccountValueSync } from "../../../core/balanceCache.js";
 import { TICK_INTERVAL_MS, state } from "../../../app/state.js";
-import { computeBreadthFlush } from "../../hotMoversSetup.js";
+import { computeBreadthFlush, applyFocusCoins } from "../../hotMoversSetup.js";
 import { reportBreadthFlush } from "../../../app/toastBridge.js";
 import { getHourlyCandles, getFifteenMinCandles } from "../../candleCache.js";
 import { classifyTrend } from "../../trendEma.js";
@@ -34,6 +34,17 @@ import {
 
 export function takeOiSnapshot() {
   recordOiSnapshot(state.latestHunter);
+}
+
+// Дельты OI за 5м/15м в процентах. Гвард oiNow > 0 (не только базы): при
+// мигающем OI==0 у тонких перпов деление выдавало нонсенс −100%/−200%.
+function oiDeltas(coin, oiNow, now) {
+  const oiP5 = getOiNMinAgo(coin, 5, now);
+  const oiP15 = getOiNMinAgo(coin, 15, now);
+  return {
+    oiDelta5m:  oiNow > 0 && oiP5  != null && oiP5  > 0 ? ((oiNow - oiP5)  / oiP5)  * 100 : null,
+    oiDelta15m: oiNow > 0 && oiP15 != null && oiP15 > 0 ? ((oiNow - oiP15) / oiP15) * 100 : null,
+  };
 }
 
 export { OI_SNAPSHOT_MS, getOiNMinAgo };
@@ -274,9 +285,16 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
     // цены и весь ряд позиции превращался в «—». Это худший момент терять данные
     // (оператор как раз держит эту монету). Дотягиваем её сюда с полными окнами,
     // даже если по моменту она глубоко внизу (2026-06-14).
-    const selected = enriched.slice(0, limit);
+    // ── Фокус витрины: только свои монеты (HOT_MOVERS_COINS) ─────────────────
+    // Смысл не в гейте входа, а во внимании: остальная движуха соблазняет
+    // торговать монеты, по которым нет ни истории, ни понимания. Пусто = вся
+    // вселенная (как было). Монета с ОТКРЫТОЙ позой проходит всегда — терять
+    // строку активной позиции нельзя (чинили много раз, см. 🛟 выше).
+    const visible = applyFocusCoins(enriched, config.trading.hotMoversCoins, activeCoins);
+
+    const selected = visible.slice(0, limit);
     const selectedSet = new Set(selected.map((m) => m.coin));
-    for (const m of enriched) {
+    for (const m of visible) {
       if (activeCoins.has(m.coin) && !selectedSet.has(m.coin)) {
         selected.push(m);
         selectedSet.add(m.coin);
@@ -339,12 +357,7 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
       // OI>Vol — норма (медиана ~3×), значим только верхний хвост (≳9, верхние
       // 10%). Фронт зажигает пассивный чип по порогу. 2026-06-29.
       const oiVolRatio = oiNow > 0 && vol24h > 0 ? oiNow / vol24h : null;
-      const oiP5   = getOiNMinAgo(m.coin, 5, now);
-      const oiP15  = getOiNMinAgo(m.coin, 15, now);
-      // Гвард oiNow > 0 (не только базы): при мигающем OI==0 у тонких перпов
-      // (#IP и ~54 др.) деление выдавало нонсенс −100%/−200%. OI не падает >100%.
-      const oiDelta5m  = oiNow > 0 && oiP5  != null && oiP5  > 0 ? ((oiNow - oiP5)  / oiP5)  * 100 : null;
-      const oiDelta15m = oiNow > 0 && oiP15 != null && oiP15 > 0 ? ((oiNow - oiP15) / oiP15) * 100 : null;
+      const { oiDelta5m, oiDelta15m } = oiDeltas(m.coin, oiNow, now);
 
       return {
         rank: idx + 1,
@@ -424,7 +437,14 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
 
     // Breadth-слив: синхронный делевередж лидеров движения (OI↓ у многих) →
     // fade против движения = лов ножа. Клиент гасит actionable у таких вердиктов.
-    const marketFlush = computeBreadthFlush(top);
+    // Считаем по ПОЛНОЙ вселенной, а не по видимым строкам: breadth — это мера
+    // рынка («много ли лидеров синхронно льётся»), и сужение витрины до трёх
+    // монет её бы просто убило (n < FLUSH_MIN_N → детектор всегда молчит).
+    const breadthRows = enriched.slice(0, limit).map((m) => {
+      const oiNow = data.find((d) => d.coin === m.coin)?.oiUsd ?? null;
+      return { windows: m.windows, ...oiDeltas(m.coin, oiNow, now) };
+    });
+    const marketFlush = computeBreadthFlush(breadthRows);
     // Тост на дашборде по фронту flush (edge-trigger + кулдаун внутри). Этот роут
     // поллит открытый дашборд → сигнал приходит ровно когда ты смотришь. Без телефона.
     reportBreadthFlush(marketFlush);
