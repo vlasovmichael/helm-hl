@@ -11,7 +11,7 @@ import { escapeHtml } from "../utils/format.js";
 // web/ собирается Vite'ом со своим корнем и тянуть в бандл серверный модуль
 // ради одной цифры не стоит. Сверено с фактом: CASHCAT $11.73 → fee_paid
 // $0.0047 ≈ 2 × 0.0002 × нотионал.
-const TAKER_FEE_RATE = 0.0002;
+export const TAKER_FEE_RATE = 0.0002;
 
 let activeCoinSet = new Set();
 // coin → краткая сводка открытой позиции (для пин-строки в Hot Movers).

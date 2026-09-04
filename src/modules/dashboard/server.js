@@ -249,6 +249,14 @@ function buildAdoptManagement(adoptPos) {
     // фронт тогда ведёт полосу от храповика сразу до цели прибыли.
     trailArmPct: t.adoptTrailEnabled ? t.adoptTrailArmPct : null,
     trailGiveBackPct: t.adoptTrailEnabled ? t.adoptTrailGiveBackPct : null,
+    // Порог умного трейла: на этом ходе снимается лимитка-цель и пол начинает
+    // ехать за пиком. До него выход снизу — жёсткий стоп или безубыток, и
+    // «пара копеек» невозможна; карточке нужна эта цена, чтобы это было видно.
+    targetTrailArmed,
+    targetTrailArmPrice:
+      t.adoptTargetTrailEnabled && !targetTrailArmed && initialRiskPct != null
+        ? entry * (1 - (isShort ? 1 : -1) * ((t.adoptTargetTrailArmR * initialRiskPct) / 100))
+        : null,
     floorPct,
     floorPrice,
     floorKind,

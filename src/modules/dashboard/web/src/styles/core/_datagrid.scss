@@ -105,6 +105,21 @@
 
 /* Floor-чип: единственное цветное «пятно» вне uPnL — тип защиты няньки
    (HARD stop / BE безубыток / TRAIL). */
+/* Порог взвода трейла в строке подписи. 🚨 Не капслоком и не микро-кеглем:
+   это ЦЕНА, её читают глазами по цифрам, а разрядка и caps ломают ряд знаков.
+   Слово-подпись тише, само число — обычным цветом текста. */
+.fl-inline {
+  font-family: var(--font-mono);
+  font-size: var(--fs-label);
+  color: var(--text-secondary);
+  white-space: nowrap;
+
+  b {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+}
 .fl-badge {
   font-family: var(--font-mono);
   font-size: var(--fs-micro);
@@ -112,6 +127,13 @@
   padding: 1px 5px;
   border-radius: 4px;
   vertical-align: middle;
+  /* TARGET — не тип пола, а состояние «цель ещё впереди»: акцентный, чтобы не
+     путался с красным HARD и зелёным TRAIL. */
+  &.fl-target {
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid var(--accent-line);
+  }
   &.fl-hard {
     color: var(--red);
     background: var(--red-soft);

@@ -12,6 +12,7 @@ import { fmtUsd, fmtPrice, fmtPct, formatUptime, escapeHtml } from "../utils/for
 import { riskTint } from "../utils/riskBar.js";
 import { updateAnimatedNumber } from "../utils/animatedNumber.js";
 import { startPriceStream, setWatchedCoins, getLivePrice, onPriceTick } from "../net/priceStream.js";
+import { TAKER_FEE_RATE } from "../state/activeCoins.js";
 
 // Доп. классы + inline-стиль для глубинной заливки PnL-карточки.
 // tint = riskTint(...) | null. Возвращает { cls, attr } для подстановки в HTML.
@@ -192,11 +193,17 @@ function manualStats(p) {
     entry && now ? ((isShort ? entry - now : now - entry) / entry) * 100 : null;
   const floorPrice = bot?.floorPrice ?? bot?.stopPrice ?? null;
   const floorKind = bot?.floorKind ?? (bot?.stopPrice ? "stop" : null);
+  // Сколько останется на полу — ЧИСТЫМИ: комиссии круга (обе стороны, тейкер)
+  // вычитаются здесь же. Валовые «+$0.00» на безубыточном полу обещают ноль,
+  // а по факту это минус на комиссию. Тот же расчёт в под-строке Hot Movers.
   const floorPnl =
     bot?.floorPct != null && p.sizeUsd != null
-      ? (bot.floorPct / 100) * p.sizeUsd
+      ? (bot.floorPct / 100) * p.sizeUsd - 2 * TAKER_FEE_RATE * p.sizeUsd
       : null;
   const peakPct = bot?.peakPct != null && bot.peakPct > 0 ? bot.peakPct : null;
+  // Цена, на которой умный трейл снимет лимитку-цель и пол поедет за пиком.
+  // Пока до неё не дошли, разворот отдаёт стоп или безубыток — не «копейки».
+  const trailArmPrice = bot?.targetTrailArmPrice ?? null;
   // Сколько ещё до цели — в R и в процентах хода. Просьба оператора (03.09.2026):
   // «R 1:1.2» на глаз не читается, нужна цифра «осталось столько-то».
   const tp = bot?.tpPrice ?? null;
@@ -208,7 +215,7 @@ function manualStats(p) {
   // getHunterMaePct). В под-строке uPnL показываем ИМЕННО его, когда позиция
   // сейчас в минусе. Кормит riskTint («призрак» отката на заливке uPnL).
   const maePct = bot?.maePct != null && bot.maePct < 0 ? bot.maePct : null;
-  return { riskUsd, rMult, movePct, floorPrice, floorKind, floorPnl, peakPct, maePct, toTargetR, toTargetPct, tpPrice: tp };
+  return { riskUsd, rMult, movePct, floorPrice, floorKind, floorPnl, peakPct, maePct, toTargetR, toTargetPct, tpPrice: tp, trailArmPrice };
 }
 
 // Floor-бейдж: тип защиты, который УЖЕ повесила нянька. Цветим только маленький
@@ -270,14 +277,16 @@ function targetModeFor(p, s) {
   return mode;
 }
 
-// Тултип карточки цели: остаток в % хода и в долларах (R виден инлайном).
+// Цель целиком уехала в тултип: в ячейке стоит пол (что будет, если развернётся),
+// а цель — то, что и так впереди.
 const targetTip = (s, p) => {
   const usd =
     p.sizeUsd != null && s.toTargetPct != null
       ? (s.toTargetPct / 100) * p.sizeUsd
       : null;
   const pct = s.toTargetPct != null ? `${s.toTargetPct.toFixed(2)}%` : "—";
-  return `To target: ${pct}${usd != null ? ` (+$${usd.toFixed(2)})` : ""}`;
+  const r = s.toTargetR != null ? ` · ${fmtRemR(s.toTargetR)} left` : "";
+  return `Target ${fmtPrice(s.tpPrice)}: ${pct}${usd != null ? ` (+$${usd.toFixed(2)})` : ""}${r}`;
 };
 
 // Текущая монета бот-позиции — чтобы понимать, патчить на месте или пере-строить.
@@ -723,9 +732,19 @@ function patchManualCard(container, p) {
       flPnlEl.classList.toggle("negative", s.floorPnl < 0);
     }
     // Тип пола меняется на лету (stop→BE→trail, когда взводится храповик).
-    const flBadge = card.querySelector("[data-mfloor]")
-      ?.closest(".grid-item")?.querySelector(".fl-badge");
-    const fb = FLOOR_BADGE[s.floorKind] || null;
+    // 🚨 Ищем от суммы, а не от цены пола: в режиме цели цены пола в ячейке
+    // нет, и поиск от неё оставлял чип с прошлым типом.
+    // Порог взвода: исчезает, когда трейл взвёлся (пол уже едет за пиком).
+    const armEl = card.querySelector("[data-marm]");
+    if (armEl) {
+      const show = s.trailArmPrice != null && s.floorKind !== "trail";
+      armEl.hidden = !show;
+      if (show) armEl.innerHTML = `trail from <b>${fmtPrice(s.trailArmPrice)}</b>`;
+    }
+    const flBadge = card.querySelector(".fl-badge");
+    const fb = targetModeFor(p, s)
+      ? { txt: "TARGET", cls: "fl-target" }
+      : FLOOR_BADGE[s.floorKind] || null;
     if (flBadge && fb) {
       flBadge.textContent = fb.txt;
       flBadge.className = `fl-badge ${fb.cls}`;
@@ -832,19 +851,29 @@ export function renderManualPositions(list) {
         s.movePct != null
           ? ` <span class="grid-inline ${s.movePct >= 0 ? "positive" : "negative"}" data-mmove>${fmtMove(s.movePct)}</span>`
           : "";
-      // Четвёртая карточка: в плюсе — цель, в минусе — пол выхода (см.
-      // isTargetMode). Ликвидацию уводим в title в обоих режимах. Нет ни цели,
-      // ни пола (не усыновлена) → fallback на Liq.
+      // Ликвидация — в title; нет пола (не усыновлена) → fallback на Liq.
       const fb = FLOOR_BADGE[s.floorKind] || null;
       const ft = floorTimerParts(p);
-      const floorCell = targetModeFor(p, s)
-        ? `<div class="grid-item${ft.cls}" title="${targetTip(s, p)} · Liquidation: ${liq}">${ft.bg}
-               <div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>To target</span>${ft.chip}</div>
-               <div class="item-value"><span data-mtarget>${fmtPrice(s.tpPrice)}</span><span class="grid-inline positive" data-mtargetrem>${fmtRemR(s.toTargetR)}</span></div>
-             </div>`
-        : s.floorPrice != null
-          ? `<div class="grid-item${ft.cls}" title="Liquidation: ${liq}">${ft.bg}
-               <div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>Floor${fb ? ` <span class="fl-badge ${fb.cls}">${fb.txt}</span>` : ""}</span>${ft.chip}</div>
+      // Ячейка одна на оба знака: где меня высадит нянька и сколько это в
+      // деньгах. Раньше в плюсе она подменялась целью — и пол, ради которого
+      // её и смотрят, пропадал ровно тогда, когда есть что терять.
+      // Чип в плюсе — TARGET (цель ещё впереди, детали в тултипе), в минусе —
+      // тип пола: HARD / BE / TRAIL.
+      const inTarget = targetModeFor(p, s);
+      const badge = inTarget ? { txt: "TARGET", cls: "fl-target" } : fb;
+      const cellTip = inTarget
+        ? `${targetTip(s, p)} · Liquidation: ${liq}`
+        : `Liquidation: ${liq}`;
+      // Пока умный трейл не взведён, пол стоит на стопе или безубытке. Цена
+      // взвода — единственное, что отвечает «когда разворот начнёт приносить»,
+      // поэтому она стоит в строке подписи, а не в тултипе.
+      const armInline =
+        s.trailArmPrice != null && s.floorKind !== "trail"
+          ? `<span class="fl-inline" data-marm title="Smart trail arms here: the target limit is pulled and the floor starts trailing the peak">trail from <b>${fmtPrice(s.trailArmPrice)}</b></span>`
+          : "";
+      const floorCell = s.floorPrice != null
+        ? `<div class="grid-item${ft.cls}" title="${cellTip}">${ft.bg}
+               <div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>Floor${badge ? ` <span class="fl-badge ${badge.cls}">${badge.txt}</span>` : ""}</span><span>${armInline}${ft.chip}</span></div>
                <div class="item-value"><span data-mfloor>${fmtPrice(s.floorPrice)}</span><span class="grid-inline ${s.floorPnl >= 0 ? "positive" : "negative"}" data-mfloorpnl>${s.floorPnl != null ? fmtSignedUsd2(s.floorPnl) : ""}</span></div>
              </div>`
           : `<div class="grid-item${ft.cls}" title="Liquidation: ${liq}">${ft.bg}<div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>Liq</span>${ft.chip}</div><div class="item-value">${liq}</div></div>`;
