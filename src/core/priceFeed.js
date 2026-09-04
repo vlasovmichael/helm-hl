@@ -19,7 +19,7 @@
 
 import WebSocket from 'ws';
 import { logger } from './logger.js';
-import { resolveApiCoin } from './universe.js';
+import { findAsset } from './universe.js';
 import { note } from './healthRegistry.js';
 
 const WS_URL  = process.env.HL_WS_URL || 'wss://api.hyperliquid.xyz/ws';
@@ -214,15 +214,31 @@ function handleMids(mids) {
 }
 
 /** Отправить (или снять) подписку на сделки по монете. */
+// 🚨 Подписка на несуществующий тикер РВЁТ ВЕСЬ СОКЕТ (замерено 04.09.2026:
+// bbo/trades на `KPEPE` → close 1006, без сообщения об ошибке; поток по всем
+// остальным монетам умирает вместе с ним). Поэтому имя монеты уходит на биржу
+// только когда universe его подтвердил: `resolveApiCoin` без загруженного
+// universe возвращает исходную строку, а внутри бота она UPPERCASE — у k-монет
+// это неверное имя. На старте фид поднимается раньше первого скаут-тика, и
+// подписка успевала уйти в этот зазор: два `closed (code 1006)` подряд в логах
+// каждого рестарта — ровно она.
 function sendTradeSub(coin, on) {
-  if (ws?.readyState !== WebSocket.OPEN) return;
+  if (ws?.readyState !== WebSocket.OPEN) return false;
+  // Отписку шлём всегда: она безопасна, а не отписаться — значит копить поток.
+  const asset = findAsset(coin);
+  if (on && !asset) {
+    logger.debug(`[PriceFeed] trades sub #${coin} отложена — universe ещё не знает тикер`);
+    return false;
+  }
   try {
     ws.send(JSON.stringify({
       method: on ? 'subscribe' : 'unsubscribe',
-      subscription: { type: 'trades', coin: resolveApiCoin(coin) },
+      subscription: { type: 'trades', coin: asset ? asset.name : coin },
     }));
+    return true;
   } catch (err) {
     logger.debug(`[PriceFeed] trades ${on ? 'sub' : 'unsub'} #${coin} failed: ${err.message}`);
+    return false;
   }
 }
 
@@ -251,14 +267,20 @@ function handleTrades(trades) {
  */
 export function setTradeWatch(coins) {
   const next = new Set((coins || []).filter(Boolean).map(normCoinKey));
-  for (const coin of next) if (!watchedTradeCoins.has(coin)) sendTradeSub(coin, true);
   for (const coin of watchedTradeCoins) {
     if (!next.has(coin)) {
       sendTradeSub(coin, false);
       tradeExtremes.delete(coin);
     }
   }
-  watchedTradeCoins = next;
+  // Подписанной считается только та монета, чья подписка реально ушла. Иначе
+  // отложенная (universe не готов) больше никогда бы не повторилась: вызов
+  // идемпотентный, и на следующем тике она уже числилась бы watched.
+  const confirmed = new Set();
+  for (const coin of next) {
+    if (watchedTradeCoins.has(coin) || sendTradeSub(coin, true)) confirmed.add(coin);
+  }
+  watchedTradeCoins = confirmed;
 }
 
 /**

@@ -42,12 +42,19 @@ const listeners = new Set();    // fn(Set<coin>) — какие монеты и�
 let pending = new Set();        // накопленные изменения до следующего кадра
 let frame = null;
 
-// 🚨 Регистр имени значим. У активов builder-DEX'ов (HIP-3) тикер приходит как
-// `xyz:NOK`, и биржа принимает подписку ТОЛЬКО со строчным префиксом площадки:
-// на `XYZ:NOK` сокет молчит — без ошибки, просто нулевой поток. Наивный
-// toUpperCase() по всему имени убивал бы live-цену у таких позиций.
-// Тот же класс, что строчная `k` в kSHIB.
-export function normCoin(coin) {
+// 🚨 Регистр имени значим, и цена ошибки — весь поток. У активов builder-DEX'ов
+// (HIP-3) тикер приходит как `xyz:NOK`, и биржа принимает подписку ТОЛЬКО со
+// строчным префиксом площадки. У k-монет строчная сама `k`: `kPEPE`, `kSHIB`.
+// На `KPEPE` биржа не отвечает ошибкой — она РВЁТ СОЕДИНЕНИЕ (close 1006,
+// замерено 04.09.2026), и цены по всем остальным монетам умирают вместе с ним.
+// Дальше reconnect переподписывается на тот же неверный тикер, и цена живёт
+// вспышками между разрывами с растущим backoff — «дёргается».
+//
+// Поэтому ключ и имя для биржи РАЗДЕЛЕНЫ. coinKey — канонический ключ карт:
+// он терпит любой регистр от вызывающего, чтобы чтение цены не зависело от
+// того, кто как назвал монету. wireName — имя ровно в том виде, в каком его
+// дал сервер (в БД лежит точное `kPEPE`), и наружу уходит только оно.
+export function coinKey(coin) {
   const s = String(coin || "");
   const i = s.indexOf(":");
   return i > 0
@@ -55,9 +62,13 @@ export function normCoin(coin) {
     : s.toUpperCase();
 }
 
+// Ключ → имя, которым монету зовёт биржа. Заполняется из setWatchedCoins.
+const wireNames = new Map();
+const wireName = (key) => wireNames.get(key) ?? key;
+
 /** Живая цена монеты. null — нет данных или протухли. */
 export function getLivePrice(coin) {
-  const rec = prices.get(normCoin(coin));
+  const rec = prices.get(coinKey(coin));
   if (!rec || Date.now() - rec.ts > STALE_MS) return null;
   return rec.px;
 }
@@ -72,9 +83,9 @@ function send(msg) {
   }
 }
 
-const sub = (coin, on) => ({
+const sub = (key, on) => ({
   method: on ? "subscribe" : "unsubscribe",
-  subscription: { type: "bbo", coin },
+  subscription: { type: "bbo", coin: wireName(key) },
 });
 
 /**
@@ -82,18 +93,26 @@ const sub = (coin, on) => ({
  * поток по её монете сразу гаснет, а не копится до перезагрузки вкладки.
  */
 export function setWatchedCoins(coins) {
-  const next = new Set((coins || []).map(normCoin).filter(Boolean));
-  for (const coin of watched) {
-    if (!next.has(coin)) {
-      send(sub(coin, false));
-      watched.delete(coin);
-      prices.delete(coin);
+  const next = new Set();
+  for (const raw of coins || []) {
+    if (!raw) continue;
+    const key = coinKey(raw);
+    next.add(key);
+    // Имя от сервера — источник истины по регистру, поэтому обновляем всегда.
+    wireNames.set(key, String(raw));
+  }
+  for (const key of watched) {
+    if (!next.has(key)) {
+      send(sub(key, false));
+      watched.delete(key);
+      prices.delete(key);
+      wireNames.delete(key);
     }
   }
-  for (const coin of next) {
-    if (!watched.has(coin)) {
-      watched.add(coin);
-      send(sub(coin, true));
+  for (const key of next) {
+    if (!watched.has(key)) {
+      watched.add(key);
+      send(sub(key, true));
     }
   }
 }
@@ -124,10 +143,9 @@ function schedule(coin) {
 }
 
 function handleBbo(data) {
-  // Тем же нормализатором, что и подписка: биржа возвращает имя ровно в том
-  // виде, в каком его прислали (`xyz:NOK`), и upper-casing префикса разошёлся
-  // бы с ключами в `watched`.
-  const coin = normCoin(data?.coin);
+  // Биржа возвращает имя ровно в том виде, в каком его прислали, поэтому
+  // входящий кадр приводим к ключу тем же coinKey, что и подписку.
+  const coin = coinKey(data?.coin);
   if (!coin || !watched.has(coin)) return;
   const bid = Number(data?.bbo?.[0]?.px);
   const ask = Number(data?.bbo?.[1]?.px);
@@ -154,7 +172,7 @@ function connect() {
     if (ws !== sock) return;
     retryDelay = RECONNECT_BASE_MS;
     // Переподписываемся на всё, за чем следим: после обрыва биржа нас не помнит.
-    for (const coin of watched) send(sub(coin, true));
+    for (const key of watched) send(sub(key, true));
   };
 
   sock.onmessage = (e) => {
