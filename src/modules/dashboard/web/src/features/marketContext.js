@@ -7,6 +7,8 @@
 // ─────────────────────────────────────────────────
 
 
+import { sparkSvg } from "../utils/spark.js";
+
 function fmtPrice(p) {
   if (p == null || !Number.isFinite(p)) return "—";
   return "$" + Math.round(p).toLocaleString("en-US");
@@ -44,6 +46,29 @@ let built = false;
 // «чистый кайф», а для крупного одометра в шапке слишком быстро, число
 // перестаёт читаться. Здесь цена живёт тактом статус-кадра (≤2с) намеренно:
 // плашка отвечает на «какой сейчас фон», а не «сколько стоит прямо сейчас».
+
+// Спарклайн BTC за 24h — та же линия, что в колонке цены Hot Movers (общий
+// sparkSvg). Стоит между «24h» и статистикой: раньше там была пустая полоса,
+// и цифра «+4.16% 24h» жила без картинки, по которой видно, как этот процент
+// набрался — гэпом ночью или ровным ходом. Ряд идёт с бэка (те же 15m-свечи,
+// на которых считаются 15m/1h/4h), поэтому лишних запросов к HL нет.
+const MC_SPARK_H = 30;
+let _lastSparkKey = "";
+
+function renderSpark(el, spark) {
+  const box = el.querySelector("#mc-spark");
+  if (!box) return;
+  if (!Array.isArray(spark) || spark.length < 2) {
+    box.innerHTML = "";
+    _lastSparkKey = "";
+    return;
+  }
+  // Перерисовываем только при смене ряда: 10с-поллинг иначе дёргал бы DOM зря.
+  const key = spark.length + ":" + spark[0] + ":" + spark[spark.length - 1];
+  if (key === _lastSparkKey) return;
+  _lastSparkKey = key;
+  box.innerHTML = sparkSvg(spark, { w: 240, h: MC_SPARK_H, cls: "mc-spark" });
+}
 
 function buildStructure(el) {
   const head = el.querySelector("#mc-head");
@@ -142,6 +167,7 @@ export function renderMarketContext(d) {
   // старому значению каждые 10с. Остальные метрики (15m/1h/4h/vol/oi/fund) — тут.
   if (Date.now() - _lastLiveBtcAt > 6000) renderBtcPrice(el, b.price);
   setVal(el, "change24h", `${fmtPct(b.change24h)} <i>24h</i>`, pctCls(b.change24h));
+  renderSpark(el, b.spark);
   setVal(el, "m15", fmtPct(b.m15), pctCls(b.m15));
   setVal(el, "m1h", fmtPct(b.m1h), pctCls(b.m1h));
   setVal(el, "m4h", fmtPct(b.m4h), pctCls(b.m4h));

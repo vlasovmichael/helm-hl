@@ -82,6 +82,27 @@
     }
   }
 
+  /* Спарклайн BTC за 24h — забирает пустое место между «24h» и статистикой.
+     Растягивается (flex:1), но не разъезжается на широком экране: max-width.
+     Пустой (нет ряда) — не занимает место, как .hm-spark-wrap в таблице. */
+  .mc-spark-wrap {
+    display: flex;
+    align-items: center;
+    flex: 1 1 120px;
+    min-width: 0;
+    max-width: 280px;
+    line-height: 0;
+    opacity: 0.85;
+
+    &:empty {
+      display: none;
+    }
+    .mc-spark {
+      width: 100%;
+      height: 30px;
+    }
+  }
+
   /* Расширенная статистика: ячейки label/value, равномерно по строке */
   .mc-stats {
     display: flex;
@@ -131,11 +152,15 @@
   /* ── Вход (один раз при монтировании): стаггер fade-up, пружинный easing ── */
   &.mc-enter {
     .mc-head,
+    .mc-spark-wrap,
     .mc-stats .mc-cell {
       animation: mc-fade-up 0.55s cubic-bezier(0.34, 1.4, 0.5, 1) backwards;
     }
     .mc-head {
       animation-delay: 0.02s;
+    }
+    .mc-spark-wrap {
+      animation-delay: 0.06s;
     }
     @for $i from 1 through 6 {
       .mc-stats .mc-cell:nth-child(#{$i}) {
@@ -159,6 +184,7 @@
       display: flex;
     }
     .mc-head,
+    .mc-spark-wrap,
     .mc-stats {
       display: none;
     }
@@ -179,6 +205,7 @@
 @media (prefers-reduced-motion: reduce) {
   .market-context {
     &.mc-enter .mc-head,
+    &.mc-enter .mc-spark-wrap,
     &.mc-enter .mc-stats .mc-cell {
       animation: none;
     }

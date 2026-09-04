@@ -308,12 +308,25 @@ function panel() {
   }, 200);
 }
 
+// Синтетический ряд цены BTC за 24h (48 точек, как отдаёт бэк) — чтобы в моке
+// был виден спарклайн плашки. Random-walk с лёгким уклоном вверх под +0.66% 24h.
+const MC_SPARK = (() => {
+  const out = [];
+  let p = 108_500;
+  for (let i = 0; i < 48; i++) {
+    p += (Math.random() - 0.45) * 260;
+    out.push(p);
+  }
+  return out;
+})();
+
 // Фейковые данные плашки Market Context (структура + медленные метрики).
 function mockMcData() {
   return {
     verdict: "MIXED",
     btc: {
       price: btcPx, change24h: 0.66, m15: 0.08, m1h: -0.21, m4h: 0.44,
+      spark: MC_SPARK,
       volUsd: 2.1e9, oiUsd: 2.0e9, funding: 0.000031,
     },
   };

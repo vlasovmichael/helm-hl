@@ -589,7 +589,7 @@ function ensureFloorTimerStyle() {
     ".floor-timer-bg{position:absolute;inset:0;transform-origin:left center;" +
     "background:linear-gradient(90deg,rgba(234,179,8,0.22),rgba(234,179,8,0.06));" +
     "animation:floorTimerDeplete 900s linear forwards;pointer-events:none;z-index:0}" +
-    ".floor-timer-chip{margin-left:6px;font-size: var(--fs-label);font-family:var(--font-mono);color:var(--yellow,#eab308);font-weight:600}" +
+    ".floor-timer-chip{font-size: var(--fs-label);font-family:var(--font-mono);color:var(--yellow,#eab308);font-weight:600}" +
     ".floor-timer-chip:empty{display:none}";
   document.head.appendChild(st);
 }
@@ -873,8 +873,8 @@ export function renderManualPositions(list) {
           : "";
       const floorCell = s.floorPrice != null
         ? `<div class="grid-item${ft.cls}" title="${cellTip}">${ft.bg}
-               <div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>Floor${badge ? ` <span class="fl-badge ${badge.cls}">${badge.txt}</span>` : ""}</span><span>${armInline}${ft.chip}</span></div>
-               <div class="item-value"><span data-mfloor>${fmtPrice(s.floorPrice)}</span><span class="grid-inline ${s.floorPnl >= 0 ? "positive" : "negative"}" data-mfloorpnl>${s.floorPnl != null ? fmtSignedUsd2(s.floorPnl) : ""}</span></div>
+               <div class="item-label" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Floor${badge ? ` <span class="fl-badge ${badge.cls}">${badge.txt}</span>` : ""}</span>${armInline}</div>
+               <div class="item-value" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span><span data-mfloor>${fmtPrice(s.floorPrice)}</span><span class="grid-inline ${s.floorPnl >= 0 ? "positive" : "negative"}" data-mfloorpnl>${s.floorPnl != null ? fmtSignedUsd2(s.floorPnl) : ""}</span></span>${ft.chip}</div>
              </div>`
           : `<div class="grid-item${ft.cls}" title="Liquidation: ${liq}">${ft.bg}<div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>Liq</span>${ft.chip}</div><div class="item-value">${liq}</div></div>`;
       return `

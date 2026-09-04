@@ -204,27 +204,10 @@
 .hm-spark-wrap:empty {
   display: none;
 }
+/* Базовая линия/цвета живут в core/_utilities.scss (.spark) — общие с Market
+   Context. Здесь только размер в ячейке. */
 .hm-spark {
   display: block;
-  overflow: visible;
-  polyline {
-    fill: none;
-    stroke: currentColor;
-    stroke-width: 1.4;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    vector-effect: non-scaling-stroke; /* линия не толстеет от растяжения бокса */
-  }
-  &.spark-up {
-    color: var(--green);
-  }
-  &.spark-down {
-    color: var(--red);
-  }
-  &.spark-flat {
-    color: var(--text-muted);
-    opacity: 0.7;
-  }
 }
 .hm-align-ok {
   color: var(--green);

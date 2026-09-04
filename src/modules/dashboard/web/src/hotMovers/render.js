@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────
 
 import { escapeHtml } from "../utils/format.js";
+import { sparkSvg } from "../utils/spark.js";
 import { tvUrl } from "../utils/links.js";
 import { popArrow, bindArrowPopEnd, initChevronArrow } from "../utils/arrowPop.js";
 import { icon } from "../core/icon.js";
@@ -62,41 +63,10 @@ const ENTRY_ICON_SVG = {
 };
 
 // Инлайн-спарклайн цены за ~20 мин (бэк отдаёт s.spark — даунсэмпл из price-
-// буфера, без запросов к HL). Цвет = знак хода (last vs first); почти-флэт →
-// приглушённый. preserveAspectRatio:none — линия растягивается на бокс, форма
-// читается даже на 56×16. Пустой/<2 точек → "" (фронт ничего не рисует).
+// буфера, без запросов к HL). Рисует общий sparkSvg (utils/spark.js), тот же,
+// что и в Market Context; hm-spark задаёт только размер в ячейке.
 const SPARK_W = 44;
 const SPARK_H = 14;
-function sparkSvg(spark) {
-  if (!Array.isArray(spark) || spark.length < 2) return "";
-  let min = Infinity,
-    max = -Infinity;
-  for (const v of spark) {
-    if (!Number.isFinite(v)) continue;
-    if (v < min) min = v;
-    if (v > max) max = v;
-  }
-  if (!Number.isFinite(min) || !Number.isFinite(max)) return "";
-  const span = max - min || 1;
-  const n = spark.length;
-  const dx = (SPARK_W - 2) / (n - 1);
-  const pts = spark
-    .map((v, i) => {
-      const x = 1 + i * dx;
-      const y = 1 + (SPARK_H - 2) * (1 - (v - min) / span);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-  const first = spark[0];
-  const last = spark[n - 1];
-  const chg = first ? (last - first) / first : 0;
-  const cls =
-    Math.abs(chg) < 0.0005 ? "spark-flat" : last >= first ? "spark-up" : "spark-down";
-  return (
-    `<svg class="hm-spark ${cls}" viewBox="0 0 ${SPARK_W} ${SPARK_H}" width="${SPARK_W}" height="${SPARK_H}" ` +
-    `preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}"/></svg>`
-  );
-}
 
 // Клик по ВСЕЙ строке монеты → открыть TradingView (раньше кликабельно было
 // только название). Делегируем на tbody один раз. Источник url — существующая
@@ -533,7 +503,7 @@ export function renderHotMovers(payload, fmtTime) {
       <td><a class="signals-price hm-coin-link" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" title="Open ${escapeHtml(s.coin)} in TradingView">#${escapeHtml(s.coin)}</a>${htfChip}${oiVolChip}</td>
       ${setupCell}
       ${entryCell}
-      <td class="hm-price-cell r ${flashCls}"><span class="hm-price-inner"><span class="hm-spark-wrap" title="Price over ~20 min (live)">${sparkSvg(s.spark)}</span><span class="signals-price">${fmtPrice(s.price)}</span></span></td>
+      <td class="hm-price-cell r ${flashCls}"><span class="hm-price-inner"><span class="hm-spark-wrap" title="Price over ~20 min (live)">${sparkSvg(s.spark, { w: SPARK_W, h: SPARK_H, cls: "hm-spark" })}</span><span class="signals-price">${fmtPrice(s.price)}</span></span></td>
       ${cells}
       <td class="r ${accelCellCls}" data-w="Acc">${accelInner}</td>
       <td class="r" data-w="OI">${oiInner}</td>

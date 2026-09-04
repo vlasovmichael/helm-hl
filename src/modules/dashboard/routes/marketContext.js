@@ -12,7 +12,19 @@ const TTL_MS = 60_000; // кэш, чтобы не дёргать HL на каж�
 let cache = { payload: null, ts: 0 };
 
 // Движения BTC за 15m/1h/4h из 15m-свечей HL (priceHistory пуст первые 4ч после
-// рестарта, поэтому считаем прямо из свечей).
+// рестарта, поэтому считаем прямо из свечей). Берём сразу сутки: те же свечи
+// дают спарклайн за 24h в плашке — второй запрос к HL ради линии не нужен.
+const SPARK_POINTS = 48; // 24h / 48 ≈ полчаса на точку — форма читается, ряд лёгкий
+
+// Равномерный даунсэмпл ряда до n точек (последняя точка = последняя цена).
+function downsample(arr, n) {
+  if (arr.length <= n) return arr;
+  const out = [];
+  const step = (arr.length - 1) / (n - 1);
+  for (let i = 0; i < n; i++) out.push(arr[Math.round(i * step)]);
+  return out;
+}
+
 async function getMoves() {
   const now = Date.now();
   let candles;
@@ -20,7 +32,7 @@ async function getMoves() {
     candles = await hlInfo(
       {
         type: "candleSnapshot",
-        req: { coin: "BTC", interval: "15m", startTime: now - 5 * 3600_000, endTime: now },
+        req: { coin: "BTC", interval: "15m", startTime: now - 24 * 3600_000, endTime: now },
       },
       { label: "dash/mc-moves", timeoutMs: 5000, maxRetries: 1, priority: HL_PRIORITY.LOW },
     );
@@ -32,7 +44,12 @@ async function getMoves() {
   const last = closes[closes.length - 1];
   const back = (n) => (closes.length > n ? closes[closes.length - 1 - n] : null);
   const pct = (prev) => (prev != null && prev !== 0 ? ((last - prev) / prev) * 100 : null);
-  return { m15: pct(back(1)), m1h: pct(back(4)), m4h: pct(back(16)) };
+  return {
+    m15: pct(back(1)),
+    m1h: pct(back(4)),
+    m4h: pct(back(16)),
+    spark: closes.length >= 2 ? downsample(closes, SPARK_POINTS) : null,
+  };
 }
 
 // Расширенная статистика BTC из assetCtx: цена, 24h %, объём, OI, funding.
@@ -88,7 +105,7 @@ async function refreshCache() {
   // Если оба источника отвалились — прошлый кэш остаётся жить.
   if (!moves && !stats) return cache.payload;
 
-  const m = moves || { m15: null, m1h: null, m4h: null };
+  const m = moves || { m15: null, m1h: null, m4h: null, spark: null };
   const { verdict, arrow } = classifyRegime(m.m15, m.m1h);
   const payload = {
     verdict,
@@ -98,6 +115,7 @@ async function refreshCache() {
       m15: m.m15,
       m1h: m.m1h,
       m4h: m.m4h,
+      spark: m.spark ?? null,
       change24h: stats?.change24h ?? null,
       volUsd: stats?.volUsd ?? null,
       oiUsd: stats?.oiUsd ?? null,

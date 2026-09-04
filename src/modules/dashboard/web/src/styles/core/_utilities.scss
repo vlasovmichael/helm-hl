@@ -33,3 +33,30 @@ $mask-icons: (
   mask: url("#{$svg}") center / contain no-repeat;
   -webkit-mask: url("#{$svg}") center / contain no-repeat;
 }
+
+
+/* ── Спарклайн (Hot Movers, Market Context) ────────────────────────────
+   Одна линия на все плашки: цвет — знак хода, толщина не зависит от
+   растяжения бокса (preserveAspectRatio:none + non-scaling-stroke). */
+.spark {
+  display: block;
+  overflow: visible;
+  polyline {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+  &.spark-up {
+    color: var(--green);
+  }
+  &.spark-down {
+    color: var(--red);
+  }
+  &.spark-flat {
+    color: var(--text-muted);
+    opacity: 0.7;
+  }
+}
