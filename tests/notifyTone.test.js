@@ -37,6 +37,21 @@ test("авария — danger", () => {
   assert.equal(kind("⚠️ Внешнее закрытие #HYPE", "позиции нет на бирже"), "danger");
 });
 
+test("радар OI информационный, даже когда в тексте «flushed»", () => {
+  const r = classifyNotif({
+    title: "OI #PONS ▼ -3.8%",
+    message: "OI -3.8% over 3m — longs being flushed on the way down — capitulation",
+    tags: ["red_circle"],
+    priority: 3,
+  });
+  assert.equal(r.kind, "info");
+  assert.equal(r.glyph, "falling"); // направление — из тега/стрелки, не тревога
+});
+
+test("направление берётся и из стрелки в заголовке", () => {
+  assert.equal(classifyNotif({ title: "OI #SOL ▲ +5.0%", message: "" }).glyph, "rising");
+});
+
 test("режимные предупреждения — warn", () => {
   assert.equal(kind("Breadth flush", "62% монет валятся · risk-off", ["snowflake"], 3), "warn");
 });

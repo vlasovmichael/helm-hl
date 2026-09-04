@@ -138,7 +138,7 @@ function flyToBell(el) {
 // Заголовки ntfy приходят с эмодзи; в дашборде их нет — цветной растр мимо
 // темы и веса шрифта, а смысл несёт иконка слева.
 // 🚨 Чистим ОБА места — и тост, и список в колокольчике.
-const EMOJI = /[\p{Extended_Pictographic}\u{FE0F}\u{20E3}]/gu;
+const EMOJI = /[\p{Extended_Pictographic}\u{FE0F}\u{20E3}\u{25B2}\u{25BC}\u{25B3}\u{25BD}]/gu;
 
 function stripEmoji(s) {
   const out = String(s || "")

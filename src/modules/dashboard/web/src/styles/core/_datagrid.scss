@@ -127,13 +127,6 @@
   padding: 1px 5px;
   border-radius: 4px;
   vertical-align: middle;
-  /* TARGET — не тип пола, а состояние «цель ещё впереди»: акцентный, чтобы не
-     путался с красным HARD и зелёным TRAIL. */
-  &.fl-target {
-    color: var(--accent);
-    background: var(--accent-soft);
-    border: 1px solid var(--accent-line);
-  }
   &.fl-hard {
     color: var(--red);
     background: var(--red-soft);

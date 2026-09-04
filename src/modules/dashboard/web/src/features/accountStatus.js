@@ -742,9 +742,7 @@ function patchManualCard(container, p) {
       if (show) armEl.innerHTML = `trail from <b>${fmtPrice(s.trailArmPrice)}</b>`;
     }
     const flBadge = card.querySelector(".fl-badge");
-    const fb = targetModeFor(p, s)
-      ? { txt: "TARGET", cls: "fl-target" }
-      : FLOOR_BADGE[s.floorKind] || null;
+    const fb = FLOOR_BADGE[s.floorKind] || null;
     if (flBadge && fb) {
       flBadge.textContent = fb.txt;
       flBadge.className = `fl-badge ${fb.cls}`;
@@ -855,12 +853,14 @@ export function renderManualPositions(list) {
       const fb = FLOOR_BADGE[s.floorKind] || null;
       const ft = floorTimerParts(p);
       // Ячейка одна на оба знака: где меня высадит нянька и сколько это в
-      // деньгах. Раньше в плюсе она подменялась целью — и пол, ради которого
-      // её и смотрят, пропадал ровно тогда, когда есть что терять.
-      // Чип в плюсе — TARGET (цель ещё впереди, детали в тултипе), в минусе —
-      // тип пола: HARD / BE / TRAIL.
+      // деньгах.
+      //
+      // 🚨 Чип — ВСЕГДА тип пола, в плюсе тоже. Он единственный отвечает, чем
+      // кончится разворот: HARD = минус на дистанцию стопа, TRAIL = пол уехал
+      // за пиком и разворот платит. Чипа «TARGET» тут быть не должно — то, что
+      // цель впереди, видно по строке trail from и по тултипу.
       const inTarget = targetModeFor(p, s);
-      const badge = inTarget ? { txt: "TARGET", cls: "fl-target" } : fb;
+      const badge = fb;
       const cellTip = inTarget
         ? `${targetTip(s, p)} · Liquidation: ${liq}`
         : `Liquidation: ${liq}`;

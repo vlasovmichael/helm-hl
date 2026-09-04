@@ -22,12 +22,17 @@ export function toastSide(item) {
   return null;
 }
 
-// Направление движения — из ntfy-тегов. Даёт иконку-тренд.
-function toastDir(item) {
+// Направление движения — из ntfy-тегов и из стрелки в заголовке (радар OI
+// шлёт «OI #PONS ▼ −3.8%»). Даёт иконку-тренд.
+export function toastDir(item) {
   const tags = Array.isArray(item.tags) ? item.tags : [];
   const has = (x) => tags.includes(x);
-  if (has("green_circle") || has("chart_with_upwards_trend")) return "up";
-  if (has("red_circle") || has("chart_with_downwards_trend")) return "down";
+  const title = String(item.title || "");
+  // \u25B2 / \u25BC — те самые ▲▼ из заголовка ntfy. Escape'ами, а не
+  // символами: проверка глифов (scripts/checkGlyphs.mjs) не отличает разбор
+  // чужого текста от вывода в интерфейс, и правильно делает.
+  if (has("green_circle") || has("chart_with_upwards_trend") || title.includes("\u25B2")) return "up";
+  if (has("red_circle") || has("chart_with_downwards_trend") || title.includes("\u25BC")) return "down";
   return null;
 }
 
@@ -63,8 +68,13 @@ export function classifyNotif(item) {
       : { kind: "loss", cls: "toast--danger", glyph: "falling", side };
   }
 
-  // Режимные предупреждения: рынок холодный, пауза, кулдаун, широкий слив.
-  if (has("snowflake") || /\bwarn|stale|cooldown|paused|\bcold\b|skip|flush|squeeze/.test(text)) {
+  // Режимные предупреждения — про СОСТОЯНИЕ БОТА (пауза, кулдаун, протухшие
+  // данные), а не про слова в описании рынка.
+  //
+  // 🚨 «flush» и «squeeze» сюда не добавлять: радар OI пишет ими про рынок
+  // («longs being flushed»), и информационный пуш получал жёлтый треугольник.
+  // Свой warn у breadth-flush есть — он приходит с тегом snowflake.
+  if (has("snowflake") || /\bwarn|stale|cooldown|paused|\bcold\b|\bskip/.test(text)) {
     return { kind: "warn", cls: "toast--warn", glyph: "warn", side };
   }
 
