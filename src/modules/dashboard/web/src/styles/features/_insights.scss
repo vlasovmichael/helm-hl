@@ -1,3 +1,4 @@
+@use "../core/utilities" as *;
 /* ──────────────────────── Insights card (per-coin + heatmap) */
 #sec-insights .insights-pane {
   padding-top: 4px;
@@ -50,10 +51,12 @@
       color: var(--text-primary);
     }
     &.sort-active.sort-desc::after {
-      content: " ↓";
+      @include mask-icon("arrow-down", 11px);
+      margin-left: 4px;
     }
     &.sort-active.sort-asc::after {
-      content: " ↑";
+      @include mask-icon("arrow-up", 11px);
+      margin-left: 4px;
     }
   }
   td {

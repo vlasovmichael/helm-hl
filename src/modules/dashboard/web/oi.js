@@ -704,7 +704,7 @@ function renderTable() {
     .map(
       (r) => `
       <tr data-coin="${r.coin}"${r.coin === activeCoin ? ' class="active"' : ""}>
-        <td>${r.coin}</td>
+        <td class="oi-coin">#${r.coin}</td>
         <td>${fmtUsd(r.oiUsd)}</td>
         <td>${fmtPctCell(r.dOi24hPct)}</td>
         <td>${fmtPctCell(r.dOi1hPct)}</td>
@@ -769,11 +769,17 @@ document.getElementById("oi-search").addEventListener("input", (e) => {
 });
 
 // ── детализация по монете ──
-async function selectCoin(coin) {
+async function selectCoin(coin, { scroll = true } = {}) {
   activeCoin = coin;
   renderTable();
   const detail = document.getElementById("oi-detail");
   detail.hidden = false;
+  // Карточка с графиком лежит НИЖЕ таблицы, и на десятой строке она за краем
+  // экрана: клик «срабатывал», а на вид не происходило ничего. Прокрутка —
+  // часть ответа на клик, а не удобство. `smooth` уже включён глобально
+  // (html { scroll-behavior }), поэтому системную настройку «меньше движения»
+  // браузер учитывает сам.
+  if (scroll) detail.scrollIntoView({ behavior: "smooth", block: "start" });
   document.getElementById("oi-detail-coin").textContent = coin;
   document.getElementById("oi-detail-sub").textContent = "loading…";
   document.getElementById("oi-series-body").innerHTML = "";
@@ -876,7 +882,8 @@ document.querySelectorAll("#oi-ranges .seg__btn").forEach((b) =>
       .forEach((r) => r.classList.remove("active"));
     b.classList.add("active");
     detailHours = Number(b.dataset.hours);
-    if (activeCoin) selectCoin(activeCoin);
+    // Смена диапазона — не переход к графику: он уже перед глазами.
+    if (activeCoin) selectCoin(activeCoin, { scroll: false });
   }),
 );
 

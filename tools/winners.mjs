@@ -279,12 +279,16 @@ function track({ quiet = false } = {}) {
 
   // Вердикт выносится только на дату решения. До неё — «рано», и это не
   // формальность: на коротком окне разброс перекрывает любой эффект.
+  //
+  // 🚨 В ФАЙЛ пишем по-английски: этот же объект читает дашборд, а интерфейс
+  // там английский — русское «рано» вылезало в шапке карточки как
+  // «verdict: рано». В консоли ниже вердикт по-прежнему по-русски.
   result.verdict = !result.decided
-    ? "рано"
+    ? "too early"
     : (selectedMedian !== null && controlMedian !== null &&
        selectedMedian > controlMedian && selectedMedian > freeze.rules.successEdgeBp)
-      ? "подтверждено"
-      : "не подтверждено";
+      ? "confirmed"
+      : "not confirmed";
 
   mkdirSync(dirname(RESULT_FILE), { recursive: true });
   writeFileSync(RESULT_FILE, JSON.stringify(result, null, 2));
@@ -299,7 +303,8 @@ function track({ quiet = false } = {}) {
   }
   console.log(`\n  медиана выбранных:   ${result.selectedMedianBp ?? "—"} бп`);
   console.log(`  медиана контроля:    ${result.controlMedianBp ?? "—"} бп  (${result.controlCount} адресов)`);
-  console.log(`  вердикт: ${result.verdict}${result.decided ? "" : ` — решение ${result.decisionDate}`}\n`);
+  const VERDICT_RU = { "too early": "рано", confirmed: "подтверждено", "not confirmed": "не подтверждено" };
+  console.log(`  вердикт: ${VERDICT_RU[result.verdict] ?? result.verdict}${result.decided ? "" : ` — решение ${result.decisionDate}`}\n`);
   return result;
 }
 

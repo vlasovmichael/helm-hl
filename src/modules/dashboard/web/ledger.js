@@ -18,15 +18,14 @@ import {
   bindTheme,
 } from "./src/core/shell.js";
 import { mountTopnav } from "./src/core/topnav.js";
+import { stat } from "./src/core/ui.js";
 import { fetchJson } from "./src/net/api.js";
 import { initModals } from "./src/features/modals.js";
 import { renderTax } from "./src/features/pnlInsights.js";
 import { renderBans } from "./src/features/accountStatus.js";
-import { icon } from "./src/core/icon.js";
 
 // Твисти месяца: свёрнут / раскрыт. Разметка, а не символ — присваивать
 // только через innerHTML.
-const TWISTY = { closed: icon("collapsed"), open: icon("expanded") };
 
 const fmt = (n, sign = true) => {
   if (n == null || isNaN(n)) return "—";
@@ -59,6 +58,9 @@ const monthLabel = (k) => {
   ];
   return names[parseInt(m, 10) - 1] + " " + y;
 };
+
+/** cls() отдаёт pos/neg — общий компонент знает positive/negative. */
+const TONE = { pos: "positive", neg: "negative" };
 
 function renderSummary(t) {
   const cards = [
@@ -99,15 +101,11 @@ function renderSummary(t) {
       sub: "funding accrual",
     },
   ];
+  // Плитка — общий компонент (core/ui.js). Своей породы карточек у ledger
+  // больше нет: .stat-card отличалась от .grid-item только фоном и капслоком,
+  // и это была разница без смысла.
   document.getElementById("summary").innerHTML = cards
-    .map(
-      (c) => `
-      <div class="stat-card">
-        <div class="k">${c.k}</div>
-        <div class="v ${c.c}">${c.v}</div>
-        <div class="vsub">${c.sub}</div>
-      </div>`,
-    )
+    .map((c) => stat({ label: c.k, value: c.v, sub: c.sub, tone: TONE[c.c] || "" }))
     .join("");
 }
 
@@ -120,7 +118,7 @@ function row(m) {
   return `
     <tr class="${m.isCurrent ? "current" : ""} ${has ? "expandable" : ""}"
         ${has ? `data-month="${m.month}" tabindex="0" role="button" aria-expanded="false"` : ""}>
-      <td class="month"><span class="twisty">${has ? TWISTY.closed : ""}</span>${monthLabel(m.month)}</td>
+      <td class="month">${monthLabel(m.month)}</td>
       <td class="grp-edge ${cls(m.botNet)}">${fmt(m.botNet)}${wr(m.botWins, m.botCount)}</td>
       <td class="col-opt dim">${m.botCount || "—"}</td>
       <td class="grp-edge ${cls(m.adoptedNet)}">${m.adoptedCount ? fmt(m.adoptedNet) : "—"}${wr(m.adoptedWins, m.adoptedCount)}</td>
@@ -132,7 +130,11 @@ function row(m) {
       <td class="grp-edge net-cell ${cls(m.net)}">${fmt(m.net)}</td>
       <td class="${cls(m.cumulativeNet)}">${fmt(m.cumulativeNet)}</td>
     </tr>
-    ${has ? `<tr class="daybreak" data-days="${m.month}" hidden><td colspan="11">${daysBlock(m)}</td></tr>` : ""}`;
+    ${has
+      ? `<tr class="daybreak" data-days="${m.month}">
+           <td colspan="11"><div class="daybreak__wrap"><div class="daybreak__inner">${daysBlock(m)}</div></div></td>
+         </tr>`
+      : ""}`;
 }
 
 // ── Разворот месяца: календарь Пн–Вс + итог недели справа ──
@@ -210,16 +212,20 @@ function daysBlock(m) {
 }
 
 function bindExpand(host) {
+  // Раскрытие анимированное, поэтому строка НЕ прячется через hidden: скрытому
+  // элементу нечего анимировать. Закрытая строка живёт в разметке с нулевой
+  // высотой (grid-template-rows: 0fr, см. _ledger.scss) и раскрывается до 1fr —
+  // это единственный способ доехать до «высоты по содержимому» без измерений в
+  // JS, который на таблице всё равно врёт (вложенный календарь переносится).
   const toggle = (tr) => {
     const panel = host.querySelector(
       `tr.daybreak[data-days="${tr.dataset.month}"]`,
     );
     if (!panel) return;
-    const open = panel.hidden;
-    panel.hidden = !open;
+    const open = !panel.classList.contains("is-open");
+    panel.classList.toggle("is-open", open);
+    tr.classList.toggle("is-open", open);
     tr.setAttribute("aria-expanded", String(open));
-    // innerHTML: TWISTY — это svg-разметка, а не символ.
-    tr.querySelector(".twisty").innerHTML = open ? TWISTY.open : TWISTY.closed;
   };
   // Клик мышью не должен оставлять фокус-рамку: помечаем строку на время
   // взаимодействия, стиль её гасит, blur снимает метку.

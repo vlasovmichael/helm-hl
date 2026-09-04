@@ -1,3 +1,4 @@
+@use "./utilities" as *;
 @use "./breakpoints" as *;
 
 /* ──────────────────────── Header & Hero */
@@ -491,10 +492,9 @@ header {
       display: none;
     }
     &::after {
-      content: "▸";
+      @include mask-icon("chevron-right", 14px);
       margin-left: auto;
       color: var(--text-muted);
-      font-size: var(--fs-small);
       transition: transform 0.15s var(--ease);
     }
   }
@@ -765,7 +765,26 @@ header {
   justify-content: space-between;
   gap: 8px;
 }
+/* Иконка события слева от заголовка — та же классификация, что у тоста.
+   Заголовки ntfy приходят с ведущим эмодзи; его срезает stripEmoji(), а смысл
+   («стоп» / «цель» / «инфо») теперь несёт эта иконка. */
+.notif-item-ico {
+  flex: none;
+  align-self: center;
+  color: var(--text-muted);
+
+  .icon {
+    width: 14px;
+    height: 14px;
+    display: block;
+  }
+}
+.notif-item.toast--danger .notif-item-ico { color: var(--red); }
+.notif-item.toast--ok .notif-item-ico { color: var(--green); }
+.notif-item.toast--warn .notif-item-ico { color: var(--warn); }
 .notif-item-title {
+  flex: 1;
+  min-width: 0;
   font-weight: 600;
   color: var(--text-primary);
 }

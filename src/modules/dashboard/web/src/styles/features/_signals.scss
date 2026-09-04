@@ -1,3 +1,4 @@
+@use "../core/utilities" as *;
 @use "../core/breakpoints" as *;
 /* ──────────────────────── Hot Movers — шапка карточки */
 .hm-header-right {
@@ -521,19 +522,21 @@
     color: var(--text-primary);
   }
   &::after {
-    content: " ⇅";
+    @include mask-icon("chevrons-up-down", 11px);
+    margin-left: 4px;
     opacity: 0.3;
-    font-size: var(--fs-micro);
   }
 }
 .ww-sort-active {
   &::after {
-    content: " ↓";
+    @include mask-icon("arrow-down", 11px);
+    margin-left: 4px;
     opacity: 0.9;
     color: var(--accent);
   }
   &.ww-sort-asc::after {
-    content: " ↑";
+    @include mask-icon("arrow-up", 11px);
+    margin-left: 4px;
     opacity: 0.9;
     color: var(--accent);
   }

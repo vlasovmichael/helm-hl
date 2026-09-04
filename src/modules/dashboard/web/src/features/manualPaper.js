@@ -14,6 +14,7 @@ import { escapeHtml, fmtUsd, fmtPct, fmtPrice } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 import * as dialog from "../core/dialog.js";
 import { icon } from "../core/icon.js";
+import { button, segmented, field, slider, card } from "../core/ui.js";
 
 let busy = false;
 let lastEquity = 0;
@@ -67,8 +68,11 @@ function closeModal() {
 function formHtml(prefill = {}) {
   const coin = prefill.coin || "";
   const side = prefill.side === "short" ? "short" : "long";
-  const sideBtn = (val, label) =>
-    `<button type="button" class="mp-side-btn mp-side-${val} ${side === val ? "is-on" : ""}" data-side="${val}">${label}</button>`;
+  // Форма собрана из тех же карточек, что «Open Position» (core/ui.js →
+  // card/slider/segmented/field). До 04.09.2026 здесь была своя вёрстка с
+  // подписями-строчками и голыми range: два диалога, открывающие позицию —
+  // настоящую и бумажную — выглядели как из разных приложений, хотя человек
+  // жмёт их по очереди и сравнивает.
   return dialog.head({
     glyph: "add",
     title: "New paper trade",
@@ -76,31 +80,83 @@ function formHtml(prefill = {}) {
   }) + `
     <div class="mp-lead">Like Rabbit, but on paper. The bot manages the exit (ATR stop + breakeven ratchet + trail), same as adopt — you can also close it yourself anytime.</div>
     <form id="mp-form" autocomplete="off">
-      <label class="mp-label">Coin</label>
-      <input id="mp-coin" class="mp-input" data-autofocus type="text" list="mp-coin-list" placeholder="e.g. BTC, SOL, kBONK" value="${escapeHtml(coin.toUpperCase())}" autocomplete="off" spellcheck="false" />
-      <datalist id="mp-coin-list"></datalist>
+      ${segmented({
+        name: "side",
+        value: side,
+        wide: true,
+        cls: "mp-sides",
+        options: [
+          { value: "long", label: "Long", icon: "long", tone: "long" },
+          { value: "short", label: "Short", icon: "short", tone: "short" },
+        ],
+      })}
 
-      <label class="mp-label">Side</label>
-      <div class="mp-sides">${sideBtn("long", `${icon("long")} Long`)}${sideBtn("short", `${icon("short")} Short`)}</div>
+      ${card({
+        label: "Coin",
+        below:
+          field({
+            id: "mp-coin",
+            value: coin.toUpperCase(),
+            placeholder: "e.g. BTC, SOL, kBONK",
+            ticker: true,
+            block: true,
+            cls: "field--coin",
+            attrs: { "data-autofocus": true, list: "mp-coin-list" },
+          }) + `<datalist id="mp-coin-list"></datalist>`,
+      })}
 
-      <label class="mp-label">Leverage: <span id="mp-lev-val">${DEFAULT_LEV}×</span> <span class="mp-lev-hint" id="mp-lev-hint"></span></label>
-      <input id="mp-lev" class="mp-range" type="range" min="1" max="${WALLET_LEV_CAP}" step="1" value="${DEFAULT_LEV}" />
+      ${card({
+        label: "Margin of equity",
+        accent: true,
+        minorValue: "—",
+        minorNote: "equity",
+        major: "10%",
+        attrs: { id: "mp-margin-card" },
+        below: slider({ name: "size", value: 10, min: 1, max: 100, step: 1, cls: "mp-range" }),
+      })}
 
-      <label class="mp-label">Margin of equity: <span id="mp-margin-val">10%</span></label>
-      <input id="mp-size" class="mp-range" type="range" min="1" max="100" step="1" value="10" />
+      ${card({
+        label: "",
+        minorValue: "Leverage",
+        minorNote: `up to ${WALLET_LEV_CAP}x`,
+        major: String(DEFAULT_LEV),
+        majorUnit: "x",
+        attrs: { id: "mp-lev-card" },
+        below: slider({
+          name: "lev",
+          value: DEFAULT_LEV,
+          min: 1,
+          max: WALLET_LEV_CAP,
+          step: 1,
+          cls: "mp-range",
+        }),
+      })}
 
-      <div class="mp-calc" id="mp-calc"></div>
+      <div class="modal__rows" id="mp-calc"></div>
       <div class="mp-err" id="mp-err" hidden></div>
-      <button type="submit" class="btn btn--primary btn--cta mp-submit" id="mp-submit">Open paper position</button>
+      ${button({ label: "Open paper position", type: "submit", variant: "primary", cta: true, cls: "mp-submit", attrs: { id: "mp-submit" } })}
     </form>`;
+}
+
+/** Слайдеры внутри карточек — по data-slider, ids больше не нужны. */
+const levEl = () => document.querySelector('#mp-form [data-slider="lev"]');
+const sizeEl = () => document.querySelector('#mp-form [data-slider="size"]');
+
+/** Заливка до бегунка живёт в --fill (см. ui.js slider) — двигаем её руками. */
+function paintSlider(el) {
+  if (!el) return;
+  const min = Number(el.min) || 0;
+  const max = Number(el.max) || 100;
+  const pct = max > min ? ((Number(el.value) - min) / (max - min)) * 100 : 0;
+  el.style.setProperty("--fill", `${Math.max(0, Math.min(100, pct)).toFixed(2)}%`);
 }
 
 // Clamp the leverage slider to what the picked coin allows (HL max, capped at
 // the wallet's practical WALLET_LEV_CAP). Shows a hint when the coin caps lower.
 function applyCoinLeverageCap() {
   const coin = (document.getElementById("mp-coin")?.value || "").trim().toUpperCase();
-  const lev = document.getElementById("mp-lev");
-  const hint = document.getElementById("mp-lev-hint");
+  const lev = levEl();
+  const hint = document.querySelector("#mp-lev-card .modal__card-minor span");
   if (!lev) return;
   const coinMax = coinLeverage[coin];
   const cap = Math.min(WALLET_LEV_CAP, Number.isFinite(coinMax) && coinMax > 0 ? coinMax : WALLET_LEV_CAP);
@@ -109,28 +165,37 @@ function applyCoinLeverageCap() {
   if (hint) {
     // Show the binding constraint: the coin's HL cap when it's the lower one,
     // otherwise the wallet's practical cap.
+    // Подпись стоит ВСЕГДА (как «up to 3x» в Open Position): пустая строка на
+    // месте ограничения читается как «ограничения нет», а оно есть всегда.
     if (coin && Number.isFinite(coinMax) && coinMax < WALLET_LEV_CAP)
-      hint.textContent = `· ${coin} caps at ${coinMax}×`;
-    else if (coin) hint.textContent = `· cap ${cap}×`;
-    else hint.textContent = "";
+      hint.textContent = `${coin} caps at ${coinMax}x`;
+    else hint.textContent = `up to ${cap}x`;
   }
   recalc();
 }
 
 function recalc() {
-  const lev = pickNum(document.getElementById("mp-lev")?.value, 1);
-  const pct = pickNum(document.getElementById("mp-size")?.value, 0);
+  const lev = pickNum(levEl()?.value, 1);
+  const pct = pickNum(sizeEl()?.value, 0);
   const margin = (lastEquity * pct) / 100;
   const notional = margin * lev;
-  const levVal = document.getElementById("mp-lev-val");
-  const mVal = document.getElementById("mp-margin-val");
+
+  const levMajor = document.querySelector("#mp-lev-card .modal__card-major");
+  const marginMajor = document.querySelector("#mp-margin-card .modal__card-major");
+  const equityCell = document.querySelector("#mp-margin-card .modal__card-minor b");
+  if (levMajor) levMajor.innerHTML = `${lev}<i>x</i>`;
+  if (marginMajor) marginMajor.textContent = `${pct}%`;
+  if (equityCell) equityCell.textContent = lastEquity > 0 ? fmtUsd(lastEquity) : "—";
+  paintSlider(levEl());
+  paintSlider(sizeEl());
+
+  // Строки-факты — как в «Open Position»: слева что, справа сколько.
   const calc = document.getElementById("mp-calc");
-  if (levVal) levVal.textContent = `${lev}×`;
-  if (mVal) mVal.textContent = `${pct}%`;
   if (calc) {
     calc.innerHTML = lastEquity > 0
-      ? `Equity <strong>${fmtUsd(lastEquity)}</strong> · margin <strong>${fmtUsd(margin)}</strong> · position size <strong>${fmtUsd(notional)}</strong>`
-      : `Equity unavailable — set the size manually with leverage × %.`;
+      ? `<div class="modal__row"><span>Margin</span><b>${fmtUsd(margin)}</b></div>
+         <div class="modal__row"><span>Position size</span><b>${fmtUsd(notional)}</b></div>`
+      : `<div class="modal__row"><span>Equity unavailable</span><b>set the size by hand</b></div>`;
   }
   return { lev, notional, margin };
 }
@@ -161,17 +226,17 @@ async function openModal(prefill = {}) {
   applyCoinLeverageCap(); // honors prefill coin + refreshes the calc line
 
   const form = document.getElementById("mp-form");
-  form.querySelectorAll(".mp-side-btn").forEach((b) =>
+  form.querySelectorAll(".seg--wide .seg__btn").forEach((b) =>
     b.addEventListener("click", () => {
-      form.querySelectorAll(".mp-side-btn").forEach((x) => x.classList.remove("is-on"));
+      form.querySelectorAll(".seg--wide .seg__btn").forEach((x) => x.classList.remove("is-on"));
       b.classList.add("is-on");
     }),
   );
   // Re-check the coin's leverage cap whenever the typed coin changes.
   document.getElementById("mp-coin").addEventListener("change", applyCoinLeverageCap);
   document.getElementById("mp-coin").addEventListener("input", applyCoinLeverageCap);
-  document.getElementById("mp-lev").addEventListener("input", recalc);
-  document.getElementById("mp-size").addEventListener("input", recalc);
+  levEl().addEventListener("input", recalc);
+  sizeEl().addEventListener("input", recalc);
   form.addEventListener("submit", onSubmit);
 }
 
@@ -183,7 +248,7 @@ async function onSubmit(e) {
   err.hidden = true;
 
   const coin = (document.getElementById("mp-coin").value || "").trim().toUpperCase();
-  const side = document.querySelector(".mp-side-btn.is-on")?.dataset.side || "long";
+  const side = document.querySelector("#mp-form .seg--wide .seg__btn.is-on")?.dataset.side || "long";
   const { lev, notional } = recalc();
   if (!coin) return showErr("Pick a coin from the list.");
   if (!(notional > 0)) return showErr("Position size is 0 — move the margin slider (or equity is unavailable).");
@@ -252,7 +317,22 @@ function rowHtml(p) {
       <td class="r ${pnlCls}"><strong>${pnl == null ? "—" : fmtUsd(pnl)}</strong>${
         roe == null ? "" : `<span class="mp-roe">${fmtPct(roe)}</span>`
       }${sub}</td>
-      <td class="c"><button type="button" class="mp-close-btn" data-mp-close-id="${p.id}" data-mp-coin="${escapeHtml(p.coin)}" data-mp-side="${escapeHtml(p.side)}" data-mp-lev="${p.leverage}" data-mp-size="${p.sizeUsd}" data-mp-entry="${p.entryPrice}" data-mp-mark-px="${p.markPrice ?? ""}" data-mp-pnl="${pnl ?? ""}" data-mp-roe="${roe ?? ""}">Close</button></td>
+      <td class="c">${button({
+        label: "Close",
+        size: "sm",
+        cls: "mp-close-btn",
+        attrs: {
+          "data-mp-close-id": p.id,
+          "data-mp-coin": p.coin,
+          "data-mp-side": p.side,
+          "data-mp-lev": p.leverage,
+          "data-mp-size": p.sizeUsd,
+          "data-mp-entry": p.entryPrice,
+          "data-mp-mark-px": p.markPrice ?? "",
+          "data-mp-pnl": pnl ?? "",
+          "data-mp-roe": roe ?? "",
+        },
+      })}</td>
     </tr>`;
 }
 
@@ -343,7 +423,7 @@ function settleConfirm(ok) {
 
 function setConfirmBusy(busyNow) {
   const btn = document.querySelector("#mp-confirm [data-mp-confirm]");
-  const cancel = document.querySelector("#mp-confirm .mp-btn-ghost");
+  const cancel = document.querySelector("#mp-confirm [data-mp-cancel]");
   if (btn) {
     btn.disabled = busyNow;
     btn.textContent = busyNow ? "Closing…" : "Close position";
@@ -379,8 +459,8 @@ function confirmClose(info, errMsg) {
     </div>
     <div class="mp-err"${errMsg ? "" : " hidden"}>${escapeHtml(errMsg || "")}</div>
     <div class="modal__actions">
-      <button type="button" class="btn btn--ghost mp-btn-ghost" data-mp-cancel>Keep it</button>
-      <button type="button" class="btn btn--danger" data-mp-confirm data-autofocus>${errMsg ? "Retry close" : "Close position"}</button>
+      ${button({ label: "Keep it", variant: "ghost", attrs: { "data-mp-cancel": true } })}
+      ${button({ label: errMsg ? "Retry close" : "Close position", variant: "danger", attrs: { "data-mp-confirm": true, "data-autofocus": true } })}
     </div>`;
   dialog.open(modal);
   return new Promise((resolve) => {

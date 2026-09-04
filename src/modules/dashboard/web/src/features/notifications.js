@@ -7,7 +7,7 @@
 // visible. The backend only reads the log — "read" is purely client-side.
 
 import { getNotifications } from "../net/api.js";
-import { escapeHtml, fmtSince } from "../utils/format.js";
+import { fmtSince } from "../utils/format.js";
 import { linkifyCoins } from "../utils/links.js";
 import { icon } from "../core/icon.js";
 
@@ -69,12 +69,16 @@ function renderList() {
     .map((n) => {
       const fresh = n.ts > lr ? " notif-item--fresh" : "";
       const mail = n.emailed ? `<span class="notif-mail" title="Also sent by email">${icon("mail")}</span>` : "";
-      const body = (n.message || "").split("\n")[0]; // первая строка — суть
+      const body = stripEmoji((n.message || "").split("\n")[0]); // первая строка — суть
+      // Та же классификация, что у тоста: одно событие выглядит одинаково и в
+      // тосте, и в списке — иначе колокольчик читается как другой продукт.
+      const { glyph, cls } = classifyNotif(n);
       // linkifyCoins сам экранирует текст и делает #COIN ссылкой на TradingView.
       return `
-        <div class="notif-item${fresh}">
+        <div class="notif-item${fresh}${cls ? ` ${cls}` : ""}">
           <div class="notif-item-head">
-            <span class="notif-item-title">${linkifyCoins(n.title)}</span>
+            <span class="notif-item-ico">${icon(glyph)}</span>
+            <span class="notif-item-title">${linkifyCoins(stripEmoji(n.title))}</span>
             <span class="notif-item-time">${mail}${fmtSince(n.ts)}</span>
           </div>
           <div class="notif-item-body">${linkifyCoins(body)}</div>
@@ -131,14 +135,16 @@ function flyToBell(el) {
   setTimeout(done, 700); // страховка, если transitionend не прилетит
 }
 
-// SVG-иконки в стиле навбара (stroke, viewBox 24). Цвет наследуется от чипа.
-const TOAST_ICONS = {
-  ok: '<circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9"/>',
-  danger: '<circle cx="12" cy="12" r="9"/><line x1="12" y1="7.5" x2="12" y2="13"/><line x1="12" y1="16.3" x2="12" y2="16.4"/>',
-  warn: '<path d="M12 3.5l8.5 15H3.5z"/><line x1="12" y1="9.5" x2="12" y2="14"/><line x1="12" y1="16.6" x2="12" y2="16.7"/>',
-  up: '<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
-  down: '<path d="M3 7l6 6 4-4 8 8"/><path d="M15 17h6v-6"/>',
-  info: '<path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+// Иконка события — ключ из общего набора (core/icon.js). Раньше здесь лежали
+// шесть контуров, набранных руками под viewBox 24: у них был свой stroke-width,
+// и рядом с иконками остального дашборда они читались как из другого набора.
+const NOTIF_ICON = {
+  ok: "check",
+  danger: "danger",
+  warn: "warn",
+  up: "rising",
+  down: "falling",
+  info: "info",
 };
 
 // Явная сторона сделки — только когда в тексте есть слово LONG/SHORT (fade-алерты,
@@ -150,18 +156,21 @@ function toastSide(item) {
   return null;
 }
 
-// Направление движения — из ntfy-тегов/стрелок. Даёт иконку-тренд ↗/↘.
+// Направление движения — из ntfy-тегов. Даёт иконку-тренд.
 function toastDir(item) {
   const tags = Array.isArray(item.tags) ? item.tags : [];
   const has = (x) => tags.includes(x);
-  if (has("green_circle") || has("chart_with_upwards_trend") || /▲/.test(item.title || "")) return "up";
-  if (has("red_circle") || has("chart_with_downwards_trend") || /▼/.test(item.title || "")) return "down";
+  if (has("green_circle") || has("chart_with_upwards_trend")) return "up";
+  if (has("red_circle") || has("chart_with_downwards_trend")) return "down";
   return null;
 }
 
-// Схема B: цвет тоста = СОБЫТИЕ (стоп/цель/пауза/инфо), сторону несёт бейдж +
+// Схема B: цвет = СОБЫТИЕ (стоп/цель/пауза/инфо), сторону несёт бейдж +
 // иконка-тренд. Вход (opened/filled) — нейтральный инфо, а не «успех».
-function classifyToast(item) {
+//
+// Одна функция на тост и на список в колокольчике: одно и то же событие в двух
+// местах обязано выглядеть одинаково.
+function classifyNotif(item) {
   const tags = Array.isArray(item.tags) ? item.tags : [];
   const has = (t) => tags.includes(t);
   const text = `${item.title || ""} ${item.message || ""}`.toLowerCase();
@@ -182,25 +191,33 @@ function classifyToast(item) {
   const cls = kind === "ok" ? "toast--ok" : kind === "danger" ? "toast--danger"
     : kind === "warn" ? "toast--warn" : "";
 
-  // Иконка события важнее тренда (стоп красный alert, не ↘). Тренд — только для
-  // нейтральных инфо-пушей (входы, радар движения).
-  let icon;
-  if (kind === "danger") icon = TOAST_ICONS.danger;
-  else if (kind === "warn") icon = TOAST_ICONS.warn;
-  else if (kind === "ok") icon = TOAST_ICONS.ok;
-  else icon = dir === "up" ? TOAST_ICONS.up : dir === "down" ? TOAST_ICONS.down : TOAST_ICONS.info;
+  // Иконка события важнее тренда (стоп — тревога, а не «вниз»). Тренд остаётся
+  // только у нейтральных инфо-пушей (входы, радар движения).
+  const glyph =
+    kind !== "info" ? NOTIF_ICON[kind]
+    : dir === "up" ? NOTIF_ICON.up
+    : dir === "down" ? NOTIF_ICON.down
+    : NOTIF_ICON.info;
 
-  return { cls, icon, side };
+  return { kind, cls, glyph, side };
 }
 
-// Заголовки ntfy начинаются с эмодзи (📊/👀/🔥/❄️) — теперь у тоста есть иконка-чип,
-// так что ведущий эмодзи-кластер срезаем, чтобы не дублировать.
-function stripLeadEmoji(s) {
-  const out = String(s || "").replace(
-    /^[\s\p{Extended_Pictographic}️←-⇿☀-➿]+/u,
-    "",
-  ).trim();
-  return out || String(s || "");
+// Тексты пушей приходят из ntfy, а там заголовок начинается с эмодзи и ещё
+// пара встречается внутри строки. В дашборде эмодзи нет: они рисуются цветным
+// растром мимо темы и мимо веса шрифта, а смысл уже несёт иконка-чип слева.
+//
+// 🚨 Чистим ОБА места — и тост, и список в колокольчике. До 04.09.2026 стриппер
+// стоял только на тосте, поэтому в панели эмодзи оставались.
+const EMOJI = /[\p{Extended_Pictographic}\u{FE0F}\u{20E3}]/gu;
+
+function stripEmoji(s) {
+  const out = String(s || "")
+    .replace(EMOJI, "")
+    // Двойные пробелы и осиротевшие разделители после вырезанного эмодзи.
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[\s·—–-]+/, "")
+    .trim();
+  return out || String(s || "").trim();
 }
 
 // Красиво выделяем тело: числовые токены ($70, 2%, +$3.10, 5x, 0.0000123) — моно
@@ -225,7 +242,7 @@ function showToast(item) {
   // Уважаем системную настройку «меньше движения» — но и вовсе без тостов скучно;
   // CSS сам упрощает анимацию (reduced-motion), поэтому тост показываем всегда.
   const stack = toastStack();
-  const { cls, icon, side } = classifyToast(item);
+  const { cls, glyph, side } = classifyNotif(item);
   const el = document.createElement("div");
   el.className = `toast${cls ? ` ${cls}` : ""}`;
   el.setAttribute("role", "status");
@@ -235,10 +252,10 @@ function showToast(item) {
     ? `<span class="toast-side toast-side--${side}">${side.toUpperCase()}</span>`
     : "";
   el.innerHTML = `
-    <span class="toast-ico"><svg viewBox="0 0 24 24" aria-hidden="true">${icon}</svg></span>
+    <span class="toast-ico">${icon(glyph)}</span>
     <div class="toast-main">
       <div class="toast-head">
-        <span class="toast-title">${badge}${linkifyCoins(stripLeadEmoji(item.title) || "Notification")}</span>
+        <span class="toast-title">${badge}${linkifyCoins(stripEmoji(item.title) || "Notification")}</span>
         <span class="toast-time">${fmtSince(item.ts)}</span>
       </div>
       ${body ? `<div class="toast-body">${decorateBody(linkifyCoins(body))}</div>` : ""}

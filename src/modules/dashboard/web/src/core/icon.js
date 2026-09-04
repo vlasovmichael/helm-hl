@@ -20,6 +20,7 @@
 
 import {
   ArrowDown,
+  ArrowLeftRight,
   ArrowUp,
   Ban,
   Bot,
@@ -79,6 +80,9 @@ const MAP = {
   prev: ChevronLeft,
   next: ChevronRight,
 
+  // Переключение одного на другое (тип ордера: маркет ⇄ лимитка). Именно
+  // «поменять местами», а не «пересчитать» (recompute) — это разные жесты.
+  swap: ArrowLeftRight,
   close: X,
   check: Check,
   add: Plus,

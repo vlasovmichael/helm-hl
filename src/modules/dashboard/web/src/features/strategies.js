@@ -134,9 +134,9 @@ function stratTradesBlock(s) {
   const pager =
     pages > 1
       ? `<div class="strat-pager">` +
-        `<button class="strat-pg-btn" data-uid="${s.uid}" data-strategy="${s.id}" data-side="${s.side || ""}" data-mode="${tc.mode}" data-page="${tc.page - 1}" ${tc.page <= 0 ? "disabled" : ""} aria-label="Previous page">${icon("prev")}</button>` +
+        `<button type="button" class="btn btn--icon btn--sm strat-pg-btn" data-uid="${s.uid}" data-strategy="${s.id}" data-side="${s.side || ""}" data-mode="${tc.mode}" data-page="${tc.page - 1}" ${tc.page <= 0 ? "disabled" : ""} aria-label="Previous page">${icon("prev")}</button>` +
         `<span class="strat-pg-info">${tc.page + 1}/${pages} · ${tc.total} trades</span>` +
-        `<button class="strat-pg-btn" data-uid="${s.uid}" data-strategy="${s.id}" data-side="${s.side || ""}" data-mode="${tc.mode}" data-page="${tc.page + 1}" ${tc.page >= pages - 1 ? "disabled" : ""} aria-label="Next page">${icon("next")}</button>` +
+        `<button type="button" class="btn btn--icon btn--sm strat-pg-btn" data-uid="${s.uid}" data-strategy="${s.id}" data-side="${s.side || ""}" data-mode="${tc.mode}" data-page="${tc.page + 1}" ${tc.page >= pages - 1 ? "disabled" : ""} aria-label="Next page">${icon("next")}</button>` +
         `</div>`
       : `<div class="strat-pg-info">${tc.total} trade${tc.total === 1 ? "" : "s"}</div>`;
   return (

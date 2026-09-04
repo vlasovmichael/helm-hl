@@ -1,3 +1,4 @@
+@use "../core/utilities" as *;
 @use "../core/breakpoints" as *;
 
 /* ──────────────────────── Order-book imbalance bar
@@ -82,10 +83,8 @@
     letter-spacing: 0.01em;
 
     &::after {
-      content: " ↗";
-      font-size: var(--fs-label);
+      @include mask-icon("arrow-up-right", 12px);
       color: var(--text-muted);
-      font-weight: 400;
       margin-left: 4px;
     }
   }

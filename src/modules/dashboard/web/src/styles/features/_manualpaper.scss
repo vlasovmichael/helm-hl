@@ -1,105 +1,17 @@
 // ── Paper trade (Rabbit-style) — entry modal + Active-Position card bits ──
-// The modal reuses the shared .modal shell (like "What if…"); only the
-// width differs. Buttons mirror the wi-* look.
+// Диалог собран из общих блоков «Open Position»: .modal__card + slider +
+// segmented + field (core/ui.js). Своей ширины у него больше нет — 420px,
+// как у эталона; своих подписей, слайдера и «калькулятора» тоже.
 @use "../core/breakpoints" as *;
 
-#mp-modal .modal__panel {
-  width: min(380px, calc(100vw - 32px));
-}
-
-.mp-title {
-  font-size: var(--fs-lead);
-  font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 4px;
-}
 .mp-lead {
   font-size: var(--fs-small);
   color: var(--text-muted);
   line-height: 1.45;
   margin-bottom: 14px;
 }
-.mp-label {
-  display: block;
-  font-size: var(--fs-small);
-  font-weight: 600;
-  color: var(--text-muted);
-  margin: 12px 0 5px;
-}
-.mp-input {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 9px 11px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--canvas-inset);
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: var(--fs-base);
-  text-transform: uppercase;
-  outline: none;
-
-  &::placeholder {
-    color: var(--text-faint);
-    text-transform: none;
-  }
-  &:focus { border-color: var(--accent-line); }
-}
-.mp-sides {
-  display: flex;
-  gap: 6px;
-}
-.mp-side-btn {
-  flex: 1;
-  padding: 9px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--canvas-inset);
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--fs-body);
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
-
-  &:hover { color: var(--text-primary); }
-
-  // Long = green, Short = red when selected.
-  &.mp-side-long.is-on {
-    color: var(--green);
-    border-color: var(--green-line, var(--green));
-    background: var(--green-soft);
-  }
-  &.mp-side-short.is-on {
-    color: var(--red);
-    border-color: var(--red-line, var(--red));
-    background: var(--red-soft);
-  }
-}
-.mp-lev-hint {
-  font-weight: 400;
-  color: var(--text-muted);
-  font-size: var(--fs-label);
-}
-.mp-range {
-  width: 100%;
-  accent-color: var(--accent);
-  cursor: pointer;
-}
-.mp-calc {
-  margin: 14px 0 6px;
-  padding: 9px 11px;
-  border-radius: 6px;
-  background: var(--accent-soft);
-  font-size: var(--fs-small);
-  color: var(--text-secondary);
-  line-height: 1.5;
-
-  strong { color: var(--text-primary); }
-}
+/* Поле монеты — общий .field.field--ticker (core/_controls.scss). */
+/* Выбор стороны — общий сегмент (.seg.seg--wide, core/_controls.scss). */
 .mp-err {
   margin: 6px 0;
   font-size: var(--fs-small);
@@ -107,21 +19,9 @@
 
   &[hidden] { display: none; }
 }
+/* Главное действие — общий .btn.btn--primary.btn--cta. */
 .mp-submit {
-  width: 100%;
   margin-top: 12px;
-  padding: 11px;
-  border: 1px solid var(--accent-line);
-  border-radius: 6px;
-  background: var(--accent);
-  color: #fff;
-  font-family: var(--font-mono);
-  font-size: var(--fs-base);
-  font-weight: 700;
-  cursor: pointer;
-
-  &:hover { background: var(--accent-strong); }
-  &:disabled { opacity: 0.6; cursor: default; }
 }
 
 // ── Paper positions block inside the Active Position card ──
@@ -171,21 +71,11 @@
   color: var(--text-muted, var(--text-secondary));
   opacity: 0.85;
 }
-.mp-close-btn {
-  padding: 4px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--card-bg, var(--bg));
-  color: var(--text-secondary);
-  font-size: var(--fs-small);
-  cursor: pointer;
-  transition:
-    color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
-
-  &:hover { color: var(--text-primary); border-color: var(--red); }
-  &:disabled { opacity: 0.5; cursor: default; }
+/* Close на строке бумажной позиции — общий .btn.btn--sm; красным он
+   становится только на ховере, чтобы ряд не пестрел. */
+.mp-close-btn:hover:not(:disabled) {
+  border-color: var(--red);
+  color: var(--red);
 }
 
 // ── Close-confirmation dialog (styled stand-in for window.confirm) ──
@@ -227,42 +117,15 @@
 }
 .mp-confirm-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 12px;
+  gap: var(--sp-2);
+  margin-top: var(--sp-3);
 
-  button {
+  /* Обе кнопки — общие .btn (ghost + danger). Здесь только «поровну по
+     ширине»: в подтверждении необратимого действия «Keep it» не должна быть
+     мельче, чем «Close position». */
+  .btn {
     flex: 1;
-    padding: 10px;
-    border-radius: 6px;
-    font-family: var(--font-mono);
-    font-size: var(--fs-body);
-    font-weight: 700;
-    cursor: pointer;
-    transition:
-    color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
-
-    &:disabled { opacity: 0.6; cursor: default; }
+    min-height: var(--ctl-h-lg);
   }
 }
-.mp-btn-ghost {
-  border: 1px solid var(--border);
-  background: var(--canvas-inset);
-  color: var(--text-secondary);
-
-  &:hover:not(:disabled) {
-    color: var(--text-primary);
-    border-color: var(--border-strong);
-  }
-}
-.mp-btn-danger {
-  border: 1px solid var(--red-line, var(--red));
-  background: var(--red-soft);
-  color: var(--red);
-
-  &:hover:not(:disabled) {
-    background: var(--red);
-    color: #fff;
-  }
-}
+/* Кнопки подтверждения — общие .btn--ghost / .btn--danger. */

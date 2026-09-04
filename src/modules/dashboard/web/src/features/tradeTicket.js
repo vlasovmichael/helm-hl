@@ -26,6 +26,7 @@
 import { escapeHtml, fmtUsd, fmtPrice } from "../utils/format.js";
 import * as dialog from "../core/dialog.js";
 import { icon } from "../core/icon.js";
+import { button, segmented } from "../core/ui.js";
 
 // Биржевой минимум ордера на HL. Меньше — отказ, поэтому это блокер, а не
 // предупреждение (Rabby показывает ровно его же красным).
@@ -217,9 +218,11 @@ function coinAmount(n) {
   return n.toPrecision(3);
 }
 
-function listBlock(cls, items) {
+// Маркер строки — иконка из общего набора, а не глиф в list-style: у ⚠
+// текстового шрифта другой вес и другая высота, чем у остальных иконок листа.
+function listBlock(cls, items, glyph = "") {
   return `<ul class="${cls}" ${items.length ? "" : "hidden"}>${items
-    .map((x) => `<li>${escapeHtml(x)}</li>`)
+    .map((x) => `<li>${glyph ? icon(glyph) : ""}<span>${escapeHtml(x)}</span></li>`)
     .join("")}</ul>`;
 }
 
@@ -375,10 +378,16 @@ function createModal(io) {
         knownCoin() ? `Open ${escapeHtml(state.coin)} Position` : "Open Position"
       }</h2>
 
-      <div class="tt-seg tt-seg--side">
-        <button type="button" class="tt-seg__btn ${!isShort ? "is-on is-long" : ""}" data-side="long">Long</button>
-        <button type="button" class="tt-seg__btn ${isShort ? "is-on is-short" : ""}" data-side="short">Short</button>
-      </div>
+      ${segmented({
+        name: "side",
+        value: state.side,
+        wide: true,
+        cls: "tt-seg--side",
+        options: [
+          { value: "long", label: "Long", tone: "long" },
+          { value: "short", label: "Short", tone: "short" },
+        ],
+      })}
 
       <!-- Поле монеты видно ВСЕГДА (а не только пока пусто): иначе, выбрав
            монету, её нельзя было бы поменять не закрыв модалку. -->
@@ -427,8 +436,13 @@ function createModal(io) {
         </div>
         <div class="tt-row">
           <span>Order Type</span>
-          <button type="button" class="tt-row__toggle" data-toggle-type>
-            ${state.orderType === "limit" ? "Limit post-only" : "Market"} ${icon("recompute")}
+          <!-- Иконка тут одна на оба состояния и означает «поменять» — так было
+               до 04.09.2026 (глиф ⇄), так и осталось, только контуром из общего
+               набора. Разные иконки под маркет и лимитку пробовали: тип ордера
+               и так написан словом рядом, а картинка начинала спорить с ним. -->
+          <button type="button" class="tt-row__toggle" data-toggle-type
+                  title="${state.orderType === "limit" ? "Limit post-only — switch to market" : "Market — switch to limit post-only"}">
+            ${state.orderType === "limit" ? "Limit post-only" : "Market"} ${icon("swap")}
           </button>
         </div>
         ${state.orderType === "limit"
@@ -477,14 +491,17 @@ function createModal(io) {
       </div>
 
       ${listBlock("tt-blockers", v.blockers)}
-      ${listBlock("tt-warnings", v.warnings)}
+      ${listBlock("tt-warnings", v.warnings, "warn")}
       ${state.error ? `<div class="tt-alert tt-alert--err">${escapeHtml(state.error)}</div>` : ""}
       ${state.result ? `<div class="tt-alert tt-alert--ok">${escapeHtml(state.result)}</div>` : ""}
 
-      <button type="button" class="tt-cta ${isShort ? "tt-cta--short" : "tt-cta--long"}"
-              data-submit ${v.ok && !state.submitting ? "" : "disabled"}>
-        ${state.submitting ? "Sending…" : `Open ${isShort ? "Short" : "Long"}`}
-      </button>
+      ${button({
+        label: state.submitting ? "Sending…" : `Open ${isShort ? "Short" : "Long"}`,
+        variant: isShort ? "short" : "long",
+        cta: true,
+        disabled: !(v.ok && !state.submitting),
+        attrs: { "data-submit": true },
+      })}
       <div class="tt-foot">${
         state.orderType === "limit"
           ? "post-only · 1.44 bps · may not fill"
@@ -684,7 +701,7 @@ function createModal(io) {
     }
     const wa = bodyEl.querySelector(".tt-warnings");
     if (wa) {
-      wa.innerHTML = v.warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join("");
+      wa.innerHTML = v.warnings.map((w) => `<li>${icon("warn")}<span>${escapeHtml(w)}</span></li>`).join("");
       wa.hidden = v.warnings.length === 0;
     }
   }

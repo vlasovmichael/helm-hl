@@ -28,6 +28,15 @@
     font-variant-numeric: tabular-nums;
     color: var(--text-primary);
   }
+  /* Подстрочник под числом — «из чего оно» («after fees + funding», «12
+     trades · 58% win»). Тише значения на две ступени: это сноска, а не
+     второе число. */
+  .item-sub {
+    margin-top: 5px;
+    font-size: var(--fs-label);
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+  }
   /* Net (Mkt) — честный итог: всё включено (price + funding − fees @ taker exit).
      Подсвечиваем как главную цифру среди PnL-карточек. */
   &.grid-item-primary {

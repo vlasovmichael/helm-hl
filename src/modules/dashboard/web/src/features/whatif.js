@@ -14,6 +14,7 @@ import { escapeHtml } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 import * as dialog from "../core/dialog.js";
 import { icon } from "../core/icon.js";
+import { button, segmented, field } from "../core/ui.js";
 
 let busy = false;
 
@@ -47,8 +48,6 @@ function openModal(html) {
 
 // ── Start form: coin field + optional side toggle + submit ──
 function formHtml(coin = "", side = "") {
-  const sideBtn = (val, label) =>
-    `<button type="button" class="wi-side-btn ${side === val ? "is-on" : ""}" data-side="${val}">${label}</button>`;
   // 🚨 Своего заголовка у формы нет: его несёт шапка диалога (dialog.head).
   // Раньше здесь стоял <div class="wi-title">Chart breakdown</div>, и в окне
   // оказывалось два заголовка подряд про одно и то же.
@@ -56,15 +55,27 @@ function formHtml(coin = "", side = "") {
     <div class="wi-lead">Coin + side → the coach lays out trend, levels, RSI, a plan with stop/target and where you are wrong. Structure analysis, <strong>not a proven-edge signal</strong> — the decision and the risk are yours.</div>
     <form id="wi-form" class="wi-form" autocomplete="off">
       <label class="wi-label">Coin (Hyperliquid ticker)</label>
-      <input id="wi-coin" class="wi-input" data-autofocus type="text" placeholder="e.g. BTC, SOL, kBONK" value="${escapeHtml(coin)}" />
+      ${field({
+        id: "wi-coin",
+        value: coin,
+        placeholder: "e.g. BTC, SOL, kBONK",
+        ticker: true,
+        block: true,
+        attrs: { "data-autofocus": true },
+      })}
       <label class="wi-label">Side (for the entry plan)</label>
-      <div class="wi-sides">
-        ${sideBtn("LONG", "Long")}
-        ${sideBtn("SHORT", "Short")}
-        ${sideBtn("", "No side")}
-      </div>
+      ${segmented({
+        name: "side",
+        value: side,
+        wide: true,
+        options: [
+          { value: "LONG", label: "Long", tone: "long" },
+          { value: "SHORT", label: "Short", tone: "short" },
+          { value: "", label: "No side" },
+        ],
+      })}
       <input type="hidden" id="wi-side" value="${escapeHtml(side)}" />
-      <button type="submit" class="btn btn--primary btn--cta wi-submit">Analyse</button>
+      ${button({ label: "Analyse", type: "submit", variant: "primary", cta: true, cls: "wi-submit" })}
       <div id="wi-error" class="wi-error" hidden></div>
     </form>`;
 }
@@ -129,7 +140,7 @@ function resultHtml(r) {
   const c = r.coach;
   // Фолбэк: если coach не построился (нет свечей) — старый fade-вердикт.
   if (!c || !c.ok) return head + legacyEdgeBlock(r) +
-    `<button type="button" class="btn btn--ghost wi-again" id="wi-again">${icon("prev")} Another coin</button>`;
+    button({ label: "Another coin", icon: "prev", variant: "ghost", cls: "wi-again", attrs: { id: "wi-again" } });
 
   // ── Коуч-вердикт (ведущий блок) ──
   let verdictBlock = "";
@@ -217,7 +228,7 @@ function resultHtml(r) {
     : `No verified edge here — this is analysis, not a signal. ${escapeHtml(c.disclaimer)}`}</div>`;
 
   return head + verdictBlock + structure + flow + levels + plan + cases + learn + edgeNote +
-    `<button type="button" class="btn btn--ghost wi-again" id="wi-again">${icon("prev")} Another coin</button>`;
+    button({ label: "Another coin", icon: "prev", variant: "ghost", cls: "wi-again", attrs: { id: "wi-again" } });
 }
 
 // Старый fade-вердикт как фолбэк, если coach не построился.
@@ -289,12 +300,12 @@ export function initWhatIf() {
       return;
     }
     // Side toggle.
-    const sideBtn = e.target.closest(".wi-side-btn");
+    const sideBtn = e.target.closest("#wi-form .seg__btn");
     if (sideBtn) {
       const val = sideBtn.dataset.side ?? "";
       const hidden = document.getElementById("wi-side");
       if (hidden) hidden.value = val;
-      for (const b of document.querySelectorAll("#whatif-modal .wi-side-btn"))
+      for (const b of document.querySelectorAll("#wi-form .seg__btn"))
         b.classList.toggle("is-on", b === sideBtn);
       return;
     }

@@ -36,7 +36,9 @@ function walk(dir, out = []) {
     if (name === "node_modules" || name === "dist") continue;
     const full = join(dir, name);
     if (statSync(full).isDirectory()) walk(full, out);
-    else if (/\.(js|html)$/.test(name)) out.push(full);
+    // .scss тоже интерфейс: глиф умеет приехать из content/list-style —
+    // так ⚠ в маркере списка предупреждений пережил перевод на lucide.
+    else if (/\.(js|html|scss)$/.test(name)) out.push(full);
   }
   return out;
 }

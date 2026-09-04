@@ -44,47 +44,9 @@
     color: var(--text-muted);
     margin-top: 6px;
   }
-  .wi-input {
-    font-family: var(--font-mono);
-    font-size: var(--fs-base);
-    text-transform: uppercase;
-    color: var(--text-primary);
-    background: var(--canvas-inset);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 8px 10px;
-    outline: none;
-
-    &::placeholder {
-      color: var(--text-faint);
-      text-transform: none;
-    }
-    &:focus {
-      border-color: var(--accent-line);
-    }
-  }
-  .wi-sides {
-    display: flex;
-    gap: 6px;
-  }
-  .wi-side-btn {
-    flex: 1;
-    font-family: var(--font-mono);
-    font-size: var(--fs-small);
-    font-weight: 600;
-    color: var(--text-secondary);
-    background: var(--canvas-inset);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 7px 4px;
-    cursor: pointer;
-
-    &.is-on {
-      color: var(--text-primary);
-      border-color: var(--accent-line);
-      background: var(--accent-soft);
-    }
-  }
+  /* Поле монеты — общий .field.field--ticker (core/_controls.scss).
+     Своего инпута у диалога больше нет. */
+  /* Выбор стороны — общий сегмент (.seg.seg--wide, core/_controls.scss). */
   /* Кнопка — общий .btn.btn--primary; здесь только «на всю ширину формы»:
      это единственное действие диалога, и половинчатая ширина читалась бы как
      «есть ещё вариант рядом». */

@@ -258,26 +258,8 @@
     margin-top: 0;
   }
 }
-.strat-pg-btn {
-  font-family: var(--font-mono);
-  font-size: var(--fs-base);
-  line-height: 1;
-  padding: 3px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--card-bg-elev);
-  color: var(--text-primary, inherit);
-  cursor: pointer;
-
-  &:hover:not(:disabled) {
-    background: var(--card-bg-hover);
-    border-color: var(--border-strong);
-  }
-  &:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-}
+/* Пейджер стратегий — общий .btn.btn--icon.btn--sm; класс остался только
+   хуком для делегированного обработчика. */
 .strat-pg-info {
   font-size: var(--fs-label);
   color: var(--text-muted);

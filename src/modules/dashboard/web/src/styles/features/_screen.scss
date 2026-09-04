@@ -1,3 +1,4 @@
+@use "../core/utilities" as *;
 /* ───────────────────────────────────────────────
    Экран монет + бюджет дня (карточка 01.4)
 
@@ -118,11 +119,11 @@
       color: var(--text-primary);
     }
     &.is-sorted[data-dir="desc"]::after {
-      content: "↓";
+      @include mask-icon("arrow-down", 11px);
       opacity: 1;
     }
     &.is-sorted[data-dir="asc"]::after {
-      content: "↑";
+      @include mask-icon("arrow-up", 11px);
       opacity: 1;
     }
   }

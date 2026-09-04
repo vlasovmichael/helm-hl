@@ -1,3 +1,4 @@
+@use "../core/utilities" as *;
 // ─────────────────────────────────────────────────────────────────────
 //  journal.html — журнал чтения графика.
 //
@@ -593,7 +594,7 @@ label.j-f {
   display: none;
 }
 .j-log-item summary::before {
-  content: "▸";
+  @include mask-icon("chevron-right", 13px);
   color: var(--text-muted);
   transition: transform 0.2s;
 }

@@ -1,3 +1,4 @@
+@use "sass:map";
 // Мелкие утилиты — заменяют повторяющиеся презентационные inline style=.
 // Сюда НЕ выносим display:none, которым управляет JS через el.style.display=""
 // (класс не сбросится reset'ом инлайна → элемент останется скрытым).
@@ -6,4 +7,34 @@
 }
 .u-rel {
   position: relative;
+}
+
+// ── Иконка в псевдоэлементе ────────────────────────────────────────────
+//
+// В разметке иконки берутся из core/icon.js, но у ::before/::after разметки
+// нет — и до 04.09.2026 там жили типографские глифы (▸ ↑ ↓ ↗ ⇅). Они рисуются
+// ТЕКСТОВЫМ шрифтом: другой вес, другая базовая линия, а ↗ и ⇅ в части систем
+// подменяются цветным эмодзи мимо темы. Контуры здесь — те же lucide, только
+// как маска, поэтому цвет наследуется от currentColor, как у обычной иконки.
+//
+// 🚨 Новых контуров сюда добавлять по одному и только под ::before/::after.
+// Всё, что стоит в разметке, идёт через icon() — иначе набор разъедется на два.
+$mask-icons: (
+  "chevron-right": "M9 18l6-6-6-6",
+  "arrow-up": "M12 19V5M5 12l7-7 7 7",
+  "arrow-down": "M12 5v14M19 12l-7 7-7-7",
+  "arrow-up-right": "M7 17L17 7M7 7h10v10",
+  "chevrons-up-down": "M7 15l5 5 5-5M7 9l5-5 5 5",
+);
+
+@mixin mask-icon($name, $size: 1em) {
+  content: "";
+  display: inline-block;
+  width: $size;
+  height: $size;
+  vertical-align: -0.14em;
+  background-color: currentColor;
+  $svg: "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='#{map.get($mask-icons, $name)}'/></svg>";
+  mask: url("#{$svg}") center / contain no-repeat;
+  -webkit-mask: url("#{$svg}") center / contain no-repeat;
 }

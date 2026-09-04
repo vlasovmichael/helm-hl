@@ -48,39 +48,8 @@
   gap: 12px;
   margin-bottom: 26px;
 }
-.stat-card {
-  background: var(--card-bg-elev);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 16px 18px;
-
-  .k {
-    font-size: var(--fs-label);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    color: var(--text-muted);
-    margin-bottom: 8px;
-  }
-  // color не фиксируем: .pos/.neg ниже слабее по специфичности и раньше
-  // проигрывали — карточки всегда были нейтральные.
-  .v {
-    font-family: var(--font-mono);
-    font-size: var(--fs-h2);
-    font-weight: 600;
-    letter-spacing: -0.01em;
-
-    &.pos { color: var(--green); }
-    &.neg { color: var(--red); }
-    &.dim { color: var(--text-primary); }
-  }
-  .vsub {
-    font-family: var(--font-mono);
-    font-size: var(--fs-label);
-    color: var(--text-muted);
-    margin-top: 3px;
-  }
-}
+/* Плитки сводки — общий .grid-item (core/_datagrid.scss). Своей породы
+   карточек у ledger больше нет; здесь осталась только их сетка. */
 
 /* table */
 .table-card {
@@ -240,10 +209,10 @@ tfoot td {
 }
 
 @include until($bp-sm) {
-  .stat-card {
+  .grid-item {
     padding: 12px 13px;
 
-    .v {
+    .item-value {
       font-size: var(--fs-h3);
     }
   }
@@ -277,16 +246,59 @@ tr.expandable {
     outline-offset: -2px;
   }
 }
-.twisty {
-  display: inline-block;
-  width: 14px;
-  color: var(--text-faint);
-  font-size: var(--fs-micro);
-}
+/* ── Раскрытие месяца ───────────────────────────────────────────────────
+   Стрелки-твисти у месяцев больше нет: в строке-кнопке она дублировала то,
+   что и так говорят курсор, подсветка при наведении и сам раскрытый блок, а
+   на 14 строках подряд читалась как частокол. Открытый месяц называет себя
+   акцентным цветом подписи и фоном — этого хватает.
+
+   Анимация: строка не прячется через hidden (скрытому анимировать нечего), а
+   стоит с нулевой высотой — grid-template-rows: 0fr → 1fr. Так календарь
+   доезжает ровно до своей высоты, без измерений в JS: они на вложенной
+   таблице всё равно врут, когда неделя переносится.
+   ──────────────────────────────────────────────────────────────────────── */
 table.ledger > tbody > tr.daybreak > td {
-  padding: 14px;
+  padding: 0;
   background: var(--canvas-subtle);
+  border-top: 0;
+}
+table.ledger > tbody > tr.daybreak.is-open > td {
   border-top: 1px solid var(--hairline);
+}
+.daybreak__wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--dur-slow) var(--ease-out);
+}
+.daybreak__inner {
+  overflow: hidden;
+  /* Содержимое проявляется чуть позже коробки и с лёгким подъёмом: иначе на
+     первых кадрах видно обрезанный сверху календарь. */
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out),
+    padding var(--dur-slow) var(--ease-out);
+}
+tr.daybreak.is-open .daybreak__wrap {
+  grid-template-rows: 1fr;
+}
+tr.daybreak.is-open .daybreak__inner {
+  opacity: 1;
+  transform: none;
+  padding: 14px;
+}
+/* Открытый месяц: подпись акцентом — вместо стрелки. */
+table.ledger > tbody > tr.expandable.is-open > td.month {
+  color: var(--accent);
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  .daybreak__wrap,
+  .daybreak__inner {
+    transition: none;
+  }
 }
 table.cal {
   width: 100%;

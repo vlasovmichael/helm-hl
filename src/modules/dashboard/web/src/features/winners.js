@@ -26,6 +26,15 @@ const usd = (v) => {
 
 const short = (addr) => `${addr.slice(0, 8)}…${addr.slice(-4)}`;
 
+// Вердикт приезжает из tools/winners.mjs. Русские значения остались в уже
+// записанных файлах — переводим на месте, чтобы «verdict: рано» не всплывал
+// в англоязычном интерфейсе. Новые прогоны пишут сразу по-английски.
+const VERDICT_EN = {
+  "рано": "too early",
+  "подтверждено": "confirmed",
+  "не подтверждено": "not confirmed",
+};
+
 const VERDICT_STYLE = {
   "confirmed": "var(--green)",
   "not confirmed": "var(--red)",
@@ -167,6 +176,9 @@ function bindToggle(tbody) {
     }
     row.hidden = false;
     if (caret) caret.innerHTML = icon("expanded");
+    // То же, что в таблице OI: раскрытая строка может оказаться за нижним краем
+    // экрана, и клик выглядит как «ничего не произошло».
+    row.scrollIntoView({ behavior: "smooth", block: "nearest" });
     // Скелетон, а не «…»: при заторе в пуле ответ приходит через секунду-две,
     // и за это время строка должна выглядеть загружающейся, а не сломанной.
     // Класс общий с остальным дашбордом (_loaders.scss).
@@ -240,7 +252,7 @@ const ago = (ms) => {
 
 const KIND = {
   open: { mark: icon("long"), label: "OPEN" },
-  close: { mark: "×", label: "CLOSE" },
+  close: { mark: icon("close"), label: "CLOSE" },
   flip: { mark: icon("recompute"), label: "FLIP" },
 };
 
@@ -343,7 +355,8 @@ export async function refreshWinners() {
     return;
   }
 
-  const verdict = res.forward?.verdict ?? "too early";
+  const raw = res.forward?.verdict ?? "too early";
+  const verdict = VERDICT_EN[raw] ?? raw;
   if (meta) {
     meta.textContent = `verdict: ${verdict}`;
     meta.style.color = VERDICT_STYLE[verdict] ?? "var(--text-muted)";
