@@ -1,38 +1,11 @@
 /* ── Strategies overview table ─────────────────────────────── */
 .strat-table-wrap {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  // Реестр стратегий шире экрана и длиннее карточки: прокрутка в обе стороны,
+  // шапка при этом остаётся (.table--sticky-head).
+  max-height: 70vh;
+  overflow-y: auto;
 }
-.strat-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-small);
-  white-space: nowrap;
 
-  thead th {
-    text-align: left;
-    font-weight: 600;
-    color: var(--text-muted);
-    font-size: var(--fs-label);
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    padding: 6px 10px;
-    border-bottom: 1px solid var(--border);
-    position: sticky;
-    top: 0;
-    background: var(--card-bg);
-  }
-  th.num,
-  td.num {
-    text-align: right;
-    font-family: var(--font-mono);
-  }
-  tbody td {
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border-muted);
-    vertical-align: middle;
-  }
-}
 .strat-row {
   cursor: pointer;
   transition: background 0.12s var(--ease);
@@ -197,22 +170,16 @@
     width: 100%;
   }
 }
+// Таблица сделок внутри раскрытой строки — общий `.table` (core/_table.scss).
+// Отличие только в отступах: она стоит внутри карточки, где слева уже есть
+// поле, поэтому левый padding ячейки нулевой.
 .strat-detail-table {
-  border-collapse: collapse;
-  font-family: var(--font-mono);
-  font-size: var(--fs-small);
-  width: 100%;
-
+  th,
   td {
     padding: 4px 14px 4px 0;
-    white-space: nowrap;
-    border-bottom: 1px solid var(--border-muted);
   }
   tr:last-child td {
     border-bottom: none;
-  }
-  td.num {
-    text-align: right;
   }
 }
 .strat-dt-coin {
@@ -221,13 +188,6 @@
 .strat-shadow-table {
   th {
     padding: 2px 14px 4px 0;
-    color: var(--text-muted);
-    font-weight: 500;
-    text-align: left;
-    border-bottom: 1px solid var(--border-muted);
-  }
-  th.num {
-    text-align: right;
   }
 }
 .strat-shadow-note {

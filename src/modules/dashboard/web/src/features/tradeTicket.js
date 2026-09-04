@@ -1,24 +1,17 @@
 // ─────────────────────────────────────────────────
 //  Trade Ticket — модалка «открыть / закрыть позицию» в стиле Rabby
 // ─────────────────────────────────────────────────
-// Зачем эта штука (важно, иначе через месяц соблазн «дополнить»):
+// Ордера уходят через SDK: сторонние фронтенды вшивают builder-fee 2 бп
+// (+46% к ставке), тут её нет — тариф биржи, интерфейс свой.
 //
-// Замер комиссий 11.08.2026: сторонний фронтенд вшивает в ордер builder-fee
-// 2 бп (+46% к ставке). Ордера через SDK — не вшивают: 374 бот-филла прошли по
-// 4.32 бп при $0.00 надбавки. Сайт биржи надбавку тоже не берёт, но пользоваться
-// им неудобно, а Rabby всплывает на каждый клик. Панель закрывает ровно этот
-// разрыв: тариф биржи, интерфейс — свой.
+// 🔒 ГРАНИЦА ОТВЕТСТВЕННОСТИ, не размывать: модалка ТОЛЬКО кладёт ордер на
+// биржу. Она не пишет в БД, не ставит стопы и не ведёт позицию — сопровождение
+// у няньки (adopt), она видит новую ручную позу и вешает свой ATR-стоп.
+// Поэтому строка «Стоп-лосс» показывающая, а не вводимая: второй стоп на ту же
+// позу — это класс рассинхрона «зеркало ≠ биржа».
 //
-// 🔒 ГРАНИЦА ОТВЕТСТВЕННОСТИ (решено 16.08.2026, не размывать):
-// Модалка ТОЛЬКО кладёт ордер на биржу. Она НЕ пишет в БД, НЕ ставит стопы и НЕ
-// ведёт позицию. Сопровождение остаётся у няньки (adopt): она видит новую
-// ручную позу так же, как при входе с сайта биржи, и через ~15 секунд вешает
-// свой ATR-стоп. Поэтому строка «Стоп-лосс» здесь показывающая, а не вводимая —
-// второй стоп на ту же позу породил бы ровно тот класс рассинхрона
-// «зеркало ≠ биржа», где уже собрано 8 фиксов за 6 недель.
-//
-// Модель размера взята у Rabby, потому что она привычна: двигаешь МАРЖУ и
-// ПЛЕЧО, нотионал считается сам (size = margin × leverage). Не наоборот.
+// Размер задаётся как в Rabby: двигаешь МАРЖУ и ПЛЕЧО, нотионал считается сам
+// (size = margin × leverage). Не наоборот.
 //
 // Модуль чист от сети: всё наружу идёт через инжектируемый `io`. Это позволяет
 // гонять его локально на моках (ticket.html), не касаясь биржи.
@@ -346,7 +339,7 @@ function createModal(io) {
     return `<ul class="tt-combo__list" role="listbox">${items
       .map(
         (c, i) =>
-          `<li class="tt-combo__item ${i === state.suggestIdx ? "is-on" : ""}" role="option"
+          `<li class="tt-combo__item ${i === state.suggestIdx ?"is-on" : ""}" role="option"
                id="${COMBO_OPT_ID}${i}"
                aria-selected="${i === state.suggestIdx}" data-pick="${escapeHtml(c)}">${escapeHtml(c)}</li>`,
       )
@@ -411,7 +404,7 @@ function createModal(io) {
             <b data-avail>${available.toFixed(2)}</b>
             <span>available</span>
           </div>
-          <div class="tt-card__major ${tooSmall ? "is-bad" : ""}" data-margin>${Number(state.marginUsd).toFixed(2)}</div>
+          <div class="tt-card__major ${tooSmall ?"is-bad" : ""}" data-margin>${Number(state.marginUsd).toFixed(2)}</div>
         </div>
         ${tooSmall ? `<div class="tt-card__err">The minimum order size is $${MIN_ORDER_USD}</div>` : ""}
         ${slider("margin", state.marginUsd, 0, Math.max(available, 0.01), 0.01)}
@@ -438,7 +431,7 @@ function createModal(io) {
           <!-- Одна иконка «поменять» на оба состояния: тип ордера написан
                словом рядом, разные картинки с ним спорят. -->
           <button type="button" class="tt-row__toggle" data-toggle-type
-                  title="${state.orderType === "limit" ? "Limit post-only — switch to market" : "Market — switch to limit post-only"}">
+                  data-card="${state.orderType === "limit" ? "Limit post-only — switch to market" : "Market — switch to limit post-only"}">
             ${state.orderType === "limit" ? "Limit post-only" : "Market"} ${icon("swap")}
           </button>
         </div>
@@ -463,13 +456,13 @@ function createModal(io) {
           <span>Size</span>
           <b data-size>${notional > 0 ? `${fmtUsd(notional)} = ${coinAmount(coins)} ${escapeHtml(state.coin || "")}` : "—"}</b>
         </div>
-        <div class="tt-row ${ctx.adoptEnabled === false ? "tt-row--bad" : ""}">
+        <div class="tt-row ${ctx.adoptEnabled === false ?"tt-row--bad" : ""}">
           <span>Stop Loss <i class="tt-row__by">set by bot</i></span>
           <b data-botstop>${botStopHtml(botStop)}</b>
         </div>
-        <div class="tt-row ${riskEq?.over ? "tt-row--bad" : ""}">
+        <div class="tt-row ${riskEq?.over ?"tt-row--bad" : ""}">
           <span>Risk at that stop</span>
-          <b class="${risk != null ? "is-risk" : ""}">${
+          <b class="${risk != null ?"is-risk" : ""}">${
             risk != null
               ? `−${fmtUsd(risk)}${riskEq ? ` <i class="tt-row__sub">${riskEq.pctOfEquity.toFixed(0)}% of equity</i>` : ""}`
               : "—"
@@ -572,33 +565,17 @@ function createModal(io) {
     bodyEl.querySelector("[data-submit]")?.addEventListener("click", submitOpen);
   }
 
-  /** Пересчёт производных чисел без перерисовки — чтобы слайдер не «прыгал». */
   /**
-   * Точечное обновление всех производных чисел БЕЗ перерисовки DOM.
-   *
-   * Полный render() тут использовать нельзя: он пересоздаёт .tt-view, из-за
-   * чего переигрывается CSS-анимация появления и модалка визуально «моргает
-   * как перезагруженная» на каждом введённом символе. Плюс терялись бы фокус,
-   * каретка и открытая выпадашка. Поэтому всё, что зависит от state и от
-   * контекста с сервера, обновляется здесь адресно.
+   * Точечное обновление производных чисел БЕЗ перерисовки DOM.
+   * 🚨 Полный render тут нельзя: он пересоздаёт.tt-view — модалка моргает на
+   * каждом символе, теряются фокус, каретка и открытая выпадашка.
    */
   /**
-   * Прижимает плечо и маржу к лимитам текущей монеты и синхронизирует слайдеры.
-   *
-   * Нужен потому, что state переживает смену монеты: выставил 10x на DOGE,
-   * переключился на CASHCAT (биржевой максимум 3x) — плечо обязано переехать
-   * само, а не ждать, пока биржа отобьёт ордер.
-   */
-  /**
-   * ЧИСТОЕ прижатие state к лимитам — без DOM. Вызывается и из render(), и из
-   * softRefresh, потому что состояние переживает смену монеты по ЛЮБОМУ пути:
-   * набор с клавиатуры, клик по подсказке, ↑↓+Enter, повторное открытие модалки
-   * с уже выбранной монетой.
-   *
-   * Раньше кламп жил только в softRefresh, и путь «клик по подсказке → render()»
-   * оставлял плечо стухшим: на CASHCAT (3x) в state висело 10x, слайдер молча
-   * прижимался разметкой, а число рядом показывало 10x и уходило на сервер.
-   * Найдено оператором 16.08.2026 на связке BTC → CASHCAT.
+   * ЧИСТОЕ прижатие плеча и маржи к лимитам монеты — без DOM.
+   * 🚨 Зовётся и из render, и из softRefresh: state переживает смену монеты
+   * по ЛЮБОМУ пути (клавиатура, клик по подсказке, ↑↓+Enter, повторное
+   * открытие). Пропущенный путь оставляет плечо выше биржевого максимума, и
+   * оно уходит на сервер.
    */
   function clampState() {
     const maxLev = leverageCap(ctx);

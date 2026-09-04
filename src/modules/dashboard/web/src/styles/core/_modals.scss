@@ -53,30 +53,20 @@
   margin-bottom: 10px;
   line-height: 1.5;
 }
+// Справочник в help-диалоге — общий `.table` (core/_table.scss). Своё здесь
+// только выравнивание по верху: в правой колонке абзац, и подпись слева
+// должна стоять на его первой строке, а не по центру блока.
 .help-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-small);
-
   th,
   td {
-    padding: 6px 8px;
-    text-align: left;
-    border-bottom: 1px solid var(--hairline);
     vertical-align: top;
-  }
-  th {
-    font-weight: 600;
-    color: var(--text-muted);
-    font-size: var(--fs-label);
-    text-transform: uppercase;
-  }
-  tr:last-child td {
-    border-bottom: none;
+    white-space: normal;
   }
   td:first-child {
     white-space: nowrap;
-    font-family: var(--font-mono);
+  }
+  tr:last-child td {
+    border-bottom: none;
   }
 }
 .help-modal {

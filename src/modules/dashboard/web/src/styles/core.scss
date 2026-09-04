@@ -9,12 +9,16 @@
 @use "core/controls";
 @use "core/chrome";
 @use "core/datagrid";
+@use "core/table";
+@use "core/tabs";
 @use "core/loaders";
 @use "core/activity";
 @use "core/footer";
 @use "core/responsive";
 @use "core/nearmiss";
 @use "core/modals";
+@use "core/hovercard";
+@use "core/hoverCard";
 @use "core/motion";
 @use "core/utilities";
 // tone — только миксины (@mixin), сам по себе CSS не печатает; подключается

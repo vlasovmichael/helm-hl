@@ -285,15 +285,15 @@ function rowHtml(p) {
   return `
     <tr>
       <td><span class="signals-price">#${escapeHtml(p.coin)}</span></td>
-      <td class="c ${sideCls}"><strong>${arrow} ${escapeHtml(p.side)}</strong></td>
-      <td class="r">${p.leverage}×</td>
-      <td class="r">${fmtUsd(p.sizeUsd)}</td>
-      <td class="r">${fmtPrice(p.entryPrice)}</td>
-      <td class="r" data-mp-mark>${p.markPrice != null ? "$" + fmtPrice(p.markPrice) : "—"}</td>
-      <td class="r ${pnlCls}"><strong>${pnl == null ? "—" : fmtUsd(pnl)}</strong>${
+      <td class="center ${sideCls}"><strong>${arrow} ${escapeHtml(p.side)}</strong></td>
+      <td class="num">${p.leverage}×</td>
+      <td class="num">${fmtUsd(p.sizeUsd)}</td>
+      <td class="num">${fmtPrice(p.entryPrice)}</td>
+      <td class="num" data-mp-mark>${p.markPrice != null ? "$" + fmtPrice(p.markPrice) : "—"}</td>
+      <td class="num ${pnlCls}"><strong>${pnl == null ? "—" : fmtUsd(pnl)}</strong>${
         roe == null ? "" : `<span class="mp-roe">${fmtPct(roe)}</span>`
       }${sub}</td>
-      <td class="c">${button({
+      <td class="center">${button({
         label: "Close",
         size: "sm",
         cls: "mp-close-btn",
@@ -332,13 +332,13 @@ async function refreshActive() {
           <span class="mp-active-meta">${used}/${max} · ${managed ? `${icon("bot")} bot manages exit` : "bot hands-off"}</span>
         </div>
         <div class="u-scroll-x">
-          <table class="data-table mp-active-table">
+          <table class="table table--compact mp-active-table">
             <thead>
               <tr>
-                <th>Coin</th><th class="c">Side</th><th class="r">Lev</th>
-                <th class="r">Size</th><th class="r">Entry</th><th class="r">Price</th>
-                <th class="r" title="Unrealized P&L (net) + ROE on margin">uPnL</th>
-                <th class="c"></th>
+                <th>Coin</th><th class="center">Side</th><th class="num">Lev</th>
+                <th class="num">Size</th><th class="num">Entry</th><th class="num">Price</th>
+                <th class="num" data-card="Unrealized P&L (net) + ROE on margin">uPnL</th>
+                <th class="center"></th>
               </tr>
             </thead>
             <tbody>${positions.map(rowHtml).join("")}</tbody>

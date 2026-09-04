@@ -69,7 +69,7 @@ function renderList() {
   list.innerHTML = items
     .map((n) => {
       const fresh = n.ts > lr ? " notif-item--fresh" : "";
-      const mail = n.emailed ? `<span class="notif-mail" title="Also sent by email">${icon("mail")}</span>` : "";
+      const mail = n.emailed ? `<span class="notif-mail" data-card="Also sent by email">${icon("mail")}</span>` : "";
       const body = stripEmoji((n.message || "").split("\n")[0]); // первая строка — суть
       // Та же классификация, что у тоста.
       const { glyph, kind } = classifyNotif(n);

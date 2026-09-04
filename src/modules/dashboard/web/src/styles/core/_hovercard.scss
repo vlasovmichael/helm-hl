@@ -1,0 +1,67 @@
+@use "./breakpoints" as *;
+
+// ─────────────────────────────────────────────────────────────────────
+//  Hover-card (core/hoverCard.js) — один слой на всё приложение.
+//
+//  Это КАРТОЧКА, а не подсказка-плашка: та же поверхность, рамка и тень, что
+//  у остальных панелей, текст по левому краю и настоящий внутренний отступ.
+//  Стрелки нет намеренно — карточка не «указывает», она раскрывается рядом.
+// ─────────────────────────────────────────────────────────────────────
+.hovercard {
+  position: fixed;
+  z-index: 90; // выше поповера уведомлений (60), ниже диалога
+  width: max-content;
+  max-width: 256px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg-elev);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  text-align: left;
+  box-shadow: var(--shadow);
+  // Курсор заходит внутрь и держит карточку открытой — иначе длинный текст
+  // нельзя ни дочитать, ни выделить.
+  pointer-events: auto;
+
+  // Появление: подъезд к хозяину + лёгкий зум, как у hover-card в shadcn.
+  opacity: 0;
+  transform: translateY(4px) scale(0.97);
+  transform-origin: bottom center;
+  transition:
+    opacity var(--dur-fast) var(--ease-out),
+    transform var(--dur-fast) var(--ease-out);
+
+  &.is-open {
+    opacity: 1;
+    transform: none;
+  }
+
+  // Карточка снизу растёт из своего верхнего края.
+  &--below {
+    transform: translateY(-4px) scale(0.97);
+    transform-origin: top center;
+  }
+
+  // Объяснение на две-три строки в узкой колонке читается плохо.
+  &--wide {
+    max-width: 320px;
+  }
+}
+
+// Хозяин карточки: курсор-вопрос там, где элемент сам по себе не кликабелен.
+[data-card]:not(button):not(a):not(input) {
+  cursor: help;
+}
+
+@include reduced-motion {
+  .hovercard {
+    transition: opacity 0.12s linear;
+    transform: none;
+    &--below {
+      transform: none;
+    }
+  }
+}

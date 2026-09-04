@@ -4,7 +4,7 @@ import { icon, paintIcons } from "./src/core/icon.js";
 //  journal.html — журнал чтения графика (дрилл «на сутки вперёд»).
 //  Читает свечи/цену HL напрямую (publicWS/REST), ничего не торгует.
 //  Цикл: читаю (разметка сценариев) → проверяю (прошлая) → журнал. По 3 якорным
-//  монетам (BTC/HYPE/SOL) + любая своя. Хранение — localStorage. 2026-06-30.
+// монетам (BTC/HYPE/SOL) + любая своя. Хранение — localStorage..
 // ─────────────────────────────────────────────────
 
 import { bindTheme } from "./src/core/shell.js";
@@ -172,7 +172,7 @@ function renderVsBtc(dchg, btcd) {
   wrap.style.display = "flex";
   const btcChg = dayChg(btcd.map((c) => ({ o: +c.o, c: +c.c }))); const rel = dchg - btcChg;
   const corr = Math.sign(dchg) === Math.sign(btcChg) && dchg !== 0;
-  el.innerHTML = `<span class="j-vschip"><span class="j-num ${rel >= 0 ? "j-up" : "j-down"}">${rel >= 0 ? "+" : ""}${rel.toFixed(1)}%</span><span class="j-badge ${corr ? "corr" : "div"}">${corr ? "tracks" : "diverges"}</span></span>`;
+  el.innerHTML = `<span class="j-vschip"><span class="j-num ${rel >= 0 ?"j-up" : "j-down"}">${rel >= 0 ? "+" : ""}${rel.toFixed(1)}%</span><span class="j-badge ${corr ?"corr" : "div"}">${corr ? "tracks" : "diverges"}</span></span>`;
 }
 
 // ── авто-разбор 4h/1h/5m «куда и когда» ──
@@ -213,10 +213,15 @@ function renderCoach(price, c4r, c1r, c5r) {
 let curTrend = "", curReg = "";
 function wireSeg(id, set) {
   const el = G(id);
-  el.querySelectorAll("button").forEach((b) => {
-    b.onclick = () => { el.querySelectorAll("button").forEach((x) => x.classList.remove("sel")); b.classList.add("sel"); set(b.dataset.v); };
+  const mark = (v) => el.querySelectorAll(".seg__btn").forEach((b) => {
+    const on = b.dataset.v === v;
+    b.classList.toggle("is-on", on); b.classList.toggle("active", on);
+    b.setAttribute("aria-pressed", String(on));
   });
-  return { set(v) { el.querySelectorAll("button").forEach((b) => b.classList.toggle("sel", b.dataset.v === v)); } };
+  el.querySelectorAll(".seg__btn").forEach((b) => {
+    b.onclick = () => { mark(b.dataset.v); set(b.dataset.v); };
+  });
+  return { set: mark };
 }
 const segT = wireSeg("segTrend", (v) => (curTrend = v)), segR = wireSeg("segReg", (v) => (curReg = v));
 
@@ -270,12 +275,12 @@ G("save").onclick = () => { entries(coin)[todayKey()] = { ...(entries(coin)[toda
 // ── вкладки монет ──
 function renderTabs() {
   G("tabs").innerHTML = allCoins().map((c) =>
-    `<button class="j-tab${c === coin ? " active" : ""}" data-coin="${c}">${c}${COINS.includes(c) ? "" : `<span class="j-rm" data-rm="${c}" title="Remove">${icon("close")}</span>`}</button>`,
-  ).join("") + `<button class="j-tab j-addbtn" id="addCoin" title="Add a coin">+</button>`;
+    `<button class="tabs__tab${c === coin ? " is-active" : ""}" data-coin="${c}">${c}${COINS.includes(c) ? "" : `<span class="j-rm" data-rm="${c}" data-card="Remove">${icon("close")}</span>`}</button>`,
+  ).join("") + `<button class="tabs__tab j-addbtn" id="addCoin" data-card="Add a coin">+</button>`;
 }
 function showAddInput() {
   const add = G("addCoin"); if (!add) return;
-  const inp = document.createElement("input"); inp.className = "j-coininput"; inp.placeholder = "ticker…"; inp.maxLength = 12;
+  const inp = document.createElement("input"); inp.className = "field field--ticker j-coininput"; inp.placeholder = "ticker…"; inp.maxLength = 12;
   add.replaceWith(inp); inp.focus();
   const done = () => { if (document.body.contains(inp)) renderTabs(); };
   inp.addEventListener("keydown", async (e) => {
@@ -301,7 +306,7 @@ function removeCoin(c) {
 G("tabs").addEventListener("click", (e) => {
   const rm = e.target.closest(".j-rm"); if (rm) { e.stopPropagation(); removeCoin(rm.dataset.rm); return; }
   if (e.target.closest("#addCoin")) { showAddInput(); return; }
-  const t = e.target.closest(".j-tab"); if (t && t.dataset.coin) switchCoin(t.dataset.coin);
+  const t = e.target.closest(".tabs__tab"); if (t && t.dataset.coin) switchCoin(t.dataset.coin);
 });
 
 // ── калькулятор стопа/размера ──

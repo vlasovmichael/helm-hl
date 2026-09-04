@@ -42,13 +42,12 @@ function fmtUsdShort(v) {
 }
 
 // Setup-вердикт карточки = контекст-направление по движению (computeMomentum в
-// режиме 'trend'). Continuation НЕ actionable (бэктест в минус) — единственный
-// вход = под-строка fade-high-ER. Radio Trend/Fade убран 2026-06-19 (он не флипал
-// ничего торгуемого после честного вердикта — см. memory smart_signals_removed).
+// режиме 'trend'). ⛔ Continuation НЕ actionable — бэктест в минус; единственный
+// вход = под-строка fade-high-ER.
 
 
 // Line-SVG иконки колонки Enter. stroke=currentColor → цвет от .hm-entry-${state}.
-// После честного вердикта (2026-06-19) для незанятой монеты состояний всего два:
+// После честного вердикта для незанятой монеты состояний всего два:
 //  · zone — мишень/прицел: сработал fade-high-ER, вход рядом (pulse, зелёный).
 //  · none — тире: эджа нет (continuation = контекст, не сделка).
 const ENTRY_ICON_SVG = {
@@ -184,12 +183,12 @@ export function renderHotMovers(payload, fmtTime) {
     .sort((a, b) => b.momScore - a.momScore || b.maxAbs - a.maxAbs);
 
   // Открытую монету (позиция бота / ручная) всегда пиним наверх, даже если её
-  // momentum не в топе — оператор хочет видеть свою позицию первой (2026-06-13).
+  // momentum не в топе — оператор хочет видеть свою позицию первой.
   const activeRows = sorted.filter((x) => isActiveCoin(x.s.coin));
   // …и даже если монеты ВООБЩЕ нет в сигналах сканера (затихла → выпала из
   // signals). Без этого пин-строка мигала: позиция то пропадала, то возвращалась
   // вместе с импульсом. Синтезируем минимальную строку из данных позиции —
-  // momentum-ячейки будут «—», но позиция остаётся видимой (2026-06-13).
+  // momentum-ячейки будут «—», но позиция остаётся видимой.
   const inSorted = new Set(activeRows.map((x) => x.s.coin));
   for (const coin of getActiveCoins()) {
     if (inSorted.has(coin)) continue;
@@ -205,7 +204,7 @@ export function renderHotMovers(payload, fmtTime) {
   // БЕЗ отсечки по ходу. Раньше прятали WAIT/dead-flat (|ход|<0.2%) — но в тихом
   // рынке под порог проходило 3-4 монеты, и таблица показывала «top 4» + пустые
   // плейсхолдеры. Юзер хочет видеть 8 реальных монет (сильнейшие сверху, тихие
-  // снизу с WAIT/—), а не 4 + дырки. sorted уже по momScore↓ (2026-06-18).
+  // снизу с WAIT/—), а не 4 + дырки. sorted уже по momScore↓.
   const slots = Math.max(0, HM_MAX_ROWS - activeRows.length);
   const restRows = sorted
     .filter((x) => !isActiveCoin(x.s.coin))
@@ -221,7 +220,7 @@ export function renderHotMovers(payload, fmtTime) {
     if (flush?.active) {
       const sharePct = Math.round((flush.share || 0) * 100);
       const word = flush.dir === "up" ? "SQUEEZE" : "FLUSH";
-      meta.innerHTML = `<span class="hm-flush-chip" title="Synchronized deleveraging across movers (${sharePct}% of top with OI down) — fade against the move = catching a knife, muted">${icon("warn")} ${word} ${sharePct}%</span> · ${escapeHtml(base)}`;
+      meta.innerHTML = `<span class="hm-flush-chip" data-card="Synchronized deleveraging across movers (${sharePct}% of top with OI down) — fade against the move = catching a knife, muted">${icon("warn")} ${word} ${sharePct}%</span> · ${escapeHtml(base)}`;
     } else {
       meta.textContent = base;
     }
@@ -247,7 +246,7 @@ export function renderHotMovers(payload, fmtTime) {
   // вверх/вниз + нейтральная риска для флэта. fill=currentColor → цвет берётся от
   // num-inline-pos/neg (зелёный/красный) или inline-color родителя, ничего не
   // дублируем. Мягкая анимация появления — в CSS (.hm-arw, уважает reduced-motion).
-  // dir: >0 рост, <0 падение, 0 флэт. (2026-06-28, вместо текстовых ▲/▼/→)
+  // dir: >0 рост, <0 падение, 0 флэт.
   const arwSvg = (dir) => {
     if (dir > 0)
       return '<svg class="hm-arw hm-arw--up" viewBox="0 0 14 16" fill="none" aria-hidden="true"><path d="M7 13 V4 M3.4 7 L7 3.3 L10.6 7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -276,7 +275,7 @@ export function renderHotMovers(payload, fmtTime) {
     const cls = tierCellCls(w);
     const inner = cls
       ? `${arrow}${fmtPct(v)}`
-      : `<span class="${v > 0 ? "num-inline-pos" : "num-inline-neg"}">${arrow}${fmtPct(v)}</span>`;
+      : `<span class="${v > 0 ?"num-inline-pos" : "num-inline-neg"}">${arrow}${fmtPct(v)}</span>`;
     return [inner, cls];
   };
   const findWin = (windows, mins) => windows.find((w) => w.mins === mins);
@@ -297,7 +296,7 @@ export function renderHotMovers(payload, fmtTime) {
     const trendInner =
       trendPct == null
         ? '<span class="num-inline-muted">—</span>'
-        : `<span class="${trendPct > 0 ? "num-inline-pos" : "num-inline-neg"}" title="price trend over ${th.trendLookbackMin || "?"}m">${arwSvg(trendPct > 0 ? 1 : -1)}${fmtPct(trendPct)}</span>`;
+        : `<span class="${trendPct > 0 ?"num-inline-pos" : "num-inline-neg"}" data-card="price trend over ${th.trendLookbackMin || "?"}m">${arwSvg(trendPct > 0 ? 1 : -1)}${fmtPct(trendPct)}</span>`;
 
     // Living heatmap: тинт строки по доминирующему движению цены (как на бирже —
     // вверх зелёный, вниз красный), интенсивность по |move|. Не зависит от
@@ -324,9 +323,6 @@ export function renderHotMovers(payload, fmtTime) {
     const rowCls = ["hm-main", isOpen ? "is-active" : "", heatCls]
       .filter(Boolean)
       .join(" ");
-
-    // (Чип «движ за/против позиции» убран 2026-06-28: дубль с направлением хода в
-    // %-ячейках; «with/against» подан криптично. Exit ведёт бот/adopt + под-строка.)
 
     // Биржевая flash-вспышка: цена выросла с прошлого рендера → зелёный,
     // упала → красный. Цена-ячейка пересоздаётся при смене html → анимация
@@ -452,7 +448,7 @@ export function renderHotMovers(payload, fmtTime) {
     // падает OI = участники разгружаются (движ выдыхается / шорты крывают). Окно
     // 15м (а не 5м) — чтобы не дублировать соседнюю колонку OI 5M. Нейтральная
     // раскраска: OI сам по себе не хорош/плох. Заменил тяжёлый Vol× — он считается
-    // только в /api/signals и в живом WS-броадкасте всегда был «—» (2026-06-28).
+    // только в /api/signals и в живом WS-броадкасте всегда был «—».
     let openSetupHtml = '<span class="num-inline-muted">—</span>';
     if (typeof s.oiDelta15m === "number" && isFinite(s.oiDelta15m)) {
       const v = s.oiDelta15m;
@@ -461,15 +457,15 @@ export function renderHotMovers(payload, fmtTime) {
       openSetupHtml = `<span style="color:${color};font-weight:600">OI 15m ${arrow}${fmtPct(v)}</span>`;
     }
     const setupCell = isOpen
-      ? `<td class="hm-setup c" data-w="Setup" title="Open-interest change over 15m: rising = new money entering the move (fuel), falling = participants closing">${openSetupHtml}</td>`
-      : `<td class="hm-setup c ${setupCls}" data-w="Setup" title="${setupTitle}"><span class="hm-setup-pill">${setupLabel}</span></td>`;
+      ? `<td class="hm-setup center" data-w="Setup" data-card="Open-interest change over 15m: rising = new money entering the move (fuel), falling = participants closing">${openSetupHtml}</td>`
+      : `<td class="hm-setup center ${setupCls}" data-w="Setup" data-card="${setupTitle}"><span class="hm-setup-pill">${setupLabel}</span></td>`;
 
     // ENTER: для открытой монеты вход неактуален — вместо таймера ОДНА стрелка,
     // которая поворачивается ПО МНЕ, а не по цене: up (зелёная) = движ в мою
     // сторону, down (красная) = против, mid при почти нулевом движении. Сама
     // стрелка — персистентный узел (см. mountDirArrows ниже): строка
     // перестраивается каждый тик, а узел переживает, поэтому поворот реально
-    // твинит. Управление/выход — в под-строке (2026-06-16: цена→прибыль).
+    // твинит. Управление и выход — в под-строке.
     let entryCell;
     if (isOpen) {
       // Направление = согласие движа со стороной позиции (та же логика, что у
@@ -480,25 +476,25 @@ export function renderHotMovers(payload, fmtTime) {
       const dir = moveAbs < 0.05 || !aSide ? "mid" : aligned ? "up" : "down";
       const tip =
         dir === "up" ? "price moving your way" : dir === "down" ? "price moving against you" : "barely moving";
-      entryCell = `<td class="hm-entry hm-dir" data-w="Dir" title="in position — ${tip}"><span class="hm-entry-icon"><span class="hm-dir-mount" data-dir="${dir}"></span></span></td>`;
+      entryCell = `<td class="hm-entry hm-dir" data-w="Dir" data-card="in position — ${tip}"><span class="hm-entry-icon"><span class="hm-dir-mount" data-dir="${dir}"></span></span></td>`;
     } else {
       const eico = ENTRY_ICON_SVG[entryState] || ENTRY_ICON_SVG.none;
-      entryCell = `<td class="hm-entry hm-entry-${entryState}" data-w="Enter" title="${entryTitle}"><span class="hm-entry-icon">${eico}</span></td>`;
+      entryCell = `<td class="hm-entry hm-entry-${entryState}" data-w="Enter" data-card="${entryTitle}"><span class="hm-entry-icon">${eico}</span></td>`;
     }
 
     // Пассивный тег старшего тренда (1h EMA): не входить против него — главный
     // леак (контр-тренд). s.htfTrend = 'up'|'down'|'flat'|'none' из enrichHtfTrend.
     let htfChip = "";
     if (s.htfTrend === "up")
-      htfChip = `<span class="hm-htf num-inline-pos" style="margin-left:6px;font-size: var(--fs-label);font-weight:600" title="Higher timeframe 1h trend UP — longs go with it; shorts fight it">1h ${icon("long")}</span>`;
+      htfChip = `<span class="hm-htf num-inline-pos" style="margin-left:6px;font-size: var(--fs-label);font-weight:600" data-card="Higher timeframe 1h trend UP — longs go with it; shorts fight it">1h ${icon("long")}</span>`;
     else if (s.htfTrend === "down")
-      htfChip = `<span class="hm-htf num-inline-neg" style="margin-left:6px;font-size: var(--fs-label);font-weight:600" title="Higher timeframe 1h trend DOWN — shorts go with it; longs fight it">1h ${icon("short")}</span>`;
+      htfChip = `<span class="hm-htf num-inline-neg" style="margin-left:6px;font-size: var(--fs-label);font-weight:600" data-card="Higher timeframe 1h trend DOWN — shorts go with it; longs fight it">1h ${icon("short")}</span>`;
     else if (s.htfTrend === "flat")
-      htfChip = `<span class="hm-htf num-inline-muted" style="margin-left:6px;font-size: var(--fs-label)" title="Higher timeframe 1h trend flat — no tailwind either way">1h ${icon("flat")}</span>`;
+      htfChip = `<span class="hm-htf num-inline-muted" style="margin-left:6px;font-size: var(--fs-label)" data-card="Higher timeframe 1h trend flat — no tailwind either way">1h ${icon("flat")}</span>`;
 
     // Чип Vol/OI: суточный оборот ≥ открытого интереса (Vol ≥ OI). На HL это
     // редкость (норма OI>Vol, медиана ~3×), поэтому Vol≥OI = монета сегодня реально
-    // крутится: высокий turnover, деньги входят-выходят, а не залегли. 2026-06-29.
+    // крутится: высокий turnover, деньги входят-выходят, а не залегли..
     let oiVolChip = "";
     const volOi =
       s.oiUsd > 0 && s.vol24hUsd > 0 ? s.vol24hUsd / s.oiUsd : null;
@@ -507,19 +503,19 @@ export function renderHotMovers(payload, fmtTime) {
         `Daily turnover is ${volOi.toFixed(1)}× open interest: 24h vol ${fmtUsdShort(s.vol24hUsd)} ≥ OI ${fmtUsdShort(s.oiUsd)}. ` +
         `On HL it is usually the other way round (OI>Vol), so this is rare: the coin is churning today — ` +
         `money moving in and out rather than sitting.`;
-      oiVolChip = `<span class="hm-oivol" style="margin-left:6px;font-size: var(--fs-label);font-weight:600" title="${escapeHtml(tip)}">Vol ${volOi.toFixed(1)}× OI</span>`;
+      oiVolChip = `<span class="hm-oivol" style="margin-left:6px;font-size: var(--fs-label);font-weight:600" data-card="${escapeHtml(tip)}">Vol ${volOi.toFixed(1)}× OI</span>`;
     }
 
     const rowHtml = `
       <td>${isOpen ? icon("pinned", { label: "Open position" }) : idx + 1}</td>
-      <td><a class="signals-price hm-coin-link" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" title="Open ${escapeHtml(s.coin)} in TradingView">#${escapeHtml(s.coin)}</a>${htfChip}${oiVolChip}</td>
+      <td><a class="signals-price hm-coin-link" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" data-card="Open ${escapeHtml(s.coin)} in TradingView">#${escapeHtml(s.coin)}</a>${htfChip}${oiVolChip}</td>
       ${setupCell}
       ${entryCell}
-      <td class="hm-price-cell r ${flashCls}"><span class="hm-price-inner"><span class="hm-spark-wrap" title="Price over ~20 min (live)">${sparkSvg(s.spark, { w: SPARK_W, h: SPARK_H, cls: "hm-spark" })}</span><span class="signals-price">${fmtPrice(s.price)}</span></span></td>
+      <td class="hm-price-cell num ${flashCls}"><span class="hm-price-inner"><span class="hm-spark-wrap" data-card="Price over ~20 min (live)">${sparkSvg(s.spark, { w: SPARK_W, h: SPARK_H, cls: "hm-spark" })}</span><span class="signals-price">${fmtPrice(s.price)}</span></span></td>
       ${cells}
-      <td class="r ${accelCellCls}" data-w="Acc">${accelInner}</td>
-      <td class="r" data-w="OI">${oiInner}</td>
-      <td class="r" data-w="Trend">${trendInner}</td>`;
+      <td class="num ${accelCellCls}" data-w="Acc">${accelInner}</td>
+      <td class="num" data-w="OI">${oiInner}</td>
+      <td class="num" data-w="Trend">${trendInner}</td>`;
 
     items.push({ key: `m:${s.coin}`, cls: rowCls, html: rowHtml });
 
@@ -656,7 +652,7 @@ function mountDirArrows(tbody) {
 // независимо от скан-тика Hot Movers. Для каждой активной монеты берёт текущую
 // цену (getActivePos().now) и, если она изменилась, играет волну В МОЮ СТОРОНУ:
 // favor (движ в плюс позиции) → зелёный шеврон/ракета вверх, against → красный
-// вниз. Для SHORT выгода = падение цены, для LONG = рост (2026-06-16).
+// вниз. Для SHORT выгода = падение цены, для LONG = рост.
 export function updateHotMoversLiveArrow() {
   for (const [coin, arrow] of _hmDirArrows) {
     const pos = getActivePos(coin);

@@ -21,6 +21,6 @@ export function tvUrl(coin) {
 export function linkifyCoins(text) {
   const safe = escapeHtml(text || "");
   return safe.replace(/#([A-Za-z][A-Za-z0-9]{0,14})\b/g, (m, coin) => {
-    return `<a class="notif-coin" href="${tvUrl(coin)}" target="_blank" rel="noopener" title="Open ${escapeHtml(coin)} in TradingView">${m}</a>`;
+    return `<a class="notif-coin" href="${tvUrl(coin)}" target="_blank" rel="noopener" data-card="Open ${escapeHtml(coin)} in TradingView">${m}</a>`;
   });
 }

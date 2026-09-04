@@ -42,11 +42,11 @@
       <div
         id="market-context"
         class="market-context unknown mc-loading"
-        title="Live BTC stats. Green frame = clear trend (RISK-ON/OFF), trade with the backdrop. Yellow = range, trading against structure is risky."
+        data-card="Live BTC stats. Green frame = clear trend (RISK-ON/OFF), trade with the backdrop. Yellow = range, trading against structure is risky."
       >
         <span class="mc-loader" aria-hidden="true"><span class="loader-spinner"></span></span>
         <span class="mc-head" id="mc-head"></span>
-        <span class="mc-spark-wrap" id="mc-spark" title="BTC price, last 24h"></span>
+        <span class="mc-spark-wrap" id="mc-spark" data-card="BTC price, last 24h"></span>
         <span class="mc-stats" id="mc-stats"></span>
       </div>
 
@@ -69,7 +69,7 @@
           id="tt-trade-btn"
           class="btn btn--primary btn--cta"
           type="button"
-          title="Open or close a position. Orders go straight to Hyperliquid via the API wallet — no builder fee, no wallet popup. The bot still places the stop and runs the exit."
+          data-card="Open or close a position. Orders go straight to Hyperliquid via the API wallet — no builder fee, no wallet popup. The bot still places the stop and runs the exit."
         >
           <i data-icon="rising"></i>Trade
         </button>
@@ -80,7 +80,7 @@
         <div class="card-header">
           <div
             class="card-title"
-            title="Coins with the largest price moves. Setup is a context direction (dump → SHORT, pump → LONG) — NOT a trade: continuation backtests negative."
+            data-card="Coins with the largest price moves. Setup is a context direction (dump → SHORT, pump → LONG) — NOT a trade: continuation backtests negative."
           >
             Hot Movers
           </div>
@@ -91,7 +91,7 @@
                 id="mp-paper-btn"
                 class="btn btn--sm"
                 type="button"
-                title="Open a paper trade (your own paper, Rabbit-style): coin, side, leverage, size off equity. The bot doesn't trade it — you run it by hand."
+                data-card="Open a paper trade (your own paper, Rabbit-style): coin, side, leverage, size off equity. The bot doesn't trade it — you run it by hand."
               >
                 <i data-icon="add"></i>Paper
               </button>
@@ -99,7 +99,7 @@
                 id="whatif-btn"
                 class="btn btn--sm"
                 type="button"
-                title="Itchy hands? Type a coin and side — the bot checks it against the fade-high-ER edge and either backs you or stops you"
+                data-card="Itchy hands? Type a coin and side — the bot checks it against the fade-high-ER edge and either backs you or stops you"
               >
                 What if…
               </button>
@@ -115,40 +115,40 @@
           </div>
         </div>
         <div class="u-scroll-x hm-scroll-wrap">
-          <table class="data-table signals-table hm-table">
+          <table class="table table--sticky-head signals-table hm-table">
             <thead>
               <tr>
                 <th style="width: 24px">#</th>
                 <th>Coin</th>
                 <th
-                  class="c"
-                  title="Fade setup: SHORT/LONG = ready to fade the move; WAIT = waiting for momentum to exhaust"
+                  class="center"
+                  data-card="Fade setup: SHORT/LONG = ready to fade the move; WAIT = waiting for momentum to exhaust"
                 >
                   Setup
                 </th>
                 <th
-                  class="c"
-                  title="Chase meter: how far price has already run IN THE TRADE DIRECTION from the short average (15m, 5m fallback). Lit only on a confirmed setup. Near the base — no chase; stretched — let it pull back; already gone your way — too late, wait for a retrace. You pick the 5m entry yourself."
+                  class="center"
+                  data-card="Chase meter: how far price has already run IN THE TRADE DIRECTION from the short average (15m, 5m fallback). Lit only on a confirmed setup. Near the base — no chase; stretched — let it pull back; already gone your way — too late, wait for a retrace. You pick the 5m entry yourself."
                 >
                   Enter
                 </th>
-                <th class="r">Price</th>
-                <th class="r">2m%</th>
-                <th class="r">5m%</th>
-                <th class="r">15m%</th>
+                <th class="num">Price</th>
+                <th class="num">2m%</th>
+                <th class="num">5m%</th>
+                <th class="num">15m%</th>
                 <th
-                  class="r"
-                  title="Acceleration: |2m| vs 5m extrapolation. Down = exhausting (fade), up = accelerating (avoid)"
+                  class="num"
+                  data-card="Acceleration: |2m| vs 5m extrapolation. Down = exhausting (fade), up = accelerating (avoid)"
                 >
                   Acc
                 </th>
                 <th
-                  class="r"
-                  title="OI change over 5 minutes. Rising = new positions; falling = closes/liquidations"
+                  class="num"
+                  data-card="OI change over 5 minutes. Rising = new positions; falling = closes/liquidations"
                 >
                   OI 5m
                 </th>
-                <th class="r" title="15m trend">
+                <th class="num" data-card="15m trend">
                   Trend
                 </th>
               </tr>
@@ -173,7 +173,7 @@
         <div class="card-header">
           <div
             class="card-title"
-            title="Coins where entering is cheap. «Friction» = what share of your risk budget the round trip (book spread + two taker fees) eats. These are NOT signals: the list is filtered by cost of entry, movement is shown as fact — the call is yours."
+            data-card="Coins where entering is cheap. «Friction» = what share of your risk budget the round trip (book spread + two taker fees) eats. These are NOT signals: the list is filtered by cost of entry, movement is shown as fact — the call is yours."
           >
             Screen
           </div>
@@ -184,34 +184,34 @@
         </div>
         <div id="screen-budget" class="scr-budget"></div>
         <div class="u-scroll-x">
-          <table class="data-table scr-table">
+          <table class="table scr-table">
             <thead>
               <tr>
-                <th data-sort="coin" title="Sort by ticker">Coin</th>
-                <th class="r" data-sort="price" title="Sort by price">Price</th>
+                <th data-sort="coin" data-card="Sort by ticker">Coin</th>
+                <th class="num" data-sort="price" data-card="Sort by price">Price</th>
                 <th
-                  class="r"
+                  class="num"
                   data-sort="move"
-                  title="Short-window move from the bot's live price buffer (15m, falls back to 1h). Sort by size of move."
+                  data-card="Short-window move from the bot's live price buffer (15m, falls back to 1h). Sort by size of move."
                 >
                   Move
                 </th>
-                <th class="r" data-sort="chg24h" title="Sort by 24h change">24h</th>
+                <th class="num" data-sort="chg24h" data-card="Sort by 24h change">24h</th>
                 <th
-                  class="r"
+                  class="num"
                   data-sort="friction"
-                  title="What share of your risk budget the round trip eats: book spread + two taker fees (4.32 bp each). Small print is the raw spread. Sort cheapest first."
+                  data-card="What share of your risk budget the round trip eats: book spread + two taker fees (4.32 bp each). Small print is the raw spread. Sort cheapest first."
                 >
                   Friction
                 </th>
                 <th
-                  class="r"
+                  class="num"
                   data-sort="mine"
-                  title="Your own track record on this coin: net P&L, number of trades and winrate. Not a prediction about the market — a fact about you."
+                  data-card="Your own track record on this coin: net P&L, number of trades and winrate. Not a prediction about the market — a fact about you."
                 >
                   Mine
                 </th>
-                <th class="r" data-sort="volume" title="Sort by 24h volume">Volume</th>
+                <th class="num" data-sort="volume" data-card="Sort by 24h volume">Volume</th>
               </tr>
             </thead>
             <tbody id="screen-tbody">

@@ -33,7 +33,7 @@ const SIZES = new Set(["sm", "lg"]);
  * @param {boolean} [o.cta]     полоса действия во всю ширину
  * @param {boolean} [o.disabled]
  * @param {string} [o.type]     button (по умолчанию) | submit
- * @param {string} [o.title]
+ * @param {string} [o.title]   подсказка (core/hoverCard.js), не нативный title
  * @param {string} [o.aria]     aria-label; для иконочной кнопки обязателен
  * @param {string} [o.cls]      дополнительные классы (хук для JS-выборки)
  * @param {object} [o.attrs]    data-атрибуты и прочее: { "data-side": "long" }
@@ -70,7 +70,7 @@ export function button({
 
   return (
     `<button type="${esc(type)}" class="${classes.join(" ")}"` +
-    (title ? ` title="${esc(title)}"` : "") +
+    (title ? ` data-card="${esc(title)}"` : "") +
     (ariaLabel ? ` aria-label="${esc(ariaLabel)}"` : "") +
     (disabled ? " disabled" : "") +
     `${extra}>` +
@@ -92,14 +92,14 @@ export function segmented({ options = [], value = "", name = "seg", cls = "", wi
       const on = String(o.value) === String(value);
       const tone = o.tone ? ` seg__btn--${o.tone}` : "";
       return (
-        `<button type="button" class="seg__btn${tone}${on ? " is-on active" : ""}"` +
+        `<button type="button" class="seg__btn${tone}${on ?" is-on active" : ""}"` +
         ` data-${esc(name)}="${esc(o.value)}" aria-pressed="${on}">` +
         (o.icon ? glyph(o.icon) + " " : "") +
         `${esc(o.label)}</button>`
       );
     })
     .join("");
-  return `<div class="seg${wide ? " seg--wide" : ""}${cls ? " " + cls : ""}" role="group">${items}</div>`;
+  return `<div class="seg${wide ?" seg--wide" : ""}${cls ? " " + cls : ""}" role="group">${items}</div>`;
 }
 
 /**
@@ -147,8 +147,41 @@ export function badge({ label = "", tone = "", title = "", cls = "" } = {}) {
   if (cls) classes.push(cls);
   return (
     `<span class="${classes.join(" ")}"` +
-    (title ? ` title="${esc(title)}"` : "") +
+    (title ? ` data-card="${esc(title)}"` : "") +
     `>${esc(label)}</span>`
+  );
+}
+
+/**
+ * Чип списка: короткая метка, которую можно убрать. Вотчлист монет
+ * (/divergence) и список китовых адресов — один и тот же приём.
+ *
+ * 🚨 Это НЕ `badge`: на бейдж не нажимают, а чип носит кнопку удаления.
+ *
+ * @param {string} o.label сама метка
+ * @param {string} [o.sub] приглушённый хвост (сокращённый адрес)
+ * @param {string} [o.title] подсказка на весь чип
+ * @param {object} [o.remove] { title, attrs } — есть крестик; нет ключа — нет крестика
+ * @param {boolean} [o.mono]
+ */
+export function chip({ label = "", sub = "", title = "", remove = null, mono = true, cls = "" } = {}) {
+  const x = remove
+    ? button({
+        icon: "close",
+        variant: "ghost",
+        aria: remove.title || "Remove",
+        title: remove.title || "Remove",
+        cls: "chip__x",
+        attrs: remove.attrs || {},
+      })
+    : "";
+  return (
+    `<span class="chip${mono ?" chip--mono" : ""}${cls ? " " + cls : ""}"` +
+    (title ? ` data-card="${esc(title)}"` : "") +
+    `>${esc(label)}` +
+    (sub ? `<i class="chip__sub">${esc(sub)}</i>` : "") +
+    x +
+    `</span>`
   );
 }
 
@@ -159,7 +192,7 @@ export function badge({ label = "", tone = "", title = "", cls = "" } = {}) {
 export function slider({ name = "", value = 0, min = 0, max = 100, step = 1, cls = "" } = {}) {
   const pct = max > min ? ((Number(value) - min) / (max - min)) * 100 : 0;
   return (
-    `<input class="slider${cls ? " " + cls : ""}" type="range"` +
+    `<input class="slider${cls ?" " + cls : ""}" type="range"` +
     (name ? ` data-slider="${esc(name)}"` : "") +
     ` min="${esc(min)}" max="${esc(max)}" step="${esc(step)}" value="${esc(value)}"` +
     ` style="--fill:${Math.max(0, Math.min(100, pct)).toFixed(2)}%">`
@@ -205,7 +238,7 @@ export function card({
     .map(([k, v]) => (v === true ? ` ${k}` : ` ${k}="${esc(v)}"`))
     .join("");
   const labelHtml = label
-    ? `<span class="modal__card-label${accent ? " modal__card-label--accent" : ""}">${esc(label)}` +
+    ? `<span class="modal__card-label${accent ?" modal__card-label--accent" : ""}">${esc(label)}` +
       (labelSub ? ` <i>${esc(labelSub)}</i>` : "") +
       `</span>`
     : "";
@@ -221,13 +254,13 @@ export function card({
            <div class="modal__card-minor">${minorValue ? `<b>${esc(minorValue)}</b>` : ""}${
              minorNote ? `<span>${esc(minorNote)}</span>` : ""
            }</div>
-           <div class="modal__card-major${bad ? " is-bad" : ""}">${esc(major)}${
+           <div class="modal__card-major${bad ?" is-bad" : ""}">${esc(major)}${
              majorUnit ? `<i>${esc(majorUnit)}</i>` : ""
            }</div>
          </div>`
       : "";
   return (
-    `<div class="modal__card${cls ? " " + cls : ""}"${extra}>` +
+    `<div class="modal__card${cls ?" " + cls : ""}"${extra}>` +
     head +
     row +
     (err ? `<div class="modal__card-err">${esc(err)}</div>` : "") +
@@ -257,9 +290,9 @@ export function stat({
     .map(([k, v]) => (v === true ? ` ${k}` : ` ${k}="${esc(v)}"`))
     .join("");
   return (
-    `<div class="grid-item${primary ? " grid-item-primary" : ""}${cls ? " " + cls : ""}"${extra}>` +
+    `<div class="grid-item${primary ?" grid-item-primary" : ""}${cls ? " " + cls : ""}"${extra}>` +
     `<div class="item-label">${esc(label)}</div>` +
-    `<div class="item-value${tone ? " " + esc(tone) : ""}"${id ? ` id="${esc(id)}"` : ""}>${esc(value)}</div>` +
+    `<div class="item-value${tone ?" " + esc(tone) : ""}"${id ? ` id="${esc(id)}"` : ""}>${esc(value)}</div>` +
     (sub ? `<div class="item-sub">${esc(sub)}</div>` : "") +
     `</div>`
   );

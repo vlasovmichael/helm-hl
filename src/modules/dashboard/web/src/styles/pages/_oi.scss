@@ -2,13 +2,6 @@
 //  oi.html — витрина открытого интереса: монета дня, фильтр входа,
 //  обзорная таблица по всем монетам, история одной монеты.
 //
-//  До 04.09.2026 всё это лежало 253 строками внутри <style> в самой
-//  странице. Из-за этого страница жила вне системы: свои кегли (12.5 / 13.5
-//  / 15.5), свои цвета мимо темы (#5b9dff, #c98a1a, #2f9e63), обращение к
-//  несуществующему токену --panel-2 с серым фолбэком — и два правила,
-//  сломанных лишней скобкой `var(--hairline))`, из-за которых у обзорной
-//  таблицы вообще не было разделителей строк.
-//
 //  Префикс ss- достался от снятого Setup Scanner: карточка «монета дня»
 //  переиспользует его разметку.
 // ─────────────────────────────────────────────────────────────────────
@@ -37,88 +30,47 @@
 .oi-table-wrap {
   overflow-x: auto;
 }
-table.oi-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-variant-numeric: tabular-nums;
-}
-.oi-table th {
-  text-align: right;
-  padding: var(--sp-2) var(--sp-3);
-  font-size: var(--fs-label);
-  font-weight: 600;
-  letter-spacing: var(--ls-wide);
-  text-transform: uppercase;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
-  cursor: pointer;
-  user-select: none;
-  white-space: nowrap;
-}
-.oi-table th:first-child {
-  text-align: left;
-}
-/* Стрелка сортировки — иконка в потоке заголовка (см. oi.js), а не глиф в
-   ::after: у ▾ и ▴ разная оптическая масса, и колонка «прыгала» при смене
-   направления. Здесь только резерв места, чтобы шапка не дёргалась. */
-.oi-table th .icon {
-  margin-left: var(--sp-1);
-  color: var(--text-faint);
-}
-.oi-table th.sorted {
-  color: var(--text-primary);
 
-  .icon {
-    color: var(--accent);
+// Таблица OI — общий `.table` (core/_table.scss). Своего здесь: все колонки
+// числовые (кроме монеты), тикер акцентом и подсветка строки одной переменной.
+.oi-table {
+  th,
+  td {
+    text-align: right;
   }
-}
-/* Заголовок с пояснением: пунктир подсказывает, что есть подсказка. */
-.oi-table th[title] {
-  cursor: help;
-  text-decoration: underline dotted 1px;
-  text-underline-offset: 3px;
-}
+  th:first-child,
+  td:first-child {
+    text-align: left;
+  }
 
-.oi-table td {
-  text-align: right;
-  padding: var(--sp-2) var(--sp-3);
-  font-size: var(--fs-base);
-  border-bottom: 1px solid var(--hairline);
-  white-space: nowrap;
-  font-family: var(--font-mono);
-}
-.oi-table td:first-child {
-  text-align: left;
-  font-weight: 600;
-}
-/* Тикер как в Hot Movers — «#SOL», акцентом: он же аффорданс, строка ведёт
-   к графику ниже. */
-.oi-coin {
-  color: var(--accent);
-  letter-spacing: 0.01em;
-}
-/* Подсветка строки. Одна переменная --row-tint красит и саму строку, и
-   липкую первую ячейку — иначе они расходятся: у ячейки СВОЙ непрозрачный
-   фон (без него сквозь неё видно проезжающие колонки), и фон строки под ним
-   не виден. До 04.09.2026 это были два независимых правила с разными
-   значениями, и при наведении первая колонка подсвечивалась иначе, чем
-   остальная строка. */
-.oi-table tbody tr {
-  cursor: pointer;
-  background: var(--row-tint, transparent);
-}
-/* 🚨 Перехода у подсветки строки тут быть не может: липкой первой колонке тон
-   задаёт background-image (градиент из --row-tint), а он переключается
-   мгновенно — с плавной строкой колонка монеты загоралась раньше ряда. */
-.oi-table tbody tr,
-.oi-table tbody tr > td {
-  transition: none;
-}
-.oi-table tbody tr:hover {
-  --row-tint: var(--card-bg-hover);
-}
-.oi-table tbody tr.active {
-  --row-tint: var(--accent-soft);
+  // Тикер как в Hot Movers — «#SOL», акцентом: он же аффорданс, строка ведёт
+  // к графику ниже.
+  .oi-coin {
+    color: var(--accent);
+    letter-spacing: 0.01em;
+  }
+
+  // 🚨 Подсветку строки И липкой ячейки ведёт ОДНА переменная --row-tint: у
+  // ячейки свой непрозрачный фон (без него сквозь неё видно проезжающие
+  // колонки), и фон строки под ним не виден. Двумя правилами колонка монеты
+  // подсвечивается иначе, чем её же строка.
+  tbody tr {
+    cursor: pointer;
+    background: var(--row-tint, transparent);
+  }
+  // 🚨 Перехода тут быть не может: липкой ячейке тон задаёт background-image,
+  // он переключается мгновенно — с плавной строкой колонка загоралась раньше.
+  tbody tr,
+  tbody tr > td {
+    transition: none;
+  }
+  tbody tr:hover {
+    --row-tint: var(--card-bg-hover);
+    background: var(--row-tint);
+  }
+  tbody tr.active {
+    --row-tint: var(--accent-soft);
+  }
 }
 
 /* Липкая колонка монеты: на узком экране таблица едет вбок, и без этого
@@ -333,44 +285,12 @@ table.oi-table {
   font-family: var(--font-mono);
 }
 
+// Ряд монет дня — общий `.tabs.tabs--wrap` (core/_tabs.scss). Своего здесь:
+// метки состояния внутри вкладки (в позиции / день закрыт) и моно-тикер.
 .cod-tabs {
-  display: flex;
-  gap: var(--sp-2);
-  flex-wrap: wrap;
   margin: 2px 0 var(--sp-3);
 }
-.cod-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sp-2);
-  padding: 6px var(--sp-3);
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  border: 1px solid var(--border);
-  background: var(--canvas-subtle);
-  color: var(--text-secondary);
-  font-family: var(--font-sans);
-  font-size: var(--fs-body);
-  font-weight: 600;
-  transition:
-    background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
 
-  &:hover {
-    border-color: var(--border-strong);
-    color: var(--text-primary);
-  }
-  &.active {
-    color: var(--text-primary);
-    border-color: var(--accent-line);
-    background: var(--accent-soft);
-  }
-  &:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-  }
-}
 .cod-tab-coin {
   font-family: var(--font-mono);
 }

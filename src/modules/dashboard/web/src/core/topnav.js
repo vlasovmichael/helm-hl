@@ -9,24 +9,25 @@
 import { initNotifications } from "../features/notifications.js";
 import { createMorphIcon } from "./iconMorph.js";
 import { BELL_ICONS, NAV_ICONS } from "./icons.js";
+import { initHoverCards } from "./hoverCard.js";
 
 const LINKS = [
   { key: "dashboard", href: "/", label: "Dashboard" },
   // Order Book остаётся как страница (/orderbook), но ссылку из навбара
-  // убрали — стакан оператору тяжело читается, не нужен на видном месте (2026-06-28).
+  // убрали — стакан оператору тяжело читается, не нужен на видном месте.
   { key: "statistics", href: "/statistics", label: "Statistics" },
-  { key: "oi", href: "/oi", label: "OI", title: "Open interest history across all coins (ΔOI 24h/1h)" },
-  { key: "lab", href: "/lab", label: "Lab", title: "Research: how positions are run + closed verdicts" },
-  { key: "journal", href: "/journal", label: "Journal", title: "Chart-reading journal — mark up a coin a day ahead" },
-  { key: "ledger", href: "/ledger", label: "Ledger", title: "Monthly P&L ledger" },
+  { key: "oi", href: "/oi", label: "OI" },
+  { key: "lab", href: "/lab", label: "Lab" },
+  { key: "journal", href: "/journal", label: "Journal" },
+  { key: "ledger", href: "/ledger", label: "Ledger" },
 ];
 
 const navLink = (l, active) => {
   const isActive = l.key === active;
   return `
-    <a class="nav-link${isActive ? " active" : ""}" href="${l.href}"${
+    <a class="nav-link${isActive ?" active" : ""}" href="${l.href}"${
       isActive ? ' aria-current="page"' : ""
-    }${l.title ? ` title="${l.title}"` : ""} data-nav="${l.key}">
+    } data-nav="${l.key}">
       <svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true">${NAV_ICONS[l.key].rest}</svg>
       ${l.label}
     </a>`;
@@ -38,6 +39,10 @@ const navLink = (l, active) => {
  * @param {'dashboard'|'statistics'|'ledger'|'lab'} active
  */
 export function mountTopnav(active) {
+  // Подсказки включаем здесь: шапка есть на каждой странице дашборда, поэтому
+  // новая страница получает их вместе с ней и про вызов нельзя забыть.
+  initHoverCards();
+
   const nav = document.getElementById("topnav");
   if (!nav) return;
   nav.setAttribute("aria-label", "Primary");
@@ -46,7 +51,7 @@ export function mountTopnav(active) {
     <div class="topnav-links">${LINKS.map((l) => navLink(l, active)).join("")}</div>
     <div class="topnav-right">
       <div class="notif" id="notif">
-        <button class="notif-btn" id="notif-btn" type="button" aria-label="Notifications" aria-expanded="false" title="Notifications">
+        <button class="notif-btn" id="notif-btn" type="button" aria-label="Notifications" aria-expanded="false">
           <svg class="nav-ico notif-bell" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
             <path d="M13.7 21a2 2 0 0 1-3.4 0" />

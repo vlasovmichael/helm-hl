@@ -1,0 +1,161 @@
+@use "./breakpoints" as *;
+@use "./utilities" as *;
+
+// ─────────────────────────────────────────────────────────────────────
+//  Таблица — одна порода на весь дашборд.
+//
+//  🚨 Своих табличных классов не заводить. Пород было семь (data-table,
+//  oi-table, mt-table, strat-table, per-coin-table, breakdown-table,
+//  help-table), и различались они не по делу: кегль шапки 10 или 11px,
+//  межбуквенное 0.03…0.07em, отступы 6/7/8px, линия то hairline, то border,
+//  а «правая колонка» называлась то `.r`, то `.num`, то `.mt-num`. Читалось
+//  это как семь разных таблиц в одном приложении.
+//
+//  Разметка:
+//    .table-wrap             — прокрутка вбок (таблица шире экрана)
+//    .table                  — сама таблица
+//    .table--compact         — плотные строки: длинные списки
+//    .table--sticky-head     — шапка не уезжает при вертикальной прокрутке
+//    th.num / td.num         — числовая колонка: вправо и моноширинно
+//    th.sortable / .is-sorted — заголовок-сортировщик
+//    tr.is-active            — строка, к которой сейчас привязан экран
+//
+//  Первая колонка всегда текстовая (монета, метка), остальные — числа: это
+//  и есть причина, по которой `td:first-child` выравнивается влево без
+//  всякого класса.
+// ─────────────────────────────────────────────────────────────────────
+
+.table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: var(--fs-body);
+  // Цифры одной ширины: без этого колонки дышат на каждом тике.
+  font-variant-numeric: tabular-nums;
+
+  th {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-sans);
+    font-size: var(--fs-micro);
+    font-weight: 600;
+    letter-spacing: var(--ls-wide);
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--hairline);
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+
+  // Числовая колонка. Заголовок над числом обязан стоять по тому же краю,
+  // иначе шапка не читается как подпись к колонке.
+  th.num,
+  td.num {
+    text-align: right;
+  }
+  th.center,
+  td.center {
+    text-align: center;
+  }
+
+  // Первая колонка — имя строки: слева и весомее остальных.
+  tbody td:first-child {
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  tbody tr:hover {
+    background: var(--card-bg-hover);
+  }
+
+  // Знак числа красит САМО ЧИСЛО, а не строку: цветная строка читается как
+  // статус, а тут цвет — это плюс или минус. Классы ставит разметка.
+  td.num-pos,
+  td.num-pos * {
+    color: var(--green);
+    font-weight: 600;
+  }
+  td.num-neg,
+  td.num-neg * {
+    color: var(--red);
+    font-weight: 600;
+  }
+  td.num-muted {
+    color: var(--text-muted);
+  }
+
+  // Заголовок с подсказкой (data-card): пунктир говорит, что есть что читать.
+  th[data-card] {
+    cursor: help;
+    text-decoration: underline dotted 1px;
+    text-underline-offset: 3px;
+  }
+}
+
+// Плотный режим — для длинных списков, где важнее строк на экран.
+.table--compact {
+  font-size: var(--fs-small);
+
+  th {
+    padding: 6px 8px;
+  }
+  td {
+    padding: 6px 8px;
+  }
+}
+
+// Шапка остаётся на месте внутри прокручиваемой карточки.
+// 🚨 Фон обязателен и непрозрачен: сквозь полупрозрачную шапку видно
+// проезжающие строки.
+.table--sticky-head thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--card-bg);
+}
+
+// Строка, к которой привязан экран (раскрытая, выбранная).
+.table tbody tr.is-active {
+  background: var(--accent-soft);
+}
+
+// ── Сортировка ──────────────────────────────────────────────────────
+// Стрелка — иконка-маска в ::after, а не глиф: у ▾ и ▴ разная оптическая
+// масса, и колонка дёргалась при смене направления.
+.table th.sortable {
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    color: var(--text-primary);
+  }
+  &::after {
+    @include mask-icon("chevrons-up-down", 11px);
+    margin-left: 4px;
+    opacity: 0.3;
+  }
+  &.is-sorted {
+    color: var(--text-primary);
+
+    &::after {
+      @include mask-icon("arrow-down", 11px);
+      opacity: 0.9;
+      color: var(--accent);
+    }
+  }
+  &.is-sorted.is-asc::after {
+    @include mask-icon("arrow-up", 11px);
+  }
+}

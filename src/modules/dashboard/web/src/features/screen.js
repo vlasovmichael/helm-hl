@@ -5,7 +5,7 @@
 // по всей бирже; Screen показывает монеты, ОТОБРАННЫЕ ПО ЦЕНЕ ВХОДА, и рядом —
 // сколько сделок уже сделано за день.
 //
-// 🔒 ЗДЕСЬ НЕТ ПРЕДСКАЗАНИЙ (решено 23.08.2026, не размывать):
+// 🔒 ЗДЕСЬ НЕТ ПРЕДСКАЗАНИЙ, не размывать:
 // ни скоринга, ни «setup», ни стрелок «покупай», ни подсветки «сигнал». Всё,
 // что мы пробовали в этом жанре, померено и эджа не дало. Карточка говорит три
 // вещи, и все три — факты: что произошло с ценой, сколько стоит вход и как ты
@@ -13,7 +13,7 @@
 //
 // Серверная часть и обоснование порога — routes/screen.js.
 
-import { settle } from "../core/placeholders.js";
+import { settle, emptyRow } from "../core/placeholders.js";
 
 const fmtPct = (v, d = 2) =>
   v == null || !Number.isFinite(v) ? "—" : (v >= 0 ? "+" : "") + v.toFixed(d) + "%";
@@ -107,7 +107,7 @@ function renderBudget(b) {
   const over = n > cap;
   // Точки-счётчик: видно с одного взгляда, без чтения цифр.
   const dots = Array.from({ length: Math.max(cap, n) }, (_, i) =>
-    `<i class="scr-dot ${i < n ? (i >= cap ? "is-over" : "is-on") : ""}"></i>`,
+    `<i class="scr-dot ${i < n ? (i >= cap ?"is-over" : "is-on") : ""}"></i>`,
   ).join("");
 
   const left = b.remainingUsd;
@@ -117,11 +117,11 @@ function renderBudget(b) {
     `<div class="scr-budget__row">` +
       `<span class="scr-budget__label">Trades today</span>` +
       `<span class="scr-budget__dots">${dots}</span>` +
-      `<b class="${over ? "is-over" : ""}">${n} / ${cap}</b>` +
+      `<b class="${over ?"is-over" : ""}">${n} / ${cap}</b>` +
     `</div>` +
     `<div class="scr-budget__row">` +
       `<span class="scr-budget__label">Left before daily stop</span>` +
-      `<b class="${b.halted ? "is-over" : ""}">${b.halted ? "stop hit" : leftTxt}</b>` +
+      `<b class="${b.halted ?"is-over" : ""}">${b.halted ? "stop hit" : leftTxt}</b>` +
     `</div>` +
     (b.known === false
       ? `<div class="scr-budget__note">daily counter hasn't run — the limit isn't holding right now</div>`
@@ -133,11 +133,11 @@ function renderBudget(b) {
 
 /** Колонка «Mine»: твой послужной список по монете. */
 function mineCell(mine) {
-  if (!mine || !mine.n) return `<td class="r scr-mine scr-mine--none">—</td>`;
+  if (!mine || !mine.n) return `<td class="num scr-mine scr-mine--none">—</td>`;
   const bad = mine.pnl < 0;
   return (
-    `<td class="r scr-mine ${bad ? "is-bad" : "is-good"}"` +
-      ` title="You traded ${mine.coinLabel || "this coin"} ${mine.n}× — net ${fmtSignedUsd(mine.pnl)}, winrate ${
+    `<td class="num scr-mine ${bad ?"is-bad" : "is-good"}"` +
+      ` data-card="You traded ${mine.coinLabel || "this coin"} ${mine.n}× — net ${fmtSignedUsd(mine.pnl)}, winrate ${
         mine.wr == null ? "—" : Math.round(mine.wr) + "%"
       }">` +
       `${fmtSignedUsd(mine.pnl)}` +
@@ -152,7 +152,11 @@ function renderRows() {
 
   const rows = sortCoins(lastData.coins).slice(0, 12);
   if (!rows.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No coin passed the threshold</td></tr>`;
+    tbody.innerHTML = emptyRow(7, {
+      glyph: "search",
+      title: "No coin passed the threshold",
+      hint: "Raise SCREEN_MAX_FRICTION_BP if the whole board is too expensive to trade today.",
+    });
     return;
   }
 
@@ -170,18 +174,18 @@ function renderRows() {
         // тикет, а не вход — размер и сторону оператор выбирает сам, а нянька
         // потом повесит стоп (см. границу ответственности в tradeTicket.js).
         `<tr class="scr-row" data-coin="${c.coin}" tabindex="0" role="button"` +
-          ` title="Open trade ticket for ${c.coin}">` +
+          ` data-card="Open trade ticket for ${c.coin}">` +
           `<td class="scr-coin">${c.coin}</td>` +
-          `<td class="r">${fmtPrice(c.price)}</td>` +
-          `<td class="r ${pctCls(short)}">${fmtPct(short, 2)}` +
+          `<td class="num">${fmtPrice(c.price)}</td>` +
+          `<td class="num ${pctCls(short)}">${fmtPct(short, 2)}` +
             (shortLabel ? `<i class="scr-win">${shortLabel}</i>` : "") +
           `</td>` +
-          `<td class="r ${pctCls(c.chg24hPct)}">${fmtPct(c.chg24hPct, 1)}</td>` +
-          `<td class="r scr-fr ${frictionClass(fr)}">${
+          `<td class="num ${pctCls(c.chg24hPct)}">${fmtPct(c.chg24hPct, 1)}</td>` +
+          `<td class="num scr-fr ${frictionClass(fr)}">${
             fr == null ? "—" : Math.round(fr) + "%"
           }<i class="scr-win">${c.spreadBp == null ? "" : c.spreadBp.toFixed(1) + " bp"}</i></td>` +
           mineCell(c.mine ? { ...c.mine, coinLabel: c.coin } : null) +
-          `<td class="r scr-vol">${fmtVol(c.volume24hUsd)}</td>` +
+          `<td class="num scr-vol">${fmtVol(c.volume24hUsd)}</td>` +
         `</tr>`
       );
     })
@@ -194,8 +198,9 @@ function renderRows() {
 function paintSortIndicators() {
   document.querySelectorAll("#sec-screen th[data-sort]").forEach((th) => {
     const on = th.dataset.sort === sortKey;
+    th.classList.add("sortable");
     th.classList.toggle("is-sorted", on);
-    th.dataset.dir = on ? sortDir : "";
+    th.classList.toggle("is-asc", on && sortDir === "asc");
   });
 }
 
@@ -225,10 +230,11 @@ export function renderScreen(data) {
         : data?.reason === "build-failed"
           ? `exchange call failed (${data.message || "no detail"})`
           : "no answer yet";
-    tbody.innerHTML =
-      `<tr><td colspan="7" class="empty-state">` +
-        `Screen is still loading — ${escapeText(String(why))}. Retrying…` +
-      `</td></tr>`;
+    tbody.innerHTML = emptyRow(7, {
+      glyph: "clock",
+      title: "Screen is still loading",
+      hint: `${escapeText(String(why))}. Retrying on the next tick.`,
+    });
     return;
   }
 
@@ -287,7 +293,5 @@ export function initScreenInteractions(openTicket) {
 // прячем, а не удаляем, и по умолчанию скрыта. Пока скрыта — фронт не ходит в
 // /api/signals и не рендерит строки (WS-кадр всё равно приходит, но его
 // hotMovers просто игнорируется).
-// 04.09.2026: тумблер «Show/Hide Hot Movers table» снят. Он прятал карточку
-// целиком и переносил кнопки Paper/What-if между двумя шапками — то есть одна
-// и та же кнопка жила то здесь, то там, и найти её было делом привычки.
-// Карточка теперь просто стоит под Active Position и всегда открыта.
+// Карточка стоит под Active Position и всегда открыта: тумблер, прятавший её
+// целиком, переносил кнопки Paper/What-if между двумя шапками.

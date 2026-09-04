@@ -10,12 +10,12 @@
 
       <main class="j-wrap">
         <div class="j-toolbar">
-          <nav class="j-nav" id="tabs"></nav>
+          <nav class="tabs j-nav" id="tabs"></nav>
           <button
             class="j-help-btn"
             id="helpToggle"
             type="button"
-            title="How to use the journal"
+            data-card="How to use the journal"
             aria-label="How to use"
           >
             <i data-icon="help"></i>
@@ -151,32 +151,33 @@
             </h2>
             <div class="j-field">
               <label class="j-f">1D trend</label>
-              <div class="j-seg" id="segTrend">
-                <button type="button" data-v="up"><i data-icon="rising"></i>up</button
-                ><button type="button" data-v="range"><i data-icon="flat"></i>range</button
-                ><button type="button" data-v="down"><i data-icon="falling"></i>down</button>
+              <div class="seg seg--wide" id="segTrend" role="group">
+                <button type="button" class="seg__btn seg__btn--long" data-v="up" aria-pressed="false"><i data-icon="rising"></i>up</button
+                ><button type="button" class="seg__btn seg__btn--flat" data-v="range" aria-pressed="false"><i data-icon="flat"></i>range</button
+                ><button type="button" class="seg__btn seg__btn--short" data-v="down" aria-pressed="false"><i data-icon="falling"></i>down</button>
               </div>
             </div>
             <div class="j-field">
               <label class="j-f">Regime</label>
-              <div class="j-seg" id="segReg">
-                <button type="button" data-v="up">trend</button
-                ><button type="button" data-v="range">range</button>
+              <div class="seg seg--wide" id="segReg" role="group">
+                <button type="button" class="seg__btn" data-v="up" aria-pressed="false">trend</button
+                ><button type="button" class="seg__btn" data-v="range" aria-pressed="false">range</button>
               </div>
             </div>
             <div class="j-field j-row2">
               <div>
                 <label class="j-f">Resistance above</label
-                ><input type="text" id="resAbove" placeholder="60.8k / 61.9k" />
+                ><input class="field field--block field--lg" type="text" id="resAbove" placeholder="60.8k / 61.9k" />
               </div>
               <div>
                 <label class="j-f">Support below</label
-                ><input type="text" id="supBelow" placeholder="58.9k / 58.0k" />
+                ><input class="field field--block field--lg" type="text" id="supBelow" placeholder="58.9k / 58.0k" />
               </div>
             </div>
             <div class="j-field">
               <label class="j-f">Scenario A — if…</label
               ><textarea
+                class="field field--block field--lg"
                 id="scenA"
                 placeholder="holds 58k → bounce to 60.8 (sell the rally)"
               ></textarea>
@@ -184,6 +185,7 @@
             <div class="j-field">
               <label class="j-f">Scenario B — if…</label
               ><textarea
+                class="field field--block field--lg"
                 id="scenB"
                 placeholder="loses 58.0k on volume → down to 56k"
               ></textarea>
@@ -191,11 +193,11 @@
             <div class="j-field j-row2">
               <div>
                 <label class="j-f">Base bias</label
-                ><input type="text" id="bias" placeholder="sell the bounces" />
+                ><input class="field field--block field--lg" type="text" id="bias" placeholder="sell the bounces" />
               </div>
               <div>
                 <label class="j-f">Plan R:R</label
-                ><input type="text" id="rr" placeholder="1:3, stop beyond 61.1" />
+                ><input class="field field--block field--lg" type="text" id="rr" placeholder="1:3, stop beyond 61.1" />
               </div>
             </div>
             <button class="btn btn--primary j-btn" id="save" type="button">Save markup</button>
@@ -216,6 +218,7 @@
                 <label class="j-f"
                   >Which scenario fired? Were the levels right?</label
                 ><textarea
+                  class="field field--block field--lg"
                   id="grade"
                   placeholder="B fired, broke 58 as expected; the 60.8 level was exact"
                 ></textarea>
@@ -234,6 +237,7 @@
             <div>
               <label class="j-f">Entry $</label
               ><input
+                class="field field--block field--lg"
                 type="text"
                 id="calcEntry"
                 inputmode="decimal"
@@ -243,6 +247,7 @@
             <div>
               <label class="j-f">Stop $</label
               ><input
+                class="field field--block field--lg"
                 type="text"
                 id="calcStop"
                 inputmode="decimal"
@@ -252,6 +257,7 @@
             <div>
               <label class="j-f">Target $ (opt.)</label
               ><input
+                class="field field--block field--lg"
                 type="text"
                 id="calcTarget"
                 inputmode="decimal"
@@ -261,6 +267,7 @@
             <div>
               <label class="j-f">Account $</label
               ><input
+                class="field field--block field--lg"
                 type="text"
                 id="calcEq"
                 inputmode="decimal"
@@ -270,6 +277,7 @@
             <div>
               <label class="j-f">Risk % of account</label
               ><input
+                class="field field--block field--lg"
                 type="text"
                 id="calcRisk"
                 inputmode="decimal"

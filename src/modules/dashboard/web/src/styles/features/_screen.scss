@@ -95,39 +95,9 @@
 }
 
 /* ── Таблица экрана ── */
+/* Общий `.table` (core/_table.scss): сортировка, шапка и колонки оттуда.
+   Здесь — только то, что от экрана. */
 .scr-table {
-  /* Сортируемые заголовки: клик меняет поле, повторный — направление.
-     Стрелка появляется только у активной колонки, чтобы шапка не рябила. */
-  th[data-sort] {
-    cursor: pointer;
-    user-select: none;
-    white-space: nowrap;
-    transition: color 0.15s ease;
-
-    &:hover {
-      color: var(--text-primary);
-    }
-
-    &::after {
-      content: "";
-      display: inline-block;
-      width: 0.7em;
-      margin-left: 3px;
-      opacity: 0;
-    }
-    &.is-sorted {
-      color: var(--text-primary);
-    }
-    &.is-sorted[data-dir="desc"]::after {
-      @include mask-icon("arrow-down", 11px);
-      opacity: 1;
-    }
-    &.is-sorted[data-dir="asc"]::after {
-      @include mask-icon("arrow-up", 11px);
-      opacity: 1;
-    }
-  }
-
   /* Строка ведёт в Trade Ticket на этой монете. */
   .scr-row {
     cursor: pointer;

@@ -1,12 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────
 //  orderbook.html — терминал стакана.
 //
-//  До 04.09.2026 лежал 112 строками в <style> самой страницы и был жёстко
-//  тёмным: собственная палитра #11161f / #0b0e13 / #c9d4e3 плюс несколько
-//  `color: #fff`. На светлой теме страница оставалась чёрной — единственная
-//  во всём дашборде, а белый текст на белых плашках просто исчезал.
-//
-//  Теперь --ob-* выведены из токенов темы. Слой имён сохранён намеренно:
+//  🚨 --ob-* выводятся из токенов темы, своей палитры у страницы нет: иначе
+//  на светлой теме она остаётся чёрной, а белый текст исчезает на плашках.
+//  Слой имён сохранён намеренно:
 //  внутри терминала «bid» и «ask» — это не «зелёный» и «красный» вообще, а
 //  две стороны книги, и правится их вид в одном месте.
 // ─────────────────────────────────────────────────────────────────────
@@ -44,22 +41,9 @@
   background: var(--ob-panel);
   flex-wrap: wrap;
 }
-.ob-tabs { display: flex; gap: 6px; }
-.ob-tab {
-  padding: 6px 14px; border: 1px solid var(--ob-line); border-radius: 7px;
-  background: var(--ob-panel-2); color: var(--ob-dim); cursor: pointer;
-  font-weight: 600; letter-spacing: 0.5px; transition:
-    color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
-}
-.ob-tab:hover { color: var(--ob-txt); border-color: var(--border-strong); }
-.ob-tab.active { color: #fff; background: var(--ob-accent); border-color: var(--ob-accent); }
-.ob-input {
-  width: 90px; padding: 6px 10px; border: 1px solid var(--ob-line); border-radius: 7px;
-  background: var(--ob-panel-2); color: var(--ob-txt);
-  font-family: inherit; font-size: var(--fs-body); text-transform: uppercase;
-}
+// Площадки — общий `.tabs.tabs--wrap` (core/_tabs.scss).
+// Поле монеты — общий `.field.field--ticker` (core/_controls.scss).
+.ob-input { width: 90px; }
 .ob-input.active { color: var(--ob-accent); border-color: var(--ob-accent); background: var(--accent-soft); font-weight: 600; }
 .ob-conn { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--ob-dim); }
 .ob-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ob-dim); }

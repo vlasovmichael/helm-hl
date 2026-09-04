@@ -21,6 +21,32 @@
   href="https://fonts.googleapis.com/css2?family=Geologica:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
   rel="stylesheet"
 />
+<!--
+  Переходы между страницами без белой вспышки: браузер сам кроссфейдит старую
+  и новую страницу (cross-document view transitions), правила — в
+  styles/core/_motion.scss.
+
+  Prerender по наведению: страница успевает загрузиться ДО клика, поэтому
+  переход выглядит мгновенным. eagerness "moderate" = браузер начинает при
+  наведении или при нажатии, а не на каждую ссылку в поле зрения.
+  🚨 Prerender ВЫПОЛНЯЕТ скрипты страницы заранее — она поднимет свои запросы
+  и WS. Правило только для страниц своего origin, и /api/* исключён явно.
+-->
+<script type="speculationrules">
+  {
+    "prerender": [
+      {
+        "where": {
+          "and": [
+            { "href_matches": "/*" },
+            { "not": { "href_matches": "/api/*" } }
+          ]
+        },
+        "eagerness": "moderate"
+      }
+    ]
+  }
+</script>
 <script>
   // Тему ставим ДО отрисовки, иначе страница успевает мигнуть светлой.
   // Только inline и только здесь: модуль грузится асинхронно и опоздает.

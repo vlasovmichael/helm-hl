@@ -1,0 +1,96 @@
+@use "./breakpoints" as *;
+
+// ─────────────────────────────────────────────────────────────────────
+//  Вкладки — переключение того, ЧТО показано в блоке ниже.
+//
+//  🚨 Не путать с `.seg` (core/_controls.scss). Сегмент — это ВЫБОР ЗНАЧЕНИЯ
+//  из 2-5 заранее известных опций (24h/7d/30d, Long/Short). Вкладки — список
+//  сущностей, который приходит из данных и меняется: монеты журнала, монеты
+//  дня, площадки стакана. Отсюда и разница в поведении: у вкладок бывает
+//  переполнение, добавление и удаление, у сегмента — никогда.
+//
+//  Разметка:
+//    .tabs            — ряд на общей подложке
+//    .tabs__tab       — сама вкладка (кнопка), активная = .is-active
+//    .tabs--wrap      — длинный список переносится, а не режется
+// ─────────────────────────────────────────────────────────────────────
+
+.tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--canvas-subtle);
+}
+
+// Список монет может не влезть в строку — тогда переносим и убираем подложку:
+// она в две строки читается как рамка вокруг случайного набора.
+.tabs--wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.tabs__tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out),
+    box-shadow var(--dur-fast) var(--ease-out);
+
+  &:hover {
+    color: var(--text-primary);
+  }
+  // Выбранная вкладка поднимается на фон карточки — «этот лист сверху».
+  // Рамки нет намеренно: она прибавила бы 2px и сдвинула соседей.
+  &.is-active {
+    color: var(--accent);
+    background: var(--card-bg);
+    box-shadow: var(--shadow-sm);
+  }
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+// В переносимом ряду подложки нет, поэтому вкладка носит рамку сама.
+.tabs--wrap .tabs__tab {
+  border: 1px solid var(--border);
+  background: var(--canvas-subtle);
+
+  &:hover {
+    border-color: var(--border-strong);
+  }
+  &.is-active {
+    color: var(--text-primary);
+    border-color: var(--accent-line);
+    background: var(--accent-soft);
+    box-shadow: none;
+  }
+}
+
+@include reduced-motion {
+  .tabs__tab {
+    transition: none;
+  }
+}

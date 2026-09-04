@@ -7,7 +7,9 @@
 
 import { escapeHtml, fmtNotional, fmtSince } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
+import { emptyRow } from "../core/placeholders.js";
 import { icon } from "../core/icon.js";
+import { button, chip } from "../core/ui.js";
 
 // Колбэк «китовые позиции обновились» — main.js вешает на него renderBtcDivergence.
 let onPositionsUpdated = () => {};
@@ -69,10 +71,12 @@ function wwRenderChips() {
     .map((w, i) => {
       const short = `${w.address.slice(0, 6)}…${w.address.slice(-4)}`;
       const labelDiffersFromShort = w.label !== short;
-      return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--bg-header);border:1px solid var(--hairline);border-radius:4px;padding:2px 7px;font-family:var(--font-mono);font-size: var(--fs-micro);color:var(--text-muted)" title="${escapeHtml(w.address)}">
-      ${escapeHtml(w.label)}${labelDiffersFromShort ? ` <span style="opacity:.5;font-size: var(--fs-micro)">${short}</span>` : ""}
-      <button data-ww-remove="${i}" style="background:none;border:none;color:var(--text-faint);cursor:pointer;font-size: var(--fs-label);padding:0 0 0 3px;line-height:1" title="Remove">×</button>
-    </span>`;
+      return chip({
+        label: w.label,
+        sub: labelDiffersFromShort ? short : "",
+        title: w.address,
+        remove: { title: "Remove", attrs: { "data-ww-remove": i } },
+      });
     })
     .join("");
   chips.querySelectorAll("[data-ww-remove]").forEach((btn) => {
@@ -152,7 +156,7 @@ function renderWhaleWatch(results) {
 
   if (allRows.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="8" class="empty-state">no open perp positions</td></tr>';
+      emptyRow(8, { glyph: "eye", title: "No open perp positions", hint: "The watched addresses are flat right now." });
     if (biasEl) biasEl.textContent = "";
     if (footerEl) footerEl.textContent = "";
     // Re-render BTC Div to clear whale column
@@ -174,9 +178,8 @@ function renderWhaleWatch(results) {
   // Sync header indicators
   document.querySelectorAll("#ww-table th[data-ww-sort]").forEach((th) => {
     const active = th.dataset.wwSort === _wwSort.key;
-    th.classList.toggle("ww-sort-active", active);
-    th.classList.toggle("ww-sort-asc", active && !_wwSort.desc);
-    th.classList.toggle("ww-sort-desc", active && _wwSort.desc);
+    th.classList.toggle("is-sorted", active);
+    th.classList.toggle("is-asc", active && !_wwSort.desc);
   });
 
   tbody.innerHTML = allRows
@@ -217,12 +220,12 @@ function renderWhaleWatch(results) {
       return `<tr style="${rowOpacity}">
       <td style="color:var(--text-muted);font-size: var(--fs-small)">${escapeHtml(p.label)}</td>
       <td style="font-weight:700">${escapeHtml(p.coin)}</td>
-      <td class="r" style="color:${sideColor};font-weight:700">${p.side}</td>
-      <td class="r">${fmtNotional(p.sizeUsd)}${deltaBadge}</td>
-      <td class="r" style="color:var(--text-muted)">${levStr}</td>
-      <td class="r">${fmtPnlColored(p.unrealizedPnl)}</td>
-      <td class="r" style="color:var(--text-muted)">${escapeHtml(entryStr)}</td>
-      <td class="r" style="color:var(--text-faint);font-size: var(--fs-label)">${sinceStr}</td>
+      <td class="num" style="color:${sideColor};font-weight:700">${p.side}</td>
+      <td class="num">${fmtNotional(p.sizeUsd)}${deltaBadge}</td>
+      <td class="num" style="color:var(--text-muted)">${levStr}</td>
+      <td class="num">${fmtPnlColored(p.unrealizedPnl)}</td>
+      <td class="num" style="color:var(--text-muted)">${escapeHtml(entryStr)}</td>
+      <td class="num" style="color:var(--text-faint);font-size: var(--fs-label)">${sinceStr}</td>
     </tr>`;
     })
     .join("");
@@ -278,7 +281,7 @@ async function fetchWhaleWatch() {
         const tbody = document.getElementById("ww-tbody");
         if (tbody)
           tbody.innerHTML =
-            '<tr><td colspan="8" class="empty-state" style="color:var(--red)">load failed — HL API unavailable</td></tr>';
+            emptyRow(8, { glyph: "danger", title: "Load failed", hint: "Hyperliquid API is unavailable — the panel retries on the next tick." });
       }
       return;
     }
@@ -287,7 +290,7 @@ async function fetchWhaleWatch() {
     if (!_wwHasData) {
       const tbody = document.getElementById("ww-tbody");
       if (tbody)
-        tbody.innerHTML = `<tr><td colspan="8" class="empty-state" style="color:var(--red)">error: ${err?.message ?? "unknown"}</td></tr>`;
+        tbody.innerHTML = emptyRow(8, { glyph: "danger", title: "Load failed", hint: err?.message ?? "Unknown error" });
     }
   }
 }
@@ -383,15 +386,28 @@ async function fetchAndRenderLeaderboard() {
         const pnlSign = r.pnl30d >= 0 ? "+" : "";
         const alreadyAdded = watchedAddresses.has(r.address.toLowerCase());
         const addBtn = alreadyAdded
-          ? `<button disabled style="font-size: var(--fs-micro);padding:2px 7px;border:1px solid var(--hairline);border-radius:4px;background:none;color:var(--text-faint);cursor:default">${icon("check")}</button>`
-          : `<button data-lb-add="${escapeHtml(r.address)}" data-lb-name="${escapeHtml(r.displayName || short)}" style="font-size: var(--fs-micro);padding:2px 7px;border:1px solid var(--hairline);border-radius:4px;background:none;color:var(--text-muted);cursor:pointer">+ Add</button>`;
+          ? button({
+              icon: "check",
+              size: "sm",
+              disabled: true,
+              title: "Already on the watch list",
+            })
+          : button({
+              label: "Add",
+              icon: "add",
+              size: "sm",
+              attrs: {
+                "data-lb-add": r.address,
+                "data-lb-name": r.displayName || short,
+              },
+            });
         return `<tr>
         <td style="color:var(--text-faint);font-size: var(--fs-label)">${idx + 1}</td>
         <td style="font-family:var(--font-mono);font-size: var(--fs-label)">${nameStr}</td>
-        <td class="r">${fmtNotional(r.accountValue)}</td>
-        <td class="r" style="color:${pnlColor}">${pnlSign}${fmtNotional(r.pnl30d)}</td>
-        <td class="r" style="color:${pnlColor}">${roi}</td>
-        <td class="r" style="color:var(--text-muted)">${fmtNotional(r.vlm30d)}</td>
+        <td class="num">${fmtNotional(r.accountValue)}</td>
+        <td class="num" style="color:${pnlColor}">${pnlSign}${fmtNotional(r.pnl30d)}</td>
+        <td class="num" style="color:${pnlColor}">${roi}</td>
+        <td class="num" style="color:var(--text-muted)">${fmtNotional(r.vlm30d)}</td>
         <td>${addBtn}</td>
       </tr>`;
       })

@@ -1,12 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────
 //  Контролы: кнопка, поле, сегментный ряд.
 //
-//  До 04.09.2026 в дашборде было около двадцати кнопочных классов (tk-btn,
-//  j-btn, mp-submit, wi-submit, strat-pg-btn, logs-filter-btn, oi-pager
-//  button…), и все — с собственными padding, радиусом и весом. Хуже того,
-//  .range-btn — вид ЧИПА ДИАПАЗОНА (24h/3d/7d/30d) — носили и обычные
-//  действия «Recompute»/«Refresh» на /oi. Одна форма означала две разные
-//  вещи, и кнопка переставала читаться кнопкой.
+//  🚨 Своих кнопочных классов не заводить: одна форма на роль. Вид чипа
+//  диапазона (24h/3d/7d/30d) — только у выбора, не у действия.
 //
 //  Здесь ровно три роли и одна форма на каждую:
 //    .btn            — действие (по умолчанию тихое, обведённое);
@@ -133,11 +129,9 @@
   font-size: var(--fs-base);
 }
 
-/* Полоса действия — главное действие карточки или диалога, во всю ширину.
-   До 04.09.2026 такая полоса была только у «Trade» (.tt-trade-cta), а
-   «Open paper position» и «Analyse» в своих диалогах оставались обычными
-   кнопками: одно и то же по смыслу действие выглядело двумя разными
-   контролами. Форма одна, цвет задаёт модификатор (--primary по умолчанию). */
+/* Полоса действия — главное действие карточки или диалога, во всю ширину
+   («Trade», «Open paper position», «Analyse»). Форма одна, цвет задаёт
+   модификатор (--primary по умолчанию). */
 .btn--cta {
   width: 100%;
   min-height: 52px;
@@ -217,6 +211,30 @@
   }
 }
 
+/* Компактное поле: фильтр или ввод одного слова в ряду чипов. */
+.field--sm {
+  min-height: var(--ctl-h-sm);
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-micro);
+}
+
+/* Крупное поле формы: там, где поле — главный элемент строки, а не фильтр в
+   шапке карточки (формы журнала, заметка дня). */
+.field--lg {
+  min-height: var(--ctl-h-lg);
+  padding: 10px 12px;
+  font-size: var(--fs-base);
+}
+
+/* Многострочное поле. Тянуть можно только по высоте: горизонтальный resize
+   ломает сетку карточки, а пользы не даёт — ширину задаёт форма. */
+textarea.field {
+  min-height: 52px;
+  padding: 10px 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
 /* Поле во всю ширину формы диалога. */
 .field--block {
   display: block;
@@ -256,6 +274,42 @@
     background: var(--accent-soft);
     border-color: var(--accent-line);
     color: var(--accent);
+  }
+}
+
+/* Чип списка — метка, которую можно убрать (вотчлист монет, адреса китов).
+   От бейджа отличается ровно этим: на чип нажимают. Крестик — обычная
+   `.btn--ghost`, ужатая до строки: своей кнопочной породы у него нет. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 4px 2px 8px;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-sm);
+  background: var(--canvas-subtle);
+  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+  white-space: nowrap;
+
+  &--mono {
+    font-family: var(--font-mono);
+  }
+}
+.chip__sub {
+  font-style: normal;
+  color: var(--text-faint);
+}
+.chip__x.btn {
+  width: 16px;
+  min-height: 16px;
+  padding: 0;
+  border-radius: 3px;
+  color: var(--text-faint);
+
+  .icon {
+    width: 12px;
+    height: 12px;
   }
 }
 
@@ -330,6 +384,20 @@
   }
 }
 
+/* Тон выбранного сегмента: сторона сделки, направление тренда. Красится
+   ТОЛЬКО текст — фон «поднятого листа» у выбранного и так есть, а цветная
+   плитка внутри плитки читается статусом. */
+.seg__btn--long.is-on {
+  color: var(--green);
+}
+.seg__btn--short.is-on {
+  color: var(--red);
+}
+/* «вбок» — третий ответ разметки в журнале (up / range / down). */
+.seg__btn--flat.is-on {
+  color: var(--warn);
+}
+
 /* Широкий сегмент — выбор стороны сделки в диалогах: тот же .seg, но во всю
    ширину, выбранный красится тоном стороны. */
 .seg--wide {
@@ -361,6 +429,10 @@
   .seg__btn--short.is-on {
     background: var(--red-soft);
     color: var(--red);
+  }
+  .seg__btn--flat.is-on {
+    background: var(--warn-soft);
+    color: var(--warn);
   }
 }
 

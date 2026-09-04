@@ -178,13 +178,13 @@ function initTradeButton() {
     // в «failed» навсегда — до перезагрузки страницы.
     const fail = (msg) => {
       label.textContent = "failed";
-      btn.title = msg;
+      btn.dataset.card = msg;
       btn.classList.add("is-failed");
       btn.disabled = false;
       setTimeout(() => {
         label.textContent = "Close";
         btn.classList.remove("is-failed");
-        btn.title = "Close the whole position at market (taker 4.32 bp, no builder fee)";
+        btn.dataset.card = "Close the whole position at market (taker 4.32 bp, no builder fee)";
       }, 4000);
     };
 
@@ -229,14 +229,14 @@ initManualPaperActive();
 initTradeButton();
 // BTC Divergence + Whale Watch вынесены на /lab.html — их HL-поллинг
 // (candleSnapshot/metaAndAssetCtxs) грузится только когда открыта Lab, а не на
-// торговом дашборде (разгрузка весового бюджета HL, защита от 429). 2026-06-17.
+// торговом дашборде (разгрузка весового бюджета HL, защита от 429)..
 initWebSocket({ onStatus });
 tick();
 setInterval(tick, REFRESH_MS);
 startFooterTimer();
 
 // ── Вкладка вернулась из фона: доигрываем застрявшие transition'ы ──────────
-// Баг «серая полоска у плашки BTC» (03.09.2026). Смена состояния светофора
+// Баг «серая полоска у плашки BTC». Смена состояния светофора
 // (unknown → wait/go) запускает transition на background и border-left-color.
 // В СКРЫТОЙ вкладке таймлайн анимаций не идёт: document.timeline.currentTime
 // стоит на нуле, transition висит в playState=running со своим стартовым

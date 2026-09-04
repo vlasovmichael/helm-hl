@@ -68,50 +68,30 @@
 }
 
 // ── Таблица ──
-.mt-table-wrap { overflow-x: auto; }
+// Общий `.table` (core/_table.scss); здесь только то, что от места: жирный
+// итог, разделители секций и тихое «no trades».
 .mt-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: var(--font-mono);
-  font-size: var(--fs-body);
-  font-weight: 500;
-  line-height: 1;
-
-  th {
-    text-align: right;
-    padding: 6px 10px;
-    font-family: var(--font-sans);
-  font-size: var(--fs-label);
-  font-weight: 600;
-  line-height: 1;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    color: var(--text-muted);
-    border-bottom: 1px solid var(--border);
+  .mt-strong td {
+    font-weight: 700;
+    background: var(--card-bg-elev);
   }
-  th:first-child { text-align: left; }
-
-  td { padding: 8px 10px; border-bottom: 1px solid var(--border-muted); }
-  .mt-label { text-align: left; color: var(--text-primary); font-weight: 600; }
-  .mt-num { text-align: right; color: var(--text-secondary); }
-  .mt-empty { text-align: right; color: var(--text-faint); }
-
-  .mt-strong td { font-weight: 700; background: var(--card-bg-elev); }
-
+  .mt-empty {
+    color: var(--text-faint);
+  }
+  // Подзаголовок секции внутри тела таблицы — не строка данных, поэтому без
+  // нижней границы и тише кеглем.
   .mt-divider td {
     padding: 10px 10px 4px;
-    font-family: var(--font-sans);
-  font-size: var(--fs-micro);
-  font-weight: 600;
-  line-height: 1;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--text-faint);
     border-bottom: none;
+    font-family: var(--font-sans);
+    font-size: var(--fs-micro);
+    font-weight: 600;
+    letter-spacing: var(--ls-wide);
+    text-transform: uppercase;
+    color: var(--text-faint);
   }
-
-  .positive { color: var(--green) !important; }
-  .negative { color: var(--red) !important; }
+  .positive { color: var(--green); }
+  .negative { color: var(--red); }
 }
 
 // ── Монеты-чипы ──

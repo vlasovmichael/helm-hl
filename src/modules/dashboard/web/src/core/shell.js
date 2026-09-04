@@ -51,7 +51,7 @@ function getStoredTheme() {
 
 // Порядок цикла кнопки. auto первым — это и дефолт при пустом localStorage.
 const THEME_CYCLE = ["auto", "light", "dark"];
-const THEME_TITLE = {
+const THEME_LABEL = {
   auto: "Theme: follow system",
   light: "Theme: light",
   dark: "Theme: dark",
@@ -77,8 +77,7 @@ export function bindTheme(chartThemers = []) {
     // показывает ТЕКУЩИЙ режим: монитор для auto, солнце/луна когда закреплено.
     icon?.to(mode);
     if (btn) {
-      btn.title = THEME_TITLE[mode];
-      btn.setAttribute("aria-label", THEME_TITLE[mode]);
+      btn.setAttribute("aria-label", THEME_LABEL[mode]);
     }
     chartThemers.forEach((fn) => fn());
   };

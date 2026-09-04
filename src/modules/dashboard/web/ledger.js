@@ -2,12 +2,10 @@ import "./src/styles/ledger.scss";
 // ─────────────────────────────────────────────────
 //  ledger.html — месячный P&L-реестр.
 //
-//  Таблица месяцев (/api/ledger) переехала сюда из <script> внутри ledger.html
-//  04.09.2026: 298 строк логики жили в разметке, не проходили ни eslint, ни
-//  сборку, и не могли ничего импортировать — из-за этого твисти месяца остался
-//  глифом ▸/▾, когда весь остальной дашборд перешёл на lucide.
-//  Плюс отсюда: Tax Summary (tick), trade-модалка, bans-strip.
-//  Тема: inline-IIFE гасит FOUC, bindTheme() вешает клики на topnav-свитчер.
+// Отсюда: таблица месяцев (/api/ledger), Tax Summary (tick), trade-модалка,
+// bans-strip. 🚨 Логику страницы держим здесь, а не в <script> разметки: там
+// она не проходит ни eslint, ни сборку и не может ничего импортировать.
+// Тема: inline-IIFE гасит FOUC, bindTheme вешает клики на topnav-свитчер.
 // ─────────────────────────────────────────────────
 
 import {
@@ -19,6 +17,7 @@ import {
 } from "./src/core/shell.js";
 import { mountTopnav } from "./src/core/topnav.js";
 import { stat } from "./src/core/ui.js";
+import { emptyState } from "./src/core/placeholders.js";
 import { fetchJson } from "./src/net/api.js";
 import { initModals } from "./src/features/modals.js";
 import { renderTax } from "./src/features/pnlInsights.js";
@@ -116,7 +115,7 @@ function row(m) {
       : "";
   const has = (m.days || []).length > 0;
   return `
-    <tr class="${m.isCurrent ? "current" : ""} ${has ? "expandable" : ""}"
+    <tr class="${m.isCurrent ?"current" : ""} ${has ? "expandable" : ""}"
         ${has ? `data-month="${m.month}" tabindex="0" role="button" aria-expanded="false"` : ""}>
       <td class="month">${monthLabel(m.month)}</td>
       <td class="grp-edge ${cls(m.botNet)}">${fmt(m.botNet)}${wr(m.botWins, m.botCount)}</td>
@@ -259,7 +258,7 @@ function renderTable(data) {
           <th>Month</th>
           <th class="grp">Bot P&L</th>
           <th class="col-opt">#</th>
-          <th class="grp" title="I entered by hand, the nanny picked it up and closed it">Adopted P&L</th>
+          <th class="grp" data-card="I entered by hand, the nanny picked it up and closed it">Adopted P&L</th>
           <th class="col-opt">#</th>
           <th class="grp">Manual P&L</th>
           <th class="col-opt">#</th>
@@ -293,16 +292,8 @@ function renderTable(data) {
   bindExpand(host);
 }
 
-// Скрипт страницы — не модуль, импортировать placeholders.js неоткуда,
-// поэтому разметка .empty собрана здесь руками. Классы те же, что у
-// остальных пустых состояний дашборда (core/_loaders.scss).
-function showEmpty(title, hint) {
-  document.getElementById("table-host").innerHTML =
-    '<div class="empty-state"><div class="empty-state__title">' +
-    title +
-    '</div><div class="empty-state__hint">' +
-    hint +
-    "</div></div>";
+function showEmpty(title, hint, glyph = "info") {
+  document.getElementById("table-host").innerHTML = emptyState({ glyph, title, hint });
   // Скелетоны сводки обещали числа, которых уже не будет.
   document.getElementById("summary").innerHTML = "";
 }
@@ -327,6 +318,7 @@ async function load() {
     showEmpty(
       "Ledger did not load",
       e.message + ". Reload the page to try again.",
+      "danger",
     );
   }
 }

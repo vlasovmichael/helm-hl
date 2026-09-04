@@ -36,16 +36,16 @@ function payoffCls(p) {
 
 function statRow(label, s, { strong = false } = {}) {
   if (!s) {
-    return `<tr><td class="mt-label">${esc(label)}</td><td colspan="5" class="mt-empty">no trades</td></tr>`;
+    return `<tr><td>${esc(label)}</td><td colspan="5" class="num mt-empty">no trades</td></tr>`;
   }
   return `
-    <tr class="${strong ? "mt-strong" : ""}">
-      <td class="mt-label">${esc(label)}</td>
-      <td class="mt-num">${s.n}</td>
-      <td class="mt-num">${s.winPct}%</td>
-      <td class="mt-num ${payoffCls(s.payoff)}">${s.payoff != null ? s.payoff.toFixed(2) : "—"}</td>
-      <td class="mt-num ${signCls(s.expectancy)}">${s.expectancy >= 0 ? "+" : "−"}$${Math.abs(s.expectancy).toFixed(3)}</td>
-      <td class="mt-num ${signCls(s.net)}">${money(s.net)}</td>
+    <tr class="${strong ?"mt-strong" : ""}">
+      <td>${esc(label)}</td>
+      <td class="num">${s.n}</td>
+      <td class="num">${s.winPct}%</td>
+      <td class="num ${payoffCls(s.payoff)}">${s.payoff != null ? s.payoff.toFixed(2) : "—"}</td>
+      <td class="num ${signCls(s.expectancy)}">${s.expectancy >= 0 ? "+" : "−"}$${Math.abs(s.expectancy).toFixed(3)}</td>
+      <td class="num ${signCls(s.net)}">${money(s.net)}</td>
     </tr>`;
 }
 
@@ -118,10 +118,10 @@ function renderBreakdown(data) {
       ${o.gross > 0 && o.net < 0 ? `<span class="mt-flag">${icon("prev")} fees ate the entire gain</span>` : ""}
     </div>
 
-    <div class="mt-table-wrap">
-      <table class="mt-table">
+    <div class="table-wrap">
+      <table class="table table--compact mt-table">
         <thead>
-          <tr><th>Cut</th><th>n</th><th>Win</th><th>Payoff</th><th>Expect.</th><th>Net</th></tr>
+          <tr><th>Cut</th><th class="num">n</th><th class="num">Win</th><th class="num">Payoff</th><th class="num">Expect.</th><th class="num">Net</th></tr>
         </thead>
         <tbody>
           ${statRow("TOTAL", o, { strong: true })}

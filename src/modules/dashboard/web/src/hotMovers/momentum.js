@@ -7,7 +7,7 @@
 // Иконки сетапа — из общего набора (core/icon.js). Здесь лежали четыре
 // самодельных <svg> со своим stroke-width и своей сеткой 12×12, поэтому в
 // одном ряду с иконками остального дашборда они выглядели чужими.
-// 04.09.2026.
+//.
 import { icon as glyph } from "../core/icon.js";
 
 const _MOM_WEIGHTS = { 2: 0.2, 5: 0.4, 15: 0.8, 60: 1.2 };
@@ -67,7 +67,7 @@ function fadeMutedByFlush(side, mode, flush) {
 //     LONG); OI не переворачивает сторону, а лишь помечает качество хода (tag
 //     trend = OI подтверждает / fade? = ход на делевередже, может выдохнуться).
 //   'fade'  — классический контртренд по OI (OI↓ ⇒ ставка на выдох/отскок).
-// Переключатель на карточке (radio) — оператор сравнивает оба вживую (2026-06-18).
+// Переключатель на карточке (radio) — оператор сравнивает оба вживую.
 export function computeMomentum(windows, accelKind, volKind, signal, flush, viewMode = "trend") {
   let weighted = 0;
   let haveData = false;

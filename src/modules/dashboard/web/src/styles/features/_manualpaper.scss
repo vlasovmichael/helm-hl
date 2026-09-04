@@ -48,15 +48,8 @@
   letter-spacing: 0;
   color: var(--text-muted, var(--text-secondary));
 }
-.mp-active-table {
-  font-size: var(--fs-body);
-
-  // P&L / side coloring (num-pos/num-neg only style inside .signals-table).
-  .num-pos,
-  .num-pos * { color: var(--green); }
-  .num-neg,
-  .num-neg * { color: var(--red); }
-}
+// Таблица активных бумажных поз — общий `.table` (core/_table.scss),
+// включая окраску чисел по знаку.
 
 // ── management card bits ──
 .mp-roe {

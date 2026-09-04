@@ -98,7 +98,7 @@
         <div class="card-header">
           <div
             class="card-title"
-            title="Lifetime cuts: per-coin, long/short and by strategy (with expectancy/payoff), plus a multi-year daily P&amp;L heatmap (paged by year). Independent of the P&amp;L period selector — always all-time."
+            data-card="Lifetime cuts: per-coin, long/short and by strategy (with expectancy/payoff), plus a multi-year daily P&amp;L heatmap (paged by year). Independent of the P&amp;L period selector — always all-time."
           >
             Insights
           </div>
@@ -123,17 +123,17 @@
               — coins · all-time
             </div>
             <div class="per-coin-table-wrap">
-              <table class="per-coin-table">
+              <table class="table table--compact table--sticky-head per-coin-table">
                 <thead>
                   <tr>
-                    <th data-sort="coin">Coin</th>
-                    <th data-sort="trades" class="num">Trades</th>
-                    <th data-sort="pnl" class="num sort-active sort-desc">
+                    <th data-sort="coin" class="sortable">Coin</th>
+                    <th data-sort="trades" class="sortable num">Trades</th>
+                    <th data-sort="pnl" class="num sortable is-sorted">
                       P&amp;L
                     </th>
-                    <th data-sort="winRate" class="num">Win%</th>
-                    <th data-sort="avg" class="num">Avg</th>
-                    <th data-sort="lastClosedAt" class="num">Last</th>
+                    <th data-sort="winRate" class="sortable num">Win%</th>
+                    <th data-sort="avg" class="sortable num">Avg</th>
+                    <th data-sort="lastClosedAt" class="sortable num">Last</th>
                   </tr>
                 </thead>
                 <tbody id="per-coin-tbody"></tbody>
@@ -147,7 +147,7 @@
           >
             <div class="breakdown-block">
               <div class="breakdown-title">Long vs Short</div>
-              <table class="breakdown-table">
+              <table class="table table--compact breakdown-table">
                 <thead>
                   <tr>
                     <th>Side</th>
@@ -163,7 +163,7 @@
             </div>
             <div class="breakdown-block">
               <div class="breakdown-title">By strategy</div>
-              <table class="breakdown-table">
+              <table class="table table--compact breakdown-table">
                 <thead>
                   <tr>
                     <th>Strategy</th>
@@ -186,15 +186,15 @@
             <div class="exits-meta" id="exits-meta">— · loading</div>
             <div class="exits-cards" id="exits-cards"></div>
             <div class="per-coin-table-wrap">
-              <table class="per-coin-table exits-table">
+              <table class="table table--compact table--sticky-head per-coin-table exits-table">
                 <thead>
                   <tr>
                     <th>Coin</th>
                     <th>Side</th>
                     <th class="num">P&amp;L</th>
-                    <th class="num" title="Max Favorable Excursion — best unrealized gain during the trade">MFE</th>
-                    <th class="num" title="Max Adverse Excursion — worst unrealized loss you sat through">MAE</th>
-                    <th class="num" title="realized ÷ MFE — how much of the available move you captured">Capture</th>
+                    <th class="num" data-card="Max Favorable Excursion — best unrealized gain during the trade">MFE</th>
+                    <th class="num" data-card="Max Adverse Excursion — worst unrealized loss you sat through">MAE</th>
+                    <th class="num" data-card="realized ÷ MFE — how much of the available move you captured">Capture</th>
                   </tr>
                 </thead>
                 <tbody id="exits-tbody"></tbody>
@@ -287,7 +287,7 @@
               class="btn btn--icon logs-pause-btn"
               id="logs-pause"
               type="button"
-              title="Pause autoscroll"
+              data-card="Pause autoscroll"
               aria-label="Pause autoscroll"
             >
               <svg class="nav-ico" id="logs-pause-ico" viewBox="0 0 24 24" aria-hidden="true"></svg>

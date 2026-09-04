@@ -146,7 +146,7 @@ export function bindLogsUi() {
     pauseBtn?.classList.toggle("active", next);
     const label = next ? "Resume autoscroll" : "Pause autoscroll";
     if (pauseBtn) {
-      pauseBtn.title = label;
+      pauseBtn.dataset.card = label;
       pauseBtn.setAttribute("aria-label", label);
     }
     const status = document.getElementById("logs-status");

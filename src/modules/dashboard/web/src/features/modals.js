@@ -17,6 +17,7 @@ import {
 import { fetchJson } from "../net/api.js";
 import * as dialog from "../core/dialog.js";
 import { icon } from "../core/icon.js";
+import { emptyState } from "../core/placeholders.js";
 
 let lastActivityEvents = [];
 
@@ -46,7 +47,7 @@ export function renderActivity(activity) {
   const events = (activity?.events || []).filter((e) => e && e.coin);
   lastActivityEvents = events;
   if (!events.length) {
-    container.innerHTML = '<div class="empty-state">No events</div>';
+    container.innerHTML = emptyState({ glyph: "history", title: "No events", hint: "Entries, exits and alerts show up here." });
     return;
   }
   container.innerHTML = events
@@ -57,7 +58,7 @@ export function renderActivity(activity) {
 
       const src = eventSource(e);
       const sm = SOURCE_META[src] || SOURCE_META.bot;
-      const srcBadge = `<span class="src-badge ${sm.cls}" title="${strategyDisplayName(
+      const srcBadge = `<span class="src-badge ${sm.cls}" data-card="${strategyDisplayName(
         e.strategy_id,
       )}">${sm.label}</span>`;
 
@@ -83,8 +84,7 @@ export function renderActivity(activity) {
         pnlCell = '<span class="activity-pnl dim">open</span>';
       } else {
         const pnlVal = e.pnl || 0;
-        pnlCell = `<span class="activity-pnl ${
-          pnlVal >= 0 ? "positive" : "negative"
+        pnlCell = `<span class="activity-pnl ${ pnlVal >= 0 ?"positive" : "negative"
         }">${pnlVal >= 0 ? "+" : ""}${pnlVal.toFixed(2)}</span>`;
       }
 
@@ -108,7 +108,7 @@ export function renderActivity(activity) {
 
 // ── Help modal (mini FAQ per card) ─────────────────────────────────────
 // Записи добавляются по мере появления карточек с кнопкой [?] (data-help).
-// Setup Scanner-карточка снята 2026-06-26 → справочник пуст, механика жива.
+// Сейчас справочник пуст, механика жива.
 const HELP_CONTENT = {};
 
 function renderHelpSection(s) {
@@ -116,7 +116,7 @@ function renderHelpSection(s) {
   html += `<div class="help-section-title">${s.title}</div>`;
   if (s.sub) html += `<div class="help-section-sub">${s.sub}</div>`;
   if (Array.isArray(s.rows) && s.rows.length) {
-    html += `<table class="help-table"><tbody>`;
+    html += `<table class="table table--compact help-table"><tbody>`;
     for (const r of s.rows) {
       html += `<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`;
     }
@@ -272,7 +272,7 @@ function tradeDetailHtml(t) {
       `<div class="tm-cell"><div class="tm-cell-label">Take Profit</div><div class="tm-cell-value">$${fmtPx(tp)}</div></div>`,
     );
   cells.push(
-    `<div class="tm-cell"><div class="tm-cell-label">Gross PnL</div><div class="tm-cell-value ${grossPnl >= 0 ? "positive" : "negative"}">${grossPnl >= 0 ? "+" : "−"}$${Math.abs(grossPnl).toFixed(4)}</div></div>`,
+    `<div class="tm-cell"><div class="tm-cell-label">Gross PnL</div><div class="tm-cell-value ${grossPnl >= 0 ?"positive" : "negative"}">${grossPnl >= 0 ? "+" : "−"}$${Math.abs(grossPnl).toFixed(4)}</div></div>`,
   );
   cells.push(
     `<div class="tm-cell"><div class="tm-cell-label">Fees</div><div class="tm-cell-value muted">−$${Math.abs(fee).toFixed(4)}</div></div>`,
@@ -332,7 +332,7 @@ async function onActivityClick(e) {
       const slot = document.getElementById("tm-detail-slot");
       if (slot)
         slot.innerHTML =
-          '<div class="tm-sub">Could not load details</div>';
+          emptyState({ glyph: "danger", title: "Could not load details", hint: "Close and open the trade again." });
     }
   }
 }

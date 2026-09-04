@@ -11,6 +11,7 @@ import { isActiveCoin } from "../state/activeCoins.js";
 import { getWhalePositions } from "./whaleWatch.js";
 import { emptyRow, settle, skeletonRows } from "../core/placeholders.js";
 import { icon } from "../core/icon.js";
+import { chip, field } from "../core/ui.js";
 
 let _divData = null;
 let _divWindow = "15m";
@@ -51,14 +52,15 @@ function divRenderWatchlistBar() {
     list
       .map((coin) => {
         const removable = !defaults.has(coin);
-        return `<span style="display:inline-flex;align-items:center;gap:3px;background:var(--surface-2,rgba(255,255,255,.06));border:1px solid var(--hairline);border-radius:4px;padding:2px 6px;font-family:var(--font-mono);font-size: var(--fs-micro);">
-      ${coin}${removable ? `<button data-remove="${coin}" style="background:none;border:none;cursor:pointer;color:var(--text-faint);padding:0;line-height:1;font-size: var(--fs-label);" title="Remove from the list">×</button>` : ""}
-    </span>`;
+        return chip({
+          label: coin,
+          remove: removable
+            ? { title: "Remove from the list", attrs: { "data-remove": coin } }
+            : null,
+        });
       })
       .join("") +
-    `<span style="display:inline-flex;align-items:center;gap:3px;">
-    <input id="div-add-input" placeholder="+ COIN" style="width:60px;background:transparent;border:1px dashed var(--hairline);border-radius:4px;padding:2px 5px;font-family:var(--font-mono);font-size: var(--fs-micro);color:inherit;outline:none;" maxlength="10" autocomplete="off" spellcheck="false"/>
-  </span>`;
+    field({ id: "div-add-input", placeholder: "+ COIN", ticker: true, cls: "field--sm div-add-input", attrs: { maxlength: 10, style: "width:74px" } });
 
   bar.querySelector("#div-add-input")?.addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
@@ -148,13 +150,13 @@ function divRenderRows(coins, btcPct, hasPast) {
           );
         whaleCell = parts.join(" ");
       }
-      return `<tr class="${isActiveCoin(c.coin) ? "is-active" : ""}">
+      return `<tr class="${isActiveCoin(c.coin) ?"is-active" : ""}">
       <td style="font-weight:600">${c.coin}</td>
-      <td class="r">${fmtPrice(c.price)}</td>
-      <td class="r" style="color:${coinColor}">${hasPast ? fmtPct(c.coinPct) : "—"}</td>
-      <td class="r" style="color:${relColor};font-weight:${Math.abs(rel ?? 0) >= 1.5 ? 600 : 400}">${hasPast && !isBtc ? fmtPct(rel) : isBtc ? "baseline" : "—"}</td>
-      <td class="c" style="color:${signalColor};font-weight:700">${signal}</td>
-      <td class="r">${whaleCell}</td>
+      <td class="num">${fmtPrice(c.price)}</td>
+      <td class="num" style="color:${coinColor}">${hasPast ? fmtPct(c.coinPct) : "—"}</td>
+      <td class="num" style="color:${relColor};font-weight:${Math.abs(rel ?? 0) >= 1.5 ? 600 : 400}">${hasPast && !isBtc ? fmtPct(rel) : isBtc ? "baseline" : "—"}</td>
+      <td class="center" style="color:${signalColor};font-weight:700">${signal}</td>
+      <td class="num">${whaleCell}</td>
     </tr>`;
     })
     .join("");

@@ -17,29 +17,29 @@
         <div class="card-header">
           <div
             class="card-title"
-            title="How positions are run, in one place. Live trades real money; Paper accumulates stats in a shadow slot, separate from production."
+            data-card="How positions are run, in one place. Live trades real money; Paper accumulates stats in a shadow slot, separate from production."
           >
             How positions are run
           </div>
           <div class="seg" id="strategies-summary"></div>
         </div>
-        <div class="strat-table-wrap">
-          <table class="strat-table" id="strategies-table">
+        <div class="table-wrap strat-table-wrap">
+          <table class="table table--compact table--sticky-head strat-table" id="strategies-table">
             <thead>
               <tr>
                 <th class="strat-col-name">Strategy</th>
-                <th title="Operating mode">Status</th>
-                <th title="Open position (slot / paper slot)">Position</th>
-                <th class="num" title="Virtual equity of the compounding paper sandbox">Equity</th>
-                <th class="num" title="Number of closed trades">Trades</th>
-                <th class="num" title="Share of winners">Win%</th>
-                <th class="num" title="Expectancy per trade (avg net)">Exp</th>
-                <th class="num" title="Payoff = avgWin / |avgLoss|. ≥2 is a healthy profile">Payoff</th>
-                <th class="num" title="Max drawdown on the net P&L curve">Max DD</th>
-                <th class="num" title="Net P&L today">Today</th>
-                <th class="num" title="Net P&L over 7 days">7d</th>
-                <th class="num" title="Net P&L all time">All</th>
-                <th class="strat-col-spark" title="Cumulative P&L curve">Trend</th>
+                <th data-card="Operating mode">Status</th>
+                <th data-card="Open position (slot / paper slot)">Position</th>
+                <th class="num" data-card="Virtual equity of the compounding paper sandbox">Equity</th>
+                <th class="num" data-card="Number of closed trades">Trades</th>
+                <th class="num" data-card="Share of winners">Win%</th>
+                <th class="num" data-card="Expectancy per trade (avg net)">Exp</th>
+                <th class="num" data-card="Payoff = avgWin / |avgLoss|. ≥2 is a healthy profile">Payoff</th>
+                <th class="num" data-card="Max drawdown on the net P&L curve">Max DD</th>
+                <th class="num" data-card="Net P&L today">Today</th>
+                <th class="num" data-card="Net P&L over 7 days">7d</th>
+                <th class="num" data-card="Net P&L all time">All</th>
+                <th class="strat-col-spark" data-card="Cumulative P&L curve">Trend</th>
               </tr>
             </thead>
             <tbody id="strategies-tbody">
@@ -68,7 +68,7 @@
         <div class="card-header">
           <div
             class="card-title"
-            title="Question: decile medians say nothing about the three best addresses inside a decile. Here the list of three was frozen IN ADVANCE (2026-08-13) and is checked forward."
+            data-card="Question: decile medians say nothing about the three best addresses inside a decile. Here the list of three was frozen IN ADVANCE (2026-08-13) and is checked forward."
           >
             Wall Street geniuses
           </div>
@@ -82,14 +82,14 @@
           ></span>
         </div>
         <div class="u-scroll-x">
-          <table class="data-table signals-table" id="win-table">
+          <table class="table table--sticky-head signals-table" id="win-table">
             <thead>
               <tr>
-                <th title="Hyperliquid address: the arrow expands its open positions right now (coin, side, leverage, floating PnL); the link itself opens the explorer">Address</th>
-                <th class="r" title="Edge the address was selected on: profit per dollar of turnover in the month before the freeze">Selection, bp</th>
-                <th class="r" title="Edge AFTER the freeze — the only number here that means anything">Forward, bp</th>
-                <th class="r" title="Profit after the freeze">PnL</th>
-                <th class="r" title="Turnover after the freeze">Turnover</th>
+                <th data-card="Hyperliquid address: the arrow expands its open positions right now (coin, side, leverage, floating PnL); the link itself opens the explorer">Address</th>
+                <th class="num" data-card="Edge the address was selected on: profit per dollar of turnover in the month before the freeze">Selection, bp</th>
+                <th class="num" data-card="Edge AFTER the freeze — the only number here that means anything">Forward, bp</th>
+                <th class="num" data-card="Profit after the freeze">PnL</th>
+                <th class="num" data-card="Turnover after the freeze">Turnover</th>
               </tr>
             </thead>
             <tbody id="win-tbody">
@@ -150,7 +150,7 @@
         <div class="card-header">
           <div
             class="card-title"
-            title="Preregistered forward tests. Each one is evaluated exactly once, when its own stop rule is met. No interim metrics are shown — that is the point."
+            data-card="Preregistered forward tests. Each one is evaluated exactly once, when its own stop rule is met. No interim metrics are shown — that is the point."
           >
             Forward tests
           </div>

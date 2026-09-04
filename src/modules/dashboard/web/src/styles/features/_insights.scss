@@ -12,83 +12,17 @@
   font-family: var(--font-mono);
 }
 .per-coin-table-wrap {
+  // Список монет длинный, поэтому карточка не растёт бесконечно: скроллится
+  // сам блок, а шапка таблицы остаётся видимой (.table--sticky-head).
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 360px;
   margin: 0 -8px;
   padding: 0 8px;
-  max-height: 360px;
-  overflow-y: auto;
 }
-.per-coin-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-small);
-  font-family: var(--font-mono);
 
-  th {
-    text-align: left;
-    font-weight: 600;
-    font-size: var(--fs-micro);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-muted);
-    padding: 6px 10px;
-    border-bottom: 1px solid var(--border-muted);
-    cursor: pointer;
-    user-select: none;
-    white-space: nowrap;
-    position: sticky;
-    top: 0;
-    background: var(--card-bg);
-    z-index: 1;
-
-    &.num {
-      text-align: right;
-    }
-    &:hover {
-      color: var(--text-primary);
-    }
-    &.sort-active {
-      color: var(--text-primary);
-    }
-    &.sort-active.sort-desc::after {
-      @include mask-icon("arrow-down", 11px);
-      margin-left: 4px;
-    }
-    &.sort-active.sort-asc::after {
-      @include mask-icon("arrow-up", 11px);
-      margin-left: 4px;
-    }
-  }
-  td {
-    padding: 6px 10px;
-    border-bottom: 1px solid var(--hairline);
-    white-space: nowrap;
-
-    &.num {
-      text-align: right;
-    }
-    &.coin-cell {
-      font-weight: 700;
-      color: var(--text-primary);
-    }
-    &.num-pos,
-    &.num-pos * {
-      color: var(--green);
-      font-weight: 600;
-    }
-    &.num-neg,
-    &.num-neg * {
-      color: var(--red);
-      font-weight: 600;
-    }
-    &.num-muted {
-      color: var(--text-muted);
-    }
-  }
-  tr:hover td {
-    background: var(--card-bg-hover);
-  }
-}
+// Обе таблицы карточки — общий `.table` (core/_table.scss), своего у них
+// не осталось: окраска чисел по знаку и сортировка живут в ядре.
 
 /* Breakdown (long/short + по стратегии) */
 .breakdown-block {
@@ -100,53 +34,9 @@
   font-size: var(--fs-micro);
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ls-wide);
   color: var(--text-muted);
   margin-bottom: 6px;
-}
-.breakdown-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fs-small);
-  font-family: var(--font-mono);
-
-  th {
-    text-align: left;
-    font-weight: 600;
-    font-size: var(--fs-micro);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-muted);
-    padding: 6px 10px;
-    border-bottom: 1px solid var(--border-muted);
-    white-space: nowrap;
-
-    &.num {
-      text-align: right;
-    }
-  }
-  td {
-    padding: 6px 10px;
-    border-bottom: 1px solid var(--hairline);
-    white-space: nowrap;
-
-    &.num {
-      text-align: right;
-    }
-    &.num-pos,
-    &.num-pos * {
-      color: var(--green);
-      font-weight: 600;
-    }
-    &.num-neg,
-    &.num-neg * {
-      color: var(--red);
-      font-weight: 600;
-    }
-  }
-  tr:hover td {
-    background: var(--card-bg-hover);
-  }
 }
 
 /* Heatmap */
@@ -412,20 +302,10 @@
   color: var(--text-muted);
   margin-bottom: 4px;
 }
+// Заметка дня — общий `.field.field--lg` (core/_controls.scss); здесь только
+// отбивка от списка сделок над ней.
 .day-modal__note {
-  width: 100%;
-  resize: vertical;
-  background: var(--canvas-subtle);
-  border: 1px solid var(--hairline);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-family: inherit;
-  font-size: var(--fs-body);
-  color: var(--text);
-  &:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
+  margin-bottom: 10px;
 }
 .day-modal__foot {
   display: flex;

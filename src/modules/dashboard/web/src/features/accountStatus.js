@@ -20,7 +20,7 @@ function tintAttrs(tint) {
   if (!tint) return { cls: "", attr: "" };
   const cls = ` rb-depth rb-${tint.phase}${tint.peak != null ? " rb-ghost" : ""}${tint.hot ? " rb-hot" : ""}`;
   const peakVar = tint.peak != null ? `;--rb-peak:${tint.peak.toFixed(3)}` : "";
-  const attr = ` style="--rb-now:${tint.now.toFixed(3)}${peakVar}"${tint.tip ? ` title="${tint.tip}"` : ""}`;
+  const attr = ` style="--rb-now:${tint.now.toFixed(3)}${peakVar}"${tint.tip ? ` data-card="${tint.tip}"` : ""}`;
   return { cls, attr };
 }
 
@@ -64,7 +64,7 @@ function applyTint(el, tint, sign) {
     } else {
       el.style.removeProperty("--rb-peak");
     }
-    if (tint.tip) el.title = tint.tip;
+    if (tint.tip) el.dataset.card = tint.tip;
     else el.removeAttribute("title");
   } else {
     el.style.removeProperty("--rb-now");
@@ -79,7 +79,7 @@ function applyTint(el, tint, sign) {
 // uPnL едет по WS (≤2с), Today обновляется поллингом (≤10с). $2 → лёгкий тон,
 // $5 → заметнее, $8+ → потолок; кривая sqrt делает мелкие суммы видимее, MAX_MIX
 // держит подмешивание цвета умеренным (текст читаем). Около нуля — нейтрально.
-// Только эта секция и нигде больше (по просьбе оператора). 2026-06-29.
+// Только эта секция и нигде больше (по просьбе оператора)..
 const PNL_MOOD_CAP_USD = 8;       // где насыщенность упирается в потолок
 const PNL_MOOD_MAX_MIX = 0.18;    // макс. доля цвета (большая площадь → мягче)
 const PNL_MOOD_DEADZONE_USD = 0.1;
@@ -166,7 +166,7 @@ function setPnlUsd(cell, v) {
 
 // ── Производные метрики ручной (HANDS-OFF/ADOPTED) позиции для карточек. Один
 // источник правды и для сборки HTML, и для патча-на-месте, чтобы цифры не
-// разъезжались. Всё считаем из payload: бэк трогать не надо (2026-06-20).
+// разъезжались. Всё считаем из payload: бэк трогать не надо.
 //   · riskUsd  — $ на кону до жёсткого стопа (initialRiskPct·size). null без стопа.
 //   · rMult    — uPnL / riskUsd: насколько сделка прошла в R (честнее доллара).
 //   · movePct  — ход цены к ВХОДУ со знаком МОЕЙ стороны (+ в мою пользу).
@@ -204,7 +204,7 @@ function manualStats(p) {
   // Цена, на которой умный трейл снимет лимитку-цель и пол поедет за пиком.
   // Пока до неё не дошли, разворот отдаёт стоп или безубыток — не «копейки».
   const trailArmPrice = bot?.targetTrailArmPrice ?? null;
-  // Сколько ещё до цели — в R и в процентах хода. Просьба оператора (03.09.2026):
+  // Сколько ещё до цели — в R и в процентах хода. Просьба оператора:
   // «R 1:1.2» на глаз не читается, нужна цифра «осталось столько-то».
   const tp = bot?.tpPrice ?? null;
   const toTargetPct =
@@ -235,16 +235,13 @@ const fmtMove = (m) => `${m >= 0 ? "+" : "−"}${Math.abs(m).toFixed(2)}%`;
 // цель всегда впереди, минус там невозможен.
 const fmtRemR = (r) => `${r.toFixed(2)}R`;
 
-// Карточка №4 работает в двух режимах, и выбирает их ЗНАК позиции (просьба
-// оператора 03.09.2026): в минусе смотришь, где тебя высадит нянька (Floor + чип
-// HARD/BE/TRAIL), в плюсе — сколько осталось до цели. Раньше остаток жил
-// подстрокой в uPnL и на телефоне рвал карточку на три строки.
-// Режим требует ЦЕЛИ: без tpPrice (её сняли, или поза без TP) остаётся Floor,
-// даже когда позиция в плюсе — иначе карточка показала бы пустоту.
-// Пик хода (MFE) в под-строке uPnL. Вернули 03.09.2026 по просьбе оператора: за
-// пиком теперь ползёт биржевой пол трейла, и цифра, от которой он считается,
-// должна быть на виду. Только пик — остаток до цели уехал на карточку цели,
-// а R убран, чтобы строка не начала снова рвать карточку на телефоне.
+// Карточка №4 работает в двух режимах, и выбирает их ЗНАК позиции: в минусе
+// смотришь, где тебя высадит нянька (Floor + чип HARD/BE/TRAIL), в плюсе —
+// сколько осталось до цели. Режим требует ЦЕЛИ: без tpPrice остаётся Floor
+// даже в плюсе, иначе карточка покажет пустоту.
+// Пик хода (MFE) — в под-строке uPnL: за ним ползёт биржевой пол трейла, и
+// цифра, от которой он считается, должна быть на виду. Только пик: R убран,
+// чтобы строка не рвала карточку на телефоне.
 // Пустая строка (а не undefined) намеренно: разметка слоёв остаётся одна и та
 // же, и патч на месте просто меняет текст, не пересобирая карточку.
 // ЗЕРКАЛЬНО ЗНАКУ ПОЗИЦИИ: в плюсе полезен пик (MFE) — за ним ползёт биржевой
@@ -299,7 +296,7 @@ let _manualKeys = "";
 export function renderHeader(status) {
   // Секция-хост только на дашборде; на /strategies.html её нет → no-op.
   if (!document.getElementById("uptime-val")) return;
-  // HL 2026-05-23 unified mode: equity = spot.total + perp.uPnL,
+  // Unified-аккаунт: equity = spot.total + perp.uPnL,
   // available = spot.total - spot.hold. Раньше показывали отдельный
   // wallet-total / perp/spot breakdown — после миграции это один и
   // тот же пул, разбивка потеряла смысл.
@@ -359,16 +356,15 @@ function renderHealthPill(health) {
   if (!pill) return;
   // unknown = ни один источник ещё не отчитался (или фид выключен флагом).
   //
-  // 🚨 До 04.09.2026 плашка в этом случае пряталась целиком (`hidden = true`),
-  // и в шапке оставалась дырка, неотличимая от «всё хорошо». Теперь два разных
-  // состояния и оба нарисованы: пока ждём — скелетон (форма будущей плашки),
-  // если фид выключен насовсем — плашка «Data —» приглушённым тоном.
+  // 🚨 Прятать плашку целиком нельзя: дырка в шапке неотличима от «всё
+  // хорошо». Оба состояния нарисованы — пока ждём скелетон, при выключенном
+  // фиде плашка «Data —» приглушённым тоном.
   const view = health && HEALTH_VIEW[health.overall];
   if (!view) {
     if (!pill.classList.contains("is-loading")) {
       pill.classList.add("is-loading");
       pill.innerHTML = '<span class="sk sk-chip"></span>';
-      pill.title = "Waiting for the first health report";
+      pill.dataset.card = "Waiting for the first health report";
     }
     return;
   }
@@ -379,7 +375,7 @@ function renderHealthPill(health) {
   pill.textContent = bad > 0 ? `${view.text} (${bad})` : view.text;
   // Детали — в нативный тултип: одна строка на проверку, худшие сверху.
   const order = { fail: 0, warn: 1, pass: 2 };
-  pill.title = (health.checks || [])
+  pill.dataset.card = (health.checks || [])
     .slice()
     .sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9))
     // 🚨 Это нативный тултип (атрибут title) — там только текст, svg не
@@ -441,7 +437,7 @@ function renderDailyBadge() {
     : danger ? "stop" : reached ? "goal" : `goal ${DAILY_GOAL_PCT}%`;
   badge.innerHTML = `Today ${valStr}${pctStr}${feeStr} · ${icon}${label}`;
   if (_lastFees != null) {
-    badge.title = `Fees: today $${(_lastFees.today ?? 0).toFixed(2)} · 7d $${(_lastFees.d7 ?? 0).toFixed(2)}`;
+    badge.dataset.card = `Fees: today $${(_lastFees.today ?? 0).toFixed(2)} · 7d $${(_lastFees.d7 ?? 0).toFixed(2)}`;
   }
   badge.hidden = false;
   badge.classList.toggle("is-pos", reached && !danger);
@@ -555,7 +551,7 @@ export function renderPosition(pos) {
 // обратный отсчёт), после 15 мин — чип «🔔 открыта X». Привязка к p.entryTime.
 // Наблюдение оператора «ровно 3 свечи 15m» в данных НЕ подтвердилось (бэктест 27.06:
 // после 3 одинаковых разворот лишь 52–58%, «3» не выделена) → таймер = чекпоинт
-// «перечитать график», а НЕ «ход кончился». 2026-06-28.
+// «перечитать график», а НЕ «ход кончился»..
 const FLOOR_TIMER_SEC = 15 * 60;
 function openedMsOf(p) {
   const t = p?.entryTime;
@@ -717,7 +713,7 @@ function patchManualCard(container, p) {
     if (tgRemEl && s.toTargetR != null) {
       tgRemEl.textContent = fmtRemR(s.toTargetR);
       const cellEl = tgRemEl.closest(".grid-item");
-      if (cellEl) cellEl.title = `${targetTip(s, p)} · Liquidation: ${p.liquidationPrice != null ? fmtPrice(p.liquidationPrice) : "—"}`;
+      if (cellEl) cellEl.dataset.card = `${targetTip(s, p)} · Liquidation: ${p.liquidationPrice != null ? fmtPrice(p.liquidationPrice) : "—"}`;
     }
     // Экстремум живёт во всех трёх слоях (spacer/base/fill) → синхроним все,
     // иначе бело-залитая копия отстанет от цветной под краем заливки.
@@ -782,10 +778,9 @@ export function renderManualPositions(list) {
 
   // ── Патч НА МЕСТЕ: тот же набор монет → двигаем uPnL/цвет/ползунок на
   // существующих узлах (плавный transition ползунка), а не рвём innerHTML.
-  // Ключ включает статус усыновления: иначе при adopt-флипе (false→true) или
-  // смене причины «без стопа» бейдж застывал на до-adopt тексте — in-place ветка
-  // обновляет только uPnL, но не бейдж (SPX висел «HANDS-OFF · MANUAL» без
-  // зелёного ADOPTED, хотя нянька уже повесила стоп — 2026-06-18).
+  // 🚨 Ключ включает статус усыновления: in-place ветка обновляет только uPnL,
+  // и без этого бейдж застывает на до-adopt тексте — «HANDS-OFF · MANUAL» на
+  // позе, которой нянька уже повесила стоп.
   const keys = list
     .map((p) => `${p.coin}:${p.adopted ? 1 : 0}:${p.adoptResyncing ? 1 : 0}:${p.adoptSkipReason ?? ""}:${p.builder ? 1 : 0}:${targetModeFor(p, manualStats(p)) ? "t" : "f"}`)
     .join("|");
@@ -812,7 +807,7 @@ export function renderManualPositions(list) {
       const manualBadge = p.builder
         ? `${escapeHtml(String(p.dex || "builder").toUpperCase())} DEX · <span style="color:var(--red,#cf222e)">NOT BABYSAT</span>`
         : p.adoptResyncing
-        ? `HANDS-OFF · MANUAL · <span style="color:var(--orange,#f59e0b)" title="Position side flipped — the bot closes the old DB row and re-adopts the position on the new side">RE-SYNCING ⟳</span>`
+        ? `HANDS-OFF · MANUAL · <span style="color:var(--orange,#f59e0b)" data-card="Position side flipped — the bot closes the old DB row and re-adopts the position on the new side">RE-SYNCING ⟳</span>`
         : p.adopted
         ? `HANDS-OFF · MANUAL · <span style="color:var(--green,#22c55e)">ADOPTED</span>`
         : p.adoptSkipReason
@@ -847,7 +842,7 @@ export function renderManualPositions(list) {
       // длинные → инлайн у значения переносился на 3-ю строку). Цвет по знаку хода.
       const moveInline =
         s.movePct != null
-          ? ` <span class="grid-inline ${s.movePct >= 0 ? "positive" : "negative"}" data-mmove>${fmtMove(s.movePct)}</span>`
+          ? ` <span class="grid-inline ${s.movePct >= 0 ?"positive" : "negative"}" data-mmove>${fmtMove(s.movePct)}</span>`
           : "";
       // Ликвидация — в title; нет пола (не усыновлена) → fallback на Liq.
       const fb = FLOOR_BADGE[s.floorKind] || null;
@@ -869,14 +864,14 @@ export function renderManualPositions(list) {
       // поэтому она стоит в строке подписи, а не в тултипе.
       const armInline =
         s.trailArmPrice != null && s.floorKind !== "trail"
-          ? `<span class="fl-inline" data-marm title="Smart trail arms here: the target limit is pulled and the floor starts trailing the peak">trail from <b>${fmtPrice(s.trailArmPrice)}</b></span>`
+          ? `<span class="fl-inline" data-marm data-card="Smart trail arms here: the target limit is pulled and the floor starts trailing the peak">trail from <b>${fmtPrice(s.trailArmPrice)}</b></span>`
           : "";
       const floorCell = s.floorPrice != null
-        ? `<div class="grid-item${ft.cls}" title="${cellTip}">${ft.bg}
+        ? `<div class="grid-item${ft.cls}" data-card="${cellTip}">${ft.bg}
                <div class="item-label" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Floor${badge ? ` <span class="fl-badge ${badge.cls}">${badge.txt}</span>` : ""}</span>${armInline}</div>
-               <div class="item-value" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span><span data-mfloor>${fmtPrice(s.floorPrice)}</span><span class="grid-inline ${s.floorPnl >= 0 ? "positive" : "negative"}" data-mfloorpnl>${s.floorPnl != null ? fmtSignedUsd2(s.floorPnl) : ""}</span></span>${ft.chip}</div>
+               <div class="item-value" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span><span data-mfloor>${fmtPrice(s.floorPrice)}</span><span class="grid-inline ${s.floorPnl >= 0 ?"positive" : "negative"}" data-mfloorpnl>${s.floorPnl != null ? fmtSignedUsd2(s.floorPnl) : ""}</span></span>${ft.chip}</div>
              </div>`
-          : `<div class="grid-item${ft.cls}" title="Liquidation: ${liq}">${ft.bg}<div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>Liq</span>${ft.chip}</div><div class="item-value">${liq}</div></div>`;
+          : `<div class="grid-item${ft.cls}" data-card="Liquidation: ${liq}">${ft.bg}<div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>Liq</span>${ft.chip}</div><div class="item-value">${liq}</div></div>`;
       return `
       <div data-mcard="${escapeHtml(p.coin)}" style="margin-top:0.75rem; padding:0.75rem; border:1px dashed var(--border); border-radius:8px;">
         <div class="mcard-head">
@@ -891,15 +886,15 @@ export function renderManualPositions(list) {
             // На builder-DEX'ах executor закрыть не может (asset-id другой
             // площадки) — кнопки нет, чтобы она не врала работоспособностью.
             p.builder
-              ? '<span class="grid-inline" title="Close it on the exchange by hand — the bot cannot reach builder-DEX assets">close by hand</span>'
+              ? '<span class="grid-inline" data-card="Close it on the exchange by hand — the bot cannot reach builder-DEX assets">close by hand</span>'
               : `<button type="button" class="pos-close-btn${closeBtnCls(s, p)}" data-posclose="${escapeHtml(p.coin)}"
-                  title="Close the whole position at market (taker 4.32 bp, no builder fee)"><span>Close</span></button>`
+                  data-card="Close the whole position at market (taker 4.32 bp, no builder fee)"><span>Close</span></button>`
           }
         </div>
         <div class="data-grid">
           <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}${riskInline}</div></div>
           <div class="grid-item"><div class="item-label">Entry · Now${moveInline}</div><div class="item-value">${fmtPrice(p.entryPrice)} · <span data-mnow>${cur}</span></div></div>
-          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ? "pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}`, subText: extremeSubTxt(s, p.unrealizedPnl) })}</div>
+          <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ?"pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}`, subText: extremeSubTxt(s, p.unrealizedPnl) })}</div>
           ${floorCell}
         </div>
       </div>`;

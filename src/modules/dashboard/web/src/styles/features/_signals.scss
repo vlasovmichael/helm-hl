@@ -42,36 +42,18 @@
   top: 0;
   z-index: 1;
 }
+// Таблицы лент (Hot Movers, Screen, OI, Winners) — общий `.table`
+// (core/_table.scss). Здесь остаётся только то, что от ленты: шапка на своём
+// фоне, потому что она липкая и под ней проезжают строки.
 .signals-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: var(--font-mono);
-  font-size: var(--fs-body);
-
-  th {
-    text-align: left;
-    font-weight: 600;
-    color: var(--text-muted);
-    font-size: var(--fs-small);
-    padding: 9px 10px;
-    border-bottom: 1px solid var(--border);
-    background: var(--canvas-subtle);
+  thead th {
     position: sticky;
     top: 0;
     z-index: 1;
-  }
-  td {
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--hairline);
-    color: var(--text-primary);
-    vertical-align: middle;
+    background: var(--canvas-subtle);
   }
   tbody tr {
-    transition: background 0.12s;
-
-    &:hover {
-      background: var(--card-bg-hover);
-    }
+    transition: background var(--dur-fast) var(--ease-out);
   }
 }
 
@@ -455,75 +437,6 @@
 }
 
 /* Shared data table used by BTC Divergence and Whale Watch */
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: var(--font-mono);
-  font-size: var(--fs-base);
-
-  th {
-    font-size: var(--fs-micro);
-    font-weight: 600;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-    color: var(--text-faint);
-    padding: 7px 10px;
-    border-bottom: 1px solid var(--hairline);
-    text-align: left;
-    white-space: nowrap;
-
-    &.r {
-      text-align: right;
-    }
-    &.c {
-      text-align: center;
-    }
-  }
-  td {
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--hairline);
-    vertical-align: middle;
-    white-space: nowrap;
-
-    &.r {
-      text-align: right;
-    }
-    &.c {
-      text-align: center;
-    }
-  }
-  tbody tr:hover {
-    background: var(--card-bg-hover, rgba(255, 255, 255, 0.03));
-  }
-}
-
-.ww-sortable {
-  cursor: pointer;
-  user-select: none;
-
-  &:hover {
-    color: var(--text-primary);
-  }
-  &::after {
-    @include mask-icon("chevrons-up-down", 11px);
-    margin-left: 4px;
-    opacity: 0.3;
-  }
-}
-.ww-sort-active {
-  &::after {
-    @include mask-icon("arrow-down", 11px);
-    margin-left: 4px;
-    opacity: 0.9;
-    color: var(--accent);
-  }
-  &.ww-sort-asc::after {
-    @include mask-icon("arrow-up", 11px);
-    margin-left: 4px;
-    opacity: 0.9;
-    color: var(--accent);
-  }
-}
 
 .signals-status {
   display: inline-block;
@@ -559,16 +472,13 @@
   color: var(--red);
 }
 
+// Тир движения: цвет числа задаёт ядро (.table), здесь — только ступени
+// «слабо / обычно / сильно» и подложка ячейки под них.
 .signals-table {
   td.num-pos-strong,
   td.num-pos-strong * {
     color: var(--green);
     font-weight: 700;
-  }
-  td.num-pos,
-  td.num-pos * {
-    color: var(--green);
-    font-weight: 600;
   }
   td.num-pos-weak,
   td.num-pos-weak * {
@@ -580,19 +490,10 @@
     color: var(--red);
     font-weight: 700;
   }
-  td.num-neg,
-  td.num-neg * {
-    color: var(--red);
-    font-weight: 600;
-  }
   td.num-neg-weak,
   td.num-neg-weak * {
     color: var(--red);
     font-weight: 500;
-  }
-  td.num-muted,
-  td.num-muted * {
-    color: var(--text-muted);
   }
 
   td.num-pos-strong {
@@ -840,12 +741,10 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
 /* Активная монета (позиция бота ИЛИ ручная) — всегда поверх heat-раскраски:
    фон-акцент + жирная левая кромка. !important, т.к. heat-классы выше по
    специфичности и иначе перебивают кромку, когда монета ещё и двигается. */
-.signals-table tr.is-active,
-.data-table tr.is-active {
+.signals-table tr.is-active {
   background: var(--grad-brand-soft) !important;
 }
-.signals-table tr.is-active td:first-child,
-.data-table tr.is-active td:first-child {
+.signals-table tr.is-active td:first-child {
   box-shadow: inset 4px 0 0 var(--brand) !important;
   font-weight: 700;
 }

@@ -20,7 +20,7 @@
             </button>
           </div>
         </div>
-        <div class="cod-tabs" id="cod-tabs" hidden></div>
+        <div class="tabs tabs--wrap cod-tabs" id="cod-tabs" hidden></div>
         <div id="cod-body">
           <!-- Скелетон формы карточки: заголовок + бейдж стороны + две
                колонки таблицы. Пока данных нет, место под них уже занято —
@@ -106,17 +106,17 @@
           </div>
         </div>
         <div class="oi-table-wrap">
-          <table class="data-table signals-table oi-table" id="oi-table">
+          <table class="table signals-table oi-table" id="oi-table">
             <thead>
               <tr>
                 <th data-key="coin">Coin</th>
-                <th data-key="oiUsd" class="sorted" title="Dollar value of all open positions (both sides). Size of the crowd, not its direction.">OI $</th>
-                <th data-key="dOi24hPct" title="Change in open interest over 24h. Rising = money coming in; falling = positions being closed.">ΔOI 24h</th>
-                <th data-key="dOi1hPct" title="Same over the last hour — catches a position being built right now.">ΔOI 1h</th>
+                <th data-key="oiUsd" class="sorted" data-card="Dollar value of all open positions (both sides). Size of the crowd, not its direction.">OI $</th>
+                <th data-key="dOi24hPct" data-card="Change in open interest over 24h. Rising = money coming in; falling = positions being closed.">ΔOI 24h</th>
+                <th data-key="dOi1hPct" data-card="Same over the last hour — catches a position being built right now.">ΔOI 1h</th>
                 <th data-key="px">Price</th>
-                <th data-key="dPx24hPct" title="Price change over 24h. Read next to ΔOI: OI up with price flat is the interesting cell.">ΔPrice 24h</th>
-                <th data-key="f" title="Hourly funding, with the daily cost below it. Positive = longs pay shorts. ×N appears when a coin runs at least 5× the exchange median — that is a real crowd imbalance, and a real cost of holding.">Funding/h</th>
-                <th data-key="v" title="24h traded volume. On Hyperliquid OI above volume is normal — it is not an anomaly.">Volume 24h</th>
+                <th data-key="dPx24hPct" data-card="Price change over 24h. Read next to ΔOI: OI up with price flat is the interesting cell.">ΔPrice 24h</th>
+                <th data-key="f" data-card="Hourly funding, with the daily cost below it. Positive = longs pay shorts. ×N appears when a coin runs at least 5× the exchange median — that is a real crowd imbalance, and a real cost of holding.">Funding/h</th>
+                <th data-key="v" data-card="24h traded volume. On Hyperliquid OI above volume is normal — it is not an anomaly.">Volume 24h</th>
               </tr>
             </thead>
             <tbody id="oi-tbody">
@@ -178,14 +178,14 @@
           so it can never tell you long or short — this page shows positioning, not direction.
         </p>
         <div class="oi-table-wrap" style="margin-top: 14px">
-          <table class="data-table signals-table oi-table" id="oi-series">
+          <table class="table signals-table oi-table" id="oi-series">
             <thead>
               <tr>
-                <th data-key="t" title="Your local time — the chart axis uses it too. Rows are bucket averages, so the newest row is the bucket for the hour that is still running.">Time · <span id="oi-tz">local</span></th>
+                <th data-key="t" data-card="Your local time — the chart axis uses it too. Rows are bucket averages, so the newest row is the bucket for the hour that is still running.">Time · <span id="oi-tz">local</span></th>
                 <th>Price</th>
-                <th title="Open positions counted in coins. Price-free, so this is the honest answer to «did anyone actually build a position».">OI (tokens)</th>
-                <th title="tokens × price. Moves when price moves, even with zero new positions — do not read a rise here as money arriving.">OI $</th>
-                <th title="Hourly funding. Positive = longs pay shorts, negative = shorts pay longs. Anything past ±0.1%/h is a real crowd imbalance, not noise — and a real cost of holding.">Funding/h</th>
+                <th data-card="Open positions counted in coins. Price-free, so this is the honest answer to «did anyone actually build a position».">OI (tokens)</th>
+                <th data-card="tokens × price. Moves when price moves, even with zero new positions — do not read a rise here as money arriving.">OI $</th>
+                <th data-card="Hourly funding. Positive = longs pay shorts, negative = shorts pay longs. Anything past ±0.1%/h is a real crowd imbalance, not noise — and a real cost of holding.">Funding/h</th>
                 <th>Volume 24h</th>
               </tr>
             </thead>

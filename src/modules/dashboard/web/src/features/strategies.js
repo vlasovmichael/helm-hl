@@ -9,6 +9,7 @@
 import { escapeHtml, fmtMoney, fmtUsd, fmtPrice } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 import { icon } from "../core/icon.js";
+import { emptyState } from "../core/placeholders.js";
 
 const _stratExpanded = new Set(); // id'шники развёрнутых строк (переживают re-render)
 let _lastStrategies = null;
@@ -112,7 +113,11 @@ function stratTradesBlock(s) {
   }
   const trades = tc.trades || [];
   if (!trades.length) {
-    return `<div class="strat-detail-block strat-detail-full"><div class="strat-detail-h">Recent trades</div><div class="empty-state">no closed trades yet</div></div>`;
+    return (
+      `<div class="strat-detail-block strat-detail-full"><div class="strat-detail-h">Recent trades</div>` +
+      emptyState({ glyph: "history", title: "No closed trades yet", hint: "The strategy has not finished a round trip." }) +
+      `</div>`
+    );
   }
   const rows = trades
     .map((t) => {
@@ -142,7 +147,7 @@ function stratTradesBlock(s) {
   return (
     `<div class="strat-detail-block strat-detail-full">` +
     `<div class="strat-detail-h">Recent trades</div>` +
-    `<table class="strat-detail-table"><tbody>${rows}</tbody></table>${pager}</div>`
+    `<table class="table table--compact strat-detail-table"><tbody>${rows}</tbody></table>${pager}</div>`
   );
 }
 
@@ -163,7 +168,7 @@ function stratShadowBlock(s) {
   return (
     `<div class="strat-detail-block strat-detail-full">` +
     `<div class="strat-detail-h">Shadow exits · what-if (${sh.n} closed)</div>` +
-    `<table class="strat-detail-table strat-shadow-table"><thead><tr>` +
+    `<table class="table table--compact strat-detail-table strat-shadow-table"><thead><tr>` +
     `<th></th><th class="num">net</th><th class="num">Δ vs actual</th><th class="num">fired</th>` +
     `</tr></thead><tbody>` +
     `<tr><td class="strat-dt-coin">actual</td><td class="num">${fmtMoney(sh.actual)}</td>` +
@@ -199,7 +204,7 @@ function stratDetail(s) {
       .join("");
     parts.push(
       `<div class="strat-detail-block"><div class="strat-detail-h">Recent signals</div>` +
-        `<table class="strat-detail-table"><tbody>${rows}</tbody></table></div>`,
+        `<table class="table table--compact strat-detail-table"><tbody>${rows}</tbody></table></div>`,
     );
   }
   // Сделки — постранично через REST-кэш.
@@ -237,21 +242,21 @@ function stratRowHtml(s, planned, opts = {}) {
   const e = s.edge || {};
   const pos = s.active
     ? `<span class="strat-pos-coin">${escapeHtml(s.active.coin)}</span> ` +
-      `<span class="strat-${s.active.side === "LONG" ? "pos" : "neg"}">${s.active.side}</span>` +
+      `<span class="strat-${s.active.side ==="LONG" ? "pos" : "neg"}">${s.active.side}</span>` +
       ` <span class="strat-dim">${s.active.heldHours.toFixed(1)}h</span>`
     : '<span class="strat-dim">—</span>';
 
   const equity = s.virtual
-    ? `${fmtUsd(s.virtual.equity)} <span class="${s.virtual.pnlTotal >= 0 ? "strat-pos" : "strat-neg"} strat-eq-pct">${(s.virtual.pnlPct * 100).toFixed(1)}%</span>`
+    ? `${fmtUsd(s.virtual.equity)} <span class="${s.virtual.pnlTotal >= 0 ?"strat-pos" : "strat-neg"} strat-eq-pct">${(s.virtual.pnlPct * 100).toFixed(1)}%</span>`
     : '<span class="strat-dim">—</span>';
 
   const trades = e.trades ?? 0;
   const winPct = trades > 0 ? `${(e.winRate * 100).toFixed(0)}%` : "—";
   const exp = Number.isFinite(e.expectancy)
-    ? `<span class="${e.expectancy >= 0 ? "strat-pos" : "strat-neg"}">${fmtMoney(e.expectancy)}</span>`
+    ? `<span class="${e.expectancy >= 0 ?"strat-pos" : "strat-neg"}">${fmtMoney(e.expectancy)}</span>`
     : "—";
   const payoff = Number.isFinite(e.payoff)
-    ? `<span class="${e.payoff >= 2 ? "strat-pos" : e.payoff < 1 ? "strat-neg" : ""}">${e.payoff.toFixed(2)}</span>`
+    ? `<span class="${e.payoff >= 2 ?"strat-pos" : e.payoff < 1 ? "strat-neg" : ""}">${e.payoff.toFixed(2)}</span>`
     : "—";
   const maxdd = Number.isFinite(e.maxDd) && e.maxDd < 0
     ? `<span class="strat-neg">${fmtMoney(e.maxDd)}</span>`
@@ -259,7 +264,7 @@ function stratRowHtml(s, planned, opts = {}) {
 
   const expanded = _stratExpanded.has(s.uid);
   const main =
-    `<tr class="strat-row${famCls}${dim}${expanded ? " is-expanded" : ""}" data-id="${s.uid}"${famAttr} tabindex="0">` +
+    `<tr class="strat-row${famCls}${dim}${expanded ?" is-expanded" : ""}" data-id="${s.uid}"${famAttr} tabindex="0">` +
     `<td class="strat-col-name"><div class="strat-name">${escapeHtml(s.label)} ` +
     `<span class="strat-caret">${icon(expanded ? "expanded" : "collapsed")}</span></div>` +
     `<div class="strat-kind">${escapeHtml(s.kind || "")}</div></td>` +

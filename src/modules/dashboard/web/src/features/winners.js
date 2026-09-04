@@ -1,6 +1,6 @@
 // ─────────────────────────────────────────────────
 //  «А если взять троих?» — витрина предзаявленного форвардного теста.
-//  Список заморожен 13.08.2026, правила в docs/winners-preregistration.md.
+// Список заморожен, правила в docs/winners-preregistration.md.
 //
 //  Витрина намеренно показывает ТРИ вещи рядом: результат выбранных, результат
 //  контрольной группы и дату решения. Первое без второго — это история успеха,
@@ -45,12 +45,12 @@ function renderRows(tbody, res) {
   settle(
     tbody,
     res.selected
-      .map((s) => `<tr data-addr="${s.address}" style="cursor:pointer" title="click a row — what this address holds right now">
+      .map((s) => `<tr data-addr="${s.address}" style="cursor:pointer" data-card="click a row — what this address holds right now">
       <td style="font-family:var(--font-mono)"><span class="win-caret" data-addr="${s.address}" style="color:var(--text-muted);padding-right:4px">${icon("collapsed")}</span><a href="https://app.hyperliquid.xyz/explorer/address/${s.address}" target="_blank" rel="noopener" style="color:inherit">${short(s.address)}</a></td>
-      <td class="r">${bp(s.selectionEdgeBp)}</td>
-      <td class="r" style="${col(s.forwardEdgeBp)}">${s.forwardEdgeBp === null ? "<span style='color:var(--text-muted)'>no trades</span>" : bp(s.forwardEdgeBp)}</td>
-      <td class="r" style="${col(s.forwardPnl)}">${s.forwardPnl === null ? "—" : usd(s.forwardPnl)}</td>
-      <td class="r">${s.forwardVolume === null ? "—" : usd(s.forwardVolume)}</td>
+      <td class="num">${bp(s.selectionEdgeBp)}</td>
+      <td class="num" style="${col(s.forwardEdgeBp)}">${s.forwardEdgeBp === null ? "<span style='color:var(--text-muted)'>no trades</span>" : bp(s.forwardEdgeBp)}</td>
+      <td class="num" style="${col(s.forwardPnl)}">${s.forwardPnl === null ? "—" : usd(s.forwardPnl)}</td>
+      <td class="num">${s.forwardVolume === null ? "—" : usd(s.forwardVolume)}</td>
     </tr>
     <tr class="win-pos" data-pos-for="${s.address}" hidden><td colspan="5" style="padding:0"></td></tr>`)
       .join(""),
@@ -108,7 +108,7 @@ function renderAccount(acc) {
     return `<div style="padding:6px 10px;color:var(--text-muted)">no response: ${acc.error}</div>`;
 
   const staleNote = acc.stale
-    ? ` · <span title="The HL request pool was busy with the live bot — this view waits at most 1.5s for budget and shows the previous answer">data from ${age(acc.staleAgeMs)}</span>`
+    ? ` · <span data-card="The HL request pool was busy with the live bot — this view waits at most 1.5s for budget and shows the previous answer">data from ${age(acc.staleAgeMs)}</span>`
     : "";
 
   if (!acc.positions.length)
@@ -123,7 +123,7 @@ function renderAccount(acc) {
       ? ` · accounts: ${venues.map((v) => `${v.dex} ${usd(v.equity)}`).join(" + ")}`
       : "";
   const partialNote = acc.partial
-    ? ` · <span title="Could not list this address’s venues (userFills did not get budget) — showing the main DEX only">main DEX only</span>`
+    ? ` · <span data-card="Could not list this address’s venues (userFills did not get budget) — showing the main DEX only">main DEX only</span>`
     : "";
 
   const head = `equity ${usd(acc.equity)} · notional ${usd(acc.notional)}` +
@@ -135,21 +135,21 @@ function renderAccount(acc) {
     .map((p) => `<tr>
       <td>${p.coin}</td>
       <td style="color:${p.side === "LONG" ? "var(--green)" : "var(--red)"}">${p.side}</td>
-      <td class="r">${usd(p.sizeUsd)}</td>
-      <td class="r">${p.leverage == null ? "—" : `${p.leverage}×`}${p.leverageType === "isolated" ? " iso" : ""}</td>
-      <td class="r">${px(p.entryPrice)}</td>
-      <td class="r" style="${col(p.unrealizedPnl)}">${usd(p.unrealizedPnl)}</td>
-      <td class="r">${p.liquidationPrice == null ? "—" : px(p.liquidationPrice)}</td>
+      <td class="num">${usd(p.sizeUsd)}</td>
+      <td class="num">${p.leverage == null ? "—" : `${p.leverage}×`}${p.leverageType === "isolated" ? " iso" : ""}</td>
+      <td class="num">${px(p.entryPrice)}</td>
+      <td class="num" style="${col(p.unrealizedPnl)}">${usd(p.unrealizedPnl)}</td>
+      <td class="num">${p.liquidationPrice == null ? "—" : px(p.liquidationPrice)}</td>
     </tr>`)
     .join("");
 
   return `<div style="padding:6px 10px;font-size: var(--fs-label);font-family:var(--font-mono)">
     <div style="color:var(--text-muted);margin-bottom:4px">${head}</div>
-    <table class="data-table" style="margin:0">
+    <table class="table table--compact" style="margin:0">
       <thead><tr>
-        <th>Coin</th><th>Side</th><th class="r">Size</th><th class="r">Lev</th>
-        <th class="r">Entry</th><th class="r" title="Unrealized PnL — this is what the leaderboard PnL counts">Floating</th>
-        <th class="r">Liq.</th>
+        <th>Coin</th><th>Side</th><th class="num">Size</th><th class="num">Lev</th>
+        <th class="num">Entry</th><th class="num" data-card="Unrealized PnL — this is what the leaderboard PnL counts">Floating</th>
+        <th class="num">Liq.</th>
       </tr></thead>
       <tbody>${rows}</tbody>
     </table>
@@ -293,7 +293,7 @@ function renderLog(box, sumBox, res) {
         <span style="flex:1">${e.coin} <span style="color:var(--text-muted)">${e.side}${e.leverage ? ` ${e.leverage}×` : ""} ${usd(e.sizeUsd)}</span></span>
         ${held}
         <span style="min-width:60px;text-align:right">${pnl}</span>
-        <span style="color:var(--text-muted)" title="${e.address}">${e.address.slice(0, 6)}…</span>
+        <span style="color:var(--text-muted)" data-card="${e.address}">${e.address.slice(0, 6)}…</span>
       </div>`;
     })
     .join("");

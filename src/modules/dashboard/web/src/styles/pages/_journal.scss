@@ -2,10 +2,8 @@
 // ─────────────────────────────────────────────────────────────────────
 //  journal.html — журнал чтения графика.
 //
-//  До 04.09.2026 всё это лежало 895 строками внутри <style> самой страницы:
-//  вне системы токенов, без препроцессора, с собственными кеглями и тремя
-//  цветными полосками border-left. Префикс j- оставлен — он и был задуман,
-//  чтобы блок не конфликтовал с глобальными .card / .btn / .status.
+//  Префикс j- — чтобы блок не конфликтовал с глобальными .card / .btn /
+//  .status.
 // ─────────────────────────────────────────────────────────────────────
 
 /* ── Журнал чтения графика — самодостаточный блок (j- префикс, чтобы не
@@ -53,62 +51,28 @@
   margin-bottom: 16px;
   flex-wrap: wrap;
 }
+// Ряд монет — общий `.tabs` (core/_tabs.scss). Здесь только крестик удаления
+// внутри вкладки: он часть вкладки, а не отдельный контрол.
 .j-nav {
-  display: flex;
-  align-items: center;
   flex-wrap: wrap;
   gap: 4px;
-  padding: 4px;
-  background: var(--canvas-subtle);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
 }
-.j-tab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  height: 32px;
-  font-family: var(--font-sans);
-  font-weight: 600;
-  font-size: var(--fs-base);
-  padding: 0 14px;
-  border-radius: var(--radius);
-  color: var(--text-secondary);
-  cursor: pointer;
-  border: none;
-  background: transparent;
-  letter-spacing: -0.01em;
-  transition:
-    color 0.15s,
-    background 0.15s,
-    box-shadow 0.15s;
-}
-.j-tab:hover {
-  color: var(--text-primary);
-}
-.j-tab.active {
-  color: var(--accent);
-  background: var(--card-bg);
-  box-shadow: var(--shadow-sm);
-}
-.j-tab .j-rm {
+.tabs__tab .j-rm {
   display: inline-grid;
   place-items: center;
   width: 15px;
   height: 15px;
   border-radius: var(--radius-sm);
-  font-size: var(--fs-body);
   line-height: 1;
   color: var(--text-muted);
   opacity: 0.55;
   margin-right: -4px;
   transition:
-    opacity 0.15s,
-    color 0.15s,
-    background 0.15s;
+    opacity var(--dur-fast) var(--ease-out),
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
 }
-.j-tab .j-rm:hover {
+.tabs__tab .j-rm:hover {
   opacity: 1;
   color: var(--red);
   background: var(--red-soft);
@@ -122,29 +86,19 @@
 .j-addbtn:hover {
   color: var(--accent);
 }
+// Поле «добавить монету» — общий `.field.field--ticker`. Своё здесь: ширина
+// под тикер и сразу активный вид, потому что оно появляется по клику и уже
+// сфокусировано.
 .j-coininput {
   width: 92px;
   height: 32px;
-  padding: 0 12px;
-  font-family: var(--font-sans);
-  font-weight: 600;
-  font-size: var(--fs-base);
-  text-transform: uppercase;
-  color: var(--text-primary);
-  background: var(--card-bg);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius);
-  outline: none;
+  border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
-}
-.j-coininput.err {
-  border-color: var(--red);
-  box-shadow: 0 0 0 3px var(--red-soft);
-}
-.j-coininput::placeholder {
-  color: var(--text-muted);
-  text-transform: none;
-  font-weight: 400;
+
+  &.err {
+    border-color: var(--red);
+    box-shadow: 0 0 0 3px var(--red-soft);
+  }
 }
 .j-status {
   margin-left: auto;
@@ -436,93 +390,22 @@ label.j-f {
   text-transform: uppercase;
   color: var(--text-muted);
 }
-.j-card input[type="text"],
-.j-card textarea {
-  width: 100%;
-  padding: 10px 12px;
-  font-family: var(--font-sans);
-  font-size: var(--fs-base);
-  color: var(--text-primary);
-  background: var(--canvas-subtle);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s,
-    background 0.15s;
-}
-.j-card input::placeholder,
-.j-card textarea::placeholder {
-  color: var(--text-muted);
-}
-.j-card textarea {
-  resize: vertical;
-  min-height: 52px;
-  line-height: 1.5;
-}
-.j-card input:focus,
-.j-card textarea:focus {
-  outline: none;
-  background: var(--card-bg);
+// Поля формы — общий `.field.field--block.field--lg` (core/_controls.scss).
+// Здесь остаётся только фокус: у карточки журнала он ярче обычного, потому
+// что это форма, в которой печатают, а не фильтр в шапке.
+.j-card .field:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
+
 .j-row2 {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
 
-.j-seg {
-  display: flex;
-  gap: 6px;
-}
-/* Ряд «1D тренд» — не сегментный .seg из шапки карточки: это ОТВЕТ в форме,
-   он на всю ширину поля и держит три семантических цвета (вверх/вбок/вниз).
-   Поэтому своя раскладка, но кегль, радиус и время перехода — общие. */
-.j-seg button {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-2);
-  min-height: var(--ctl-h-lg);
-  font-family: var(--font-sans);
-  font-weight: 600;
-  font-size: var(--fs-body);
-  color: var(--text-secondary);
-  background: var(--canvas-subtle);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition:
-    color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out);
-}
-.j-seg button:hover {
-  color: var(--text-primary);
-  border-color: var(--border-strong);
-}
-.j-seg button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.j-seg button.sel[data-v="up"] {
-  color: var(--green);
-  background: var(--green-soft);
-  border-color: var(--green-line);
-}
-.j-seg button.sel[data-v="down"] {
-  color: var(--red);
-  background: var(--red-soft);
-  border-color: var(--red-line);
-}
-.j-seg button.sel[data-v="range"] {
-  color: var(--warn);
-  background: var(--warn-soft);
-  border-color: var(--warn);
-}
+/* Ряды «1D trend» и «Regime» — общий `.seg--wide` (core/_controls). Тон
+   ответа несёт модификатор сегмента: `--long` / `--flat` / `--short`. */
 
 /* Кнопки журнала — общий .btn (core/_controls.scss). Здесь остаётся только
    то, что от места: отбивка сверху и рост под палец, потому что это кнопка

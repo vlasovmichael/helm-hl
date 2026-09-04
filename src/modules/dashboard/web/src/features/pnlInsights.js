@@ -13,6 +13,7 @@ import { fmtMoney, escapeHtml, strategyDisplayName } from "../utils/format.js";
 import { fetchJson, postJson } from "../net/api.js";
 import { icon } from "../core/icon.js";
 import * as dialog from "../core/dialog.js";
+import { emptyRow, emptyState, skeletonText } from "../core/placeholders.js";
 
 let currentPnlPeriod = "today";
 let lastPnlSummary = null;
@@ -132,7 +133,7 @@ function renderPnlSummary() {
   const strategies = Object.entries(p.byStrategy || {});
   if (strategies.length === 0) {
     stratContainer.innerHTML =
-      '<div class="empty-state">No trades in this period</div>';
+      emptyState({ glyph: "history", title: "No trades in this period", hint: "Pick a wider window above." });
   } else {
     const maxAbs = Math.max(
       1e-9,
@@ -203,7 +204,7 @@ function breakdownRow(label, r) {
 }
 
 function renderBreakdown() {
-  const empty = '<tr><td colspan="6" class="empty-state">No trades yet</td></tr>';
+  const empty = emptyRow(6, { glyph: "history", title: "No trades yet", hint: "Rows appear as positions close." });
   const sideTbody = document.getElementById("breakdown-side-tbody");
   if (sideTbody) {
     const rows = lastInsights.bySide || [];
@@ -222,9 +223,9 @@ function renderBreakdown() {
 
 // ── Exit quality: MFE/MAE excursion (насколько хорошо выходим) ──
 function statCard(label, value, cls, hint) {
-  return `<div class="exits-card ${cls || ""}">
+  return `<div class="exits-card ${cls ||""}">
       <div class="exits-card-val">${value}</div>
-      <div class="exits-card-lbl" title="${hint || ""}">${label}</div>
+      <div class="exits-card-lbl" data-card="${hint || ""}">${label}</div>
     </div>`;
 }
 
@@ -239,7 +240,7 @@ function renderExits() {
     meta.textContent = "No trades with MFE/MAE tracking yet (adopt: manual entry, bot exit)";
     cards.innerHTML = "";
     tbody.innerHTML =
-      '<tr><td colspan="6" class="empty-state">No excursion data yet</td></tr>';
+      emptyRow(6, { glyph: "history", title: "No excursion data yet", hint: "MFE/MAE is recorded while the bot runs a position." });
     return;
   }
 
@@ -314,10 +315,10 @@ function renderPerCoin() {
 
   // Sort indicator on headers.
   document.querySelectorAll(".per-coin-table th[data-sort]").forEach((th) => {
-    th.classList.remove("sort-active", "sort-asc", "sort-desc");
+    th.classList.remove("is-sorted", "is-asc");
     if (th.dataset.sort === key) {
-      th.classList.add("sort-active");
-      th.classList.add(dir === "asc" ? "sort-asc" : "sort-desc");
+      th.classList.add("is-sorted");
+      if (dir === "asc") th.classList.add("is-asc");
     }
   });
 
@@ -332,7 +333,7 @@ function renderPerCoin() {
   if (!tbody) return;
   if (rows.length === 0) {
     tbody.innerHTML =
-      '<tr><td colspan="6" class="empty-state">No trades yet</td></tr>';
+      emptyRow(6, { glyph: "history", title: "No trades yet", hint: "Rows appear as positions close." });
     return;
   }
   tbody.innerHTML = rows
@@ -435,7 +436,7 @@ function renderHeatmap() {
       const clickAttr = d ? ` data-date="${key}" role="button" tabindex="0"` : "";
       const clickCls = d ? " is-clickable" : "";
       cells.push(
-        `<div class="heatmap-cell ${cellClass(d)}${todayCls}${clickCls}" title="${tip}"${clickAttr}></div>`,
+        `<div class="heatmap-cell ${cellClass(d)}${todayCls}${clickCls}" data-card="${tip}"${clickAttr}></div>`,
       );
     }
     const pnlCls = monthPnl > 0 ? "pos" : monthPnl < 0 ? "neg" : "";
@@ -579,9 +580,6 @@ const SOURCE_LABEL = { bot: "bot", adopted: "adopt", manual: "manual" };
 
 function ensureDayModal() {
   if (dayModalEl) return dayModalEl;
-  // Шестая модалка проекта, и до 04.09.2026 единственная, что осталась вне
-  // общей: своя подложка, своя панель на 520px, свой Escape, свой замок
-  // прокрутки. Рядом с остальными она читалась как окно другого приложения.
   const el = document.createElement("div");
   el.className = "modal day-modal";
   el.hidden = true;
@@ -598,7 +596,7 @@ function ensureDayModal() {
       <div class="day-modal__summary" id="day-modal-summary"></div>
       <div class="day-modal__trades" id="day-modal-trades"></div>
       <label class="day-modal__note-lbl" for="day-modal-note">Day note</label>
-      <textarea id="day-modal-note" class="day-modal__note" rows="4"
+      <textarea id="day-modal-note" class="field field--block field--lg day-modal__note" rows="4"
         placeholder="What went well / where you slipped / did you follow the plan…"></textarea>
       <div class="day-modal__foot">
         <span class="day-modal__status" id="day-modal-status"></span>
@@ -624,7 +622,7 @@ async function openDayModal(date) {
   el.querySelector("#day-modal-title").textContent = date;
   el.querySelector("#day-modal-summary").innerHTML = "";
   el.querySelector("#day-modal-trades").innerHTML =
-    '<div class="day-modal__loading">Loading…</div>';
+    skeletonText(3);
   el.querySelector("#day-modal-note").value = "";
   el.querySelector("#day-modal-status").textContent = "";
   dialog.open(el, { onClose: () => saveDayNote(false) });
@@ -634,7 +632,7 @@ async function openDayModal(date) {
     data = await fetchJson(`/api/day-journal?date=${date}`);
   } catch {
     el.querySelector("#day-modal-trades").innerHTML =
-      '<div class="day-modal__loading">Load error</div>';
+      emptyState({ glyph: "danger", title: "Could not load the day", hint: "Reopen the day to try again." });
     return;
   }
   if (dayModalState.date !== date) return; // открыли другой день, пока грузилось
@@ -662,13 +660,13 @@ function renderDayTrades(trades) {
         <td>${escapeHtml(t.coin || "?")}</td>
         <td><span class="day-side day-side--${sideCls}">${sideCls.toUpperCase()}</span></td>
         <td class="day-modal__src">${escapeHtml(src)}</td>
-        <td class="r">${_fmtTime(t.closeTime)}</td>
-        <td class="r ${pnlCls}">${fmtMoney(t.pnl)}</td>
+        <td class="num">${_fmtTime(t.closeTime)}</td>
+        <td class="num ${pnlCls}">${fmtMoney(t.pnl)}</td>
       </tr>`;
     })
     .join("");
   return `<table class="day-modal__table"><thead><tr>
-      <th>Coin</th><th>Side</th><th>Source</th><th class="r">Closed</th><th class="r">PnL</th>
+      <th>Coin</th><th>Side</th><th>Source</th><th class="num">Closed</th><th class="num">PnL</th>
     </tr></thead><tbody>${rows}</tbody></table>`;
 }
 

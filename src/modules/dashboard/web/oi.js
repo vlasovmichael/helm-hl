@@ -1,6 +1,6 @@
 import "./src/styles/oi.scss";
 import { icon, paintIcons } from "./src/core/icon.js";
-import { emptyRow, settle } from "./src/core/placeholders.js";
+import { emptyRow, emptyState, settle } from "./src/core/placeholders.js";
 import { mountPageHeader } from "./src/core/pageHeader.js";
 // ─────────────────────────────────────────────────
 //  oi.html — витрина истории open interest (все монеты).
@@ -104,7 +104,7 @@ const fmtFunding = (n) => {
       : day;
   return (
     `<span class="${cls}">${sign}${(n * 100).toFixed(4)}%</span>` +
-    `<span class="oi-sub${loud ? " oi-sub-loud" : ""}">${sub}</span>`
+    `<span class="oi-sub${loud ?" oi-sub-loud" : ""}">${sub}</span>`
   );
 };
 // Местное время, не UTC: страницу читает человек, сверяющий её со своими
@@ -147,7 +147,7 @@ const codPct = (n, digits = 2) =>
   n == null || !Number.isFinite(n) ? "—" : `${n >= 0 ? "+" : ""}${n.toFixed(digits)}%`;
 const codSigned = (n, digits = 2) => {
   if (n == null || !Number.isFinite(n)) return '<span class="oi-muted">—</span>';
-  return `<span class="${n > 0 ? "oi-pos" : n < 0 ? "oi-neg" : "oi-muted"}">${codPct(n, digits)}</span>`;
+  return `<span class="${n > 0 ?"oi-pos" : n < 0 ? "oi-neg" : "oi-muted"}">${codPct(n, digits)}</span>`;
 };
 
 /**
@@ -160,9 +160,9 @@ const codSegs = (score, side) => {
   const n = Number.isFinite(score) ? score : 0;
   const segs = Array.from(
     { length: 5 },
-    (_, i) => `<span class="ss-seg${i < n ? " on" : ""}"></span>`,
+    (_, i) => `<span class="ss-seg${i < n ?" on" : ""}"></span>`,
   ).join("");
-  return `<span class="ss-segs cod-segs--${tone}" title="${n} of 5 conditions met">${segs}</span>`;
+  return `<span class="ss-segs cod-segs--${tone}" data-card="${n} of 5 conditions met">${segs}</span>`;
 };
 
 // Балла `move` здесь больше нет: он дублировал отсечку по ходу и потому
@@ -192,7 +192,7 @@ function codRenderTabs() {
   el.hidden = false;
   el.innerHTML = tabs
     .map(
-      (p) => `<button type="button" class="cod-tab${p.coin === codActive ? " active" : ""}${p.held ? " cod-tab--held" : ""}" data-coin="${p.coin}">
+      (p) => `<button type="button" class="tabs__tab cod-tab${p.coin === codActive ? " is-active" : ""}${p.held ? " cod-tab--held" : ""}" data-coin="${p.coin}">
         ${
           p.tradedToday
             ? '<span class="cod-tab-held cod-tab-done">day closed</span>'
@@ -254,7 +254,7 @@ function codRenderTradedToday(p) {
         <p class="cod-sub">Day result for this coin</p>
         <table class="cod-t">
           <tr><td>Trades</td><td>${d.count}</td></tr>
-          <tr><td>Result</td><td class="${d.pnl >= 0 ? "cod-rr-ok" : "cod-rr-bad"}">${d.pnl < 0 ? "-" : "+"}$${Math.abs(d.pnl).toFixed(2)}</td></tr>
+          <tr><td>Result</td><td class="${d.pnl >= 0 ?"cod-rr-ok" : "cod-rr-bad"}">${d.pnl < 0 ? "-" : "+"}$${Math.abs(d.pnl).toFixed(2)}</td></tr>
           <tr><td>Last exit</td><td>${d.lastCloseAt ? new Date(d.lastCloseAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "—"}</td></tr>
           ${d.side ? `<tr><td>Side</td><td>${d.side}</td></tr>` : ""}
         </table>
@@ -288,7 +288,7 @@ function codRenderHeld(p) {
     <tr><td>Planned entry</td><td>${codFmtPx(pl.entry)}</td></tr>
     <tr><td>Plan stop</td><td>${codFmtPx(pl.stop)} · ${pl.toStopPct.toFixed(2)}% away</td></tr>
     <tr><td>Plan target</td><td>${codFmtPx(pl.target)} · ${pl.toTargetPct.toFixed(2)}% away</td></tr>
-    <tr><td>Now in R</td><td class="${pl.rNow >= 0 ? "cod-rr-ok" : "cod-rr-bad"}">${pl.rNow == null ? "—" : `${pl.rNow >= 0 ? "+" : ""}${pl.rNow.toFixed(2)}R`}</td></tr>
+    <tr><td>Now in R</td><td class="${pl.rNow >= 0 ?"cod-rr-ok" : "cod-rr-bad"}">${pl.rNow == null ? "—" : `${pl.rNow >= 0 ? "+" : ""}${pl.rNow.toFixed(2)}R`}</td></tr>
     <tr><td>Progress to target</td><td>${pl.progressPct == null ? "—" : `${pl.progressPct.toFixed(0)}%`}</td></tr>`
     : `<tr><td colspan="2" class="oi-muted">Entry did not come from this card — no plan to compare against</td></tr>`;
 
@@ -345,15 +345,14 @@ function codRenderBody() {
   const tabs = codAllTabs();
   if (!tabs.length) {
     const others = codData?.others?.length ?? 0;
-    body.innerHTML = `<div class="empty-state">
-      ${icon("pause")}
-      <div class="empty-state__title">No setup today</div>
-      <div class="empty-state__hint">
-        No coin reached ${codData?.thresholds?.SHOW_MIN_SCORE ?? 3}/5.
-        ${others ? `Candidates reviewed: ${others} — each fell short.` : ""}
-        Skipping the day is a decision too.
-      </div>
-    </div>`;
+    body.innerHTML = emptyState({
+      glyph: "pause",
+      title: "No setup today",
+      hint:
+        `No coin reached ${codData?.thresholds?.SHOW_MIN_SCORE ?? 3}/5. ` +
+        (others ? `Candidates reviewed: ${others} — each fell short. ` : "") +
+        "Skipping the day is a decision too.",
+    });
     return;
   }
   const p = tabs.find((x) => x.coin === codActive) || tabs[0];
@@ -373,7 +372,7 @@ function codRenderBody() {
   const hitRows = Object.entries(COD_HIT_LABEL)
     .map(
       ([k, label]) =>
-        `<tr><td class="${p.hits[k] ? "cod-hit" : "cod-miss"}">${icon(p.hits[k] ? "check" : "flat")}${label}</td><td>${p.hits[k] ? "yes" : "no"}</td></tr>`,
+        `<tr><td class="${p.hits[k] ?"cod-hit" : "cod-miss"}">${icon(p.hits[k] ? "check" : "flat")}${label}</td><td>${p.hits[k] ? "yes" : "no"}</td></tr>`,
     )
     .join("");
 
@@ -396,7 +395,7 @@ function codRenderBody() {
     <tr><td>Stop <span class="oi-muted">(place it BEFORE entry)</span></td><td>${codFmtPx(l.stop)} · ${l.riskPct.toFixed(2)}%</td></tr>
     <tr><td>Target${l.targetProjected ? ' <span class="oi-muted">(projected)</span>' : ""}</td><td>${codFmtPx(l.target)} · ${l.rewardPct.toFixed(2)}%</td></tr>
     ${l.farTarget ? `<tr><td>Far level <span class="oi-muted">(runner)</span></td><td>${codFmtPx(l.farTarget)}</td></tr>` : ""}
-    <tr><td>R:R</td><td class="${rrOk ? "cod-rr-ok" : "cod-rr-bad"}">${l.rr.toFixed(2)}</td></tr>`
+    <tr><td>R:R</td><td class="${rrOk ?"cod-rr-ok" : "cod-rr-bad"}">${l.rr.toFixed(2)}</td></tr>`
     : `<tr><td colspan="2" class="oi-muted">Levels could not be built</td></tr>`;
 
   const flags = p.flags.length
@@ -456,7 +455,7 @@ function codRenderForward() {
       const ex =
         h.avgExcessPct == null
           ? "—"
-          : `<b class="${h.avgExcessPct > 0 ? "oi-pos" : h.avgExcessPct < 0 ? "oi-neg" : ""}">${
+          : `<b class="${h.avgExcessPct > 0 ?"oi-pos" : h.avgExcessPct < 0 ? "oi-neg" : ""}">${
               h.avgExcessPct >= 0 ? "+" : ""
             }${h.avgExcessPct.toFixed(2)}%</b>`;
       const wr = h.excessWinRate == null ? "—" : `${h.excessWinRate.toFixed(0)}%`;
@@ -489,11 +488,11 @@ async function loadCoinOfDay(force = false) {
   } catch (err) {
     meta.textContent = "error";
     document.getElementById("cod-body").innerHTML =
-      `<div class="empty-state">
-        ${icon("danger")}
-        <div class="empty-state__title">Scan failed</div>
-        <div class="empty-state__hint">${err.message}. Press Recompute to try again.</div>
-      </div>`;
+      emptyState({
+        glyph: "danger",
+        title: "Scan failed",
+        hint: `${err.message}. Press Recompute to try again.`,
+      });
   }
 }
 
@@ -514,11 +513,11 @@ function efRenderBody(data) {
   const body = document.getElementById("ef-body");
   const rows = data.rows || [];
   if (!rows.length) {
-    body.innerHTML = `<div class="empty-state">
-      ${icon("clock")}
-      <div class="empty-state__title">Not enough price history yet</div>
-      <div class="empty-state__hint">The filter needs about an hour of ticks after a restart before it can judge a move.</div>
-    </div>`;
+    body.innerHTML = emptyState({
+      glyph: "clock",
+      title: "Not enough price history yet",
+      hint: "The filter needs about an hour of ticks after a restart before it can judge a move.",
+    });
     return;
   }
 
@@ -551,7 +550,7 @@ function efRenderBody(data) {
       const pos = r.position
         ? `<span class="ef-side ${r.position.side.toLowerCase()}">${icon(r.position.side === "SHORT" ? "short" : "long")}${r.position.side}</span>`
         : `<span class="oi-muted">—</span>`;
-      return `<tr class="${r.holdingBlocked ? "ef-held" : ""}">
+      return `<tr class="${r.holdingBlocked ?"ef-held" : ""}">
         <td>${r.coin}</td>
         <td>${efPct(r.trend15m)}</td>
         <td>${efPct(r.trend1h)}</td>
@@ -575,9 +574,9 @@ function efRenderBody(data) {
         <thead>
           <tr>
             <th>Coin</th><th>15m</th><th>1h</th><th>24h</th>
-            <th title="Side that would be an entry into the move that already happened">Costly side</th>
+            <th data-card="Side that would be an entry into the move that already happened">Costly side</th>
             <th>Move</th>
-            <th title="Your open position on the exchange">You hold</th>
+            <th data-card="Your open position on the exchange">You hold</th>
           </tr>
         </thead>
         <tbody>${trs}</tbody>
@@ -607,11 +606,11 @@ async function loadEntryFilter() {
     efRenderForward(data);
   } catch (err) {
     meta.textContent = "error";
-    document.getElementById("ef-body").innerHTML = `<div class="empty-state">
-      ${icon("danger")}
-      <div class="empty-state__title">Could not load the filter</div>
-      <div class="empty-state__hint">${err.message}. Press Refresh to try again.</div>
-    </div>`;
+    document.getElementById("ef-body").innerHTML = emptyState({
+      glyph: "danger",
+      title: "Could not load the filter",
+      hint: `${err.message}. Press Refresh to try again.`,
+    });
   }
 }
 
@@ -719,15 +718,14 @@ function renderTable() {
   tbody.querySelectorAll("tr[data-coin]").forEach((tr) =>
     tr.addEventListener("click", () => selectCoin(tr.dataset.coin)),
   );
-  // Маркер сортировки: иконка в потоке заголовка. Раньше это был глиф в
-  // ::after (" ▾"/" ▴") — у них разная оптическая масса, и колонка дёргалась
-  // при смене направления; заодно шапка не могла показать, ЧТО сортируется,
-  // если направление совпадало со стрелкой соседней колонки.
+  // Маркер сортировки рисует общий `.table` (core/_table.scss): место под
+  // стрелку зарезервировано у каждого заголовка, поэтому колонка не дёргается
+  // при смене направления.
   document.querySelectorAll("#oi-table thead th").forEach((th) => {
     const on = th.dataset.key === sortKey;
-    th.classList.toggle("sorted", on);
-    th.querySelector(".icon")?.remove();
-    if (on) th.insertAdjacentHTML("beforeend", icon(sortAsc ? "sortAsc" : "sortDesc"));
+    th.classList.add("sortable");
+    th.classList.toggle("is-sorted", on);
+    th.classList.toggle("is-asc", on && sortAsc);
   });
   // пейджер
   pager.hidden = pages <= 1;
@@ -805,7 +803,7 @@ async function selectCoin(coin, { scroll = true } = {}) {
   const stale = Date.now() - last.t > 45 * 60_000;
   const fresh =
     `last ${fmtTime(last.t).slice(6)} · ` +
-    `<span class="${stale ? "oi-stale" : "oi-fresh"}">${fmtAge(last.t)}</span>`;
+    `<span class="${stale ?"oi-stale" : "oi-fresh"}">${fmtAge(last.t)}</span>`;
   document.getElementById("oi-detail-sub").innerHTML =
     `${data.rawCount} points · ${fresh} · OI ${fmtTok(first.oi)}→${fmtTok(last.oi)} tokens ` +
     `(${sgn(dTok)}${dTok.toFixed(1)}%) · price ${sgn(dPx)}${dPx.toFixed(1)}% ` +
@@ -862,7 +860,7 @@ function renderSeries(pts, bucketH) {
       <tr>
         <td>${fmtTime(p.t)}${
           p.t + bucketH * 3600_000 > Date.now()
-            ? ' <span class="oi-live" title="This bucket is still filling — it covers the hour that has not ended yet.">filling</span>'
+            ? ' <span class="oi-live" data-card="This bucket is still filling — it covers the hour that has not ended yet.">filling</span>'
             : ""
         }</td>
         <td>${fmtPx(p.px)}</td>

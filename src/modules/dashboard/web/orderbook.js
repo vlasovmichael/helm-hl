@@ -34,7 +34,7 @@ let reconnectT = null;
 const tabsEl = document.getElementById("ob-tabs");
 COINS.forEach((c) => {
   const b = document.createElement("div");
-  b.className = "ob-tab" + (c === coin ? " active" : "");
+  b.className = "tabs__tab ob-tab" + (c === coin ? " is-active" : "");
   b.textContent = c;
   b.dataset.coin = c;
   b.onclick = () => setCoin(c);
@@ -49,7 +49,7 @@ function setCoin(c) {
   if (c === coin) return;
   coin = c;
   const preset = COINS.includes(c);
-  document.querySelectorAll(".ob-tab").forEach((t) => t.classList.toggle("active", t.dataset.coin === c));
+  document.querySelectorAll(".ob-tab").forEach((t) => t.classList.toggle("is-active", t.dataset.coin === c));
   customEl.classList.toggle("active", !preset);
   customEl.value = preset ? "" : c;
   resubscribe();

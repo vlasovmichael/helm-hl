@@ -28,3 +28,28 @@
   }
 }
 
+// ── Переход между страницами ────────────────────────────────────────────────
+// Дашборд — многостраничный, и до этого каждый переход по шапке давал белую
+// вспышку: страница выгружалась, новая рисовалась с нуля. Кроссфейд документа
+// (view transitions) убирает вспышку, а шапка с именем `topnav` при этом
+// НЕ анимируется — она остаётся на месте, как и должна: это один и тот же
+// элемент, просто на другой странице.
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 140ms;
+  animation-timing-function: var(--ease-out);
+}
+
+.topnav {
+  view-transition-name: topnav;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @view-transition {
+    navigation: none;
+  }
+}
