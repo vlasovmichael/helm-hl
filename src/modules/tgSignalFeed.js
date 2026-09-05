@@ -25,10 +25,12 @@ export function parseChannelHtml(html) {
   for (let i = 0; i < idx.length; i++) {
     const chunk = html.slice(idx[i].index, i + 1 < idx.length ? idx[i + 1].index : html.length);
     const ts = chunk.match(/<time[^>]*datetime="([^"]+)"/)?.[1] || null;
-    const body = chunk.match(
-      /<div class="tgme_widget_message_text[^"]*"[^>]*>([\s\S]*?)<\/div>\s*(?:<div class="tgme_widget_message_(?:reply_markup|footer|bubble_end)|<\/div>)/,
-    );
-    out.push({ id: Number(idx[i][1]), ts, text: body ? unescapeTags(body[1]).trim() : '' });
+    // 🚨 Берём ВСЕ текстовые блоки поста, а не первый. Отчёт о результате
+    // канал дописывает соседним блоком, и по первому пост выглядел бы свежим
+    // сигналом — с уже известным исходом.
+    const bodies = [...chunk.matchAll(/<div class="tgme_widget_message_text[^"]*"[^>]*>([\s\S]*?)<\/div>\s*(?:<div class="tgme_widget_message_(?:reply_markup|footer|bubble_end)|<\/div>)/g)];
+    const text = bodies.map((b) => unescapeTags(b[1]).trim()).filter(Boolean).join('\n');
+    out.push({ id: Number(idx[i][1]), ts, text });
   }
   return out;
 }

@@ -165,8 +165,17 @@ function loadConfig() {
   // Размер крошечный и плечо 1 намеренно: замер про направление канала, а не
   // про то, сколько мы бы заработали.
   const tgSignalEnabled = (process.env.TG_SIGNAL_ENABLED || 'false').toLowerCase() === 'true';
+  // `хэндл|Подпись` через запятую. Хэндлы держим в окружении, а не в коде:
+  // это данные замера, и в публичном репозитории им делать нечего.
   const tgSignalChannels = String(process.env.TG_SIGNAL_CHANNELS || '')
-    .split(',').map((c) => c.trim()).filter(Boolean);
+    .split(',')
+    .map((c) => c.trim())
+    .filter(Boolean)
+    .map((c) => {
+      const [handle, label] = c.split('|').map((x) => x.trim());
+      return { handle, label: label || handle };
+    })
+    .filter((c) => c.handle);
   const tgSignalSizeUsd = parseFloat(process.env.TG_SIGNAL_SIZE_USD || '10');
   const tgSignalLeverage = parseFloat(process.env.TG_SIGNAL_LEVERAGE || '1');
   const tgSignalPollMin = parseFloat(process.env.TG_SIGNAL_POLL_MIN || '5');

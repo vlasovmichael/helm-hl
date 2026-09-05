@@ -67,9 +67,13 @@ export async function handleList(_req, res) {
       });
     }
 
+    // Хэндл канала наружу не отдаём: витрина показывает подпись из настроек.
+    const labelOf = (handle) =>
+      config.trading.tgSignalChannels.find((c) => c.handle === handle)?.label || handle;
+
     const journal = getTgSignals(60).map((r) => ({
       id: r.id,
-      channel: r.channel,
+      channel: labelOf(r.channel),
       postedAt: r.posted_at,
       coin: r.coin,
       side: (r.side || "long").toUpperCase(),
@@ -89,7 +93,7 @@ export async function handleList(_req, res) {
     res.json({
       ok: true,
       enabled: config.trading.tgSignalEnabled,
-      channels: config.trading.tgSignalChannels,
+      channels: config.trading.tgSignalChannels.map((c) => c.label),
       sizeUsd: config.trading.tgSignalSizeUsd,
       leverage: config.trading.tgSignalLeverage,
       positions,

@@ -134,6 +134,19 @@ test('страница канала режется по постам, время
   assert.match(posts[0].text, /#LA\/USDT/);
 });
 
+// 🚨 Отчёт о результате канал дописывает соседним текстовым блоком. Берём все,
+// иначе пост выглядел бы свежим сигналом — с уже известным исходом.
+test('все текстовые блоки поста склеиваются в один текст', () => {
+  const html = `
+    <div data-post="chan/20"><time datetime="2026-09-05T10:00:00+00:00"></time>
+      <div class="tgme_widget_message_text js-message_text">#LA/USDT #SHORT</div>
+      <div class="tgme_widget_message_text js-message_text">All targets achieved</div>
+      <div class="tgme_widget_message_footer"></div></div>`;
+  const [post] = parseChannelHtml(html);
+  assert.match(post.text, /#LA\/USDT #SHORT/);
+  assert.match(post.text, /All targets achieved/);
+});
+
 test('пост без текста не роняет разбор — картинка тоже пост', () => {
   const posts = parseChannelHtml('<div data-post="chan/12"><time datetime="2026-09-05T10:00:00+00:00"></time></div>');
   assert.equal(posts.length, 1);

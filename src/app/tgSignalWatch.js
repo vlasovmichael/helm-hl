@@ -64,12 +64,12 @@ export async function pollTgSignals(fetcher = fetchChannelSignals) {
   let opened = 0;
   let skipped = 0;
 
-  for (const channel of t.tgSignalChannels) {
+  for (const { handle } of t.tgSignalChannels) {
     let signals;
     try {
-      signals = await fetcher(channel);
+      signals = await fetcher(handle);
     } catch (err) {
-      logger.debug(`[TgSignal] ${channel}: опрос не удался — ${err.message}`);
+      logger.debug(`[TgSignal] ${handle}: опрос не удался — ${err.message}`);
       continue;
     }
 
