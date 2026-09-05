@@ -75,20 +75,19 @@ export const handleFvgForward = served("fvg", () => {
 });
 
 // ── Все форвард-накопители одним списком ────────────────────────────────────
-// Гипотез стало пять, и держать под каждую свою ручку значит однажды забыть
-// одну из них — а забытый накопитель это и есть тихо умерший накопитель.
-// Здесь по-прежнему НЕТ ни одной метрики результата: только сколько набрано,
-// с какой скоростью и когда последняя запись.
+// Держать под каждую гипотезу свою ручку значит однажды забыть одну из них — а
+// забытый накопитель это и есть тихо умерший накопитель. Здесь по-прежнему НЕТ
+// ни одной метрики результата: только сколько набрано, с какой скоростью и
+// когда последняя запись.
+//
+// 🚨 Гипотеза с ВЕРДИКТОМ из списка убирается: витрина показывает идущее, а
+// закрытое живёт в data/hypotheses/registry.json (runs). Снято отсюда:
+// liqwick-net-edge-n277 и exec-hour-cost-n400 — обе отвергнуты 05.09.
 const FORWARDS = [
   {
     id: "fvg-wide-retest-4h", label: "FVG wide retest 4h",
     file: join("data", "fvg-forward", "trades.jsonl"),
     target: 1500, unit: "trades", tField: "entryT", startedISO: "2026-08-29",
-  },
-  {
-    id: "liqwick-net-edge-n277", label: "Liquidation wick fade",
-    file: join("data", "liq-wick", "events.jsonl"),
-    target: 277, unit: "events", tField: "entry_ts", startedISO: "2026-07-22",
   },
   {
     id: "wide-stop-premium-4h", label: "Wide stop premium",
@@ -116,19 +115,20 @@ const FORWARDS = [
 // раз при взятии порога.
 const DB_FORWARDS = [
   {
+    // 🚨 Гипотеза про ИЗМЕНЕНИЕ, поэтому счёт идёт только с момента включения
+    // post-only. Пока EXEC_POSTONLY_SINCE не выставлен, накопитель честно стоит
+    // на нуле: 2000 залитых филлов — это база «до», а не прогресс.
     id: "exec-maker-share-n200", label: "Execution cost · maker share",
     target: 200, unit: "fills", startedISO: "2026-09-05",
-    rows: () => getFillCosts(0),
+    rows: () => {
+      const since = Date.parse(process.env.EXEC_POSTONLY_SINCE || "");
+      return Number.isFinite(since) ? getFillCosts(since) : [];
+    },
   },
   {
     id: "exec-stop-slippage-n60", label: "Stop trigger slippage",
     target: 60, unit: "stops", startedISO: "2026-09-05",
     rows: () => getFillCosts(0).filter((r) => r.slip_bp != null),
-  },
-  {
-    id: "exec-hour-cost-n400", label: "Cost by hour of day",
-    target: 400, unit: "fills", startedISO: "2026-09-05",
-    rows: () => getFillCosts(0),
   },
   {
     id: "exec-alert-lag-n40", label: "Alert to trade lag",
