@@ -56,6 +56,16 @@ console.log(`  филлов: ${s.n} за ${days.toFixed(0)} дн | оборот 
 console.log(`  доля мейкера: ${s.makerShare.toFixed(1)}%`);
 console.log(`  комиссия: всего ${s.feeBpAll.toFixed(2)} бп | мейкер ${s.feeBpMaker?.toFixed(2) ?? '—'} | тейкер ${s.feeBpTaker?.toFixed(2) ?? '—'}`);
 
+// Разбивка вход/выход. Без неё «97% тейкера» не говорит, что чинить: выходы
+// бот уже кладёт лимиткой (CLOSE_LIMIT_ENABLED), а входы ставятся руками.
+// Если мейкерская доля на выходах высокая, чинить нужно РУКУ, а не код.
+{
+  const share = (rs) => (rs.length ? (rs.filter((r) => !r.crossed).length / rs.length) * 100 : null);
+  const opens = rows.filter((r) => r.is_open), closes = rows.filter((r) => !r.is_open);
+  const f = (v) => (v == null ? '—' : v.toFixed(1) + '%');
+  console.log(`  мейкер по входам: ${f(share(opens))} (n=${opens.length}) | по выходам: ${f(share(closes))} (n=${closes.length})`);
+}
+
 console.log(`\n  ── 1. Мейкерская доля (порог: n≥200 ПОСЛЕ включения post-only) ──`);
 if (!Number.isFinite(SINCE)) {
   console.log(`  ⏸  база «до» набрана (${s.n} филлов, ${s.makerShare.toFixed(1)}% мейкера, ${s.feeBpAll.toFixed(2)} бп).`);
