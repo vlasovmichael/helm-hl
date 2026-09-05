@@ -15,6 +15,7 @@
 import { join } from "node:path";
 import { readFileSync, existsSync } from "node:fs";
 import { readJsonl } from "../../../../tools/researchStats.mjs";
+import { getFillCosts, getVenueSnapshots } from "../../../core/database.js";
 
 const CACHE_TTL_MS = 60_000;
 const cache = new Map();
@@ -106,6 +107,41 @@ const FORWARDS = [
   },
 ];
 
+// Накопители, которые живут в БД, а не в jsonl. Считаются теми же полями, что
+// проверяет стоп-правило в реестре: иначе витрина и вердикт разъедутся.
+//
+// 🚨 Здесь по-прежнему ТОЛЬКО счётчики. У гипотез про издержки подглядывание в
+// счётчик разрешено предзаявкой (в отличие от предсказательных), но метрики
+// результата на витрину всё равно не идут — их печатает execCostStats.mjs один
+// раз при взятии порога.
+const DB_FORWARDS = [
+  {
+    id: "exec-maker-share-n200", label: "Execution cost · maker share",
+    target: 200, unit: "fills", startedISO: "2026-09-05",
+    rows: () => getFillCosts(0),
+  },
+  {
+    id: "exec-stop-slippage-n60", label: "Stop trigger slippage",
+    target: 60, unit: "stops", startedISO: "2026-09-05",
+    rows: () => getFillCosts(0).filter((r) => r.slip_bp != null),
+  },
+  {
+    id: "exec-hour-cost-n400", label: "Cost by hour of day",
+    target: 400, unit: "fills", startedISO: "2026-09-05",
+    rows: () => getFillCosts(0),
+  },
+  {
+    id: "exec-alert-lag-n40", label: "Alert to trade lag",
+    target: 40, unit: "trades", startedISO: "2026-09-05",
+    rows: () => getFillCosts(0).filter((r) => r.alert_lag_ms != null),
+  },
+  {
+    id: "venue-hip3-premium-45d", label: "HIP-3 venue premium",
+    target: 45, unit: "days", startedISO: "2026-09-05", byDay: true,
+    rows: () => getVenueSnapshots(0),
+  },
+];
+
 // Условия остановки сверх n — общие для гипотез, предзаявленных 31.08.
 const MIN_CALENDAR_DAYS = 45;
 const MIN_REGIME_SHARE = 0.2;
@@ -141,5 +177,37 @@ export const handleForwards = served("forwards", () => {
       minRegimeShare: MIN_REGIME_SHARE,
     };
   });
+  // Накопители из БД — тем же payload'ом, фронту различать источник незачем.
+  for (const f of DB_FORWARDS) {
+    let rows;
+    try {
+      rows = f.rows() || [];
+    } catch {
+      continue; // таблицы ещё нет — накопитель просто не показываем
+    }
+    const times = rows.map((r) => r.ts).filter(Number.isFinite).sort((a, b) => a - b);
+    const dayKeys = new Set(times.map((t) => new Date(t).toISOString().slice(0, 10)));
+    const n = f.byDay ? dayKeys.size : rows.length;
+    const startedMs = Date.parse(`${f.startedISO}T00:00:00Z`);
+    const daysRunning = Math.max(0, (Date.now() - startedMs) / 86_400_000);
+    const perDay = daysRunning >= 1 && n ? n / daysRunning : null;
+    const etaDays = perDay && perDay > 0 && n < f.target ? (f.target - n) / perDay : null;
+    items.push({
+      id: f.id, label: f.label, unit: f.unit,
+      n, target: f.target, pct: (n / f.target) * 100,
+      daysRunning, perDay,
+      etaISO: etaDays != null && Number.isFinite(etaDays)
+        ? new Date(Date.now() + etaDays * 86_400_000).toISOString().slice(0, 10)
+        : null,
+      staleHours: times.length ? (Date.now() - times[times.length - 1]) / 3_600_000 : null,
+      calendarDays: dayKeys.size,
+      // Условия про календарь и режимы касаются предсказательных гипотез 31.08;
+      // у накопителей про издержки их нет, и рисовать «ещё нужно» было бы враньём.
+      minCalendarDays: null,
+      regimeShare: null,
+      minRegimeShare: null,
+    });
+  }
+
   return { items, decisionRule: "each one is evaluated exactly once, on its own terms from the registry" };
 });

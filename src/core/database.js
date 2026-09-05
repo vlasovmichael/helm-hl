@@ -405,6 +405,55 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS tg_claims_posted_idx ON tg_claims (posted_at);
   `);
 
+  // Издержки исполнения — строка на КАЖДЫЙ свой филл. Питает форвард-гипотезы
+  // про мейкера, проскальзывание стопов и стоимость часа. Всё, что тут лежит,
+  // приходит из ленты филлов даром: ни одного лишнего запроса к бирже.
+  // tid уникален у HL → повторная запись при реконнекте ничего не портит.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS fill_costs (
+      tid          INTEGER PRIMARY KEY,
+      ts           INTEGER NOT NULL,
+      coin         TEXT    NOT NULL,
+      dex          TEXT,
+      dir          TEXT    NOT NULL,
+      is_open      INTEGER NOT NULL,
+      side         TEXT,
+      px           REAL    NOT NULL,
+      sz           REAL    NOT NULL,
+      notional     REAL    NOT NULL,
+      fee          REAL    NOT NULL,
+      fee_bp       REAL    NOT NULL,
+      crossed      INTEGER NOT NULL,
+      hour_utc     INTEGER NOT NULL,
+      oid          INTEGER,
+      -- Плановый стоп позиции на момент филла: разница с px и есть
+      -- проскальзывание триггера. null, если позы в БД не было.
+      planned_sl   REAL,
+      slip_bp      REAL,
+      -- Задержка от ближайшего пуша по этой же монете, мс. null, если пуша не было.
+      alert_lag_ms INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS fill_costs_ts_idx ON fill_costs (ts);
+    CREATE INDEX IF NOT EXISTS fill_costs_coin_idx ON fill_costs (coin);
+  `);
+
+  // Площадки HIP-3: фандинг и спред по часам. Истории у этих DEX'ов почти нет,
+  // поэтому бэктестить нечего — только копить вперёд.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS venue_snapshots (
+      ts        INTEGER NOT NULL,
+      dex       TEXT    NOT NULL,
+      coin      TEXT    NOT NULL,
+      mid       REAL,
+      spread_bp REAL,
+      funding   REAL,
+      oi_usd    REAL,
+      PRIMARY KEY (ts, dex, coin)
+    );
+    CREATE INDEX IF NOT EXISTS venue_snapshots_ts_idx ON venue_snapshots (ts);
+    CREATE INDEX IF NOT EXISTS venue_snapshots_dex_idx ON venue_snapshots (dex);
+  `);
+
   logger.info(`[DB] Initialized at ${DB_PATH}`);
   return db;
 }
@@ -874,6 +923,47 @@ export function getTgClaims(limit = 400) {
   return getDb()
     .prepare('SELECT * FROM tg_claims ORDER BY posted_at DESC LIMIT ?')
     .all(Math.max(1, Math.min(2000, Number(limit) || 400)));
+}
+
+/** Записать издержки филла. Идемпотентно по tid. */
+export function recordFillCost(row) {
+  const res = getDb()
+    .prepare(`INSERT OR IGNORE INTO fill_costs
+        (tid, ts, coin, dex, dir, is_open, side, px, sz, notional, fee, fee_bp,
+         crossed, hour_utc, oid, planned_sl, slip_bp, alert_lag_ms)
+      VALUES (@tid, @ts, @coin, @dex, @dir, @is_open, @side, @px, @sz, @notional, @fee, @fee_bp,
+              @crossed, @hour_utc, @oid, @planned_sl, @slip_bp, @alert_lag_ms)`)
+    .run(row);
+  return res.changes > 0;
+}
+
+/** Строки издержек за период (по умолчанию всё). */
+export function getFillCosts(sinceMs = 0) {
+  return getDb()
+    .prepare('SELECT * FROM fill_costs WHERE ts >= ? ORDER BY ts ASC')
+    .all(Number(sinceMs) || 0);
+}
+
+/** Открытая позиция по монете (любой стратегии) — нужна для планового стопа. */
+export function getOpenPositionByCoin(coin) {
+  return getDb()
+    .prepare("SELECT * FROM positions WHERE status = 'OPEN' AND coin = ? ORDER BY id DESC LIMIT 1")
+    .get(String(coin).toUpperCase());
+}
+
+/** Снимок площадки. Идемпотентно по (ts, dex, coin). */
+export function recordVenueSnapshot(row) {
+  return getDb()
+    .prepare(`INSERT OR IGNORE INTO venue_snapshots (ts, dex, coin, mid, spread_bp, funding, oi_usd)
+              VALUES (@ts, @dex, @coin, @mid, @spread_bp, @funding, @oi_usd)`)
+    .run(row).changes > 0;
+}
+
+/** Снимки площадок за период. */
+export function getVenueSnapshots(sinceMs = 0) {
+  return getDb()
+    .prepare('SELECT * FROM venue_snapshots WHERE ts >= ? ORDER BY ts ASC')
+    .all(Number(sinceMs) || 0);
 }
 
 /** Журнал сигналов, свежие сверху. */

@@ -20,6 +20,7 @@ import { reportRestartIfUnclean } from './app/restartWatch.js';
 import { startPriceFeed } from './core/priceFeed.js';
 import { startHealthWatch } from './app/healthWatch.js';
 import { startFillFeed } from './core/fillFeed.js';
+import { recordFill } from './modules/execCosts.js';
 import { startWsExitLoop } from './app/wsExitTick.js';
 import { startTickWatchdog } from './app/tickWatchdog.js';
 import { startMemWatch } from './app/memWatch.js';
@@ -98,7 +99,14 @@ async function main() {
   // обычным циклом нет. Опрос остаётся страховкой на случай обрыва WS.
   // Fail-soft: ошибки фида не валят бота.
   startFillFeed({
-    onFill: () => {
+    onFill: (fills) => {
+      // Издержки исполнения пишем ДО тика: пока integrity не закрыла позу, в её
+      // строке ещё лежит плановый стоп, и проскальзывание триггера считается.
+      // Fail-soft внутри: сбор данных не имеет права мешать торговле.
+      let saved = 0;
+      for (const f of fills ?? []) if (recordFill(f)) saved++;
+      if (saved) logger.debug(`[ExecCosts] записано филлов: ${saved}`);
+
       state.lastIntegrityCheck = 0;
       tick().catch((err) => logger.warn(`[FillFeed] тик после филла упал: ${err.message}`));
     },
