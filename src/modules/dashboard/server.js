@@ -62,6 +62,10 @@ import {
   handleClose as handleManualPaperClose,
 } from "./routes/manualPaper.js";
 import {
+  handleList as handleTgSignalsList,
+  handleClose as handleTgSignalsClose,
+} from "./routes/tgSignals.js";
+import {
   handleContext as handleTicketContext,
   handleOpen as handleTicketOpen,
   handleClose as handleTicketClose,
@@ -1054,6 +1058,10 @@ export function startDashboard() {
   app.get("/api/manual-paper", handleManualPaperList);
   app.post("/api/manual-paper/open", handleManualPaperOpen);
   app.post("/api/manual-paper/close", handleManualPaperClose);
+
+  // Форвард по чужим прогнозам: сигнальные бумажные позы + журнал сигналов.
+  app.get("/api/tg-signals", handleTgSignalsList);
+  app.post("/api/tg-signals/close", handleTgSignalsClose);
 
   // Trade Ticket: РЕАЛЬНЫЕ ордера с дашборда (модалка в Active Position).
   // Только кладут ордер на биржу — стоп и сопровождение остаются за нянькой.

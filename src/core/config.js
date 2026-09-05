@@ -161,6 +161,38 @@ function loadConfig() {
   // «Бумажный adopt»: выход бумажных поз (manual_paper) ведётся той же
   // механикой, что реальный adopt, но без денег.
   const manualPaperAdoptEnabled = (process.env.MANUAL_PAPER_ADOPT_ENABLED || 'true').toLowerCase() === 'true';
+  // ── Форвард по чужим прогнозам: сигнал TG-канала → бумажная поза ──────────
+  // Размер крошечный и плечо 1 намеренно: замер про направление канала, а не
+  // про то, сколько мы бы заработали.
+  const tgSignalEnabled = (process.env.TG_SIGNAL_ENABLED || 'false').toLowerCase() === 'true';
+  const tgSignalChannels = String(process.env.TG_SIGNAL_CHANNELS || '')
+    .split(',').map((c) => c.trim()).filter(Boolean);
+  const tgSignalSizeUsd = parseFloat(process.env.TG_SIGNAL_SIZE_USD || '10');
+  const tgSignalLeverage = parseFloat(process.env.TG_SIGNAL_LEVERAGE || '1');
+  const tgSignalPollMin = parseFloat(process.env.TG_SIGNAL_POLL_MIN || '5');
+  const tgSignalMaxAgeMin = parseFloat(process.env.TG_SIGNAL_MAX_AGE_MIN || '30');
+  const tgSignalDedupHours = parseFloat(process.env.TG_SIGNAL_DEDUP_HOURS || '6');
+  const tgSignalMaxSlots = parseFloat(process.env.TG_SIGNAL_MAX_SLOTS || '10');
+  if (!Number.isFinite(tgSignalSizeUsd) || tgSignalSizeUsd <= 0) {
+    throw new Error(`TG_SIGNAL_SIZE_USD must be > 0. Got: "${process.env.TG_SIGNAL_SIZE_USD}"`);
+  }
+  if (!Number.isFinite(tgSignalLeverage) || tgSignalLeverage < 1 || tgSignalLeverage > 50) {
+    throw new Error(`TG_SIGNAL_LEVERAGE must be in [1, 50]. Got: "${process.env.TG_SIGNAL_LEVERAGE}"`);
+  }
+  if (!Number.isFinite(tgSignalPollMin) || tgSignalPollMin < 1) {
+    throw new Error(`TG_SIGNAL_POLL_MIN must be >= 1. Got: "${process.env.TG_SIGNAL_POLL_MIN}"`);
+  }
+  // 🚨 Возраст поста — предохранитель от подглядывания: без потолка первый
+  // запуск открыл бы позы по прогнозам с известным исходом.
+  if (!Number.isFinite(tgSignalMaxAgeMin) || tgSignalMaxAgeMin <= 0 || tgSignalMaxAgeMin > 240) {
+    throw new Error(`TG_SIGNAL_MAX_AGE_MIN must be in (0, 240]. Got: "${process.env.TG_SIGNAL_MAX_AGE_MIN}"`);
+  }
+  if (!Number.isFinite(tgSignalDedupHours) || tgSignalDedupHours <= 0) {
+    throw new Error(`TG_SIGNAL_DEDUP_HOURS must be > 0. Got: "${process.env.TG_SIGNAL_DEDUP_HOURS}"`);
+  }
+  if (!Number.isFinite(tgSignalMaxSlots) || tgSignalMaxSlots < 1) {
+    throw new Error(`TG_SIGNAL_MAX_SLOTS must be >= 1. Got: "${process.env.TG_SIGNAL_MAX_SLOTS}"`);
+  }
   // Максимальный возраст позы, которую ещё можно усыновить. 6ч ловит ручные
   // входы, даже если бот их заметил не сразу, и отсекает древние orphan'ы.
   // 🚨 Короткое окно (были 10мин) — мина: cooldown истекает позже окна, и поза
@@ -399,6 +431,14 @@ function loadConfig() {
       trendLookbackMin,
       adoptEnabled,
       manualPaperAdoptEnabled,
+      tgSignalEnabled,
+      tgSignalChannels,
+      tgSignalSizeUsd,
+      tgSignalLeverage,
+      tgSignalPollMin,
+      tgSignalMaxAgeMin,
+      tgSignalDedupHours,
+      tgSignalMaxSlots,
       adoptMaxAgeMin,
       adoptStopMode,
       adoptStopPct,

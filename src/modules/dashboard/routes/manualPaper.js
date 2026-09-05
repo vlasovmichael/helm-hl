@@ -5,46 +5,26 @@
 // жмёт кнопку → модалка (монета/сторона/плечо/слайдер от реального депо) →
 // открывается бумажная позиция strategy_id='manual_paper', mode='PAPER'.
 //
-// Бот её НЕ торгует и НЕ закрывает: своего тика у manual_paper нет. Цена остаётся
-// свежей сама (scout пиннит все PAPER-коины через getActivePaperCoins) → live
-// mark-to-market. Закрывает только оператор кнопкой. Архив закрытых сделок поднимается
-// в таблицу Strategies через обычные getStrategyStats (history с тем же strategy_id).
+// Вход рукой, выход ведёт нянька (app/manualPaperSupervise.js) — тем же кодом,
+// что и реальный adopt. Оператор может закрыть кнопкой в любой момент. Цена
+// остаётся свежей сама (scout пиннит все PAPER-коины через getActivePaperCoins)
+// → live mark-to-market. Архив закрытых сделок поднимается в таблицу Strategies
+// через обычные getStrategyStats (history с тем же strategy_id).
 //
 // Multi-slot (как adopt): можно держать несколько бумажных входов разом.
 
 import { config } from "../../../core/config.js";
 import { logger } from "../../../core/logger.js";
-import {
-  savePosition,
-  closePosition,
-  getActiveManualPaperPositions,
-} from "../../../core/database.js";
-import { getLivePrice } from "../../../core/priceFeed.js";
+import { closePosition, getActiveManualPaperPositions } from "../../../core/database.js";
 import { getLivePriceMap } from "../../exchange.js";
-import { getAccountEquity } from "../../wallet.js";
 import { calcPnl, FEE_RATE } from "../../executor/math.js";
-import { computeStopDistPct } from "../../../app/adoptReconcile.js";
+import { openPaperPosition, resolvePrice, safeEquity } from "../../paperEntry.js";
 import { getAdoptPeakPct } from "../../strategistAdopt.js";
 import { getUniverse } from "../../../core/universe.js";
 
 const STRATEGY_ID = "manual_paper";
 const MAX_SLOTS = 8;          // потолок одновременных бумажных входов
 const MAX_LEVERAGE = 50;
-
-/** Свежая цена монеты: WS-фид → fallback на кэш price-map. null если нет. */
-async function resolvePrice(coin) {
-  const c = String(coin || "").toUpperCase();
-  const live = getLivePrice(c); // {price, ts} | null
-  if (live && Number.isFinite(live.price) && live.price > 0) return live.price;
-  try {
-    const map = await getLivePriceMap(); // Map<coin, px>
-    const p = map?.get?.(c);
-    if (Number.isFinite(p) && p > 0) return p;
-  } catch {
-    /* price-map недоступен — вернём null, вызывающий решит */
-  }
-  return null;
-}
 
 /** Список торгуемых монет (с живой ценой) для автоподстановки. [] при ошибке. */
 async function availableCoins() {
@@ -64,16 +44,6 @@ function leverageByCoin() {
     if (a?.name && Number.isFinite(lev) && lev > 0) out[a.name.toUpperCase()] = lev;
   }
   return out;
-}
-
-/** Доступное депо (equity) для слайдера. 0 при ошибке. */
-async function safeEquity() {
-  try {
-    const eq = await getAccountEquity();
-    return Number.isFinite(eq) && eq > 0 ? eq : 0;
-  } catch {
-    return 0;
-  }
 }
 
 /** Mark-to-market открытой бумажной позы по текущей цене. */
@@ -124,6 +94,7 @@ export async function handleList(_req, res) {
         managed: config.trading.manualPaperAdoptEnabled,
         stopPrice: Number.isFinite(pos.sl_price) ? pos.sl_price : null,
         stopPct,
+        targetPrice: Number.isFinite(pos.tp_price) ? pos.tp_price : null,
         peakPct: getAdoptPeakPct(pos.id) || 0,
       });
     }
@@ -156,43 +127,15 @@ export async function handleOpen(req, res) {
       return res.status(409).json({ error: `already open ${side} ${coin}` });
     }
 
-    let price = await resolvePrice(coin);
-    if (price == null && Number(b.entryPrice) > 0) price = Number(b.entryPrice); // fallback на цену из карточки
-    if (price == null) return res.status(422).json({ error: `no live price for ${coin}` });
-
-    const equity = await safeEquity();
-
-    // «Бумажный adopt» включён → ставим виртуальный жёсткий стоп ATR-ом (как
-    // реальный adopt). Дальше выход ведёт superviseManualPaperPositions
-    // (BE-храповик + трейл). Fail-soft: не смогли посчитать стоп — открываем без
-    // него (мягкий выход всё равно отработает).
-    let slPrice = null;
-    let slLabel = "no stop";
-    if (config.trading.manualPaperAdoptEnabled) {
-      try {
-        const { distPct, basis } = await computeStopDistPct(coin);
-        slPrice = side === "short" ? price * (1 + distPct / 100) : price * (1 - distPct / 100);
-        slLabel = `SL @ ${slPrice.toPrecision(6)} (−${distPct.toFixed(2)}% ${basis === "atr" ? "ATR" : "fixed"})`;
-      } catch (e) {
-        logger.warn(`[manualPaper] stop calc #${coin} failed: ${e.message} — открываю без жёсткого стопа`);
-      }
-    }
-
-    const id = savePosition({
-      coin,
-      size_usd: sizeUsd,
-      entry_price: price,
-      entry_apy: 0,                  // нет funding-edge — чистый price-журнал
-      entry_time: Date.now(),
-      mode: "PAPER",
-      strategy_id: STRATEGY_ID,
-      side,
-      leverage,
-      entry_equity: equity || null,
-      sl_price: slPrice,
+    // Один путь входа с автоматом по сигналам: стоп, цель и ступени считаются там.
+    const r = await openPaperPosition({
+      coin, side, sizeUsd, leverage,
+      strategyId: STRATEGY_ID,
+      entryPrice: Number(b.entryPrice) > 0 ? Number(b.entryPrice) : undefined,
+      tag: "manualPaper",
     });
-    logger.info(`[manualPaper] OPEN ${side} #${coin} ${leverage}x $${sizeUsd.toFixed(2)} @ ${price} · ${slLabel}`);
-    res.json({ ok: true, id, coin, side, leverage, sizeUsd, entryPrice: price, slPrice });
+    if (!r.ok) return res.status(422).json({ error: r.error });
+    res.json({ ok: true, id: r.id, coin, side, leverage, sizeUsd, entryPrice: r.entryPrice, slPrice: r.slPrice, tpPrice: r.tpPrice });
   } catch (err) {
     logger.warn(`[manualPaper] open failed: ${err.message}`);
     res.status(500).json({ error: true });

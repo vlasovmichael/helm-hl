@@ -52,6 +52,19 @@ const REGISTRY = [
     },
   },
   {
+    id: 'tg_signal',
+    label: 'Channel calls',
+    kind: 'external call · paper',
+    split: true,                              // каналы дают и long, и short
+    resolve: () => {
+      // Форвард по чужим прогнозам: вход автоматом по посту канала, выход —
+      // та же нянька. Выключенный вотчер показываем честно: строка остаётся,
+      // иначе замер тихо исчезает из таблицы вместе с накопленным треком.
+      const enabled = config.trading.tgSignalEnabled;
+      return { enabled, status: enabled ? 'paper' : 'off' };
+    },
+  },
+  {
     id: 'adopt',
     label: 'Adopt',
     kind: 'manual-entry · babysit',

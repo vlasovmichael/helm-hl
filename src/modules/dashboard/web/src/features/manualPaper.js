@@ -289,7 +289,7 @@ function rowHtml(p) {
       <td class="num">${p.leverage}×</td>
       <td class="num">${fmtUsd(p.sizeUsd)}</td>
       <td class="num">${fmtPrice(p.entryPrice)}</td>
-      <td class="num" data-mp-mark>${p.markPrice != null ? "$" + fmtPrice(p.markPrice) : "—"}</td>
+      <td class="num" data-mp-mark>${fmtPrice(p.markPrice)}</td>
       <td class="num ${pnlCls}"><strong>${pnl == null ? "—" : fmtUsd(pnl)}</strong>${
         roe == null ? "" : `<span class="mp-roe">${fmtPct(roe)}</span>`
       }${sub}</td>
@@ -418,8 +418,8 @@ function confirmClose(info, errMsg) {
     <div class="mp-confirm-grid">
       ${cell("Side", `${icon(isShort ? "short" : "long")} ${escapeHtml(info.side || "—")}${info.lev ? " " + info.lev + "×" : ""}`, isShort ? "num-neg" : "num-pos")}
       ${cell("Size", size == null ? "—" : fmtUsd(size))}
-      ${cell("Entry", entry == null ? "—" : "$" + fmtPrice(entry))}
-      ${cell("Mark", mark == null ? "—" : "$" + fmtPrice(mark))}
+      ${cell("Entry", fmtPrice(entry))}
+      ${cell("Mark", fmtPrice(mark))}
       ${cell("uPnL", pnl == null ? "—" : fmtUsd(pnl) + (roe == null ? "" : ` (${fmtPct(roe)})`), pnlCls)}
     </div>
     <div class="mp-err"${errMsg ? "" : " hidden"}>${escapeHtml(errMsg || "")}</div>`,

@@ -15,6 +15,7 @@ import { mountTopnav } from "./src/core/topnav.js";
 import { renderStrategies } from "./src/features/strategies.js";
 import { refreshWinners } from "./src/features/winners.js";
 import { refreshFvgForward } from "./src/features/research.js";
+import { refreshTgSignalLab, mountTgSignalLabSkeleton } from "./src/features/tgSignals.js";
 
 // ── Bootstrap ──
 mountPageHeader({
@@ -33,4 +34,11 @@ initWebSocket({
 refreshWinners();
 // Форвард FVG: коллектор пишет журнал раз в сутки по крону — поллить незачем.
 refreshFvgForward();
+// Форвард по чужим прогнозам: позы открываются редко (каналы дают меньше сигнала
+// в сутки), поэтому минуты опроса хватает с запасом.
+mountTgSignalLabSkeleton();
+refreshTgSignalLab();
+setInterval(() => {
+  if (!document.hidden) refreshTgSignalLab();
+}, 60_000);
 startFooterTimer();

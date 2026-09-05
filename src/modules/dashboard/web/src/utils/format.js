@@ -114,6 +114,8 @@ export function strategyDisplayName(sid) {
   // 🚨 Только текст. Значок «кто вёл сделку» рисует вызывающий код через
   // icon("bot" | "manual"): эмодзи здесь означали, что имя стратегии нельзя
   // ни выровнять по колонке, ни покрасить — цветной растр темы не знает.
+  if (sid === "manual_paper") return "My paper";
+  if (sid === "tg_signal") return "Channel calls";
   if (sid === "adopt" || sid === "adopted") return "Adopted";
   if (sid === "bot") return "Bot";
   if (sid === "manual") return "Manual";

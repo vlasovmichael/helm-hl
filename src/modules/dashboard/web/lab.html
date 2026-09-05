@@ -171,6 +171,29 @@
         </div>
       </section>
 
+      <!-- Чужая гипотеза, не наша предзаявленная, — поэтому итог тут виден, но
+           только с доверительным интервалом. Журнал держит и пропуски: без них
+           «канал молчал» неотличимо от «не смогли открыть». -->
+      <section class="card" id="sec-tg">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-card="Paper positions opened automatically from public channel calls. Only the coin, the side and the post time are taken from the channel; the exit is run by the bot."
+          >
+            Signal forward &middot; channel calls
+          </div>
+          <span
+            id="tg-lab-meta"
+            style="
+              font-size: var(--fs-label);
+              font-family: var(--font-mono);
+              color: var(--text-muted);
+            "
+          ></span>
+        </div>
+        <div id="tg-lab-body"></div>
+      </section>
+
       <footer id="footer-status">
         <span>Connecting to core…</span>
         <a

@@ -39,6 +39,7 @@ import { renderMarketContext, updateBtcLivePrice } from "./src/features/marketCo
 import { initModals, renderActivity } from "./src/features/modals.js";
 import { initWhatIf } from "./src/features/whatif.js";
 import { initManualPaperTrigger, initManualPaperActive } from "./src/features/manualPaper.js";
+import { initTgSignalPositions } from "./src/features/tgSignals.js";
 import { initTradeTicket } from "./src/features/tradeTicket.js";
 import { readJson as parseApi } from "./src/utils/api.js";
 
@@ -226,6 +227,7 @@ initModals();
 initWhatIf();
 initManualPaperTrigger("mp-paper-btn");
 initManualPaperActive();
+initTgSignalPositions();
 initTradeButton();
 // BTC Divergence + Whale Watch вынесены на /lab.html — их HL-поллинг
 // (candleSnapshot/metaAndAssetCtxs) грузится только когда открыта Lab, а не на

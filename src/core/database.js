@@ -355,6 +355,29 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS cod_forward_created_idx ON cod_forward (created_at);
   `);
 
+  // Журнал сигналов TG-каналов. Строка на КАЖДЫЙ разобранный пост, включая
+  // пропущенные: без отказов «канал молчал» неотличимо от «не смогли открыть».
+  // UNIQUE(channel, post_id) — идемпотентность опроса.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tg_signals (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      channel     TEXT    NOT NULL,
+      post_id     INTEGER NOT NULL,
+      posted_at   INTEGER NOT NULL,
+      seen_at     INTEGER NOT NULL,
+      coin        TEXT    NOT NULL,
+      side        TEXT    NOT NULL,
+      excerpt     TEXT,
+      status      TEXT    NOT NULL,
+      skip_reason TEXT,
+      position_id INTEGER,
+      entry_price REAL,
+      UNIQUE (channel, post_id)
+    );
+    CREATE INDEX IF NOT EXISTS tg_signals_posted_idx ON tg_signals (posted_at);
+    CREATE INDEX IF NOT EXISTS tg_signals_status_idx ON tg_signals (status);
+  `);
+
   logger.info(`[DB] Initialized at ${DB_PATH}`);
   return db;
 }
@@ -727,6 +750,80 @@ export function getActiveManualPaperPositions() {
     .all();
 }
 
+/** Стратегии, чей выход ведёт бумажная нянька (app/manualPaperSupervise.js). */
+export const PAPER_NANNY_STRATEGIES = ['manual_paper', 'tg_signal'];
+
+/** Все активные бумажные позы под нянькой — и ручные, и сигнальные. */
+export function getActivePaperNannyPositions() {
+  return getDb()
+    .prepare(
+      `SELECT * FROM positions WHERE status = 'OPEN' AND mode = 'PAPER'
+         AND strategy_id IN (${PAPER_NANNY_STRATEGIES.map(() => '?').join(', ')})
+       ORDER BY id ASC`,
+    )
+    .all(...PAPER_NANNY_STRATEGIES);
+}
+
+/** Активные (OPEN) позы, открытые по сигналам TG-каналов. */
+export function getActiveTgSignalPositions() {
+  return getDb()
+    .prepare("SELECT * FROM positions WHERE status = 'OPEN' AND mode = 'PAPER' AND strategy_id = 'tg_signal' ORDER BY id ASC")
+    .all();
+}
+
+/** Записать пост в журнал. INSERT OR IGNORE: повторный опрос отдаёт те же посты.
+ *  @returns {number|null} id строки, null если уже была. */
+export function recordTgSignal(sig) {
+  const res = getDb()
+    .prepare(`INSERT OR IGNORE INTO tg_signals
+        (channel, post_id, posted_at, seen_at, coin, side, excerpt, status, skip_reason, position_id, entry_price)
+      VALUES (@channel, @post_id, @posted_at, @seen_at, @coin, @side, @excerpt, @status, @skip_reason, @position_id, @entry_price)`)
+    .run({
+      channel: sig.channel,
+      post_id: sig.postId,
+      posted_at: sig.postedAt,
+      seen_at: Date.now(),
+      coin: sig.coin,
+      side: sig.side,
+      excerpt: sig.excerpt ?? null,
+      status: sig.status,
+      skip_reason: sig.skipReason ?? null,
+      position_id: sig.positionId ?? null,
+      entry_price: sig.entryPrice ?? null,
+    });
+  return res.changes ? Number(res.lastInsertRowid) : null;
+}
+
+/** Виден ли пост канала журналу (уже разобран на прошлом круге). */
+export function isTgPostSeen(channel, postId) {
+  return !!getDb()
+    .prepare('SELECT 1 FROM tg_signals WHERE channel = ? AND post_id = ?')
+    .get(channel, Number(postId));
+}
+
+/** Максимальный разобранный post_id канала (0, если журнал пуст). */
+export function lastTgPostId(channel) {
+  const row = getDb()
+    .prepare('SELECT MAX(post_id) AS mx FROM tg_signals WHERE channel = ?')
+    .get(channel);
+  return Number(row?.mx) || 0;
+}
+
+/** Был ли такой сигнал за windowMs. Каналы дублируют пост — без окна один
+ *  прогноз открыл бы две позы и удвоил вес канала. */
+export function hasRecentTgSignal(coin, side, windowMs) {
+  return !!getDb()
+    .prepare("SELECT 1 FROM tg_signals WHERE coin = ? AND side = ? AND status = 'opened' AND posted_at >= ?")
+    .get(String(coin).toUpperCase(), side, Date.now() - windowMs);
+}
+
+/** Журнал сигналов, свежие сверху. */
+export function getTgSignals(limit = 100) {
+  return getDb()
+    .prepare('SELECT * FROM tg_signals ORDER BY posted_at DESC LIMIT ?')
+    .all(Math.max(1, Math.min(1000, Number(limit) || 100)));
+}
+
 /**
  * Возвращает активную (OPEN) shadow-позицию (mode='PAPER') или undefined.
  * Отдельный slot для paper-стратегий в PROD-боте — не конкурирует с реальным
@@ -931,6 +1028,12 @@ export function getAllTradesMerged(mode = 'PRODUCTION') {
  * а также wins/losses/avgWin/avgLoss (для payoff = avgWin/|avgLoss|).
  * Читает live + архив (archive-aware), чтобы Auto-Cleanup не обнулял трек-рекорд.
  */
+/** Закрытые сделки стратегии (live + архив), старые → новые. Витринам нужен
+ *  список, а не сводка: по агрегату доверительный интервал не посчитать. */
+export function getStrategyTrades(strategyId, mode = 'PAPER', side = null) {
+  return getStrategyHistoryMerged(strategyId, mode, side);
+}
+
 export function getStrategyStats(strategyId, mode, side = null) {
   const rows = getStrategyHistoryMerged(strategyId, mode, side);
   const n = rows.length;

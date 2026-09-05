@@ -10,6 +10,7 @@ import { runDailyMaintenance } from './alerts.js';
 import { integrityCheck, orphanCheck } from './integrity.js';
 import { superviseAdoptPositions } from './adoptSupervise.js';
 import { superviseManualPaperPositions } from './manualPaperSupervise.js';
+import { tgSignalTick } from './tgSignalWatch.js';
 import { runBalanceDiag } from './balanceDiag.js';
 import { flushBotStatePeriodic } from './lifecycle.js';
 import { state } from './state.js';
@@ -64,9 +65,13 @@ async function tickBody() {
     // (→ manualState='paused'), уже усыновлённые должны продолжать вестись.
     await superviseAdoptPositions();
 
-    // «Бумажный adopt»: ведём выход личных бумажных поз (manual_paper) той же
+    // «Бумажный adopt»: ведём выход бумажных поз (ручных и сигнальных) той же
     // механикой. Независимо от hands-off и режима бота. Fail-soft внутри.
     await superviseManualPaperPositions();
+
+    // Форвард по чужим прогнозам: опрос TG-каналов и бумажные входы по свежим
+    // сигналам. Свой шаг (TG_SIGNAL_POLL_MIN) внутри, тик его только будит.
+    await tgSignalTick();
 
     if (manualState === 'paused') {
       logger.debug('[Tick] HANDS-OFF: manual position active, scan-only refresh');
