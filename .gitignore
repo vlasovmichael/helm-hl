@@ -59,4 +59,7 @@ data/grid/
 # Кэш свечей postOnlySim — тоже восстановимый.
 data/postonly/
 data/tg-signals/
+# Сырьё коллектора liq-wick. В git остаётся ПРОТОКОЛ (data/hypotheses/registry.json)
+# с вердиктом и числами, а не журнал событий: он восстановим и растёт.
+data/liq-wick/
 data/entry-timing/
