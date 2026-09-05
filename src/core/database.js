@@ -784,14 +784,16 @@ export function getActiveManualPaperPositions() {
 export const PAPER_NANNY_STRATEGIES = ['manual_paper', 'tg_signal'];
 
 /** Все активные бумажные позы под нянькой — и ручные, и сигнальные. */
-export function getActivePaperNannyPositions() {
+export function getActivePaperNannyPositions(strategies = PAPER_NANNY_STRATEGIES) {
+  const ids = strategies.filter((s) => PAPER_NANNY_STRATEGIES.includes(s));
+  if (ids.length === 0) return [];
   return getDb()
     .prepare(
       `SELECT * FROM positions WHERE status = 'OPEN' AND mode = 'PAPER'
-         AND strategy_id IN (${PAPER_NANNY_STRATEGIES.map(() => '?').join(', ')})
+         AND strategy_id IN (${ids.map(() => '?').join(', ')})
        ORDER BY id ASC`,
     )
-    .all(...PAPER_NANNY_STRATEGIES);
+    .all(...ids);
 }
 
 /** Активные (OPEN) позы, открытые по сигналам TG-каналов. */

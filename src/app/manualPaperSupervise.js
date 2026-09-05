@@ -14,12 +14,12 @@
 //
 // Гейт: MANUAL_PAPER_ADOPT_ENABLED. Тихо, без ntfy.
 
-import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getActivePaperNannyPositions, closePosition } from '../core/database.js';
 import { getLivePrice } from '../modules/exchange.js';
 import { analyzeAdopt, clearAdoptState, consumeAdoptMfeMae } from '../modules/strategistAdopt.js';
 import { planPaperExit } from '../modules/paperEntry.js';
+import { managedStrategies } from '../modules/paperNannyGate.js';
 import { calcPnl, FEE_RATE, MAKER_FEE_RATE } from '../modules/executor/math.js';
 
 /** id позы → уже забранные ступени сетки. Живёт до рестарта (см. шапку). */
@@ -132,8 +132,9 @@ function closePaper(pos, fillPrice, reason, exitFeeRate = FEE_RATE) {
  * @returns {Promise<number>} число закрытых этим проходом поз
  */
 export async function superviseManualPaperPositions(priceFn = getLivePrice) {
-  if (!config.trading.manualPaperAdoptEnabled) return 0;
-  const positions = getActivePaperNannyPositions();
+  const managed = managedStrategies();
+  if (managed.length === 0) return 0;
+  const positions = getActivePaperNannyPositions(managed);
   if (positions.length === 0) return 0;
 
   let closed = 0;

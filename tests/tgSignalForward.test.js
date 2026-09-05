@@ -152,3 +152,21 @@ test('пост без текста не роняет разбор — карти
   assert.equal(posts.length, 1);
   assert.equal(posts[0].text, '');
 });
+
+// ── Гейты няньки ────────────────────────────────────────────────────────────
+// 🚨 Общий флаг однажды уже оставил сигнальные позы без стопа и цели: форвард
+// тогда мерил бы «вошёл и держу вечно», а не работу направления канала.
+
+const { isNannyOn, managedStrategies } = await import('../src/modules/paperNannyGate.js');
+
+test('гейты личного журнала и сигнального форварда независимы', () => {
+  // В тестовом окружении TG_SIGNAL_ENABLED не задан → выключен, личный включён.
+  assert.equal(isNannyOn('tg_signal'), false);
+  assert.equal(isNannyOn('manual_paper'), true);
+  assert.deepEqual(managedStrategies(), ['manual_paper']);
+});
+
+test('незнакомая стратегия под няньку не попадает', () => {
+  assert.equal(isNannyOn('adopt'), false);
+  assert.equal(isNannyOn(undefined), false);
+});

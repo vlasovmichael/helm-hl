@@ -109,6 +109,10 @@
   margin-bottom: 14px;
 }
 
+.cmp-grid--pair {
+  grid-template-columns: repeat(2, 1fr);
+}
+
 .cmp-lane {
   display: flex;
   flex-direction: column;

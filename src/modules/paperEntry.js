@@ -6,6 +6,7 @@
 // План выхода считается на входе и ложится в строку позиции — как у adopt.
 
 import { config } from '../core/config.js';
+import { isNannyOn } from './paperNannyGate.js';
 import { logger } from '../core/logger.js';
 import { savePosition } from '../core/database.js';
 import { getLivePrice } from '../core/priceFeed.js';
@@ -106,7 +107,7 @@ export async function openPaperPosition({
   // её будет оператор руками, и врать строке позиции про стоп нельзя.
   let plan = { slPrice: null, tpPrice: null, rungs: [] };
   let planLabel = 'no stop (nanny off)';
-  if (config.trading.manualPaperAdoptEnabled) {
+  if (isNannyOn(strategyId)) {
     try {
       const { distPct, basis } = await computeStopDistPct(c);
       plan = planPaperExit({ side, entry: price, stopDistPct: distPct, sizeUsd });

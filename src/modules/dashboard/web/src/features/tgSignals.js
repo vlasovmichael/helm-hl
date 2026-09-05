@@ -302,27 +302,18 @@ function lane({ title, sub, st, hero, heroNote, foot, muted = false, track = tru
 }
 
 /**
- * Сравнение трёх колонок. Третья намеренно НЕ на одной шкале с первыми двумя:
- * её проценты плечевые и посчитаны самим каналом, и общая ось внушала бы, что
- * числа сопоставимы.
+ * Две колонки: что звонки канала сделали у нас и что канал публикует о себе.
+ * Общей шкалы у них нет намеренно — проценты справа плечевые и посчитаны самим
+ * каналом. Свои бумажные сделки сюда не попадают: другой источник входа.
  */
 function comparisonHtml(c) {
-  const mine = c?.mine || { n: 0 };
   const theirs = c?.theirs || { n: 0 };
   const claimed = c?.claimed || { n: 0 };
 
   const lanes =
     lane({
-      title: "You",
-      sub: "your entries, bot exits",
-      st: mine,
-      hero: mine.n ? signed(mine.mean) : "—",
-      heroNote: "mean per trade, net, 1&times;",
-      foot: verdict(mine).text,
-    }) +
-    lane({
-      title: "Their calls",
-      sub: "same rules as yours",
+      title: "What the calls did",
+      sub: "taken at 1&times;, exited by the bot",
       st: theirs,
       hero: theirs.n ? signed(theirs.mean) : "—",
       heroNote: "mean per trade, net, 1&times;",
@@ -341,7 +332,7 @@ function comparisonHtml(c) {
         : "leverage not stated on these posts",
     });
 
-  return `<div class="cmp-grid">${lanes}</div>${punchline(theirs, claimed)}`;
+  return `<div class="cmp-grid cmp-grid--pair">${lanes}</div>${punchline(theirs, claimed)}`;
 }
 
 /**
@@ -409,10 +400,11 @@ export async function refreshTgSignalLab() {
   const head =
     comparisonHtml(cmp) +
     `<p class="tg-lab-note">
-      Left two columns are the same measurement: net return per trade as a share of its own
-      notional, entered at the market price and exited by the bot. The right column is not ours —
-      it is what the channels publish about themselves, on their own leverage and their own
-      accounting. It sits apart for that reason, and shares no axis with the other two.
+      Left is our measurement of the channels' own calls: net return per trade as a share of its
+      own notional, entered at the market price the moment the post is seen and exited by the bot.
+      Right is not our measurement at all — it is what those channels publish about themselves, on
+      their own leverage and their own accounting, so the two share no axis. Your own paper trades
+      are deliberately absent: different entries, closed by hand, not comparable to either.
     </p>`;
 
   const table = journal.length

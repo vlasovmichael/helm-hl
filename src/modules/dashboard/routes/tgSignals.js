@@ -116,8 +116,10 @@ export async function handleList(_req, res) {
         .filter((t) => Number.isFinite(t.realized_pnl) && t.size_usd > 0)
         .map((t) => (t.realized_pnl / t.size_usd) * 100);
 
+    // 🚨 Только сигнальные сделки. Свои бумажные сюда не идут: у них другой
+    // источник входа и оператор закрывает их рукой — рядом в одной таблице это
+    // читалось бы как сравнимые числа, а они не сравнимы.
     const theirs = netPct(getStrategyTrades(STRATEGY_ID, "PAPER"));
-    const mine = netPct(getStrategyTrades("manual_paper", "PAPER"));
     const stats = meanCi(theirs);
 
     // Третья колонка — витрина: то, что канал публикует о себе сам. Проценты
@@ -127,7 +129,6 @@ export async function handleList(_req, res) {
     const claimAt1x = claims.filter((c) => c.pct_at_1x != null).map((c) => c.pct_at_1x);
 
     const comparison = {
-      mine: summarize(mine),
       theirs: summarize(theirs),
       claimed: {
         ...summarize(claimPct),
