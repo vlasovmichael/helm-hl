@@ -192,12 +192,11 @@ export async function fetchPositions(address, opts = {}) {
     if (got.length || (Number.isFinite(eq) && eq > 0))
       venues.push({ dex: dex || "main", equity: Number.isFinite(eq) ? eq : null, positions: got.length });
   }
-  // Время открытия — из кэша филлов. Ключ там с префиксом площадки («xyz:GOLD»),
-  // а в позиции монета уже без него, поэтому пробуем оба вида.
+  // Время открытия — из кэша филлов. Ключ там ровно тот же, что в позиции:
+  // биржа отдаёт монету builder-DEX'а уже с префиксом площадки («xyz:GOLD»).
   const opened = openedAtFor(address);
   for (const p of positions) {
-    const key = p.dex && p.dex !== "main" ? `${p.dex}:${p.coin}` : p.coin;
-    const ts = opened.get(key) ?? opened.get(p.coin) ?? null;
+    const ts = opened.get(p.coin);
     p.entryTime = Number.isFinite(ts) ? ts : null;
   }
 
