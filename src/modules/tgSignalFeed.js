@@ -36,13 +36,13 @@ export function parseChannelHtml(html) {
 }
 
 /**
- * Свежие сигналы канала. Сетевая ошибка — не исключение, а пустой список:
- * недоступный t.me не должен ронять тик бота.
+ * Посты канала со страницы превью. Сетевая ошибка — не исключение, а пустой
+ * список: недоступный t.me не должен ронять тик бота.
  * @param {string} channel
  * @param {(url:string)=>Promise<Response>} [fetchFn]
- * @returns {Promise<Array>} сигналы в порядке публикации
+ * @returns {Promise<Array<{id:number, ts:string|null, text:string}>>}
  */
-export async function fetchChannelSignals(channel, fetchFn = fetch) {
+export async function fetchChannelPosts(channel, fetchFn = fetch) {
   let html;
   try {
     const res = await fetchFn(`https://t.me/s/${channel}`, {
@@ -58,5 +58,10 @@ export async function fetchChannelSignals(channel, fetchFn = fetch) {
     logger.debug(`[TgSignal] ${channel} недоступен: ${err.message}`);
     return [];
   }
-  return parsePosts(channel, parseChannelHtml(html));
+  return parseChannelHtml(html);
+}
+
+/** Свежие сигналы канала — посты, пропущенные через разбор форматов. */
+export async function fetchChannelSignals(channel, fetchFn = fetch) {
+  return parsePosts(channel, await fetchChannelPosts(channel, fetchFn));
 }

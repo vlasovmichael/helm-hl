@@ -251,6 +251,117 @@ function verdict(stats) {
   return { tone: "", text: "not distinguishable from zero yet" };
 }
 
+const signed = (v, digits = 2) =>
+  v == null || !Number.isFinite(v) ? "—" : `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(digits)}%`;
+
+const toneOf = (v) => (v == null ? "" : v >= 0 ? "num-pos" : "num-neg");
+
+/**
+ * Интервальная шкала вокруг нуля: полоса от lo до hi, точка на среднем.
+ * Пока полоса пересекает ноль, это видно раньше, чем читается число — ради
+ * этого она и стоит, а не ради украшения.
+ */
+function ciTrack(st) {
+  if (!st || st.lo == null) return `<div class="cmp-track cmp-track--empty"></div>`;
+  // Шкала симметрична: половина ширины на каждую сторону от нуля, предел —
+  // самый дальний конец интервала. Так ноль всегда ровно посередине.
+  const span = Math.max(Math.abs(st.lo), Math.abs(st.hi)) * 1.15 || 1;
+  const pos = (v) => 50 + (v / span) * 50;
+  const left = Math.min(pos(st.lo), pos(st.hi));
+  const width = Math.abs(pos(st.hi) - pos(st.lo));
+  const crossesZero = st.lo <= 0 && st.hi >= 0;
+  return `
+    <div class="cmp-track" data-card="95% confidence interval for the mean; the line marks zero">
+      <div class="cmp-track__zero"></div>
+      <div class="cmp-track__band${crossesZero ? " is-flat" : st.mean >= 0 ? " is-pos" : " is-neg"}"
+           style="left:${left.toFixed(2)}%;width:${Math.max(width, 1.5).toFixed(2)}%"></div>
+      <div class="cmp-track__dot" style="left:${pos(st.mean).toFixed(2)}%"></div>
+    </div>`;
+}
+
+/** Одна колонка сравнения. */
+function lane({ title, sub, st, hero, heroNote, foot, muted = false, track = true }) {
+  const n = st?.n || 0;
+  return `
+    <div class="cmp-lane${muted ? " cmp-lane--claim" : ""}">
+      <div class="cmp-lane__head">
+        <span class="cmp-lane__title">${title}</span>
+        <span class="cmp-lane__sub">${sub}</span>
+      </div>
+      <div class="cmp-lane__hero ${muted ? "" : toneOf(st?.mean)}">${hero}</div>
+      <div class="cmp-lane__heronote">${heroNote}</div>
+      ${track ? ciTrack(st) : `<div class="cmp-track cmp-track--note">not on the same scale</div>`}
+      <dl class="cmp-lane__facts">
+        <div><dt>Trades</dt><dd>${n || "—"}</dd></div>
+        <div><dt>Win rate</dt><dd>${n ? `${st.winRate.toFixed(0)}%` : "—"}</dd></div>
+        <div><dt>Median</dt><dd>${n ? signed(st.median) : "—"}</dd></div>
+        <div><dt>Best · worst</dt><dd>${n ? `${signed(st.best, 1)} · ${signed(st.worst, 1)}` : "—"}</dd></div>
+      </dl>
+      <div class="cmp-lane__foot">${foot}</div>
+    </div>`;
+}
+
+/**
+ * Сравнение трёх колонок. Третья намеренно НЕ на одной шкале с первыми двумя:
+ * её проценты плечевые и посчитаны самим каналом, и общая ось внушала бы, что
+ * числа сопоставимы.
+ */
+function comparisonHtml(c) {
+  const mine = c?.mine || { n: 0 };
+  const theirs = c?.theirs || { n: 0 };
+  const claimed = c?.claimed || { n: 0 };
+
+  const lanes =
+    lane({
+      title: "You",
+      sub: "your entries, bot exits",
+      st: mine,
+      hero: mine.n ? signed(mine.mean) : "—",
+      heroNote: "mean per trade, net, 1&times;",
+      foot: verdict(mine).text,
+    }) +
+    lane({
+      title: "Their calls",
+      sub: "same rules as yours",
+      st: theirs,
+      hero: theirs.n ? signed(theirs.mean) : "—",
+      heroNote: "mean per trade, net, 1&times;",
+      foot: verdict(theirs).text,
+    }) +
+    lane({
+      title: "What they post",
+      sub: "the channels' own numbers",
+      st: claimed,
+      muted: true,
+      track: false,
+      hero: claimed.n ? signed(claimed.mean, 1) : "—",
+      heroNote: "mean per claim, leveraged",
+      foot: claimed.withLeverage
+        ? `${claimed.withLeverage} state their leverage &rarr; ${signed(claimed.at1x.mean)} at 1&times;`
+        : "leverage not stated on these posts",
+    });
+
+  return `<div class="cmp-grid">${lanes}</div>${punchline(theirs, claimed)}`;
+}
+
+/**
+ * Разрыв между витриной и фактом одной фразой. Пишется только когда обе стороны
+ * посчитаны: без сделок это было бы обвинение без замера.
+ */
+function punchline(theirs, claimed) {
+  if (!theirs.n || !claimed.n) return "";
+  const at1x = claimed.at1x?.n ? claimed.at1x : null;
+  return `
+    <p class="cmp-punch">
+      The channels post <b>${signed(claimed.mean, 1)}</b> per call across
+      <b>${claimed.n}</b> results and call <b>${claimed.winRate.toFixed(0)}%</b> of them wins.
+      ${at1x ? `Where they state the leverage, that is <b>${signed(at1x.mean)}</b> on unlevered size. ` : ""}
+      The same calls, taken at 1&times; the moment they were posted and exited by the bot,
+      did <b class="${toneOf(theirs.mean)}">${signed(theirs.mean)}</b> per trade
+      over <b>${theirs.n}</b> trades.
+    </p>`;
+}
+
 function journalRow(s) {
   const isShort = s.side === "SHORT";
   const opened = s.status === "opened";
@@ -285,40 +396,23 @@ export async function refreshTgSignalLab() {
   }
 
   const journal = data?.journal || [];
-  const stats = data?.stats || null;
-  const v = verdict(stats);
+  const cmp = data?.comparison || null;
+  const traded = cmp?.theirs?.n || 0;
 
   if (meta) {
     meta.textContent = data?.enabled
-      ? `${data.closedCount || 0} closed · ${(data.positions || []).length} open`
+      ? `${traded} closed · ${(data.positions || []).length} open`
       : "watcher off";
     meta.style.color = data?.enabled ? "var(--text-muted)" : "var(--red)";
   }
 
-  const head = `
-    <div class="tg-lab-summary">
-      <div class="tg-lab-stat">
-        <span class="tg-lab-stat-label">Closed calls</span>
-        <b>${data?.closedCount || 0}</b>
-      </div>
-      <div class="tg-lab-stat">
-        <span class="tg-lab-stat-label">Mean per call</span>
-        <b class="${v.tone}">${stats ? fmtPct(stats.mean) : "—"}</b>
-      </div>
-      <div class="tg-lab-stat">
-        <span class="tg-lab-stat-label">95% interval</span>
-        <b>${stats && stats.lo != null ? `${fmtPct(stats.lo)} … ${fmtPct(stats.hi)}` : "—"}</b>
-      </div>
-      <div class="tg-lab-stat tg-lab-stat--wide">
-        <span class="tg-lab-stat-label">Verdict</span>
-        <b class="${v.tone}">${v.text}</b>
-      </div>
-    </div>
-    <p class="tg-lab-note">
-      Result is the net return per call as a share of its own notional, so the tiny fixed size and 1&times;
-      leverage cannot flatter it. Only the coin, the side and the post's timestamp come from the channel —
-      entry is taken at the market price when the post is seen, and the exit is run by the same nanny that
-      manages real positions. Channel entries, targets and stops are ignored on purpose.
+  const head =
+    comparisonHtml(cmp) +
+    `<p class="tg-lab-note">
+      Left two columns are the same measurement: net return per trade as a share of its own
+      notional, entered at the market price and exited by the bot. The right column is not ours —
+      it is what the channels publish about themselves, on their own leverage and their own
+      accounting. It sits apart for that reason, and shares no axis with the other two.
     </p>`;
 
   const table = journal.length

@@ -15,12 +15,14 @@
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import {
+  recordTgClaim,
   recordTgSignal,
   isTgPostSeen,
   hasRecentTgSignal,
   getActiveTgSignalPositions,
 } from '../core/database.js';
-import { fetchChannelSignals } from '../modules/tgSignalFeed.js';
+import { fetchChannelPosts } from '../modules/tgSignalFeed.js';
+import { parsePosts, parseClaim } from '../modules/tgSignals.js';
 import { openPaperPosition } from '../modules/paperEntry.js';
 import { getUniverse } from '../core/universe.js';
 
@@ -51,10 +53,10 @@ export function judgeSignal(sig, state) {
 /**
  * Один проход опроса всех настроенных каналов.
  * Best-effort: молчащий канал или упавший вход не мешают остальным.
- * @param {(channel:string)=>Promise<Array>} [fetcher] — инжектится в тестах
+ * @param {(channel:string)=>Promise<Array>} [fetcher] — посты канала; инжектится в тестах
  * @returns {Promise<{checked:number, opened:number, skipped:number}>}
  */
-export async function pollTgSignals(fetcher = fetchChannelSignals) {
+export async function pollTgSignals(fetcher = fetchChannelPosts) {
   const t = config.trading;
   if (!t.tgSignalEnabled || t.tgSignalChannels.length === 0) {
     return { checked: 0, opened: 0, skipped: 0 };
@@ -65,13 +67,29 @@ export async function pollTgSignals(fetcher = fetchChannelSignals) {
   let skipped = 0;
 
   for (const { handle } of t.tgSignalChannels) {
-    let signals;
+    let posts;
     try {
-      signals = await fetcher(handle);
+      posts = await fetcher(handle);
     } catch (err) {
       logger.debug(`[TgSignal] ${handle}: опрос не удался — ${err.message}`);
       continue;
     }
+
+    // Витрина канала. Возраст тут не важен: это не сделка, а его заявление о
+    // собственном результате, и подглядывать в него нечего.
+    for (const p of posts) {
+      const claim = parseClaim(p.text);
+      if (!claim) continue;
+      recordTgClaim({
+        ...claim,
+        channel: handle,
+        postId: p.id,
+        postedAt: Date.parse(p.ts),
+        excerpt: String(p.text).replace(/\s+/g, ' ').slice(0, 200),
+      });
+    }
+
+    const signals = parsePosts(handle, posts);
 
     for (const sig of signals) {
       if (isTgPostSeen(sig.channel, sig.postId)) continue;

@@ -113,6 +113,56 @@ const FORMATS = [
   },
 ];
 
+// ── Витрина канала ──────────────────────────────────────────────────────────
+// Тот самый пост-отчёт, который RESULT_MARKERS отвергает как сигнал, сам по себе
+// данные: это заявление канала о собственном результате. Пишем его отдельно,
+// чтобы рядом с нашими фактическими сделками стояло то, что канал рисует у себя.
+//
+// 🚨 Процент у каналов ПЛЕЧЕВОЙ и почти никогда не подписан плечом. Приводим к
+// 1x только когда плечо названо явно; иначе так и помечаем — иначе сравнение
+// превратится в подгонку.
+
+// «Profit: 68.25%» и обратный порядок «45.5% Profit» — встречаются оба.
+const CLAIM_PATTERNS = [
+  { re: /\b(profit|прибыль)\s*:?\s*\+?(\d+(?:\.\d+)?)\s*%/i, win: true, group: 2 },
+  { re: /\b(loss|убыток)\s*:?\s*-?(\d+(?:\.\d+)?)\s*%/i, win: false, group: 2 },
+  { re: /(\d+(?:\.\d+)?)\s*%\s*(profit|gain)/i, win: true, group: 1 },
+  { re: /(\d+(?:\.\d+)?)\s*%\s*(loss)/i, win: false, group: 1 },
+];
+const RE_CLAIM_COIN = /#([A-Z0-9]{2,12})(?:\/USDT)?/;
+
+/**
+ * Заявленный каналом результат сделки.
+ * @param {string} text
+ * @returns {{coin:string, pct:number, win:boolean, leverage:number|null,
+ *            pctAt1x:number|null}|null}
+ */
+export function parseClaim(text) {
+  if (!text) return null;
+  const t = decodeEntities(text);
+  const coin = normalizeCoin(RE_CLAIM_COIN.exec(t)?.[1]);
+  if (!coin) return null;
+
+  let hit = null;
+  for (const p of CLAIM_PATTERNS) {
+    const m = p.re.exec(t);
+    if (m) { hit = { m, spec: p }; break; }
+  }
+  if (!hit) return null;
+  const raw = Number(hit.m[hit.spec.group]);
+  if (!Number.isFinite(raw)) return null;
+  const pct = hit.spec.win ? raw : -raw;
+
+  // Плечо ищем ТОЛЬКО рядом с процентом («on 5x lev», «(5x)»). Диапазон из
+  // самого сигнала («ISOLATED 10X - 75X») не годится: он не говорит, с каким
+  // плечом канал посчитал ЭТОТ результат.
+  const near = t.slice(hit.m.index, hit.m.index + hit.m[0].length + 24);
+  const lev = /\(?\s*(\d+(?:\.\d+)?)\s*x\b\s*(?:lev)?/i.exec(near)?.[1];
+  const leverage = lev && Number(lev) >= 1 && Number(lev) <= 125 ? Number(lev) : null;
+
+  return { coin, pct, win: hit.spec.win, leverage, pctAt1x: leverage ? pct / leverage : null };
+}
+
 /** Опознаваемые форматы постов. */
 export function knownFormats() {
   return FORMATS.map((f) => f.id);

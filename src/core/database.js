@@ -61,6 +61,14 @@ export function initDB() {
     logger.info('[DB] Migration: added strategy_id to history');
   }
 
+  // Migration: нотионал сделки в архив. Без него доходность в процентах от
+  // собственного размера не посчитать, а сравнивать сделки в долларах нельзя —
+  // размер у ручных входов плавает по слайдеру.
+  if (!histColumns.find(c => c.name === 'size_usd')) {
+    db.exec('ALTER TABLE history ADD COLUMN size_usd REAL');
+    logger.info('[DB] Migration: added size_usd to history');
+  }
+
   // Migration: sl_price / tp_price для hunter-позиций (nullable — carry/fade их не имеют)
   if (!posColumns.find(c => c.name === 'sl_price')) {
     db.exec('ALTER TABLE positions ADD COLUMN sl_price REAL');
@@ -378,6 +386,25 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS tg_signals_status_idx ON tg_signals (status);
   `);
 
+  // Витрина каналов: их собственные заявления о результате. Рядом с нашими
+  // фактическими сделками это вторая половина сравнения — что канал рисует.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tg_claims (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      channel    TEXT    NOT NULL,
+      post_id    INTEGER NOT NULL,
+      posted_at  INTEGER NOT NULL,
+      coin       TEXT    NOT NULL,
+      pct        REAL    NOT NULL,
+      win        INTEGER NOT NULL,
+      leverage   REAL,
+      pct_at_1x  REAL,
+      excerpt    TEXT,
+      UNIQUE (channel, post_id)
+    );
+    CREATE INDEX IF NOT EXISTS tg_claims_posted_idx ON tg_claims (posted_at);
+  `);
+
   logger.info(`[DB] Initialized at ${DB_PATH}`);
   return db;
 }
@@ -636,6 +663,7 @@ export function closePosition(id, data) {
   const insertHistory = getDb().prepare(`
     INSERT INTO history (
       coin, entry_price, close_price, realized_pnl, fee_paid, mode, closed_at, reason, strategy_id, side,
+      size_usd,
       entry_spike_pct, entry_trend_15m_pct, entry_trend_1h_pct,
       entry_funding_rate, entry_volume_24h_usd, entry_oi_usd,
       entry_oi_delta_2m, entry_oi_delta_5m, entry_oi_delta_15m, entry_hour_utc,
@@ -644,6 +672,7 @@ export function closePosition(id, data) {
     )
     VALUES (
       @coin, @entry_price, @close_price, @realized_pnl, @fee_paid, @mode, @closed_at, @reason, @strategy_id, @side,
+      @size_usd,
       @entry_spike_pct, @entry_trend_15m_pct, @entry_trend_1h_pct,
       @entry_funding_rate, @entry_volume_24h_usd, @entry_oi_usd,
       @entry_oi_delta_2m, @entry_oi_delta_5m, @entry_oi_delta_15m, @entry_hour_utc,
@@ -664,6 +693,7 @@ export function closePosition(id, data) {
       coin:         position.coin,
       entry_price:  position.entry_price,
       close_price:  data.close_price,
+      size_usd:     position.size_usd,
       realized_pnl: data.realized_pnl,
       fee_paid:     data.fee_paid,
       mode:         position.mode,
@@ -815,6 +845,33 @@ export function hasRecentTgSignal(coin, side, windowMs) {
   return !!getDb()
     .prepare("SELECT 1 FROM tg_signals WHERE coin = ? AND side = ? AND status = 'opened' AND posted_at >= ?")
     .get(String(coin).toUpperCase(), side, Date.now() - windowMs);
+}
+
+/** Записать заявленный каналом результат. Идемпотентно по (channel, post_id). */
+export function recordTgClaim(c) {
+  const res = getDb()
+    .prepare(`INSERT OR IGNORE INTO tg_claims
+        (channel, post_id, posted_at, coin, pct, win, leverage, pct_at_1x, excerpt)
+      VALUES (@channel, @post_id, @posted_at, @coin, @pct, @win, @leverage, @pct_at_1x, @excerpt)`)
+    .run({
+      channel: c.channel,
+      post_id: c.postId,
+      posted_at: c.postedAt,
+      coin: c.coin,
+      pct: c.pct,
+      win: c.win ? 1 : 0,
+      leverage: c.leverage ?? null,
+      pct_at_1x: c.pctAt1x ?? null,
+      excerpt: c.excerpt ?? null,
+    });
+  return res.changes ? Number(res.lastInsertRowid) : null;
+}
+
+/** Заявленные каналами результаты, свежие сверху. */
+export function getTgClaims(limit = 400) {
+  return getDb()
+    .prepare('SELECT * FROM tg_claims ORDER BY posted_at DESC LIMIT ?')
+    .all(Math.max(1, Math.min(2000, Number(limit) || 400)));
 }
 
 /** Журнал сигналов, свежие сверху. */
