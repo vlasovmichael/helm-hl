@@ -113,7 +113,7 @@ async function isReopenedPosition(dbPosition, exchangePositions) {
     return false;
   }
 
-  let openTime = null;
+  let openTime;
   try {
     const fills = await fetchUserFills(dbPosition.entry_time - 60_000, { force: true });
     openTime = resolveManualOpenTime({

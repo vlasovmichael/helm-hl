@@ -76,7 +76,7 @@ test('первый цикл метит все наличные позы atStartu
 test('новая монета во втором цикле → atStartup=false (видели рождение)', () => {
   const map = new Map();
   let boot = updateFirstSeen(map, ['SPX'], NOW, false);
-  boot = updateFirstSeen(map, ['SPX', 'WLD'], NOW + MIN, boot);
+  updateFirstSeen(map, ['SPX', 'WLD'], NOW + MIN, boot);
   assert.equal(map.get('SPX').atStartup, true, 'старая со старта');
   assert.equal(map.get('WLD').atStartup, false, 'появилась при живом боте → свежая');
 });
@@ -89,7 +89,7 @@ test('existing монета не перезаписывается, ушедша�
   assert.equal(map.has('SPX'), false, 'ушедшая монета удалена из карты');
   assert.equal(map.get('WLD').atStartup, false);
   // SPX вернулась — это уже НОВОЕ появление при живом боте.
-  boot = updateFirstSeen(map, ['WLD', 'SPX'], NOW + 6 * MIN, boot);
+  updateFirstSeen(map, ['WLD', 'SPX'], NOW + 6 * MIN, boot);
   assert.equal(map.get('SPX').atStartup, false);
   assert.notEqual(map.get('SPX').ts, spxTs, 'ts свежий, не старый');
 });

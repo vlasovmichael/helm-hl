@@ -111,7 +111,7 @@ function localMove(coin, minutes) {
  */
 export function buildTrackRecord(limit = 2000) {
   const byCoin = new Map();
-  let rows = [];
+  let rows;
   try {
     rows = getHistory(limit);
   } catch (err) {

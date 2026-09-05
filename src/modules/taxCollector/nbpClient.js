@@ -80,7 +80,7 @@ async function fetchNbpForDate(currency, isoDate) {
       return null; // выходной/праздник — нормальная ситуация
     }
     // Сетевая или 5xx ошибка — пробрасываем, чтобы caller решил что делать
-    throw new Error(`NBP API ${currency} ${isoDate}: ${err.message}`);
+    throw new Error(`NBP API ${currency} ${isoDate}: ${err.message}`, { cause: err });
   }
 }
 

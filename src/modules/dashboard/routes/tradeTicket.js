@@ -293,7 +293,7 @@ export async function handleContext(req, res) {
  * могут быть, когда на бирже их уже нет.
  */
 async function buildPositions() {
-  let raw = [];
+  let raw;
   try {
     raw = await fetchExchangePositions();
   } catch {

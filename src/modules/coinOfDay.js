@@ -182,7 +182,7 @@ function buildLevels({ side, price, c1h, c15, atr15Pct }) {
   // Цель — ближайший пивот 1ч по ходу сделки, но не ближе 1.5R.
   const { highs, lows } = pivots(c1h, 2);
   const minDist = price * ((riskPct * COD.MIN_RR) / 100);
-  let target = null;
+  let target;
   let targetProjected = false;
   if (isShort) {
     const cands = lows.filter((l) => l <= price - minDist).sort((a, b) => b - a);

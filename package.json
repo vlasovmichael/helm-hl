@@ -29,6 +29,7 @@
     "ws": "^8.16.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.11.0",
     "eslint": "^10.9.1",

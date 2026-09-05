@@ -141,7 +141,7 @@ function resultHtml(r) {
     button({ label: "Another coin", icon: "prev", variant: "ghost", cls: "wi-again", attrs: { id: "wi-again" } });
 
   // ── Коуч-вердикт (ведущий блок) ──
-  let verdictBlock = "";
+  let verdictBlock;
   if (c.verdict) {
     const toneCls = COACH_TONE_CLS[c.verdict.tone] || "wi-neutral";
     // Локальная переменная НЕ `icon`: она бы перекрыла импортированную

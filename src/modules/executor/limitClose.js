@@ -107,7 +107,7 @@ export async function closeLimitFirst({ coin, side }) {
   // гарантированно не пересечёт рынок и не отвалится с post-only reject.
   const px = formatHlPrice(rawPx, szDecimals);
 
-  let oid = null;
+  let oid;
   try {
     const result = await retryWithBackoff(
       () => placeLimit({ coin, isBuy, sz: startSz, px, tif: 'Alo', reduceOnly: true }),
