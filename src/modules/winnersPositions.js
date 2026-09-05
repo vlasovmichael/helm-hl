@@ -33,7 +33,66 @@ import { hlInfo, HL_PRIORITY } from "../core/hlClient.js";
 // он кэшируется на 6 часов — набор площадок у человека меняется редко.
 
 const DEX_TTL_MS = 6 * 3_600_000;
-const dexCache = new Map(); // address → { dexes: string[], at }
+const dexCache = new Map(); // address → { dexes: string[], openedAt: Map, at }
+
+/**
+ * Когда открылась ТЕКУЩАЯ позиция по каждой монете, из ленты филлов.
+ *
+ * clearinghouseState времени открытия не отдаёт вообще, и позиции на
+ * builder-DEX'ах оставались без возраста: у карточки просто не было чему тикать.
+ * Филлы для этого и так читаются (список площадок берётся из них же), поэтому
+ * время достаётся даром — отдельного запроса не нужно.
+ *
+ * Якорь startPosition обязателен: без него поза, открытая до окна филлов, будет
+ * выглядеть открытой на первом же попавшемся филле. Не смогли определить —
+ * возвращаем null, а не догадку.
+ *
+ * @param {Array} fills — сырые userFills
+ * @returns {Map<string, number|null>} coin → ms открытия
+ */
+export function positionOpenTimes(fills) {
+  const EPS = 1e-9;
+  const byCoin = new Map();
+  for (const f of Array.isArray(fills) ? fills : []) {
+    const coin = f?.coin;
+    if (!coin) continue;
+    if (!byCoin.has(coin)) byCoin.set(coin, []);
+    byCoin.get(coin).push(f);
+  }
+
+  const out = new Map();
+  for (const [coin, list] of byCoin) {
+    list.sort((a, b) => Number(a.time) - Number(b.time));
+    const anchor = Number(list[0]?.startPosition);
+    let net = Number.isFinite(anchor) ? anchor : 0;
+    // Поза уже стояла до окна филлов — когда открылась, отсюда не узнать.
+    let openedAt = Math.abs(net) > EPS ? null : undefined;
+
+    for (const f of list) {
+      const dir = String(f?.dir || '');
+      const sz = Math.abs(Number(f?.sz) || 0);
+      if (!sz) continue;
+      const before = net;
+
+      if (dir.includes('>')) {
+        // Флип: старая поза закрылась и тут же открылась новая, обратной стороной.
+        net = dir.startsWith('Long') ? -sz : sz;
+        openedAt = Number(f.time);
+        continue;
+      }
+      const isOpen = dir.startsWith('Open ');
+      const isClose = dir.startsWith('Close ');
+      if (!isOpen && !isClose) continue;
+      const isLong = dir.includes('Long');
+      net += isOpen === isLong ? sz : -sz;
+
+      if (Math.abs(before) <= EPS && Math.abs(net) > EPS) openedAt = Number(f.time);
+      else if (Math.abs(net) <= EPS) openedAt = undefined;
+    }
+    out.set(coin, Math.abs(net) > EPS ? (openedAt ?? null) : null);
+  }
+  return out;
+}
 
 const hlLow = (body, label) =>
   hlInfo(body, { label, timeoutMs: 8_000, maxRetries: 2, priority: HL_PRIORITY.LOW });
@@ -52,8 +111,14 @@ async function dexesFor(address) {
       if (!dexes.includes(dex)) dexes.push(dex);
     }
   }
-  dexCache.set(address, { dexes, at: Date.now() });
+  // Время открытия достаём из этих же филлов — второй запрос не нужен.
+  dexCache.set(address, { dexes, openedAt: positionOpenTimes(fills), at: Date.now() });
   return dexes;
+}
+
+/** Время открытия позиций из кэша филлов. Пусто, если филлы ещё не читались. */
+function openedAtFor(address) {
+  return dexCache.get(address)?.openedAt ?? new Map();
 }
 
 function parsePositions(state, dex) {
@@ -127,6 +192,15 @@ export async function fetchPositions(address, opts = {}) {
     if (got.length || (Number.isFinite(eq) && eq > 0))
       venues.push({ dex: dex || "main", equity: Number.isFinite(eq) ? eq : null, positions: got.length });
   }
+  // Время открытия — из кэша филлов. Ключ там с префиксом площадки («xyz:GOLD»),
+  // а в позиции монета уже без него, поэтому пробуем оба вида.
+  const opened = openedAtFor(address);
+  for (const p of positions) {
+    const key = p.dex && p.dex !== "main" ? `${p.dex}:${p.coin}` : p.coin;
+    const ts = opened.get(key) ?? opened.get(p.coin) ?? null;
+    p.entryTime = Number.isFinite(ts) ? ts : null;
+  }
+
   positions.sort((a, b) => b.sizeUsd - a.sizeUsd);
 
   const notional = positions.reduce((s, p) => s + p.sizeUsd, 0);

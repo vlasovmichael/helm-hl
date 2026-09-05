@@ -469,7 +469,9 @@ async function getStatusData() {
           liquidationPrice: p.liquidationPrice,
           leverage: p.leverage,
           currentPrice: mark,
-          entryTime: null,
+          // Время открытия восстановлено из ленты филлов (positionOpenTimes).
+          // null = поза старше окна филлов, тогда карточка возраст не рисует.
+          entryTime: p.entryTime ?? null,
           adopted: false,
           adoptResyncing: false,
           adoptSkipReason: null,
