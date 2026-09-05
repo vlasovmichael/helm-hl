@@ -229,6 +229,16 @@ function buildAdoptManagement(adoptPos) {
   } else {
     return { strategy: "adopt", peakPct, floorPct: null, floorKind: "stop" };
   }
+  const resolved = resolveFloor({
+    entry,
+    isShort,
+    slPrice: adoptPos.sl_price,
+    floorPct,
+    floorKind,
+    floorOrderMode: t.adoptTrailFloorOrder,
+  });
+  floorPct = resolved.floorPct;
+  const floorSource = resolved.floorSource;
   const dir = isShort ? 1 : -1;
   const floorPrice = entry * (1 - dir * (floorPct / 100));
   // Исходный риск (для R-multiple): дистанция входа до resting-SL на бирже.
@@ -265,6 +275,9 @@ function buildAdoptManagement(adoptPos) {
     floorPct,
     floorPrice,
     floorKind,
+    // 'order' — цена реального resting-ордера; 'planned' — уровень, по которому
+    // закроет сам бот (ордера на бирже нет).
+    floorSource,
   };
 }
 
@@ -643,6 +656,28 @@ async function handleHistory(req, res) {
 // (архитектура single-slot). closed_at adopt-флипа = реальное время ноги, так что
 // допуска в несколько секунд хватает с запасом на округления/индексацию.
 const DEDUP_TS_TOLERANCE_MS = 5_000;
+/**
+ * Какой пол показывать в карточке.
+ *
+ * 🚨 Пол, который едет БИРЖЕВЫМ ОРДЕРОМ, обязан показываться по цене ордера, а
+ * не по пересчитанному идеалу: ордер переставляется шагами
+ * ADOPT_TRAIL_FLOOR_STEP_PCT и живёт в sl_price, а идеал считается от свежего
+ * пика и всегда убегает вперёд. 05.09 карточка обещала +$0.21, на бирже стоял
+ * ордер на +$0.17 — решение принималось по числу, которого там не было.
+ * Тот же класс, что остальные расхождения «зеркало ≠ биржа».
+ *
+ * @returns {{floorPct:number, floorSource:'order'|'planned'}}
+ */
+export function resolveFloor({ entry, isShort, slPrice, floorPct, floorKind, floorOrderMode }) {
+  const ridesAsOrder =
+    floorOrderMode && slPrice != null && (floorKind === "trail" || floorKind === "be");
+  if (!ridesAsOrder) return { floorPct, floorSource: "planned" };
+  return {
+    floorPct: isShort ? ((entry - slPrice) / entry) * 100 : ((slPrice - entry) / entry) * 100,
+    floorSource: "order",
+  };
+}
+
 export function makeHistoryCoverage(historyRows, activePos) {
   const closesByCoin = new Map();
   for (const t of historyRows || []) {

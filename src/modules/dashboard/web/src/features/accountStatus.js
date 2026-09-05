@@ -553,6 +553,11 @@ export function renderPosition(pos) {
 // после 3 одинаковых разворот лишь 52–58%, «3» не выделена) → таймер = чекпоинт
 // «перечитать график», а НЕ «ход кончился»..
 const FLOOR_TIMER_SEC = 15 * 60;
+const DAY_SEC = 24 * 3600;
+// Санити-потолок: отсекает мусорную дату входа, но не живую позу. Раньше здесь
+// стояли сутки, и у позиции старше дня счётчик просто ИСЧЕЗАЛ — выглядело как
+// «времени нет», хотя поза висела неделю.
+const MAX_AGE_SEC = 400 * DAY_SEC;
 function openedMsOf(p) {
   const t = p?.entryTime;
   if (t == null) return null;
@@ -566,8 +571,11 @@ function openedMsOf(p) {
   return ms;
 }
 // Часы открытой позиции MM:SS (после часа H:MM:SS). Тикают каждую секунду.
+// Дольше суток секунды не значат ничего, и счётчик переходит на дни и недели —
+// тем же форматом, что uptime, чтобы в интерфейсе не было двух языков времени.
 function fmtClock(sec) {
   sec = Math.floor(sec);
+  if (sec >= DAY_SEC) return formatUptime(sec / 60);
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
   const s = sec % 60;
@@ -607,7 +615,7 @@ function floorTimerParts(p) {
   const openedMs = openedMsOf(p);
   if (openedMs == null) return { cls: "", bg: "", chip: "" };
   const sec = (Date.now() - openedMs) / 1000;
-  if (!(sec >= 0) || sec > 24 * 3600) return { cls: "", bg: "", chip: "" }; // санити
+  if (!(sec >= 0) || sec > MAX_AGE_SEC) return { cls: "", bg: "", chip: "" }; // санити
   const bg =
     sec < FLOOR_TIMER_SEC
       ? `<div class="floor-timer-bg" style="animation-delay:-${sec.toFixed(0)}s"></div>`
