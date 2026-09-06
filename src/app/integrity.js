@@ -613,6 +613,22 @@ export async function orphanCheck() {
   // Остаётся только «ручное» — позы на бирже, которых нет в БД бота
   const manualPositions = exchangePositions.filter((p) => !ownedCoins.has(p.coin));
 
+  // 🚨 Крутим ДАЖЕ на пустом списке: усыновлённая монета уходит из manualPositions,
+  // и ранний return ниже пропускал подрезку first-seen и бэкфилл entry_time —
+  // протухшая запись доживала до следующего входа по той же монете.
+  if (config.trading.adoptEnabled && manualPositions.length === 0) {
+    try {
+      await maybeAdoptManualPosition([]);   // подрезает first-seen
+    } catch (err) {
+      logger.debug(`[Adopt] first-seen housekeeping failed: ${err.message}`);
+    }
+    try {
+      await reconcileProvisionalAdoptEntries();
+    } catch (err) {
+      logger.debug(`[Adopt] provisional entry backfill failed: ${err.message}`);
+    }
+  }
+
   // ── Ручных позиций нет ─────────────────────────
   if (manualPositions.length === 0) {
     if (state.manualPositionActive) {

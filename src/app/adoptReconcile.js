@@ -23,6 +23,7 @@ import { placeLimit } from '../modules/exchange.js';
 import { formatHlPrice, MIN_ORDER_USD } from '../modules/executor/math.js';
 import { buildTpGrid } from '../modules/tpGrid.js';
 import { fetchUserFills } from '../modules/userFills.js';
+import { getLiveFills, fillKey } from '../core/fillFeed.js';
 import { isQuietHour } from '../core/ntfy.js';
 import { getLastDailyRiskStatus, localDayKey } from '../modules/dailyRisk.js';
 import { HL_PRIORITY } from '../core/hlClient.js';
@@ -372,7 +373,17 @@ async function getManualOpenTime(coin, currentNet = null) {
     logger.debug(`[Adopt] fetchUserFills failed: ${err.message}`);
     return null;
   }
-  return resolveManualOpenTime({ coin, fills, currentNet });
+  // 🚨 REST-лента отстаёт на 10-30с: открывающего филла в ней ещё нет. WS принёс
+  // его мгновенно — доклеиваем, иначе возраст падает на провизорный first-seen.
+  return resolveManualOpenTime({ coin, fills: mergeFills(fills, getLiveFills()), currentNet });
+}
+
+/** Чистая (для теста): REST-лента + живые WS-филлы, дедуп по fillKey, по времени. */
+export function mergeFills(restFills, liveFills) {
+  const byKey = new Map();
+  for (const f of restFills ?? []) byKey.set(fillKey(f), f);
+  for (const f of liveFills ?? []) byKey.set(fillKey(f), f);
+  return [...byKey.values()].sort((a, b) => a.time - b.time);
 }
 
 /**

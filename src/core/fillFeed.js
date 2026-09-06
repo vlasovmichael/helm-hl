@@ -36,6 +36,12 @@ let onFillCb = null;
 const seen = new Set();   // Set держит порядок вставки — этого хватает для подрезки
 const stats = { events: 0, lastFillAt: 0, connectedAt: 0 };
 
+// Кольцо живых филлов (контракт как у REST userFills). Индексатор HL отдаёт филл
+// в userFillsByTime через 10-30с — потребителям ленты этот буфер закрывает окно.
+const LIVE_MAX = 300;
+const LIVE_TTL_MS = 6 * 3_600_000;   // 6ч — REST-окно (60д) перекрывает всё старше
+const liveFills = [];
+
 /**
  * Ключ филла для дедупа. tid уникален у HL; hash+oid — запасной вариант,
  * если tid не пришёл. Без дедупа реконнект переигрывал бы одни и те же филлы.
@@ -110,6 +116,7 @@ function connect() {
 
     stats.events += fresh.length;
     stats.lastFillAt = Date.now();
+    recordLiveFills(fresh);
     const summary = fresh
       .map((f) => `${f.dir ?? '?'} #${f.coin} ${f.sz}@${f.px}`)
       .join(', ');
@@ -153,6 +160,21 @@ export function stopFillFeed() {
   try { ws?.close(); } catch { /* noop */ }
   ws = null;
   connected = false;
+}
+
+/** Кладёт филлы в кольцо. Экспорт ради тестов. */
+export function recordLiveFills(fills) {
+  const now = Date.now();
+  for (const f of fills ?? []) if (f?.coin && f?.time != null) liveFills.push(f);
+  const cutoff = now - LIVE_TTL_MS;
+  while (liveFills.length > LIVE_MAX || (liveFills.length && liveFills[0].time < cutoff)) {
+    liveFills.shift();
+  }
+}
+
+/** Филлы, которые WS уже видел, а REST-индексатор мог ещё не отдать. */
+export function getLiveFills(sinceMs = 0) {
+  return sinceMs > 0 ? liveFills.filter((f) => f.time >= sinceMs) : [...liveFills];
 }
 
 export function fillFeedStatus() {
