@@ -314,18 +314,20 @@
     margin-bottom: 14px;
   }
 
+  /* Подвал разбора: пересчёт той же монеты другой стороной + возврат к форме. */
+  .wi-actions {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .wi-actions-label {
+    margin-bottom: 6px;
+    font-size: var(--fs-label);
+    font-weight: 600;
+    color: var(--text-muted);
+  }
   .wi-again {
-    font-family: var(--font-mono);
-    font-size: var(--fs-small);
-    color: var(--text-secondary);
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 4px 0;
-
-    &:hover {
-      color: var(--text-primary);
-    }
+    width: 100%;
   }
 }
 

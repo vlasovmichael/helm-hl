@@ -315,8 +315,7 @@ textarea.field {
 
 /* Поле монеты: крупное, моно, капсом — читается заголовком карточки, а не
    строкой формы. Общее для ручного папера и trade ticket. */
-.field--coin,
-.tt-coin-input {
+.field--coin {
   width: 100%;
   box-sizing: border-box;
   margin-top: 8px;
@@ -334,6 +333,52 @@ textarea.field {
 
   &::placeholder { color: var(--text-faint); font-weight: 400; }
   &:focus { border-color: var(--accent-line); }
+}
+
+/* Поле монеты с подсказками. Разметку и клавиатуру ведёт core/coinCombo.js —
+   контрол общий для trade ticket, ручного папера и разбора монеты. */
+.combo {
+  position: relative;
+}
+.combo__list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  max-height: 232px;
+  margin: 0;
+  padding: 5px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--card-bg-elev);
+  box-shadow: var(--shadow);
+  animation: combo-in 140ms ease-out;
+}
+.combo__item {
+  padding: 9px 11px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-base);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+
+  &:hover,
+  &.is-on {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+}
+@keyframes combo-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .combo__list { animation: none; }
 }
 
 /* Тихий чип в карточке диалога («Isolated»). Не бейдж: не должен спорить по

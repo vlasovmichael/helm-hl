@@ -14,9 +14,13 @@ import { escapeHtml } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 import * as dialog from "../core/dialog.js";
 import { icon } from "../core/icon.js";
-import { button, segmented, field } from "../core/ui.js";
+import { button, segmented } from "../core/ui.js";
+import { attachCoinCombo, coinCombo, loadCoinUniverse } from "../core/coinCombo.js";
 
 let busy = false;
+let coinList = [];
+// Последняя разобранная монета: из разбора можно сразу проверить другую сторону.
+let lastCoin = "";
 
 // Вердикт → иконка. Тон (pat/smack/neutral) красит карточку через класс.
 // 🚨 Только общий набор: у руками набранных <svg> свой stroke-width, и в ряду
@@ -33,19 +37,24 @@ const TONE_CLS = { pat: "wi-pat", smack: "wi-smack", neutral: "wi-neutral" };
 
 // Оболочку и шапку даёт ядро (core/dialog.js) — здесь только тело. Форма,
 // загрузка и разбор — три тела одного окна, show() их переставляет.
+function openForm(coin = "", side = "LONG") {
+  openModal(formHtml(coin, side));
+  attachCoinCombo(document.getElementById("wi-coin"), { getCoins: () => coinList });
+  if (!coinList.length) loadCoinUniverse().then((list) => { coinList = list; });
+}
+
 function openModal(body) {
   dialog.show({
     id: "whatif-modal",
-    wide: true,
-    glyph: "target",
-    title: "What if…",
-    sub: "Checks a coin against the live edge — it does not look for one",
+    glyph: "search",
+    title: "Check a coin",
+    sub: "Structure, levels and a plan — the edge check comes with it",
     body,
   });
 }
 
-// ── Start form: coin field + optional side toggle + submit ──
-function formHtml(coin = "", side = "") {
+// ── Start form: coin field + side toggle + submit ──
+function formHtml(coin = "", side = "LONG") {
   // 🚨 Своего заголовка у формы нет: его несёт шапка диалога (dialog.head).
   // Раньше здесь стоял <div class="wi-title">Chart breakdown</div>, и в окне
   // оказывалось два заголовка подряд про одно и то же.
@@ -53,29 +62,42 @@ function formHtml(coin = "", side = "") {
     <div class="wi-lead">Coin + side → the coach lays out trend, levels, RSI, a plan with stop/target and where you are wrong. Structure analysis, <strong>not a proven-edge signal</strong> — the decision and the risk are yours.</div>
     <form id="wi-form" class="wi-form" autocomplete="off">
       <label class="wi-label">Coin (Hyperliquid ticker)</label>
-      ${field({
+      ${coinCombo({
         id: "wi-coin",
         value: coin,
         placeholder: "e.g. BTC, SOL, kBONK",
-        ticker: true,
-        block: true,
         attrs: { "data-autofocus": true },
       })}
       <label class="wi-label">Side (for the entry plan)</label>
-      ${segmented({
-        name: "side",
-        value: side,
-        wide: true,
-        options: [
-          { value: "LONG", label: "Long", tone: "long" },
-          { value: "SHORT", label: "Short", tone: "short" },
-          { value: "", label: "No side" },
-        ],
-      })}
+      ${sideSeg(side)}
       <input type="hidden" id="wi-side" value="${escapeHtml(side)}" />
       ${button({ label: "Analyse", type: "submit", variant: "primary", cta: true, cls: "wi-submit" })}
       <div id="wi-error" class="wi-error" hidden></div>
     </form>`;
+}
+
+function sideSeg(side, cls = "") {
+  return segmented({
+    name: "side",
+    value: side,
+    wide: true,
+    cls,
+    options: [
+      { value: "LONG", label: "Long", icon: "long", tone: "long" },
+      { value: "SHORT", label: "Short", icon: "short", tone: "short" },
+    ],
+  });
+}
+
+// Подвал разбора: та же монета другой стороной — один клик, без возврата в форму.
+function resultActions(side) {
+  return (
+    `<div class="wi-actions">` +
+    `<div class="wi-actions-label">Same coin, other side</div>` +
+    sideSeg(side === "SHORT" ? "SHORT" : "LONG", "wi-reside") +
+    button({ label: "Another coin", icon: "prev", variant: "ghost", cls: "wi-again", attrs: { id: "wi-again" } }) +
+    `</div>`
+  );
 }
 
 // ── Loader: spinner + staged "scanning" steps ──
@@ -137,8 +159,7 @@ function resultHtml(r) {
 
   const c = r.coach;
   // Фолбэк: если coach не построился (нет свечей) — старый fade-вердикт.
-  if (!c || !c.ok) return head + legacyEdgeBlock(r) +
-    button({ label: "Another coin", icon: "prev", variant: "ghost", cls: "wi-again", attrs: { id: "wi-again" } });
+  if (!c || !c.ok) return head + legacyEdgeBlock(r) + resultActions(r.userSide);
 
   // ── Коуч-вердикт (ведущий блок) ──
   let verdictBlock;
@@ -226,7 +247,7 @@ function resultHtml(r) {
     : `No verified edge here — this is analysis, not a signal. ${escapeHtml(c.disclaimer)}`}</div>`;
 
   return head + verdictBlock + structure + flow + levels + plan + cases + learn + edgeNote +
-    button({ label: "Another coin", icon: "prev", variant: "ghost", cls: "wi-again", attrs: { id: "wi-again" } });
+    resultActions(r.userSide);
 }
 
 // Старый fade-вердикт как фолбэк, если coach не построился.
@@ -246,6 +267,7 @@ function legacyEdgeBlock(r) {
 async function runCheck(coin, side) {
   if (busy) return;
   busy = true;
+  lastCoin = coin;
 
   openModal(loaderHtml(coin));
   // Staged "scanning" feel: cycle step text while the real fetch runs.
@@ -265,7 +287,7 @@ async function runCheck(coin, side) {
     clearInterval(stepTimer);
 
     if (r?.error) {
-      openModal(formHtml(coin, side));
+      openForm(coin, side);
       const errEl = document.getElementById("wi-error");
       if (errEl) { errEl.textContent = r.error; errEl.hidden = false; }
       return;
@@ -273,7 +295,7 @@ async function runCheck(coin, side) {
     openModal(resultHtml(r));
   } catch (err) {
     clearInterval(stepTimer);
-    openModal(formHtml(coin, side));
+    openForm(coin, side);
     const errEl = document.getElementById("wi-error");
     if (errEl) { errEl.textContent = "Check failed — try again"; errEl.hidden = false; }
   } finally {
@@ -283,21 +305,25 @@ async function runCheck(coin, side) {
 
 export function initWhatIf() {
   // Закрытие, Escape, замок прокрутки и возврат фокуса — core/dialog.js.
-  const modal = dialog.shell("whatif-modal", { wide: true });
+  const modal = dialog.shell("whatif-modal");
   if (modal) dialog.bindClose(modal);
 
   document.addEventListener("click", (e) => {
-    // Open the form.
     if (e.target.closest("#whatif-btn")) {
-      openModal(formHtml());
+      openForm();
       return;
     }
-    // Back to the form.
     if (e.target.closest("#wi-again")) {
-      openModal(formHtml());
+      openForm();
       return;
     }
-    // Side toggle.
+    // Сторона в подвале разбора — сразу пересчёт по той же монете.
+    const reside = e.target.closest(".wi-reside .seg__btn");
+    if (reside) {
+      if (lastCoin) runCheck(lastCoin, reside.dataset.side || "LONG");
+      return;
+    }
+    // Сторона в форме.
     const sideBtn = e.target.closest("#wi-form .seg__btn");
     if (sideBtn) {
       const val = sideBtn.dataset.side ?? "";

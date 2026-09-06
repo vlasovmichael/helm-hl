@@ -128,6 +128,10 @@
 .strat-detail-row > td {
   background: var(--card-bg-elev);
   padding: 10px 14px !important;
+  /* Кромка оттенком семейства вместо точки: раскрытый блок принадлежит строке
+     над ним, и связь должна быть видна, но точка тут читалась как вторая
+     строка семейства (см. strategies.js). */
+  box-shadow: inset 3px 0 0 hsl(var(--fam-hue, 0) 60% 55% / 0.55);
 }
 .strat-detail {
   display: flex;

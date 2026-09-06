@@ -124,7 +124,14 @@ export function close(root) {
   const hide = () => {
     if (!dlg.root.classList.contains("is-open")) dlg.root.hidden = true;
   };
-  dlg.panel.addEventListener("transitionend", hide, { once: true });
+  // 🚨 Событие только СВОЁ: переход крестика или кнопки внутри панели кончается
+  // раньше, всплывает сюда и прячет диалог на полпути (уход пропадал целиком).
+  const onEnd = (e) => {
+    if (e.target !== dlg.panel) return;
+    dlg.panel.removeEventListener("transitionend", onEnd);
+    hide();
+  };
+  dlg.panel.addEventListener("transitionend", onEnd);
   setTimeout(hide, 400);
   unlockScroll();
   // Фокус обязан вернуться на кнопку, которая открыла диалог: иначе после

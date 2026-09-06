@@ -344,7 +344,9 @@ export function renderHotMovers(payload, fmtTime) {
         // У открытой монеты momentum-ячейки НЕ гасим — для позиции это и есть
         // exit-сигнал «движ ещё жив или выдыхается».
         const [inner, cls] = pctCellTiered(w);
-        const klass = ["hm-window", "r", cls].filter(Boolean).join(" ");
+        // `num` — числовая колонка ядра (.table), ровно под своим `th.num`.
+        // Стоявшего тут `r` в стилях нет вообще: колонки уезжали влево.
+        const klass = ["hm-window", "num", cls].filter(Boolean).join(" ");
         return `<td class="${klass}" data-w="${lbl}">${inner}</td>`;
       })
       .join("");

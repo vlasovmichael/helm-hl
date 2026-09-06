@@ -282,7 +282,9 @@ function stratRowHtml(s, planned, opts = {}) {
     `<td class="strat-col-spark">${stratSparkline(s.spark)}</td></tr>`;
 
   const detail = expanded
-    ? `<tr class="strat-detail-row strat-fam" data-detail="${s.uid}"${famAttr}><td colspan="13">${stratDetail(s)}</td></tr>`
+    // 🚨 Без `strat-fam`: его точка (td:first-child::before) на ячейке во всю
+    // ширину висела по центру раскрытого блока. Оттенок несёт --fam-hue.
+    ? `<tr class="strat-detail-row" data-detail="${s.uid}"${famAttr}><td colspan="13">${stratDetail(s)}</td></tr>`
     : "";
   return main + detail;
 }

@@ -64,12 +64,8 @@
   color: var(--text-muted, var(--text-secondary));
   opacity: 0.85;
 }
-/* Close на строке бумажной позиции — общий .btn.btn--sm; красным он
-   становится только на ховере, чтобы ряд не пестрел. */
-.mp-close-btn:hover:not(:disabled) {
-  border-color: var(--red);
-  color: var(--red);
-}
+/* Close на строке позиции — общий .btn.btn--danger: выход необратим, роль
+   ровно про это. Своих правил у кнопки нет. */
 
 // ── Close-confirmation dialog (styled stand-in for window.confirm) ──
 #mp-confirm .modal__panel {

@@ -90,9 +90,11 @@
           <div class="hm-header-right">
             <span id="hm-actions-slot"></span>
             <span id="hm-tools" class="hm-tools">
+              <!-- Обычный размер, а не btn--sm: это действия карточки, мелкими
+                   они читались подписями. btn--primary занято «Trade». -->
               <button
                 id="mp-paper-btn"
-                class="btn btn--sm"
+                class="btn"
                 type="button"
                 data-card="Open a paper trade (your own paper, Rabbit-style): coin, side, leverage, size off equity. The bot doesn't trade it — you run it by hand."
               >
@@ -100,11 +102,11 @@
               </button>
               <button
                 id="whatif-btn"
-                class="btn btn--sm"
+                class="btn"
                 type="button"
-                data-card="Itchy hands? Type a coin and side — the bot checks it against the fade-high-ER edge and either backs you or stops you"
+                data-card="Itchy hands? Type a coin and side — the coach lays out trend, levels and a plan with stop and target, and says whether the verified edge is with you"
               >
-                What if…
+                <i data-icon="search"></i>Check coin
               </button>
             </span>
             <span

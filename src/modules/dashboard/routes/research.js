@@ -13,8 +13,8 @@
 // иначе дашборд и консоль разъедутся в цифрах.
 
 import { join } from "node:path";
-import { readFileSync, existsSync } from "node:fs";
-import { readJsonl } from "../../../../tools/researchStats.mjs";
+import { readFileSync, existsSync, appendFileSync, mkdirSync } from "node:fs";
+import { readJsonl, stats, clusterCi, winLose } from "../../../../tools/researchStats.mjs";
 import { getFillCosts, getVenueSnapshots } from "../../../core/database.js";
 
 const CACHE_TTL_MS = 60_000;
@@ -211,3 +211,159 @@ export const handleForwards = served("forwards", () => {
 
   return { items, decisionRule: "each one is evaluated exactly once, on its own terms from the registry" };
 });
+
+// ── Разбор одного форварда ──────────────────────────────────────────────────
+// 🚨 Подглядывание ломает предзаявку. Ручка его не запрещает, но требует явный
+// `?peek=1` и пишет просмотр в data/hypotheses/peeks.jsonl: результат, увиденный
+// до срока, перестаёт быть чистым тестом, и это должно остаться записанным.
+const PEEK_LOG = join("data", "hypotheses", "peeks.jsonl");
+
+// Величина гипотезы — по одной на форвард. Нет строки = метрики на строку нет.
+const METRICS = {
+  "fvg-wide-retest-4h": { field: "rNet", unit: "R", label: "net R per trade" },
+  "wide-stop-premium-4h": {
+    field: "diffNet", unit: "R", label: "net R difference, wide − narrow (paired)",
+    legs: { wide: (r) => r.wide?.rNet, narrow: (r) => r.narrow?.rNet },
+  },
+  "session-open-reversal": { field: "rNet", unit: "R", label: "net R per trade" },
+  "squeeze-expansion-4h": { field: "rNet", unit: "R", label: "net R per trade" },
+};
+
+const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
+
+function registryEntry(id) {
+  try {
+    const reg = JSON.parse(readFileSync(join("data", "hypotheses", "registry.json"), "utf8"));
+    return (reg.hypotheses || []).find((h) => h.id === id) || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Прогресс и условия остановки — те же поля, что у списка форвардов. */
+function progressOf(f, rows) {
+  const times = rows.map((r) => r[f.tField]).filter(Number.isFinite).sort((a, b) => a - b);
+  const days = new Set(times.map(dayOf));
+  const n = f.byDay ? days.size : rows.length;
+  let up = 0, down = 0;
+  for (const r of rows) {
+    if (r.btcRegime === "btc_up") up++;
+    else if (r.btcRegime === "btc_down") down++;
+  }
+  const regimeTotal = up + down;
+  const regimeShare = regimeTotal ? Math.min(up, down) / regimeTotal : null;
+  return {
+    n, target: f.target, unit: f.unit, pct: (n / f.target) * 100,
+    calendarDays: days.size, minCalendarDays: MIN_CALENDAR_DAYS,
+    regimeShare, minRegimeShare: MIN_REGIME_SHARE,
+    lastT: times[times.length - 1] ?? null,
+    ready: n >= f.target && days.size >= MIN_CALENDAR_DAYS && (regimeShare ?? 0) >= MIN_REGIME_SHARE,
+  };
+}
+
+/** Одна клетка разбора: среднее с CI + таблица «выиграло/проиграло». */
+function cell(label, values, dayKeys) {
+  return { label, ...winLose(values), stats: stats(values), cluster: clusterCi(values, dayKeys) };
+}
+
+export function handleForwardBreakdown(req, res) {
+  const id = String(req.params.id || "");
+  const f = FORWARDS.find((x) => x.id === id);
+  if (!f) {
+    // Накопители из БД считает execCostStats.mjs: величина там не на строку.
+    const db = DB_FORWARDS.find((x) => x.id === id);
+    res.json(db
+      ? { ok: true, id, label: db.label, hasMetric: false,
+          note: "This one is a cost counter, not a per-trade bet — it is read once by tools/execCostStats.mjs." }
+      : { ok: false, reason: "unknown-forward" });
+    return;
+  }
+
+  let payload;
+  try {
+    const rows = readJsonl(f.file);
+    const prog = progressOf(f, rows);
+    const reg = registryEntry(id);
+    const head = {
+      ok: true, id, label: f.label, hasMetric: !!METRICS[id],
+      progress: prog,
+      // Правило печатает фронт по-английски из порогов: в реестре оно русское.
+      description: reg?.description || null,
+    };
+    const peek = req.query?.peek === "1";
+    if (!prog.ready && !peek) { res.json({ ...head, locked: true }); return; }
+    const m = METRICS[id];
+    if (!m) { res.json({ ...head, locked: false }); return; }
+
+    const usable = rows.filter((r) => Number.isFinite(r[m.field]) && Number.isFinite(r[f.tField]));
+    const values = usable.map((r) => r[m.field]);
+    const dayKeys = usable.map((r) => dayOf(r[f.tField]));
+    const pick = (fn) => {
+      const sel = usable.filter(fn);
+      return { values: sel.map((r) => r[m.field]), days: sel.map((r) => dayOf(r[f.tField])) };
+    };
+    const up = pick((r) => r.btcRegime === "btc_up");
+    const down = pick((r) => r.btcRegime === "btc_down");
+    const longs = pick((r) => r.side === "LONG");
+    const shorts = pick((r) => r.side === "SHORT");
+
+    const all = cell("All", values, dayKeys);
+    const cells = [
+      cell("BTC up", up.values, up.days),
+      cell("BTC down", down.values, down.days),
+      cell("LONG", longs.values, longs.days),
+      cell("SHORT", shorts.values, shorts.days),
+    ].filter((c) => c.n > 0);
+
+    // Ноги пары: без них не видно, какая из них двигает разницу.
+    const legs = m.legs
+      ? Object.entries(m.legs).map(([name, get]) => {
+          const v = usable.map(get).filter(Number.isFinite);
+          return { label: name, ...winLose(v), stats: stats(v) };
+        })
+      : null;
+
+    // Порог из предзаявки: среднее > 0, кластерный CI мимо нуля, тот же знак в
+    // обеих клетках режима. Провал любого = отвергнута.
+    const upCell = cells.find((c) => c.label === "BTC up");
+    const downCell = cells.find((c) => c.label === "BTC down");
+    const checks = [
+      { label: "mean above zero", pass: all.stats?.mean > 0 },
+      { label: "clustered CI clears zero", pass: !!all.cluster && !all.cluster.zeroInside },
+      {
+        label: "positive in both BTC regimes",
+        pass: (upCell?.stats?.mean ?? -1) > 0 && (downCell?.stats?.mean ?? -1) > 0,
+      },
+    ];
+
+    if (peek && !prog.ready) {
+      try {
+        mkdirSync(join("data", "hypotheses"), { recursive: true });
+        appendFileSync(PEEK_LOG, JSON.stringify({ id, at: new Date().toISOString(), n: prog.n, target: f.target }) + "\n");
+      } catch { /* журнал подглядываний не должен ронять ответ */ }
+    }
+
+    payload = {
+      ...head,
+      locked: false,
+      peeked: peek && !prog.ready,
+      metric: { field: m.field, unit: m.unit, label: m.label },
+      all,
+      cells,
+      legs,
+      checks,
+      verdict: checks.every((c) => c.pass) ? "passes" : "fails",
+    };
+  } catch (err) {
+    payload = { ok: false, reason: "read-error", message: String(err?.message || err) };
+  }
+  res.json(payload);
+}
+
+/** Сколько раз в незакрытый форвард уже заглядывали (витрина спрашивает). */
+export function handleForwardPeeks(_req, res) {
+  const rows = existsSync(PEEK_LOG) ? readJsonl(PEEK_LOG) : [];
+  const byId = {};
+  for (const r of rows) byId[r.id] = (byId[r.id] || 0) + 1;
+  res.json({ ok: true, byId, total: rows.length });
+}

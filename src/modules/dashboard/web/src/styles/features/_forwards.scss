@@ -1,0 +1,193 @@
+// Форвард-тесты: строка-накопитель (она же кнопка) и разбор в диалоге.
+
+.fw-row {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+
+  &:hover,
+  &:focus-visible {
+    background: var(--card-bg-hover);
+    border-color: var(--border);
+    outline: none;
+  }
+}
+.fw-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fw-label {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.fw-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+
+  &.is-stale {
+    color: var(--red);
+  }
+}
+.fw-caret {
+  color: var(--text-faint);
+}
+.fw-bar {
+  height: 6px;
+  margin: 5px 0 4px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--bg-elevated);
+
+  span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+  }
+}
+.fw-row.is-ready .fw-bar span {
+  background: var(--green);
+}
+.fw-meta {
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.fw-stale {
+  color: var(--red);
+}
+.fw-note {
+  margin-top: 10px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+// ── Диалог разбора ──
+#fw-modal {
+  .fw-lead,
+  .fw-rule {
+    font-size: var(--fs-small);
+    line-height: 1.5;
+    color: var(--text-muted);
+  }
+  .fw-rule {
+    margin: 16px 0 4px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+  .fw-loading {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 18px 0;
+    color: var(--text-muted);
+  }
+  .fw-warn {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 12px 0;
+    padding: 10px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--warn-soft, var(--canvas-inset));
+    font-size: var(--fs-small);
+    line-height: 1.5;
+    color: var(--text-secondary);
+
+    > .icon {
+      flex: 0 0 auto;
+      margin-top: 2px;
+      color: var(--warn);
+    }
+  }
+
+  .fw-verdict {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding: 12px;
+    border-radius: 12px;
+    background: var(--canvas-inset);
+  }
+  .fw-verdict-head {
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+  .fw-verdict.is-pass .fw-verdict-icon {
+    color: var(--green);
+  }
+  .fw-verdict.is-fail .fw-verdict-icon {
+    color: var(--red);
+  }
+  .fw-checks {
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--fs-small);
+
+    li {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+  }
+
+  // Три числа, ради которых окно и открывают.
+  .fw-headline {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 4px;
+
+    > div {
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--canvas-inset);
+    }
+    span {
+      display: block;
+      font-size: var(--fs-label);
+      color: var(--text-muted);
+    }
+    b {
+      font-family: var(--font-mono);
+      font-size: var(--fs-body);
+    }
+  }
+  .fw-metric-note {
+    margin-bottom: 14px;
+    font-size: var(--fs-label);
+    color: var(--text-faint);
+  }
+  .fw-sub-h {
+    margin: 16px 0 6px;
+    font-size: var(--fs-label);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: var(--ls-wide);
+    color: var(--text-muted);
+  }
+  .fw-table {
+    width: 100%;
+  }
+}
+
+.fw-pos {
+  color: var(--green);
+}
+.fw-neg {
+  color: var(--red);
+}

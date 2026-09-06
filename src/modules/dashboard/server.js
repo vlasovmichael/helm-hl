@@ -54,7 +54,7 @@ import {
 } from "./auth.js";
 import { handleMarketContext } from "./routes/marketContext.js";
 import { handleOiOverview, handleOiCoin } from "./routes/oiCollector.js";
-import { handleFvgForward, handleForwards } from "./routes/research.js";
+import { handleFvgForward, handleForwards, handleForwardBreakdown, handleForwardPeeks } from "./routes/research.js";
 import { handleWinners, handleWinnersPositions, handleWinnersEvents } from "./routes/winners.js";
 import {
   handleList as handleManualPaperList,
@@ -1125,6 +1125,8 @@ export function startDashboard() {
   // Прогресс форварда FVG — только счётчик и даты, метрик по определению нет.
   app.get("/api/fvg-forward", handleFvgForward);
   app.get("/api/forwards", handleForwards);
+  app.get("/api/forwards/peeks", handleForwardPeeks);
+  app.get("/api/forwards/:id/breakdown", handleForwardBreakdown);
   app.get("/api/position-nanny", handlePositionNanny);
   app.get("/api/coin-of-day", handleCoinOfDay);
   app.get("/api/entry-filter", handleEntryFilter);

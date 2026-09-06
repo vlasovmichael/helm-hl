@@ -227,7 +227,6 @@
 
 // Сегмент Long / Short — общий контрол (.seg--wide, core/_controls.scss).
 // Здесь остались только отступы внутри листа.
-.tt-seg--side { margin-bottom: 12px; }
 .tt-seg--pct { margin: 12px 0; }
 
 // Карточки маржи/плеча и слайдер — общие блоки диалога:
@@ -239,42 +238,8 @@
 
 // ── Поле монеты с выпадашкой подсказок ──
 .tt-card--coin { overflow: visible; } // иначе список обрезался бы карточкой
-.tt-combo {
-  position: relative;
-}
-.tt-combo__list {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  right: 0;
-  z-index: 5;
-  max-height: 232px;
-  margin: 0;
-  padding: 5px;
-  overflow-y: auto;
-  list-style: none;
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  background: var(--card-bg-elev);
-  box-shadow: var(--shadow);
-  animation: tt-view-in 140ms ease-out;
-}
-.tt-combo__item {
-  padding: 9px 11px;
-  border-radius: 8px;
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--fs-base);
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  cursor: pointer;
-
-  &:hover,
-  &.is-on {
-    background: var(--accent-soft);
-    color: var(--accent);
-  }
-}
+// Поле монеты с выпадашкой — общий контрол `.combo` (core/_controls.scss):
+// тем же полем пользуются ручной папер и разбор монеты.
 
 // ── Строки-факты ──
 .tt-rows {
@@ -477,7 +442,7 @@
     opacity: 1;
   }
   .tt-view--enter,
-  .tt-combo__list,
+  .combo__list,
   .tt-alert,
   .tt-tab.is-on::after { animation: none; }
 }

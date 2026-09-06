@@ -44,7 +44,8 @@ function rowHtml(p) {
       <td class="num tg-age">${fmtSince(p.entryTime)}</td>
       <td class="center">${button({
         label: "Close",
-        size: "sm",
+        icon: "close",
+        variant: "danger",
         cls: "tg-close-btn",
         attrs: {
           "data-tg-close-id": p.id,

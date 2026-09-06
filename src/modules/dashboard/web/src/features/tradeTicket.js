@@ -20,6 +20,7 @@ import { escapeHtml, fmtUsd, fmtPrice } from "../utils/format.js";
 import * as dialog from "../core/dialog.js";
 import { icon } from "../core/icon.js";
 import { button, segmented } from "../core/ui.js";
+import { attachCoinCombo, coinCombo, suggestCoins } from "../core/coinCombo.js";
 
 // Биржевой минимум ордера на HL. Меньше — отказ, поэтому это блокер, а не
 // предупреждение (Rabby показывает ровно его же красным).
@@ -218,25 +219,8 @@ function listBlock(cls, items, glyph = "") {
     .join("")}</ul>`;
 }
 
-/**
- * Подсказки тикеров под вводом. Совпадение с НАЧАЛА строки идёт выше, чем
- * вхождение в середине: набирая «AC», человек ищет ACE, а не CASHCAT.
- */
-export function suggestCoins(query, coins, limit = 8) {
-  const q = String(query || "").trim().toUpperCase();
-  const list = Array.isArray(coins) ? coins : [];
-  if (!q) return list.slice(0, limit);
-  const starts = [];
-  const contains = [];
-  for (const c of list) {
-    const u = String(c).toUpperCase();
-    if (u === q) continue; // точное совпадение уже введено — подсказывать нечего
-    if (u.startsWith(q)) starts.push(c);
-    else if (u.includes(q)) contains.push(c);
-    if (starts.length >= limit) break;
-  }
-  return [...starts, ...contains].slice(0, limit);
-}
+// Подбор переехал в core/coinCombo.js. Ре-экспорт — его проверяют тесты тикета.
+export { suggestCoins };
 
 /** Слайдер с залитой левой частью — залив рисуем градиентом по значению. */
 function slider(name, value, min, max, step) {
@@ -261,8 +245,7 @@ function createModal(io) {
     submitting: false,
     error: null,
     result: null,
-    suggestOpen: false, // видна ли выпадашка тикеров
-    suggestIdx: 0,      // подсвеченный пункт (для ↑/↓ + Enter)
+    combo: { open: false, idx: 0 }, // состояние выпадашки тикеров
   };
   let ctx = { price: null, available: 0, maxLeverage: FALLBACK_LEVERAGE_CAP, day: {}, adoptEnabled: true, positions: [] };
   let el = null;
@@ -325,27 +308,6 @@ function createModal(io) {
     return `${escapeHtml(fmtPrice(botStop))} <i class="tt-row__sub">−${Number(ctx.stopDistPct).toFixed(1)}% ATR</i>`;
   }
 
-  /** Префикс id пунктов выпадашки (для aria-activedescendant). */
-  const COMBO_OPT_ID = "tt-coin-opt-";
-
-  /** Выпадашка подсказок под полем монеты. Пусто → ничего не рисуем. */
-  function suggestList() {
-    if (!state.suggestOpen) return "";
-    const items = suggestCoins(state.coin, ctx.coins);
-    if (!items.length) return "";
-    // id на каждом пункте — чтобы input мог указать на подсвеченный через
-    // aria-activedescendant: без этого скринридер читает список, но молчит о
-    // том, где сейчас стоит выбор при навигации стрелками.
-    return `<ul class="tt-combo__list" role="listbox">${items
-      .map(
-        (c, i) =>
-          `<li class="tt-combo__item ${i === state.suggestIdx ?"is-on" : ""}" role="option"
-               id="${COMBO_OPT_ID}${i}"
-               aria-selected="${i === state.suggestIdx}" data-pick="${escapeHtml(c)}">${escapeHtml(c)}</li>`,
-      )
-      .join("")}</ul>`;
-  }
-
   function renderOpen() {
     const v = validateOpen(state, ctx);
     const isShort = state.side === "short";
@@ -385,13 +347,7 @@ function createModal(io) {
            монету, её нельзя было бы поменять не закрыв модалку. -->
       <div class="tt-card tt-card--coin">
         <div class="tt-card__label">Coin</div>
-        <div class="tt-combo">
-          <input class="tt-coin-input" data-f="coin" type="text" placeholder="ticker"
-                 autocomplete="off" autocapitalize="characters" spellcheck="false"
-                 role="combobox" aria-expanded="${state.suggestOpen ? "true" : "false"}"
-                 aria-autocomplete="list" value="${escapeHtml(state.coin)}">
-          ${suggestList()}
-        </div>
+        ${coinCombo({ value: state.coin, attrs: { "data-f": "coin" } })}
       </div>
 
       <div class="tt-card">
@@ -680,113 +636,41 @@ function createModal(io) {
     }
   }
 
-  /**
-   * Поле монеты с выпадашкой. Список перерисовывается ТОЧЕЧНО, без render():
-   * полная перерисовка сбрасывала бы фокус и каретку на каждом символе.
-   */
+  /** Поле монеты — общий контрол (core/coinCombo.js). */
   function wireCombo(input) {
-    const combo = input.parentElement;
-
-    const redrawList = () => {
-      combo.querySelector(".tt-combo__list")?.remove();
-      combo.insertAdjacentHTML("beforeend", suggestList());
-      input.setAttribute("aria-expanded", state.suggestOpen ? "true" : "false");
-      // Указываем на подсвеченный пункт, только если он реально нарисован.
-      const active = combo.querySelector(".tt-combo__item.is-on");
-      if (active) input.setAttribute("aria-activedescendant", active.id);
-      else input.removeAttribute("aria-activedescendant");
-      combo.querySelectorAll("[data-pick]").forEach((li) => {
-        // mousedown, а не click: blur поля успел бы закрыть список раньше клика.
-        li.addEventListener("mousedown", (e) => {
-          e.preventDefault();
-          pick(li.dataset.pick);
-        });
-      });
-    };
-
-    const pick = (coin) => {
-      state.coin = coin;
-      state.suggestOpen = false;
-      state.suggestIdx = 0;
-      input.value = coin;
-      // Рисуем СРАЗУ, не дожидаясь сети: клик по монете обязан отвечать
-      // мгновенно. Раньше здесь стоял `loadContext().then(render)`, и выбор
-      // «думал» 3-5 секунд — столько живой запрос ATR-свечей по незнакомой
-      // монете ждёт бюджета веса.
-      //
-      // Монето-зависимые поля гасим до приезда ответа: показать цену и плечо
-      // ПРЕДЫДУЩЕЙ монеты под именем новой — хуже, чем показать прочерк.
-      ctx = {
-        ...ctx,
-        price: null,
-        stopDistPct: null,
-        stopBasis: null,
-        maxLeverage: null,
-        exchangeMaxLeverage: null,
-        coinKnown: null,
-        hasPosition: false,
-        cooldown: null,
-      };
-      render();
-      clearTimeout(ctxTimer);
-      loadContext().then(softRefresh);
-    };
-
-    input.addEventListener("input", () => {
-      const clean = input.value.toUpperCase().replace(/[^A-Z0-9:_-]/g, "");
-      if (input.value !== clean) input.value = clean;
-      state.coin = clean;
-      state.error = null;
-      state.suggestOpen = true;
-      state.suggestIdx = 0;
-      redrawList();
-      scheduleContext();
-      softRefresh();
-    });
-
-    input.addEventListener("focus", () => {
-      state.suggestOpen = true;
-      state.suggestIdx = 0;
-      redrawList();
-    });
-
-    input.addEventListener("blur", () => {
-      state.suggestOpen = false;
-      redrawList();
-    });
-
-    input.addEventListener("keydown", (e) => {
-      const items = suggestCoins(state.coin, ctx.coins);
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        if (!items.length) return;
-        e.preventDefault();
-        state.suggestOpen = true;
-        const step = e.key === "ArrowDown" ? 1 : -1;
-        state.suggestIdx = (state.suggestIdx + step + items.length) % items.length;
-        redrawList();
-      } else if ((e.key === "Home" || e.key === "End") && state.suggestOpen && items.length) {
-        // Прыжок к краям списка. Home/End в поле ввода иначе гоняли бы каретку
-        // по тексту тикера — при открытой выпадашке полезнее список.
-        e.preventDefault();
-        state.suggestIdx = e.key === "Home" ? 0 : items.length - 1;
-        redrawList();
-      } else if (e.key === "Enter" && state.suggestOpen && items[state.suggestIdx]) {
-        e.preventDefault();
-        pick(items[state.suggestIdx]);
-      } else if (e.key === "Escape" && state.suggestOpen) {
-        // Гасим список, но НЕ модалку — иначе Esc закрывал бы всё разом.
-        e.stopPropagation();
-        state.suggestOpen = false;
-        redrawList();
-      }
+    attachCoinCombo(input, {
+      getCoins: () => ctx.coins,
+      state: state.combo,
+      onInput: (coin) => {
+        state.coin = coin;
+        state.error = null;
+        scheduleContext();
+        softRefresh();
+      },
+      onPick: (coin) => {
+        state.coin = coin;
+        // Рисуем сразу: запрос ATR-свечей ждёт бюджета веса 3-5 секунд. Поля
+        // монеты гасим — цена прошлой монеты под именем новой хуже прочерка.
+        ctx = {
+          ...ctx,
+          price: null,
+          stopDistPct: null,
+          stopBasis: null,
+          maxLeverage: null,
+          exchangeMaxLeverage: null,
+          coinKnown: null,
+          hasPosition: false,
+          cooldown: null,
+        };
+        render();
+        clearTimeout(ctxTimer);
+        loadContext().then(softRefresh);
+      },
     });
   }
 
   // Смена монеты меняет цену, ATR-стоп и потолок плеча → перезапрашиваем
   // контекст, но не на каждый символ: «CHIP» — это четыре нажатия.
-  // Смена монеты меняет цену, ATR-стоп и потолок плеча → перезапрашиваем
-  // контекст, но не на каждый символ: «CHIP» — это четыре нажатия.
-  //
   // Ответ вливаем через softRefresh, а НЕ через render(): полная перерисовка
   // на каждом символе выглядела как перезагрузка окна (переигрывалась анимация
   // появления) и сбрасывала фокус с кареткой.

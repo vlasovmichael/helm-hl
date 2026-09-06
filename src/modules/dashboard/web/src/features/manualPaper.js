@@ -14,13 +14,15 @@ import { escapeHtml, fmtUsd, fmtPct, fmtPrice } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 import * as dialog from "../core/dialog.js";
 import { icon } from "../core/icon.js";
-import { button, segmented, field, slider, card } from "../core/ui.js";
+import { button, segmented, slider, card } from "../core/ui.js";
+import { attachCoinCombo, coinCombo } from "../core/coinCombo.js";
 
 let busy = false;
 let lastEquity = 0;
 // coin (UPPERCASE) → max leverage allowed (from HL universe). Used to clamp the
 // leverage slider after a coin is picked — most coins on the wallet cap at 3–10×.
 let coinLeverage = {};
+let coinList = [];
 
 const WALLET_LEV_CAP = 10; // practical cap on the wallet; never offer more
 const DEFAULT_LEV = 3;     // most positions ride 3×
@@ -66,16 +68,12 @@ function formHtml(prefill = {}) {
 
       ${card({
         label: "Coin",
-        below:
-          field({
-            id: "mp-coin",
-            value: coin.toUpperCase(),
-            placeholder: "e.g. BTC, SOL, kBONK",
-            ticker: true,
-            block: true,
-            cls: "field--coin",
-            attrs: { "data-autofocus": true, list: "mp-coin-list" },
-          }) + `<datalist id="mp-coin-list"></datalist>`,
+        below: coinCombo({
+          id: "mp-coin",
+          value: coin.toUpperCase(),
+          placeholder: "e.g. BTC, SOL, kBONK",
+          attrs: { "data-autofocus": true },
+        }),
       })}
 
       ${card({
@@ -172,12 +170,6 @@ function recalc() {
   return { lev, notional, margin };
 }
 
-// Fill the <datalist> for the coin autocomplete (typed input, not a long list).
-function populateCoins(coins) {
-  const list = document.getElementById("mp-coin-list");
-  if (!list) return;
-  list.innerHTML = coins.map((c) => `<option value="${escapeHtml(c)}"></option>`).join("");
-}
 
 async function openModal(prefill = {}) {
   dialog.show({
@@ -193,11 +185,11 @@ async function openModal(prefill = {}) {
     const data = await fetchJson("/api/manual-paper");
     lastEquity = pickNum(data?.equity, 0);
     coinLeverage = data?.leverage && typeof data.leverage === "object" ? data.leverage : {};
-    populateCoins(Array.isArray(data?.coins) ? data.coins : []);
+    coinList = Array.isArray(data?.coins) ? data.coins : [];
   } catch {
     lastEquity = 0;
     coinLeverage = {};
-    populateCoins([]);
+    coinList = [];
   }
   applyCoinLeverageCap(); // honors prefill coin + refreshes the calc line
 
@@ -208,9 +200,11 @@ async function openModal(prefill = {}) {
       b.classList.add("is-on");
     }),
   );
-  // Re-check the coin's leverage cap whenever the typed coin changes.
-  document.getElementById("mp-coin").addEventListener("change", applyCoinLeverageCap);
-  document.getElementById("mp-coin").addEventListener("input", applyCoinLeverageCap);
+  attachCoinCombo(document.getElementById("mp-coin"), {
+    getCoins: () => coinList,
+    onInput: applyCoinLeverageCap,
+    onPick: applyCoinLeverageCap,
+  });
   levEl().addEventListener("input", recalc);
   sizeEl().addEventListener("input", recalc);
   form.addEventListener("submit", onSubmit);
@@ -295,7 +289,8 @@ function rowHtml(p) {
       }${sub}</td>
       <td class="center">${button({
         label: "Close",
-        size: "sm",
+        icon: "close",
+        variant: "danger",
         cls: "mp-close-btn",
         attrs: {
           "data-mp-close-id": p.id,
