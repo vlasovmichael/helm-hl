@@ -9,30 +9,19 @@ description: >-
 
 Прод — докер-контейнер `hl-paper-scanner` на Oracle, доступ по `ssh oracle`.
 
-## Перед выкаткой
-
-1. `npm test` локально — сторожа + тесты. Красное не деплоим.
-2. Изменения в `src/modules/dashboard/web/` требуют пересборки витрины:
-   она собирается внутри docker build, отдельного шага не нужно.
-3. Закоммитить и запушить в `main` — прод тянет из git, не из локальной папки.
-
 ## Выкатка
 
 ```bash
-ssh oracle 'cd ~/hl-paper-scanner && git pull -q origin main && git log --oneline -1'
-ssh oracle 'cd ~/hl-paper-scanner && docker compose build -q hl-paper-scanner'
-ssh oracle 'cd ~/hl-paper-scanner && docker compose up -d hl-paper-scanner'
+.claude/skills/deploy/deploy.sh
 ```
 
-## Проверка после старта
+Скрипт сам: гоняет `npm test`, отказывается выкатывать при незакоммиченном
+(прод тянет из git), пушит, тянет на Oracle, пересобирает образ, поднимает
+контейнер и показывает логи. Красные тесты — выкатки нет.
 
-Ждать ~25с, потом:
+Проверить прод, ничего не трогая: `deploy.sh --check`.
 
-```bash
-ssh oracle 'docker logs --tail 40 hl-paper-scanner 2>&1 | grep -iE "error|started|adopt"'
-```
-
-Убедиться: тик идёт, WS-фиды подключились, открытые позы подхвачены со стопами.
+Витрина дашборда собирается внутри docker build, отдельного шага нет.
 
 ## 🚨 База
 
