@@ -237,7 +237,7 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS bot_oid_log_coin_ts_idx ON bot_oid_log (coin, ts);
   `);
 
-  // Candy Girl signal log — сигнал + авто-резолв (TP раньше SL = win, наоборот
+  // Candy Girl signal log — сигнал + авто-резолв (TP прежде SL = win, обратное
   // = loss, ни то ни другое за таймаут = timeout). Точность радара меряется тут.
   db.exec(`
     CREATE TABLE IF NOT EXISTS candy_signals (
@@ -325,19 +325,13 @@ export function initDB() {
     CREATE INDEX IF NOT EXISTS coin_of_day_status_idx ON coin_of_day_picks (status);
   `);
 
-  // Форвард-лог «Монеты дня», версия 2. Старая таблица выше —
-  // архив закрытого замера, её не трогаем.
+  // Форвард-лог «Монеты дня», версия 2. Таблица выше — архив закрытого замера.
   //
-  // 🚨 Мерим ДРУГОЕ. Версия 1 писала исход по стопу/цели и упиралась в таймаут
-  // 2ч: цель бралась 1 раз из 103, то есть замер отвечал на вопрос «успевает ли
-  // сетап за два часа», а не «есть ли в нём что-то». Здесь исход — чистый ход
-  // цены на 4/8/24ч, без стопа и без срока. Юзер прямо сказал, что смотрел
-  // именно эти горизонты («подождать 4-6-8 часов»).
-  //
-  // 🚨 Рядом пишется ход BTC за ТО ЖЕ окно. Без этого столбца лог не отвечает
-  // на главный вопрос («или так совпало с ценой битка») — падение альты на
-  // общем сливе рынка неотличимо от отработки фейда. Решение принимается по
-  // excess = chg − btc, а не по chg.
+  // 🚨 Исход = чистый ход цены на 4/8/24ч, без стопа и без срока: со стопом и
+  // таймаутом 2ч замер отвечает «успевает ли сетап за два часа», а не «есть ли
+  // в нём что-то».
+  // 🚨 Рядом пишется ход BTC за ТО ЖЕ окно: без него падение альты на общем
+  // сливе неотличимо от отработки фейда. Решение — по excess = chg − btc.
   db.exec(`
     CREATE TABLE IF NOT EXISTS cod_forward (
       date        TEXT    NOT NULL,
@@ -795,11 +789,9 @@ export function closePosition(id, data) {
  */
 export function getActivePosition() {
   const mode = config.isProduction ? 'PRODUCTION' : 'PAPER';
-  // Single-slot = ТОЛЬКО бот-стратегии (hunter/carry/...). Adopt-позы исключаем:
-  // у них свой multi-slot аксессор getActiveAdoptPositions(). Иначе свежая adopt-поза
-  // с бОльшим id перехватывала слот (ORDER BY id DESC) и осиротляла реальную позу
-  // бота — она выпадала из ownedCoins и бот бросал её как «ничейную ручную»
-  //. strategy_id IS NULL = легаси carry, оставляем.
+  // 🚨 Single-slot = ТОЛЬКО бот-стратегии: adopt-позы идут через свой multi-slot
+  // аксессор. Иначе свежая adopt-поза перехватывает слот по ORDER BY id DESC и
+  // осиротляет позу бота. strategy_id IS NULL = легаси carry, оставляем.
   return getDb()
     .prepare("SELECT * FROM positions WHERE status = ? AND mode = ? AND (strategy_id IS NULL OR strategy_id != 'adopt') ORDER BY id DESC LIMIT 1")
     .get('OPEN', mode);
@@ -1007,10 +999,8 @@ export function getActivePaperCoins() {
   return new Set(rows.map((r) => (r.coin || '').toUpperCase()).filter(Boolean));
 }
 
-// Держим 3 года: Performance-график «All» должен показывать ВСЮ жизнь счёта
-// (депозиты-ступеньки, пики вроде $115). Строка снапшота ~16 байт, 288/день ×
-// 3 года ≈ 315k строк ≈ пара МБ — пренебрежимо. Раньше было 35 дней и обрезало
-// старые пики.
+// 3 года: Performance-график «All» показывает ВСЮ жизнь счёта, а короткое окно
+// срезает старые пики. 315k строк ≈ пара МБ — пренебрежимо.
 const EQUITY_SNAPSHOT_RETENTION_MS = 1095 * 24 * 3_600_000; // 3 года
 
 /**
@@ -1534,13 +1524,9 @@ export function archiveAndClearHistory() {
   );
 
   const merged = [...existing, ...newRows];
-  // Атомарная запись через tmp + rename — как saveBotState/balanceCache.
-  // Прямой writeFileSync открывал бы существующий файл на запись и падал с
-  // EACCES, если владелец файла (opc) ≠ UID процесса в контейнере (node).
-  // rename требует прав только на директорию data/ (она 777).
-  // Минифицированный JSON (без отступов): архив — машинный append-only лог,
-  // pretty-print раздувал его в ~2× (12k строк → 236 КБ). compactHistoryArchive
-  // переписывает существующий файл в тот же формат.
+  // 🚨 Атомарно через tmp + rename: прямой writeFileSync падает с EACCES, когда
+  // владелец файла на хосте ≠ UID процесса в контейнере. rename требует прав
+  // только на data/. JSON минифицирован — архив машинный, pretty-print × 2.
   const tmpPath = `${ARCHIVE_PATH}.${process.pid}.tmp`;
   writeFileSync(tmpPath, JSON.stringify(merged), 'utf-8');
   renameSync(tmpPath, ARCHIVE_PATH);

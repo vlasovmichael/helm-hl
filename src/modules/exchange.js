@@ -271,8 +271,7 @@ export async function checkAccountLeverage(maxSafe = 1) {
  * @returns {Promise<Array>}
  */
 export async function getPositions() {
-  // Через hlInfo (а не raw SDK), чтобы все /info-запросы шли через единый
-  // rate-limiter. Раньше SDK-вызовы балансов/позиций конкурировали с candle-
+  // 🚨 Через hlInfo, а не raw SDK: иначе балансы/позиции конкурируют с candle-
   // флудом за IP-бюджет 1200/min без координации → "unknown error"/$0.
   const state = await hlInfo(
     { type: "clearinghouseState", user: config.wallet.address },
@@ -344,11 +343,9 @@ export async function fetchSpotUsdcBalance() {
 
 /**
  * Fetcher для balanceCache. 🚨 Источник баланса — spotClearinghouseState:
- * perp-часть unified-аккаунта by design $0 без открытых позиций и годится
- * только для unrealized PnL. Контракт кэша {accountValue, withdrawable,
- * unrealizedPnl}:
+ * perp-часть unified-аккаунта by design $0 и годится только для unrealized PnL.
  * accountValue = spot.USDC.total + perp.unrealizedPnl
- * withdrawable = spot.USDC.total - spot.USDC.hold
+ * withdrawable = spot.USDC.total − spot.USDC.hold
  * unrealizedPnl = perp.marginSummary.totalUnrealizedPnl
  */
 async function fetchBalanceFromSdk() {
@@ -508,15 +505,12 @@ export async function getLivePriceMap(maxAgeMs = ACCT_PRICES_TTL_MS) {
 }
 
 /**
- * Live trade-side price для дашборда. Используется только для отображения
- * "Now" линии на графике, чтобы цена совпадала с close последней свечи.
+ * Live trade-side price для дашборда: линия "Now" должна совпадать с close
+ * последней свечи.
  *
- * Источник #1 — WS-фид allMids (priceFeed): мгновенно, без HTTP. Дашборд
- * рендерит цену в 5+ местах на каждый рефреш, и раньше каждый вызов летел
- * тяжёлым metaAndAssetCtxs (все ~760 монет) → штормил rate-limit → 429 →
- * бэклог в hlClient → Scout ловил RTT > 10s. Теперь берём mid из того же
- * WS-кэша, что и торговые тики. HTTP остаётся только фолбэком, если фид
- * протух (reconnect и т.п.).
+ * 🚨 Источник — WS-фид allMids: дашборд рендерит цену в 5+ местах за рефреш, и
+ * поход в metaAndAssetCtxs (все ~760 монет) на каждый вызов штормит rate-limit.
+ * HTTP — только фолбэк на протухший фид.
  */
 export async function getLivePrice(coin) {
   // Fast path: свежий WS-фид.
@@ -548,18 +542,9 @@ export async function getLivePrice(coin) {
 // ─────────────────────────────────────────────────
 //  Order primitives — единственный шов к торговому API биржи
 // ─────────────────────────────────────────────────
-//
-// ЗАЧЕМ ЭТОТ БЛОК: раньше executor лез в SDK напрямую
-// (getExchange().custom.marketOpen / .exchange.placeOrder / .cancelOrder) и
-// сам лепил суффикс "-PERP". Это «протекающая абстракция»: смена биржи
-// требовала правок по всему executor'у. Теперь ВСЯ торговля идёт через эти 4
-// примитива — при переезде на другую биржу переписываются только они
-// (+ парсинг fills), а не логика стратегий.
-//
-// Поведение 1:1 с прежними сырыми вызовами. Retry/backoff осознанно НЕ здесь:
-// он остаётся на местах вызова (разные label/maxRetries под операцию).
-// Формат цены (formatHlPrice) пока тоже у вызова — это HL-математика; в шаг 2
-// (под конкретную новую биржу) она переедет внутрь placeTrigger.
+// 🚨 Вся торговля идёт через эти 4 примитива, в SDK напрямую executor не лезет:
+// при переезде на другую биржу переписываются только они (+ парсинг fills).
+// Retry/backoff и формат цены осознанно НЕ здесь, а на местах вызова.
 
 /**
  * Маркет-открытие (IoC-лимит как имитация маркета на HL).
