@@ -32,11 +32,11 @@
     "@eslint/js": "^10.0.1",
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.11.0",
-    "eslint": "^10.9.1",
-    "globals": "^17.11.0",
+    "eslint": "^10.10.0",
+    "globals": "^17.12.0",
     "lightweight-charts": "^5.2.1",
-    "lucide": "^1.40.0",
-    "sass": "^1.101.0",
-    "vite": "^8.0.16"
+    "lucide": "^1.41.0",
+    "sass": "^1.104.0",
+    "vite": "^8.2.2"
   }
 }
