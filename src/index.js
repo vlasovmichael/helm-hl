@@ -20,6 +20,7 @@ import { reportRestartIfUnclean } from './app/restartWatch.js';
 import { startPriceFeed } from './core/priceFeed.js';
 import { startHealthWatch } from './app/healthWatch.js';
 import { startFillFeed } from './core/fillFeed.js';
+import { markFillDirty } from './app/integrity.js';
 import { recordFill } from './modules/execCosts.js';
 import { startWsExitLoop } from './app/wsExitTick.js';
 import { startTickWatchdog } from './app/tickWatchdog.js';
@@ -107,6 +108,10 @@ async function main() {
       for (const f of fills ?? []) if (recordFill(f)) saved++;
       if (saved) logger.debug(`[ExecCosts] записано филлов: ${saved}`);
 
+      // 🚨 Сброса интервала мало: clearinghouseState отстаёт от филла на секунду-две,
+      // и сверка сразу после филла видит СТАРУЮ позу, но окно на 60с уже сожжено.
+      // Метим монету грязной — сверка форсируется каждый тик, пока не сойдётся.
+      markFillDirty((fills ?? []).map((f) => f.coin));
       state.lastIntegrityCheck = 0;
       tick().catch((err) => logger.warn(`[FillFeed] тик после филла упал: ${err.message}`));
     },

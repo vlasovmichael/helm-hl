@@ -22,7 +22,68 @@ import {
   INTEGRITY_CHECK_INTERVAL_MS,
   INTEGRITY_GRACE_PERIOD_MS,
   INTEGRITY_VANISH_DEFER_MS,
+  INTEGRITY_FILL_RECHECK_MS,
 } from './state.js';
+
+/**
+ * Пометить монеты «сверить в следующем же тике».
+ *
+ * Зовётся из WS-фида филлов. 🚨 Одного сброса lastIntegrityCheck мало:
+ * clearinghouseState отстаёт от филла, сверка сразу после него видит прежнюю
+ * позу и уходит спать на INTEGRITY_CHECK_INTERVAL_MS. Всё это окно перезаход
+ * оператора не виден няньке, а значит висит без стопа.
+ *
+ * @param {string[]} coins
+ */
+export function markFillDirty(coins) {
+  const deadline = Date.now() + INTEGRITY_FILL_RECHECK_MS;
+  for (const c of coins ?? []) {
+    if (typeof c === 'string' && c) state.fillDirtyCoins.set(c.toUpperCase(), deadline);
+  }
+}
+
+/** Грязные монеты с непросроченным дедлайном; просроченные вычищает. */
+export function pruneFillDirty(now = Date.now()) {
+  for (const [coin, deadline] of state.fillDirtyCoins) {
+    if (now >= deadline) state.fillDirtyCoins.delete(coin);
+  }
+  return new Set(state.fillDirtyCoins.keys());
+}
+
+/**
+ * Снять метку с монет, где зеркало сошлось: строки в БД нет (её подхватит adopt)
+ * либо её вход совпал с биржевым. Пока не сошлось — форсируем сверку дальше.
+ *
+ * @param {Array} exchangePositions — сырые позиции с биржи
+ */
+export function settleFillDirty(exchangePositions) {
+  if (state.fillDirtyCoins.size === 0) return;
+  const slotPos = getActivePosition();
+  const byCoin = new Map();
+  if (slotPos) byCoin.set(up(slotPos.coin), slotPos);
+  for (const p of getActiveAdoptPositions()) byCoin.set(up(p.coin), p);
+
+  for (const coin of [...state.fillDirtyCoins.keys()]) {
+    const dbPos = byCoin.get(coin);
+    if (!dbPos) { state.fillDirtyCoins.delete(coin); continue; }
+    const live = (exchangePositions || [])
+      .map((ap) => ap?.position ?? ap)
+      .find((pp) => isSameCoin(pp?.coin, coin) && parseFloat(pp?.szi ?? '0') !== 0);
+    if (!live) continue;   // строка есть, позы нет → расхождение, держим метку
+    const verdict = classifyEntryDrift({
+      dbEntryPrice: dbPos.entry_price,
+      exEntryPx:    parseFloat(live.entryPx ?? live.entry_price ?? '0'),
+      dbEntryTime:  dbPos.entry_time,
+      openTime:     null,
+    });
+    if (verdict === 'same') state.fillDirtyCoins.delete(coin);
+  }
+}
+
+/** Верхний регистр тикера. */
+function up(c) {
+  return String(c ?? '').toUpperCase();
+}
 
 /**
  * Утилита для надёжного сравнения тикеров.
@@ -413,7 +474,10 @@ export async function integrityCheck() {
     return false;
   }
 
-  if (now - state.lastIntegrityCheck < INTEGRITY_CHECK_INTERVAL_MS) return false;
+  // Монета с недавним филлом сверяется каждый тик: 60с-окно тут стоит
+  // неусыновлённой позы без стопа (см. markFillDirty).
+  const forced = pruneFillDirty(now);
+  if (forced.size === 0 && now - state.lastIntegrityCheck < INTEGRITY_CHECK_INTERVAL_MS) return false;
   state.lastIntegrityCheck = now;
 
   // Слот-позиция (Hunter/carry/...) + ВСЕ adopt-позы (multi-slot). Дедуп по id.
@@ -425,6 +489,7 @@ export async function integrityCheck() {
   const positionsToCheck = [...byId.values()];
   if (positionsToCheck.length === 0) {
     _lagStreak = 0;
+    state.fillDirtyCoins.clear();   // строк нет → сверять нечего, adopt подхватит сам
     noteMirror('pass', 'no open positions — nothing to cross-check');
     return false;
   }
@@ -470,6 +535,7 @@ export async function integrityCheck() {
     // истинно всегда, когда деньги в позах, и гард спамил бы варнингом.
     if (vanished.length === 0 && reopened.length === 0) {
       _lagStreak = 0;
+      settleFillDirty(liveOnExchange);
       noteMirror('pass', `${positionsToCheck.length} position(s) in place, no drift`);
       return false;
     }
@@ -536,6 +602,7 @@ export async function integrityCheck() {
     // Именно здесь штатный выход по полу (target-trail закрывает биржевым
     // ордером) перестаёт выглядеть так же, как настоящий рассинхрон.
     _lagStreak = 0;
+    settleFillDirty(liveOnExchange);
     const names = [...vanished, ...reopened].map((p) => `#${p.coin}`).join(', ');
     noteMirror(
       anyClosed ? 'pass' : 'warn',

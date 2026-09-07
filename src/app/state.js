@@ -19,6 +19,10 @@ export const INTEGRITY_GRACE_PERIOD_MS  = 30_000;        // 30с grace посл�
 // запись закрытия (даём индексатору HL время), чтобы не писать мусорный
 // equity-diff PnL. После этого порога закрываем по equity-diff, чтобы слот не завис.
 export const INTEGRITY_VANISH_DEFER_MS  = 5 * 60_000;    // 5 мин
+// Филл по монете → зеркало БД заведомо разошлось с биржей. Пока строка не сойдётся
+// с реальностью, сверка идёт каждый тик, а не раз в INTEGRITY_CHECK_INTERVAL_MS:
+// 🚨 неусыновлённая поза всё это окно висит без стопа.
+export const INTEGRITY_FILL_RECHECK_MS  = 3 * 60_000;    // 3 мин
 export const BOT_STATE_PATH             = 'data/bot_state.json';
 export const SHUTDOWN_TIMEOUT_MS        = 15_000;        // 15с на завершение
 export const BOT_STATE_FLUSH_INTERVAL_MS = 60_000;       // 60с периодический snapshot
@@ -40,6 +44,9 @@ export const state = {
   // close-fill ещё не было видно в fills. Используется для defer-окна (см.
   // INTEGRITY_VANISH_DEFER_MS), чтобы дождаться индексации реального PnL.
   vanishedSince:       new Map(),
+  // coin → дедлайн форсированной сверки. Ставится на филле, снимается когда
+  // строка в БД сошлась с биржей (или по дедлайну, чтобы не жечь вес API).
+  fillDirtyCoins:      new Map(),
   sessionStartEquity:  0,
   lastIdleAt:          0,
   prevApyMap:          new Map(),

@@ -49,11 +49,10 @@ async function tickBody() {
     }
 
     // ── Integrity Check: детекция внешнего закрытия ──
+    // 🚨 Ранний return здесь стоил перезаходу целого тика без стопа: строку
+    // закрыли, а adopt ниже в этот тик уже не заходил. Вход пропускаем, защиту —
+    // нет (см. ветку externalClose после сопровождения).
     const externalClose = await integrityCheck();
-    if (externalClose) {
-      logger.info('[Tick] Skipping after external close detection');
-      return;
-    }
 
     // ── Manual Position Check: hands-off режим если оператор торгует вручную ──
     // (внутри orphanCheck при ADOPT_ENABLED подхватываются свежие ручные позы.)
@@ -72,6 +71,12 @@ async function tickBody() {
     // Форвард по чужим прогнозам: опрос TG-каналов и бумажные входы по свежим
     // сигналам. Свой шаг (TG_SIGNAL_POLL_MIN) внутри, тик его только будит.
     await tgSignalTick();
+
+    // Зеркало только что чинили — новых входов в этот тик не делаем.
+    if (externalClose) {
+      logger.info('[Tick] Skipping entry after external close detection');
+      return;
+    }
 
     if (manualState === 'paused') {
       logger.debug('[Tick] HANDS-OFF: manual position active, scan-only refresh');
