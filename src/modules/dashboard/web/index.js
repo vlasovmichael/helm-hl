@@ -237,6 +237,30 @@ tick();
 setInterval(tick, REFRESH_MS);
 startFooterTimer();
 
+// Счётчик форвард-замера под таблицей: сколько сделок из 60 набрано с момента
+// регистрации гипотезы, за которую отвечает бейдж LATE. Раз в 10 минут —
+// счётчик двигается только на закрытии сделки, поллинг тут был бы шумом.
+// Сам вердикт по монете в /api/entry-filter не читается: он уже едет в
+// hotMovers-строках, и второй источник той же метки завёл бы расхождение.
+async function loadChaseForward() {
+  const el = document.getElementById("hm-chase-fwd");
+  if (!el) return;
+  try {
+    const d = await fetchJson("/api/entry-filter");
+    const fw = d?.forward;
+    if (!fw || fw.n == null) return;
+    el.hidden = false;
+    el.innerHTML = `<b>LATE badge — forward check:</b> <b>${fw.n}</b> of <b>${fw.target}</b>
+      fresh trades logged since the rule was registered. It was found in past data, so it is
+      judged <b>once</b>, at ${fw.target} — looking earlier is what turned five previous ideas
+      into noise.`;
+  } catch {
+    /* счётчик — не данные для решения: сетевой сбой просто оставляет строку скрытой */
+  }
+}
+loadChaseForward();
+setInterval(loadChaseForward, 600_000);
+
 // ── Вкладка вернулась из фона: доигрываем застрявшие transition'ы ──────────
 // Баг «серая полоска у плашки BTC». Смена состояния светофора
 // (unknown → wait/go) запускает transition на background и border-left-color.

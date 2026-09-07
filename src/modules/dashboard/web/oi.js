@@ -498,122 +498,6 @@ async function loadCoinOfDay(force = false) {
 
 
 
-// ── entry filter ──
-// Карточка не выбирает монету и не предлагает вход: она помечает сторону, за
-// которую журнал уже заплатил (вход в сторону случившегося движения). Молчание
-// фильтра — это молчание, а не разрешение.
-const EF_LVL_LABEL = { extreme: "extreme", strong: "strong", fast: "fast 15m", quiet: "quiet" };
-
-function efPct(v, digits = 1) {
-  if (v == null || !Number.isFinite(v)) return "—";
-  return `${v >= 0 ? "+" : ""}${v.toFixed(digits)}%`;
-}
-
-function efRenderBody(data) {
-  const body = document.getElementById("ef-body");
-  const rows = data.rows || [];
-  if (!rows.length) {
-    body.innerHTML = emptyState({
-      glyph: "clock",
-      title: "Not enough price history yet",
-      hint: "The filter needs about an hour of ticks after a restart before it can judge a move.",
-    });
-    return;
-  }
-
-  const held = data.holdingBlocked || [];
-  const verdict = held.length
-    ? {
-        cls: "warn",
-        head: `You are in ${held.map((h) => `${h.position.side} ${h.coin}`).join(", ")} — entered with the move`,
-        detail: held
-          .map((h) => `${h.coin}: ${h.text}. In the journal this side averaged −0.18 per trade; the extreme slice −0.49.`)
-          .join(" "),
-      }
-    : data.flagged
-      ? {
-          cls: "calm",
-          head: `${data.flagged} of ${data.scanned} coins are running hard right now`,
-          detail: "No open position sits on the flagged side. The table below marks which side would be an entry into a move that already happened — it does not suggest the opposite side as a trade.",
-        }
-      : {
-          cls: "calm",
-          head: "Nothing is running hard — the filter is silent",
-          detail: "No coin exceeds 3% on the hour or 1.5% on 15 minutes. Silence means the journal has nothing to say here, not that an entry is good.",
-        };
-
-  const trs = rows
-    .map((r) => {
-      const side = r.blockedSide
-        ? `<span class="ef-side ${r.blockedSide.toLowerCase()}">${icon(r.blockedSide === "SHORT" ? "short" : "long")}${r.blockedSide}</span>`
-        : `<span class="ef-side none">—</span>`;
-      const pos = r.position
-        ? `<span class="ef-side ${r.position.side.toLowerCase()}">${icon(r.position.side === "SHORT" ? "short" : "long")}${r.position.side}</span>`
-        : `<span class="oi-muted">—</span>`;
-      return `<tr class="${r.holdingBlocked ?"ef-held" : ""}">
-        <td>${r.coin}</td>
-        <td>${efPct(r.trend15m)}</td>
-        <td>${efPct(r.trend1h)}</td>
-        <td>${efPct(r.dayChangePct)}</td>
-        <td>${side}</td>
-        <td><span class="ef-lvl ${r.level}">${EF_LVL_LABEL[r.level] || r.level}</span></td>
-        <td>${pos}</td>
-      </tr>`;
-    })
-    .join("");
-
-  settle(
-    body,
-    `
-    <div class="ef-verdict ${verdict.cls}">
-      <div class="ef-vh">${verdict.head}</div>
-      <div class="ef-vd">${verdict.detail}</div>
-    </div>
-    <div class="ef-table-wrap">
-      <table class="ef-t">
-        <thead>
-          <tr>
-            <th>Coin</th><th>15m</th><th>1h</th><th>24h</th>
-            <th data-card="Side that would be an entry into the move that already happened">Costly side</th>
-            <th>Move</th>
-            <th data-card="Your open position on the exchange">You hold</th>
-          </tr>
-        </thead>
-        <tbody>${trs}</tbody>
-      </table>
-    </div>`,
-  );
-}
-
-function efRenderForward(data) {
-  const el = document.getElementById("ef-fwd");
-  const fw = data.forward;
-  if (!fw || fw.n == null) { el.hidden = true; return; }
-  el.hidden = false;
-  el.innerHTML = `<b>Forward check:</b> <b>${fw.n}</b> of <b>${fw.target}</b> fresh trades logged since the hypothesis
-    was registered. The rule was found in past data, so it is judged <b>once</b>, at ${fw.target} — looking earlier
-    is what turned five previous ideas into noise.`;
-}
-
-async function loadEntryFilter() {
-  const meta = document.getElementById("ef-meta");
-  meta.textContent = "reading…";
-  try {
-    const data = await fetchJson("/api/entry-filter");
-    if (data.error) throw new Error(data.error);
-    meta.textContent = data.marketAgeSec == null ? "" : `market ${data.marketAgeSec}s old · ${data.scanned} coins`;
-    efRenderBody(data);
-    efRenderForward(data);
-  } catch (err) {
-    meta.textContent = "error";
-    document.getElementById("ef-body").innerHTML = emptyState({
-      glyph: "danger",
-      title: "Could not load the filter",
-      hint: `${err.message}. Press Refresh to try again.`,
-    });
-  }
-}
-
 // ── состояние обзора ──
 const PAGE_SIZE = 10;
 let overview = [];
@@ -891,11 +775,8 @@ document.querySelectorAll("#oi-ranges .seg__btn").forEach((b) =>
   if (tzEl) tzEl.textContent = TZ_LABEL;
 }
 
-document.getElementById("ef-refresh")?.addEventListener("click", () => loadEntryFilter());
-
 // <i data-icon="…"> в статической разметке → настоящие svg.
 paintIcons();
 
 loadCoinOfDay();
-loadEntryFilter();
 loadOverview();

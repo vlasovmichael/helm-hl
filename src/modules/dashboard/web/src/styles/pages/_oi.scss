@@ -466,8 +466,7 @@
 }
 
 /* Прогресс форвард-замера. Пунктир — «счётчик ещё идёт, вывода тут нет». */
-.cod-fwd,
-.ef-fwd {
+.cod-fwd {
   margin-top: var(--sp-4);
   padding: var(--sp-3);
   border-radius: var(--radius-sm);
@@ -480,117 +479,6 @@
     color: var(--text-primary);
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
-  }
-}
-
-/* ── Фильтр входа ──────────────────────────────────────────────────── */
-.ef-verdict {
-  padding: var(--sp-3) var(--sp-4);
-  border-radius: var(--radius);
-  border: 1px solid var(--border-muted);
-  background: var(--canvas-subtle);
-
-  &.warn {
-    border-color: var(--red-line);
-    background: var(--red-soft);
-  }
-}
-.ef-vh {
-  font-weight: 700;
-  font-size: var(--fs-base);
-  letter-spacing: var(--ls-tight);
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  flex-wrap: wrap;
-}
-.ef-vd {
-  margin-top: var(--sp-2);
-  font-size: var(--fs-body);
-  line-height: 1.6;
-  color: var(--text-secondary);
-}
-.ef-table-wrap {
-  overflow-x: auto;
-  margin-top: var(--sp-4);
-}
-table.ef-t {
-  width: 100%;
-  border-collapse: collapse;
-  font-variant-numeric: tabular-nums;
-}
-.ef-t th {
-  text-align: right;
-  font-size: var(--fs-small);
-  font-weight: 600;
-  color: var(--text-secondary);
-  padding: var(--sp-2) var(--sp-3);
-  border-bottom: 1px solid var(--hairline);
-  white-space: nowrap;
-}
-.ef-t th:first-child,
-.ef-t td:first-child {
-  text-align: left;
-}
-.ef-t td {
-  text-align: right;
-  padding: 7px var(--sp-3);
-  font-size: var(--fs-body);
-  border-bottom: 1px solid var(--hairline);
-  white-space: nowrap;
-}
-.ef-t td:first-child {
-  font-weight: 600;
-  font-family: var(--font-mono);
-}
-.ef-t tr.ef-held td {
-  background: var(--red-soft);
-}
-.ef-side {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  font-size: var(--fs-micro);
-  letter-spacing: var(--ls-wide);
-  padding: 2px 7px;
-  border-radius: var(--radius-pill);
-  color: #fff;
-  font-weight: 600;
-
-  .icon {
-    width: 10px;
-    height: 10px;
-  }
-  &.long {
-    background: var(--green);
-  }
-  &.short {
-    background: var(--red);
-  }
-  &.none {
-    background: transparent;
-    color: var(--text-secondary);
-  }
-}
-.ef-lvl {
-  font-size: var(--fs-label);
-  letter-spacing: var(--ls-wide);
-  text-transform: uppercase;
-
-  &.extreme {
-    color: var(--red);
-    font-weight: 700;
-  }
-  &.strong {
-    color: var(--warn);
-    font-weight: 600;
-  }
-  &.fast,
-  &.quiet {
-    color: var(--text-secondary);
-  }
-  &.quiet {
-    opacity: 0.6;
   }
 }
 

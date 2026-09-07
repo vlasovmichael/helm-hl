@@ -127,7 +127,7 @@
                 <th>Coin</th>
                 <th
                   class="center"
-                  data-card="Fade setup: SHORT/LONG = ready to fade the move; WAIT = waiting for momentum to exhaust"
+                  data-card="Fade setup: SHORT/LONG = ready to fade the move; WAIT = waiting for momentum to exhaust. A LATE badge means the journal already paid for that side — it is an entry into a move that has happened."
                 >
                   Setup
                 </th>
@@ -168,6 +168,10 @@
             </tbody>
           </table>
         </div>
+        <!-- Счётчик форвард-замера гипотезы `entry-into-continuation` (бейдж
+             LATE). Стоп-правило: смотреть результат ровно один раз, на 60
+             сделках. Счётчик живёт здесь, потому что здесь живёт сам бейдж. -->
+        <p class="hm-fwd" id="hm-chase-fwd" hidden></p>
       </section>
 
       <!-- 01.4 / Screen — монеты, отобранные по цене входа, + бюджет дня.

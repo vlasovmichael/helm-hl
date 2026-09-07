@@ -35,6 +35,7 @@ import {
   createElement,
   ExternalLink,
   Eye,
+  Flame,
   Hand,
   History,
   Info,
@@ -55,6 +56,7 @@ import {
   TrendingDown,
   TrendingUp,
   TriangleAlert,
+  Waves,
   X,
   Zap,
 } from "lucide";
@@ -103,6 +105,11 @@ const MAP = {
   target: Target,
   // «Рынок холодный» — режимный гейт what-if, не оценка сделки.
   cold: Snowflake,
+  // Синхронный делевередж по всей витрине: рынок сливается (волна) или выносит
+  // шорты (огонь). Это режим рынка, а не сбой интерфейса, — поэтому не warn:
+  // треугольник читается как «что-то сломалось».
+  flush: Waves,
+  squeeze: Flame,
 
   bot: Bot,
   manual: Hand,
