@@ -16,7 +16,9 @@ const { mergeFills, resolveManualOpenTime, updateFirstSeen } =
 const { recordLiveFills, getLiveFills } = await import('../src/core/fillFeed.js');
 
 const MIN = 60_000;
-const T0 = 1_788_712_076_373;   // открытие шортовой ноги
+// 🚨 Время относительное: кольцо живых филлов режет всё старше LIVE_TTL_MS (6ч),
+// и захардкоженная метка делала тест времянкой — зелёный в день написания, красный назавтра.
+const T0 = Date.now() - 3 * 3_600_000;   // открытие шортовой ноги
 
 const fill = (tid, time, dir, sz) => ({ tid, time, dir, sz: String(sz), coin: 'LDO', px: '0.42' });
 
