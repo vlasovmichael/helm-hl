@@ -78,102 +78,6 @@
         </button>
       </section>
 
-      <!-- 01.5 / Hot Movers — live price spikes + OI delta -->
-      <section class="card" id="sec-movers">
-        <div class="card-header">
-          <div
-            class="card-title"
-            data-card="Coins with the largest price moves. Setup is a context direction (dump → SHORT, pump → LONG) — NOT a trade: continuation backtests negative."
-          >
-            Hot Movers
-          </div>
-          <div class="hm-header-right">
-            <span id="hm-actions-slot"></span>
-            <span id="hm-tools" class="hm-tools">
-              <!-- Обычный размер, а не btn--sm: это действия карточки, мелкими
-                   они читались подписями. btn--primary занято «Trade». -->
-              <button
-                id="mp-paper-btn"
-                class="btn"
-                type="button"
-                data-card="Open a paper trade (your own paper, Rabbit-style): coin, side, leverage, size off equity. The bot doesn't trade it — you run it by hand."
-              >
-                <i data-icon="add"></i>Paper
-              </button>
-              <button
-                id="whatif-btn"
-                class="btn"
-                type="button"
-                data-card="Itchy hands? Type a coin and side — the coach lays out trend, levels and a plan with stop and target, and says whether the verified edge is with you"
-              >
-                <i data-icon="search"></i>Check coin
-              </button>
-            </span>
-            <span
-              id="hot-movers-meta"
-              style="
-                font-size: var(--fs-label);
-                font-family: var(--font-mono);
-                color: var(--text-muted);
-              "
-            ></span>
-          </div>
-        </div>
-        <div class="u-scroll-x hm-scroll-wrap">
-          <table class="table table--sticky-head signals-table hm-table">
-            <thead>
-              <tr>
-                <th style="width: 24px">#</th>
-                <th>Coin</th>
-                <th
-                  class="center"
-                  data-card="Fade setup: SHORT/LONG = ready to fade the move; WAIT = waiting for momentum to exhaust. A LATE badge means the journal already paid for that side — it is an entry into a move that has happened."
-                >
-                  Setup
-                </th>
-                <th
-                  class="center"
-                  data-card="Chase meter: how far price has already run IN THE TRADE DIRECTION from the short average (15m, 5m fallback). Lit only on a confirmed setup. Near the base — no chase; stretched — let it pull back; already gone your way — too late, wait for a retrace. You pick the 5m entry yourself."
-                >
-                  Enter
-                </th>
-                <th class="num">Price</th>
-                <th class="num">2m%</th>
-                <th class="num">5m%</th>
-                <th class="num">15m%</th>
-                <th
-                  class="num"
-                  data-card="Acceleration: |2m| vs 5m extrapolation. Down = exhausting (fade), up = accelerating (avoid)"
-                >
-                  Acc
-                </th>
-                <th
-                  class="num"
-                  data-card="OI change over 5 minutes. Rising = new positions; falling = closes/liquidations"
-                >
-                  OI 5m
-                </th>
-                <th class="num" data-card="15m trend">
-                  Trend
-                </th>
-              </tr>
-            </thead>
-            <tbody id="hot-movers-tbody">
-              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
-              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
-              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
-              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
-              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
-              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
-            </tbody>
-          </table>
-        </div>
-        <!-- Счётчик форвард-замера гипотезы `entry-into-continuation` (бейдж
-             LATE). Стоп-правило: смотреть результат ровно один раз, на 60
-             сделках. Счётчик живёт здесь, потому что здесь живёт сам бейдж. -->
-        <p class="hm-fwd" id="hm-chase-fwd" hidden></p>
-      </section>
-
       <!-- 01.4 / Screen — монеты, отобранные по цене входа, + бюджет дня.
            Заменяет Hot Movers в роли «куда смотреть»: отбор идёт по трению
            (спред + комиссии), а не по движению. Обоснование и порог —
@@ -188,6 +92,25 @@
           </div>
           <div class="scr-header-right">
             <span id="screen-actions-slot"></span>
+            <!-- Действия по монете. Жили в шапке Hot Movers; та уехала на
+                 /movers, а руки оператора остались здесь — на карточке, которая
+                 и отвечает «куда смотреть» на главной. -->
+            <button
+              id="mp-paper-btn"
+              class="btn"
+              type="button"
+              data-card="Open a paper trade (your own paper, Rabbit-style): coin, side, leverage, size off equity. The bot doesn't trade it — you run it by hand."
+            >
+              <i data-icon="add"></i>Paper
+            </button>
+            <button
+              id="whatif-btn"
+              class="btn"
+              type="button"
+              data-card="Itchy hands? Type a coin and side — the coach lays out trend, levels and a plan with stop and target, and says whether the verified edge is with you"
+            >
+              <i data-icon="search"></i>Check coin
+            </button>
             <span id="screen-meta" class="scr-meta"></span>
           </div>
         </div>
@@ -278,14 +201,6 @@
       <button class="bottom-nav-btn" data-target="sec-screen" aria-label="Screen">
         <span class="nav-icon" aria-hidden="true"></span>
         <span>Screen</span>
-      </button>
-      <button
-        class="bottom-nav-btn"
-        data-target="sec-movers"
-        aria-label="Hot Movers"
-      >
-        <span class="nav-icon" aria-hidden="true"></span>
-        <span>Movers</span>
       </button>
       <button
         class="bottom-nav-btn"

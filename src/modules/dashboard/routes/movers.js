@@ -15,7 +15,6 @@ import { findAsset, getUniverse, resolveApiCoin } from "../../../core/universe.j
 import { getCachedAccountValueSync } from "../../../core/balanceCache.js";
 import { TICK_INTERVAL_MS, state } from "../../../app/state.js";
 import { computeBreadthFlush, applyFocusCoins } from "../../hotMoversSetup.js";
-import { classify as classifyChase } from "./entryFilter.js";
 import { reportBreadthFlush } from "../../../app/toastBridge.js";
 import { getHourlyCandles, getFifteenMinCandles } from "../../candleCache.js";
 import { classifyTrend } from "../../trendEma.js";
@@ -391,13 +390,6 @@ async function buildMoversPayload(limit = 12, { enrich = true } = {}) {
         // Из in-memory буфера — НИ ОДНОГО запроса к HL, поэтому едет и в cheap
         // WS-броадкасте (каждые 2с). Фронт рисует SVG, если точек ≥2.
         spark: getPriceSpark(m.coin, 20, 24, now),
-        // «Вход по уже случившемуся движению»: та же метка, что на карточке
-        // /oi, но здесь она стоит в строке, где монету и выбирают. Считается из
-        // готовых окон 60м/15м — ни одного лишнего запроса.
-        chasing: classifyChase({
-          trend1h: m.windows.find((w) => w.mins === 60)?.spikePct ?? null,
-          trend15m: m.windows.find((w) => w.mins === 15)?.spikePct ?? null,
-        }),
         htfTrend: null, // заполняется enrichHtfTrend (1h EMA-тренд) для fade-гейта
       };
     });

@@ -119,7 +119,7 @@ const PUBLIC_DIR = join(__dirname, "dist");
 // сборки, а не часть адреса. Старые адреса редиректим 301, чтобы закладки и
 // ссылки в ntfy-пушах не побились.
 const PAGES = [
-  "index", "ledger", "journal", "statistics", "lab", "oi",
+  "index", "movers", "ledger", "journal", "statistics", "lab", "oi",
   "orderbook", "orderbook-sim", "ticket",
 ];
 
