@@ -151,11 +151,16 @@ function finishHmProgress() {
 // бейдж в строке). Рисуем ТОЛЬКО когда помеченная сторона совпадает с той, что
 // строка предлагает или в которой оператор уже сидит: иначе это шум на каждой
 // быстрой монете. Молчание бейджа — молчание, а не разрешение.
-export function chaseBadge(chasing, side) {
+export function chaseBadge(chasing, side, isWait = false) {
   if (!chasing || chasing.level === "quiet" || !chasing.blockedSide) return "";
   if (!side || chasing.blockedSide !== side) return "";
+  // На WAIT-строке бейджа нет: «поздно входить» поверх «не входи» — это не два
+  // факта, а один, сказанный дважды, и читается как противоречие.
+  if (isWait) return "";
   const card = `${chasing.text}. Journal (650 manual trades): entering with the move returned −0.18 per trade against −0.05 entering against it.`;
-  return `<span class="hm-chase hm-chase--${chasing.level}" data-card="${escapeHtml(card)}">LATE</span>`;
+  // Уровень — вторым, приглушённым словом внутри того же бейджа: тот же приём,
+  // что у modeTag в Setup-пилле, поэтому в ряду читается как одна вещь.
+  return `<span class="hm-chase hm-chase--${chasing.level}" data-card="${escapeHtml(card)}">LATE<span class="hm-chase-lvl">${chasing.level.toUpperCase()}</span></span>`;
 }
 
 export function renderHotMovers(payload, fmtTime) {
@@ -471,7 +476,11 @@ export function renderHotMovers(payload, fmtTime) {
     }
     // Открытая поза → метим сторону, в которой оператор УЖЕ сидит; закрытая →
     // сторону, которую предлагает momentum.
-    const chase = chaseBadge(s.chasing, isOpen ? (getActivePos(s.coin)?.side ?? null) : setup.side);
+    const chase = chaseBadge(
+      s.chasing,
+      isOpen ? (getActivePos(s.coin)?.side ?? null) : setup.side,
+      !isOpen && setup.cls === "setup-wait",
+    );
     const setupCell = isOpen
       ? `<td class="hm-setup center" data-w="Setup" data-card="Open-interest change over 15m: rising = new money entering the move (fuel), falling = participants closing">${openSetupHtml}${chase}</td>`
       : `<td class="hm-setup center ${setupCls}" data-w="Setup" data-card="${setupTitle}"><span class="hm-setup-pill">${setupLabel}</span>${chase}</td>`;

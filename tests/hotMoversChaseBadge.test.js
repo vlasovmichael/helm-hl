@@ -13,10 +13,15 @@ const { chaseBadge } = await import('../src/modules/dashboard/web/src/hotMovers/
 
 const strongLong = { level: 'strong', blockedSide: 'LONG', text: '+4.2% in an hour — entering LONG goes with the move' };
 
-test('помеченная сторона совпала со стороной строки — бейдж есть', () => {
+test('помеченная сторона совпала со стороной строки — бейдж есть, с уровнем', () => {
   const html = chaseBadge(strongLong, 'LONG');
   assert.match(html, /hm-chase--strong/);
-  assert.match(html, />LATE</);
+  assert.match(html, /LATE/);
+  assert.match(html, /STRONG/);
+});
+
+test('строка WAIT бейджа не получает — «поздно входить» поверх «не входи»', () => {
+  assert.equal(chaseBadge(strongLong, 'LONG', true), '');
 });
 
 test('противоположная сторона бейджа не получает', () => {
