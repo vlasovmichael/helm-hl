@@ -103,7 +103,13 @@ function formHtml(prefill = {}) {
         }),
       })}
 
-      <div class="modal__rows" id="mp-calc"></div>
+      <!-- Скелетон двух строк-фактов: equity приезжает запросом уже ПОСЛЕ
+           открытия диалога, и пустой контейнер раздувался на две строки прямо
+           под курсором — диалог прыгал. Место занято сразу. -->
+      <div class="modal__rows" id="mp-calc">
+        <div class="modal__row"><span>Margin</span><b><span class="sk sk-num"></span></b></div>
+        <div class="modal__row"><span>Position size</span><b><span class="sk sk-num"></span></b></div>
+      </div>
       <div class="mp-err" id="mp-err" hidden></div>
       ${button({ label: "Open paper position", type: "submit", variant: "primary", cta: true, cls: "mp-submit", attrs: { id: "mp-submit" } })}
     </form>`;
@@ -162,10 +168,13 @@ function recalc() {
   // Строки-факты: слева что, справа сколько.
   const calc = document.getElementById("mp-calc");
   if (calc) {
+    // Обе строки остаются и без equity: пропажа одной — тот же прыжок высоты,
+    // только на шаг позже.
     calc.innerHTML = lastEquity > 0
       ? `<div class="modal__row"><span>Margin</span><b>${fmtUsd(margin)}</b></div>
          <div class="modal__row"><span>Position size</span><b>${fmtUsd(notional)}</b></div>`
-      : `<div class="modal__row"><span>Equity unavailable</span><b>set the size by hand</b></div>`;
+      : `<div class="modal__row"><span>Margin</span><b>—</b></div>
+         <div class="modal__row"><span>Equity unavailable</span><b>set the size by hand</b></div>`;
   }
   return { lev, notional, margin };
 }
