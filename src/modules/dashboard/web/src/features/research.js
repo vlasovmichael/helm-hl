@@ -58,7 +58,6 @@ function renderForward(f) {
   // живой, уже стоил трёх недель на Spike-Fade.
   const stale = f.staleHours != null && f.staleHours > 72;
   const notStarted = f.n === 0 && f.daysRunning < 1;
-  const ready = f.n >= f.target;
 
   // Условия сверх счётчика: без них порог можно набрать за неделю внутри
   // одного рыночного режима, и результат будет про погоду, а не про правило.
@@ -69,6 +68,11 @@ function renderForward(f) {
   if (f.regimeShare != null && f.minRegimeShare && f.regimeShare < f.minRegimeShare) {
     gates.push(`regime split ${Math.round(f.regimeShare * 100)}% (needs ${Math.round(f.minRegimeShare * 100)}%)`);
   }
+
+  // 🚨 Зелёная строка = стоп-правило выполнено ЦЕЛИКОМ, не только счётчик.
+  // Набранное n при незакрытых гейтах читается как «пора смотреть» и толкает
+  // подглядывать в незрелый форвард.
+  const ready = f.n >= f.target && gates.length === 0;
 
   const pace = notStarted
     ? "starts with the next collector run"
