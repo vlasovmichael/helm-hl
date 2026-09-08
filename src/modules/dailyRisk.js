@@ -15,9 +15,14 @@
 // Что halted НЕ делает: НЕ отключает няньку (вход без стопа хуже лимита) и НЕ
 // трогает сопровождение/выходы открытых поз. Кошелёк не заблокировать — это
 // громкий rail, не замок.
+//
+// Вторая рельса — бюджет комиссий (DAILY_FEE_BUDGET_PCT). Минус по PnL решает
+// рынок, комиссии решает частота: это единственная статья, растущая от числа
+// сделок гарантированно. Тоже громкая, тоже не замок.
 
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
+import { getCachedAccountValueSync } from '../core/balanceCache.js';
 import { fetchUserFills } from './userFills.js';
 
 /** Ключ дня в TZ процесса (контейнер = Europe/Warsaw). */
@@ -43,10 +48,27 @@ export function computeDayStats(fills, dayKey) {
   return { net, fees, count };
 }
 
+/**
+ * Бюджет комиссий на день. Отдельная рельса от стоп-лосса намеренно: минус по
+ * PnL — исход рынка, комиссии — исход ЧАСТОТЫ, и второе зависит только от
+ * оператора. Чистая функция, отсюда же и тесты.
+ *
+ * @param {number} feesUsd — комиссии за день
+ * @param {number} equityUsd — размер счёта
+ * @param {number} budgetPct — потолок, % от счёта; 0 = рельса выключена
+ * @returns {{pct:number|null, exceeded:boolean}}
+ */
+export function feeBudgetState(feesUsd, equityUsd, budgetPct) {
+  if (!(budgetPct > 0) || !(equityUsd > 0)) return { pct: null, exceeded: false };
+  const pct = (feesUsd / equityUsd) * 100;
+  return { pct, exceeded: pct >= budgetPct };
+}
+
 // Последний посчитанный статус (для дашборда, sync-доступ) + день последнего
 // алерта пересечения (1 громкий пуш/день, дальше пусть держит рельса).
 let _last = null;         // { dayKey, netUsd, feesUsd, fillCount, halted, limitUsd, at }
 let _alertedDay = null;
+let _feeAlertedDay = null;
 
 /** Последний известный статус (может быть null до первого тика). */
 export function getLastDailyRiskStatus() {
@@ -68,20 +90,36 @@ export async function refreshDailyRisk(now = Date.now()) {
     const halted = enabled && net <= -limitUsd;
     const crossedNow = halted && _alertedDay !== dayKey;
     if (crossedNow) _alertedDay = dayKey;
-    _last = { dayKey, netUsd: net, feesUsd: fees, fillCount: count, halted, limitUsd, at: now };
+    const fee = feeBudgetState(fees, getCachedAccountValueSync(), config.trading.dailyFeeBudgetPct);
+    const feeCrossedNow = fee.exceeded && _feeAlertedDay !== dayKey;
+    if (feeCrossedNow) _feeAlertedDay = dayKey;
+    _last = {
+      dayKey, netUsd: net, feesUsd: fees, fillCount: count, halted, limitUsd, at: now,
+      feePct: fee.pct, feeBudgetPct: config.trading.dailyFeeBudgetPct, feeExceeded: fee.exceeded,
+    };
+    if (feeCrossedNow) {
+      logger.warn(
+        `[DailyRisk] 💸 бюджет комиссий на день выбран: $${fees.toFixed(2)} = ` +
+          `${fee.pct.toFixed(1)}% счёта при потолке ${config.trading.dailyFeeBudgetPct}% (филлов ${count}).`,
+      );
+    }
     if (crossedNow) {
       logger.warn(
         `[DailyRisk] 🛑 дневной стоп-лосс: net $${net.toFixed(2)} ≤ −$${limitUsd} ` +
           `(fees $${fees.toFixed(2)}, fills ${count}). Новые авто-входы закрыты до полуночи.`,
       );
     }
-    return { halted, crossedNow, netUsd: net, feesUsd: fees, limitUsd, dayKey };
+    return { halted, crossedNow, netUsd: net, feesUsd: fees, limitUsd, dayKey, feePct: fee.pct, feeCrossedNow };
   } catch (err) {
     logger.debug(`[DailyRisk] refresh failed: ${err.message} — считаем не-halted`);
     const stale = _last && _last.dayKey === dayKey ? _last : null;
-    return { halted: !!stale?.halted, crossedNow: false, netUsd: stale?.netUsd ?? 0, feesUsd: stale?.feesUsd ?? 0, limitUsd, dayKey };
+    return {
+      halted: !!stale?.halted, crossedNow: false, netUsd: stale?.netUsd ?? 0,
+      feesUsd: stale?.feesUsd ?? 0, limitUsd, dayKey,
+      feePct: stale?.feePct ?? null, feeCrossedNow: false,
+    };
   }
 }
 
 /** Тест-хелпер: сброс состояния. */
-export function _resetDailyRiskState() { _last = null; _alertedDay = null; }
+export function _resetDailyRiskState() { _last = null; _alertedDay = null; _feeAlertedDay = null; }

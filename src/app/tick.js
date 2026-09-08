@@ -37,6 +37,16 @@ async function tickBody() {
     const dailyRisk = config.isProduction
       ? await refreshDailyRisk()
       : { halted: false, crossedNow: false };
+    // Комиссии за день: info-пуш, не urgent — это счёт за частоту, не авария.
+    if (dailyRisk.feeCrossedNow) {
+      await fireAdoptNtfy(
+        `💸 Бюджет комиссий на день выбран: ${dailyRisk.feePct.toFixed(1)}%`,
+        `Комиссии за сегодня — ${dailyRisk.feePct.toFixed(1)}% счёта при потолке ` +
+        `${config.trading.dailyFeeBudgetPct}%.\nЭто плата за частоту, а не за рынок: ` +
+        `каждая следующая сделка начинается с минуса в круг.`,
+        ['money_with_wings'],
+      );
+    }
     if (dailyRisk.crossedNow) {
       await fireAdoptNtfy(
         `🛑 Дневной стоп-лосс: ${dailyRisk.netUsd.toFixed(2)}$`,

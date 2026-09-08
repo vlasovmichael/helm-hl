@@ -323,6 +323,12 @@ function loadConfig() {
   // хуже, чем превышенный лимит.
   const dailyLossLimitEnabled = (process.env.DAILY_LOSS_LIMIT_ENABLED || 'true').toLowerCase() === 'true';
   const dailyLossLimitUsd     = parseFloat(process.env.DAILY_LOSS_LIMIT_USD || '5');
+  // Комиссии — единственная статья, которая растёт с числом сделок гарантированно,
+  // а не вероятностно. Бюджет в % от счёта за день; 0 = рельса выключена.
+  const dailyFeeBudgetPct     = parseFloat(process.env.DAILY_FEE_BUDGET_PCT || '1.5');
+  if (!Number.isFinite(dailyFeeBudgetPct) || dailyFeeBudgetPct < 0 || dailyFeeBudgetPct > 100) {
+    throw new Error(`DAILY_FEE_BUDGET_PCT must be in [0, 100]. Got: "${process.env.DAILY_FEE_BUDGET_PCT}"`);
+  }
   if (isNaN(dailyLossLimitUsd) || dailyLossLimitUsd <= 0) {
     throw new Error(`DAILY_LOSS_LIMIT_USD must be > 0. Got: "${process.env.DAILY_LOSS_LIMIT_USD}"`);
   }
@@ -481,6 +487,7 @@ function loadConfig() {
       adoptPeakAlertMfePct,
       adoptPeakAlertGiveBackPct,
       dailyLossLimitEnabled,
+      dailyFeeBudgetPct,
       dailyLossLimitUsd,
       screenMaxFrictionBp,
       screenTradesPerDay,
