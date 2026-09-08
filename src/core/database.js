@@ -1684,7 +1684,15 @@ export function resolveCodPick(date, coin, res) {
                 resolved_at = @resolved_at
           WHERE date = @date AND coin = @coin`,
       )
-      .run({ date, coin, resolved_at: Date.now(), ...res });
+      .run({
+        // 🚨 Все горизонты явно: better-sqlite3 валит запрос на отсутствующем
+        // именованном параметре, а резолвер шлёт только созревшие. COALESCE
+        // уже держит null — недостающий горизонт просто не перезапишется.
+        date, coin, resolved_at: Date.now(),
+        chg_4h: null, chg_8h: null, chg_24h: null,
+        btc_4h: null, btc_8h: null, btc_24h: null,
+        ...res,
+      });
     return true;
   } catch (err) {
     logger.warn(`[CoinOfDay] forward resolve failed ${coin}: ${err.message}`);

@@ -149,8 +149,7 @@ export async function resolveOpenPicks(now = Date.now()) {
         );
       }
       const res = computeHorizons(pick, coinCandles, btcCandles, now);
-      if (res) {
-        resolveCodPick(pick.date, pick.coin, res);
+      if (res && resolveCodPick(pick.date, pick.coin, res)) {
         done++;
         const parts = Object.entries(res).map(([k, v]) => `${k}=${v?.toFixed(2)}%`);
         logger.info(`[CoinOfDay] resolved ${pick.coin} ${pick.side} ${parts.join(' ')}`);
