@@ -68,7 +68,7 @@ export async function initEquityChart() {
   if (equityChart) return;
 
   // lightweight-charts грузим лениво (отдельный чанк) — нужен только здесь, на index.
-  const { createChart } = await import("lightweight-charts");
+  const { createChart, AreaSeries } = await import("lightweight-charts");
 
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
   const accent = cssVar("--accent") || "#635BFF";
@@ -132,7 +132,7 @@ export async function initEquityChart() {
     },
   });
 
-  equitySeries = equityChart.addAreaSeries({
+  equitySeries = equityChart.addSeries(AreaSeries, {
     lineColor: accent,
     topColor: hexToRgba(accent, 0.28),
     bottomColor: hexToRgba(accent, 0),

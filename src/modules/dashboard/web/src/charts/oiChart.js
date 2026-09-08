@@ -148,7 +148,7 @@ export async function drawOiChart(points) {
   lastPoints = points;
 
   if (!chart) {
-    const { createChart } = await import("lightweight-charts");
+    const { createChart, AreaSeries, LineSeries } = await import("lightweight-charts");
     const c = themeColors();
     chart = createChart(container, {
       width: container.clientWidth,
@@ -189,7 +189,7 @@ export async function drawOiChart(points) {
 
     // Порядок добавления = порядок отрисовки: цена первой, чтобы лечь ПОД OI.
     // Она здесь контекст, а не вторая героиня — заливка приглушена, линия тонкая.
-    pxSeries = chart.addAreaSeries({
+    pxSeries = chart.addSeries(AreaSeries, {
       lineColor: PX_COLOR,
       topColor: PX_FILL,
       bottomColor: "rgba(232, 184, 75, 0)",
@@ -200,7 +200,7 @@ export async function drawOiChart(points) {
       priceFormat: { type: "custom", formatter: px },
       crosshairMarkerRadius: 3,
     });
-    oiSeries = chart.addLineSeries({
+    oiSeries = chart.addSeries(LineSeries, {
       color: OI_COLOR,
       lineWidth: 2,
       priceScaleId: "right",
@@ -221,6 +221,14 @@ export async function drawOiChart(points) {
         if (chart && container) chart.resize(container.clientWidth, container.clientHeight);
       });
     }
+  }
+
+  // 🚨 Сборка ниже падает НЕ здесь, если серии не создались: chart уже не null,
+  // следующий вызов пропустит блок целиком и придёт на setData у null. Ошибка
+  // прилетит из другого места и про другое.
+  if (!oiSeries || !pxSeries) {
+    chart = null;
+    throw new Error("[oiChart] series were not created; state reset, next call rebuilds");
   }
 
   const oiVals = points.map((p) => p.oi).filter(Number.isFinite);
