@@ -26,6 +26,7 @@ import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
 import { hlInfo } from '../core/hlClient.js';
 import { fetchUserFills, reconstructRoundTrips } from './userFills.js';
+import { localDayKey } from './dailyRisk.js';
 import {
   getBotOidsSince,
   getHistorySince,
@@ -46,16 +47,19 @@ let cache = { ts: 0, payload: null };
 
 // ── helpers ──────────────────────────────────────
 
+// 🚨 не UTC: по нему ночные сделки уезжают во вчерашний день и Ledger
+// расходится со Statistics и дневным стопом — те режут день по локальной
+// полуночи. Единый ключ дня на всю дашборду — localDayKey.
 function monthKey(ms) {
-  const d = new Date(ms);
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+  return localDayKey(ms).slice(0, 7);
 }
 
 function dayKey(ms) {
-  return new Date(ms).toISOString().slice(0, 10);
+  return localDayKey(ms);
 }
 
-// Понедельник ISO-недели, в которую попал день (UTC).
+// Понедельник ISO-недели, в которую попал день. Дата уже календарная строка,
+// поэтому арифметика идёт в UTC — сдвига дня она не даёт.
 function weekKey(dateStr) {
   const d = new Date(`${dateStr}T00:00:00Z`);
   const shift = (d.getUTCDay() + 6) % 7;  // Пн=0 … Вс=6
@@ -191,7 +195,7 @@ export async function getMonthlyLedger() {
   const recomputeFloor = Date.now() - SAFE_RECOMPUTE_MS;
   const monthStartMs = (k) => {
     const [y, mo] = k.split('-').map(Number);
-    return Date.UTC(y, mo - 1, 1);
+    return new Date(y, mo - 1, 1).getTime();
   };
   const curKey = monthKey(Date.now());
   const snap = loadSnapshot();

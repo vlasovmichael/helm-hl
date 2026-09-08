@@ -10,12 +10,13 @@ const { computeDayStats, localDayKey } = await import('../src/modules/dailyRisk.
 const fill = (time, closedPnl, fee) => ({ time, closedPnl: String(closedPnl), fee: String(fee) });
 
 test('dailyRisk: net дня = Σ closedPnl − Σ fee, только сегодняшние fills', () => {
-  const now = Date.now();
-  const today = localDayKey(now);
-  const yesterday = now - 24 * 3600_000;
+  // Полдень, а не Date.now(): у полуночи «минуту назад» уезжало во вчера.
+  const noon = new Date().setHours(12, 0, 0, 0);
+  const today = localDayKey(noon);
+  const yesterday = noon - 24 * 3600_000;
   const fills = [
-    fill(now, '2.50', '0.10'),        // сегодня: +2.40 net
-    fill(now - 60_000, '-4.00', '0.20'), // сегодня: −4.20 net
+    fill(noon, '2.50', '0.10'),        // сегодня: +2.40 net
+    fill(noon - 60_000, '-4.00', '0.20'), // сегодня: −4.20 net
     fill(yesterday, '-50', '1'),      // вчера — не считается
   ];
   const s = computeDayStats(fills, today);
