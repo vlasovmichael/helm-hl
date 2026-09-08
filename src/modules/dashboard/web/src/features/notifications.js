@@ -10,7 +10,7 @@ import { getNotifications } from "../net/api.js";
 import { fmtSince } from "../utils/format.js";
 import { linkifyCoins } from "../utils/links.js";
 import { icon } from "../core/icon.js";
-import { classifyNotif } from "./notifyTone.js";
+import { classifyNotif, parseDigest } from "./notifyTone.js";
 
 const LS_KEY = "helm.notif.lastRead";
 const POLL_MS = 60_000;
@@ -70,9 +70,13 @@ function renderList() {
     .map((n) => {
       const fresh = n.ts > lr ? " notif-item--fresh" : "";
       const mail = n.emailed ? `<span class="notif-mail" data-card="Also sent by email">${icon("mail")}</span>` : "";
-      const body = stripEmoji((n.message || "").split("\n")[0]); // первая строка — суть
       // Та же классификация, что у тоста.
       const { glyph, kind } = classifyNotif(n);
+      // Дайджест чужих сделок — не одна фраза, а список: строки разбираются на
+      // колонки, иначе знак денег теряется в потоке одинаковых строк.
+      const digest = renderDigest(n.message);
+      const body = digest
+        || decorateBody(linkifyCoins(stripEmoji((n.message || "").split("\n")[0])));
       // linkifyCoins сам экранирует текст и делает #COIN ссылкой на TradingView.
       return `
         <div class="notif-item${fresh} notif-item--${kind}">
@@ -81,10 +85,43 @@ function renderList() {
             <span class="notif-item-title">${linkifyCoins(stripEmoji(n.title))}</span>
             <span class="notif-item-time">${mail}${fmtSince(n.ts)}</span>
           </div>
-          <div class="notif-item-body">${linkifyCoins(body)}</div>
+          <div class="notif-item-body">${body}</div>
         </div>`;
     })
     .join("");
+}
+
+// Дайджест чужих сделок в ленте: имя и сумма — в строку, остальное второй
+// строкой приглушённо. Знак красит и иконку, и сумму: колонка денег ловится
+// глазом за один проход.
+function renderDigest(message) {
+  const rows = parseDigest(message);
+  if (!rows) return null;
+  return rows
+    .map((r) => {
+      const glyph = r.kind === "open" ? "add" : r.kind === "flip" ? "swap" : "close";
+      const tone = r.sign ? ` wl-line--${r.sign}` : "";
+      const pnl = r.pnl
+        ? `<span class="wl-pnl">${escapeText(r.pnl)}</span>`
+        : `<span class="wl-pnl wl-pnl--none">open</span>`;
+      return `
+        <div class="wl-line${tone}">
+          <span class="wl-ico">${icon(glyph)}</span>
+          <span class="wl-head">${escapeText(r.head)}</span>
+          ${pnl}
+          <span class="wl-meta">${escapeText(r.meta)}</span>
+        </div>`;
+    })
+    .join("");
+}
+
+// Строки дайджеста приходят от чужого счёта — в разметку они попадают только
+// экранированными.
+function escapeText(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 async function refresh() {
@@ -178,7 +215,8 @@ function showToast(item) {
   el.setAttribute("role", "status");
   el.style.setProperty("--toast-life", `${TOAST_LINGER_MS}ms`);
   const body = (item.message || "").split("\n")[0];
-  const badge = side
+  // Пилюля — только когда иконка НЕ стрелка стороны: иначе сторона написана дважды.
+  const badge = side && glyph !== side
     ? `<span class="toast-side toast-side--${side}">${side.toUpperCase()}</span>`
     : "";
   el.innerHTML = `

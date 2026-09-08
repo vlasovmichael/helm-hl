@@ -780,10 +780,74 @@ header {
     display: block;
   }
 }
-.notif-item--ok .notif-item-ico { color: var(--green); }
+.notif-item--ok .notif-item-ico,
+.notif-item--up .notif-item-ico { color: var(--green); }
 .notif-item--loss .notif-item-ico,
+.notif-item--down .notif-item-ico,
 .notif-item--danger .notif-item-ico { color: var(--red); }
 .notif-item--warn .notif-item-ico { color: var(--warn); }
+
+/* Дайджест чужих сделок: имя и сумма в строку, метаданные — второй строкой.
+   Сумма выровнена в колонку, поэтому знак денег ловится одним взглядом. */
+.wl-line {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: "ico head pnl" ". meta meta";
+  gap: 1px 8px;
+  align-items: center;
+  padding: 5px 0;
+
+  & + & {
+    border-top: 1px solid var(--hairline);
+  }
+}
+.wl-ico {
+  grid-area: ico;
+  color: var(--text-faint);
+
+  .icon {
+    width: 13px;
+    height: 13px;
+    display: block;
+  }
+}
+.wl-head {
+  grid-area: head;
+  min-width: 0;
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wl-pnl {
+  grid-area: pnl;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.wl-pnl--none {
+  color: var(--text-faint);
+  font-weight: 400;
+  font-style: italic;
+}
+.wl-meta {
+  grid-area: meta;
+  color: var(--text-muted);
+  font-size: var(--fs-label);
+}
+.wl-line--pos {
+  .wl-ico,
+  .wl-pnl {
+    color: var(--green);
+  }
+}
+.wl-line--neg {
+  .wl-ico,
+  .wl-pnl {
+    color: var(--red);
+  }
+}
 .notif-item-title {
   flex: 1;
   min-width: 0;
@@ -912,6 +976,16 @@ header {
 .toast--warn {
   --toast-accent: var(--amber);
   --toast-accent-rgb: 217, 147, 10;
+}
+/* Сторона сделки и направление движения. Тон здесь означает СТОРОНУ, а не
+   исход: у входа исхода ещё нет. */
+.toast--up {
+  --toast-accent: var(--green);
+  --toast-accent-rgb: 26, 127, 55;
+}
+.toast--down {
+  --toast-accent: var(--red);
+  --toast-accent-rgb: 207, 34, 46;
 }
 .toast-ico {
   flex-shrink: 0;

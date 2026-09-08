@@ -80,6 +80,8 @@ function addresses() {
 const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 const usd = (n) =>
   Math.abs(n) >= 1000 ? `$${(n / 1000).toFixed(1)}k` : `$${n.toFixed(0)}`;
+// Знак ПЕРЕД долларом: usd() отдаёт «$-1.4k», и минус тонет между разделителями.
+const signedUsd = (n) => `${n >= 0 ? '+' : '\u2212'}${usd(Math.abs(n))}`;
 const arrow = (side) => (side === 'SHORT' ? '▼' : '▲');
 const dur = (ms) => {
   const m = Math.round(ms / 60_000);
@@ -230,9 +232,9 @@ async function tick() {
       if (ev.kind === 'open')
         lines.push(`${arrow(ev.side)} OPEN ${t} ${ev.side} · ${usd(ev.sizeUsd)}${ev.leverage ? ` · ${ev.leverage}×` : ''} · ${short(address)}`);
       else if (ev.kind === 'close')
-        lines.push(`× CLOSE ${t} ${ev.side} · был ${usd(ev.sizeUsd)}${pnlNet == null ? '' : ` · ${pnlNet >= 0 ? '+' : ''}${usd(pnlNet)}`}${heldMs ? ` · ${dur(heldMs)}` : ''} · ${short(address)}`);
+        lines.push(`× CLOSE ${t} ${ev.side} · был ${usd(ev.sizeUsd)}${pnlNet == null ? '' : ` · ${signedUsd(pnlNet)}`}${heldMs ? ` · ${dur(heldMs)}` : ''} · ${short(address)}`);
       else
-        lines.push(`⇄ FLIP ${t} ${ev.from}→${ev.side} · ${usd(ev.sizeUsd)}${pnlNet == null ? '' : ` · ${pnlNet >= 0 ? '+' : ''}${usd(pnlNet)}`} · ${short(address)}`);
+        lines.push(`⇄ FLIP ${t} ${ev.from}→${ev.side} · ${usd(ev.sizeUsd)}${pnlNet == null ? '' : ` · ${signedUsd(pnlNet)}`} · ${short(address)}`);
 
       journal.push({
         ts: now,

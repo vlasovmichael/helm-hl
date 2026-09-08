@@ -13,10 +13,11 @@ const NOTIF_ICON = {
   info: "info",
 };
 
-// Явная сторона сделки — только когда в тексте есть слово LONG/SHORT (fade-алерты,
-// филлы). Тогда показываем цветную пилюлю. Для радара OI/move это не «сторона».
+// Явная сторона сделки — только из ЗАГОЛОВКА («LONG #DOT opened»). 🚨 Не из
+// тела: дайджест чужих сделок перечисляет в нём и лонги, и шорты, и событие
+// получало сторону первой попавшейся строки.
 export function toastSide(item) {
-  const t = `${item.title || ""} ${item.message || ""}`;
+  const t = String(item.title || "");
   if (/\bshort\b/i.test(t)) return "short";
   if (/\blong\b/i.test(t)) return "long";
   return null;
@@ -42,7 +43,6 @@ function infoGlyph(item, dir) {
   const title = String(item.title || "");
   if (/событ|digest|сводка/i.test(title)) return "history";  // дайджест за период
   if (/\bOI\b/i.test(title)) return "flow";                  // радар открытого интереса
-  if (/\bopened\b|открыт/i.test(title)) return "add";        // вход
   if (/\badopted\b|усынов/i.test(title)) return "bot";       // нянька подхватила
   if (/funding|фандинг/i.test(title)) return "clock";
   if (tags.includes("eyes") || /started moving|проснул/i.test(title)) return "eye";
@@ -73,12 +73,15 @@ export function classifyNotif(item) {
   if (isAlert) return { kind: "danger", cls: "toast--danger", glyph: "danger", side };
 
   // Закрытие: знак PnL в теле. «PnL +$3.10 · held 2h · trail» → плюс.
+  // Цвет — по исходу, иконка — по стороне: у убыточного лонга стрелка вверх
+  // и рамка красная, и обе вещи читаются сразу.
   if (/\bclosed\b|закрыт/i.test(title)) {
     const m = msg.match(/pnl\s*([+\-−])/i);
     const win = m ? m[1] === "+" : !/[-−]\$/.test(msg);
+    const glyph = side || (win ? "check" : "falling");
     return win
-      ? { kind: "ok", cls: "toast--ok", glyph: "check", side }
-      : { kind: "loss", cls: "toast--danger", glyph: "falling", side };
+      ? { kind: "ok", cls: "toast--ok", glyph, side }
+      : { kind: "loss", cls: "toast--danger", glyph, side };
   }
 
   // Режимные предупреждения — про СОСТОЯНИЕ БОТА (пауза, кулдаун, протухшие
@@ -94,13 +97,50 @@ export function classifyNotif(item) {
     return { kind: "warn", cls: "toast--warn", glyph: "warn", side };
   }
 
-  // Вход и всё остальное — нейтрально: у открытия исхода ещё нет, и красить
-  // его в «успех» значит обещать то, чего никто не знает.
-  //
-  // 🚨 Иконка — по ТИПУ события, направление несут цвет и пилюля стороны. По
-  // одному направлению радар OI, будильник вотчлиста и открытие позы получали
-  // одну и ту же стрелку, и лента читалась как одна строка, повторённая сто раз.
-  const dir = toastDir(item) || (side === "long" ? "up" : side === "short" ? "down" : null);
+  // Сторона сделки — стрелка вверх/вниз, зелёная у лонга, красная у шорта.
+  // Это НЕ обещание исхода: у входа его ещё нет, тон здесь означает сторону.
+  if (side) {
+    const kind = side === "long" ? "up" : "down";
+    return { kind, cls: `toast--${kind}`, glyph: side, side };
+  }
+
+  // Радар и будильники: направление несёт ЦВЕТ, иконка остаётся по типу события.
+  // 🚨 Не отдавать им стрелку: с одной стрелкой на всех радар OI, будильник
+  // вотчлиста и дайджест читаются как одна строка, повторённая сто раз.
+  const dir = toastDir(item);
   const glyph = infoGlyph(item, dir);
-  return { kind: "info", cls: "", glyph, side };
+  return dir
+    ? { kind: dir, cls: `toast--${dir}`, glyph, side }
+    : { kind: "info", cls: "", glyph, side };
+}
+
+// Разбор тела дайджеста чужих сделок на колонки. Markup — в notifications.js.
+// \u25b2\u25bc\u00d7\u21c4 — маркеры OPEN/CLOSE/FLIP. Escape'ами, а не символами:
+// сторож глифов не отличает разбор чужого текста от вывода в интерфейс.
+const DIGEST_LINE = /^([\u25b2\u25bc\u00d7\u21c4])\s+(OPEN|CLOSE|FLIP)\s+(.+)$/;
+const SIGNED_MONEY = /^([+\-\u2212])\$|^\$([+\-\u2212])/;
+
+/**
+ * @param {string} message — тело пуша целиком
+ * @returns {Array<{kind:'open'|'close'|'flip', head:string, pnl:string|null,
+ *                  sign:'pos'|'neg'|null, meta:string}>|null} null — это не дайджест
+ */
+export function parseDigest(message) {
+  const rows = [];
+  for (const raw of String(message || "").split("\n")) {
+    const m = DIGEST_LINE.exec(raw.trim());
+    if (!m) continue;
+    const parts = m[3].split("\u00b7").map((x) => x.trim()).filter(Boolean);
+    const head = parts.shift() || "";
+    const pnlAt = parts.findIndex((x) => SIGNED_MONEY.test(x));
+    const pnl = pnlAt >= 0 ? parts.splice(pnlAt, 1)[0] : null;
+    rows.push({
+      kind: m[2].toLowerCase(),
+      head,
+      pnl,
+      sign: pnl ? (/^[-\u2212]|\$[-\u2212]/.test(pnl) ? "neg" : "pos") : null,
+      meta: parts.join(" \u00b7 "),
+    });
+  }
+  return rows.length ? rows : null;
 }
