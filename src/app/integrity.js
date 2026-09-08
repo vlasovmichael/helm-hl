@@ -9,6 +9,7 @@ import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 import { getActivePosition, getActiveAdoptPositions, closePosition as dbClosePosition } from '../core/database.js';
 import { getPositionsCached, getAccountSummary, cancelOrderFor, getFrontendOpenOrders } from '../modules/exchange.js';
+import { getBuilderPositions } from '../modules/builderPositions.js';
 import { fireNtfy } from '../core/ntfy.js';
 import { note } from '../core/healthRegistry.js';
 import { fetchExchangePositions } from '../modules/sync.js';
@@ -448,6 +449,40 @@ export function orphanReduceOnlyCoins(openOrders, dbPositions) {
   return [...found];
 }
 
+/**
+ * Сколько занятой маржи НИЧЕМ не объяснено.
+ *
+ * Маржа площадок HIP-3 лежит в спот-USDC как hold, а в clearinghouseState
+ * основного DEX'а её не видно: позиции там нет, деньги заняты. Вычитаем эквити
+ * builder-DEX'ов — остаток и есть та маржа, под которую позиции не нашлось.
+ *
+ * Чистая функция: без сети и БД.
+ *
+ * @param {number} equity — весь счёт
+ * @param {number} withdrawable — свободно
+ * @param {number} builderEquity — эквити на площадках HIP-3
+ * @returns {number} необъяснённая маржа, $
+ */
+export function unexplainedMarginUsd(equity, withdrawable, builderEquity) {
+  const held = (Number(equity) || 0) - (Number(withdrawable) || 0);
+  return held - Math.max(0, Number(builderEquity) || 0);
+}
+
+// Ниже этого остатка занятая маржа считается объяснённой: у HIP-3 своя
+// комиссия и свой uPnL, поэтому эквити площадки и hold спота сходятся не до
+// цента.
+const MARGIN_EXPLAINED_SLACK_USD = 1;
+
+/** Эквити на площадках HIP-3. Отказ чтения → 0: это консервативно (уйдём в лаг). */
+async function builderEquityUsd() {
+  try {
+    const b = await getBuilderPositions();
+    return b?.error ? 0 : (b?.equity || 0);
+  } catch {
+    return 0;
+  }
+}
+
 // ── Здоровье сверки «БД ↔ биржа» для health-плашки ─────────────────────────
 // Исход проверки уезжает в шапку дашборда (core/healthRegistry.js).
 //
@@ -559,7 +594,12 @@ export async function integrityCheck() {
         // ордера не отдались — консервативный путь
         logger.debug(`[Integrity] open-orders read failed: ${err.message}`);
       }
-      if (orphanCoins.length === 0) {
+      // Вторая законная причина занятой маржи — позиция на площадке HIP-3:
+      // основной DEX её не отдаёт, а спот-USDC она держит.
+      const builderEquity = await builderEquityUsd();
+      const unexplained = unexplainedMarginUsd(equity, withdrawable, builderEquity);
+
+      if (orphanCoins.length === 0 && unexplained > MARGIN_EXPLAINED_SLACK_USD) {
         logger.warn(
           `[Integrity] ⚡ getPositions() пуст, но маржа заблокирована: ` +
             `withdrawable=$${withdrawable.toFixed(2)} vs equity=$${equity.toFixed(2)} ` +
@@ -574,8 +614,11 @@ export async function integrityCheck() {
         return false;
       }
       logger.warn(
-        `[Integrity] маржа заблокирована, но это НЕ лаг API: reduce-only ордера без позиции ` +
-          `#${orphanCoins.join(', #')} — закрываю строки и снимаю сирот`,
+        orphanCoins.length
+          ? `[Integrity] маржа заблокирована, но это НЕ лаг API: reduce-only ордера без позиции ` +
+              `#${orphanCoins.join(', #')} — закрываю строки и снимаю сирот`
+          : `[Integrity] маржа заблокирована площадками HIP-3 ($${builderEquity.toFixed(2)}), ` +
+              `не лагом API — закрываю строки`,
       );
     }
 

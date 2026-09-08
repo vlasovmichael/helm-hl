@@ -1,13 +1,14 @@
 import "./src/styles/index.scss";
 import { paintIcons } from "./src/core/icon.js";
 // ─────────────────────────────────────────────────
-//  index.html — «радар»: header/position, screen, market context, trade-модалка.
-//  Hot Movers и Chasing → /movers.html; divergence/whale → /lab.html;
-//  графики/strategies/pnl/logs — др. страницы.
+//  index.html — «радар»: header/position, hot movers, screen, market context,
+//  trade-модалка.
+//  Divergence/whale → /lab.html; графики/strategies/pnl/logs — др. страницы.
 // ─────────────────────────────────────────────────
 
 import {
   REFRESH_MS,
+  fmtTime,
   getRangeHours,
   bindTheme,
   bindRange,
@@ -27,6 +28,10 @@ import {
   setActivePositionsPnl,
 } from "./src/features/accountStatus.js";
 import {
+  renderHotMovers,
+  updateHotMoversLiveArrow,
+} from "./src/hotMovers/render.js";
+import {
   renderScreen,
   initScreenInteractions,
 } from "./src/features/screen.js";
@@ -37,6 +42,11 @@ import { initManualPaperTrigger, initManualPaperActive } from "./src/features/ma
 import { initTgSignalPositions } from "./src/features/tgSignals.js";
 import { initTradeTicket } from "./src/features/tradeTicket.js";
 import { readJson as parseApi } from "./src/utils/api.js";
+
+// WS шлёт hotMovers каждые ~2с. Пока поток живой — HTTP-фолбэк /api/signals
+// в tick() не дёргаем (был бы дубликат тех же данных).
+const WS_HOTMOVERS_FRESH_MS = 8000;
+let lastWsHotMoversAt = 0;
 
 function onStatus(data) {
   renderHeader(data);
@@ -54,6 +64,14 @@ function onStatus(data) {
   setActivePositionsPnl(upnl);
   // Живая цена BTC в плашку Market Context (≤2с, из WS-кадра) — не ждём 10с-поллинг.
   updateBtcLivePrice(data.btcLivePrice);
+  // Hot Movers из WS (≤2с) вместо 10с-поллинга; HTTP /api/signals в tick() = фолбэк.
+  if (data.hotMovers?.signals) {
+    renderHotMovers(data.hotMovers, fmtTime);
+    lastWsHotMoversAt = Date.now();
+  }
+  // Живой спин стрелки активной монеты в Hot Movers (≤2с) — после рендера, чтобы
+  // спин ставился на уже смонтированный узел и не сбрасывался перестроением строк.
+  updateHotMoversLiveArrow();
 }
 
 // Каждая панель рисуется САМА, как только пришли её данные. Раньше здесь стоял
@@ -76,6 +94,14 @@ function tick() {
     .catch((err) =>
       renderScreen({ ok: false, reason: "dashboard unreachable", message: err?.message }),
     );
+
+  // Фолбэк /api/signals только если WS не присылал hotMovers недавно.
+  const wsHotFresh = Date.now() - lastWsHotMoversAt < WS_HOTMOVERS_FRESH_MS;
+  if (!wsHotFresh) {
+    paint(fetchJson("/api/signals?limit=30"), (d) => {
+      if (d?.signals) renderHotMovers(d, fmtTime);
+    });
+  }
 
   // Локальные эндпоинты (своя БД, без HL-веса) — рисуются первыми, не ждут биржу.
   paint(
@@ -211,6 +237,30 @@ tick();
 setInterval(tick, REFRESH_MS);
 startFooterTimer();
 
+// Счётчик форвард-замера под таблицей: сколько сделок из 60 набрано с момента
+// регистрации гипотезы, за которую отвечают колонки Costly side / Move. Раз в
+// 10 минут — счётчик двигается только на закрытии сделки, поллинг тут был бы
+// шумом. Сам вердикт по монете в /api/entry-filter не читается: он уже едет в
+// hotMovers-строках, и второй источник той же метки завёл бы расхождение.
+async function loadChaseForward() {
+  const el = document.getElementById("hm-chase-fwd");
+  if (!el) return;
+  try {
+    const d = await fetchJson("/api/entry-filter");
+    const fw = d?.forward;
+    if (!fw || fw.n == null) return;
+    el.hidden = false;
+    el.innerHTML = `<b>Costly side — forward check:</b> <b>${fw.n}</b> of <b>${fw.target}</b>
+      fresh trades logged since the rule was registered. It was found in past data, so it is
+      judged <b>once</b>, at ${fw.target} — looking earlier is what turned five previous ideas
+      into noise.`;
+  } catch {
+    /* счётчик — не данные для решения: сетевой сбой просто оставляет строку скрытой */
+  }
+}
+loadChaseForward();
+setInterval(loadChaseForward, 600_000);
+
 
 // ── Вкладка вернулась из фона: доигрываем застрявшие transition'ы ──────────
 // Баг «серая полоска у плашки BTC». Смена состояния светофора
@@ -232,11 +282,23 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-// DEV-мок без бэка: ?mock=1 — активная монета (risk-bar + ракета). Мок тиков
-// Hot Movers уехал вместе с таблицей на /movers. Динамический импорт → в проде
-// модуль даже не грузится.
+// DEV-моки без бэка. Динамический импорт → в проде модули даже не грузятся.
+//   ?mock=1  — активная монета (risk-bar + ракета);
+//   ?mock=hm — тики Hot Movers: порядок монет меняется каждые 2с, на этом
+//              смотрят движение таблицы (живые тики иначе только с бэка).
 {
-  if (new URLSearchParams(location.search).get("mock") != null) {
+  const mock = new URLSearchParams(location.search).get("mock");
+  if (mock === "hm") {
+    // &pos=SOL,BTC — открытые позиции: с ними у строк появляются под-строки,
+    // на которых и проверяется высота карточки.
+    const pos = (new URLSearchParams(location.search).get("pos") || "")
+      .split(",")
+      .map((c) => c.trim().toUpperCase())
+      .filter(Boolean);
+    import("./src/dev/mockHotMovers.js").then((m) =>
+      m.startHotMoversMock({ positions: pos }),
+    );
+  } else if (mock != null) {
     import("./src/dev/mockActive.js").then((m) => m.startMock({ onStatus }));
   }
 }

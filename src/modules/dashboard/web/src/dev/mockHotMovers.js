@@ -24,10 +24,23 @@ function payload(t) {
       const { w, p } = PHASE[i];
       const base = Math.sin(t * w + p) * 5;
       const win = (mins, k) => ({ mins, spikePct: base * k, volUsd: 1e6 });
+      // Вердикт Costly side / Move считает сервер (routes/entryFilter.js);
+      // здесь его пороги повторены, иначе колонки в моке всегда пустые.
+      const t1h = base * 1.6, t15m = base * 1.2;
+      const level =
+        Math.abs(t1h) >= 5 ? "extreme"
+        : Math.abs(t1h) >= 3 ? "strong"
+        : Math.abs(t15m) >= 1.5 ? "fast"
+        : "quiet";
       return {
         coin,
         price: price(i) * (1 + base / 400),
         windows: [win(2, 0.4), win(5, 0.8), win(15, 1.2), win(60, 1.6)],
+        chasing: {
+          level,
+          blockedSide: level === "quiet" ? null : (t1h > 0 ? "LONG" : "SHORT"),
+          text: `${t1h.toFixed(1)}% in an hour — mock`,
+        },
         volMult: 1 + Math.abs(Math.sin(t * w)) * 2,
         oiChangePct: base,
         htfTrend: base > 1 ? "up" : base < -1 ? "down" : "flat",

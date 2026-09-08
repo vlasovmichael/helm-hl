@@ -13,7 +13,6 @@ import { initHoverCards } from "./hoverCard.js";
 
 const LINKS = [
   { key: "dashboard", href: "/", label: "Dashboard" },
-  { key: "movers", href: "/movers", label: "Movers" },
   // Order Book остаётся как страница (/orderbook), но ссылку из навбара
   // убрали — стакан оператору тяжело читается, не нужен на видном месте.
   { key: "statistics", href: "/statistics", label: "Statistics" },

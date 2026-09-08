@@ -147,6 +147,29 @@ function finishHmProgress() {
   }
 }
 
+// Колонки Costly side / Move — вердикт «вход по уже случившемуся движению»
+// (payload.chasing, считается на сервере из окон 60м/15м). Разделены намеренно:
+// сторона отвечает «какая», уровень — «насколько поздно», и уровень без стороны
+// не значит ничего.
+const CHASE_LVL_LABEL = { extreme: "extreme", strong: "strong", fast: "fast 15m", quiet: "quiet" };
+
+function chaseCells(chasing) {
+  const side = chasing?.blockedSide || null;
+  const level = chasing?.level || "quiet";
+  const sideHtml = side
+    ? `<span class="hm-costly-pill ${side.toLowerCase()}">${icon(side === "SHORT" ? "short" : "long")}${side}</span>`
+    : '<span class="num-inline-muted">—</span>';
+  // Тултип несёт цену стороны из журнала — колонка сама по себе только метка.
+  const card = chasing?.text
+    ? `${chasing.text}. Journal (650 manual trades): entering with the move returned −0.18 per trade against −0.05 entering against it.`
+    : "No strong move on the hour or 15 minutes — the filter says nothing";
+  return (
+    `<td class="hm-costly center" data-w="Costly" data-card="${escapeHtml(card)}">${sideHtml}</td>` +
+    `<td class="hm-move" data-w="Move" data-card="How far the move has already gone: extreme = the hour moved 5%+, strong = 3%+, fast 15m = 1.5%+ in 15 minutes">` +
+      `<span class="hm-move-lvl ${level}">${CHASE_LVL_LABEL[level] || level}</span></td>`
+  );
+}
+
 export function renderHotMovers(payload, fmtTime) {
   const tbody = document.getElementById("hot-movers-tbody");
   const meta = document.getElementById("hot-movers-meta");
@@ -517,7 +540,8 @@ export function renderHotMovers(payload, fmtTime) {
       ${cells}
       <td class="num ${accelCellCls}" data-w="Acc">${accelInner}</td>
       <td class="num" data-w="OI">${oiInner}</td>
-      <td class="num" data-w="Trend">${trendInner}</td>`;
+      <td class="num" data-w="Trend">${trendInner}</td>
+      ${chaseCells(s.chasing)}`;
 
     items.push({ key: `m:${s.coin}`, cls: rowCls, html: rowHtml });
 
@@ -557,7 +581,7 @@ export function renderHotMovers(payload, fmtTime) {
     items.push({
       key: "ph:status",
       cls: "hm-status-row",
-      html: `<td colspan="11" class="hm-status-cell">${statusHtml}</td>`,
+      html: `<td colspan="13" class="hm-status-cell">${statusHtml}</td>`,
     });
     startHmProgress();
   } else {
@@ -569,7 +593,7 @@ export function renderHotMovers(payload, fmtTime) {
       items.push({
         key: `ph:${i}`,
         cls: "hm-placeholder-row",
-        html: '<td colspan="11" class="hm-ph-cell"><span class="signals-price">&nbsp;</span></td>',
+        html: '<td colspan="13" class="hm-ph-cell"><span class="signals-price">&nbsp;</span></td>',
       });
     }
   }
@@ -601,6 +625,11 @@ function stabilizeHeight(tbody, rowTarget) {
   const rowH = sample?.offsetHeight || 0;
   const headH = thead?.offsetHeight || 0;
   if (rowH <= 0) return; // пустое состояние (статус-строка) — высоту не трогаем
+  // На мобиле строка — карточка, и её высоту задаёт контент (число колонок в
+  // ней меняется). Отдаём измеренную высоту в переменную, по которой добивочные
+  // карточки держат min-height: иначе пустой слот остаётся на хардкоде и не
+  // сходится с настоящей карточкой.
+  wrap.style.setProperty("--hm-card-min-h", `${rowH}px`);
   // Под-строки меряем поимённо: они ниже основных и у каждой своя высота
   // (позиция с бейджем переносится на узком экране).
   let subH = 0;

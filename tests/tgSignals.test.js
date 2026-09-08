@@ -120,6 +120,38 @@ test('проза со словом short не становится сигнал�
   assert.equal(parsePost('We are long term bullish on ETH here.'), null);
 });
 
+
+// ── side-slash-ticker / coin-side-labels ────────────────────────────────────
+
+const SIDE_SLASH = 'Binance Futures, OKX, BingX Futures Long/Buy #HYPE/USDT Enter above - 86.80 Targets: 87.32 - 87.84';
+
+test('сторона парой слов через слэш посреди списка бирж', () => {
+  assert.deepEqual(parsePost(SIDE_SLASH), { coin: 'HYPE', side: 'long', format: 'side-slash-ticker' });
+  const short = 'BybitUSDT Short/Sell #SOL/USDT Enter below - 180.5';
+  assert.deepEqual(parsePost(short), { coin: 'SOL', side: 'short', format: 'side-slash-ticker' });
+});
+
+const COIN_SIDE = `\u{1F4E6} TRADING GAIN
+Coin: COMPUSDT
+Side:SELL
+SELL Zone:18.50 -18.80
+Stoploss:19.05`;
+
+test('подписи Coin/Side разбираются, SELL = short', () => {
+  assert.deepEqual(parsePost(COIN_SIDE), { coin: 'COMP', side: 'short', format: 'coin-side-labels' });
+});
+
+test('тот же канал с шапкой-восклицанием и суффиксом перпа .P', () => {
+  const alert = '\u{1F4E9}TradingGain Range Alert\n\n\u{1F7E2} RANGE LONG!\n\u{1F4CA} Coin: TAUSDT.P\n\u{1F4B0} Entry: 0.05992';
+  assert.deepEqual(parsePost(alert), { coin: 'TA', side: 'long', format: 'coin-side-labels' });
+});
+
+// 🚨 Сторона у coin-side-labels берётся ТОЛЬКО из подписи или восклицательной
+// шапки: слово LONG где угодно в тексте ловило бы рекламу и дисклеймеры.
+test('слово стороны в прозе не даёт сигнала при наличии Coin:', () => {
+  assert.equal(parsePost('Coin: COMPUSDT\nWe stay long term bullish on this one.'), null);
+});
+
 // Форматы опознаются автоматически, поэтому важно, что они не спорят друг с
 // другом: пост одного формата не должен разбираться другим.
 test('форматы не перехватывают чужие посты', () => {
@@ -129,6 +161,8 @@ test('форматы не перехватывают чужие посты', () 
     [SIDE_FIRST, 'side-first'],
     [LABELLED, 'labelled-card'],
     ['Buying #BICO here on Binance', 'imperative'],
+    [SIDE_SLASH, 'side-slash-ticker'],
+    [COIN_SIDE, 'coin-side-labels'],
   ];
   for (const [text, format] of cases) assert.equal(parsePost(text).format, format);
 });

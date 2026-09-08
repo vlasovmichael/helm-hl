@@ -51,6 +51,7 @@ const RESULT_MARKERS = [
 export function normalizeCoin(raw) {
   if (!raw) return null;
   let c = String(raw).trim().toUpperCase().replace(/^[#$]/, '');
+  c = c.replace(/\.P(ERP)?$/i, '');           // TAUSDT.P — перп у TradingView-ботов
   c = c.replace(/[/-]?(USDT|USDC|USD|PERP)$/i, '');
   if (!/^[A-Z0-9]{2,12}$/.test(c)) return null;
   const k = c.match(/^1000(?:X)?([A-Z]{2,10})$/);
@@ -99,6 +100,31 @@ const FORMATS = [
       const m = text.match(/(?:^|\n)[^\w\n]{0,8}(LONG|SHORT)\s+#?([A-Z0-9]{2,12})\/?USDT\b/i);
       if (!m) return null;
       return { coin: normalizeCoin(m[2]), side: normalizeSide(m[1]) };
+    },
+  },
+  {
+    // «Long/Buy #HYPE/USDT Enter above — …»: сторона парой слов через слэш.
+    id: 'side-slash-ticker',
+    match(text) {
+      const m = text.match(/\b(?:Long\/Buy|Buy\/Long|Short\/Sell|Sell\/Short)\s+#?([A-Z0-9]{2,12})\/?USDT\b/i);
+      if (!m) return null;
+      const side = /short|sell/i.test(m[0]) ? 'short' : 'long';
+      return { coin: normalizeCoin(m[1]), side };
+    },
+  },
+  {
+    // Coin: COMPUSDT ⏎ Side:SELL — и его же вариант с заголовком «RANGE LONG!».
+    // Сторону берём только из подписи или из восклицательной шапки: слово
+    // LONG где угодно в тексте здесь ловило бы дисклеймеры и рекламу.
+    id: 'coin-side-labels',
+    match(text) {
+      const coin = text.match(/\bCoin\s*:\s*\$?#?([A-Z0-9]{2,14}(?:\.P)?)\b/i);
+      if (!coin) return null;
+      const side =
+        text.match(/\bSide\s*:\s*\W{0,4}(BUY|SELL|LONG|SHORT)\b/i)?.[1] ||
+        text.match(/(?:^|\n)[^\w\n]{0,4}(?:[A-Z]+\s+)?(LONG|SHORT)\s*!/i)?.[1];
+      if (!side) return null;
+      return { coin: normalizeCoin(coin[1]), side: normalizeSide(side) };
     },
   },
   {

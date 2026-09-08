@@ -24,6 +24,74 @@
   background: color-mix(in srgb, var(--neg, #e5484d) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--neg, #e5484d) 35%, transparent);
 }
+/* Счётчик форвард-замера под таблицей. Пунктир — «счётчик ещё идёт, вывода
+   тут нет»: тот же приём, что у .cod-fwd на /oi. */
+.hm-fwd {
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-3);
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border);
+  font-size: var(--fs-small);
+  line-height: 1.6;
+  color: var(--text-secondary);
+
+  b {
+    color: var(--text-primary);
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Колонка Costly side: сторона, за которую журнал уже заплатил. Пилюля, а не
+   голый текст, — рядом стоит Setup-пилл, и две стороны в строке должны
+   отличаться на глаз. */
+.hm-costly-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-wide);
+  color: #fff;
+
+  .icon {
+    width: 10px;
+    height: 10px;
+  }
+  &.long {
+    background: var(--green);
+  }
+  &.short {
+    background: var(--red);
+  }
+}
+
+/* Колонка Move: насколько движение уже ушло. Только текст — это шкала к
+   соседней стороне, а не второй сигнал. */
+.hm-move-lvl {
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-wide);
+  text-transform: uppercase;
+
+  &.extreme {
+    color: var(--red);
+    font-weight: 700;
+  }
+  &.strong {
+    color: var(--warn);
+    font-weight: 600;
+  }
+  &.fast,
+  &.quiet {
+    color: var(--text-secondary);
+  }
+  &.quiet {
+    opacity: 0.6;
+  }
+}
+
 .signals-table-wrap {
   overflow-x: auto;
   margin: 0 -8px;
@@ -61,7 +129,7 @@
    цены (у разных монет разное число знаков: $0.00001 vs $104k, % меняет знак/
    разряд). table-layout:fixed → ширина колонки не зависит от контента. Шрифт уже
    моноширинный (tabular). card-вёрстка ниже включается раньше — на ≤$bp-lg (там же,
-   где мобильная нижняя навигация): на узком дашборде (рядом с графиком) 11 колонок
+   где мобильная нижняя навигация): на узком дашборде (рядом с графиком) 13 колонок
    не влезали и резались в «+0…». Десктоп-таблица — только выше $bp-lg. */
 @include from($bp-lg + 1) {
   .hm-table {
@@ -113,7 +181,15 @@
   .hm-table td:nth-child(11) {
     width: 52px;
   } /* Trend */
-  /* Под-строка позиции (colspan=11) — не зажимать в 26px nth-child(1), дать всю ширину. */
+  .hm-table th:nth-child(12),
+  .hm-table td:nth-child(12) {
+    width: 86px;
+  } /* Costly side */
+  .hm-table th:nth-child(13),
+  .hm-table td:nth-child(13) {
+    width: 72px;
+  } /* Move */
+  /* Под-строка позиции (colspan=13) — не зажимать в 26px nth-child(1), дать всю ширину. */
   .hm-table .hm-pos-row td {
     width: auto;
     overflow: visible;
@@ -894,7 +970,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
 }
 
 /* ── Hot Movers — мобильная card-вёрстка (≤720px) ──
-   11 колонок не влезают в телефон → каждая монета становится карточкой:
+   13 колонок не влезают в телефон → каждая монета становится карточкой:
    строка 1 = ранг · тикер(+чип) · цена(справа) · тайминг входа;
    строка 2 = Setup-вердикт во всю ширину;
    строка 3 = окна 2m/5m/15m; строка 4 = Acc / OI / Trend.
@@ -1010,6 +1086,17 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     flex: 1 1 26%;
     text-align: left;
   }
+  /* строка 5: вердикт «поздно ли» — сторона и уровень рядом, во всю ширину */
+  .hm-table tr.hm-main td.hm-costly {
+    order: 10;
+    flex: 0 0 auto;
+    text-align: left;
+  }
+  .hm-table tr.hm-main td.hm-move {
+    order: 11;
+    flex: 1 1 auto;
+    text-align: left;
+  }
   /* лейблы только на метрик-ячейках (окна + Acc/OI/Trend) */
   .hm-table tr.hm-main td[data-w]::before {
     content: attr(data-w);
@@ -1025,18 +1112,10 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   .hm-table tr.hm-main td.hm-entry::before {
     content: none;
   }
-  /* живая кромка по направлению/позиции — слева на всей карточке
-     (на мобиле box-shadow td:first-child не даёт высоту) */
-  .hm-table tr.hm-main.row-up.row-heat-mid,
-  .hm-table tr.hm-main.row-up.row-heat-strong {
-    box-shadow: inset 3px 0 0 var(--green);
-  }
-  .hm-table tr.hm-main.row-down.row-heat-mid,
-  .hm-table tr.hm-main.row-down.row-heat-strong {
-    box-shadow: inset 3px 0 0 var(--red);
-  }
+  /* 🚨 Кромки-box-shadow на карточке-ряде нет: направление уже несут цвет цены
+     и проценты, а своя монета — фон .is-active. */
   .hm-table tr.hm-main.is-active {
-    box-shadow: inset 4px 0 0 var(--accent) !important;
+    box-shadow: none !important;
   }
   /* плейсхолдер (empty-state / waiting) обычным блоком */
   .hm-table tbody tr:not(.hm-main):not(.hm-pos-row) {
