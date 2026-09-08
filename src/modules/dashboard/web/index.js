@@ -238,7 +238,7 @@ setInterval(tick, REFRESH_MS);
 startFooterTimer();
 
 // Счётчик форвард-замера под таблицей: сколько сделок из 60 набрано с момента
-// регистрации гипотезы, за которую отвечают колонки Costly side / Move. Раз в
+// регистрации гипотезы, за которую отвечают метка COSTLY и колонка Move. Раз в
 // 10 минут — счётчик двигается только на закрытии сделки, поллинг тут был бы
 // шумом. Сам вердикт по монете в /api/entry-filter не читается: он уже едет в
 // hotMovers-строках, и второй источник той же метки завёл бы расхождение.
@@ -250,7 +250,7 @@ async function loadChaseForward() {
     const fw = d?.forward;
     if (!fw || fw.n == null) return;
     el.hidden = false;
-    el.innerHTML = `<b>Costly side — forward check:</b> <b>${fw.n}</b> of <b>${fw.target}</b>
+    el.innerHTML = `<b>COSTLY mark — forward check:</b> <b>${fw.n}</b> of <b>${fw.target}</b>
       fresh trades logged since the rule was registered. It was found in past data, so it is
       judged <b>once</b>, at ${fw.target} — looking earlier is what turned five previous ideas
       into noise.`;

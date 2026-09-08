@@ -147,26 +147,27 @@ function finishHmProgress() {
   }
 }
 
-// Колонки Costly side / Move — вердикт «вход по уже случившемуся движению»
-// (payload.chasing, считается на сервере из окон 60м/15м). Разделены намеренно:
-// сторона отвечает «какая», уровень — «насколько поздно», и уровень без стороны
-// не значит ничего.
+// Метка «эта сторона уже стоила дорого» — только когда помеченная сторона равна
+// той, что строка предлагает: иначе шум на каждой быстрой монете.
+// 🚨 Уровень в метку не пишем: он рядом, в колонке Move.
+export function chaseBadge(chasing, side, isWait = false) {
+  if (!chasing || chasing.level === "quiet" || !chasing.blockedSide) return "";
+  if (!side || chasing.blockedSide !== side) return "";
+  // На WAIT метки нет: «поздно входить» поверх «не входи» — один факт дважды.
+  if (isWait) return "";
+  const card = `${chasing.text}. Journal (650 manual trades): entering with the move returned −0.18 per trade against −0.05 entering against it.`;
+  return `<span class="hm-chase hm-chase--${chasing.level}" data-card="${escapeHtml(card)}">COSTLY</span>`;
+}
+
+// Колонка Move: насколько движение ушло. Про монету, а не про сторону, — поэтому
+// стоит отдельно от метки и рисуется всегда.
 const CHASE_LVL_LABEL = { extreme: "extreme", strong: "strong", fast: "fast 15m", quiet: "quiet" };
 
-function chaseCells(chasing) {
-  const side = chasing?.blockedSide || null;
+function moveCell(chasing) {
   const level = chasing?.level || "quiet";
-  const sideHtml = side
-    ? `<span class="hm-costly-pill ${side.toLowerCase()}">${icon(side === "SHORT" ? "short" : "long")}${side}</span>`
-    : '<span class="num-inline-muted">—</span>';
-  // Тултип несёт цену стороны из журнала — колонка сама по себе только метка.
-  const card = chasing?.text
-    ? `${chasing.text}. Journal (650 manual trades): entering with the move returned −0.18 per trade against −0.05 entering against it.`
-    : "No strong move on the hour or 15 minutes — the filter says nothing";
   return (
-    `<td class="hm-costly center" data-w="Costly" data-card="${escapeHtml(card)}">${sideHtml}</td>` +
     `<td class="hm-move" data-w="Move" data-card="How far the move has already gone: extreme = the hour moved 5%+, strong = 3%+, fast 15m = 1.5%+ in 15 minutes">` +
-      `<span class="hm-move-lvl ${level}">${CHASE_LVL_LABEL[level] || level}</span></td>`
+    `<span class="hm-move-lvl ${level}">${CHASE_LVL_LABEL[level] || level}</span></td>`
   );
 }
 
@@ -481,9 +482,16 @@ export function renderHotMovers(payload, fmtTime) {
       const color = Math.abs(v) >= 3 ? "var(--accent)" : "var(--text-muted)";
       openSetupHtml = `<span style="color:${color};font-weight:600">OI 15m ${arrow}${fmtPct(v)}</span>`;
     }
+    // Открытая поза → метим сторону, в которой оператор УЖЕ сидит; закрытая →
+    // сторону, которую предлагает momentum.
+    const chase = chaseBadge(
+      s.chasing,
+      isOpen ? (getActivePos(s.coin)?.side ?? null) : setup.side,
+      !isOpen && setup.cls === "setup-wait",
+    );
     const setupCell = isOpen
-      ? `<td class="hm-setup center" data-w="Setup" data-card="Open-interest change over 15m: rising = new money entering the move (fuel), falling = participants closing">${openSetupHtml}</td>`
-      : `<td class="hm-setup center ${setupCls}" data-w="Setup" data-card="${setupTitle}"><span class="hm-setup-pill">${setupLabel}</span></td>`;
+      ? `<td class="hm-setup center" data-w="Setup" data-card="Open-interest change over 15m: rising = new money entering the move (fuel), falling = participants closing">${openSetupHtml}${chase}</td>`
+      : `<td class="hm-setup center ${setupCls}" data-w="Setup" data-card="${setupTitle}"><span class="hm-setup-pill">${setupLabel}</span>${chase}</td>`;
 
     // ENTER: для открытой монеты вход неактуален — вместо таймера ОДНА стрелка,
     // которая поворачивается ПО МНЕ, а не по цене: up (зелёная) = движ в мою
@@ -541,7 +549,7 @@ export function renderHotMovers(payload, fmtTime) {
       <td class="num ${accelCellCls}" data-w="Acc">${accelInner}</td>
       <td class="num" data-w="OI">${oiInner}</td>
       <td class="num" data-w="Trend">${trendInner}</td>
-      ${chaseCells(s.chasing)}`;
+      ${moveCell(s.chasing)}`;
 
     items.push({ key: `m:${s.coin}`, cls: rowCls, html: rowHtml });
 
@@ -581,7 +589,7 @@ export function renderHotMovers(payload, fmtTime) {
     items.push({
       key: "ph:status",
       cls: "hm-status-row",
-      html: `<td colspan="13" class="hm-status-cell">${statusHtml}</td>`,
+      html: `<td colspan="12" class="hm-status-cell">${statusHtml}</td>`,
     });
     startHmProgress();
   } else {
@@ -593,7 +601,7 @@ export function renderHotMovers(payload, fmtTime) {
       items.push({
         key: `ph:${i}`,
         cls: "hm-placeholder-row",
-        html: '<td colspan="13" class="hm-ph-cell"><span class="signals-price">&nbsp;</span></td>',
+        html: '<td colspan="12" class="hm-ph-cell"><span class="signals-price">&nbsp;</span></td>',
       });
     }
   }

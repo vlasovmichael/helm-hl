@@ -42,34 +42,32 @@
   }
 }
 
-/* Колонка Costly side: сторона, за которую журнал уже заплатил. Пилюля, а не
-   голый текст, — рядом стоит Setup-пилл, и две стороны в строке должны
-   отличаться на глаз. */
-.hm-costly-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 7px;
-  border-radius: var(--radius-pill);
+/* Метка «эта сторона уже стоила дорого» рядом с Setup-пиллом. Кегль ниже
+   пилла и без иконки: это сноска к сетапу, а не второй сигнал в строке. */
+.hm-chase {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 4px;
+  border-radius: 3px;
   font-size: var(--fs-micro);
-  font-weight: 600;
-  letter-spacing: var(--ls-wide);
-  color: #fff;
-
-  .icon {
-    width: 10px;
-    height: 10px;
-  }
-  &.long {
-    background: var(--green);
-  }
-  &.short {
-    background: var(--red);
-  }
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  vertical-align: middle;
+  color: var(--text-muted);
+  border: 1px solid color-mix(in srgb, var(--text-muted) 35%, transparent);
+}
+.hm-chase--strong {
+  color: var(--orange, #f59e0b);
+  border-color: color-mix(in srgb, var(--orange, #f59e0b) 45%, transparent);
+}
+.hm-chase--extreme {
+  color: var(--neg, #e5484d);
+  border-color: color-mix(in srgb, var(--neg, #e5484d) 50%, transparent);
+  background: color-mix(in srgb, var(--neg, #e5484d) 12%, transparent);
 }
 
-/* Колонка Move: насколько движение уже ушло. Только текст — это шкала к
-   соседней стороне, а не второй сигнал. */
+/* Колонка Move: насколько движение уже ушло. Только текст — это шкала к метке
+   у Setup, а не второй сигнал. */
 .hm-move-lvl {
   font-size: var(--fs-label);
   letter-spacing: var(--ls-wide);
@@ -129,7 +127,7 @@
    цены (у разных монет разное число знаков: $0.00001 vs $104k, % меняет знак/
    разряд). table-layout:fixed → ширина колонки не зависит от контента. Шрифт уже
    моноширинный (tabular). card-вёрстка ниже включается раньше — на ≤$bp-lg (там же,
-   где мобильная нижняя навигация): на узком дашборде (рядом с графиком) 13 колонок
+   где мобильная нижняя навигация): на узком дашборде (рядом с графиком) 12 колонок
    не влезали и резались в «+0…». Десктоп-таблица — только выше $bp-lg. */
 @include from($bp-lg + 1) {
   .hm-table {
@@ -151,8 +149,8 @@
   } /* Coin (+ чипы 1h-тренд / OI×V) */
   .hm-table th:nth-child(3),
   .hm-table td:nth-child(3) {
-    width: 80px;
-  } /* Setup */
+    width: 108px;
+  } /* Setup (+ метка COSTLY) */
   .hm-table th:nth-child(4),
   .hm-table td:nth-child(4) {
     width: 52px;
@@ -183,13 +181,9 @@
   } /* Trend */
   .hm-table th:nth-child(12),
   .hm-table td:nth-child(12) {
-    width: 86px;
-  } /* Costly side */
-  .hm-table th:nth-child(13),
-  .hm-table td:nth-child(13) {
     width: 72px;
   } /* Move */
-  /* Под-строка позиции (colspan=13) — не зажимать в 26px nth-child(1), дать всю ширину. */
+  /* Под-строка позиции (colspan=12) — не зажимать в 26px nth-child(1), дать всю ширину. */
   .hm-table .hm-pos-row td {
     width: auto;
     overflow: visible;
@@ -970,7 +964,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
 }
 
 /* ── Hot Movers — мобильная card-вёрстка (≤720px) ──
-   13 колонок не влезают в телефон → каждая монета становится карточкой:
+   12 колонок не влезают в телефон → каждая монета становится карточкой:
    строка 1 = ранг · тикер(+чип) · цена(справа) · тайминг входа;
    строка 2 = Setup-вердикт во всю ширину;
    строка 3 = окна 2m/5m/15m; строка 4 = Acc / OI / Trend.
@@ -1086,15 +1080,10 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     flex: 1 1 26%;
     text-align: left;
   }
-  /* строка 5: вердикт «поздно ли» — сторона и уровень рядом, во всю ширину */
-  .hm-table tr.hm-main td.hm-costly {
-    order: 10;
-    flex: 0 0 auto;
-    text-align: left;
-  }
+  /* Move — последним в четвёртой строке, рядом с Acc/OI/Trend */
   .hm-table tr.hm-main td.hm-move {
-    order: 11;
-    flex: 1 1 auto;
+    order: 10;
+    flex: 1 1 26%;
     text-align: left;
   }
   /* лейблы только на метрик-ячейках (окна + Acc/OI/Trend) */
