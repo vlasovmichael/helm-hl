@@ -288,7 +288,11 @@ document.addEventListener("visibilitychange", () => {
 //              смотрят движение таблицы (живые тики иначе только с бэка).
 {
   const mock = new URLSearchParams(location.search).get("mock");
-  if (mock === "hm") {
+  if (mock === "hm" && new URLSearchParams(location.search).get("states")) {
+    import("./src/dev/mockHotMovers.js").then((m) =>
+      m.startHotMoversStates({ flushDir: new URLSearchParams(location.search).get("flush") || "up" }),
+    );
+  } else if (mock === "hm") {
     // &pos=SOL,BTC — открытые позиции: с ними у строк появляются под-строки,
     // на которых и проверяется высота карточки.
     const pos = (new URLSearchParams(location.search).get("pos") || "")

@@ -147,16 +147,32 @@ function finishHmProgress() {
   }
 }
 
-// Метка «эта сторона уже стоила дорого» — только когда помеченная сторона равна
-// той, что строка предлагает: иначе шум на каждой быстрой монете.
-// 🚨 Уровень в метку не пишем: он рядом, в колонке Move.
-export function chaseBadge(chasing, side, isWait = false) {
-  if (!chasing || chasing.level === "quiet" || !chasing.blockedSide) return "";
-  if (!side || chasing.blockedSide !== side) return "";
-  // На WAIT метки нет: «поздно входить» поверх «не входи» — один факт дважды.
-  if (isWait) return "";
-  const card = `${chasing.text}. Journal (650 manual trades): entering with the move returned −0.18 per trade against −0.05 entering against it.`;
-  return `<span class="hm-chase hm-chase--${chasing.level}" data-card="${escapeHtml(card)}">COSTLY</span>`;
+// Будильник «выдохшийся хвост»: монета прошла 3%+ за полчаса на протяжённом
+// ходе. 🚨 Не вход — форвард дал expectancy ≈ 0; метка значит «глянь график».
+function fadeHotChip(fh) {
+  if (!fh?.fired) return "";
+  const card =
+    `Tail of an extended move: ${fh.move > 0 ? "+" : ""}${fh.move.toFixed(1)}% in 30 min, ` +
+    `Kaufman ER ${fh.er.toFixed(2)} over 4h. A wake-up call to look at the chart, NOT an entry — ` +
+    `the forward run (n=34) came out at expectancy ≈ 0, CI95 [−1.0, +2.2]%.`;
+  return `<span class="hm-fh" data-card="${escapeHtml(card)}">${icon("squeeze")}${escapeHtml(fh.side)}</span>`;
+}
+
+// Класс пилюли — по тому, что она показывает: WAIT серым, сторона цветом.
+// 🚨 Не по setup.cls: там сторона живёт и на WAIT-строках, и пилюля красилась.
+function costlyCls(setup) {
+  if (setup.cls === "setup-wait") return "costly-wait";
+  if (setup.side === "LONG") return "costly-long";
+  if (setup.side === "SHORT") return "costly-short";
+  return "costly-none";
+}
+
+// Совпала ли сторона строки с той, за которую журнал уже заплатил.
+// 🚨 На WAIT не метим: «поздно входить» поверх «не входи» — один факт дважды.
+export function isCostlySide(chasing, side, isWait = false) {
+  if (!chasing || chasing.level === "quiet" || !chasing.blockedSide) return false;
+  if (!side || chasing.blockedSide !== side) return false;
+  return !isWait;
 }
 
 // Колонка Move: насколько движение ушло. Про монету, а не про сторону, — поэтому
@@ -166,7 +182,7 @@ const CHASE_LVL_LABEL = { extreme: "extreme", strong: "strong", fast: "fast 15m"
 function moveCell(chasing) {
   const level = chasing?.level || "quiet";
   return (
-    `<td class="hm-move" data-w="Move" data-card="How far the move has already gone: extreme = the hour moved 5%+, strong = 3%+, fast 15m = 1.5%+ in 15 minutes">` +
+    `<td class="hm-move num" data-w="Move" data-card="How far the move has already gone: extreme = the hour moved 5%+, strong = 3%+, fast 15m = 1.5%+ in 15 minutes">` +
     `<span class="hm-move-lvl ${level}">${CHASE_LVL_LABEL[level] || level}</span></td>`
   );
 }
@@ -437,7 +453,6 @@ export function renderHotMovers(payload, fmtTime) {
     // Честный вердикт: continuation-вердикт карточки бэктестился в МИНУС
     // (−0.16%/30м, win 42%, 1752 сигнала), поэтому «вход» здесь не загорается
     // никогда — только приглушённый контекст направления, Enter='—'.
-    let setupCls = setup.cls;
     let setupLabel = setup.label;
     let setupTitle = setup.title;
     const entryState = "none";
@@ -445,12 +460,6 @@ export function renderHotMovers(payload, fmtTime) {
       ? ""
       : "context only — continuation backtests negative, this is not an entry";
     if (!isOpen) {
-      // Гасим до wait-вида: сторона и тинт строки всё ещё показывают движение,
-      // но Enter остаётся '—'.
-      setupCls =
-        setup.side === "LONG" ? "setup-wait-long"
-        : setup.side === "SHORT" ? "setup-wait-short"
-        : "setup-none";
       setupLabel = setupLabel.replace(/<i class="setup-dot"[^>]*><\/i>/, ""); // снять STRONG-точку «вход»
       setupTitle = `Context direction (momentum), NOT a trade. · ${setup.title}`;
     }
@@ -484,14 +493,19 @@ export function renderHotMovers(payload, fmtTime) {
     }
     // Открытая поза → метим сторону, в которой оператор УЖЕ сидит; закрытая →
     // сторону, которую предлагает momentum.
-    const chase = chaseBadge(
+    // Открытая поза → метим сторону, в которой оператор УЖЕ сидит; закрытая →
+    // сторону, которую предлагает momentum.
+    const costly = isCostlySide(
       s.chasing,
       isOpen ? (getActivePos(s.coin)?.side ?? null) : setup.side,
       !isOpen && setup.cls === "setup-wait",
     );
+    const costlyCard = costly
+      ? `${s.chasing.text}. Journal (650 manual trades): entering with the move returned −0.18 per trade against −0.05 entering against it. · `
+      : "";
     const setupCell = isOpen
-      ? `<td class="hm-setup center" data-w="Setup" data-card="Open-interest change over 15m: rising = new money entering the move (fuel), falling = participants closing">${openSetupHtml}${chase}</td>`
-      : `<td class="hm-setup center ${setupCls}" data-w="Setup" data-card="${setupTitle}"><span class="hm-setup-pill">${setupLabel}</span>${chase}</td>`;
+      ? `<td class="hm-setup center" data-w="Costly" data-card="Open-interest change over 15m: rising = new money entering the move (fuel), falling = participants closing">${openSetupHtml}</td>`
+      : `<td class="hm-costly center ${costlyCls(setup)}${costly ? " is-costly" : ""}" data-w="Costly" data-card="${escapeHtml(costlyCard)}${escapeHtml(setupTitle)}">${setupLabel}</td>`;
 
     // ENTER: для открытой монеты вход неактуален — вместо таймера ОДНА стрелка,
     // которая поворачивается ПО МНЕ, а не по цене: up (зелёная) = движ в мою
@@ -541,7 +555,7 @@ export function renderHotMovers(payload, fmtTime) {
 
     const rowHtml = `
       <td>${isOpen ? icon("pinned", { label: "Open position" }) : idx + 1}</td>
-      <td><a class="signals-price hm-coin-link" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" data-card="Open ${escapeHtml(s.coin)} in TradingView">#${escapeHtml(s.coin)}</a>${htfChip}${oiVolChip}</td>
+      <td><a class="signals-price hm-coin-link" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" data-card="Open ${escapeHtml(s.coin)} in TradingView">#${escapeHtml(s.coin)}</a>${htfChip}${oiVolChip}${fadeHotChip(s.fadeHot)}</td>
       ${setupCell}
       ${entryCell}
       <td class="hm-price-cell num ${flashCls}"><span class="hm-price-inner"><span class="hm-spark-wrap" data-card="Price over ~20 min (live)">${sparkSvg(s.spark, { w: SPARK_W, h: SPARK_H, cls: "hm-spark" })}</span><span class="signals-price">${fmtPrice(s.price)}</span></span></td>

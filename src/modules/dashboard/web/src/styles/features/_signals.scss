@@ -42,32 +42,85 @@
   }
 }
 
-/* Метка «эта сторона уже стоила дорого» рядом с Setup-пиллом. Кегль ниже
-   пилла и без иконки: это сноска к сетапу, а не второй сигнал в строке. */
-.hm-chase {
-  display: inline-block;
-  margin-left: 5px;
-  padding: 0 4px;
-  border-radius: 3px;
-  font-size: var(--fs-micro);
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  vertical-align: middle;
-  color: var(--text-muted);
-  border: 1px solid color-mix(in srgb, var(--text-muted) 35%, transparent);
-}
-.hm-chase--strong {
+/* Будильник «выдохшийся хвост» — обведённый чип у тикера. Обводка, а не
+   заливка: заливку в этой строке носят вердикты, а это не вердикт. */
+.hm-fh {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: var(--ls-wide);
   color: var(--orange, #f59e0b);
-  border-color: color-mix(in srgb, var(--orange, #f59e0b) 45%, transparent);
-}
-.hm-chase--extreme {
-  color: var(--neg, #e5484d);
-  border-color: color-mix(in srgb, var(--neg, #e5484d) 50%, transparent);
-  background: color-mix(in srgb, var(--neg, #e5484d) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--orange, #f59e0b) 45%, transparent);
+
+  .icon,
+  svg {
+    width: 11px;
+    height: 11px;
+  }
 }
 
-/* Колонка Move: насколько движение уже ушло. Только текст — это шкала к метке
-   у Setup, а не второй сигнал. */
+/* Колонка Costly side: внутри — метка сетапа, здесь только её вид. */
+.hm-costly .setup-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-wide);
+  color: #fff;
+
+  .icon,
+  svg {
+    width: 10px;
+    height: 10px;
+  }
+}
+.hm-costly.costly-long .setup-pill {
+  background: var(--green);
+}
+.hm-costly.costly-short .setup-pill {
+  background: var(--red);
+}
+/* WAIT — серая пилюля: состояние есть, стороны нет. */
+.hm-costly.costly-wait .setup-pill {
+  background: color-mix(in srgb, var(--text-muted) 22%, transparent);
+  color: var(--text-secondary);
+}
+.hm-costly.costly-none .setup-pill {
+  background: transparent;
+  color: var(--text-secondary);
+  padding-left: 0;
+}
+/* Сторона, за которую журнал уже заплатил. */
+.hm-costly.is-costly .setup-pill {
+  box-shadow: 0 0 0 1.5px var(--canvas), 0 0 0 3px var(--neg, #e5484d);
+}
+
+/* Режим захода — хвост справа от пилюли. */
+.hm-costly .setup-mode {
+  margin-left: 5px;
+  font-size: var(--fs-micro);
+  font-weight: 600;
+  letter-spacing: var(--ls-wide);
+  color: var(--text-muted);
+  vertical-align: middle;
+}
+/* Сторона, за которую журнал уже заплатил. */
+.hm-costly.is-costly .setup-pill {
+  box-shadow: 0 0 0 1.5px var(--canvas), 0 0 0 3px var(--neg, #e5484d);
+}
+
+/* Колонка Move: насколько движение уже ушло. Прижата вправо. */
+.hm-move {
+  text-align: right;
+}
 .hm-move-lvl {
   font-size: var(--fs-label);
   letter-spacing: var(--ls-wide);
@@ -1084,6 +1137,11 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   .hm-table tr.hm-main td.hm-move {
     order: 10;
     flex: 1 1 26%;
+    text-align: left;
+  }
+  .hm-table tr.hm-main td.hm-costly {
+    order: 5;
+    flex: 0 0 100%;
     text-align: left;
   }
   /* лейблы только на метрик-ячейках (окна + Acc/OI/Trend) */

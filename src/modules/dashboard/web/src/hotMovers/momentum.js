@@ -196,7 +196,7 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
   const setupGlyph = isFade
     ? glyph("recompute")
     : glyph(sideUp ? "long" : "short");
-  const modeTag = `<span style="opacity:.65;font-size: var(--fs-micro);font-weight:600"> ${(tagText ?? mode).toUpperCase()}</span>`;
+  const modeTag = `<span class="setup-mode">${(tagText ?? mode).toUpperCase()}</span>`;
   const strongCls = isFade
     ? sideUp
       ? "setup-fade-long"
@@ -218,7 +218,7 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
     const confirm =
       (accelKind === "up" ? "accel up " : "") + (volKind === "high" ? "vol up" : "");
     return {
-      label: `<span class="setup-pill">${setupGlyph}${side}${dot}${modeTag}</span>`,
+      label: `<span class="setup-pill">${setupGlyph}${side}${dot}</span>${modeTag}`,
       cls: strongCls,
       title:
         `${mode.toUpperCase()} ${side} (score ${score.toFixed(1)}) · ${why}` +
@@ -230,7 +230,7 @@ export function computeMomentum(windows, accelKind, volKind, signal, flush, view
   }
   if (score >= 1.5) {
     return {
-      label: `<span class="setup-pill">${setupGlyph}${side}${modeTag}</span>`,
+      label: `<span class="setup-pill">${setupGlyph}${side}</span>${modeTag}`,
       cls: weakCls,
       title: `Weak ${mode.toUpperCase()} ${side} (score ${score.toFixed(1)}) · ${why} — watching`,
       score,

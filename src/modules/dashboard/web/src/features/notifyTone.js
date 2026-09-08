@@ -36,6 +36,19 @@ export function toastDir(item) {
   return null;
 }
 
+// Тип информационного события → иконка. Порядок от частного к общему.
+function infoGlyph(item, dir) {
+  const tags = Array.isArray(item.tags) ? item.tags : [];
+  const title = String(item.title || "");
+  if (/событ|digest|сводка/i.test(title)) return "history";  // дайджест за период
+  if (/\bOI\b/i.test(title)) return "flow";                  // радар открытого интереса
+  if (/\bopened\b|открыт/i.test(title)) return "add";        // вход
+  if (/\badopted\b|усынов/i.test(title)) return "bot";       // нянька подхватила
+  if (/funding|фандинг/i.test(title)) return "clock";
+  if (tags.includes("eyes") || /started moving|проснул/i.test(title)) return "eye";
+  return dir === "up" ? NOTIF_ICON.up : dir === "down" ? NOTIF_ICON.down : NOTIF_ICON.info;
+}
+
 // Одна функция на тост и на список: одно событие выглядит одинаково в обоих.
 // Цвет означает ИСХОД (плюс/минус/авария), а не тип события.
 //
@@ -73,14 +86,21 @@ export function classifyNotif(item) {
   //
   // 🚨 «flush» и «squeeze» сюда не добавлять: радар OI пишет ими про рынок
   // («longs being flushed»), и информационный пуш получал жёлтый треугольник.
-  // Свой warn у breadth-flush есть — он приходит с тегом snowflake.
-  if (has("snowflake") || /\bwarn|stale|cooldown|paused|\bcold\b|\bskip/.test(text)) {
+  // Свой warn у breadth-flush есть — тег snowflake, и иконка у него снежинка.
+  if (has("snowflake")) {
+    return { kind: "warn", cls: "toast--warn", glyph: "cold", side };
+  }
+  if (/\bwarn|stale|cooldown|paused|\bcold\b|\bskip/.test(text)) {
     return { kind: "warn", cls: "toast--warn", glyph: "warn", side };
   }
 
   // Вход и всё остальное — нейтрально: у открытия исхода ещё нет, и красить
   // его в «успех» значит обещать то, чего никто не знает.
+  //
+  // 🚨 Иконка — по ТИПУ события, направление несут цвет и пилюля стороны. По
+  // одному направлению радар OI, будильник вотчлиста и открытие позы получали
+  // одну и ту же стрелку, и лента читалась как одна строка, повторённая сто раз.
   const dir = toastDir(item) || (side === "long" ? "up" : side === "short" ? "down" : null);
-  const glyph = dir === "up" ? NOTIF_ICON.up : dir === "down" ? NOTIF_ICON.down : NOTIF_ICON.info;
+  const glyph = infoGlyph(item, dir);
   return { kind: "info", cls: "", glyph, side };
 }

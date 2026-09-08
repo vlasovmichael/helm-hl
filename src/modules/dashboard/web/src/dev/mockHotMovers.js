@@ -43,6 +43,9 @@ function payload(t) {
         },
         volMult: 1 + Math.abs(Math.sin(t * w)) * 2,
         oiChangePct: base,
+        // OI решает тег режима; фаза своя у монеты — в таблице есть все три.
+        oiDelta15m: Math.sin(t * w * 0.7 + i) * 3,
+        oiDelta5m: Math.sin(t * w * 0.9 + i) * 2,
         htfTrend: base > 1 ? "up" : base < -1 ? "down" : "flat",
         vol24hUsd: 5e8,
         oiUsd: 9e8,
@@ -53,6 +56,54 @@ function payload(t) {
       };
     }),
   };
+}
+
+// Стенд состояний колонки Costly side: по строке на каждое, ничего не движется.
+// ?mock=hm&states=1
+const STATES = [
+  { coin: "AAA", note: "LONG TREND",   px: 1.2, mom: 4, oi: 3,    costly: null },
+  { coin: "BBB", note: "SHORT TREND",  px: -1.2, mom: -4, oi: 3,  costly: null },
+  { coin: "CCC", note: "LONG FADE?",   px: 1.2, mom: 4, oi: -3,   costly: null },
+  { coin: "DDD", note: "SHORT FADE?",  px: -1.2, mom: -4, oi: -3, costly: null },
+  { coin: "EEE", note: "WAIT",         px: 0.05, mom: 0.2, oi: 0, costly: null },
+  { coin: "FFF", note: "no data",      px: 1, mom: null, oi: 0,   costly: null },
+  { coin: "GGG", note: "LONG + costly", px: 1.2, mom: 4, oi: 3,   costly: "LONG" },
+  { coin: "HHH", note: "SHORT + costly", px: -1.2, mom: -4, oi: 3, costly: "SHORT" },
+  { coin: "III", note: "tail alarm", px: 4, mom: 4, oi: 3, costly: null, fadeHot: { fired: true, side: "SHORT", move: 4.2, er: 0.61 } },
+];
+
+function statesPayload(flushDir) {
+  return {
+    ts: Date.now(),
+    thresholds: {},
+    // dir=up → чип SQUEEZE с пламенем, down → FLUSH с волнами.
+    marketFlush: flushDir ? { active: true, dir: flushDir, share: 0.72, n: 30 } : null,
+    signals: STATES.map((st, i) => ({
+      coin: st.coin,
+      price: 10 + i,
+      windows: st.mom == null
+        ? [{ mins: 2, spikePct: null }, { mins: 5, spikePct: null }, { mins: 15, spikePct: null }, { mins: 60, spikePct: null }]
+        : [2, 5, 15, 60].map((mins) => ({ mins, spikePct: st.mom, volUsd: 1e6 })),
+      volMult: 1.5,
+      oiDelta15m: st.oi,
+      oiDelta5m: st.oi,
+      htfTrend: "flat",
+      fadeHot: st.fadeHot || null,
+      vol24hUsd: 1e8,
+      oiUsd: 9e8,
+      chasing: st.costly
+        ? { level: "extreme", blockedSide: st.costly, text: `${st.px}% in an hour — mock` }
+        : { level: "quiet", blockedSide: null, text: "" },
+      spark: Array.from({ length: 24 }, () => 10 + i),
+    })),
+  };
+}
+
+/** Статичный стенд: рисуем один раз, ничего не дёргается. */
+export function startHotMoversStates({ flushDir = "up" } = {}) {
+  const fmtTime = (ms) => new Date(ms).toLocaleTimeString();
+  renderHotMovers(statesPayload(flushDir), fmtTime);
+  return () => {};
 }
 
 /**
