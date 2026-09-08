@@ -331,8 +331,13 @@ textarea.field {
   text-transform: uppercase;
   outline: none;
 
-  &::placeholder { color: var(--text-faint); font-weight: 400; }
-  &:focus { border-color: var(--accent-line); }
+  &::placeholder {
+    color: var(--text-faint);
+    font-weight: 400;
+  }
+  &:focus {
+    border-color: var(--accent-line);
+  }
 }
 
 /* Поле монеты с подсказками. Разметку и клавиатуру ведёт core/coinCombo.js —
@@ -364,6 +369,7 @@ textarea.field {
   font-family: var(--font-mono);
   font-size: var(--fs-base);
   font-weight: 600;
+  margin-bottom: 1px;
   letter-spacing: 0.03em;
   cursor: pointer;
 
@@ -374,11 +380,19 @@ textarea.field {
   }
 }
 @keyframes combo-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
-  .combo__list { animation: none; }
+  .combo__list {
+    animation: none;
+  }
 }
 
 /* Тихий чип в карточке диалога («Isolated»). Не бейдж: не должен спорить по
@@ -511,7 +525,9 @@ textarea.field {
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
     transition: transform 0.12s var(--ease);
   }
-  &::-webkit-slider-thumb:active { transform: scale(1.25); }
+  &::-webkit-slider-thumb:active {
+    transform: scale(1.25);
+  }
   &::-moz-range-thumb {
     width: 16px;
     height: 16px;

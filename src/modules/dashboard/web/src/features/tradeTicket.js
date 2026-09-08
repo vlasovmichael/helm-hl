@@ -240,7 +240,9 @@ function createModal(io) {
     side: "short",
     marginUsd: 0,
     leverage: 3,
-    orderType: "market",
+    // Лимитка по умолчанию: 97% филлов уходили тейкером, а мейкер снимает не
+    // 3 бп комиссии, а медиану ~16 бп спреда. Маркет остался на переключателе.
+    orderType: "limit",
     limitPx: "",
     submitting: false,
     error: null,
@@ -725,6 +727,11 @@ function createModal(io) {
     if (!io?.getContext) return;
     try {
       ctx = { ...ctx, ...(await io.getContext(state.coin)) };
+      // Пустое поле лимитки блокирует отправку — заполняем текущей ценой, её
+      // дальше двигают руками на свою сторону книги.
+      if (state.orderType === "limit" && !state.limitPx) {
+        state.limitPx = plainPrice(ctx.price) || "";
+      }
       if (!(state.marginUsd > 0) && ctx.available > 0) {
         // Стартовая маржа — половина свободного, но не меньше минимума ордера.
         state.marginUsd = Math.min(ctx.available, Math.max(ctx.available / 2, MIN_ORDER_USD / state.leverage));
