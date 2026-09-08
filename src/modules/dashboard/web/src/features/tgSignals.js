@@ -10,7 +10,7 @@ import { escapeHtml, fmtUsd, fmtPct, fmtPrice, fmtSince } from "../utils/format.
 import { fetchJson } from "../net/api.js";
 import { icon } from "../core/icon.js";
 import { button, badge } from "../core/ui.js";
-import { emptyRow, emptyState, skeletonRows, settle } from "../core/placeholders.js";
+import { emptyState, skeletonRows, settle } from "../core/placeholders.js";
 import * as dialog from "../core/dialog.js";
 
 const POLL_MS = 15_000;
@@ -60,8 +60,6 @@ function rowHtml(p) {
     </tr>`;
 }
 
-const COLS = 9;
-
 function tableHtml(data) {
   const positions = data.positions || [];
   const src = (data.channels || []).length
@@ -71,15 +69,7 @@ function tableHtml(data) {
     ? `${src} · ${fmtUsd(data.sizeUsd)} at ${data.leverage}&times; · ${icon("bot")} bot manages exit`
     : "watcher off";
 
-  const body = positions.length
-    ? positions.map(rowHtml).join("")
-    : emptyRow(COLS, {
-        glyph: "clock",
-        title: "No signal positions open",
-        hint: data.enabled
-          ? "A paper position opens by itself the next time a followed channel posts a call."
-          : "Set TG_SIGNAL_ENABLED=true to start the forward test.",
-      });
+  const body = positions.map(rowHtml).join("");
 
   return `
     <div class="tg-active">
@@ -108,8 +98,10 @@ async function refreshActive() {
   if (!container) return; // не на этой странице
   try {
     const data = await fetchJson("/api/tg-signals");
-    // Вотчер выключен и поз нет — блок не мозолит глаза.
-    if (!data?.enabled && !(data?.positions || []).length) {
+    // Нет открытых поз — блока нет вовсе. Каналы дают заявку раз в несколько
+    // дней, и пустая таблица на девять колонок стояла на главной постоянно.
+    // Состояние источника видно в Lab, здесь место только живым позициям.
+    if (!(data?.positions || []).length) {
       container.innerHTML = "";
       return;
     }
