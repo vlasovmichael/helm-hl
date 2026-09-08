@@ -173,6 +173,15 @@ function normalizeFill(raw) {
  *   reason ∈ 'tp_trigger' | 'sl_trigger' | 'liquidation' | 'manual_close' | 'external_unknown'
  *   pnl = price PnL ДО комиссий (Σ closedPnl); fee = Σ комиссий close-fills; net = pnl − fee.
  */
+/** Ликвидировали нас, а не контрагента, чью маркет-заливку поймала наша лимитка. */
+function isOwnLiquidation(liq) {
+  const victim = String(liq?.liquidatedUser || '').toLowerCase();
+  const me = String(config.wallet?.address || '').toLowerCase();
+  // Без адреса (тесты, paper) — старое поведение: считаем ликвидацию своей.
+  if (!victim || !me) return true;
+  return victim === me;
+}
+
 export function classifyClose(position, fills) {
   const result = { reason: 'external_unknown', pnl: null, fee: 0, closePx: null, closedAt: null };
   if (!Array.isArray(fills) || fills.length === 0) return result;
@@ -187,8 +196,11 @@ export function classifyClose(position, fills) {
   // нулевой накопленной позиции. Для cause detection достаточно первого.
   const first = candidates[0];
 
-  // 1. Liquidation: HL ставит liquidation объект на fill.
-  if (first.liquidation) {
+  // 1. Liquidation: объект liquidation на филле описывает ЛИКВИДИРУЕМОГО, и он
+  // приезжает и когда ликвидировали контрагента — нашу лимитку залил его
+  // маркет-ордер. 🚨 Сверять liquidatedUser с нашим адресом: без этого взятая
+  // цель читается как ликвидация.
+  if (first.liquidation && isOwnLiquidation(first.liquidation)) {
     result.reason = 'liquidation';
   }
   // 2. SL/TP trigger: oid совпадает с сохранённым в DB.

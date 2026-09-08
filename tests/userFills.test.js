@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-const { reconstructManualTrades, findRoundTripForPosition } = await import('../src/modules/userFills.js');
+const { reconstructManualTrades, findRoundTripForPosition, classifyClose } = await import('../src/modules/userFills.js');
 
 // ── Хелпер: fill в normalize'd-форме (как отдаёт normalizeFill) ──
 function makeFill({ coin = 'X', px = 100, sz = 1, time, dir, oid = null, closedPnl = 0, fee = 0 }) {
@@ -210,4 +210,29 @@ test('KAITO: same-side нога ещё не закрыта в fills → null (in
   const lagFills = kaitoFlipFills.slice(0, 3);
   const pos = { coin: 'KAITO', side: 'long', entry_price: 0.68976, entry_time: KAITO_BAD_TIME };
   assert.equal(findRoundTripForPosition(pos, lagFills), null);
+});
+
+
+// ═══════════════════════════════════════════════
+//  classifyClose: чья это ликвидация
+// ═══════════════════════════════════════════════
+
+test('ликвидация КОНТРАГЕНТА на нашей лимитке = tp_trigger, не liquidation', () => {
+  const fills = [
+    { coin: 'DOT', px: 1.2584, sz: 19, time: 2000, dir: 'Close Long', oid: 77,
+      closedPnl: 0.72, fee: 0.0034,
+      liquidation: { liquidatedUser: '0x8e9ce07ab1955a82a555c13eacd0243069d2476c' } },
+  ];
+  const pos = { coin: 'DOT', side: 'long', entry_time: 1000, hunter_tp_oid: 77 };
+  assert.equal(classifyClose(pos, fills).reason, 'tp_trigger');
+});
+
+test('ликвидация НАС — по-прежнему liquidation', () => {
+  const fills = [
+    { coin: 'DOT', px: 1.18, sz: 19, time: 2000, dir: 'Close Long', oid: 77,
+      closedPnl: -0.8, fee: 0.004,
+      liquidation: { liquidatedUser: process.env.PUBLIC_WALLET_ADDRESS.toUpperCase() } },
+  ];
+  const pos = { coin: 'DOT', side: 'long', entry_time: 1000, hunter_tp_oid: 77 };
+  assert.equal(classifyClose(pos, fills).reason, 'liquidation');
 });
