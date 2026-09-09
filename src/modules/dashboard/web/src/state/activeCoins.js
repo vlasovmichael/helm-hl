@@ -190,7 +190,9 @@ export function hmPosHintInner(coin) {
       return `<span class="hm-hint hm-hint-${k}"${tip}>${escapeHtml(t)}</span>`;
     })
     .join(" ");
-  return `<td colspan="11">
+  // 🚨 colspan = число колонок Hot Movers (12). На 11 подстрока не добивала
+  // последнюю колонку, и у активной позиции справа оставался белый хвост.
+  return `<td colspan="12">
     <span class="hm-pos-tag hm-pos-${source}">${tag}</span>${chipsHtml}
   </td>`;
 }
