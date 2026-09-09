@@ -2,24 +2,40 @@
    Тепловая сетка целей и стопов. Серая клетка = ноль внутри интервала,
    и это состояние важнее любого цвета: там нечего решать. */
 
+/* Полоска и число — фиксированная сетка, иначе столбики пляшут по ширине
+   числа и колонку невозможно прочесть как шкалу. */
+.calib-gap {
+  display: inline-grid;
+  grid-template-columns: 56px 72px;
+  gap: var(--sp-2);
+  align-items: center;
+}
+.calib-gapval {
+  text-align: right;
+}
 .calib-gapbar {
-  display: inline-block;
-  width: 56px;
   height: 6px;
   border-radius: var(--radius-pill);
   background: var(--border-muted);
   overflow: hidden;
-  margin-right: var(--sp-2);
-  vertical-align: 1px;
   i {
     display: block;
     height: 100%;
     background: currentColor;
     border-radius: var(--radius-pill);
+    transition: width var(--dur-slow, 280ms) var(--ease-out);
   }
 }
-.warntxt {
-  color: var(--amber, #d29922);
+
+/* Три тона разрыва: досягаемо / на грани / вряд ли. Тон один и тот же в
+   таблице и в разборе — иначе разбор читается как другая величина. */
+.calib-up { color: var(--green); }
+.calib-warn { color: var(--amber, #d29922); }
+.calib-down { color: var(--red); }
+
+/* Липкая шапка перекрыла бы заголовок карточки, к которой ведёт подводка. */
+#sec-calib-grid {
+  scroll-margin-top: 64px;
 }
 
 .calib-gridwrap {
@@ -86,6 +102,50 @@
   opacity: 0.8;
 }
 
+/* Строка монеты кликабельна: подводка слева растёт из нуля, чтобы выбор
+   читался движением, а не только цветом фона. */
+#calib-rank tbody tr {
+  cursor: pointer;
+  position: relative;
+  transition: background var(--dur, 180ms) var(--ease-out);
+
+  td:first-child::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--accent);
+    transform: scaleY(0);
+    transform-origin: center;
+    transition: transform var(--dur, 180ms) var(--ease-out);
+  }
+  &:hover {
+    background: var(--canvas-subtle);
+    td:first-child::before {
+      transform: scaleY(0.45);
+    }
+  }
+  &.is-selected {
+    background: var(--accent-soft);
+    td:first-child::before {
+      transform: scaleY(1);
+    }
+  }
+}
+
+/* Вход сетки при смене монеты: тот же mc-fade-up, что у плашки BTC —
+   второй такой же кадр заводить незачем. */
+.is-entering .calib-cell {
+  animation: mc-fade-up var(--dur-slow, 280ms) var(--ease-out) both;
+}
+@for $i from 1 through 6 {
+  .is-entering tbody tr:nth-child(#{$i}) .calib-cell {
+    animation-delay: #{$i * 0.035}s;
+  }
+}
+
 .calib-detail {
   border-top: 1px solid var(--border-muted);
   padding: var(--sp-4) var(--sp-5);
@@ -95,6 +155,7 @@
 
   .value {
     white-space: nowrap;
+    transition: color var(--dur, 180ms) var(--ease-out);
   }
   small {
     font-size: var(--fs-small);
@@ -102,6 +163,25 @@
     font-weight: 400;
   }
 }
+/* Разрыв — то, ради чего страница существует: он крупнее соседей и на своей
+   подложке, иначе тонет в ряду одинаковых чисел. */
+.calib-hero {
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--canvas-subtle);
+  border-left: 2px solid currentColor;
+
+  .label {
+    color: var(--text-muted);
+  }
+  .value {
+    font-size: var(--fs-h3);
+    font-weight: 600;
+    color: inherit;
+    letter-spacing: var(--ls-tight);
+  }
+}
+
 .calib-note {
   grid-column: 1 / -1;
   font-size: var(--fs-body);
@@ -111,7 +191,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .calib-cell {
+  .calib-cell,
+  .calib-gapbar i,
+  #calib-rank tbody tr,
+  #calib-rank tbody tr td:first-child::before {
     transition: none;
+  }
+  .is-entering .calib-cell {
+    animation: none;
   }
 }

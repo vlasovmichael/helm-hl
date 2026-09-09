@@ -22,7 +22,7 @@ const fmtUsd = (v) =>
   v >= 1e9 ? `$${(v / 1e9).toFixed(1)}B` : v >= 1e6 ? `$${Math.round(v / 1e6)}M` : `$${Math.round(v / 1e3)}K`;
 
 // Разрыв красим по величине: до 5 п.п. — досягаемо, свыше 10 — вряд ли.
-const gapTone = (g) => (g <= 5 ? "up" : g <= 10 ? "warntxt" : "down");
+const gapTone = (g) => (g <= 5 ? "calib-up" : g <= 10 ? "calib-warn" : "calib-down");
 
 // Клетка серая, если ноль внутри доверительного интервала: там нечего сказать,
 // и цвет создавал бы видимость знания.
@@ -57,8 +57,10 @@ function rankTable() {
             <td class="num mono">${g.hit}<span class="muted">%</span></td>
             <td class="num mono">${need(g)}<span class="muted">%</span></td>
             <td class="num mono ${gapTone(gp)}">
-              <span class="calib-gapbar"><i style="width:${((gp / maxGap) * 100).toFixed(0)}%"></i></span>
-              +${gp}<span class="muted"> pp</span>
+              <span class="calib-gap">
+                <span class="calib-gapbar"><i style="width:${((gp / maxGap) * 100).toFixed(0)}%"></i></span>
+                <span class="calib-gapval">+${gp}<span class="muted"> pp</span></span>
+              </span>
             </td>
           </tr>`;
         })
@@ -95,10 +97,13 @@ function detail(c, g) {
     <div class="calib-detail">
       <div><div class="label">Target</div><div class="value mono">${g.tgt} <small>bp · $${usd(g.tgt).toPrecision(3)}</small></div></div>
       <div><div class="label">Stop</div><div class="value mono">${g.stp} <small>bp · $${usd(g.stp).toPrecision(3)}</small></div></div>
-      <div><div class="label">Market reaches target</div><div class="value mono">${g.hit}<small>%</small></div></div>
-      <div><div class="label">Break-even needs</div><div class="value mono">${need(g)}<small>%</small></div></div>
-      <div><div class="label">Gap</div><div class="value mono ${gapTone(gp)}">+${gp} <small>pp</small></div></div>
-      <div><div class="label">Expectancy</div><div class="value mono ${sure ? (expect(g) > 0 ? "up" : "down") : "muted"}">${expect(g) > 0 ? "+" : ""}${expect(g)} <small>± ${g.ci} bp</small></div></div>
+      <div><div class="label">Market reaches target</div><div class="value mono calib-up">${g.hit}<small>%</small></div></div>
+      <div><div class="label">Break-even needs</div><div class="value mono calib-warn">${need(g)}<small>%</small></div></div>
+      <div class="calib-hero ${gapTone(gp)}">
+        <div class="label">Gap to close</div>
+        <div class="value mono">+${gp} <small>pp</small></div>
+      </div>
+      <div><div class="label">Expectancy</div><div class="value mono ${sure ? (expect(g) > 0 ? "calib-up" : "calib-down") : "muted"}">${expect(g) > 0 ? "+" : ""}${expect(g)} <small>± ${g.ci} bp</small></div></div>
       <div class="calib-note">
         Out of 100 trades with this pair the market itself reaches the target <b>${g.hit}</b> times.
         Covering the <b>${cost(c)} bp</b> round trip needs <b>${need(g)}</b>.
@@ -117,7 +122,7 @@ function selectCell(g) {
   if (host) host.innerHTML = detail(c, g);
 }
 
-function selectCoin(name) {
+function selectCoin(name, { scroll = false } = {}) {
   cur = name;
   const c = DATA.coins[name];
   if (!c) return;
@@ -129,7 +134,15 @@ function selectCoin(name) {
   const meta = document.getElementById("calib-atr");
   if (meta) meta.innerHTML = `<span class="chip">${c.atr} bp / hour</span><span class="chip">${fmtUsd(c.vlm)} / day</span>`;
   const host = document.getElementById("calib-grid");
-  if (host) host.innerHTML = gridTable(c);
+  if (host) {
+    host.innerHTML = gridTable(c);
+    // Класс снимается по окончании — иначе повторный выбор той же монеты
+    // не проигрывает вход заново.
+    host.classList.remove("is-entering");
+    void host.offsetWidth;
+    host.classList.add("is-entering");
+    setTimeout(() => host.classList.remove("is-entering"), 700);
+  }
   document.querySelectorAll(".calib-cell").forEach((el) =>
     el.addEventListener("click", () => {
       const [mt, ms] = el.dataset.k.split("_").map(Number);
@@ -137,6 +150,15 @@ function selectCoin(name) {
     }),
   );
   selectCell(best(c));
+
+  // Подводим к сетке только по клику: на первой отрисовке страница и так
+  // стоит наверху, и прыжок вниз выглядел бы как чужое действие.
+  // 🚨 behavior не задаём — плавность берётся из scroll-behavior на html,
+  // а он сам выключается при prefers-reduced-motion.
+  if (scroll) {
+    const section = document.getElementById("sec-calib-grid");
+    if (section) section.scrollIntoView({ block: "start" });
+  }
 }
 
 function paint() {
@@ -144,7 +166,7 @@ function paint() {
   if (rank) {
     rank.innerHTML = rankTable();
     rank.querySelectorAll("tr[data-coin]").forEach((tr) =>
-      tr.addEventListener("click", () => selectCoin(tr.dataset.coin)),
+      tr.addEventListener("click", () => selectCoin(tr.dataset.coin, { scroll: true })),
     );
   }
   const names = Object.keys(DATA.coins);
