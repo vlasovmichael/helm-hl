@@ -21,7 +21,7 @@ node_modules/
 src/modules/dashboard/dist/
 
 # Логи
-logs/*.log
+logs/
 npm-debug.log*
 
 # Системные файлы
