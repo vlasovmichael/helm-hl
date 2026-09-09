@@ -349,8 +349,11 @@
 #hot-movers-tbody tr[data-hmkey^="pos:"] {
   cursor: pointer;
 }
+/* 🚨 Не кромка слева: вертикальные акцентные полосы из дашборда выведены,
+   а на карточной (мобильной) вёрстке они ещё и не гасились и лезли поверх
+   карточки. Ховер несёт фон — как во всех остальных таблицах. */
 #hot-movers-tbody tr[data-hmkey^="m:"]:hover {
-  box-shadow: inset 3px 0 0 var(--brand);
+  background: var(--card-bg-hover);
 }
 .hm-pos-row td {
   padding: 3px 10px 7px 30px !important;
@@ -361,7 +364,9 @@
      Лёгкая чернильная подложка + тонкая кромка-акцент слева. */
   background: var(--canvas-inset);
   border-bottom: 1px solid var(--border);
-  box-shadow: inset 2px 0 0 var(--brand, var(--accent));
+  /* Кромка серая: подстрока — продолжение своей монеты, а не отдельный
+     акцент. Цветная полоса тут спорила с тегом позиции. */
+  box-shadow: inset 2px 0 0 var(--border-strong);
 }
 /* Теги BOT / YOU / YOU+BOT — заливные пилюли с белым текстом: контраст читаемый
    на любом фоне (раньше цветной текст на одноцветном фоне сливался). */

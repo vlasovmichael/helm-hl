@@ -652,13 +652,13 @@ function stabilizeHeight(tbody, rowTarget) {
   // карточки держат min-height: иначе пустой слот остаётся на хардкоде и не
   // сходится с настоящей карточкой.
   wrap.style.setProperty("--hm-card-min-h", `${rowH}px`);
-  // Под-строки меряем поимённо: они ниже основных и у каждой своя высота
-  // (позиция с бейджем переносится на узком экране).
-  let subH = 0;
-  for (const tr of tbody.querySelectorAll(".hm-pos-row, .hm-fadehot-row")) {
-    subH += tr.offsetHeight;
-  }
-  const target = headH + rowH * Math.max(1, rowTarget) + subH;
+  // 🚨 Высота = сумма ФАКТИЧЕСКИХ высот строк, а не rowH × rowTarget: на
+  // карточной вёрстке высоту карточки задаёт её содержимое (у монеты с тегами
+  // Vol/OI строк больше), и умножение эталона занижало итог — карточка
+  // получала прокрутку ровно там, где её и считали лишней.
+  let rowsH = 0;
+  for (const tr of tbody.children) rowsH += tr.offsetHeight;
+  const target = headH + rowsH;
   if (Math.abs(target - _hmFixedH) > 1) {
     wrap.style.height = `${target}px`;
     _hmFixedH = target;
