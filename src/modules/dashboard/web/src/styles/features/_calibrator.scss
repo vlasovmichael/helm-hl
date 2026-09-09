@@ -1,3 +1,5 @@
+@use "../core/breakpoints" as *;
+
 /* ── Калибратор ───────────────────────────────────────────────────────
    Тепловая сетка целей и стопов. Серая клетка = ноль внутри интервала,
    и это состояние важнее любого цвета: там нечего решать. */
@@ -102,36 +104,17 @@
   opacity: 0.8;
 }
 
-/* Строка монеты кликабельна: подводка слева растёт из нуля, чтобы выбор
-   читался движением, а не только цветом фона. */
+/* Строка монеты кликабельна. 🚨 Без цветной планки слева: в дашборде выбор
+   читается фоном, и вертикальные акцентные полосы отсюда выведены. */
 #calib-rank tbody tr {
   cursor: pointer;
-  position: relative;
   transition: background var(--dur, 180ms) var(--ease-out);
 
-  td:first-child::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: var(--accent);
-    transform: scaleY(0);
-    transform-origin: center;
-    transition: transform var(--dur, 180ms) var(--ease-out);
-  }
   &:hover {
     background: var(--canvas-subtle);
-    td:first-child::before {
-      transform: scaleY(0.45);
-    }
   }
   &.is-selected {
     background: var(--accent-soft);
-    td:first-child::before {
-      transform: scaleY(1);
-    }
   }
 }
 
@@ -190,14 +173,44 @@
   padding-left: var(--sp-3);
 }
 
-@media (prefers-reduced-motion: reduce) {
+@include reduced-motion {
   .calib-cell,
   .calib-gapbar i,
-  #calib-rank tbody tr,
-  #calib-rank tbody tr td:first-child::before {
+  #calib-rank tbody tr {
     transition: none;
   }
   .is-entering .calib-cell {
     animation: none;
+  }
+}
+
+/* ── Телефон ──────────────────────────────────────────────────────────
+   Восемь колонок с моноширинными числами на 390px не влезают ни при каком
+   кегле, поэтому второстепенное (круг, доля круга, лучшая пара) прячем:
+   решение принимается по разрыву, а он остаётся. */
+@include until($bp-md) {
+  .col-opt {
+    display: none;
+  }
+  #calib-rank .table {
+    font-size: var(--fs-small);
+
+    th,
+    td {
+      padding: 9px 10px;
+    }
+  }
+  /* Полоска шкалы уступает место числу: на узком важнее прочесть значение. */
+  .calib-gap {
+    grid-template-columns: 28px 62px;
+    gap: var(--sp-1);
+  }
+  .calib-cell {
+    width: 56px;
+    height: 44px;
+  }
+  .calib-detail {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    padding: var(--sp-3) var(--sp-4);
   }
 }

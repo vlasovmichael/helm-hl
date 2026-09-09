@@ -39,7 +39,7 @@ function upcomingTable(rows) {
     <table class="table table--compact">
       <thead><tr>
         <th>Coin</th><th class="num">Enter</th><th class="num">Unlock</th>
-        <th class="num">Size</th><th class="num">× daily vol</th><th>Category</th>
+        <th class="num col-opt">Size</th><th class="num">× daily vol</th><th class="col-opt">Category</th>
       </tr></thead>
       <tbody>${rows
         .map((u) => {
@@ -48,9 +48,9 @@ function upcomingTable(rows) {
             <td class="strong">${u.coin}</td>
             <td class="num mono">${d10(u.entryTs)}${isToday ? ' <span class="chip">today</span>' : ""}</td>
             <td class="num mono muted">${d10(u.unlockTs)}</td>
-            <td class="num mono">${fmtUsd(u.usd)}</td>
+            <td class="num mono col-opt">${fmtUsd(u.usd)}</td>
             <td class="num mono"><span class="chip${u.ratio >= 10 ? " chip--hot" : ""}">${u.ratio.toFixed(1)}×</span></td>
-            <td class="muted">${u.category}</td>
+            <td class="muted col-opt">${u.category}</td>
           </tr>`;
         })
         .join("")}</tbody>

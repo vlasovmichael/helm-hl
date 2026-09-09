@@ -85,7 +85,7 @@ export function mountTopnav(active) {
         <button class="research-btn" id="research-btn" type="button"
                 aria-label="Research" aria-expanded="false" aria-haspopup="true">
           <svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+            <path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" />
           </svg>
         </button>
         <div class="research-panel" id="research-panel" hidden role="menu" aria-label="Research">

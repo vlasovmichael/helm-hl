@@ -41,8 +41,8 @@ function rankTable() {
   return `
     <table class="table table--compact">
       <thead><tr>
-        <th>Coin</th><th class="num">Hourly range</th><th class="num">Round trip</th>
-        <th class="num">Cost / range</th><th class="num">Best pair</th>
+        <th>Coin</th><th class="num">Hourly range</th><th class="num col-opt">Round trip</th>
+        <th class="num col-opt">Cost / range</th><th class="num col-opt">Best pair</th>
         <th class="num">Market gives</th><th class="num">Needs</th><th class="num">Gap</th>
       </tr></thead>
       <tbody>${names
@@ -51,9 +51,9 @@ function rankTable() {
           return `<tr data-coin="${n}"${n === cur ? ' class="is-selected"' : ""}>
             <td class="strong">${n}</td>
             <td class="num mono">${c.atr} <span class="muted">bp</span></td>
-            <td class="num mono">${cost(c)} <span class="muted">bp</span></td>
-            <td class="num mono">${share(c)}<span class="muted">%</span></td>
-            <td class="num mono muted">${g.mt}× / ${g.ms}×</td>
+            <td class="num mono col-opt">${cost(c)} <span class="muted">bp</span></td>
+            <td class="num mono col-opt">${share(c)}<span class="muted">%</span></td>
+            <td class="num mono muted col-opt">${g.mt}× / ${g.ms}×</td>
             <td class="num mono">${g.hit}<span class="muted">%</span></td>
             <td class="num mono">${need(g)}<span class="muted">%</span></td>
             <td class="num mono ${gapTone(gp)}">
