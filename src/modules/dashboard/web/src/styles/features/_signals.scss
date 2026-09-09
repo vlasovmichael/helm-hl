@@ -1173,6 +1173,36 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   .hm-table tbody tr:not(.hm-main):not(.hm-pos-row) {
     display: block;
   }
+
+  /* Скелетон: на десктопе это 12 ячеек в ряд, на карточной вёрстке они
+     выстраиваются столбиком и сливаются в сплошную штриховку. Оставляем
+     столько строк, сколько у настоящей карточки (ранг+пара+цена, спайк,
+     тренд), остальные прячем и разводим отступом. */
+  .hm-table tbody tr.sk-row {
+    display: block;
+    padding: 11px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    margin-bottom: 6px;
+    min-height: var(--hm-card-min-h, 96px);
+  }
+  .hm-table tbody tr.sk-row td {
+    display: block;
+    padding: 0;
+    margin-bottom: 8px;
+  }
+  .hm-table tbody tr.sk-row td:nth-child(n + 4) {
+    display: none;
+  }
+  .hm-table tbody tr.sk-row td:nth-child(1) .sk {
+    width: 38%;
+  }
+  .hm-table tbody tr.sk-row td:nth-child(2) .sk {
+    width: 64%;
+  }
+  .hm-table tbody tr.sk-row td:nth-child(3) .sk {
+    width: 46%;
+  }
   /* Добивочные карточки до HM_MAX_ROWS на мобиле ТОЖЕ резервируют высоту — всегда
      8 рядов, чтобы секция не прыгала при смене числа монет (просьба оператора). Пустой
      слот высотой с карточку, тот же border-bottom, без контента/тинта/ховера. */

@@ -4,6 +4,7 @@ import { mountPageHeader } from "./src/core/pageHeader.js";
 //  strategies.html — таблица стратегий, Performance-график (equity),
 //  Chill Boy, P&L Summary + Insights, Live Logs.
 //  Радар-фичи/модалки сюда не грузятся.
+//  «My trade breakdown» снят: фича и роут /api/my-trades целы.
 // ─────────────────────────────────────────────────
 
 import {
@@ -36,7 +37,6 @@ import {
   bindLogsUi,
   fetchInitialLogs,
 } from "./src/features/logs.js";
-import { tickTradeBreakdown } from "./src/features/tradeBreakdown.js";
 
 async function tick() {
   // Strategies переехала на Lab — здесь её больше не грузим (/api/strategies).
@@ -47,7 +47,6 @@ async function tick() {
   ]);
   if (pnlR.status === "fulfilled") setPnlSummary(pnlR.value);
   if (insightsR.status === "fulfilled") setInsights(insightsR.value);
-  tickTradeBreakdown();
   if (historyR.status === "fulfilled" && historyR.value?.points) {
     const pts = historyR.value.points;
     const seen = new Set();
