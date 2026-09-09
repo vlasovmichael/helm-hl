@@ -25,6 +25,8 @@ test('adopt stop: ATR в коридоре → basis atr, дистанция = AT
   const r = await computeStopDistPct('AAA');
   assert.equal(r.basis, 'atr');
   assert.ok(Math.abs(r.distPct - 3) < 0.01, `expected ~3%, got ${r.distPct}`);
+  assert.equal(r.clamp, null, 'внутри коридора зажима нет');
+  assert.ok(Math.abs(r.rawPct - 3) < 0.01, 'rawPct равен дистанции, пока не зажато');
 });
 
 test('adopt stop: тихая монета → зажим снизу MIN_PCT (2%)', async () => {
@@ -34,6 +36,8 @@ test('adopt stop: тихая монета → зажим снизу MIN_PCT (2%)
   const r = await computeStopDistPct('QUIET');
   assert.equal(r.basis, 'atr');
   assert.equal(r.distPct, 2);
+  assert.equal(r.clamp, 'min');
+  assert.ok(r.rawPct < 2, `ATR просил меньше пола, got ${r.rawPct}`);
 });
 
 test('adopt stop: дёрганая монета → зажим сверху MAX_PCT (8%)', async () => {
@@ -43,6 +47,10 @@ test('adopt stop: дёрганая монета → зажим сверху MAX_
   const r = await computeStopDistPct('WILD');
   assert.equal(r.basis, 'atr');
   assert.equal(r.distPct, 8);
+  // Ради этого случая правка и делалась: 90.7% живых стопов приходят отсюда,
+  // а лог называл их «ATR».
+  assert.equal(r.clamp, 'max');
+  assert.ok(r.rawPct > 8, `ATR просил больше потолка, got ${r.rawPct}`);
 });
 
 test('adopt stop: свечей нет → фолбэк на фикс ADOPT_STOP_PCT (5%)', async () => {
@@ -50,4 +58,6 @@ test('adopt stop: свечей нет → фолбэк на фикс ADOPT_STOP_
   const r = await computeStopDistPct('NOCANDLES');
   assert.equal(r.basis, 'pct');
   assert.equal(r.distPct, 5);
+  assert.equal(r.clamp, null);
+  assert.equal(r.rawPct, null, 'фолбэк ATR не считал — сообщать нечего');
 });

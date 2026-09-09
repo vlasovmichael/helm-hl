@@ -129,7 +129,11 @@ export function isBeyondPlannedStop({ side, price, plannedSl }) {
  *   (нянька ставит настоящий стоп). Витринам дашборда, которым это число нужно
  *   лишь показать, положено передавать LOW: их справка не должна занимать
  *   бюджет веса перед торговым путём.
- * @returns {Promise<{ distPct:number, basis:'atr'|'pct' }>}
+ * @returns {Promise<{ distPct:number, basis:'atr'|'pct',
+ *                     rawPct:number|null, clamp:'min'|'max'|null }>}
+ *   rawPct — сколько ATR запросил ДО зажима, clamp — какой край сработал.
+ *   🚨 Без них лог печатает «ATR» на числе, которое пришло из потолка, и
+ *   подстройка под волатильность выглядит работающей, когда она срезана.
  */
 export async function computeStopDistPct(coin, priority = HL_PRIORITY.NORMAL) {
   const t = config.trading;
@@ -142,7 +146,8 @@ export async function computeStopDistPct(coin, priority = HL_PRIORITY.NORMAL) {
         if (Number.isFinite(a) && a > 0 && Number.isFinite(lastClose) && lastClose > 0) {
           const rawPct = (a * t.adoptAtrMult / lastClose) * 100;
           const pct = Math.min(t.adoptStopMaxPct, Math.max(t.adoptStopMinPct, rawPct));
-          return { distPct: pct, basis: 'atr' };
+          const clamp = pct === rawPct ? null : (rawPct > pct ? 'max' : 'min');
+          return { distPct: pct, basis: 'atr', rawPct, clamp };
         }
       }
       logger.info(`[Adopt] ATR недоступен для #${coin} — фолбэк на фикс ${t.adoptStopPct}%`);
@@ -150,7 +155,7 @@ export async function computeStopDistPct(coin, priority = HL_PRIORITY.NORMAL) {
       logger.debug(`[Adopt] ATR calc failed #${coin}: ${err.message} — фолбэк на фикс-%`);
     }
   }
-  return { distPct: t.adoptStopPct, basis: 'pct' };
+  return { distPct: t.adoptStopPct, basis: 'pct', rawPct: null, clamp: null };
 }
 
 /**
@@ -455,7 +460,7 @@ export async function maybeAdoptManualPosition(manualPositions) {
 
     // ── Жёсткий стоп (reduce-only) ──────────────
     // Дистанция: ATR(1h)×MULT (подстройка под волатильность) либо фикс-% фолбэк.
-    const { distPct, basis } = await computeStopDistPct(coin);
+    const { distPct, basis, rawPct, clamp } = await computeStopDistPct(coin);
     const plannedSl = side === 'short'
       ? entry * (1 + distPct / 100)
       : entry * (1 - distPct / 100);
@@ -720,7 +725,14 @@ export async function maybeAdoptManualPosition(manualPositions) {
       );
     }
 
-    const distLabel = `−${distPct.toFixed(2)}% ${basis === 'atr' ? 'ATR' : 'фикс'}`;
+    // Зажим называется зажимом: «ATR» на числе из потолка читается как
+    // подстройка под монету, которой не было.
+    const distLabel =
+      basis !== 'atr'
+        ? `−${distPct.toFixed(2)}% фикс`
+        : clamp
+          ? `−${distPct.toFixed(2)}% ${clamp === 'max' ? 'потолок' : 'пол'}, ATR просил ${rawPct.toFixed(2)}%`
+          : `−${distPct.toFixed(2)}% ATR`;
     logger.info(
       `[Adopt] 🤝 adopted #${coin} ${side.toUpperCase()} (id=${id}) | ` +
       `entry=$${entry} size=$${sizeUsd.toFixed(2)} age=${ageMin.toFixed(1)}min | ` +
