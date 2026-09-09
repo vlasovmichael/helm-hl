@@ -91,6 +91,12 @@ import { handleCoinOfDay } from "./routes/coinOfDay.js";
 import { handleEntryFilter } from "./routes/entryFilter.js";
 import { isTargetTrailArmed } from "../../app/adoptSupervise.js";
 import { resolveOpenPicks } from "../coinOfDayLog.js";
+import { rebuild as rebuildCalibrator, readCache as calibratorCache } from "../calibrator.js";
+import {
+  scan as scanUnlocks,
+  settle as settleUnlocks,
+  report as unlocksReport,
+} from "../../../tools/unlocksForward.mjs";
 import {
   DIVERGENCE_WATCHLIST,
   DIVERGENCE_SNAPSHOT_MS,
@@ -120,7 +126,7 @@ const PUBLIC_DIR = join(__dirname, "dist");
 // ссылки в ntfy-пушах не побились.
 const PAGES = [
   "index", "ledger", "journal", "statistics", "lab", "oi",
-  "orderbook", "orderbook-sim", "ticket",
+  "orderbook", "orderbook-sim", "ticket", "unlocks", "calibrator",
 ];
 
 function sendPage(name, res) {
@@ -1130,6 +1136,14 @@ export function startDashboard() {
   app.get("/api/position-nanny", handlePositionNanny);
   app.get("/api/coin-of-day", handleCoinOfDay);
   app.get("/api/entry-filter", handleEntryFilter);
+  // Форвард по разлокам: счётчик, очередь входов и закрытые события.
+  app.get("/api/unlocks", (_req, res) => res.json(unlocksReport()));
+  // Калибратор отдаёт готовый кэш: пересчёт идёт по расписанию, не по запросу.
+  app.get("/api/calibrator", (_req, res) => {
+    const c = calibratorCache();
+    if (!c) return res.status(503).json({ error: "not built yet" });
+    res.json(c);
+  });
   app.get("/api/btc-divergence/all", handleBtcDivergenceAll);
   app.get("/api/whale-watch", handleWhaleWatch);
   app.get("/api/whale-watch/batch", handleWhaleWatchBatch);
@@ -1341,6 +1355,27 @@ export function startDashboard() {
   );
 
   setInterval(() => probeAlloc("dash:oiSnapshot", async () => takeOiSnapshot()), OI_SNAPSHOT_MS);
+
+  // Форвард по разлокам: скан расписания и расчёт закрытых событий.
+  // 🚨 Скан обязан идти регулярно: событие, найденное позже собственной даты
+  // входа, в зачёт не идёт (clean:false) — пропущенные сутки съедают выборку.
+  // Раз в 6 часов, первый прогон через минуту после старта.
+  const unlocksTick = () =>
+    probeAlloc("dash:unlocksForward", async () => {
+      await scanUnlocks({ quiet: true });
+      await settleUnlocks({ quiet: true });
+    }).catch((err) => logger.debug(`[Unlocks] tick failed: ${err.message}`));
+  setTimeout(unlocksTick, 60_000);
+  setInterval(unlocksTick, 6 * 3600_000);
+
+  // Калибратор: сетка целей и стопов по монетам. Считается долго и меняется
+  // медленно (часовой размах — величина недельного масштаба), поэтому раз в
+  // 12 часов, первый прогон отложен, чтобы не спорить со стартом за лимиты HL.
+  const calibTick = () =>
+    probeAlloc("dash:calibrator", async () => rebuildCalibrator())
+      .catch((err) => logger.debug(`[Calibrator] rebuild failed: ${err.message}`));
+  setTimeout(calibTick, 3 * 60_000);
+  setInterval(calibTick, 12 * 3600_000);
 
   // Резолвер «Монеты дня»: догоняет ход монеты и BTC на 4/8/24ч.
   // Раз в 15 минут = темп закрытия бара; measurement-only, торговлю не трогает.

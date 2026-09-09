@@ -51,6 +51,8 @@ export default defineConfig({
         statistics: resolve(webRoot, "statistics.html"),
         lab: resolve(webRoot, "lab.html"),
         oi: resolve(webRoot, "oi.html"),
+        unlocks: resolve(webRoot, "unlocks.html"),
+        calibrator: resolve(webRoot, "calibrator.html"),
         login: resolve(webRoot, "login.html"),
         // Стенд дизайна Trade Ticket на моках (биржи не касается). Живёт в
         // сборке намеренно: страницу удобно открыть и на задеплоенном дашборде,

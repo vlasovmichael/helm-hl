@@ -25,6 +25,8 @@ import {
   Calendar,
   Check,
   ChevronDown,
+  ChevronsDown,
+  ChevronsUp,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -70,6 +72,10 @@ const MAP = {
   // сделки, поэтому и картинка другая.
   rising: TrendingUp,
   falling: TrendingDown,
+  // Широкий сдвиг рынка: двойной шеврон = движение всей корзины, а не одной
+  // монеты. 🚨 Не снежинка: холод описывает затишье, а flush — ровно наоборот.
+  breadthDown: ChevronsDown,
+  breadthUp: ChevronsUp,
   flat: Minus,
 
   // Раскрытие. collapsed/expanded — состояния ОДНОГО слота, поэтому пара.

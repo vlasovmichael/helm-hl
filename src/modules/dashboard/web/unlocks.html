@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!--#head-->
+    <title>Helm · Unlocks</title>
+  </head>
+  <body>
+    <div class="container">
+      <nav class="topnav" id="topnav" aria-label="Primary"></nav>
+
+      <header id="page-header"></header>
+
+      <!-- 01 / Состояние форварда. Счётчик до предзаявленного n — единственное,
+           что здесь можно читать как «результат»: вердикт заперт до n=60. -->
+      <section class="card" id="sec-unlock-status">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-card="Short a coin 7 days before a large token cliff unlock. Dates are public months ahead; the forward tests whether that is already priced in. Schedules are snapshotted on discovery, so a date moved later cannot leak into the result."
+          >
+            Forward progress
+          </div>
+          <div class="seg" id="unlock-lock"></div>
+        </div>
+        <div id="unlock-status"></div>
+      </section>
+
+      <!-- 02 / Календарь входов. Дата входа = разлок минус 7 дней. -->
+      <section class="card" id="sec-unlock-upcoming">
+        <div class="card-header">
+          <div class="card-title" data-card="Entry date is the unlock date minus 7 days. Size is shown against the coin's own median daily volume — the bigger the multiple, the heavier the selling pressure.">
+            Upcoming entries
+          </div>
+          <div class="seg" id="unlock-count"></div>
+        </div>
+        <div class="table-wrap" id="unlock-upcoming"></div>
+      </section>
+
+      <!-- 03 / Закрытые события. -->
+      <section class="card" id="sec-unlock-settled">
+        <div class="card-header">
+          <div class="card-title" data-card="Settled events: short entered at the close 7 days before, closed at the close on unlock day. Costs are two taker fees.">
+            Settled
+          </div>
+        </div>
+        <div id="unlock-settled"></div>
+      </section>
+
+      <footer class="footer" id="footer"></footer>
+    </div>
+    <script type="module" src="/unlocks.js"></script>
+  </body>
+</html>

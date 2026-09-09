@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!--#head-->
+    <title>Helm · Calibrator</title>
+  </head>
+  <body>
+    <div class="container">
+      <nav class="topnav" id="topnav" aria-label="Primary"></nav>
+
+      <header id="page-header"></header>
+
+      <!-- 01 / Рейтинг монет по цене входа. Разрыв = сколько точности сверх
+           того, что даёт сам рынок, нужно добавить, чтобы выйти в ноль. -->
+      <section class="card" id="sec-calib-rank">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-card="Direction is not predictable — this page does not guess it. It shows how much accuracy a coin demands before its costs are paid: the gap between what the market gives on its own and what a break-even needs."
+          >
+            Cost of being right
+          </div>
+          <div class="seg" id="calib-mode">
+            <button class="seg__btn active" data-mode="T" type="button">Market entry</button>
+            <button class="seg__btn" data-mode="M" type="button">Limit entry</button>
+          </div>
+        </div>
+        <div class="table-wrap" id="calib-rank"></div>
+      </section>
+
+      <!-- 02 / Сетка целей и стопов выбранной монеты. -->
+      <section class="card" id="sec-calib-grid">
+        <div class="card-header">
+          <div class="card-title" data-card="Targets and stops in multiples of the coin's own hourly range. Grey cells are those where zero sits inside the confidence interval — indistinguishable from a coin flip.">
+            <span id="calib-coin">—</span>
+          </div>
+          <div class="seg" id="calib-atr"></div>
+        </div>
+        <div id="calib-grid"></div>
+        <div id="calib-detail"></div>
+      </section>
+
+      <footer class="footer" id="footer"></footer>
+    </div>
+    <script type="module" src="/calibrator.js"></script>
+  </body>
+</html>

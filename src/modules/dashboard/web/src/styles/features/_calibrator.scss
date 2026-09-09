@@ -1,0 +1,117 @@
+/* ── Калибратор ───────────────────────────────────────────────────────
+   Тепловая сетка целей и стопов. Серая клетка = ноль внутри интервала,
+   и это состояние важнее любого цвета: там нечего решать. */
+
+.calib-gapbar {
+  display: inline-block;
+  width: 56px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--border-muted);
+  overflow: hidden;
+  margin-right: var(--sp-2);
+  vertical-align: 1px;
+  i {
+    display: block;
+    height: 100%;
+    background: currentColor;
+    border-radius: var(--radius-pill);
+  }
+}
+.warntxt {
+  color: var(--amber, #d29922);
+}
+
+.calib-gridwrap {
+  padding: 0 var(--sp-5) var(--sp-4);
+  overflow-x: auto;
+}
+.calib-heat {
+  border-collapse: separate;
+  border-spacing: 3px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  margin: 0 auto;
+
+  th {
+    font-family: var(--font-sans);
+    font-size: var(--fs-label);
+    font-weight: 500;
+    color: var(--text-muted);
+    letter-spacing: var(--ls-wide);
+    text-transform: uppercase;
+    padding: var(--sp-1);
+  }
+  td {
+    padding: 0;
+  }
+}
+.calib-axis--y {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.calib-cell {
+  width: 78px;
+  height: 52px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  cursor: pointer;
+  font: inherit;
+  transition:
+    transform var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: var(--border-strong);
+  }
+  &.is-selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+}
+.calib-e {
+  font-size: var(--fs-body);
+  font-weight: 700;
+  letter-spacing: var(--ls-tight);
+}
+.calib-p {
+  font-size: var(--fs-micro);
+  opacity: 0.8;
+}
+
+.calib-detail {
+  border-top: 1px solid var(--border-muted);
+  padding: var(--sp-4) var(--sp-5);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--sp-4);
+
+  .value {
+    white-space: nowrap;
+  }
+  small {
+    font-size: var(--fs-small);
+    color: var(--text-muted);
+    font-weight: 400;
+  }
+}
+.calib-note {
+  grid-column: 1 / -1;
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  border-left: 2px solid var(--border-strong);
+  padding-left: var(--sp-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .calib-cell {
+    transition: none;
+  }
+}

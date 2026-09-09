@@ -22,6 +22,21 @@ const LINKS = [
   { key: "ledger", href: "/ledger", label: "Ledger" },
 ];
 
+// Витрины исследований: живут отдельно от основной навигации — открываются
+// редко, а место в ряду ссылок стоит дорого.
+const RESEARCH = [
+  {
+    href: "/unlocks",
+    title: "Unlocks",
+    note: "Token unlock forward — schedule, queue, settled trades",
+  },
+  {
+    href: "/calibrator",
+    title: "Calibrator",
+    note: "How much edge a coin demands before costs are paid",
+  },
+];
+
 const navLink = (l, active) => {
   const isActive = l.key === active;
   return `
@@ -66,6 +81,24 @@ export function mountTopnav(active) {
           <div class="notif-list" id="notif-list"></div>
         </div>
       </div>
+      <div class="research" id="research">
+        <button class="research-btn" id="research-btn" type="button"
+                aria-label="Research" aria-expanded="false" aria-haspopup="true">
+          <svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+          </svg>
+        </button>
+        <div class="research-panel" id="research-panel" hidden role="menu" aria-label="Research">
+          ${RESEARCH.map(
+            (r) => `<a class="research-item" href="${r.href}" role="menuitem">
+              <svg class="nav-ico" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 12h14" /><path d="m13 6 6 6-6 6" />
+              </svg>
+              <span><b>${r.title}</b><i>${r.note}</i></span>
+            </a>`,
+          ).join("")}
+        </div>
+      </div>
       <button class="theme-toggle" id="theme-toggle" type="button">
         <svg class="nav-ico" id="theme-ico" viewBox="0 0 24 24" aria-hidden="true"></svg>
       </button>
@@ -73,6 +106,52 @@ export function mountTopnav(active) {
   initNotifications();
   mountBellMorph();
   mountNavMorph(nav);
+  mountResearchMenu();
+}
+
+/**
+ * Меню Research. Открытие/закрытие ведёт класс .is-open (анимация в CSS,
+ * тот же приём, что у панели уведомлений), [hidden] снимается заранее и
+ * ставится обратно после выезда — иначе анимации закрытия не видно.
+ *
+ * 🚨 hidden возвращается по transitionend, а не по таймеру: при
+ * prefers-reduced-motion перехода нет вовсе, поэтому там закрываем сразу.
+ */
+function mountResearchMenu() {
+  const btn = document.getElementById("research-btn");
+  const panel = document.getElementById("research-panel");
+  if (!btn || !panel) return;
+
+  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let open = false;
+
+  const setOpen = (next) => {
+    if (next === open) return;
+    open = next;
+    btn.setAttribute("aria-expanded", String(open));
+    if (open) {
+      panel.hidden = false;
+      // Кадр на применение [hidden]=false, иначе браузер схлопнет переход.
+      requestAnimationFrame(() => panel.classList.add("is-open"));
+    } else {
+      panel.classList.remove("is-open");
+      if (reduced) panel.hidden = true;
+    }
+  };
+
+  panel.addEventListener("transitionend", (e) => {
+    if (e.propertyName === "opacity" && !open) panel.hidden = true;
+  });
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setOpen(!open);
+  });
+  document.addEventListener("click", (e) => {
+    if (open && !panel.contains(e.target)) setOpen(false);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") setOpen(false);
+  });
 }
 
 /**

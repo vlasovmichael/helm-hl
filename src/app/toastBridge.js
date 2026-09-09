@@ -102,7 +102,7 @@ export function reportBreadthFlush(flush) {
       message:
         (sharePct != null ? `${sharePct}% монет ${down ? 'валятся' : 'летят'}` : 'широкий сдвиг') +
         ` · ${down ? 'risk-off' : 'risk-on'} · будильник`,
-      tags: ['snowflake'], // → янтарный warn-тост
+      tags: [down ? 'breadth-down' : 'breadth-up'], // янтарный warn + шеврон по стороне
       priority: 3,
     });
   } catch (err) {

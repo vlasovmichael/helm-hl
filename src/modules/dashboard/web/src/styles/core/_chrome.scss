@@ -666,11 +666,13 @@ header {
     display: none;
   }
 }
-.notif-panel {
+// Выезжающая панель под кнопкой в шапке. Приём один на всю шапку: панель
+// уведомлений и меню Research открываются одинаково, иначе шапка выглядит
+// собранной из разных мест.
+%pop-panel {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  width: 340px;
   max-width: calc(100vw - 24px);
   max-height: 70vh;
   overflow: hidden;
@@ -682,8 +684,8 @@ header {
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
   z-index: 60;
 
-  // Анимация открытия/закрытия. Состояние видимости — класс .is-open (его
-  // ставит/снимает JS), а атрибут [hidden] лишь убирает из потока после выезда.
+  // Состояние видимости — класс .is-open (его ставит/снимает JS), а атрибут
+  // [hidden] лишь убирает из потока после выезда.
   transform-origin: top right;
   opacity: 0;
   transform: translateY(-6px) scale(0.98);
@@ -697,6 +699,11 @@ header {
     transform: none;
     pointer-events: auto;
   }
+}
+
+.notif-panel {
+  @extend %pop-panel;
+  width: 340px;
   &[hidden] {
     display: none;
   }
@@ -714,8 +721,77 @@ header {
   }
 }
 @include reduced-motion {
-  .notif-panel {
+  .notif-panel,
+  .research-panel {
     transition: none;
+  }
+}
+
+/* ── Меню Research: витрины исследований, которым не место в основной
+      навигации. Кнопка стоит рядом с колокольчиком и открывается тем же
+      приёмом. ── */
+.research {
+  position: relative;
+}
+.research-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-h);
+  height: var(--ctl-h);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    color var(--dur-fast) var(--ease-out),
+    background var(--dur-fast) var(--ease-out);
+
+  &:hover,
+  &[aria-expanded="true"] {
+    color: var(--text-primary);
+    background: var(--canvas-subtle);
+  }
+}
+.research-panel {
+  @extend %pop-panel;
+  width: 260px;
+  padding: var(--sp-1);
+  &[hidden] {
+    display: none;
+  }
+}
+.research-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease-out);
+
+  &:hover {
+    background: var(--canvas-subtle);
+  }
+  .nav-ico {
+    flex: none;
+    margin-top: 2px;
+    color: var(--text-muted);
+  }
+  b {
+    display: block;
+    font-size: var(--fs-body);
+    font-weight: 500;
+  }
+  i {
+    display: block;
+    font-style: normal;
+    font-size: var(--fs-small);
+    color: var(--text-muted);
+    line-height: 1.35;
   }
 }
 .notif-panel-head {

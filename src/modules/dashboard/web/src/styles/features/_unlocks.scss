@@ -1,0 +1,85 @@
+/* ── Форвард по разлокам ──────────────────────────────────────────────
+   Счётчик до предзаявленного n — главное число страницы; прогресс-полоса
+   рядом, чтобы «сколько осталось» читалось без арифметики. */
+
+.unlock-status {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sp-6);
+  align-items: center;
+  padding: var(--sp-4) var(--sp-5);
+}
+
+.unlock-n {
+  .unlock-n-val {
+    font-size: var(--fs-hero);
+    font-weight: 700;
+    letter-spacing: var(--ls-tight);
+    line-height: 1;
+  }
+  .unlock-n-of {
+    font-size: var(--fs-lead);
+    color: var(--text-muted);
+  }
+  .label {
+    margin-top: var(--sp-1);
+  }
+}
+
+.unlock-bar {
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--border-muted);
+  overflow: hidden;
+  i {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    border-radius: var(--radius-pill);
+    transition: width var(--dur-slow) var(--ease-out);
+  }
+}
+
+.unlock-meta {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+}
+
+/* Строка сегодняшнего входа — подсвечена, чтобы не искать её глазами. */
+.unlock-today td {
+  background: var(--accent-soft);
+}
+
+.unlock-empty {
+  padding: var(--sp-6);
+  text-align: center;
+  color: var(--text-faint);
+  font-size: var(--fs-body);
+}
+
+.unlock-note {
+  margin: var(--sp-4);
+  border-left: 2px solid var(--border-strong);
+  padding-left: var(--sp-3);
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+}
+
+/* Замок вердикта: жёлтый, пока выборка не набрана, зелёный — когда пора
+   оценивать. Третьего состояния нет намеренно. */
+.chip--lock {
+  color: var(--amber, #d29922);
+  border-color: rgba(210, 153, 34, 0.35);
+  background: rgba(210, 153, 34, 0.1);
+}
+.chip--ready {
+  color: var(--green);
+  border-color: var(--green-line);
+  background: var(--green-soft);
+}
+/* Разлок от десяти дневных оборотов — вес, ради которого гипотеза и заведена. */
+.chip--hot {
+  color: var(--red);
+  border-color: var(--red-line);
+}

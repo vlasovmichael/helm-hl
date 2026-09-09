@@ -89,9 +89,12 @@ export function classifyNotif(item) {
   //
   // 🚨 «flush» и «squeeze» сюда не добавлять: радар OI пишет ими про рынок
   // («longs being flushed»), и информационный пуш получал жёлтый треугольник.
-  // Свой warn у breadth-flush есть — тег snowflake, и иконка у него снежинка.
-  if (has("snowflake")) {
-    return { kind: "warn", cls: "toast--warn", glyph: "cold", side };
+  // У breadth-flush свой тег, и он же несёт направление сдвига.
+  if (has("breadth-down")) {
+    return { kind: "warn", cls: "toast--warn", glyph: "breadthDown", side };
+  }
+  if (has("breadth-up")) {
+    return { kind: "warn", cls: "toast--warn", glyph: "breadthUp", side };
   }
   if (/\bwarn|stale|cooldown|paused|\bcold\b|\bskip/.test(text)) {
     return { kind: "warn", cls: "toast--warn", glyph: "warn", side };

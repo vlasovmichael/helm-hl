@@ -56,7 +56,7 @@ test("направление радара живёт в toastDir, а не в и�
 });
 
 test("режимные предупреждения — warn", () => {
-  assert.equal(kind("Breadth flush", "62% монет валятся · risk-off", ["snowflake"], 3), "warn");
+  assert.equal(kind("Breadth flush", "62% монет валятся · risk-off", ["breadth-down"], 3), "warn");
 });
 
 test("иконка у закрытия зависит от знака, а не от тегов", () => {
@@ -75,12 +75,16 @@ test("у закрытия со стороной в заголовке иконк
   assert.equal(r.kind, "loss");
 });
 
-// Тег snowflake у breadth-flush несёт снежинку, а не общий warn-треугольник:
-// это режим рынка, и он должен отличаться от «что-то сломалось».
-test("breadth flush показывает снежинку, тон остаётся warn", () => {
-  const r = classifyNotif({ title: "Breadth flush ▼", message: "62% монет валятся · risk-off", tags: ["snowflake"] });
-  assert.equal(r.glyph, "cold");
-  assert.equal(r.kind, "warn");
+// Breadth flush несёт СТОРОНУ сдвига, а не общий warn-треугольник: это режим
+// рынка, и он должен отличаться от «что-то сломалось».
+// 🚨 Не снежинка: холод описывает затишье, а flush — ровно наоборот.
+test("breadth flush показывает сторону сдвига, тон остаётся warn", () => {
+  const down = classifyNotif({ title: "Breadth flush ▼", message: "62% монет валятся · risk-off", tags: ["breadth-down"] });
+  assert.equal(down.glyph, "breadthDown");
+  assert.equal(down.kind, "warn");
+  const up = classifyNotif({ title: "Breadth flush ▲", message: "62% монет летят · risk-on", tags: ["breadth-up"] });
+  assert.equal(up.glyph, "breadthUp");
+  assert.equal(up.kind, "warn");
 });
 
 // Иконка информационного события — по ТИПУ, а не по направлению: иначе радар

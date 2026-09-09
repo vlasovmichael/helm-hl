@@ -176,8 +176,13 @@ export function report() {
   };
 }
 
-const cmd = process.argv[2];
-if (cmd === "scan") await scan();
-else if (cmd === "settle") await settle();
-else if (cmd === "report") console.log(JSON.stringify(report(), null, 2));
-else if (cmd) console.error(`неизвестная команда: ${cmd}`);
+// CLI-часть работает только при прямом запуске: файл импортируется дашбордом
+// ради scan/settle по расписанию, и разбор argv там сработал бы на чужих флагах.
+const runDirectly = process.argv[1] && process.argv[1].endsWith("unlocksForward.mjs");
+if (runDirectly) {
+  const cmd = process.argv[2];
+  if (cmd === "scan") await scan();
+  else if (cmd === "settle") await settle();
+  else if (cmd === "report") console.log(JSON.stringify(report(), null, 2));
+  else console.error("команды: scan | settle | report");
+}
