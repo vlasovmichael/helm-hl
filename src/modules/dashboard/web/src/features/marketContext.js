@@ -37,7 +37,22 @@ const STAT_CELLS = [
   ["volUsd", "Vol 24h"],
   ["oiUsd", "OI"],
   ["funding", "Funding 1h"],
+  ["bias", "Bias 15m"],
 ];
+
+// Порог хода BTC, ниже которого сторона не называется. 10 бп — не круглое число
+// с потолка: на 105 сделках оператора входы по направлению BTC дали −30.7 бп
+// против −50.1 у входов против него, а сделки при штиле BTC — худшие (−104 бп).
+// 🚨 CI пока накрывает ноль (n мал): плашка ставит признак на счётчик, а не
+// объявляет его рабочим. Порог не двигать без нового замера.
+const BIAS_THRESHOLD_PCT = 0.10;
+
+function biasCell(m15) {
+  if (m15 == null || !Number.isFinite(m15)) return ["—", ""];
+  if (m15 >= BIAS_THRESHOLD_PCT) return ["LONG", "up"];
+  if (m15 <= -BIAS_THRESHOLD_PCT) return ["SHORT", "down"];
+  return ["FLAT", "mut"];
+}
 
 let built = false;
 
@@ -172,6 +187,8 @@ export function renderMarketContext(d) {
   setVal(el, "oiUsd", fmtUsd(b.oiUsd));
   const fund = b.funding == null ? null : b.funding * 100;
   setVal(el, "funding", fund == null ? "—" : fmtPct(fund, 4), pctCls(fund));
+  const [biasTxt, biasCls] = biasCell(b.m15);
+  setVal(el, "bias", biasTxt, biasCls);
 }
 
 // Живая цена BTC из WS-кадра статуса (≤2с) — зовётся из onStatus. Обновляет

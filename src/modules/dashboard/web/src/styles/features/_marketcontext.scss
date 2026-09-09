@@ -135,6 +135,11 @@
         &.down {
           color: var(--red);
         }
+        /* Штиль BTC: сторона не называется. Приглушённый — чтобы FLAT не
+           читался как сигнал наравне с LONG/SHORT. */
+        &.mut {
+          color: var(--text-faint);
+        }
       }
     }
   }
@@ -162,7 +167,7 @@
     .mc-spark-wrap {
       animation-delay: 0.06s;
     }
-    @for $i from 1 through 6 {
+    @for $i from 1 through 7 {
       .mc-stats .mc-cell:nth-child(#{$i}) {
         animation-delay: #{0.06 + $i * 0.05}s;
       }
