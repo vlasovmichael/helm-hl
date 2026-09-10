@@ -159,3 +159,32 @@
     @include mask-icon("arrow-up", 11px);
   }
 }
+
+// ── Таблицы открытых позиций: общая сетка ───────────────────────────────
+// Paper и Signal рисуются как две независимые <table> друг под другом.
+// При авто-раскладке каждая считает ширины по своему содержимому, и колонки
+// с одинаковыми заголовками расходятся по горизонтали.
+// 🚨 Ширины фиксированные и одинаковые для обеих: набор колонок обязан
+// совпадать, иначе сетка снова разъедется.
+.pos-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 640px;
+
+  th,
+  td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  // Coin · Side · Lev · Size · Entry · Price · uPnL · Age · кнопка
+  th:nth-child(1) { width: 14%; }
+  th:nth-child(2) { width: 10%; }
+  th:nth-child(3) { width: 7%; }
+  th:nth-child(4) { width: 11%; }
+  th:nth-child(5) { width: 14%; }
+  th:nth-child(6) { width: 14%; }
+  th:nth-child(7) { width: 13%; }
+  th:nth-child(8) { width: 9%; }
+  th:nth-child(9) { width: 8%; }
+}

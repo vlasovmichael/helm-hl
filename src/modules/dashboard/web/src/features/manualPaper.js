@@ -10,10 +10,11 @@
 // touching HTML) and reuses the shared .modal shell — flat, theme-aware
 // panel like "What if…". REST: GET/POST /api/manual-paper(/open|/close).
 
-import { escapeHtml, fmtUsd, fmtPct, fmtPrice } from "../utils/format.js";
+import { escapeHtml, fmtUsd, fmtPct, fmtPrice, fmtSince } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 import * as dialog from "../core/dialog.js";
 import { icon } from "../core/icon.js";
+import { renderTickValue } from "../core/tickValue.js";
 import { button, segmented, slider, card } from "../core/ui.js";
 import { attachCoinCombo, coinCombo } from "../core/coinCombo.js";
 
@@ -286,16 +287,17 @@ function rowHtml(p) {
         }</span>`
       : "";
   return `
-    <tr>
+    <tr data-mp-row="${escapeHtml(p.id)}">
       <td><span class="signals-price">#${escapeHtml(p.coin)}</span></td>
       <td class="center ${sideCls}"><strong>${arrow} ${escapeHtml(p.side)}</strong></td>
       <td class="num">${p.leverage}×</td>
       <td class="num">${fmtUsd(p.sizeUsd)}</td>
       <td class="num">${fmtPrice(p.entryPrice)}</td>
-      <td class="num" data-mp-mark>${fmtPrice(p.markPrice)}</td>
-      <td class="num ${pnlCls}"><strong>${pnl == null ? "—" : fmtUsd(pnl)}</strong>${
+      <td class="num" data-mp-mark><span data-mp-mark-val>${fmtPrice(p.markPrice)}</span></td>
+      <td class="num ${pnlCls}" data-mp-pnl-cell><strong data-mp-pnl-val>${pnl == null ? "—" : fmtUsd(pnl)}</strong>${
         roe == null ? "" : `<span class="mp-roe">${fmtPct(roe)}</span>`
       }${sub}</td>
+      <td class="num mp-age">${p.entryTime ? fmtSince(p.entryTime) : "—"}</td>
       <td class="center">${button({
         label: "Close",
         icon: "close",
@@ -316,6 +318,40 @@ function rowHtml(p) {
     </tr>`;
 }
 
+// Возвращает true, если удалось обойтись точечным обновлением.
+function patchLive(container, positions) {
+  const rows = container.querySelectorAll("tr[data-mp-row]");
+  if (rows.length !== positions.length || !rows.length) return false;
+  const byId = new Map(positions.map((p) => [String(p.id), p]));
+  for (const tr of rows) if (!byId.has(tr.dataset.mpRow)) return false;
+
+  for (const tr of rows) {
+    const p = byId.get(tr.dataset.mpRow);
+    const markEl = tr.querySelector("[data-mp-mark-val]");
+    const pnlEl = tr.querySelector("[data-mp-pnl-val]");
+    if (markEl) {
+      const prevPx = Number(tr.dataset.mpPrevPx);
+      const up = Number.isFinite(prevPx) && p.markPrice != null ? p.markPrice > prevPx : null;
+      renderTickValue(markEl, fmtPrice(p.markPrice), up);
+      if (p.markPrice != null) tr.dataset.mpPrevPx = String(p.markPrice);
+    }
+    if (pnlEl) {
+      const prevPnl = Number(tr.dataset.mpPrevPnl);
+      const pnl = p.unrealized;
+      const up = Number.isFinite(prevPnl) && pnl != null ? pnl > prevPnl : null;
+      renderTickValue(pnlEl, pnl == null ? "—" : fmtUsd(pnl), up);
+      // Знак ведёт цвет всей ячейки, хвост — направление последнего движения.
+      const cell = pnlEl.closest("[data-mp-pnl-cell]");
+      if (cell && pnl != null) {
+        cell.classList.toggle("num-pos", pnl >= 0);
+        cell.classList.toggle("num-neg", pnl < 0);
+      }
+      if (pnl != null) tr.dataset.mpPrevPnl = String(pnl);
+    }
+  }
+  return true;
+}
+
 async function refreshActive() {
   const container = document.getElementById("mp-active-container");
   if (!container) return; // не на этой странице
@@ -326,6 +362,11 @@ async function refreshActive() {
       container.innerHTML = ""; // нет бумажных поз — блок не мозолит глаза
       return;
     }
+    // Тот же набор позиций — обновляем ЧИСЛА, а не пересобираем таблицу:
+    // при перерисовке DOM теряет identity ячеек, и подсветка изменившегося
+    // хвоста гаснет на каждом тике вместе с ней.
+    if (patchLive(container, positions)) return;
+
     const used = data?.slots?.used ?? positions.length;
     const max = data?.slots?.max ?? 8;
     const managed = positions.some((p) => p.managed);
@@ -336,12 +377,13 @@ async function refreshActive() {
           <span class="mp-active-meta">${used}/${max} · ${managed ? `${icon("bot")} bot manages exit` : "bot hands-off"}</span>
         </div>
         <div class="u-scroll-x">
-          <table class="table table--compact mp-active-table">
+          <table class="table table--compact pos-table mp-active-table">
             <thead>
               <tr>
                 <th>Coin</th><th class="center">Side</th><th class="num">Lev</th>
                 <th class="num">Size</th><th class="num">Entry</th><th class="num">Price</th>
                 <th class="num" data-card="Unrealized P&L (net) + ROE on margin">uPnL</th>
+                <th class="num">Age</th>
                 <th class="center"></th>
               </tr>
             </thead>

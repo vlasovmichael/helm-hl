@@ -78,7 +78,7 @@ function tableHtml(data) {
         <span class="tg-active-meta">${meta}</span>
       </div>
       <div class="u-scroll-x">
-        <table class="table table--compact tg-active-table">
+        <table class="table table--compact pos-table tg-active-table">
           <thead>
             <tr>
               <th>Coin</th><th class="center">Side</th><th class="num">Lev</th>
