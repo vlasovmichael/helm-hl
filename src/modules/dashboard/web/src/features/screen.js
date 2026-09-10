@@ -162,9 +162,9 @@ function posCell(pos) {
   }
   const bar = (v, cls) =>
     v == null
-      ? `<div class="scr-lsbar ${cls} is-empty"></div>`
-      : `<div class="scr-lsbar ${cls}"><span style="--w:${v.toFixed(1)}%"></span>` +
-        `<em>${Math.round(v)}</em></div>`;
+      ? `<div class="scr-lsbar ${cls} is-empty"><em>—</em><i></i></div>`
+      : `<div class="scr-lsbar ${cls}"><em>${Math.round(v)}</em>` +
+        `<i><span style="--w:${v.toFixed(1)}%"></span></i></div>`;
   // ⇄ ставим только на заметном разрыве: мелкая разница — это шум выборки,
   // а не расхождение крупных с розницей.
   const gap =

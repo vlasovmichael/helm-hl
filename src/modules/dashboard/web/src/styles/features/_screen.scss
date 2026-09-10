@@ -261,42 +261,57 @@
    Зелёная часть — лонг, красный фон — остаток (шорт). */
 .scr-ls {
   position: relative;
-  min-width: 92px;
+  min-width: 118px;
 
   &--none {
     color: var(--text-faint);
   }
 }
+/* Число стоит СЛЕВА от полосы, а не поверх неё: на тёмной половине шкалы
+   наложенная цифра не читается ни при какой прозрачности. */
 .scr-lsbar {
-  position: relative;
-  height: 8px;
-  margin: 2px 0;
-  border-radius: 2px;
-  background: color-mix(in srgb, var(--red) 22%, transparent);
-  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 3px 0;
 
+  /* Дорожка. Красная — шорт, зелёная часть внутри — лонг. */
+  i {
+    position: relative;
+    flex: 1;
+    height: 8px;
+    border-radius: 2px;
+    background: color-mix(in srgb, var(--red) 30%, transparent);
+    overflow: hidden;
+    font-style: normal;
+  }
   span {
     position: absolute;
     inset: 0 auto 0 0;
     width: 0;
-    background: color-mix(in srgb, var(--green) 55%, transparent);
+    background: color-mix(in srgb, var(--green) 60%, transparent);
     /* Полосы разъезжаются из нуля тем же жестом, что и прогресс в системе;
        конечная ширина приезжает инлайновой --w. */
     animation: scr-ls-grow 620ms var(--ease-out) both;
   }
   &.is-retail span {
-    background: color-mix(in srgb, var(--green) 30%, transparent);
+    background: color-mix(in srgb, var(--green) 34%, transparent);
   }
-  &.is-empty {
+  &.is-empty i {
     background: var(--border-muted);
   }
 
   em {
-    position: absolute;
-    top: -2px;
-    right: 3px;
+    flex: 0 0 22px;
     font-style: normal;
-    font-size: var(--fs-micro);
+    font-family: var(--font-mono);
+    font-size: var(--fs-small);
+    text-align: right;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+  /* Розница — вторым планом: её доля справочная, ведёт верхняя строка. */
+  &.is-retail em {
     color: var(--text-secondary);
   }
 }
@@ -363,7 +378,7 @@
   color: var(--accent);
 }
 .scr-fund {
-  font-size: var(--fs-micro);
+  font-size: var(--fs-body);
 }
 
 @media (prefers-reduced-motion: reduce) {
