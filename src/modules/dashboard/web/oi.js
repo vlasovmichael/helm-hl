@@ -506,7 +506,7 @@ let sortAsc = false;
 let filter = "";
 let page = 0;
 let activeCoin = null;
-let detailHours = 72;
+let detailHours = 24;
 
 // ── обзор ──
 async function loadOverview() {
