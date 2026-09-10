@@ -19,10 +19,19 @@ import { getPriceNMinAgo, getLatestPrice } from "../../../core/priceHistory.js";
 import { getHistory, getActiveAdoptPositions, getActivePosition } from "../../../core/database.js";
 import { getLastDailyRiskStatus } from "../../dailyRisk.js";
 import { getCachedAccountValueSync } from "../../../core/balanceCache.js";
+import {
+  getPositioning,
+  getHourProfile,
+  sweepPositioning,
+} from "../../binancePositioning.js";
 
-// Тейкер-комиссия HL по факту наших филлов. Круг = вход + выход.
+// Комиссии HL по факту наших филлов. Круг = вход + выход.
 const TAKER_FEE_BP = 4.32;
 const ROUND_TRIP_FEE_BP = TAKER_FEE_BP * 2;
+// Лимитка стоит в книге и спред не платит вовсе — отсюда и разрыв с тейкером
+// втрое. Показываем обе цифры рядом: это цена одного и того же входа.
+const MAKER_FEE_BP = 1.44;
+const MAKER_ROUND_TRIP_BP = MAKER_FEE_BP * 2;
 
 // metaAndAssetCtxs весит 20 (не в списке лёгких). Кэш 120с → 10 веса/мин из
 // бюджета 1000. Ликвидность за две минуты не меняется, а колонки движения
@@ -235,6 +244,16 @@ export async function buildScreenPayload() {
       frictionPctOfRisk: cost?.pctOfRisk ?? null,
       volume24hUsd: Number(ctx.dayNtlVlm) || null,
       maxLeverage: u.maxLeverage ?? null,
+      // Круг лимиткой: комиссия мейкера в обе стороны, спреда нет.
+      makerFrictionBp: MAKER_ROUND_TRIP_BP,
+      makerFrictionUsd: (notional * MAKER_ROUND_TRIP_BP) / 10000,
+      // Фандинг за час, в процентах — знак говорит, кто кому платит.
+      fundingPct: Number.isFinite(Number(ctx.funding)) ? Number(ctx.funding) * 100 : null,
+      oiUsd: Number(ctx.openInterest) > 0 ? Number(ctx.openInterest) * mid : null,
+      // Расстановка и профиль часов — с Binance, могут быть null: пары нет
+      // либо свип ещё не дошёл до этой монеты.
+      pos: getPositioning(u.name),
+      hours: getHourProfile(u.name),
       // Твой послужной список по этой монете — null, если ни разу не торговал.
       mine: track.get(String(u.name).toUpperCase()) ?? null,
     });
@@ -243,11 +262,18 @@ export async function buildScreenPayload() {
   const rank = (c) => Math.abs(c.chg15mPct ?? c.chg1hPct ?? c.chg24hPct ?? 0);
   coins.sort((a, b) => rank(b) - rank(a));
 
+  // Досбор расстановки в фоне, в порядке экрана: верхние монеты обновятся
+  // первыми. Ответ не ждёт — на этом рендере поля будут прошлыми, на
+  // следующем свежими. Ошибку глотаем: экран живёт и без расстановки.
+  sweepPositioning(coins.map((c) => c.coin)).catch(() => {});
+
   return {
     ok: true,
     thresholdBp: maxBp,
     notionalUsd: notional,
     riskUsd,
+    takerRoundTripBp: ROUND_TRIP_FEE_BP,
+    makerRoundTripBp: MAKER_ROUND_TRIP_BP,
     passed: coins.length,
     considered,
     coins,

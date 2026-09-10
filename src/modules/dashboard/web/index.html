@@ -191,6 +191,26 @@
             >
               <i data-icon="search"></i>Check coin
             </button>
+            <label class="scr-search">
+              <i data-icon="search" class="scr-search-icon"></i>
+              <input
+                id="screen-search"
+                class="field field--sm field--ticker"
+                type="search"
+                placeholder="Coin…"
+                autocomplete="off"
+                spellcheck="false"
+                data-card="Filter the board by ticker. Narrows before the top-12 cut, so a coin outside the dozen is still findable. Esc clears."
+              />
+              <button
+                class="scr-search-clear"
+                type="button"
+                data-screen-clear
+                aria-label="Clear search"
+              >
+                &times;
+              </button>
+            </label>
             <span id="screen-meta" class="scr-meta"></span>
           </div>
         </div>
@@ -218,6 +238,24 @@
                 </th>
                 <th
                   class="num"
+                  data-card="Same round trip, but entered and exited with a limit order: maker fee 1.44 bp each way and no spread paid. The gap to Friction is what a filled limit is worth."
+                >
+                  Limit
+                </th>
+                <th class="num" data-card="Open interest in dollars, with its 1h change underneath. OI counts both sides at once — it says positions are held, never which way.">OI</th>
+                <th
+                  data-card="Who is long. Top bar: large accounts by position size. Bottom bar: all accounts by count. a swap mark shows a gap of 12+ points between them. Source: Binance, same coin — not HL positions."
+                >
+                  Long
+                </th>
+                <th class="num" data-card="Hourly funding rate. Positive means longs pay shorts.">Funding</th>
+                <th
+                  data-card="When this coin actually moves: average bar range per UTC hour over the last week. The highlighted bar is the current hour."
+                >
+                  Hours
+                </th>
+                <th
+                  class="num"
                   data-sort="mine"
                   data-card="Your own track record on this coin: net P&L, number of trades and winrate. Not a prediction about the market — a fact about you."
                 >
@@ -227,11 +265,11 @@
               </tr>
             </thead>
             <tbody id="screen-tbody">
-              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
-              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
-              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
-              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
-              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
+              <tr class="sk-row"><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td><td><span class="sk"></span></td></tr>
             </tbody>
           </table>
         </div>

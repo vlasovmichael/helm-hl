@@ -14,6 +14,7 @@
 // Серверная часть и обоснование порога — routes/screen.js.
 
 import { settle, emptyRow } from "../core/placeholders.js";
+import { icon } from "../core/icon.js";
 
 const fmtPct = (v, d = 2) =>
   v == null || !Number.isFinite(v) ? "—" : (v >= 0 ? "+" : "") + v.toFixed(d) + "%";
@@ -77,6 +78,9 @@ const SORT_KEYS = {
 let sortKey = "move";
 let sortDir = "desc";
 let lastData = null;
+// Фильтр по тикеру. Живёт в модуле, а не в DOM: рендер идёт на каждом
+// поллинге и обязан пережить перерисовку, не теряя набранное.
+let screenQuery = "";
 
 export function sortCoins(coins, key = sortKey, dir = sortDir) {
   const pick = SORT_KEYS[key] || SORT_KEYS.move;
@@ -146,17 +150,89 @@ function mineCell(mine) {
   );
 }
 
+
+/**
+ * Расстановка: две полосы — крупные счета по объёму позиций и вся розница по
+ * числу счетов. Полосы, а не числа: разрыв между ними читается взглядом, а
+ * именно он тут единственное содержание. Данные — Binance, по той же монете.
+ */
+function posCell(pos) {
+  if (!pos || (pos.topLongPct == null && pos.retailLongPct == null)) {
+    return `<td class="scr-ls scr-ls--none">—</td>`;
+  }
+  const bar = (v, cls) =>
+    v == null
+      ? `<div class="scr-lsbar ${cls} is-empty"></div>`
+      : `<div class="scr-lsbar ${cls}"><span style="--w:${v.toFixed(1)}%"></span>` +
+        `<em>${Math.round(v)}</em></div>`;
+  // ⇄ ставим только на заметном разрыве: мелкая разница — это шум выборки,
+  // а не расхождение крупных с розницей.
+  const gap =
+    pos.topLongPct != null && pos.retailLongPct != null
+      ? Math.abs(pos.topLongPct - pos.retailLongPct)
+      : 0;
+  return (
+    `<td class="scr-ls" data-card="Top: large accounts by position size. Bottom: all accounts by count. Source: Binance">` +
+      bar(pos.topLongPct, "is-top") +
+      bar(pos.retailLongPct, "is-retail") +
+      (gap >= 12 ? `<b class="scr-div">${icon("swap")}</b>` : "") +
+    `</td>`
+  );
+}
+
+/** OI в долларах и куда он двинулся за час. */
+function oiCell(c) {
+  if (c.oiUsd == null) return `<td class="num scr-oi">—</td>`;
+  const d = c.pos?.oiChg1hPct;
+  return (
+    `<td class="num scr-oi">${fmtVol(c.oiUsd)}` +
+      (d == null ? "" : `<i class="scr-win ${pctCls(d)}">${fmtPct(d, 1)} 1h</i>`) +
+    `</td>`
+  );
+}
+
+/**
+ * Профиль суток: 24 столбика, средний размах бара по часу UTC за неделю.
+ * Текущий час подсвечен — это и есть ответ на «сейчас вообще время входить».
+ */
+function hoursCell(hours) {
+  if (!Array.isArray(hours) || hours.length !== 24) {
+    return `<td class="scr-hrs scr-hrs--none">—</td>`;
+  }
+  const mx = Math.max(...hours) || 1;
+  const now = new Date().getUTCHours();
+  const bars = hours
+    .map((v, h) => {
+      const pct = Math.max(8, Math.round((v / mx) * 100));
+      return (
+        `<i style="--h:${pct}%;--bi:${h}"${h === now ? ' class="is-now"' : ""}` +
+        ` data-tip="${h}:00 UTC · ${v.toFixed(2)}%"></i>`
+      );
+    })
+    .join("");
+  return `<td class="scr-hrs"><div class="scr-spark">${bars}</div></td>`;
+}
+
 function renderRows() {
   const tbody = document.getElementById("screen-tbody");
   if (!tbody || !lastData?.coins) return;
 
-  const rows = sortCoins(lastData.coins).slice(0, 12);
+  // Поиск сужает ДО отсечки в 12 строк: иначе искомая монета найдётся только
+  // если она уже попала в верхнюю дюжину, а это ровно наоборот тому, зачем
+  // поиск нужен.
+  const q = screenQuery.trim().toLowerCase();
+  const pool = q
+    ? lastData.coins.filter((c) => String(c.coin).toLowerCase().includes(q))
+    : lastData.coins;
+  const rows = sortCoins(pool).slice(0, 12);
   if (!rows.length) {
-    tbody.innerHTML = emptyRow(7, {
-      glyph: "search",
-      title: "No coin passed the threshold",
-      hint: "Raise SCREEN_MAX_FRICTION_BP if the whole board is too expensive to trade today.",
-    });
+    tbody.innerHTML = q
+      ? emptyRow(11, { glyph: "search", title: `Nothing matches «${q}»` })
+      : emptyRow(11, {
+          glyph: "search",
+          title: "No coin passed the threshold",
+          hint: "Raise SCREEN_MAX_FRICTION_BP if the whole board is too expensive to trade today.",
+        });
     return;
   }
 
@@ -184,6 +260,15 @@ function renderRows() {
           `<td class="num scr-fr ${frictionClass(fr)}">${
             fr == null ? "—" : Math.round(fr) + "%"
           }<i class="scr-win">${c.spreadBp == null ? "" : c.spreadBp.toFixed(1) + " bp"}</i></td>` +
+          `<td class="num scr-mk">${
+            c.makerFrictionBp == null ? "—" : c.makerFrictionBp.toFixed(1)
+          }<i class="scr-win">limit</i></td>` +
+          oiCell(c) +
+          posCell(c.pos) +
+          `<td class="num scr-fund ${pctCls(c.fundingPct)}">${
+            c.fundingPct == null ? "—" : c.fundingPct.toFixed(4) + "%"
+          }</td>` +
+          hoursCell(c.hours) +
           mineCell(c.mine ? { ...c.mine, coinLabel: c.coin } : null) +
           `<td class="num scr-vol">${fmtVol(c.volume24hUsd)}</td>` +
         `</tr>`
@@ -210,7 +295,6 @@ function paintSortIndicators() {
  */
 export function renderScreen(data) {
   const tbody = document.getElementById("screen-tbody");
-  const meta = document.getElementById("screen-meta");
   if (!tbody) return;
 
   if (data?.budget) renderBudget(data.budget);
@@ -230,7 +314,7 @@ export function renderScreen(data) {
         : data?.reason === "build-failed"
           ? `exchange call failed (${data.message || "no detail"})`
           : "no answer yet";
-    tbody.innerHTML = emptyRow(7, {
+    tbody.innerHTML = emptyRow(11, {
       glyph: "clock",
       title: "Screen is still loading",
       hint: `${escapeText(String(why))}. Retrying on the next tick.`,
@@ -239,13 +323,30 @@ export function renderScreen(data) {
   }
 
   lastData = data;
-  if (meta) {
-    const risk = data.riskUsd;
-    meta.textContent =
-      `${data.passed} of ${data.considered} · friction < ${data.thresholdBp} bp` +
-      (risk ? ` · risk $${risk.toFixed(2)}` : "");
-  }
+  paintMeta();
   renderRows();
+}
+
+/**
+ * Строка меты. Отдельно от renderScreen: её переписывает и поиск, показывая
+ * «сколько из скольких» вместо порога — иначе непонятно, сузился список или
+ * монета вправду не прошла по цене входа.
+ */
+function paintMeta() {
+  const meta = document.getElementById("screen-meta");
+  if (!meta || !lastData) return;
+  const q = screenQuery.trim();
+  if (q) {
+    const hits = lastData.coins.filter((c) =>
+      String(c.coin).toLowerCase().includes(q.toLowerCase()),
+    ).length;
+    meta.textContent = `${hits} of ${lastData.passed} match «${q}»`;
+    return;
+  }
+  const risk = lastData.riskUsd;
+  meta.textContent =
+    `${lastData.passed} of ${lastData.considered} · friction < ${lastData.thresholdBp} bp` +
+    (risk ? ` · risk $${risk.toFixed(2)}` : "");
 }
 
 /**
@@ -255,6 +356,33 @@ export function renderScreen(data) {
 export function initScreenInteractions(openTicket) {
   const sec = document.getElementById("sec-screen");
   if (!sec) return;
+
+  const search = document.getElementById("screen-search");
+  if (search) {
+    const field = search.closest(".scr-search");
+    const apply = () => {
+      screenQuery = search.value;
+      field?.classList.toggle("has-value", screenQuery.length > 0);
+      renderRows();
+      paintMeta();
+    };
+    search.addEventListener("input", apply);
+    // Escape очищает, не снимая фокус: следующий запрос сразу можно набирать.
+    search.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        search.value = "";
+        apply();
+      }
+      // Клик по строке открывает тикет, но клавиши поиска не должны
+      // всплывать до обработчика секции.
+      e.stopPropagation();
+    });
+    sec.querySelector("[data-screen-clear]")?.addEventListener("click", () => {
+      search.value = "";
+      apply();
+      search.focus();
+    });
+  }
 
   sec.querySelectorAll("th[data-sort]").forEach((th) => {
     th.addEventListener("click", () => {
