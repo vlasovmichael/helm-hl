@@ -11,6 +11,7 @@ import { getActivePosition, getActiveAdoptPositions, closePosition as dbClosePos
 import { getPositionsCached, getAccountSummary, cancelOrderFor, getFrontendOpenOrders } from '../modules/exchange.js';
 import { getBuilderPositions } from '../modules/builderPositions.js';
 import { fireNtfy } from '../core/ntfy.js';
+import { recordNotification } from '../core/notifyLog.js';
 import { note } from '../core/healthRegistry.js';
 import { fetchExchangePositions } from '../modules/sync.js';
 import { fetchUserFills, classifyClose, findRoundTripForPosition } from '../modules/userFills.js';
@@ -361,6 +362,27 @@ async function closeIfVanished(dbPosition, exchangePositions, equity, withdrawab
     closed_at:    closedAtOverride,  // реальное время ноги (флип) — иначе Date.now()
     exitFeatures,
   });
+
+  // Колокол и тост «позиция закрыта». Стоп и тейк срабатывают НА БИРЖЕ, то
+  // есть закрытие приходит сюда, а не через afterClose — без этой строки у
+  // открытия уведомление есть, а у закрытия нет вовсе.
+  // 🚨 recordNotification, а не fireNtfy: сделки на телефон не шумят, туда
+  // идут только риск-алерты.
+  try {
+    const sign = estimatedPnl >= 0 ? '+' : '−';
+    const parts = [`PnL ${sign}$${Math.abs(estimatedPnl).toFixed(2)}`];
+    const heldMin = Math.round((Date.now() - dbPosition.entry_time) / 60000);
+    parts.push(`held ${heldMin < 60 ? `${heldMin}m` : `${(heldMin / 60).toFixed(1)}h`}`);
+    parts.push(String(closeReason || 'closed').replace(/_/g, ' '));
+    recordNotification({
+      title: `#${dbPosition.coin} ${String(dbPosition.side || '').toUpperCase()} closed`,
+      message: parts.join(' · '),
+      tags: [estimatedPnl >= 0 ? 'white_check_mark' : 'rotating_light'],
+      priority: estimatedPnl >= 0 ? 3 : 4,
+    });
+  } catch (err) {
+    logger.warn(`[Integrity] close toast failed: ${err.message}`);
+  }
 
   // Позиции больше нет — снимаем её недобитые ордера. 🚨 Выживший reduce-only
   // из пары SL+TP закроет НОВУЮ позу при перезаходе в ту же монету.

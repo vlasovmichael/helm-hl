@@ -741,19 +741,15 @@ export async function maybeAdoptManualPosition(manualPositions) {
     );
 
     // Тост на дашборде «позиция открыта» и для РУЧНЫХ входов (adopt). afterOpen →
-    // toastBridge → recordNotification (колокол+тост), телефон уже покрыт fireAdoptNtfy.
+    // toastBridge → recordNotification (колокол+тост), без телефона.
     notify('afterOpen', {
       coin, price: entry, sizeUsd, positionId: id,
       mode: 'PRODUCTION', strategy: 'adopt', side,
     });
 
-    await fireAdoptNtfy(
-      `Adopt #${coin} ${side.toUpperCase()} — стоп выставлен`,
-      `Подхватил ручную позу $${sizeUsd.toFixed(0)} @ $${entry}\n` +
-      `Стоп на бирже: $${plannedSl.toPrecision(6)} (${distLabel})\n` +
-      `Дальше веду сам: храповик + трейл.`,
-      ['handshake'],
-    );
+    // 🚨 Push «стоп выставлен» сюда не идёт: подхват ручной позы — сделка, а
+    // сделки на телефон молчат. Открытие уже видно колоколом через afterOpen,
+    // на телефон уходят только риск-алерты (тильт ниже).
 
     // Тильт-алерт: новый ручной вход в день, где дневной стоп-лосс уже пробит.
     // Няньку НЕ отключаем (вход без стопа хуже), но кричим громко: худшие дни
