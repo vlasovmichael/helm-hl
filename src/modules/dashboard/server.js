@@ -93,6 +93,7 @@ import { handlePretrade } from "./routes/pretrade.js";
 import {
   handleFlowWallets,
   handleFlowLiqMap,
+  handleFlowLiqHeat,
   handleFlowCoin,
   handleFlowCoins,
 } from "./routes/flow.js";
@@ -1149,6 +1150,7 @@ export function startDashboard() {
   // Поток ордеров с адресами: витрина читает базу коллектора hl-flow.
   app.get("/api/flow/wallets", handleFlowWallets);
   app.get("/api/flow/liqmap", handleFlowLiqMap);
+  app.get("/api/flow/liqheat", handleFlowLiqHeat);
   app.get("/api/flow/coin", handleFlowCoin);
   app.get("/api/flow/coins", handleFlowCoins);
   // Форвард по разлокам: счётчик, очередь входов и закрытые события.

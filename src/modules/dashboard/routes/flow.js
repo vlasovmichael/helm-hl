@@ -172,6 +172,61 @@ export function handleFlowLiqMap(req, res) {
   }
 }
 
+// ── Тепловая карта ликвидаций: время × цена, цвет — объём закрытий ──────────
+// 🚨 Стороны не смешиваются в одну шкалу: лонг и шорт на одном уровне — два
+// разных события, а не «вдвое больше топлива».
+export function handleFlowLiqHeat(req, res) {
+  const d = conn();
+  if (!d) return res.json({ ok: false, reason: 'collecting', cells: [] });
+
+  const coin = String(req.query.coin || 'BTC').toUpperCase();
+  const hours = hoursBack(req, 24);
+  const cols = Math.min(Number(req.query.cols) || 48, 96);
+  const rows = Math.min(Number(req.query.rows) || 24, 48);
+  const since = Date.now() - hours * 3_600_000;
+
+  try {
+    const raw = d.prepare(`
+      SELECT p.ts AS ts, p.szi AS szi, p.liq AS liq, p.ntl AS ntl
+        FROM positions p JOIN coins c ON c.id = p.coin
+       WHERE c.name = ? AND p.ts >= ? AND p.liq IS NOT NULL AND p.liq > 0`).all(coin, since);
+    if (!raw.length) return res.json({ ok: true, coin, cells: [], ref: null });
+
+    const live = getLatestPrice(coin);
+    const ref = live > 0 ? live : raw[raw.length - 1].ntl / Math.abs(raw[raw.length - 1].szi);
+
+    // Полоса цен — процентная: одна сетка обязана лечь и на BTC, и на монету
+    // за $0.003. Хвосты за пределами полосы отбрасываются, а не сжимаются в
+    // край: слипшийся край рисует стену там, где её нет.
+    const RANGE = Number(req.query.range) || 25;
+    const t0 = since;
+    const t1 = Date.now();
+    const grid = new Map();
+
+    for (const r of raw) {
+      const pct = ((r.liq - ref) / ref) * 100;
+      if (Math.abs(pct) > RANGE) continue;
+      const x = Math.min(cols - 1, Math.max(0, Math.floor(((r.ts - t0) / (t1 - t0)) * cols)));
+      const y = Math.min(rows - 1, Math.max(0, Math.floor(((RANGE - pct) / (2 * RANGE)) * rows)));
+      const key = `${x}|${y}`;
+      let cell = grid.get(key);
+      if (!cell) { cell = { x, y, longUsd: 0, shortUsd: 0, n: 0 }; grid.set(key, cell); }
+      if (r.szi > 0) cell.longUsd += r.ntl; else cell.shortUsd += r.ntl;
+      cell.n += 1;
+    }
+
+    const cells = [...grid.values()];
+    res.json({
+      ok: true, coin, ref, hours, cols, rows, range: RANGE, t0, t1,
+      max: cells.reduce((m, c) => Math.max(m, c.longUsd + c.shortUsd), 0),
+      cells,
+    });
+  } catch (err) {
+    logger.warn(`[Flow] liqheat: ${err.message}`);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
 // ── Нетто-поток по монете ───────────────────────────────────────────────────
 // Считаем ТОЛЬКО тейкерскую сторону: мейкер стоит там, где его исполнили, его
 // нетто — след чужой агрессии, а не собственного намерения.

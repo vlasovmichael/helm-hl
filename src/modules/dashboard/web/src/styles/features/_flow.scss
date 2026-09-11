@@ -9,68 +9,92 @@
   font-size: var(--fs-small); color: var(--text-muted);
 }
 
-/* ── Карта ликвидаций ────────────────────────────────────────────────────
-   Горизонтальные бары на шкале цены. Текущая цена — базовая линия: смысл
-   карты в расстоянии до чужих вынужденных закрытий, а не в абсолютных суммах. */
-.flq {
-  position: relative;
-  border: 1px solid var(--hairline); border-radius: 8px;
-  background: var(--canvas);
-  padding: 8px 0;
-  max-height: 460px; overflow-y: auto;
-}
-.flq-plot { position: relative; }
-
-.flq-row {
-  position: absolute; left: 0; right: 0; top: var(--y);
+/* ── Тепловая карта ликвидаций ───────────────────────────────────────────
+   Время × цена, интенсивность цветом; справа профиль по уровню. Высота
+   фиксированная — прокрутки нет, карта видна целиком. */
+.heat {
   display: grid;
-  grid-template-columns: var(--label-w) 1fr var(--val-w);
-  align-items: center; gap: 10px;
-  height: 22px; padding: 0 12px;
-  font-size: var(--fs-body); font-variant-numeric: tabular-nums;
+  grid-template-columns: 58px 1fr 64px;
+  gap: 8px;
+  align-items: stretch;
 }
-.flq-row:hover, .flq-row:focus-visible { background: var(--canvas-inset); outline: none; }
 
-.flq-px { text-align: right; color: var(--text-secondary); }
-.flq-usd { text-align: right; color: var(--text-primary); font-weight: 600; }
-
-/* Трек — дорожка бара. Ширину несёт --w, а не инлайн-стиль на самом баре:
-   так рост анимируется одним свойством и не дёргает раскладку. */
-.flq-track { position: relative; height: 12px; }
-.flq-bar {
-  position: absolute; left: 0; top: 0; bottom: 0;
-  width: var(--w);
-  border-radius: 0 4px 4px 0;
-  transform-origin: left center;
-  animation: flq-grow 0.4s var(--ease) both;
-  animation-delay: calc(var(--i) * 14ms);
+.heat-axis { position: relative; }
+.heat-tick {
+  position: absolute; right: 0;
+  top: calc(var(--y) * (100% / var(--rows)));
+  font-size: var(--fs-micro); color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  transform: translateY(-2px);
 }
-.flq-row.long .flq-bar { background: var(--green-line); }
-.flq-row.short .flq-bar { background: var(--red-line); }
-.flq-row.long .flq-px { color: var(--green); }
-.flq-row.short .flq-px { color: var(--red); }
 
-/* Базовая линия текущей цены. */
-.flq-now {
-  position: absolute; left: 0; right: 0; height: 0;
-  border-top: 1px dashed var(--text-faint);
+.heat-plot {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  grid-template-rows: repeat(var(--rows), 14px);
+  gap: 1px;
+  background: var(--canvas-inset);
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  padding: 2px;
+  overflow: hidden;
+}
+
+.heat-cell { display: block; border-radius: 1px; }
+/* Интенсивность несёт alpha, тон — сторону: идентичность не держится на
+   одной только яркости. */
+.heat-cell.long { background: color-mix(in srgb, var(--green) calc(var(--a) * 100%), transparent); }
+.heat-cell.short { background: color-mix(in srgb, var(--red) calc(var(--a) * 100%), transparent); }
+.heat-cell:hover { outline: 1px solid var(--text-secondary); outline-offset: -1px; }
+
+/* Текущая цена — базовая линия карты. */
+.heat-now {
+  position: absolute; left: 0; right: 0;
+  top: calc(var(--y) * 15px + 2px);
+  border-top: 1px dashed var(--text-primary);
   pointer-events: none;
 }
-.flq-now-tag {
-  position: absolute; left: 12px; top: -8px;
-  padding: 1px 6px; border-radius: 4px;
+.heat-now-tag {
+  position: absolute; right: 4px; top: -9px;
+  padding: 0 5px; border-radius: 4px;
   background: var(--canvas); border: 1px solid var(--hairline);
-  font-size: var(--fs-micro); color: var(--text-secondary);
+  font-size: var(--fs-micro); color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
 
-/* Легенда: две стороны — идентичность не должна держаться на одном цвете. */
+/* Профиль: та же величина, сложенная по времени. */
+.heat-profile {
+  position: relative;
+  border-left: 1px solid var(--hairline);
+  padding-left: 4px;
+}
+.heat-prof {
+  position: absolute; left: 4px;
+  top: calc(var(--y) * 15px + 2px);
+  height: 13px; width: var(--w);
+  border-radius: 0 2px 2px 0;
+  transform-origin: left center;
+  animation: flq-grow 0.4s var(--ease) both;
+  animation-delay: calc(var(--y) * 12ms);
+}
+.heat-prof.long { background: var(--green-line); }
+.heat-prof.short { background: var(--red-line); }
+
+/* Легенда: две стороны — цвет не единственный носитель смысла. */
 .flq-legend { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .flq-key { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
 .flq-key.long { background: var(--green-line); }
 .flq-key.short { background: var(--red-line); }
 
 @keyframes flq-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+@media (max-width: 760px) {
+  .heat { grid-template-columns: 46px 1fr 36px; }
+  .heat-plot { grid-template-rows: repeat(var(--rows), 10px); }
+  .heat-now { top: calc(var(--y) * 11px + 2px); }
+  .heat-prof { top: calc(var(--y) * 11px + 2px); height: 9px; }
+}
 
 /* ── Адреса ──────────────────────────────────────────────────────────────
    Ссылка, но не «синяя подчёркнутая»: в таблице их полсотни, и подчёркивание
@@ -124,3 +148,7 @@
 
 /* Пустая строка-добивка: держит высоту карточки при смене монеты. */
 .flow-blank td { color: transparent; }
+
+/* Скелетон карты — общий .sk несёт скин и мерцание, здесь только габарит,
+   чтобы сетка не меняла размер при подмене данными. */
+.heat-cell.sk { border-radius: 1px; }

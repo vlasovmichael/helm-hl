@@ -17,6 +17,13 @@ const pp = (v) => (v == null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)} pp`);
 
 const TONE = { ok: "pt--ok", warn: "pt--warn", bad: "pt--bad" };
 
+/** Возраст сетки словами: карточка не должна выдавать вчерашний расчёт за сейчас. */
+const age = (ms) => {
+  if (!(ms > 0)) return "just rebuilt";
+  const h = ms / 3_600_000;
+  return h < 1 ? `${Math.round(ms / 60_000)}m old` : `${Math.round(h)}h old`;
+};
+
 /** Одна строка «вопрос → число → чем это число является». */
 const line = (label, value, note, cls = "") =>
   `<div class="pt-line ${cls}">
@@ -69,6 +76,9 @@ export function renderPretrade(el, d) {
       <b class="pt-coin">${c.name}</b>
       ${badge({ label: v.label, cls: `pt-badge pt-badge--${v.tone}` })}
       <span class="pt-note">${v.note}</span>
+      <span class="pt-age" data-tip="Spread and price are live; the target/stop grid is rebuilt every 12 hours — a median hourly range is a weekly-scale number.">
+        spread live · grid ${age(c.gridAgeMs)}
+      </span>
     </div>
 
     ${line("Typical range", bp(c.atr), `median 1h range · cost is ${c.share.toFixed(0)}% of it`)}

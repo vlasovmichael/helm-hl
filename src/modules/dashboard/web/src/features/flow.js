@@ -82,72 +82,97 @@ export function renderWallets(el, data) {
     </table>`);
 }
 
-// ── Карта ликвидаций ────────────────────────────────────────────────────────
-// Форма выбрана по задаче: величина на шкале цены → горизонтальные бары с осью
-// цены по вертикали. Лонги ликвидируются ВНИЗ, шорты ВВЕРХ, поэтому это не одна
-// величина, а две стороны относительно текущей цены — она и есть базовая линия.
-//
-// 🚨 Стороны не складываются в один бар: сумма «сколько всего ликвидируется на
-// уровне» не имеет смысла, пока цена не пришла на этот уровень с нужной стороны.
+// ── Тепловая карта: время × цена, справа профиль по уровню ──────────────────
+// 🚨 Шкала интенсивности логарифмическая: суммы в ячейках различаются на три
+// порядка, на линейной вся карта кроме одного пятна уходит в пустоту.
+const HEAT_ROWS = 24;
+const HEAT_COLS = 48;
 
-const WALLET_ROWS = 25;  // строк в рейтинге кошельков
-const NET_ROWS = 15;     // строк в нетто-потоке: высота карточки постоянна
-const LIQ_H = 22;        // высота уровня
-const LIQ_LABEL_W = 74;  // колонка цены слева
-const LIQ_VAL_W = 96;    // колонка суммы справа
+const heatAlpha = (v, max) =>
+  v <= 0 ? 0 : Math.min(1, 0.12 + (0.88 * Math.log10(1 + v)) / Math.log10(1 + max));
 
 export function renderLiqMap(el, data) {
   if (!el) return;
-  if (!data.ok || !data.buckets.length) {
+  if (!data.ok) {
     settle(el, emptyState({
-      glyph: data.ok ? "info" : "hourglass",
-      title: data.ok ? "No liquidation prices in range" : "Collecting",
-      hint: data.ok
-        ? "Cross positions without a liquidation price are excluded — the account carries them elsewhere."
-        : "Position snapshots start after the first sweep.",
+      glyph: "hourglass",
+      title: "Collecting",
+      hint: "Position snapshots start after the first sweep.",
+    }));
+    return;
+  }
+  if (!data.cells?.length) {
+    settle(el, emptyState({
+      glyph: "info",
+      title: "No liquidation prices in range",
+      hint: "Cross positions without a liquidation price are excluded — the account carries them elsewhere.",
     }));
     return;
   }
 
-  const rows = data.buckets.slice().sort((a, b) => b.pct - a.pct);
-  const max = Math.max(...rows.map((b) => b.longUsd + b.shortUsd)) || 1;
-  const h = rows.length * LIQ_H;
+  const { cols, rows, range, ref, max } = data;
 
-  // Текущая цена — базовая линия графика, а не подпись сбоку: весь смысл карты
-  // в том, насколько далеко от неё стоят чужие вынужденные закрытия.
-  const zeroIdx = rows.findIndex((b) => b.pct <= 0);
-  const zeroY = (zeroIdx < 0 ? rows.length : zeroIdx) * LIQ_H;
+  // Профиль по уровню цены: сумма ячеек строки за всё окно.
+  const byRow = new Array(rows).fill(null).map(() => ({ long: 0, short: 0 }));
+  const grid = new Map();
+  for (const c of data.cells) {
+    grid.set(`${c.x}|${c.y}`, c);
+    byRow[c.y].long += c.longUsd;
+    byRow[c.y].short += c.shortUsd;
+  }
+  const rowMax = Math.max(...byRow.map((r) => r.long + r.short)) || 1;
 
-  const bars = rows.map((b, i) => {
-    const total = b.longUsd + b.shortUsd;
-    const isLong = b.longUsd >= b.shortUsd;
-    const px = data.ref * (1 + b.pct / 100);
-    const w = (total / max) * 100;
-    const y = i * LIQ_H;
-    const label = px < 1 ? px.toPrecision(4) : px.toFixed(px < 100 ? 2 : 0);
-    return `<div class="flq-row ${isLong ? "long" : "short"}" style="--y:${y}px;--w:${w.toFixed(1)}%;--i:${i}"
-        tabindex="0" data-tip="${usd(total)} · ${b.n} ${b.n === 1 ? "wallet" : "wallets"} · ${isLong ? "longs" : "shorts"} liquidate at ${label}">
-        <span class="flq-px">${label}</span>
-        <span class="flq-track"><i class="flq-bar"></i></span>
-        <span class="flq-usd">${usd(total)}</span>
-      </div>`;
-  }).join("");
+  const priceAt = (y) => ref * (1 + (range - ((y + 0.5) / rows) * 2 * range) / 100);
+  const fmtPx = (p) => (p < 1 ? p.toPrecision(4) : p.toFixed(p < 100 ? 2 : 0));
+
+  const cells = [];
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const c = grid.get(`${x}|${y}`);
+      if (!c) { cells.push('<i class="heat-cell"></i>'); continue; }
+      const total = c.longUsd + c.shortUsd;
+      const side = c.longUsd >= c.shortUsd ? "long" : "short";
+      const when = new Date(data.t0 + ((x + 0.5) / cols) * (data.t1 - data.t0));
+      cells.push(
+        `<i class="heat-cell ${side}" style="--a:${heatAlpha(total, max).toFixed(3)}"` +
+        ` data-tip="${usd(total)} · ${fmtPx(priceAt(y))} · ${c.n} ${c.n === 1 ? "position" : "positions"} · ${when.toISOString().slice(11, 16)}"></i>`,
+      );
+    }
+  }
+
+  // Подписи цены — каждая четвёртая: ось обязана читаться, но не заслонять карту.
+  const ticks = [];
+  for (let y = 0; y < rows; y += 4) {
+    ticks.push(`<span class="heat-tick" style="--y:${y}">${fmtPx(priceAt(y))}</span>`);
+  }
+
+  const profile = byRow
+    .map((r, y) => {
+      const total = r.long + r.short;
+      const side = r.long >= r.short ? "long" : "short";
+      return `<i class="heat-prof ${side}" style="--y:${y};--w:${((total / rowMax) * 100).toFixed(1)}%"></i>`;
+    })
+    .join("");
+
+  const nowY = ((range - 0) / (2 * range)) * rows;
 
   settle(el, `
     <div class="flow-head">
-      <span>${data.wallets} wallets · ${usd(data.total)} notional</span>
+      <span>${data.hours}h · ${usd(data.cells.reduce((a, c) => a + c.longUsd + c.shortUsd, 0))} notional</span>
       <span class="flq-legend">
         <i class="flq-key long"></i> longs liquidate down
         <i class="flq-key short"></i> shorts liquidate up
       </span>
     </div>
-    <div class="flq" style="--liq-h:${h}px;--label-w:${LIQ_LABEL_W}px;--val-w:${LIQ_VAL_W}px">
-      <div class="flq-plot" style="height:${h}px">
-        ${bars}
-        <div class="flq-now" style="top:${zeroY}px">
-          <span class="flq-now-tag">${data.ref < 1 ? data.ref.toPrecision(4) : data.ref.toFixed(data.ref < 100 ? 2 : 0)}</span>
+    <div class="heat" style="--cols:${cols};--rows:${rows}">
+      <div class="heat-axis">${ticks.join("")}</div>
+      <div class="heat-plot">
+        ${cells.join("")}
+        <div class="heat-now" style="--y:${nowY.toFixed(2)}">
+          <span class="heat-now-tag">${fmtPx(ref)}</span>
         </div>
       </div>
+      <div class="heat-profile">${profile}</div>
     </div>`);
 }
 
@@ -197,6 +222,16 @@ export function renderNetFlow(el, data) {
 }
 
 export const flowSkeleton = (el, cols) => { if (el) el.innerHTML = skeletonRows(cols, 6); };
+
+/** Скелетон карты — та же сетка, что и сама карта: подмена не меняет габарит. */
+export function heatSkeleton(el) {
+  if (!el) return;
+  const cells = Array.from({ length: HEAT_ROWS * HEAT_COLS }, () => '<i class="heat-cell sk"></i>').join("");
+  el.innerHTML =
+    `<div class="heat" style="--cols:${HEAT_COLS};--rows:${HEAT_ROWS}">` +
+    `<div class="heat-axis"></div><div class="heat-plot">${cells}</div>` +
+    `<div class="heat-profile"></div></div>`;
+}
 
 /** Селектор монет — компонент дизайн-системы, не самодельные кнопки. */
 export function renderCoinPicker(el, coins, value, name = "coin") {

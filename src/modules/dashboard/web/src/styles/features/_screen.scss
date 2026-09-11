@@ -400,8 +400,13 @@
   background: var(--canvas-inset);
 }
 .pt-coin { font-size: var(--fs-lead); }
+/* Возраст расчёта — справа и приглушённо: важно, но не главное в строке. */
+.pt-age {
+  margin-left: auto; font-size: var(--fs-micro); color: var(--text-faint);
+  white-space: nowrap;
+}
 .pt-verdict.pt--ok { box-shadow: inset 3px 0 0 var(--green); }
-.pt-verdict.pt--warn { box-shadow: inset 3px 0 0 var(--red-line); }
+.pt-verdict.pt--warn { box-shadow: inset 3px 0 0 var(--text-faint); }
 .pt-verdict.pt--bad { box-shadow: inset 3px 0 0 var(--red); }
 .pt-badge--ok { color: var(--green); }
 .pt-badge--warn { color: var(--text-secondary); }

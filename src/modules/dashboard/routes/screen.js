@@ -306,6 +306,23 @@ export async function buildScreenPayload() {
 }
 
 /** GET /api/screen */
+/**
+ * Живой срез по монете из кэша экрана: спред и цена меняются за минуты, а
+ * сетка калибратора пересчитывается раз в 12 часов. Отдаём то, что уже
+ * посчитано — своего запроса к HL это не стоит.
+ */
+export function liveCoinSnapshot(coin) {
+  const row = cache.payload?.coins?.find((c) => c.coin === String(coin).toUpperCase());
+  if (!row) return null;
+  return {
+    price: row.price,
+    spreadBp: row.spreadBp,
+    range1hBp: row.range1hBp,
+    payoff: row.payoff,
+    ageMs: Date.now() - cache.builtAt,
+  };
+}
+
 export async function handleScreen(_req, res) {
   const now = Date.now();
   if (cache.payload && now - cache.builtAt < CACHE_TTL_MS) {

@@ -13,6 +13,7 @@ import {
   renderLiqMap,
   renderNetFlow,
   flowSkeleton,
+  heatSkeleton,
   renderCoinPicker,
 } from "./src/features/flow.js";
 import { segmented } from "./src/core/ui.js";
@@ -51,7 +52,7 @@ function windowPicker() {
   });
   node.onclick = (e) => {
     const h = Number(e.target.closest("[data-h]")?.dataset.h);
-    if (h) { state.hours = h; loadWallets(true); }
+    if (h) { state.hours = h; loadWallets(true); loadLiq(true); loadNet(true); }
   };
 }
 
@@ -70,11 +71,11 @@ async function loadWallets(fresh = false) {
 
 async function loadLiq(fresh = false) {
   coinPicker(el("flow-liq-coin"), state.liqCoin, (c) => { state.liqCoin = c; loadLiq(true); });
-  if (fresh || !el("flow-liqmap")?.children.length) flowSkeleton(el("flow-liqmap"), 4);
+  if (fresh || !el("flow-liqmap")?.children.length) heatSkeleton(el("flow-liqmap"));
   try {
-    renderLiqMap(el("flow-liqmap"), await getJson(`/api/flow/liqmap?coin=${state.liqCoin}`));
+    renderLiqMap(el("flow-liqmap"), await getJson(`/api/flow/liqheat?coin=${state.liqCoin}&hours=${state.hours}`));
   } catch {
-    renderLiqMap(el("flow-liqmap"), { ok: false, buckets: [] });
+    renderLiqMap(el("flow-liqmap"), { ok: false });
   }
 }
 
