@@ -34,7 +34,7 @@
 .flq-legend { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .flq-ramp {
   width: 84px; height: 8px; border-radius: 2px; display: inline-block;
-  background: linear-gradient(90deg, #eef0f6, #b9c6e8, #6f8fd6, #9c5fb5, #c0392b, #5b1d10);
+  background: linear-gradient(90deg, #fff4c2, #fdd276, #f79b3f, #e2562a, #b01c1c, #6d0f14);
 }
 [data-theme="dark"] .flq-ramp {
   background: linear-gradient(90deg, #2b1a48, #414487, #2a788e, #22a884, #7ad151, #fde725);

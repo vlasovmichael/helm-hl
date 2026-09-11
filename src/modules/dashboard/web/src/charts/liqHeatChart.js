@@ -18,7 +18,7 @@ import { cssVar } from "../utils/format.js";
 // наоборот — бледное = пусто, густое = много. Одна шкала на обе темы всегда
 // теряет один из концов: жёлтое на белом не видно, чёрное на тёмном тоже.
 const RAMP_DARK = ["#2b1a48", "#414487", "#2a788e", "#22a884", "#7ad151", "#fde725"];
-const RAMP_LIGHT = ["#eef0f6", "#b9c6e8", "#6f8fd6", "#9c5fb5", "#c0392b", "#5b1d10"];
+const RAMP_LIGHT = ["#fff4c2", "#fdd276", "#f79b3f", "#e2562a", "#b01c1c", "#6d0f14"];
 
 const hex = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
 
@@ -34,7 +34,14 @@ function rampColor(ramp, t) {
 
 // 🚨 Шкала логарифмическая: суммы в ячейках различаются на три порядка, на
 // линейной вся карта, кроме одного пятна, уходит в пустоту.
-const intensity = (v, max) => (v <= 0 ? 0 : Math.log10(1 + v) / Math.log10(1 + max));
+// 🚨 Нормируем логарифм МЕЖДУ минимумом и максимумом окна, а не «log v / log
+// max»: суммы тут от десятков тысяч до десятков миллионов, и деление на log
+// max выдаёт 0.9 и для $6M, и для $60M — вся карта одного тона.
+const intensity = (v, lo, hi) =>
+  v <= 0 || hi <= lo ? 0 : Math.min(1, Math.max(0, (Math.log10(v) - lo) / (hi - lo)));
+// Ниже этого уровня ячейка не рисуется: мелочь затягивает поле ровным фоном и
+// прячет под собой и цену, и настоящие кластеры.
+const FLOOR = 0.12;
 
 const isDark = () => document.documentElement.getAttribute("data-theme") === "dark";
 const pad2 = (n) => String(n).padStart(2, "0");
@@ -69,7 +76,7 @@ let host = null;
 // Рисует ячейки карты. Координаты берёт у самого графика
 // (timeToCoordinate/priceToCoordinate) — карта и свечи не могут разъехаться.
 function makeHeat() {
-  const state = { data: null, barTimes: [], rowSum: [], bandLo: 0, bandHi: 0 };
+  const state = { data: null, barTimes: [], rowSum: [], bandLo: 0, bandHi: 0, lo: 0, hi: 1 };
 
   const draw = (target) => {
     const d = state.data;
@@ -119,8 +126,15 @@ function makeHeat() {
         const x0 = Math.round(e[0] * hr);
         const x1 = Math.round(e[1] * hr);
         if (x1 <= x0) continue;
-        ctx.fillStyle = rampColor(ramp, intensity(c.longUsd + c.shortUsd, d.max));
+        const t = intensity(c.longUsd + c.shortUsd, state.lo, state.hi);
+        // 🚨 Слабые ячейки не рисуем и приглушаем остальные по силе: без этого
+        // карта — сплошное лоскутное одеяло, где мелкий стоп на $50k кричит так
+        // же громко, как кластер на $40M, и цену под ним не видно.
+        if (t < FLOOR) continue;
+        ctx.globalAlpha = 0.25 + 0.75 * t;
+        ctx.fillStyle = rampColor(ramp, t);
         ctx.fillRect(x0, Math.round(yTop * vr), x1 - x0, Math.max(1, Math.round((yBot - yTop) * vr)));
+        ctx.globalAlpha = 1;
       }
 
     });
@@ -133,6 +147,9 @@ function makeHeat() {
     setData(d) {
       state.data = d;
       state.rowSum = new Array(d.rows).fill(0);
+      const sums = d.cells.map((c) => c.longUsd + c.shortUsd).filter((v) => v > 0);
+      state.lo = Math.log10(Math.min(...sums));
+      state.hi = Math.log10(Math.max(...sums));
       for (const c of d.cells) state.rowSum[c.y] += c.longUsd + c.shortUsd;
     },
     get data() { return state.data; },
@@ -196,6 +213,14 @@ export function applyLiqHeatTheme() {
     rightPriceScale: { borderColor: c.grid },
     timeScale: { borderColor: c.grid },
   });
+  candles?.applyOptions({
+    upColor: c.bg,
+    downColor: cssVar("--text-primary") || "#18181B",
+    borderUpColor: cssVar("--text-primary") || "#18181B",
+    borderDownColor: cssVar("--text-primary") || "#18181B",
+    wickUpColor: cssVar("--text-primary") || "#18181B",
+    wickDownColor: cssVar("--text-primary") || "#18181B",
+  });
   // Палитра карты зависит от темы, а холст сам себя не перерисует.
   heat?.redraw();
 }
@@ -253,15 +278,16 @@ export async function drawLiqHeat(container, data, kl) {
       crosshair: { mode: 0 },
       handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
     });
-    // Свечи тонкие и приглушённые: героиня картинки — карта, цена тут маршрут
-    // по ней. Сплошная заливка спорила бы с цветом ячеек.
+    // 🚨 Свечи МОНОХРОМНЫЕ: карта под ними уже красно-жёлтая, и зелёно-красная
+    // цена в ней тонула. Направление несёт заливка — полая вверх, залитая вниз,
+    // как в классических hollow candles.
     candles = chart.addSeries(CandlestickSeries, {
-      upColor: "rgba(255,255,255,0)",
-      downColor: "rgba(255,255,255,0)",
-      borderUpColor: cssVar("--green-line") || "#26a69a",
-      borderDownColor: cssVar("--red-line") || "#ef5350",
-      wickUpColor: cssVar("--green-line") || "#26a69a",
-      wickDownColor: cssVar("--red-line") || "#ef5350",
+      upColor: cssVar("--card-bg") || "#fff",
+      downColor: cssVar("--text-primary") || "#18181B",
+      borderUpColor: cssVar("--text-primary") || "#18181B",
+      borderDownColor: cssVar("--text-primary") || "#18181B",
+      wickUpColor: cssVar("--text-primary") || "#18181B",
+      wickDownColor: cssVar("--text-primary") || "#18181B",
       priceLineVisible: true,
       priceFormat: { type: "custom", formatter: fmtPx },
     });

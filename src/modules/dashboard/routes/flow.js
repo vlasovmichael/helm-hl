@@ -183,7 +183,7 @@ export function handleFlowLiqHeat(req, res) {
   const coin = String(req.query.coin || 'BTC').toUpperCase();
   const hours = hoursBack(req, 24);
   const cols = Math.min(Number(req.query.cols) || 96, 240);
-  const rows = Math.min(Number(req.query.rows) || 64, 160);
+  const rows = Math.min(Number(req.query.rows) || 120, 240);
   const since = Date.now() - hours * 3_600_000;
 
   try {
