@@ -9,39 +9,66 @@
   font-size: var(--fs-small); color: var(--text-muted);
 }
 
-/* ── Лестница ликвидаций ─────────────────────────────────────────────────
-   Приём тот же, что у стакана: уровень цены с заливкой по объёму. Лонги
-   ликвидируются вниз, шорты вверх — стороны раскрашены и не складываются. */
+/* ── Карта ликвидаций ────────────────────────────────────────────────────
+   Горизонтальные бары на шкале цены. Текущая цена — базовая линия: смысл
+   карты в расстоянии до чужих вынужденных закрытий, а не в абсолютных суммах. */
 .flq {
-  max-height: 420px; overflow-y: auto;
-  border: 1px solid var(--hairline); border-radius: 8px;
-  background: var(--canvas-inset);
-}
-.flq-row {
   position: relative;
-  display: grid; grid-template-columns: 62px 1fr 110px 44px;
-  align-items: center; gap: 8px;
-  height: 26px; padding: 0 12px;
+  border: 1px solid var(--hairline); border-radius: 8px;
+  background: var(--canvas);
+  padding: 8px 0;
+  max-height: 460px; overflow-y: auto;
+}
+.flq-plot { position: relative; }
+
+.flq-row {
+  position: absolute; left: 0; right: 0; top: var(--y);
+  display: grid;
+  grid-template-columns: var(--label-w) 1fr var(--val-w);
+  align-items: center; gap: 10px;
+  height: 22px; padding: 0 12px;
   font-size: var(--fs-body); font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
-.flq-row + .flq-row { box-shadow: inset 0 1px 0 var(--hairline); }
-.flq-bar {
-  position: absolute; left: 0; top: 2px; bottom: 2px;
-  border-radius: 0 4px 4px 0; z-index: 0;
-  /* Рост от события — полосы приезжают один раз, вместе с данными. */
-  transform-origin: left center;
-  animation: flq-grow 0.45s var(--ease) both;
-}
-.flq-row.long .flq-bar { background: var(--tier-pos-normal); }
-.flq-row.short .flq-bar { background: var(--tier-neg-normal); }
-.flq-row > span { position: relative; z-index: 1; }
-.flq-pct { color: var(--text-muted); font-size: var(--fs-small); }
-.flq-row.long .flq-px { color: var(--green); font-weight: 600; }
-.flq-row.short .flq-px { color: var(--red); font-weight: 600; }
-.flq-px { text-align: right; }
+.flq-row:hover, .flq-row:focus-visible { background: var(--canvas-inset); outline: none; }
+
+.flq-px { text-align: right; color: var(--text-secondary); }
 .flq-usd { text-align: right; color: var(--text-primary); font-weight: 600; }
-.flq-n { text-align: right; color: var(--text-faint); font-size: var(--fs-small); }
+
+/* Трек — дорожка бара. Ширину несёт --w, а не инлайн-стиль на самом баре:
+   так рост анимируется одним свойством и не дёргает раскладку. */
+.flq-track { position: relative; height: 12px; }
+.flq-bar {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: var(--w);
+  border-radius: 0 4px 4px 0;
+  transform-origin: left center;
+  animation: flq-grow 0.4s var(--ease) both;
+  animation-delay: calc(var(--i) * 14ms);
+}
+.flq-row.long .flq-bar { background: var(--green-line); }
+.flq-row.short .flq-bar { background: var(--red-line); }
+.flq-row.long .flq-px { color: var(--green); }
+.flq-row.short .flq-px { color: var(--red); }
+
+/* Базовая линия текущей цены. */
+.flq-now {
+  position: absolute; left: 0; right: 0; height: 0;
+  border-top: 1px dashed var(--text-faint);
+  pointer-events: none;
+}
+.flq-now-tag {
+  position: absolute; left: 12px; top: -8px;
+  padding: 1px 6px; border-radius: 4px;
+  background: var(--canvas); border: 1px solid var(--hairline);
+  font-size: var(--fs-micro); color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Легенда: две стороны — идентичность не должна держаться на одном цвете. */
+.flq-legend { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.flq-key { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+.flq-key.long { background: var(--green-line); }
+.flq-key.short { background: var(--red-line); }
 
 @keyframes flq-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
@@ -94,3 +121,6 @@
     animation: none;
   }
 }
+
+/* Пустая строка-добивка: держит высоту карточки при смене монеты. */
+.flow-blank td { color: transparent; }

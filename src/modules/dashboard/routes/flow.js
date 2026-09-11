@@ -17,6 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { logger } from '../../../core/logger.js';
+import { getLatestPrice } from '../../../core/priceHistory.js';
 
 const DB_F = path.join('data', 'flow', 'flow.db');
 const BAR_MS = 300_000;
@@ -137,10 +138,12 @@ export function handleFlowLiqMap(req, res) {
 
     if (!rows.length) return res.json({ ok: true, coin, ts, ref: null, buckets: [], total: 0 });
 
-    // Опорная цена — медиана entry: своей цены у витрины нет, а брать её из
-    // торгового пути ради картинки значит тратить весовой бюджет HL.
+    // Опорная цена — живая из буфера бота (его наполняет WS, сети не стоит).
+    // Медиана entry остаётся фолбэком: по ней график сдвинут на величину
+    // среднего входа толпы, и «текущая цена» на нём была бы враньём.
     const entries = rows.map((r) => r.ntl / Math.abs(r.szi)).sort((a, b) => a - b);
-    const ref = entries[Math.floor(entries.length / 2)];
+    const live = getLatestPrice(coin);
+    const ref = live > 0 ? live : entries[Math.floor(entries.length / 2)];
 
     // Корзины в процентах от опорной цены: в абсолютных единицах одна сетка не
     // годится сразу для BTC и для монеты за $0.003.

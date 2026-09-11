@@ -156,6 +156,16 @@
 .hm-scroll-wrap {
   overflow-y: auto;
 }
+/* 🚨 Высота основной строки задана эталоном (--hm-row-h ставит JS = максимум
+   за сессию). Без неё строка с иконкой Enter выше строки без неё, состав ленты
+   меняется каждый тик — и карточка дышала вместе с ним.
+   Только десктоп: ниже $bp-lg строка — карточка, её высоту задаёт контент. */
+@include from($bp-lg + 1) {
+  .hm-scroll-wrap .hm-table tbody tr[data-hmkey^="m:"],
+  .hm-scroll-wrap .hm-table tbody tr.hm-placeholder-row {
+    height: var(--hm-row-h, auto);
+  }
+}
 .hm-scroll-wrap .hm-table thead th {
   position: sticky;
   top: 0;

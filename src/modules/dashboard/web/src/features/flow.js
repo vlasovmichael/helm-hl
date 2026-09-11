@@ -49,7 +49,8 @@ export function renderWallets(el, data) {
     return;
   }
 
-  const rows = data.wallets.map((w) => {
+  const fillerW = Math.max(0, WALLET_ROWS - data.wallets.length);
+  const rows = data.wallets.slice(0, WALLET_ROWS).map((w) => {
     const r = role(w.takerPct);
     const pos = w.positions
       .slice(0, 3)
@@ -74,14 +75,27 @@ export function renderWallets(el, data) {
         <th class="num">Net taken</th><th class="num col-opt">Coins</th>
         <th class="num col-opt">Equity</th><th>Open positions</th>
       </tr></thead>
-      <tbody>${rows}</tbody>
+      <tbody>${rows}${Array.from(
+        { length: fillerW },
+        () => `<tr class="flow-blank"><td colspan="7">&nbsp;</td></tr>`,
+      ).join("")}</tbody>
     </table>`);
 }
 
 // ── Карта ликвидаций ────────────────────────────────────────────────────────
-// Приём отрисовки взят у стакана (.ob-row / .ob-bar): те же уровни цены с
-// заливкой пропорционально объёму. Лонги ликвидируются вниз, шорты вверх —
-// поэтому стороны раскрашены как bid/ask и НЕ складываются в одну полосу.
+// Форма выбрана по задаче: величина на шкале цены → горизонтальные бары с осью
+// цены по вертикали. Лонги ликвидируются ВНИЗ, шорты ВВЕРХ, поэтому это не одна
+// величина, а две стороны относительно текущей цены — она и есть базовая линия.
+//
+// 🚨 Стороны не складываются в один бар: сумма «сколько всего ликвидируется на
+// уровне» не имеет смысла, пока цена не пришла на этот уровень с нужной стороны.
+
+const WALLET_ROWS = 25;  // строк в рейтинге кошельков
+const NET_ROWS = 15;     // строк в нетто-потоке: высота карточки постоянна
+const LIQ_H = 22;        // высота уровня
+const LIQ_LABEL_W = 74;  // колонка цены слева
+const LIQ_VAL_W = 96;    // колонка суммы справа
+
 export function renderLiqMap(el, data) {
   if (!el) return;
   if (!data.ok || !data.buckets.length) {
@@ -95,29 +109,46 @@ export function renderLiqMap(el, data) {
     return;
   }
 
-  const max = Math.max(...data.buckets.map((b) => b.longUsd + b.shortUsd));
-  const rows = data.buckets
-    .slice()
-    .sort((a, b) => b.pct - a.pct)
-    .map((b, i) => {
-      const total = b.longUsd + b.shortUsd;
-      const isLong = b.longUsd >= b.shortUsd;
-      const px = data.ref * (1 + b.pct / 100);
-      return `<div class="flq-row ${isLong ? "long" : "short"}">
-        <span class="flq-bar" style="width:${((total / max) * 100).toFixed(1)}%;animation-delay:${i * 18}ms"></span>
-        <span class="flq-pct">${b.pct > 0 ? "+" : ""}${b.pct}%</span>
-        <span class="flq-px">${px < 1 ? px.toPrecision(4) : px.toFixed(px < 100 ? 2 : 0)}</span>
+  const rows = data.buckets.slice().sort((a, b) => b.pct - a.pct);
+  const max = Math.max(...rows.map((b) => b.longUsd + b.shortUsd)) || 1;
+  const h = rows.length * LIQ_H;
+
+  // Текущая цена — базовая линия графика, а не подпись сбоку: весь смысл карты
+  // в том, насколько далеко от неё стоят чужие вынужденные закрытия.
+  const zeroIdx = rows.findIndex((b) => b.pct <= 0);
+  const zeroY = (zeroIdx < 0 ? rows.length : zeroIdx) * LIQ_H;
+
+  const bars = rows.map((b, i) => {
+    const total = b.longUsd + b.shortUsd;
+    const isLong = b.longUsd >= b.shortUsd;
+    const px = data.ref * (1 + b.pct / 100);
+    const w = (total / max) * 100;
+    const y = i * LIQ_H;
+    const label = px < 1 ? px.toPrecision(4) : px.toFixed(px < 100 ? 2 : 0);
+    return `<div class="flq-row ${isLong ? "long" : "short"}" style="--y:${y}px;--w:${w.toFixed(1)}%;--i:${i}"
+        tabindex="0" data-tip="${usd(total)} · ${b.n} ${b.n === 1 ? "wallet" : "wallets"} · ${isLong ? "longs" : "shorts"} liquidate at ${label}">
+        <span class="flq-px">${label}</span>
+        <span class="flq-track"><i class="flq-bar"></i></span>
         <span class="flq-usd">${usd(total)}</span>
-        <span class="flq-n">${b.n}</span>
       </div>`;
-    }).join("");
+  }).join("");
 
   settle(el, `
     <div class="flow-head">
-      <span>${data.wallets} wallets · ${usd(data.total)} notional tracked</span>
-      <span>longs liquidate down, shorts up · % from reference price</span>
+      <span>${data.wallets} wallets · ${usd(data.total)} notional</span>
+      <span class="flq-legend">
+        <i class="flq-key long"></i> longs liquidate down
+        <i class="flq-key short"></i> shorts liquidate up
+      </span>
     </div>
-    <div class="flq">${rows}</div>`);
+    <div class="flq" style="--liq-h:${h}px;--label-w:${LIQ_LABEL_W}px;--val-w:${LIQ_VAL_W}px">
+      <div class="flq-plot" style="height:${h}px">
+        ${bars}
+        <div class="flq-now" style="top:${zeroY}px">
+          <span class="flq-now-tag">${data.ref < 1 ? data.ref.toPrecision(4) : data.ref.toFixed(data.ref < 100 ? 2 : 0)}</span>
+        </div>
+      </div>
+    </div>`);
 }
 
 // ── Нетто-поток тейкеров ────────────────────────────────────────────────────
@@ -132,7 +163,11 @@ export function renderNetFlow(el, data) {
   }
 
   const max = Math.max(...data.top.map((t) => Math.abs(t.net))) || 1;
-  const rows = data.top.map((t) => {
+  // 🚨 Число строк добивается до NET_ROWS пустышками. У разных монет кошельков
+  // разное количество, и без добивки карточка меняла высоту на каждом
+  // переключении монеты — приём тот же, что в ленте Hot Movers.
+  const filler = Math.max(0, NET_ROWS - data.top.length);
+  const rows = data.top.slice(0, NET_ROWS).map((t) => {
     const w = (Math.abs(t.net) / max) * 100;
     return `<tr>
       <td>${addrLink(t.addr)}</td>
@@ -146,13 +181,18 @@ export function renderNetFlow(el, data) {
     </tr>`;
   }).join("");
 
+  const blanks = Array.from(
+    { length: filler },
+    () => `<tr class="flow-blank"><td colspan="4">&nbsp;</td></tr>`,
+  ).join("");
+
   settle(el, `
     <table class="table table--compact flow-net">
       <thead><tr>
         <th>Wallet</th><th class="num">Net taken</th><th>Direction</th>
         <th class="num col-opt">Total traded</th>
       </tr></thead>
-      <tbody>${rows}</tbody>
+      <tbody>${rows}${blanks}</tbody>
     </table>`);
 }
 

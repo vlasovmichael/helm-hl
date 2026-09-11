@@ -48,10 +48,14 @@ const KEEP_FLOW_DAYS = Number(process.env.FLOW_KEEP_DAYS || 90);
 const KEEP_POS_DAYS  = Number(process.env.FLOW_KEEP_POS_DAYS || 180);
 
 // Сколько кошельков опрашиваем на позиции и как часто. Вес clearinghouseState
-// в лимите HL — 2 при потолке 1200/мин, поэтому шлём с зазором в разы.
-const POS_TOP      = Number(process.env.FLOW_POS_TOP || 300);
+// в лимите HL — 2 при потолке 1200/мин, то есть 600 запросов в минуту; зазор
+// 120мс держит нас втрое ниже потолка.
+//
+// 🚨 Охват решает, будет ли карта ликвидаций читаемой: из тысячи кошельков
+// позиция по конкретной монете есть у единиц. На 300 карта выходит пустой.
+const POS_TOP      = Number(process.env.FLOW_POS_TOP || 1200);
 const POS_EVERY_MS = Number(process.env.FLOW_POS_EVERY_MS || 600_000);
-const POS_GAP_MS   = 200;
+const POS_GAP_MS   = Number(process.env.FLOW_POS_GAP_MS || 120);
 
 const PING_MS   = 30_000;
 const STALE_MS  = 120_000;

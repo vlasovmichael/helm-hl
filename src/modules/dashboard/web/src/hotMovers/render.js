@@ -626,6 +626,7 @@ export function renderHotMovers(payload, fmtTime) {
 }
 
 let _hmFixedH = 0; // последняя выставленная высота обёртки (анти-трэшинг layout)
+let _hmRowH = 0;   // эталон высоты основной строки: МАКСИМУМ за сессию
 
 // Гасим прыжок высоты карточки: основные строки добиты плейсхолдерами до
 // rowTarget, высота обёртки = thead + rowTarget строк. Меряем, а не хардкодим:
@@ -639,34 +640,37 @@ function stabilizeHeight(tbody, rowTarget) {
   if (!wrap) return;
   const table = tbody.parentElement; // <table>, внутри thead+tbody
   const thead = table?.querySelector("thead");
-  // Эталон высоты строки: первая основная (m:) или пустышка (ph:) — у них
-  // постоянная высота. Под-строки (pos/fh) ниже и для эталона не годятся.
-  const sample =
-    tbody.querySelector('tr[data-hmkey^="m:"]') ||
-    tbody.querySelector("tr.hm-placeholder-row");
-  const rowH = sample?.offsetHeight || 0;
   const headH = thead?.offsetHeight || 0;
+
+  // 🚨 Эталон строки — МАКСИМУМ, а не первая попавшаяся. Иконка Enter (26px) и
+  // живая стрелка есть не у каждой монеты, поэтому строки разной высоты, а
+  // состав ленты меняется каждый тик: «высота по образцу» гуляла вместе с ним.
+  // Максимум запоминается на сессию и только растёт — высота строки перестаёт
+  // зависеть от того, какие монеты сейчас наверху.
+  let rowH = 0;
+  let subH = 0;
+  for (const tr of tbody.children) {
+    const key = tr.dataset.hmkey || "";
+    const main = key.startsWith("m:") || tr.classList.contains("hm-placeholder-row");
+    if (main) rowH = Math.max(rowH, tr.offsetHeight);
+    else subH += tr.offsetHeight;
+  }
   if (rowH <= 0) return; // пустое состояние (статус-строка) — высоту не трогаем
+  if (rowH > _hmRowH) {
+    _hmRowH = rowH;
+    wrap.style.setProperty("--hm-row-h", `${rowH}px`);
+  }
   // На мобиле строка — карточка, и её высоту задаёт контент (число колонок в
   // ней меняется). Отдаём измеренную высоту в переменную, по которой добивочные
   // карточки держат min-height: иначе пустой слот остаётся на хардкоде и не
   // сходится с настоящей карточкой.
-  wrap.style.setProperty("--hm-card-min-h", `${rowH}px`);
-  // 🚨 Высота = сумма ФАКТИЧЕСКИХ высот строк, а не rowH × rowTarget: на
-  // карточной вёрстке высоту карточки задаёт её содержимое (у монеты с тегами
-  // Vol/OI строк больше), и умножение эталона занижало итог — карточка
-  // получала прокрутку ровно там, где её и считали лишней.
-  let rowsH = 0;
-  for (const tr of tbody.children) rowsH += tr.offsetHeight;
-  // 🚨 Гистерезис, а не порог в пиксель. Сумма фактических высот дышит от тика
-  // к тику (стрелка активной монеты, теги Vol/OI, подпиксели шрифта), и на
-  // пороге 1px карточка ловила эту дрожь как «изменение». Растём сразу — иначе
-  // строка уедет под край; ужимаемся только когда контента стало заметно
-  // меньше на целую строку, то есть позиция действительно закрылась.
-  const target = headH + rowsH;
-  const grew = target > _hmFixedH + 1;
-  const shrankForReal = target < _hmFixedH - Math.max(8, rowH / 2);
-  if (grew || shrankForReal) {
+  wrap.style.setProperty("--hm-card-min-h", `${_hmRowH}px`);
+
+  // Основных строк ВСЕГДА rowTarget (недостающие добиты пустышками), поэтому их
+  // вклад считается от эталона, а не от текущего замера. Меняться высоте есть
+  // от чего ровно одно: под-строки открытых позиций.
+  const target = headH + _hmRowH * rowTarget + subH;
+  if (Math.abs(target - _hmFixedH) > 1) {
     wrap.style.height = `${target}px`;
     _hmFixedH = target;
   }
