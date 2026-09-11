@@ -17,10 +17,11 @@ import {
   renderCoinPicker,
 } from "./src/features/flow.js";
 import { segmented } from "./src/core/ui.js";
+import { applyLiqHeatTheme } from "./src/charts/liqHeatChart.js";
 
 mountTopnav("flow");
 mountPageHeader({ eyebrow: "Research · on-chain participants", title: "Order Flow" });
-bindTheme();
+bindTheme([applyLiqHeatTheme]);
 startFooterTimer();
 
 const state = { hours: 24, liqCoin: "BTC", netCoin: "BTC", coins: [] };
@@ -73,9 +74,9 @@ async function loadLiq(fresh = false) {
   coinPicker(el("flow-liq-coin"), state.liqCoin, (c) => { state.liqCoin = c; loadLiq(true); });
   if (fresh || !el("flow-liqmap")?.children.length) heatSkeleton(el("flow-liqmap"));
   try {
-    renderLiqMap(el("flow-liqmap"), await getJson(`/api/flow/liqheat?coin=${state.liqCoin}&hours=${state.hours}`));
+    await renderLiqMap(el("flow-liqmap"), await getJson(`/api/flow/liqheat?coin=${state.liqCoin}&hours=${state.hours}`));
   } catch {
-    renderLiqMap(el("flow-liqmap"), { ok: false });
+    await renderLiqMap(el("flow-liqmap"), { ok: false });
   }
 }
 

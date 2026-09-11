@@ -173,16 +173,17 @@ export function handleFlowLiqMap(req, res) {
 }
 
 // ── Тепловая карта ликвидаций: время × цена, цвет — объём закрытий ──────────
-// 🚨 Стороны не смешиваются в одну шкалу: лонг и шорт на одном уровне — два
-// разных события, а не «вдвое больше топлива».
+// 🚨 Колонка = ОДИН срез позиций, не равная доля окна: срезы редкие, и сетка
+// «окно / cols» рисует пустые столбцы там, где просто не было снимка.
+// Цена абсолютная: карта ложится на свечи, шкала у них общая.
 export function handleFlowLiqHeat(req, res) {
   const d = conn();
   if (!d) return res.json({ ok: false, reason: 'collecting', cells: [] });
 
   const coin = String(req.query.coin || 'BTC').toUpperCase();
   const hours = hoursBack(req, 24);
-  const cols = Math.min(Number(req.query.cols) || 48, 96);
-  const rows = Math.min(Number(req.query.rows) || 24, 48);
+  const cols = Math.min(Number(req.query.cols) || 96, 240);
+  const rows = Math.min(Number(req.query.rows) || 64, 160);
   const since = Date.now() - hours * 3_600_000;
 
   try {
@@ -195,22 +196,49 @@ export function handleFlowLiqHeat(req, res) {
     const live = getLatestPrice(coin);
     const ref = live > 0 ? live : raw[raw.length - 1].ntl / Math.abs(raw[raw.length - 1].szi);
 
-    // Полоса цен — процентная: одна сетка обязана лечь и на BTC, и на монету
-    // за $0.003. Хвосты за пределами полосы отбрасываются, а не сжимаются в
-    // край: слипшийся край рисует стену там, где её нет.
-    const RANGE = Number(req.query.range) || 25;
-    // 🚨 Шкала времени начинается с ПЕРВОГО среза, а не с «сейчас минус окно»:
-    // сбор моложе окна, и жёсткое начало рисовало полкарты пустотой, как будто
-    // ликвидаций там не было.
-    const t0 = Math.max(since, raw.reduce((m, r) => Math.min(m, r.ts), Infinity));
-    const t1 = Date.now();
-    const grid = new Map();
+    // Колонки = срезы. Если их больше, чем колонок, соседние срезы склеиваются
+    // поровну — но пустых столбцов не появляется ни при каком окне.
+    const stamps = [...new Set(raw.map((r) => r.ts))].sort((a, b) => a - b);
+    const group = Math.ceil(stamps.length / cols);
+    const colOf = new Map();
+    const colTs = [];
+    stamps.forEach((ts, i) => {
+      const x = Math.floor(i / group);
+      colOf.set(ts, x);
+      if (colTs.length === x) colTs.push(ts); // метка колонки = её первый срез
+    });
 
-    for (const r of raw) {
-      const pct = ((r.liq - ref) / ref) * 100;
-      if (Math.abs(pct) > RANGE) continue;
-      const x = Math.min(cols - 1, Math.max(0, Math.floor(((r.ts - t0) / (t1 - t0)) * cols)));
-      const y = Math.min(rows - 1, Math.max(0, Math.floor(((RANGE - pct) / (2 * RANGE)) * rows)));
+    // Полоса цен: 1% и 99% перцентили по ДЕНЬГАМ, а не по числу позиций —
+    // хвост из сотни мелких стопов не обязан растягивать шкалу. Опорная цена
+    // всегда внутри полосы: карта без текущей цены не читается.
+    const sorted = raw
+      .filter((r) => Math.abs((r.liq - ref) / ref) <= (Number(req.query.range) || 25) / 100)
+      .sort((a, b) => a.liq - b.liq);
+    if (!sorted.length) return res.json({ ok: true, coin, ref, cells: [] });
+    const money = sorted.reduce((s, r) => s + r.ntl, 0);
+    const cut = (share) => {
+      let acc = 0;
+      for (const r of sorted) {
+        acc += r.ntl;
+        if (acc >= money * share) return r.liq;
+      }
+      return sorted[sorted.length - 1].liq;
+    };
+    // Полоса режется дважды: по деньгам (5/95) и жёстким потолком в ±8% от
+    // цены. Без потолка одинокая позиция с плечом ×2 растягивает шкалу вдвое, и
+    // весь кластер вокруг цены сплющивается в две строки.
+    const CAP = 0.08;
+    const priceLo = Math.max(ref * (1 - CAP), Math.min(cut(0.05), ref * 0.996));
+    const priceHi = Math.min(ref * (1 + CAP), Math.max(cut(0.95), ref * 1.004));
+    const step = (priceHi - priceLo) / rows;
+
+    const grid = new Map();
+    for (const r of sorted) {
+      const x = colOf.get(r.ts);
+      if (x === undefined) continue;
+      if (r.liq < priceLo || r.liq > priceHi) continue;
+      // y=0 — ВЕРХ карты (самая высокая цена), как на ценовой шкале.
+      const y = Math.min(rows - 1, Math.max(0, Math.floor((priceHi - r.liq) / step)));
       const key = `${x}|${y}`;
       let cell = grid.get(key);
       if (!cell) { cell = { x, y, longUsd: 0, shortUsd: 0, n: 0 }; grid.set(key, cell); }
@@ -220,7 +248,10 @@ export function handleFlowLiqHeat(req, res) {
 
     const cells = [...grid.values()];
     res.json({
-      ok: true, coin, ref, hours, cols, rows, range: RANGE, t0, t1,
+      ok: true, coin, ref, hours,
+      cols: colTs.length, rows, colTs, priceLo, priceHi,
+      t0: colTs[0], t1: colTs[colTs.length - 1],
+      total: cells.reduce((s, c) => s + c.longUsd + c.shortUsd, 0),
       max: cells.reduce((m, c) => Math.max(m, c.longUsd + c.shortUsd), 0),
       cells,
     });

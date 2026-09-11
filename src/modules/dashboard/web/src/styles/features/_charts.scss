@@ -83,3 +83,47 @@
     color: var(--text-muted);
   }
 }
+
+/* Тултип графиков (OI, карта ликвидаций) — общий: курсор на канве один и
+   тот же, а стиль подсказки не может зависеть от страницы. */
+.oi-tip {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-small);
+  line-height: 1.5;
+  border: 1px solid var(--border);
+  background: var(--card-bg-elev);
+  color: var(--text-primary);
+  box-shadow: var(--shadow);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.oi-tip-t {
+  color: var(--text-secondary);
+  font-size: var(--fs-label);
+  margin-bottom: 3px;
+}
+.oi-tip-r {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+
+  b {
+    width: 9px;
+    height: 3px;
+    border-radius: 2px;
+    flex: none;
+  }
+  span {
+    font-family: var(--font-mono);
+    margin-left: auto;
+  }
+  i {
+    font-style: normal;
+    color: var(--text-secondary);
+    font-size: var(--fs-label);
+  }
+}

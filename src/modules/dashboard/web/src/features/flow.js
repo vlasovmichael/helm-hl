@@ -9,6 +9,7 @@
 
 import { skeletonRows, emptyState, settle } from "../core/placeholders.js";
 import { badge, chip, segmented } from "../core/ui.js";
+import { drawLiqHeat, clearLiqHeat } from "../charts/liqHeatChart.js";
 
 const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -28,6 +29,9 @@ function role(pct) {
   if (pct <= 20) return { label: "maker", tone: "maker" };
   return { label: "mixed", tone: "mixed" };
 }
+
+const WALLET_ROWS = 25;  // строк в рейтинге кошельков
+const NET_ROWS = 15;     // строк в нетто-потоке: высота карточки постоянна
 
 const explorer = (a) => `https://app.hyperliquid.xyz/explorer/address/${a}`;
 const addrLink = (a) =>
@@ -82,109 +86,60 @@ export function renderWallets(el, data) {
     </table>`);
 }
 
-// ── Тепловая карта: время × цена, справа профиль по уровню ──────────────────
-// 🚨 Шкала интенсивности логарифмическая: суммы в ячейках различаются на три
-// порядка, на линейной вся карта кроме одного пятна уходит в пустоту.
-const HEAT_ROWS = 24;
-const HEAT_COLS = 48;
+// ── Карта ликвидаций ────────────────────────────────────────────────────────
+// Картинка — в charts/liqHeatChart.js, здесь пустые состояния, шапка, легенда.
+// 🚨 Интервал свечей — под ФАКТИЧЕСКОЕ окно карты, а не под окно витрины: сбор
+// бывает моложе окна, и на трёх часах 15m-свечи дают десяток столбиков.
+const klInterval = (ms) => {
+  const h = ms / 3_600_000;
+  return h <= 3 ? "1m" : h <= 12 ? "5m" : h <= 40 ? "15m" : "1h";
+};
 
-const heatAlpha = (v, max) =>
-  v <= 0 ? 0 : Math.min(1, 0.12 + (0.88 * Math.log10(1 + v)) / Math.log10(1 + max));
-
-/** Подписи оси времени: пять засечек — ось обязана читаться, но не пестрить. */
-function timeTicks(t0, t1) {
-  const hhmm = (t) => new Date(t).toTimeString().slice(0, 5);
-  return Array.from({ length: 5 }, (_, i) => {
-    const p = i / 4;
-    return `<span class="heat-ttick" style="--p:${(p * 100).toFixed(1)}%">${hhmm(t0 + p * (t1 - t0))}</span>`;
-  }).join("");
-}
-
-export function renderLiqMap(el, data) {
+export async function renderLiqMap(el, data) {
   if (!el) return;
-  if (!data.ok) {
-    settle(el, emptyState({
+  const empty = (state) => { clearLiqHeat(); settle(el, emptyState(state)); };
+
+  if (!data.ok)
+    return empty({
       glyph: "hourglass",
       title: "Collecting",
       hint: "Position snapshots start after the first sweep.",
-    }));
-    return;
-  }
-  if (!data.cells?.length) {
-    settle(el, emptyState({
+    });
+  if (!data.cells?.length)
+    return empty({
       glyph: "info",
       title: "No liquidation prices in range",
       hint: "Cross positions without a liquidation price are excluded — the account carries them elsewhere.",
-    }));
-    return;
-  }
+    });
 
-  const { cols, rows, range, ref, max } = data;
+  let kl = [];
+  try {
+    const r = await fetch(`/api/candles?coin=${data.coin}&interval=${klInterval(data.t1 - data.t0)}`);
+    kl = r.ok ? await r.json() : [];
+  } catch { /* карта без свечей бессмысленна — уйдём в пустое состояние ниже */ }
+  if (!Array.isArray(kl) || !kl.length)
+    return empty({ glyph: "info", title: "No candles for this coin" });
 
-  // Профиль по уровню цены: сумма ячеек строки за всё окно.
-  const byRow = new Array(rows).fill(null).map(() => ({ long: 0, short: 0 }));
-  const grid = new Map();
-  for (const c of data.cells) {
-    grid.set(`${c.x}|${c.y}`, c);
-    byRow[c.y].long += c.longUsd;
-    byRow[c.y].short += c.shortUsd;
-  }
-  const rowMax = Math.max(...byRow.map((r) => r.long + r.short)) || 1;
-
-  const priceAt = (y) => ref * (1 + (range - ((y + 0.5) / rows) * 2 * range) / 100);
-  const fmtPx = (p) => (p < 1 ? p.toPrecision(4) : p.toFixed(p < 100 ? 2 : 0));
-
-  const cells = [];
-  for (let y = 0; y < rows; y += 1) {
-    for (let x = 0; x < cols; x += 1) {
-      const c = grid.get(`${x}|${y}`);
-      if (!c) { cells.push('<i class="heat-cell"></i>'); continue; }
-      const total = c.longUsd + c.shortUsd;
-      const side = c.longUsd >= c.shortUsd ? "long" : "short";
-      const when = new Date(data.t0 + ((x + 0.5) / cols) * (data.t1 - data.t0));
-      cells.push(
-        `<i class="heat-cell ${side}" style="--a:${heatAlpha(total, max).toFixed(3)}"` +
-        ` data-tip="${usd(total)} · ${fmtPx(priceAt(y))} · ${c.n} ${c.n === 1 ? "position" : "positions"} · ${when.toISOString().slice(11, 16)}"></i>`,
-      );
-    }
-  }
-
-  // Подписи цены — каждая четвёртая: ось обязана читаться, но не заслонять карту.
-  const ticks = [];
-  for (let y = 0; y < rows; y += 4) {
-    ticks.push(`<span class="heat-tick" style="--y:${y}">${fmtPx(priceAt(y))}</span>`);
-  }
-
-  const profile = byRow
-    .map((r, y) => {
-      const total = r.long + r.short;
-      const side = r.long >= r.short ? "long" : "short";
-      return `<i class="heat-prof ${side}" style="--y:${y};--w:${((total / rowMax) * 100).toFixed(1)}%"></i>`;
-    })
-    .join("");
-
-  const nowY = ((range - 0) / (2 * range)) * rows;
-
-  settle(el, `
-    <div class="flow-head">
-      <span>${data.hours}h · ${usd(data.cells.reduce((a, c) => a + c.longUsd + c.shortUsd, 0))} notional</span>
-      <span class="flq-legend">
-        <i class="flq-key long"></i> longs liquidate down
-        <i class="flq-key short"></i> shorts liquidate up
-      </span>
-    </div>
-    <div class="heat" style="--cols:${cols};--rows:${rows}">
-      <div class="heat-axis">${ticks.join("")}</div>
-      <div class="heat-plot">
-        ${cells.join("")}
-        <div class="heat-now" style="--y:${nowY.toFixed(2)}">
-          <span class="heat-now-tag">${fmtPx(ref)}</span>
-        </div>
+  // Каркас ставим один раз: график живёт между тиками, пересоздавать его на
+  // каждом обновлении — мигание и потеря зума, который поставил оператор.
+  if (!el.querySelector(".liqheat-plot")) {
+    el.innerHTML = `
+      <div class="flow-head">
+        <span class="liqheat-sum"></span>
+        <span class="flq-legend">
+          <i class="flq-ramp"></i> less fuel → more fuel · below price = longs, above = shorts
+        </span>
       </div>
-      <div class="heat-profile">${profile}</div>
-      <div class="heat-time">${timeTicks(data.t0, data.t1)}</div>
-    </div>`);
+      <div class="liqheat-plot"></div>`;
+  }
+  el.querySelector(".liqheat-sum").textContent =
+    `${data.hours}h · ${usd(data.total)} notional · ${fmtPxShort(data.ref)} now`;
+
+  const ok = await drawLiqHeat(el.querySelector(".liqheat-plot"), data, kl);
+  if (!ok) empty({ glyph: "info", title: "No candles for this window" });
 }
+
+const fmtPxShort = (p) => (p == null ? "—" : p >= 1000 ? p.toFixed(0) : p >= 1 ? p.toFixed(3) : p.toPrecision(4));
 
 // ── Нетто-поток тейкеров ────────────────────────────────────────────────────
 export function renderNetFlow(el, data) {
@@ -236,11 +191,7 @@ export const flowSkeleton = (el, cols) => { if (el) el.innerHTML = skeletonRows(
 /** Скелетон карты — та же сетка, что и сама карта: подмена не меняет габарит. */
 export function heatSkeleton(el) {
   if (!el) return;
-  const cells = Array.from({ length: HEAT_ROWS * HEAT_COLS }, () => '<i class="heat-cell sk"></i>').join("");
-  el.innerHTML =
-    `<div class="heat" style="--cols:${HEAT_COLS};--rows:${HEAT_ROWS}">` +
-    `<div class="heat-axis"></div><div class="heat-plot">${cells}</div>` +
-    `<div class="heat-profile"></div></div>`;
+  el.innerHTML = '<div class="liqheat-sk sk-block"></div>';
 }
 
 /** Селектор монет — компонент дизайн-системы, не самодельные кнопки. */
