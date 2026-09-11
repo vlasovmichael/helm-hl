@@ -8,6 +8,7 @@
 // ─────────────────────────────────────────────────
 
 import { emptyState, settle } from "../core/placeholders.js";
+import { badge, segmented } from "../core/ui.js";
 
 const bp = (v) => (v == null ? "—" : `${v.toFixed(1)} bp`);
 const usd = (v) =>
@@ -56,7 +57,8 @@ export function renderPretrade(el, d) {
   // и только в конце то, что оператор выбирает сам.
   const body = `
     <div class="pt-verdict ${TONE[v.tone] || ""}">
-      <b>${c.name}</b> · ${v.label}
+      <b class="pt-coin">${c.name}</b>
+      ${badge({ label: v.label, cls: `pt-badge pt-badge--${v.tone}` })}
       <span class="pt-note">${v.note}</span>
     </div>
 
@@ -85,11 +87,11 @@ export function renderPretrade(el, d) {
 /** Список монет по цене попытки. Замена отбору по рывку — тот вычитал. */
 export function renderPretradeRanked(el, d, current, onPick) {
   if (!el || !d.ok) return;
-  el.innerHTML = d.ranked
-    .slice(0, 10)
-    .map((r) => `<button type="button" class="seg-btn${r.coin === current ? " is-active" : ""}" data-coin="${r.coin}"
-      data-tip="cost is ${r.share.toFixed(0)}% of its typical range">${r.coin}</button>`)
-    .join("");
+  el.innerHTML = segmented({
+    name: "coin",
+    value: current,
+    options: d.ranked.slice(0, 10).map((r) => ({ value: r.coin, label: r.coin })),
+  });
   el.onclick = (e) => {
     const coin = e.target.closest("[data-coin]")?.dataset.coin;
     if (coin) onPick(coin);

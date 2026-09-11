@@ -8,7 +8,14 @@ import "./src/styles/index.scss";
 import { bindTheme, startFooterTimer } from "./src/core/shell.js";
 import { mountPageHeader } from "./src/core/pageHeader.js";
 import { mountTopnav } from "./src/core/topnav.js";
-import { renderWallets, renderLiqMap, renderNetFlow, flowSkeleton } from "./src/features/flow.js";
+import {
+  renderWallets,
+  renderLiqMap,
+  renderNetFlow,
+  flowSkeleton,
+  renderCoinPicker,
+} from "./src/features/flow.js";
+import { segmented } from "./src/core/ui.js";
 
 mountTopnav("flow");
 mountPageHeader({ eyebrow: "Research · on-chain participants", title: "Order Flow" });
@@ -24,14 +31,10 @@ const getJson = async (url) => {
   return r.json();
 };
 
-/** Селектор монеты собирается из тех монет, по которым поток уже собран. */
+/** Селектор монеты — общий компонент, монеты те, по которым поток уже собран. */
 function coinPicker(node, value, onPick) {
   if (!node) return;
-  const list = state.coins.slice(0, 8).map((c) => c.name);
-  if (!list.includes(value) && value) list.unshift(value);
-  node.innerHTML = list
-    .map((c) => `<button type="button" class="seg-btn${c === value ? " is-active" : ""}" data-coin="${c}">${c}</button>`)
-    .join("");
+  renderCoinPicker(node, state.coins, value);
   node.onclick = (e) => {
     const c = e.target.closest("[data-coin]")?.dataset.coin;
     if (c) onPick(c);
@@ -41,9 +44,11 @@ function coinPicker(node, value, onPick) {
 function windowPicker() {
   const node = el("flow-window");
   if (!node) return;
-  node.innerHTML = [6, 24, 72]
-    .map((h) => `<button type="button" class="seg-btn${h === state.hours ? " is-active" : ""}" data-h="${h}">${h}h</button>`)
-    .join("");
+  node.innerHTML = segmented({
+    name: "h",
+    value: String(state.hours),
+    options: [6, 24, 72].map((h) => ({ value: String(h), label: `${h}h` })),
+  });
   node.onclick = (e) => {
     const h = Number(e.target.closest("[data-h]")?.dataset.h);
     if (h) { state.hours = h; loadWallets(); }
@@ -62,6 +67,7 @@ async function loadWallets() {
 
 async function loadLiq() {
   coinPicker(el("flow-liq-coin"), state.liqCoin, (c) => { state.liqCoin = c; loadLiq(); });
+  flowSkeleton(el("flow-liqmap"), 4);
   try {
     renderLiqMap(el("flow-liqmap"), await getJson(`/api/flow/liqmap?coin=${state.liqCoin}`));
   } catch {

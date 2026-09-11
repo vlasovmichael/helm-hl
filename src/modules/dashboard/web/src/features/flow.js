@@ -8,6 +8,7 @@
 // ─────────────────────────────────────────────────
 
 import { skeletonRows, emptyState, settle } from "../core/placeholders.js";
+import { badge, chip, segmented } from "../core/ui.js";
 
 const short = (a) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
@@ -23,12 +24,14 @@ const signed = (v) => (v > 0 ? `+${usd(v)}` : usd(v));
 // Роль кошелька — это доля тейкера в обороте, а не размер. Тот, кто стоит
 // лимитками, и тот, кто их выносит, зарабатывают на противоположных вещах.
 function role(pct) {
-  if (pct >= 80) return { label: "taker", tone: "hot" };
-  if (pct <= 20) return { label: "maker", tone: "cool" };
-  return { label: "mixed", tone: "" };
+  if (pct >= 80) return { label: "taker", tone: "taker" };
+  if (pct <= 20) return { label: "maker", tone: "maker" };
+  return { label: "mixed", tone: "mixed" };
 }
 
 const explorer = (a) => `https://app.hyperliquid.xyz/explorer/address/${a}`;
+const addrLink = (a) =>
+  `<a class="flow-addr" href="${explorer(a)}" target="_blank" rel="noopener">${short(a)}</a>`;
 
 // ── Кошельки ────────────────────────────────────────────────────────────────
 export function renderWallets(el, data) {
@@ -50,13 +53,13 @@ export function renderWallets(el, data) {
     const r = role(w.takerPct);
     const pos = w.positions
       .slice(0, 3)
-      .map((p) => `<span class="chip${p.szi > 0 ? " chip--long" : " chip--short"}">${p.coin} ${usd(p.ntl)}</span>`)
+      .map((p) => chip({ label: p.coin, sub: usd(p.ntl), cls: `flow-pos-chip ${p.szi > 0 ? "long" : "short"}` }))
       .join(" ");
     const more = w.positions.length > 3 ? ` <span class="muted">+${w.positions.length - 3}</span>` : "";
     return `<tr>
-      <td class="strong mono"><a href="${explorer(w.addr)}" target="_blank" rel="noopener">${short(w.addr)}</a></td>
+      <td>${addrLink(w.addr)}</td>
       <td class="num mono">${usd(w.vol)}</td>
-      <td class="num"><span class="chip${r.tone ? ` chip--${r.tone}` : ""}">${r.label} ${w.takerPct.toFixed(0)}%</span></td>
+      <td class="num flow-role">${badge({ label: `${r.label} ${w.takerPct.toFixed(0)}%`, cls: `flow-role--${r.tone || "mixed"}` })}</td>
       <td class="num mono ${w.net > 0 ? "pos" : "neg"}">${signed(w.net)}</td>
       <td class="num mono muted col-opt">${w.coins}</td>
       <td class="num mono col-opt">${w.equity === null ? "—" : usd(w.equity)}</td>
@@ -96,25 +99,25 @@ export function renderLiqMap(el, data) {
   const rows = data.buckets
     .slice()
     .sort((a, b) => b.pct - a.pct)
-    .map((b) => {
+    .map((b, i) => {
       const total = b.longUsd + b.shortUsd;
       const isLong = b.longUsd >= b.shortUsd;
       const px = data.ref * (1 + b.pct / 100);
-      return `<div class="ob-row ${isLong ? "bid" : "ask"}">
-        <span class="ob-bar" style="width:${((total / max) * 100).toFixed(1)}%"></span>
-        <span class="ob-tag">${b.pct > 0 ? "+" : ""}${b.pct}%</span>
-        <span class="ob-px">${px < 1 ? px.toPrecision(4) : px.toFixed(px < 100 ? 2 : 0)}</span>
-        <span class="ob-sz">${usd(total)}</span>
-        <span class="ob-usd">${b.n}</span>
+      return `<div class="flq-row ${isLong ? "long" : "short"}">
+        <span class="flq-bar" style="width:${((total / max) * 100).toFixed(1)}%;animation-delay:${i * 18}ms"></span>
+        <span class="flq-pct">${b.pct > 0 ? "+" : ""}${b.pct}%</span>
+        <span class="flq-px">${px < 1 ? px.toPrecision(4) : px.toFixed(px < 100 ? 2 : 0)}</span>
+        <span class="flq-usd">${usd(total)}</span>
+        <span class="flq-n">${b.n}</span>
       </div>`;
     }).join("");
 
   settle(el, `
-    <div class="flow-liq-head">
+    <div class="flow-head">
       <span>${data.wallets} wallets · ${usd(data.total)} notional tracked</span>
-      <span class="muted">longs liquidate down, shorts up · % from reference price</span>
+      <span>longs liquidate down, shorts up · % from reference price</span>
     </div>
-    <div class="ob-ladder">${rows}</div>`);
+    <div class="flq">${rows}</div>`);
 }
 
 // ── Нетто-поток тейкеров ────────────────────────────────────────────────────
@@ -132,10 +135,12 @@ export function renderNetFlow(el, data) {
   const rows = data.top.map((t) => {
     const w = (Math.abs(t.net) / max) * 100;
     return `<tr>
-      <td class="strong mono"><a href="${explorer(t.addr)}" target="_blank" rel="noopener">${short(t.addr)}</a></td>
+      <td>${addrLink(t.addr)}</td>
       <td class="num mono ${t.net > 0 ? "pos" : "neg"}">${signed(t.net)}</td>
-      <td class="flow-track">
-        <i class="flow-fill ${t.net > 0 ? "pos" : "neg"}" style="width:${w.toFixed(1)}%"></i>
+      <td>
+        <span class="flow-track">
+          <i class="flow-fill ${t.net > 0 ? "pos" : "neg"}" style="width:${(w / 2).toFixed(1)}%"></i>
+        </span>
       </td>
       <td class="num mono muted col-opt">${usd(t.taker + t.maker)}</td>
     </tr>`;
@@ -152,3 +157,15 @@ export function renderNetFlow(el, data) {
 }
 
 export const flowSkeleton = (el, cols) => { if (el) el.innerHTML = skeletonRows(cols, 6); };
+
+/** Селектор монет — компонент дизайн-системы, не самодельные кнопки. */
+export function renderCoinPicker(el, coins, value, name = "coin") {
+  if (!el) return;
+  const list = coins.slice(0, 8).map((c) => (typeof c === "string" ? c : c.name));
+  if (value && !list.includes(value)) list.unshift(value);
+  el.innerHTML = segmented({
+    name,
+    value,
+    options: list.map((c) => ({ value: c, label: c })),
+  });
+}

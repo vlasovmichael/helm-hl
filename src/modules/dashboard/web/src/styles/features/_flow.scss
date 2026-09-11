@@ -1,25 +1,96 @@
-/* Order Flow — витрина потока с адресами.
-   Лестница ликвидаций переиспользует .ob-row/.ob-bar стакана: те же уровни
-   цены с заливкой, поэтому здесь только сетка колонок и полоса направления. */
+/* Order Flow — поток с адресами участников.
+   🚨 Классы свои, не `.ob-*`: те живут в бандле страницы стакана, и на этой
+   странице их нет вовсе — лестница оставалась без сетки и разъезжалась. */
 
-.flow-liq-head {
+.flow-head {
   display: flex; justify-content: space-between; align-items: baseline;
-  gap: 12px; padding: 0 14px 8px; font-size: var(--fs-label);
-  flex-wrap: wrap;
+  gap: 12px; flex-wrap: wrap;
+  padding: 0 2px 10px;
+  font-size: var(--fs-small); color: var(--text-muted);
 }
 
-/* У стакана четыре колонки с размером в монетах; здесь размер один, в долларах. */
-#flow-liqmap .ob-row { grid-template-columns: 70px 1fr 120px 48px; }
-#flow-liqmap .ob-row .ob-bar { left: 0; right: auto; }
-#flow-liqmap .ob-ladder { max-height: 420px; }
-
-.flow-net .flow-track {
-  position: relative; height: 10px; min-width: 80px;
-  background: var(--canvas-inset); border-radius: 3px; overflow: hidden;
+/* ── Лестница ликвидаций ─────────────────────────────────────────────────
+   Приём тот же, что у стакана: уровень цены с заливкой по объёму. Лонги
+   ликвидируются вниз, шорты вверх — стороны раскрашены и не складываются. */
+.flq {
+  max-height: 420px; overflow-y: auto;
+  border: 1px solid var(--hairline); border-radius: 8px;
+  background: var(--canvas-inset);
 }
-.flow-fill { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 3px; }
-.flow-fill.pos { background: var(--ob-bid, var(--accent-pos)); }
-.flow-fill.neg { background: var(--ob-ask, var(--accent-neg)); }
+.flq-row {
+  position: relative;
+  display: grid; grid-template-columns: 62px 1fr 110px 44px;
+  align-items: center; gap: 8px;
+  height: 26px; padding: 0 12px;
+  font-size: var(--fs-body); font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.flq-row + .flq-row { box-shadow: inset 0 1px 0 var(--hairline); }
+.flq-bar {
+  position: absolute; left: 0; top: 2px; bottom: 2px;
+  border-radius: 0 4px 4px 0; z-index: 0;
+  /* Рост от события — полосы приезжают один раз, вместе с данными. */
+  transform-origin: left center;
+  animation: flq-grow 0.45s var(--ease) both;
+}
+.flq-row.long .flq-bar { background: var(--tier-pos-normal); }
+.flq-row.short .flq-bar { background: var(--tier-neg-normal); }
+.flq-row > span { position: relative; z-index: 1; }
+.flq-pct { color: var(--text-muted); font-size: var(--fs-small); }
+.flq-row.long .flq-px { color: var(--green); font-weight: 600; }
+.flq-row.short .flq-px { color: var(--red); font-weight: 600; }
+.flq-px { text-align: right; }
+.flq-usd { text-align: right; color: var(--text-primary); font-weight: 600; }
+.flq-n { text-align: right; color: var(--text-faint); font-size: var(--fs-small); }
 
-.chip--long { color: var(--ob-bid, var(--accent-pos)); }
-.chip--short { color: var(--ob-ask, var(--accent-neg)); }
+@keyframes flq-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+/* ── Адреса ──────────────────────────────────────────────────────────────
+   Ссылка, но не «синяя подчёркнутая»: в таблице их полсотни, и подчёркивание
+   превращает колонку в частокол. */
+.flow-addr {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  color: var(--text-primary); text-decoration: none;
+  border-bottom: 1px dashed var(--hairline);
+  transition: color var(--dur-fast, 0.12s) var(--ease-out);
+}
+.flow-addr:hover { color: var(--accent, var(--green)); border-bottom-color: currentColor; }
+
+/* ── Полоса направления в таблице нетто-потока ───────────────────────────
+   Трек внутри ячейки, а не сама ячейка: иначе он растягивался на всю колонку
+   серым прямоугольником. */
+.flow-track {
+  position: relative; height: 8px; width: 100%; max-width: 220px;
+  background: var(--canvas-inset); border-radius: 4px; overflow: hidden;
+}
+.flow-fill {
+  position: absolute; top: 0; bottom: 0; border-radius: 4px;
+  transform-origin: inherit;
+  animation: flq-grow 0.45s var(--ease) both;
+}
+/* Покупки растут вправо от центра, продажи влево — знак читается формой. */
+.flow-fill.pos { left: 50%; background: var(--green-line); transform-origin: left center; }
+.flow-fill.neg { right: 50%; background: var(--red-line); transform-origin: right center; }
+.flow-track::before {
+  content: ""; position: absolute; left: 50%; top: 0; bottom: 0;
+  width: 1px; background: var(--hairline); z-index: 1;
+}
+
+/* Роль кошелька цветом: агрессор платит за немедленность, мейкер её продаёт.
+   Модификаторов у .badge в системе нет — тон несёт свой класс. */
+.flow-role .badge { font-size: var(--fs-small); }
+.flow-role--taker { color: var(--red); }
+.flow-role--maker { color: var(--green); }
+.flow-role--mixed { color: var(--text-muted); }
+.flow-pos-chip { color: var(--text-secondary); }
+.flow-pos-chip.long { color: var(--green); }
+.flow-pos-chip.short { color: var(--red); }
+
+/* Приём системы: блок с движением глушит себя сам, а не полагается на общий
+   сброс. Полосы остаются на месте, просто приезжают без роста. */
+@media (prefers-reduced-motion: reduce) {
+  .flq-bar,
+  .flow-fill {
+    animation: none;
+  }
+}

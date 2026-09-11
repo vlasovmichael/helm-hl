@@ -658,8 +658,15 @@ function stabilizeHeight(tbody, rowTarget) {
   // получала прокрутку ровно там, где её и считали лишней.
   let rowsH = 0;
   for (const tr of tbody.children) rowsH += tr.offsetHeight;
+  // 🚨 Гистерезис, а не порог в пиксель. Сумма фактических высот дышит от тика
+  // к тику (стрелка активной монеты, теги Vol/OI, подпиксели шрифта), и на
+  // пороге 1px карточка ловила эту дрожь как «изменение». Растём сразу — иначе
+  // строка уедет под край; ужимаемся только когда контента стало заметно
+  // меньше на целую строку, то есть позиция действительно закрылась.
   const target = headH + rowsH;
-  if (Math.abs(target - _hmFixedH) > 1) {
+  const grew = target > _hmFixedH + 1;
+  const shrankForReal = target < _hmFixedH - Math.max(8, rowH / 2);
+  if (grew || shrankForReal) {
     wrap.style.height = `${target}px`;
     _hmFixedH = target;
   }
