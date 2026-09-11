@@ -91,6 +91,15 @@ const HEAT_COLS = 48;
 const heatAlpha = (v, max) =>
   v <= 0 ? 0 : Math.min(1, 0.12 + (0.88 * Math.log10(1 + v)) / Math.log10(1 + max));
 
+/** Подписи оси времени: пять засечек — ось обязана читаться, но не пестрить. */
+function timeTicks(t0, t1) {
+  const hhmm = (t) => new Date(t).toTimeString().slice(0, 5);
+  return Array.from({ length: 5 }, (_, i) => {
+    const p = i / 4;
+    return `<span class="heat-ttick" style="--p:${(p * 100).toFixed(1)}%">${hhmm(t0 + p * (t1 - t0))}</span>`;
+  }).join("");
+}
+
 export function renderLiqMap(el, data) {
   if (!el) return;
   if (!data.ok) {
@@ -173,6 +182,7 @@ export function renderLiqMap(el, data) {
         </div>
       </div>
       <div class="heat-profile">${profile}</div>
+      <div class="heat-time">${timeTicks(data.t0, data.t1)}</div>
     </div>`);
 }
 

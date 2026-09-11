@@ -64,6 +64,21 @@
 }
 
 /* Профиль: та же величина, сложенная по времени. */
+/* Ось времени — под картой, во всю её ширину. */
+.heat-time {
+  grid-column: 2;
+  position: relative;
+  height: 14px;
+  font-size: var(--fs-micro);
+  color: var(--text-muted);
+}
+.heat-ttick {
+  position: absolute; left: var(--p); transform: translateX(-50%);
+  font-variant-numeric: tabular-nums;
+}
+.heat-ttick:first-child { transform: none; }
+.heat-ttick:last-child { transform: translateX(-100%); }
+
 .heat-profile {
   position: relative;
   border-left: 1px solid var(--hairline);

@@ -199,7 +199,10 @@ export function handleFlowLiqHeat(req, res) {
     // за $0.003. Хвосты за пределами полосы отбрасываются, а не сжимаются в
     // край: слипшийся край рисует стену там, где её нет.
     const RANGE = Number(req.query.range) || 25;
-    const t0 = since;
+    // 🚨 Шкала времени начинается с ПЕРВОГО среза, а не с «сейчас минус окно»:
+    // сбор моложе окна, и жёсткое начало рисовало полкарты пустотой, как будто
+    // ликвидаций там не было.
+    const t0 = Math.max(since, raw.reduce((m, r) => Math.min(m, r.ts), Infinity));
     const t1 = Date.now();
     const grid = new Map();
 

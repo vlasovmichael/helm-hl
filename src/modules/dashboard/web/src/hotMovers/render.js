@@ -622,59 +622,13 @@ export function renderHotMovers(payload, fmtTime) {
 
   reconcileRows(tbody, items);
   mountDirArrows(tbody);
-  stabilizeHeight(tbody, rowTarget);
 }
 
-let _hmFixedH = 0; // последняя выставленная высота обёртки (анти-трэшинг layout)
-let _hmRowH = 0;   // эталон высоты основной строки: МАКСИМУМ за сессию
-
-// Гасим прыжок высоты карточки: основные строки добиты плейсхолдерами до
-// rowTarget, высота обёртки = thead + rowTarget строк. Меряем, а не хардкодим:
-// иконки Enter и кегль делают строку выше.
-//
-// 🚨 Под-строки открытых позиций (`pos:`) входят в расчёт: без них карточка
-// получала прокрутку ровно когда позиция открыта, и строка позиции уезжала
-// под её нижний край.
-function stabilizeHeight(tbody, rowTarget) {
-  const wrap = tbody.closest(".hm-scroll-wrap");
-  if (!wrap) return;
-  const table = tbody.parentElement; // <table>, внутри thead+tbody
-  const thead = table?.querySelector("thead");
-  const headH = thead?.offsetHeight || 0;
-
-  // 🚨 Эталон строки — МАКСИМУМ, а не первая попавшаяся. Иконка Enter (26px) и
-  // живая стрелка есть не у каждой монеты, поэтому строки разной высоты, а
-  // состав ленты меняется каждый тик: «высота по образцу» гуляла вместе с ним.
-  // Максимум запоминается на сессию и только растёт — высота строки перестаёт
-  // зависеть от того, какие монеты сейчас наверху.
-  let rowH = 0;
-  let subH = 0;
-  for (const tr of tbody.children) {
-    const key = tr.dataset.hmkey || "";
-    const main = key.startsWith("m:") || tr.classList.contains("hm-placeholder-row");
-    if (main) rowH = Math.max(rowH, tr.offsetHeight);
-    else subH += tr.offsetHeight;
-  }
-  if (rowH <= 0) return; // пустое состояние (статус-строка) — высоту не трогаем
-  if (rowH > _hmRowH) {
-    _hmRowH = rowH;
-    wrap.style.setProperty("--hm-row-h", `${rowH}px`);
-  }
-  // На мобиле строка — карточка, и её высоту задаёт контент (число колонок в
-  // ней меняется). Отдаём измеренную высоту в переменную, по которой добивочные
-  // карточки держат min-height: иначе пустой слот остаётся на хардкоде и не
-  // сходится с настоящей карточкой.
-  wrap.style.setProperty("--hm-card-min-h", `${_hmRowH}px`);
-
-  // Основных строк ВСЕГДА rowTarget (недостающие добиты пустышками), поэтому их
-  // вклад считается от эталона, а не от текущего замера. Меняться высоте есть
-  // от чего ровно одно: под-строки открытых позиций.
-  const target = headH + _hmRowH * rowTarget + subH;
-  if (Math.abs(target - _hmFixedH) > 1) {
-    wrap.style.height = `${target}px`;
-    _hmFixedH = target;
-  }
-}
+// Высоту карточки держит CSS: основная строка фиксирована (--hm-row-h,
+// core в _signals.scss), основных строк всегда HM_MAX_ROWS. 🚨 Мерить её в JS
+// нельзя: строки разной высоты (иконка Enter, живая стрелка), состав ленты
+// меняется каждый тик — любой замер гуляет вместе с ним. Под-строка позиции
+// добавляет свою высоту один раз, при открытии, и дальше карточка стоит.
 
 // Персистентные стрелки активной монеты: строки перестраиваются (innerHTML)
 // каждый тик, поэтому переносим ОДИН и тот же DOM-узел стрелки в перестроенную
