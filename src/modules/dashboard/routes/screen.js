@@ -15,7 +15,7 @@
 import { config } from "../../../core/config.js";
 import { logger } from "../../../core/logger.js";
 import { hlInfo, HL_PRIORITY } from "../../../core/hlClient.js";
-import { getPriceNMinAgo, getLatestPrice } from "../../../core/priceHistory.js";
+import { getPriceNMinAgo, getLatestPrice, getSamplesSince } from "../../../core/priceHistory.js";
 import { getHistory, getActiveAdoptPositions, getActivePosition } from "../../../core/database.js";
 import { getLastDailyRiskStatus } from "../../dailyRisk.js";
 import { getCachedAccountValueSync } from "../../../core/balanceCache.js";
@@ -97,6 +97,24 @@ export function frictionCost({ spreadBp, notionalUsd, riskUsd }) {
  * Движение монеты по локальному буферу цен — HL не дёргаем вообще.
  * Буфер короткий, поэтому окна нет → null, а не ноль (ноль соврал бы «стоит»).
  */
+/**
+ * Размах (max−min) за N минут в бп. 🚨 Не путать с движением: рывок направлен
+ * и хуже случайного входа, размах ненаправлен и автокоррелирован (0.25).
+ */
+function localRangeBp(coin, minutes) {
+  const s = getSamplesSince(coin, minutes);
+  if (s.length < 3) return null;
+  let hi = -Infinity;
+  let lo = Infinity;
+  for (const x of s) {
+    if (x.price > hi) hi = x.price;
+    if (x.price < lo) lo = x.price;
+  }
+  const ref = getLatestPrice(coin);
+  if (!(ref > 0) || !(hi > lo)) return null;
+  return ((hi - lo) / ref) * 10000;
+}
+
 function localMove(coin, minutes) {
   const now = getLatestPrice(coin);
   const then = getPriceNMinAgo(coin, minutes);
@@ -238,6 +256,7 @@ export async function buildScreenPayload() {
       chg24hPct: prev > 0 ? ((mid - prev) / prev) * 100 : null,
       chg15mPct: localMove(u.name, 15),
       chg1hPct: localMove(u.name, 60),
+      range1hBp: localRangeBp(u.name, 60),
       spreadBp,
       frictionBp: cost?.totalBp ?? null,
       frictionUsd: cost?.costUsd ?? null,
@@ -259,8 +278,12 @@ export async function buildScreenPayload() {
     });
   });
 
-  const rank = (c) => Math.abs(c.chg15mPct ?? c.chg1hPct ?? c.chg24hPct ?? 0);
-  coins.sort((a, b) => rank(b) - rank(a));
+  // 🚨 Ранг не по |рывку|: сортировка по движению делает из экрана hot movers,
+  // а вход по рывку хуже случайного. Размах/трение — обе части измеримы.
+  const payoff = (c) =>
+    c.range1hBp > 0 && c.frictionBp > 0 ? c.range1hBp / c.frictionBp : -1;
+  coins.forEach((c) => { c.payoff = payoff(c) > 0 ? +payoff(c).toFixed(2) : null; });
+  coins.sort((a, b) => payoff(b) - payoff(a));
 
   // Досбор расстановки в фоне, в порядке экрана: верхние монеты обновятся
   // первыми. Ответ не ждёт — на этом рендере поля будут прошлыми, на

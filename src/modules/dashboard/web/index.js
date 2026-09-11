@@ -35,6 +35,7 @@ import {
   renderScreen,
   initScreenInteractions,
 } from "./src/features/screen.js";
+import { renderPretrade, renderPretradeRanked } from "./src/features/pretrade.js";
 import { renderMarketContext, updateBtcLivePrice } from "./src/features/marketContext.js";
 import { initModals, renderActivity } from "./src/features/modals.js";
 import { initWhatIf } from "./src/features/whatif.js";
@@ -89,6 +90,8 @@ function tick() {
   // туннель моргнул) общий проглатывает ошибку молча, и в таблице навсегда
   // висит стартовое «Building screen…». Пробрасываем провал в рендер — он
   // покажет причину и «Retrying…», а уже нарисованный список не тронет.
+  loadPretrade();
+
   fetchJson("/api/screen")
     .then((d) => renderScreen(d))
     .catch((err) =>
@@ -227,6 +230,21 @@ initModals();
 initWhatIf();
 initManualPaperTrigger("mp-paper-btn");
 initManualPaperActive();
+// Карточка решения перед входом. Монета своя, от экрана не зависит: сетка
+// калибратора пересчитывается по расписанию и в поллинге экрана не нуждается.
+let ptCoin = "";
+async function loadPretrade(coin) {
+  if (coin) ptCoin = coin;
+  try {
+    const d = await fetchJson(`/api/pretrade${ptCoin ? `?coin=${ptCoin}` : ""}`);
+    if (d.ok && !ptCoin) ptCoin = d.coin?.name || d.ranked?.[0]?.coin || "";
+    renderPretradeRanked(document.getElementById("pt-coins"), d, ptCoin, loadPretrade);
+    renderPretrade(document.getElementById("pt-body"), d);
+  } catch {
+    renderPretrade(document.getElementById("pt-body"), { ok: false });
+  }
+}
+
 initTgSignalPositions();
 initTradeButton();
 // BTC Divergence + Whale Watch вынесены на /lab.html — их HL-поллинг

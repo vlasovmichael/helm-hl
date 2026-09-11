@@ -158,6 +158,22 @@
         <p class="hm-fwd" id="hm-chase-fwd" hidden></p>
       </section>
 
+      <!-- 01.3 / Pre-trade — что известно про монету ДО входа. Порядок строк
+           обратный привычному: цена попытки и размер идут раньше выбора, а
+           стороны нет вовсе — направление в цене не предсказуемо. -->
+      <section class="card" id="sec-pretrade">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-card="What is known before an entry: how far the coin typically travels, what one round trip costs, which target/stop pair breaks even, what size holds your risk, and how many attempts today's fee budget still pays for. Side is deliberately absent — direction does not persist in price (autocorrelation −0.01), amplitude does (0.25)."
+          >
+            Pre-trade
+          </div>
+          <div class="seg" id="pt-coins"></div>
+        </div>
+        <div id="pt-body"></div>
+      </section>
+
       <!-- 01.4 / Screen — монеты, отобранные по цене входа, + бюджет дня.
            Заменяет Hot Movers в роли «куда смотреть»: отбор идёт по трению
            (спред + комиссии), а не по движению. Обоснование и порог —
@@ -166,7 +182,7 @@
         <div class="card-header">
           <div
             class="card-title"
-            data-card="Coins where entering is cheap. «Friction» = what share of your risk budget the round trip (book spread + two taker fees) eats. These are NOT signals: the list is filtered by cost of entry, movement is shown as fact — the call is yours."
+            data-card="Coins where entering is cheap. «Friction» = what share of your risk budget the round trip (book spread + two taker fees) eats. These are NOT signals: the list is filtered by cost of entry and ordered by payoff (how many round trips the last hour’s range covers), movement is shown as fact — the call is yours."
           >
             Screen
           </div>
@@ -220,6 +236,13 @@
             <thead>
               <tr>
                 <th data-sort="coin" data-card="Sort by ticker">Coin</th>
+                <th
+                  class="num"
+                  data-sort="payoff"
+                  data-card="How many times the last hour's range covers one round trip. Range is undirected and it is the one thing that persists in this data (autocorrelation 0.25); direction does not (−0.01). Below 3× the cost eats most of a typical move. This is the default order — not the size of the move, which was measured and is worse than random."
+                >
+                  Payoff
+                </th>
                 <th class="num" data-sort="price" data-card="Sort by price">Price</th>
                 <th
                   class="num"

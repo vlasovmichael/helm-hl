@@ -89,6 +89,7 @@ import { handleTradeBreakdown } from "./routes/tradeBreakdown.js";
 import { handlePositionNanny } from "./routes/positionNanny.js";
 import { handleCoinOfDay } from "./routes/coinOfDay.js";
 import { handleEntryFilter } from "./routes/entryFilter.js";
+import { handlePretrade } from "./routes/pretrade.js";
 import {
   handleFlowWallets,
   handleFlowLiqMap,
@@ -1143,6 +1144,8 @@ export function startDashboard() {
   app.get("/api/position-nanny", handlePositionNanny);
   app.get("/api/coin-of-day", handleCoinOfDay);
   app.get("/api/entry-filter", handleEntryFilter);
+  // Карточка решения перед входом: цель, стоп, размер, остаток бюджета дня.
+  app.get("/api/pretrade", handlePretrade);
   // Поток ордеров с адресами: витрина читает базу коллектора hl-flow.
   app.get("/api/flow/wallets", handleFlowWallets);
   app.get("/api/flow/liqmap", handleFlowLiqMap);

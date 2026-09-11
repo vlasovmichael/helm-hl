@@ -391,3 +391,36 @@
     height: var(--h);
   }
 }
+
+/* Pre-trade — карточка решения перед входом. Строка = вопрос, число, чем это
+   число является: третий столбец обязателен, без него цифра читается как совет. */
+.pt-verdict {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  padding: 10px 14px; border-radius: 6px; margin-bottom: 10px;
+  background: var(--canvas-inset);
+}
+.pt-verdict.pt--ok { box-shadow: inset 2px 0 0 var(--accent-pos); }
+.pt-verdict.pt--warn { box-shadow: inset 2px 0 0 var(--accent-warn, var(--ob-gold)); }
+.pt-verdict.pt--bad { box-shadow: inset 2px 0 0 var(--accent-neg); }
+
+.pt-line {
+  display: grid; grid-template-columns: 150px 130px 1fr;
+  align-items: baseline; gap: 10px;
+  padding: 5px 14px; font-size: var(--fs-body);
+}
+.pt-label { color: var(--text-secondary); }
+.pt-value { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.pt-note { color: var(--text-tertiary); font-size: var(--fs-label); }
+.pt-row--ok .pt-value { color: var(--accent-pos); }
+.pt-row--warn .pt-value { color: var(--accent-warn, var(--ob-gold)); }
+.pt-row--flat .pt-value { color: var(--text-tertiary); font-weight: 400; }
+.pt-split { height: 1px; background: var(--border-subtle, var(--ob-line)); margin: 10px 14px; }
+.pt-halt {
+  margin: 10px 14px 0; padding: 8px 12px; border-radius: 6px;
+  background: var(--canvas-inset); color: var(--accent-neg); font-size: var(--fs-label);
+}
+
+@media (max-width: 640px) {
+  .pt-line { grid-template-columns: 1fr auto; }
+  .pt-note { grid-column: 1 / -1; }
+}

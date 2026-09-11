@@ -55,13 +55,27 @@ export function frictionClass(pctOfRisk) {
   return "scr-fr--bad";
 }
 
+// Окупаемость: ниже 2× круг съедает половину типичного хода — там попытка
+// платит больше, чем приносит средний размах.
+function payoffClass(p) {
+  if (p == null) return "";
+  if (p >= 6) return "scr-fr--ok";
+  if (p >= 3) return "scr-fr--mid";
+  return "scr-fr--bad";
+}
+
 // ── Сортировка ─────────────────────────────────────────────────────────────
-// Дефолт — по величине движения: список уже отобран по цене входа, и внутри
-// него интересно, что шевелится. Клик по заголовку переключает поле, повторный
-// клик — направление.
+// Дефолт — по окупаемости попытки (размах часа / круг издержек), а НЕ по
+// величине движения. 🚨 Сортировка по |рывку| ставит наверх ровно тот отбор,
+// который измерен и хуже случайного (34.6% против 41.1%): глаз берёт первые
+// строки, и порядок списка становится решением за оператора.
+// Клик по заголовку переключает поле, повторный клик — направление.
 const SORT_KEYS = {
   coin:     (c) => c.coin,
   price:    (c) => c.price,
+  // Во сколько раз размах последнего часа покрывает круг. Обе части измеримы,
+  // в отличие от направления.
+  payoff:   (c) => c.payoff ?? null,
   // ВАЖНО: ранжируем ТОЛЬКО по короткому окну. Подставлять сюда 24ч, когда
   // короткого нет, нельзя: монета с +25% за сутки встала бы выше монеты с +3%
   // за 15 минут, и колонка «Move» врала бы порядком. Нет данных → в конец.
@@ -75,7 +89,7 @@ const SORT_KEYS = {
   mine:     (c) => (c.mine ? c.mine.pnl : 0),
 };
 
-let sortKey = "move";
+let sortKey = "payoff";
 let sortDir = "desc";
 let lastData = null;
 // Фильтр по тикеру. Живёт в модуле, а не в DOM: рендер идёт на каждом
@@ -83,7 +97,7 @@ let lastData = null;
 let screenQuery = "";
 
 export function sortCoins(coins, key = sortKey, dir = sortDir) {
-  const pick = SORT_KEYS[key] || SORT_KEYS.move;
+  const pick = SORT_KEYS[key] || SORT_KEYS.payoff;
   const sign = dir === "asc" ? 1 : -1;
   return [...coins].sort((a, b) => {
     const x = pick(a);
@@ -252,6 +266,9 @@ function renderRows() {
         `<tr class="scr-row" data-coin="${c.coin}" tabindex="0" role="button"` +
           ` data-card="Open trade ticket for ${c.coin}">` +
           `<td class="scr-coin">${c.coin}</td>` +
+          `<td class="num scr-payoff ${payoffClass(c.payoff)}">${
+            c.payoff == null ? "—" : c.payoff.toFixed(1) + "×"
+          }</td>` +
           `<td class="num">${fmtPrice(c.price)}</td>` +
           `<td class="num ${pctCls(short)}">${fmtPct(short, 2)}` +
             (shortLabel ? `<i class="scr-win">${shortLabel}</i>` : "") +
