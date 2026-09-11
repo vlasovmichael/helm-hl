@@ -7,7 +7,7 @@
 //  окупается, какой размер держит риск и сколько попыток оплачено бюджетом.
 // ─────────────────────────────────────────────────
 
-import { emptyState, settle } from "../core/placeholders.js";
+import { emptyState, settle, skeletonText } from "../core/placeholders.js";
 import { badge, segmented } from "../core/ui.js";
 
 const bp = (v) => (v == null ? "—" : `${v.toFixed(1)} bp`);
@@ -24,6 +24,15 @@ const line = (label, value, note, cls = "") =>
      <span class="pt-value mono">${value}</span>
      <span class="pt-note">${note}</span>
    </div>`;
+
+/**
+ * Скелетон карточки. Ставится ТОЛЬКО на смену монеты: settle() играет вход
+ * лишь поверх скелетона, и без этого условия карточка дёргалась бы на каждом
+ * тике поллинга — то самое «движение по таймеру», которого в системе нет.
+ */
+export function pretradeSkeleton(el) {
+  if (el) el.innerHTML = skeletonText(8);
+}
 
 export function renderPretrade(el, d) {
   if (!el) return;

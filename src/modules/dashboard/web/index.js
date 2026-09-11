@@ -35,7 +35,11 @@ import {
   renderScreen,
   initScreenInteractions,
 } from "./src/features/screen.js";
-import { renderPretrade, renderPretradeRanked } from "./src/features/pretrade.js";
+import {
+  renderPretrade,
+  renderPretradeRanked,
+  pretradeSkeleton,
+} from "./src/features/pretrade.js";
 import { renderMarketContext, updateBtcLivePrice } from "./src/features/marketContext.js";
 import { initModals, renderActivity } from "./src/features/modals.js";
 import { initWhatIf } from "./src/features/whatif.js";
@@ -234,7 +238,12 @@ initManualPaperActive();
 // калибратора пересчитывается по расписанию и в поллинге экрана не нуждается.
 let ptCoin = "";
 async function loadPretrade(coin) {
-  if (coin) ptCoin = coin;
+  // Скелетон только на клик по монете: числа меняются целиком, и подмену
+  // стоит показать. На поллинге его нет — иначе карточка мигала бы сама по себе.
+  if (coin) {
+    ptCoin = coin;
+    pretradeSkeleton(document.getElementById("pt-body"));
+  }
   try {
     const d = await fetchJson(`/api/pretrade${ptCoin ? `?coin=${ptCoin}` : ""}`);
     if (d.ok && !ptCoin) ptCoin = d.coin?.name || d.ranked?.[0]?.coin || "";

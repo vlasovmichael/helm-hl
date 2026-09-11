@@ -51,13 +51,16 @@ function windowPicker() {
   });
   node.onclick = (e) => {
     const h = Number(e.target.closest("[data-h]")?.dataset.h);
-    if (h) { state.hours = h; loadWallets(); }
+    if (h) { state.hours = h; loadWallets(true); }
   };
 }
 
-async function loadWallets() {
+// 🚨 Скелетон — только на событие (клик по монете или окну) и на первый
+// рендер. На поллинге его нет: settle() играет вход поверх скелетона, и
+// ставить его каждые 60 секунд значит завести мигание по таймеру.
+async function loadWallets(fresh = false) {
   windowPicker();
-  flowSkeleton(el("flow-wallets"), 7);
+  if (fresh || !el("flow-wallets")?.children.length) flowSkeleton(el("flow-wallets"), 7);
   try {
     renderWallets(el("flow-wallets"), await getJson(`/api/flow/wallets?hours=${state.hours}`));
   } catch {
@@ -65,9 +68,9 @@ async function loadWallets() {
   }
 }
 
-async function loadLiq() {
-  coinPicker(el("flow-liq-coin"), state.liqCoin, (c) => { state.liqCoin = c; loadLiq(); });
-  flowSkeleton(el("flow-liqmap"), 4);
+async function loadLiq(fresh = false) {
+  coinPicker(el("flow-liq-coin"), state.liqCoin, (c) => { state.liqCoin = c; loadLiq(true); });
+  if (fresh || !el("flow-liqmap")?.children.length) flowSkeleton(el("flow-liqmap"), 4);
   try {
     renderLiqMap(el("flow-liqmap"), await getJson(`/api/flow/liqmap?coin=${state.liqCoin}`));
   } catch {
@@ -75,9 +78,9 @@ async function loadLiq() {
   }
 }
 
-async function loadNet() {
-  coinPicker(el("flow-net-coin"), state.netCoin, (c) => { state.netCoin = c; loadNet(); });
-  flowSkeleton(el("flow-net"), 4);
+async function loadNet(fresh = false) {
+  coinPicker(el("flow-net-coin"), state.netCoin, (c) => { state.netCoin = c; loadNet(true); });
+  if (fresh || !el("flow-net")?.children.length) flowSkeleton(el("flow-net"), 4);
   try {
     renderNetFlow(el("flow-net"), await getJson(`/api/flow/coin?coin=${state.netCoin}&hours=${state.hours}`));
   } catch {
