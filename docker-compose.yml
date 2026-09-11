@@ -129,6 +129,32 @@ services:
     networks:
       - gateway_net
 
+  # Поток ордеров HL с адресами участников + срезы чужих позиций.
+  # Отдельный процесс: ордеров ноль, торгового бота не касается. Пишет
+  # data/flow/flow.db — агрегат (адрес, монета) по 5-мин барам, суточную сводку
+  # по кошелькам и срезы позиций с ценами ликвидации. Данные невосстановимы:
+  # HL не отдаёт историей ни поток, ни чужие позиции.
+  flow:
+    build: .
+    container_name: hl-flow
+    restart: unless-stopped
+    command: node tools/flowCollector.mjs
+    env_file: .env
+    environment:
+      TZ: ${TZ:-Europe/Warsaw}
+    volumes:
+      - ./data:/app/data
+    # Не веб-сервер → HEALTHCHECK из Dockerfile (пинг :3010) тут не применим.
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          # Агрегат живёт в памяти между барами: ~6-7k пар на бар.
+          memory: 256M
+    networks:
+      - gateway_net
+
 networks:
   gateway_net:
     name: gateway_net
