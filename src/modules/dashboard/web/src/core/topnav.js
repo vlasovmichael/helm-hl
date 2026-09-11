@@ -31,6 +31,11 @@ const RESEARCH = [
     note: "Token unlock forward — schedule, queue, settled trades",
   },
   {
+    href: "/flow",
+    title: "Order Flow",
+    note: "Who trades on HL — wallets, liquidation map, net taker flow",
+  },
+  {
     href: "/calibrator",
     title: "Calibrator",
     note: "How much edge a coin demands before costs are paid",

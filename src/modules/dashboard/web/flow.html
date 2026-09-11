@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!--#head-->
+    <title>Helm · Order Flow</title>
+  </head>
+  <body>
+    <div class="container">
+      <nav class="topnav" id="topnav" aria-label="Primary"></nav>
+
+      <header id="page-header"></header>
+
+      <!-- 01 / Кто торгует. Роль важнее размера: мейкер и тейкер зарабатывают
+           на противоположных вещах, и мерить их одной линейкой нельзя. -->
+      <section class="card" id="sec-flow-wallets">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-card="Every Hyperliquid trade is signed by both addresses, so flow can be split by participant instead of guessed from trade size. Role is the taker share of a wallet's volume: 100% pays for immediacy, 0% sells it."
+          >
+            Wallets
+          </div>
+          <div class="seg" id="flow-window"></div>
+        </div>
+        <div class="table-wrap" id="flow-wallets"></div>
+      </section>
+
+      <!-- 02 / Где стоят вынужденные закрытия. Единственный участник, чьё
+           направление известно заранее, — тот, кого закроют не по его воле. -->
+      <section class="card" id="sec-flow-liq">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-card="Liquidation prices of real open positions, bucketed by distance from price. Not an estimate from open interest — each row is someone's actual margin call."
+          >
+            Liquidation map
+          </div>
+          <div class="seg" id="flow-liq-coin"></div>
+        </div>
+        <div id="flow-liqmap"></div>
+      </section>
+
+      <!-- 03 / Куда набирают агрессией. Считается только тейкерская сторона:
+           мейкера исполнили, его нетто — след чужого намерения, не своего. -->
+      <section class="card" id="sec-flow-net">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-card="Net taker flow per wallet: how much a wallet bought minus sold while paying the spread. Maker fills are excluded — a maker ends up where someone else's aggression put them."
+          >
+            Net taker flow
+          </div>
+          <div class="seg" id="flow-net-coin"></div>
+        </div>
+        <div class="table-wrap" id="flow-net"></div>
+      </section>
+    </div>
+    <script type="module" src="/flow.js"></script>
+  </body>
+</html>

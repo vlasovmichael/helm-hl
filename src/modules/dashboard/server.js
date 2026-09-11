@@ -89,6 +89,12 @@ import { handleTradeBreakdown } from "./routes/tradeBreakdown.js";
 import { handlePositionNanny } from "./routes/positionNanny.js";
 import { handleCoinOfDay } from "./routes/coinOfDay.js";
 import { handleEntryFilter } from "./routes/entryFilter.js";
+import {
+  handleFlowWallets,
+  handleFlowLiqMap,
+  handleFlowCoin,
+  handleFlowCoins,
+} from "./routes/flow.js";
 import { isTargetTrailArmed } from "../../app/adoptSupervise.js";
 import { resolveOpenPicks } from "../coinOfDayLog.js";
 import { rebuild as rebuildCalibrator, readCache as calibratorCache } from "../calibrator.js";
@@ -127,6 +133,7 @@ const PUBLIC_DIR = join(__dirname, "dist");
 const PAGES = [
   "index", "ledger", "journal", "statistics", "lab", "oi",
   "orderbook", "orderbook-sim", "ticket", "unlocks", "calibrator",
+  "flow",
 ];
 
 function sendPage(name, res) {
@@ -1136,6 +1143,11 @@ export function startDashboard() {
   app.get("/api/position-nanny", handlePositionNanny);
   app.get("/api/coin-of-day", handleCoinOfDay);
   app.get("/api/entry-filter", handleEntryFilter);
+  // Поток ордеров с адресами: витрина читает базу коллектора hl-flow.
+  app.get("/api/flow/wallets", handleFlowWallets);
+  app.get("/api/flow/liqmap", handleFlowLiqMap);
+  app.get("/api/flow/coin", handleFlowCoin);
+  app.get("/api/flow/coins", handleFlowCoins);
   // Форвард по разлокам: счётчик, очередь входов и закрытые события.
   app.get("/api/unlocks", (_req, res) => res.json(unlocksReport()));
   // Калибратор отдаёт готовый кэш: пересчёт идёт по расписанию, не по запросу.

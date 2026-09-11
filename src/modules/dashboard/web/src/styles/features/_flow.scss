@@ -1,0 +1,25 @@
+/* Order Flow — витрина потока с адресами.
+   Лестница ликвидаций переиспользует .ob-row/.ob-bar стакана: те же уровни
+   цены с заливкой, поэтому здесь только сетка колонок и полоса направления. */
+
+.flow-liq-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 12px; padding: 0 14px 8px; font-size: var(--fs-label);
+  flex-wrap: wrap;
+}
+
+/* У стакана четыре колонки с размером в монетах; здесь размер один, в долларах. */
+#flow-liqmap .ob-row { grid-template-columns: 70px 1fr 120px 48px; }
+#flow-liqmap .ob-row .ob-bar { left: 0; right: auto; }
+#flow-liqmap .ob-ladder { max-height: 420px; }
+
+.flow-net .flow-track {
+  position: relative; height: 10px; min-width: 80px;
+  background: var(--canvas-inset); border-radius: 3px; overflow: hidden;
+}
+.flow-fill { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 3px; }
+.flow-fill.pos { background: var(--ob-bid, var(--accent-pos)); }
+.flow-fill.neg { background: var(--ob-ask, var(--accent-neg)); }
+
+.chip--long { color: var(--ob-bid, var(--accent-pos)); }
+.chip--short { color: var(--ob-ask, var(--accent-neg)); }
