@@ -148,32 +148,49 @@
   margin: 0 -8px;
   padding: 0 8px;
 }
-/* Hot Movers: фиксируем высоту обёртки (выставляет JS = thead + HM_MAX_ROWS
-   строк), лишние под-строки (pos/fade) скроллятся внутри — карточка не прыгает
-   при смене монет. Заголовок sticky внутри скролла. height ставится в JS, т.к.
-   высота строки зависит от иконок Enter (26px) и шрифта — мерить надёжнее, чем
-   хардкодить. */
-/* Высота — от содержимого: 8 строк по 34px плюс под-строки позиций. Скролла
-   нет, потому что и переполнения нет: число основных строк постоянно. */
-.hm-scroll-wrap {
-  overflow-y: visible;
-}
-/* 🚨 Высота основной строки — КОНСТАНТА, а не замер. Строки разной высоты
-   (иконка Enter 26px, живая стрелка активной монеты), состав ленты меняется
-   каждый тик, и любое измерение гуляло вместе с ним. Основных строк всегда
-   HM_MAX_ROWS → высота карточки постоянна; под-строка открытой позиции
-   добавляет свою высоту один раз и дальше не двигается.
+/* Hot Movers: высота карточки = КОНСТАНТЫ × СЧЁТЧИКИ, а не содержимое.
+   Шапка + --hm-rows основных строк + --hm-pos-rows под-строк позиций; счётчики
+   ставит JS, и это числа строк, а не замеры.
+   🚨 Ничего не мерить и не отдавать высоту содержимому: строки разной высоты
+   (иконка Enter, живая стрелка), состав ленты меняется каждый тик, а уходящая
+   строка живёт в DOM до конца анимации — любая из этих величин дёргает высоту.
    Только десктоп: ниже $bp-lg строка — карточка, её высоту задаёт контент. */
+.hm-scroll-wrap {
+  --hm-row-h: 34px;
+  --hm-head-h: 30px;
+  --hm-pos-h: 26px;
+}
 @include from($bp-lg + 1) {
+  .hm-scroll-wrap {
+    height: calc(
+      var(--hm-head-h) + var(--hm-rows, 8) * var(--hm-row-h) + var(--hm-pos-rows, 0) *
+        var(--hm-pos-h)
+    );
+    overflow-y: hidden;
+  }
+  .hm-scroll-wrap .hm-table thead th {
+    height: var(--hm-head-h);
+    padding-top: 0;
+    padding-bottom: 0;
+  }
   .hm-scroll-wrap .hm-table tbody tr[data-hmkey^="m:"],
   .hm-scroll-wrap .hm-table tbody tr.hm-placeholder-row {
-    height: 34px;
+    height: var(--hm-row-h);
   }
   .hm-scroll-wrap .hm-table tbody tr[data-hmkey^="m:"] > td,
   .hm-scroll-wrap .hm-table tbody tr.hm-placeholder-row > td {
-    height: 34px;
+    height: var(--hm-row-h);
     padding-top: 0;
     padding-bottom: 0;
+  }
+  .hm-scroll-wrap .hm-table tbody tr.hm-pos-row > td {
+    height: var(--hm-pos-h);
+  }
+  /* Прелоадер занимает ровно те же строки, что займёт лента: иначе карточка
+     подрастает в момент, когда монеты приехали. */
+  .hm-scroll-wrap .hm-table tbody tr.hm-status-row .hm-status-cell {
+    height: calc(var(--hm-rows, 8) * var(--hm-row-h));
+    padding: 0;
   }
 }
 .hm-scroll-wrap .hm-table thead th {
@@ -940,11 +957,10 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   }
 }
 
-/* ── Hot Movers: вход, уход, перестановка ─────────────────────────────
-   Три события у строки, и все три идут по ОДНОЙ вертикальной оси: монета
-   приходит сверху (оттуда, где голова списка), уходит вниз, переезжает по
-   вертикали. До 04.09.2026 уход был вбок на 18px — строка улетала в сторону
-   без всякой на то причины, и это читалось как два разных механизма.
+/* ── Hot Movers: вход и перестановка ──────────────────────────────────
+   Оба события идут по ОДНОЙ вертикальной оси: монета приходит сверху (оттуда,
+   где голова списка) и переезжает по вертикали. 🚨 Ухода нет: слот уходящей
+   строки тут же занимает новая монета, затухание держало бы лишнюю строку.
 
    Анимируются только opacity и transform. Из входа убран `background`:
    он не композитится, а таблица и так перерисовывает цены каждые две
@@ -964,26 +980,11 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     transform: none;
   }
 }
-@keyframes hmRowLeave {
-  from {
-    opacity: 1;
-    transform: none;
-  }
-  to {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-}
 .hm-table tbody tr.hm-enter {
   animation: hmRowEnter var(--dur-slow) var(--spring);
 }
-.hm-table tbody tr.hm-leaving {
-  animation: hmRowLeave var(--dur) var(--ease-out) forwards;
-  pointer-events: none;
-}
 @include reduced-motion {
-  .hm-table tbody tr.hm-enter,
-  .hm-table tbody tr.hm-leaving {
+  .hm-table tbody tr.hm-enter {
     animation: none;
   }
 }

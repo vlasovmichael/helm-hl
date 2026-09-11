@@ -620,15 +620,22 @@ export function renderHotMovers(payload, fmtTime) {
     }
   }
 
+  // Счётчики строк для CSS-высоты карточки: сколько основных слотов и сколько
+  // под-строк позиций. Это числа, а не замеры, — высота остаётся константой,
+  // пока не откроется/закроется позиция (см. .hm-scroll-wrap в _signals.scss).
+  const wrap = tbody.closest(".hm-scroll-wrap");
+  if (wrap) {
+    wrap.style.setProperty("--hm-rows", String(rowTarget));
+    wrap.style.setProperty(
+      "--hm-pos-rows",
+      String(items.filter((i) => i.key.startsWith("pos:")).length),
+    );
+  }
+
   reconcileRows(tbody, items);
   mountDirArrows(tbody);
 }
 
-// Высоту карточки держит CSS: основная строка фиксирована (--hm-row-h,
-// core в _signals.scss), основных строк всегда HM_MAX_ROWS. 🚨 Мерить её в JS
-// нельзя: строки разной высоты (иконка Enter, живая стрелка), состав ленты
-// меняется каждый тик — любой замер гуляет вместе с ним. Под-строка позиции
-// добавляет свою высоту один раз, при открытии, и дальше карточка стоит.
 
 // Персистентные стрелки активной монеты: строки перестраиваются (innerHTML)
 // каждый тик, поэтому переносим ОДИН и тот же DOM-узел стрелки в перестроенную
@@ -698,7 +705,7 @@ function reconcileRows(tbody, items) {
     window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-  // Живые (не уходящие) строки по ключу. Узлы без data-hmkey — это плейсхолдеры
+  // Живые строки по ключу. Узлы без data-hmkey — это плейсхолдеры
   // (стартовый «Waiting for price history…» из HTML или empty-state) — выкидываем
   // сразу, иначе реконсилер их не трогает и они висят под монетами.
   const live = new Map();
@@ -708,7 +715,7 @@ function reconcileRows(tbody, items) {
       el.remove();
       continue;
     }
-    if (!el.classList.contains("hm-leaving")) live.set(k, el);
+    live.set(k, el);
   }
   const desired = new Set(items.map((i) => i.key));
 
@@ -718,23 +725,15 @@ function reconcileRows(tbody, items) {
     for (const [k, el] of live) firstTop.set(k, el.getBoundingClientRect().top);
 
   // Плейсхолдеры (ph:N) — пустые добивочные строки: едут через реконсилер, но
-  // без появления/ухода, чтобы не мельтешить (монета просто занимает
+  // без появления и проезда, чтобы не мельтешить (монета просто занимает
   // освободившийся пустой слот).
   const isPh = (k) => k.startsWith("ph:");
 
-  // EXIT: строки, которых больше нет в желаемом наборе — гасим и удаляем.
-  for (const [k, el] of live) {
-    if (desired.has(k)) continue;
-    if (reduceMotion || isPh(k)) {
-      el.remove();
-      continue;
-    }
-    el.classList.add("hm-leaving");
-    el.dataset.hmkey = ""; // снять с учёта, чтобы не матчился новой строкой
-    const done = () => el.remove();
-    el.addEventListener("animationend", done, { once: true });
-    setTimeout(done, 600); // подстраховка, если animationend не придёт
-  }
+  // EXIT: строки, которых больше нет в желаемом наборе — удаляем СРАЗУ.
+  // 🚨 Не гасить уходящую строку анимацией: слот тут же занимает новая монета,
+  // и на время затухания строк в таблице на одну больше, чем слотов — карточка
+  // дёргается, а при фиксированной высоте нижняя строка режется краем.
+  for (const [k, el] of live) if (!desired.has(k)) el.remove();
 
   // BUILD/UPDATE + расстановка в нужном порядке.
   const ordered = [];
