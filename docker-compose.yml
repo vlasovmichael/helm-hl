@@ -104,6 +104,31 @@ services:
     networks:
       - gateway_net
 
+  # Фандинг-спред HL против Kraken — форвард по предзаявке
+  # hl-kraken-funding-forward-2026-09. Отдельный процесс: своих ордеров ноль,
+  # торгового бота не касается. Пишет часовые снимки котировок обеих площадок в
+  # data/funding-spread/snapshots.jsonl; ставки и цены при оценке берутся из
+  # истории бирж, а спред восстановить потом нельзя — поэтому он и пишется.
+  funding-spread:
+    build: .
+    container_name: hl-funding-spread
+    restart: unless-stopped
+    command: node tools/fundingSpreadCollector.mjs
+    env_file: .env
+    environment:
+      TZ: ${TZ:-Europe/Warsaw}
+    volumes:
+      - ./data:/app/data
+    # Не веб-сервер → HEALTHCHECK из Dockerfile (пинг :3010) тут не применим.
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    networks:
+      - gateway_net
+
 networks:
   gateway_net:
     name: gateway_net
