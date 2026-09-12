@@ -9,7 +9,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { findLiveSetups } from '../tools/fvgZones.mjs';
+import { findLiveSetups, findPendingZones } from '../tools/fvgZones.mjs';
 import { findTrades, PARAMS } from '../tools/fvgRule.mjs';
 
 const M15 = 15 * 60_000;
@@ -50,14 +50,18 @@ function buildSeries({ gap = 1.03, htfCount = 90, Z = 85, retest = true, rally =
   }
   if (rally) {
     // Дальше ход вверх: сделка обязана закрыться, иначе findTrades её не отдаст.
-    for (let i = Z + 2; i < htfCount; i++) {
+    // Без ретеста рост начинается сразу за зоной: иначе «обычный» бар опустится
+    // ниже цены входа и зона окажется тронутой, чего этот режим и избегает.
+    for (let i = Z + (retest ? 2 : 1); i < htfCount; i++) {
       htf[i] = { o: zTop * 1.01, h: zBot * 1.12, l: zTop * 1.005, c: zBot * 1.1 };
     }
   }
   const bars = [];
   htf.forEach((b, i) => bars.push(...expand(b, i * 16)));
   // Индекс 15m бара, несущего прокол: третий в группе Z+1.
-  return { bars, touchIdx: (Z + 1) * 16 + 2, zBot, zTop, fillPx };
+  // zoneT — метка 4h бара Z, по ней зона узнаётся среди прочих: прокол в зону
+  // сам образует второй гэп относительно бара Z-1, и это законная зона.
+  return { bars, touchIdx: (Z + 1) * 16 + 2, zoneT: T0 + Z * 16 * M15, zBot, zTop, fillPx };
 }
 
 test('живой сетап отдаёт те же вход и стоп, что находит правило форварда', () => {
@@ -102,6 +106,33 @@ test('касание не на последних барах не будит', (
 test('без ретеста сетапа нет — зона есть, входа не было', () => {
   const { bars, touchIdx } = buildSeries({ retest: false });
   assert.deepEqual(findLiveSetups('TEST', bars.slice(0, touchIdx + 1), { freshBars: 1 }), []);
+});
+
+// ── зоны в ожидании: от них зависит, какие монеты вообще догружать ──────────
+
+test('зона без касания считается ждущей ретеста', () => {
+  const { bars, zoneT } = buildSeries({ retest: false });
+  const pending = findPendingZones('TEST', bars);
+  const mine = pending.find((z) => z.zoneT === zoneT);
+  assert.ok(mine, 'построенная зона обязана попасть в ждущие');
+  assert.equal(mine.side, 'LONG');
+});
+
+test('после касания зона больше не ждёт — освежать нечего', () => {
+  const { bars, zoneT } = buildSeries();
+  const pending = findPendingZones('TEST', bars);
+  assert.ok(!pending.some((z) => z.zoneT === zoneT), 'тронутая зона не должна ждать ретеста');
+});
+
+test('зона с истёкшим окном ожидания не ждёт', () => {
+  // Зона на 60-м баре 4h при 90 барах всего: окно wait уже позади.
+  const { bars } = buildSeries({ Z: 60, retest: false });
+  assert.deepEqual(findPendingZones('TEST', bars), []);
+});
+
+test('узкая зона в ожидание не попадает', () => {
+  const { bars } = buildSeries({ gap: 1.005, retest: false });
+  assert.deepEqual(findPendingZones('TEST', bars), []);
 });
 
 test('ширина зоны и дистанция стопа — разные числа', () => {

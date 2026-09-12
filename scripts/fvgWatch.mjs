@@ -9,32 +9,37 @@
 //  из свечей, а не из сделок оператора. Подглядывания тут нет — метрики
 //  не считаются и не печатаются, только геометрия текущего сетапа.
 //
-//  Делит базу свечей с fvgForward.mjs: историю читает из неё, а догружает
-//  только свежий хвост — 4h EMA50 требует ~2 недель, качать их каждые 15 мин
-//  незачем.
+//  ── Два режима, и это про вес HL, а не про удобство ──
+//  Лимит HL считается по IP и делится с ботом, а скрипт идёт отдельным
+//  процессом и в весовую очередь hlClient не попадает.
+//  🚨 Догрузка всей вселенной разом = кратно выше лимита за минуту: бот
+//  получает 429 на балансах, косметика отваливается по дедлайну.
+//    · --full — обход всей вселенной, чтобы найти НОВЫЕ зоны. Редко (раз в час).
+//    · без флага — догружаются только монеты с зоной, ждущей ретеста
+//      (findPendingZones). Их обычно десятки, поэтому дёшево и часто.
 //
-//  Запуск: node scripts/fvgWatch.mjs [--dry] [--fetch-days 2] [--read-days 20]
+//  Базу свечей делит с fvgForward.mjs.
+//
+//  Запуск: node scripts/fvgWatch.mjs [--full] [--dry] [--no-fetch]
 // ─────────────────────────────────────────────────────────────────────────────
 import Database from 'better-sqlite3';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
-import { findLiveSetups } from '../tools/fvgZones.mjs';
+import { findLiveSetups, findPendingZones } from '../tools/fvgZones.mjs';
 import { PARAMS } from '../tools/fvgRule.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i >= 0 ? process.argv[i + 1] : d; };
 const DRY = process.argv.includes('--dry');
+const FULL = process.argv.includes('--full');
+const NO_FETCH = process.argv.includes('--no-fetch');
 const FETCH_DAYS = parseInt(arg('fetch-days', process.env.FVG_WATCH_FETCH_DAYS || '2'), 10);
 // 20 дней: 80 баров 4h (EMA50 + запас) ≈ 14 дней, берём с полем.
 const READ_DAYS = parseInt(arg('read-days', process.env.FVG_WATCH_READ_DAYS || '20'), 10);
 // Сколько последних 15m баров считать «только что». 1 = звать в момент касания.
 const FRESH_BARS = parseInt(process.env.FVG_WATCH_FRESH_BARS || '1', 10);
 // Темп догрузки, запросов в минуту. Вес candleSnapshot — 20 единиц, лимит HL —
-// 1000 в минуту на IP, и бот ест из того же лимита: скрипт работает отдельным
-// процессом и в весовую очередь hlClient не попадает.
-//
-// 🚨 не качать вселенную залпом: две сотни монет разом = кратно выше лимита за
-// одну минуту, и торговый путь бота голодает. 30 запросов/мин = 600 единиц,
-// боту остаётся запас.
-const FETCH_RPM = parseInt(process.env.FVG_WATCH_RPM || '30', 10);
+// 1000 в минуту на IP. 20 запросов/мин = 400 единиц, боту остаётся больше
+// половины: он сам в спокойном режиме занимает около половины бюджета.
+const FETCH_RPM = parseInt(process.env.FVG_WATCH_RPM || '20', 10);
 const DB_PATH = process.env.FVG_DB || 'candles.db';
 const STATE_FILE = 'data/fvg-watch/seen.json';
 // Зона живёт максимум wait баров 4h; месяц с запасом покрывает её целиком.
@@ -94,7 +99,6 @@ async function firePush(title, message, now) {
   }
 }
 
-// ── свежий хвост свечей ─────────────────────────────────────────────────────
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.exec(`CREATE TABLE IF NOT EXISTS candles (
@@ -102,11 +106,33 @@ db.exec(`CREATE TABLE IF NOT EXISTS candles (
    PRIMARY KEY (coin, t)
  )`);
 
-if (!process.argv.includes('--no-fetch')) {
+/** Бары из базы, сгруппированные по монете. */
+function readBars() {
+  const rows = db.prepare('SELECT coin,t,o,h,l,c FROM candles WHERE t >= ? ORDER BY coin,t')
+    .all(Date.now() - READ_DAYS * 86400_000);
+  const byCoin = new Map();
+  for (const r of rows) { let a = byCoin.get(r.coin); if (!a) byCoin.set(r.coin, (a = [])); a.push(r); }
+  return byCoin;
+}
+
+let byCoin = readBars();
+
+// ── догрузка: всю вселенную только по --full, иначе лишь кандидатов ─────────
+if (!NO_FETCH) {
+  let coins;
+  if (FULL) {
+    const meta = await post({ type: 'metaAndAssetCtxs' });
+    coins = meta[0].universe.filter((u) => !u.isDelisted).map((u) => u.name);
+  } else {
+    // Зона в силе = вход по ней ещё возможен, только такие монеты и стоит освежать.
+    coins = [];
+    for (const [coin, bars] of byCoin) {
+      try { if (findPendingZones(coin, bars).length) coins.push(coin); } catch { /* монета не ломает прогон */ }
+    }
+  }
+
   const ins = db.prepare('INSERT OR REPLACE INTO candles (coin,t,o,h,l,c,v) VALUES (?,?,?,?,?,?,?)');
   const many = db.transaction((c, rs) => { for (const k of rs) ins.run(c, k.t, +k.o, +k.h, +k.l, +k.c, +k.v); });
-  const meta = await post({ type: 'metaAndAssetCtxs' });
-  const coins = meta[0].universe.filter((u) => !u.isDelisted).map((u) => u.name);
   const start = Date.now() - FETCH_DAYS * 86400_000;
   let got = 0;
   // Последовательно и с паузой: параллельные потоки складывают свой вес в одну
@@ -119,14 +145,10 @@ if (!process.argv.includes('--no-fetch')) {
     } catch { /* пропуск монеты не ломает прогон */ }
     await sleep(gapMs);
   }
-  console.log(`[fetch] ${coins.length} монет · +${got} свечей · темп ${FETCH_RPM}/мин`);
+  console.log(`[fetch] ${FULL ? 'вселенная' : 'кандидаты'}: ${coins.length} монет · +${got} свечей · темп ${FETCH_RPM}/мин`);
+  if (coins.length) byCoin = readBars();
 }
-
-const rows = db.prepare('SELECT coin,t,o,h,l,c FROM candles WHERE t >= ? ORDER BY coin,t')
-  .all(Date.now() - READ_DAYS * 86400_000);
 db.close();
-const byCoin = new Map();
-for (const r of rows) { let a = byCoin.get(r.coin); if (!a) byCoin.set(r.coin, (a = [])); a.push(r); }
 
 // ── дедуп: одна зона = один пуш ─────────────────────────────────────────────
 mkdirSync('data/fvg-watch', { recursive: true });

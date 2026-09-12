@@ -112,3 +112,53 @@ export function findLiveSetups(coin, bars, { freshBars = 1 } = {}) {
   }
   return out;
 }
+
+/**
+ * Зоны, которые ещё ждут ретеста: образованы, окно ожидания не истекло,
+ * касания в имеющихся данных не было.
+ *
+ * 🚨 Нужны, чтобы освежать свечи ТОЛЬКО там, где вход вообще возможен. Вес HL
+ * общий с ботом, и догрузка всей вселенной ради десятка кандидатов отбирает
+ * бюджет у торгового пути — это уже стоило 429 на живом боте.
+ *
+ * @param {string} coin
+ * @param {Array<{t:number,o:number,h:number,l:number,c:number}>} bars — 15m, по возрастанию t
+ */
+export function findPendingZones(coin, bars) {
+  const { wait: WAIT, minw: MINW, pen: PEN } = PARAMS;
+  const out = [];
+  if (bars.length < 400) return out;
+  const { bars: H, htfEnd } = aggregate(bars, SPAN);
+  if (H.length < 80) return out;
+  const hc = H.map((b) => b.c);
+  const fE = emaSeries(hc, 20), sE = emaSeries(hc, 50);
+
+  for (let i = 52; i < H.length - 1; i++) {
+    // Окно ожидания должно доставать до конца данных: истёкшая зона мертва.
+    if (i + WAIT < H.length - 1) continue;
+
+    const bull = H[i - 2].h < H[i].l, bear = H[i - 2].l > H[i].h;
+    if (!bull && !bear) continue;
+    const t = trendAt(fE, sE, i, H[i].c);
+    if (t !== (bull ? 'up' : 'down')) continue;
+
+    const zTop = bull ? H[i].l : H[i].h;
+    const zBot = bull ? H[i - 2].h : H[i - 2].l;
+    const width = Math.abs(zTop - zBot);
+    if (!(width > 0) || width / zTop < MINW / 100) continue;
+
+    const start = htfEnd[i] + 1;
+    if (start >= bars.length) continue;
+    const fillPx = bull ? zTop - PEN * width : zTop + PEN * width;
+
+    // Уже коснулись — вход состоялся на этих данных, обновлять нечего.
+    let touched = false;
+    for (let j = start; j < bars.length; j++) {
+      if (bull ? bars[j].l <= fillPx : bars[j].h >= fillPx) { touched = true; break; }
+    }
+    if (touched) continue;
+
+    out.push({ coin, side: bull ? 'LONG' : 'SHORT', zoneT: H[i].t, entry: fillPx, zTop, zBot });
+  }
+  return out;
+}
