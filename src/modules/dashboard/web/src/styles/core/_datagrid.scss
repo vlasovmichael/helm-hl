@@ -104,7 +104,7 @@
 }
 
 /* Floor-чип: единственное цветное «пятно» вне uPnL — тип защиты няньки
-   (HARD stop / BE безубыток / TRAIL). */
+   (HARD stop / BE безубыток). */
 /* Порог взвода трейла в строке подписи. 🚨 Не капслоком и не микро-кеглем:
    это ЦЕНА, её читают глазами по цифрам, а разрядка и caps ломают ряд знаков.
    Слово-подпись тише, само число — обычным цветом текста. */
@@ -135,16 +135,28 @@
     background: var(--red-soft);
     border: 1px solid var(--red-line);
   }
-  &.fl-be {
+  &.fl-be,
+  &.fl-target {
     color: var(--text-secondary);
     background: var(--canvas-subtle);
     border: 1px solid var(--border);
   }
-  &.fl-trail {
-    color: var(--green);
-    background: var(--green-soft);
-    border: 1px solid var(--green-line);
-  }
+}
+
+/* Строки ячейки, у которых справа стоит спутник (чип таймера, сумма на полу):
+   подпись/число слева, спутник у правого края. Лейбл ровняем по центру, а
+   значения — по базовой линии, иначе мелкая приписка «висит» над крупной цифрой. */
+.item-toprow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.item-valuerow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
 }
 
 /* Заливка PnL-карточки по знаку (зелёный/красный). Перебивает accent-soft у

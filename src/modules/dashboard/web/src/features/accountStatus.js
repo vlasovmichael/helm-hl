@@ -197,9 +197,6 @@ function manualStats(p) {
       ? (bot.floorPct / 100) * p.sizeUsd - 2 * TAKER_FEE_RATE * p.sizeUsd
       : null;
   const peakPct = bot?.peakPct != null && bot.peakPct > 0 ? bot.peakPct : null;
-  // Цена, на которой умный трейл снимет лимитку-цель и пол поедет за пиком.
-  // Пока до неё не дошли, разворот отдаёт стоп или безубыток — не «копейки».
-  const trailArmPrice = bot?.targetTrailArmPrice ?? null;
   // Сколько ещё до цели — в R и в процентах хода. Просьба оператора:
   // «R 1:1.2» на глаз не читается, нужна цифра «осталось столько-то».
   const tp = bot?.tpPrice ?? null;
@@ -211,16 +208,15 @@ function manualStats(p) {
   // getHunterMaePct). В под-строке uPnL показываем ИМЕННО его, когда позиция
   // сейчас в минусе. Кормит riskTint («призрак» отката на заливке uPnL).
   const maePct = bot?.maePct != null && bot.maePct < 0 ? bot.maePct : null;
-  return { riskUsd, rMult, movePct, floorPrice, floorKind, floorPnl, peakPct, maePct, toTargetR, toTargetPct, tpPrice: tp, trailArmPrice };
+  return { riskUsd, rMult, movePct, floorPrice, floorKind, floorPnl, peakPct, maePct, toTargetR, toTargetPct, tpPrice: tp };
 }
 
 // Floor-бейдж: тип защиты, который УЖЕ повесила нянька. Цветим только маленький
-// чип (HARD/BE/TRAIL), чтобы не плодить второе «пятно» — глубинная заливка
+// чип (HARD/BE), чтобы не плодить второе «пятно» — глубинная заливка
 // живёт только на uPnL.
 const FLOOR_BADGE = {
   stop: { txt: "HARD", cls: "fl-hard" },
   be: { txt: "BE", cls: "fl-be" },
-  trail: { txt: "TRAIL", cls: "fl-trail" },
 };
 
 const fmtSignedUsd2 = (v) => `${v >= 0 ? "+" : "−"}$${Math.abs(v).toFixed(2)}`;
@@ -232,7 +228,7 @@ const fmtMove = (m) => `${m >= 0 ? "+" : "−"}${Math.abs(m).toFixed(2)}%`;
 const fmtRemR = (r) => `${r.toFixed(2)}R`;
 
 // Карточка №4 в двух режимах, выбирает их ЗНАК позиции: в минусе — где высадит
-// нянька (Floor + чип HARD/BE/TRAIL), в плюсе — сколько до цели. Без tpPrice
+// нянька (Floor + чип HARD/BE), в плюсе — сколько до цели. Без tpPrice
 // остаётся Floor даже в плюсе, иначе карточка пустая.
 // Под-строка uPnL зеркальна знаку: в плюсе пик (MFE, за ним ползёт пол трейла),
 // в минусе — худшая просадка (MAE). Пустая строка вместо undefined намеренно:
@@ -718,18 +714,13 @@ function patchManualCard(container, p) {
       flPnlEl.classList.toggle("positive", s.floorPnl >= 0);
       flPnlEl.classList.toggle("negative", s.floorPnl < 0);
     }
-    // Тип пола меняется на лету (stop→BE→trail, когда взводится храповик).
+    // Тип пола меняется на лету (stop→BE, когда взводится храповик).
     // 🚨 Ищем от суммы, а не от цены пола: в режиме цели цены пола в ячейке
     // нет, и поиск от неё оставлял чип с прошлым типом.
-    // Порог взвода: исчезает, когда трейл взвёлся (пол уже едет за пиком).
-    const armEl = card.querySelector("[data-marm]");
-    if (armEl) {
-      const show = s.trailArmPrice != null && s.floorKind !== "trail";
-      armEl.hidden = !show;
-      if (show) armEl.innerHTML = `trail from <b>${fmtPrice(s.trailArmPrice)}</b>`;
-    }
     const flBadge = card.querySelector(".fl-badge");
-    const fb = FLOOR_BADGE[s.floorKind] || null;
+    const fb = card.querySelector("[data-mtarget]")
+      ? { txt: "TARGET", cls: "fl-target" }
+      : FLOOR_BADGE[s.floorKind] || null;
     if (flBadge && fb) {
       flBadge.textContent = fb.txt;
       flBadge.className = `fl-badge ${fb.cls}`;
@@ -819,12 +810,6 @@ export function renderManualPositions(list) {
       });
       const { cls: rbCls, attr: rbAttr } = tintAttrs(tint);
       const s = manualStats(p);
-      // Size → риск на кону до жёсткого стопа ($), инлайном на той же строке.
-      // Нет стопа → ничего (риск не ограничен; само-сигналит отсутствием цифры).
-      const riskInline =
-        s.riskUsd != null
-          ? ` <span class="grid-inline negative">risk −$${s.riskUsd.toFixed(2)}</span>`
-          : "";
       // Entry·Now → дистанция к входу в СТРОКЕ ЛЕЙБЛА (две цены sub-cent монеты
       // длинные → инлайн у значения переносился на 3-ю строку). Цвет по знаку хода.
       const moveInline =
@@ -834,33 +819,27 @@ export function renderManualPositions(list) {
       // Ликвидация — в title; нет пола (не усыновлена) → fallback на Liq.
       const fb = FLOOR_BADGE[s.floorKind] || null;
       const ft = floorTimerParts(p);
-      // Ячейка одна на оба знака: где меня высадит нянька и сколько это в
-      // деньгах.
-      //
-      // 🚨 Чип — ВСЕГДА тип пола, в плюсе тоже. Он единственный отвечает, чем
-      // кончится разворот: HARD = минус на дистанцию стопа, TRAIL = пол уехал
-      // за пиком и разворот платит. Чипа «TARGET» тут быть не должно — то, что
-      // цель впереди, видно по строке trail from и по тултипу.
+      // Ячейка №4 в двух режимах по знаку позиции: в минусе — где высадит
+      // нянька (Floor + чип), в плюсе — цель и сколько до неё осталось.
       const inTarget = targetModeFor(p, s);
-      const badge = fb;
+      const badge = inTarget ? { txt: "TARGET", cls: "fl-target" } : fb;
       const cellTip = inTarget
         ? `${targetTip(s, p)} · Liquidation: ${liq}`
         : `Liquidation: ${liq}`;
-      // Пока умный трейл не взведён, пол стоит на стопе или безубытке. Цена
-      // взвода — единственное, что отвечает «когда разворот начнёт приносить»,
-      // поэтому она стоит в строке подписи, а не в тултипе.
-      const armInline =
-        s.trailArmPrice != null && s.floorKind !== "trail"
-          ? `<span class="fl-inline" data-marm data-card="Smart trail arms here: the target limit is pulled and the floor starts trailing the peak">trail from <b>${fmtPrice(s.trailArmPrice)}</b></span>`
-          : "";
-      const floorCell = s.floorPrice != null
-        ? `<div class="grid-item${ft.cls}" data-card="${cellTip}">${ft.bg}
-               <div class="item-label" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span>Floor${badge ? ` <span class="fl-badge ${badge.cls}">${badge.txt}</span>` : ""}</span>${armInline}</div>
-               <div class="item-value" style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span><span data-mfloor>${fmtPrice(s.floorPrice)}</span><span class="grid-inline ${s.floorPnl >= 0 ?"positive" : "negative"}" data-mfloorpnl>${s.floorPnl != null ? fmtSignedUsd2(s.floorPnl) : ""}</span></span>${ft.chip}</div>
-             </div>`
-          : `<div class="grid-item${ft.cls}" data-card="Liquidation: ${liq}">${ft.bg}<div class="item-label" style="display:flex;justify-content:space-between;align-items:center"><span>Liq</span>${ft.chip}</div><div class="item-value">${liq}</div></div>`;
+      // Значение ячейки идёт за чипом: в минусе — пол выхода и что он платит,
+      // в плюсе — цена лимитки-цели и остаток до неё. Оба узла патчатся на тике.
+      const exitValue =
+        inTarget && s.tpPrice != null
+          ? `<span><span data-mtarget>${fmtPrice(s.tpPrice)}</span><span class="grid-inline positive" data-mtargetrem>${s.toTargetR != null ? fmtRemR(s.toTargetR) : "—"}</span></span>`
+          : `<span><span data-mfloor>${fmtPrice(s.floorPrice)}</span><span class="grid-inline ${s.floorPnl >= 0 ?"positive" : "negative"}" data-mfloorpnl>${s.floorPnl != null ? fmtSignedUsd2(s.floorPnl) : ""}</span></span>`;
+      const floorCell = s.floorPrice == null
+        ? `<div class="grid-item${ft.cls}" data-card="Liquidation: ${liq}">${ft.bg}<div class="item-label item-toprow"><span>Liq</span>${ft.chip}</div><div class="item-value">${liq}</div></div>`
+        : `<div class="grid-item${ft.cls}" data-card="${cellTip}">${ft.bg}
+               <div class="item-label item-toprow"><span>Floor${badge ? ` <span class="fl-badge ${badge.cls}">${badge.txt}</span>` : ""}</span></div>
+               <div class="item-value item-valuerow">${exitValue}${ft.chip}</div>
+             </div>`;
       return `
-      <div data-mcard="${escapeHtml(p.coin)}" style="margin-top:0.75rem; padding:0.75rem; border:1px dashed var(--border); border-radius:8px;">
+      <div class="mcard" data-mcard="${escapeHtml(p.coin)}">
         <div class="mcard-head">
           <span class="mcard-badge">${manualBadge}</span>
           <span class="item-value highlight">#${p.coin}</span>
@@ -879,7 +858,7 @@ export function renderManualPositions(list) {
           }
         </div>
         <div class="data-grid">
-          <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}${riskInline}</div></div>
+          <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(p.sizeUsd)} · ${lev}</div></div>
           <div class="grid-item"><div class="item-label">Entry · Now${moveInline}</div><div class="item-value">${fmtPrice(p.entryPrice)} · <span data-mnow>${cur}</span></div></div>
           <div class="grid-item pnl-tint pnl-${p.unrealizedPnl >= 0 ?"pos" : "neg"}${rbCls}"${rbAttr}>${pnlLayers({ label: "uPnL", valueCls: cls(p.unrealizedPnl), valueText: `${sgn(p.unrealizedPnl)}$${Math.abs(p.unrealizedPnl).toFixed(4)}`, subText: extremeSubTxt(s, p.unrealizedPnl) })}</div>
           ${floorCell}
