@@ -27,6 +27,14 @@ const FETCH_DAYS = parseInt(arg('fetch-days', process.env.FVG_WATCH_FETCH_DAYS |
 const READ_DAYS = parseInt(arg('read-days', process.env.FVG_WATCH_READ_DAYS || '20'), 10);
 // Сколько последних 15m баров считать «только что». 1 = звать в момент касания.
 const FRESH_BARS = parseInt(process.env.FVG_WATCH_FRESH_BARS || '1', 10);
+// Темп догрузки, запросов в минуту. Вес candleSnapshot — 20 единиц, лимит HL —
+// 1000 в минуту на IP, и бот ест из того же лимита: скрипт работает отдельным
+// процессом и в весовую очередь hlClient не попадает.
+//
+// 🚨 не качать вселенную залпом: две сотни монет разом = кратно выше лимита за
+// одну минуту, и торговый путь бота голодает. 30 запросов/мин = 600 единиц,
+// боту остаётся запас.
+const FETCH_RPM = parseInt(process.env.FVG_WATCH_RPM || '30', 10);
 const DB_PATH = process.env.FVG_DB || 'candles.db';
 const STATE_FILE = 'data/fvg-watch/seen.json';
 // Зона живёт максимум wait баров 4h; месяц с запасом покрывает её целиком.
@@ -101,18 +109,17 @@ if (!process.argv.includes('--no-fetch')) {
   const coins = meta[0].universe.filter((u) => !u.isDelisted).map((u) => u.name);
   const start = Date.now() - FETCH_DAYS * 86400_000;
   let got = 0;
-  const chunks = Array.from({ length: 4 }, () => []);
-  coins.forEach((c, i) => chunks[i % 4].push(c));
-  await Promise.all(chunks.map(async (list) => {
-    for (const coin of list) {
-      try {
-        const cs = await post({ type: 'candleSnapshot', req: { coin, interval: '15m', startTime: start, endTime: Date.now() } });
-        if (Array.isArray(cs) && cs.length) { many(coin, cs); got += cs.length; }
-      } catch { /* пропуск монеты не ломает прогон */ }
-      await sleep(40);
-    }
-  }));
-  console.log(`[fetch] ${coins.length} монет · +${got} свечей`);
+  // Последовательно и с паузой: параллельные потоки складывают свой вес в одну
+  // минуту, а лимит считается по IP, не по соединению.
+  const gapMs = Math.ceil(60_000 / Math.max(1, FETCH_RPM));
+  for (const coin of coins) {
+    try {
+      const cs = await post({ type: 'candleSnapshot', req: { coin, interval: '15m', startTime: start, endTime: Date.now() } });
+      if (Array.isArray(cs) && cs.length) { many(coin, cs); got += cs.length; }
+    } catch { /* пропуск монеты не ломает прогон */ }
+    await sleep(gapMs);
+  }
+  console.log(`[fetch] ${coins.length} монет · +${got} свечей · темп ${FETCH_RPM}/мин`);
 }
 
 const rows = db.prepare('SELECT coin,t,o,h,l,c FROM candles WHERE t >= ? ORDER BY coin,t')
