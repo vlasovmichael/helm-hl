@@ -36,6 +36,31 @@ const WATCHLIST = RAW_WATCHLIST
   .map((s) => s.trim().toUpperCase())
   .filter((s) => s && s !== '*');
 
+// Топ-N по суточному обороту — поверх явного списка: список монет устаревает,
+// оборот сам показывает, где сейчас жизнь. Оборот уже лежит в снапшоте scout
+// (volume24hUsd), так что расширение не стоит ни одного запроса в HL. 0 = off.
+const TOP_VOLUME_N = parseInt(process.env.ALERT_TOP_VOLUME_N || '20', 10);
+
+/**
+ * Монеты под наблюдением: явный список ∪ топ-N по обороту.
+ * null = фильтра нет (вся вселенная).
+ */
+export function pickWatchedCoins(
+  snap,
+  { watchlist = WATCHLIST, topN = TOP_VOLUME_N, watchAll = WATCH_ALL } = {},
+) {
+  if (watchAll) return null;
+  const out = new Set(watchlist);
+  if (topN > 0) {
+    const ranked = snap
+      .filter((it) => it?.coin && Number.isFinite(it.volume24hUsd))
+      .sort((a, b) => b.volume24hUsd - a.volume24hUsd)
+      .slice(0, topN);
+    for (const it of ranked) out.add(it.coin);
+  }
+  return out;
+}
+
 // Скан каждые 15с (= цикл scout'а, который обновляет OI в state.latestHunter).
 // Был 60с — это и был главный лаг детекта (OI-сёрдж приходил «поздно» не из-за
 // данных, а потому что воркер их лениво опрашивал). Чаще смысла нет: OI в WS не
@@ -153,10 +178,10 @@ async function runOnce(now = Date.now()) {
   const snap = state.latestHunter;
   if (!Array.isArray(snap) || snap.length === 0) return;
 
-  const watch = new Set(WATCHLIST);
+  const watch = pickWatchedCoins(snap);
   for (const item of snap) {
     if (!item?.coin || item.price == null) continue;
-    if (!WATCH_ALL && !watch.has(item.coin)) continue;
+    if (watch && !watch.has(item.coin)) continue;
 
     // ── OI-сёрдж (1м) — независимый триггер, БЕЗ ценового гейта ──
     // Резкий набор/сброс позиций сам по себе — повод глянуть. Не делаем
@@ -242,8 +267,8 @@ export function startWatchlistAlerts() {
     logger.info('[WatchlistAlerts] disabled (WATCHLIST_ALERT_ENABLED=false)');
     return;
   }
-  if (!WATCH_ALL && WATCHLIST.length === 0) {
-    logger.info('[WatchlistAlerts] disabled — ALERT_WATCHLIST пуст');
+  if (!WATCH_ALL && WATCHLIST.length === 0 && TOP_VOLUME_N <= 0) {
+    logger.info('[WatchlistAlerts] disabled — ALERT_WATCHLIST пуст и ALERT_TOP_VOLUME_N=0');
     return;
   }
   loadAlertState();
@@ -251,7 +276,9 @@ export function startWatchlistAlerts() {
     runOnce().catch((err) => logger.warn(`[WatchlistAlerts] tick failed: ${err.message}`));
   }, INTERVAL_MS);
   timer.unref?.();
-  const coinsLabel = WATCH_ALL ? '* (whole universe)' : WATCHLIST.join(',');
+  const coinsLabel = WATCH_ALL
+    ? '* (whole universe)'
+    : `${WATCHLIST.join(',') || '—'}${TOP_VOLUME_N > 0 ? ` + top-${TOP_VOLUME_N} by volume` : ''}`;
   const oiSurgeLabel = OI_SURGE_ENABLED
     ? `OI-surge ±${OI_SURGE_PCT}%/${OI_SURGE_WINDOW_MIN}m (cd ${OI_SURGE_COOLDOWN_MS / 60_000}m)`
     : 'OI-surge off';
