@@ -26,7 +26,6 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
 import { fireNtfy } from '../core/ntfy.js';
-import { state } from '../app/state.js';
 import { HL_PRIORITY } from '../core/hlClient.js';
 import { getFifteenMinCandles } from './candleCache.js';
 import { findLiveSetups, findPendingZones } from '../../tools/fvgZones.mjs';
@@ -48,6 +47,14 @@ const HTF_MS = 4 * 3600_000;
 const seen = new Map();     // coin|zoneT → ts пуша
 let lastFullAt = 0;         // когда последний раз обходили всю вселенную
 let timer = null;
+
+/** Монеты, по которым в базе есть свечи за окно. Дешевле полного чтения баров. */
+export function coinsWithHistory(db, since) {
+  return db.prepare('SELECT DISTINCT coin FROM candles WHERE t >= ? ORDER BY coin')
+    .all(since)
+    .map((r) => r.coin)
+    .filter(Boolean);
+}
 
 /** Свежая порция из HL поверх истории из базы. Дубли по t решает свежая. */
 export function mergeBars(dbBars, fresh) {
@@ -93,9 +100,6 @@ const fmt = (v) => (v >= 1000 ? v.toFixed(1) : v >= 1 ? v.toFixed(3) : v.toPreci
 const yieldLoop = () => new Promise((r) => setImmediate(r));
 
 async function runOnce(now = Date.now()) {
-  const universe = [...new Set((state.latestHunter || []).map((i) => i?.coin).filter(Boolean))];
-  if (universe.length === 0) return;
-
   let db;
   try {
     db = new Database(DB_PATH, { readonly: true, fileMustExist: true });
@@ -106,6 +110,18 @@ async function runOnce(now = Date.now()) {
 
   const full = isNewHtfBucket(lastFullAt, now);
   const since = now - READ_DAYS * 86400_000;
+
+  // 🚨 Вселенная — монеты С ИСТОРИЕЙ в базе, а не hunter-scope из снапшота:
+  // тот вдвое-втрое уже, и будильник молча пропускал бы зоны по остальным.
+  let universe;
+  try {
+    universe = coinsWithHistory(db, since);
+  } catch (err) {
+    db.close();
+    logger.warn(`[FvgAlerts] список монет не прочитан: ${err.message}`);
+    return;
+  }
+  if (universe.length === 0) { db.close(); return; }
   const q = db.prepare('SELECT t,o,h,l,c FROM candles WHERE coin=? AND t >= ? ORDER BY t');
   let pushed = 0, refreshed = 0;
 
