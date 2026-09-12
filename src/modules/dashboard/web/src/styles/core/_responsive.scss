@@ -166,9 +166,11 @@
 
   .seg {
     width: 100%;
+    flex-wrap: wrap;
   }
   .seg .seg__btn {
-    flex: 1;
+    /* 🚨 базис не 0: с ним ряд не переносится и распирает документ. */
+    flex: 1 1 auto;
     min-height: var(--ctl-h);
   }
 
