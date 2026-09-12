@@ -47,6 +47,10 @@ const HTF_MS = 4 * 3600_000;
 const seen = new Map();     // coin|zoneT → ts пуша
 let lastFullAt = 0;         // когда последний раз обходили всю вселенную
 let timer = null;
+// 🚨 Проход бывает ДЛИННЕЕ интервала: полный обход вселенной ждёт свечи по
+// низкому приоритету, и каждая монета может простоять в весовой очереди до
+// дедлайна. Без этого флага тики накладываются и дублируют запросы к HL.
+let running = false;
 
 /** Монеты, по которым в базе есть свечи за окно. Дешевле полного чтения баров. */
 export function coinsWithHistory(db, since) {
@@ -192,7 +196,14 @@ export function startFvgAlerts() {
   }
   loadState();
   timer = setInterval(() => {
-    runOnce().catch((err) => logger.warn(`[FvgAlerts] tick failed: ${err.message}`));
+    if (running) {
+      logger.debug('[FvgAlerts] проход ещё идёт — тик пропущен');
+      return;
+    }
+    running = true;
+    runOnce()
+      .catch((err) => logger.warn(`[FvgAlerts] tick failed: ${err.message}`))
+      .finally(() => { running = false; });
   }, INTERVAL_MS);
   timer.unref?.();
   logger.info(
@@ -205,4 +216,5 @@ export function startFvgAlerts() {
 export function _resetFvgAlerts() {
   seen.clear();
   lastFullAt = 0;
+  running = false;
 }
