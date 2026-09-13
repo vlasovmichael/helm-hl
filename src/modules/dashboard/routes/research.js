@@ -36,23 +36,29 @@ function hasPressureTable(db) {
   return !!db?.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pressure_events'").get();
 }
 
+// flow.db пишет отдельный контейнер: её отсутствие, блокировка или битый файл
+// обязаны гасить одну карточку, а не весь список форвардов через served().
 function pressureRows() {
-  const db = pressureDb();
-  if (!hasPressureTable(db)) return [];
-  return db.prepare(`
-    SELECT c.name AS coin, e.side, e.cohort,
-           e.entry_bar * ? AS entryT, e.fade_bp AS fadeBp,
-           e.btc_regime AS btcRegime
-      FROM pressure_events e JOIN coins c ON c.id = e.coin
-     WHERE e.status = 'resolved'
-     ORDER BY e.entry_bar`).all(BAR_MS);
+  try {
+    const db = pressureDb();
+    if (!hasPressureTable(db)) return [];
+    return db.prepare(`
+      SELECT c.name AS coin, e.side, e.cohort,
+             e.entry_bar * ? AS entryT, e.fade_bp AS fadeBp,
+             e.btc_regime AS btcRegime
+        FROM pressure_events e JOIN coins c ON c.id = e.coin
+       WHERE e.status = 'resolved'
+       ORDER BY e.entry_bar`).all(BAR_MS);
+  } catch { return []; }
 }
 
 function pressureLatest() {
-  const db = pressureDb();
-  if (!hasPressureTable(db)) return null;
-  const bar = db.prepare("SELECT MAX(bar) AS bar FROM market_bars WHERE closed = 1").get()?.bar;
-  return Number.isFinite(bar) ? bar * BAR_MS : null;
+  try {
+    const db = pressureDb();
+    if (!hasPressureTable(db)) return null;
+    const bar = db.prepare("SELECT MAX(bar) AS bar FROM market_bars WHERE closed = 1").get()?.bar;
+    return Number.isFinite(bar) ? bar * BAR_MS : null;
+  } catch { return null; }
 }
 
 /** Общая обёртка: кэш + fail-soft. Ни одна витрина не должна ронять дашборд. */
@@ -321,7 +327,9 @@ function progressOf(f, rows) {
     calendarDays: days.size, minCalendarDays,
     regimeShare, minRegimeShare: MIN_REGIME_SHARE,
     groups, minPerGroup: f.minPerGroup ?? null, groupReady,
-    lastT: times[times.length - 1] ?? null,
+    // Возраст данных — по накопителю, а не по последнему зрелому наблюдению:
+    // при редком сигнале второе отстаёт на часы и живой сбор выглядит мёртвым.
+    lastT: f.latest?.() ?? times[times.length - 1] ?? null,
     ready: n >= f.target && days.size >= minCalendarDays &&
       (regimeShare ?? 0) >= MIN_REGIME_SHARE && groupReady,
   };

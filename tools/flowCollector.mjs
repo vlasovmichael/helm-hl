@@ -61,6 +61,9 @@ const POS_GAP_MS   = Number(process.env.FLOW_POS_GAP_MS || 120);
 const PING_MS   = 30_000;
 const STALE_MS  = 120_000;
 const STATUS_MS = 300_000;
+// Тишина длиннее тика = в баре дырка. На живом фиде филлы идут непрерывно по
+// всем монетам, поэтому порог срабатывает только на настоящем обрыве.
+const GAP_MS    = 30_000;
 
 const log = (m) => console.log(`[${new Date().toISOString()}] ${m}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -173,6 +176,13 @@ let lastMsgAt = Date.now();
 let fillsSeen = 0;
 let usdSeen = 0;
 
+// 🚨 Бар, увиденный не целиком (старт процесса, реконнект), закрывать нельзя:
+// правило сигнала проверяет непрерывность баров, но не полноту каждого.
+const dirtyBars = new Set();
+function markGap(fromMs, toMs) {
+  for (let b = Math.floor(fromMs / BAR_MS); b <= Math.floor(toMs / BAR_MS); b++) dirtyBars.add(b);
+}
+
 function bump(coin, addr, usd, taker, buy) {
   const key = `${coin}|${addr}`;
   let r = acc.get(key);
@@ -215,16 +225,18 @@ const flushTx = db.transaction((rows, marketRows, barId, dayId, closed) => {
 });
 
 function flush(barId, closed = true) {
+  for (const b of dirtyBars) if (b < barId) dirtyBars.delete(b);
   const rows = [...acc.values()].filter(
     (r) => r.tbuy + r.tsell + r.mbuy + r.msell >= MIN_USD,
   );
   const marketRows = [...marketAcc.values()];
-  if (!marketRows.length) return;
+  if (!marketRows.length) { acc = new Map(); return; }
+  const isClosed = closed && !dirtyBars.has(barId);
   const dayId = Math.floor((barId * BAR_MS) / 86_400_000);
-  flushTx(rows, marketRows, barId, dayId, closed);
+  flushTx(rows, marketRows, barId, dayId, isClosed);
   acc = new Map();
   marketAcc = new Map();
-  const pressure = closed
+  const pressure = isClosed
     ? advancePressureForward(db, barId)
     : { added: 0, resolved: 0, invalidated: 0 };
   log(`бар ${barId}: строк ${rows.length}, филлов ${fillsSeen}, оборот $${(usdSeen / 1e6).toFixed(1)}М`);
@@ -234,6 +246,21 @@ function flush(barId, closed = true) {
   fillsSeen = 0; usdSeen = 0;
 }
 
+// Аккумулятор при ошибке НЕ чистится, и бар не двигается: следующая попытка
+// допишет тот же бар. Цена этого — молчаливый затык, поэтому считаем подряд.
+let flushFails = 0;
+function flushSafe(barId) {
+  try {
+    flush(barId);
+    flushFails = 0;
+    return true;
+  } catch (e) {
+    flushFails += 1;
+    log(`flush: ${e.message}${flushFails >= 3 ? ` 🚨 подряд ${flushFails}, бар ${barId} не закрыт` : ''}`);
+    return false;
+  }
+}
+
 function onTrades(list) {
   for (const t of list) {
     const px = Number(t.px);
@@ -241,8 +268,11 @@ function onTrades(list) {
     if (!(px > 0) || !(sz > 0)) continue;
     const time = Number(t.time) || Date.now();
     const tradeBar = Math.floor(time / BAR_MS);
+    // 🚨 Время из будущего не двигает бар: уехав вперёд, он отсеет весь
+    // дальнейший поток как запоздавший, и сбор умрёт без единой ошибки.
+    if (tradeBar > Math.floor(Date.now() / BAR_MS) + 1) continue;
     if (tradeBar > bar) {
-      try { flush(bar); } catch (e) { log(`flush: ${e.message}`); return; }
+      if (!flushSafe(bar)) return;
       bar = tradeBar;
     }
     // Запоздавший филл уже нельзя дописать: бар мог породить неизменяемый сигнал.
@@ -288,6 +318,7 @@ async function connect() {
 
   ws.on('open', () => {
     backoff = 1_000;
+    markGap(lastMsgAt, Date.now());
     lastMsgAt = Date.now();
     for (const c of coins) {
       ws.send(JSON.stringify({ method: 'subscribe', subscription: { type: 'trades', coin: c } }));
@@ -375,7 +406,10 @@ function prune() {
   const a = db.prepare('DELETE FROM flow WHERE bar < ?').run(barCut).changes;
   const b = db.prepare('DELETE FROM positions WHERE ts < ?').run(tsCut).changes;
   const c = db.prepare('DELETE FROM accounts WHERE ts < ?').run(tsCut).changes;
-  if (a || b || c) log(`ретеншн: flow −${a}, positions −${b}, accounts −${c}`);
+  // Сигналу нужно восемь баров назад; pressure_events переживают ретеншн — это
+  // журнал наблюдений, а не сырьё.
+  const m = db.prepare('DELETE FROM market_bars WHERE bar < ?').run(barCut).changes;
+  if (a || b || c || m) log(`ретеншн: flow −${a}, positions −${b}, accounts −${c}, бары −${m}`);
 }
 
 // ── Жизненный цикл ──────────────────────────────────────────────────────────
@@ -391,10 +425,12 @@ let lastPrune = 0;
 for (;;) {
   const now = Date.now();
 
+  // Порядок важен: дырку помечаем ДО закрытия бара, иначе сигнал успеет
+  // родиться из неполного бара, а пометка придёт уже на реконнекте.
+  if (now - lastMsgAt > GAP_MS) markGap(lastMsgAt, now);
+
   const cur = Math.floor(now / BAR_MS);
-  if (cur > bar) {
-    try { flush(bar); bar = cur; } catch (e) { log(`flush: ${e.message}`); }
-  }
+  if (cur > bar && flushSafe(bar)) bar = cur;
 
   if (ws?.readyState === WebSocket.OPEN) {
     ws.ping();

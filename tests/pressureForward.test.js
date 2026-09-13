@@ -127,3 +127,22 @@ test('незакрытый последний бар не имеет права 
   assert.equal(db.prepare('SELECT COUNT(*) AS n FROM pressure_events').get().n, 0);
   db.close();
 });
+
+test('неполный бар в середине окна рвёт его, а не проходит незаметно', () => {
+  const db = new Database(':memory:');
+  db.exec('CREATE TABLE coins (id INTEGER PRIMARY KEY, name TEXT UNIQUE NOT NULL)');
+  db.prepare('INSERT INTO coins (id, name) VALUES (1, ?)').run('ALT');
+  installPressureForward(db);
+  const insert = db.prepare(`
+    INSERT INTO market_bars
+      (bar, coin, o, h, l, c, volume, tbuy, tsell, fills, closed)
+    VALUES (@bar, 1, @o, @h, @l, @c, @volume, @tbuy, @tsell, @fills, @closed)`);
+  const rows = risingWindow(10_000, 40_000);
+  rows[3].closed = 0;
+  for (const row of rows) insert.run(row);
+
+  const result = advancePressureForward(db, 107, { ...PRESSURE_FORWARD, startsAt: 0 });
+  assert.equal(result.added, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM pressure_events').get().n, 0);
+  db.close();
+});
