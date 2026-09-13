@@ -14,11 +14,46 @@
 
 import { join } from "node:path";
 import { readFileSync, existsSync, appendFileSync, mkdirSync } from "node:fs";
+import Database from "better-sqlite3";
 import { readJsonl, stats, clusterCi, winLose } from "../../../../tools/researchStats.mjs";
 import { getFillCosts, getVenueSnapshots } from "../../../core/database.js";
 
 const CACHE_TTL_MS = 60_000;
 const cache = new Map();
+const FLOW_DB = join("data", "flow", "flow.db");
+const BAR_MS = 300_000;
+
+let flowDb = null;
+function pressureDb() {
+  if (flowDb) return flowDb;
+  if (!existsSync(FLOW_DB)) return null;
+  flowDb = new Database(FLOW_DB, { readonly: true, fileMustExist: true });
+  flowDb.pragma("busy_timeout = 3000");
+  return flowDb;
+}
+
+function hasPressureTable(db) {
+  return !!db?.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pressure_events'").get();
+}
+
+function pressureRows() {
+  const db = pressureDb();
+  if (!hasPressureTable(db)) return [];
+  return db.prepare(`
+    SELECT c.name AS coin, e.side, e.cohort,
+           e.entry_bar * ? AS entryT, e.fade_bp AS fadeBp,
+           e.btc_regime AS btcRegime
+      FROM pressure_events e JOIN coins c ON c.id = e.coin
+     WHERE e.status = 'resolved'
+     ORDER BY e.entry_bar`).all(BAR_MS);
+}
+
+function pressureLatest() {
+  const db = pressureDb();
+  if (!hasPressureTable(db)) return null;
+  const bar = db.prepare("SELECT MAX(bar) AS bar FROM market_bars WHERE closed = 1").get()?.bar;
+  return Number.isFinite(bar) ? bar * BAR_MS : null;
+}
 
 /** Общая обёртка: кэш + fail-soft. Ни одна витрина не должна ронять дашборд. */
 function served(key, build) {
@@ -104,6 +139,13 @@ const FORWARDS = [
     file: join("data", "forward", "squeeze-expansion-4h.jsonl"),
     target: 1200, unit: "trades", tField: "entryT", startedISO: "2026-09-01",
   },
+  {
+    id: "flow-pressure-exhaustion-2026-09", label: "Flow pressure exhaustion",
+    rows: pressureRows, latest: pressureLatest,
+    target: 300, unit: "events", tField: "entryT", startedISO: "2026-09-14",
+    minCalendarDays: 60, groupField: "cohort", minPerGroup: 100,
+    note: "This mechanism test is evaluated once with a clustered cohort comparison from the registry.",
+  },
 ];
 
 // Накопители, которые живут в БД, а не в jsonl. Считаются теми же полями, что
@@ -145,10 +187,25 @@ const DB_FORWARDS = [
 // Условия остановки сверх n — общие для гипотез, предзаявленных 31.08.
 const MIN_CALENDAR_DAYS = 45;
 const MIN_REGIME_SHARE = 0.2;
+const rowsFor = (f) => f.rows ? f.rows() : readJsonl(f.file);
+const minCalendarDaysFor = (f) => f.minCalendarDays ?? MIN_CALENDAR_DAYS;
+
+function groupProgress(f, rows) {
+  if (!f.groupField || !f.minPerGroup) return { groups: null, groupReady: true };
+  const groups = {};
+  for (const row of rows) {
+    const key = row[f.groupField];
+    if (key) groups[key] = (groups[key] || 0) + 1;
+  }
+  return {
+    groups,
+    groupReady: Object.keys(groups).length >= 2 && Object.values(groups).every((n) => n >= f.minPerGroup),
+  };
+}
 
 export const handleForwards = served("forwards", () => {
   const items = FORWARDS.map((f) => {
-    const rows = readJsonl(f.file);
+    const rows = rowsFor(f);
     const times = rows.map((r) => r[f.tField]).filter(Number.isFinite).sort((a, b) => a - b);
     const dayKeys = new Set(times.map((t) => new Date(t).toISOString().slice(0, 10)));
     const n = f.byDay ? dayKeys.size : rows.length;
@@ -163,6 +220,8 @@ export const handleForwards = served("forwards", () => {
       else if (r.btcRegime === "btc_down") down++;
     }
     const regimeTotal = up + down;
+    const { groups, groupReady } = groupProgress(f, rows);
+    const latest = f.latest?.() ?? times[times.length - 1] ?? null;
     return {
       id: f.id, label: f.label, unit: f.unit,
       n, target: f.target, pct: (n / f.target) * 100,
@@ -170,11 +229,14 @@ export const handleForwards = served("forwards", () => {
       etaISO: etaDays != null && Number.isFinite(etaDays)
         ? new Date(Date.now() + etaDays * 86_400_000).toISOString().slice(0, 10)
         : null,
-      staleHours: times.length ? (Date.now() - times[times.length - 1]) / 3_600_000 : null,
+      staleHours: latest ? (Date.now() - latest) / 3_600_000 : null,
       calendarDays: dayKeys.size,
-      minCalendarDays: MIN_CALENDAR_DAYS,
+      minCalendarDays: minCalendarDaysFor(f),
       regimeShare: regimeTotal ? Math.min(up, down) / regimeTotal : null,
       minRegimeShare: MIN_REGIME_SHARE,
+      groups,
+      minPerGroup: f.minPerGroup ?? null,
+      groupReady,
     };
   });
   // Накопители из БД — тем же payload'ом, фронту различать источник незачем.
@@ -252,12 +314,16 @@ function progressOf(f, rows) {
   }
   const regimeTotal = up + down;
   const regimeShare = regimeTotal ? Math.min(up, down) / regimeTotal : null;
+  const { groups, groupReady } = groupProgress(f, rows);
+  const minCalendarDays = minCalendarDaysFor(f);
   return {
     n, target: f.target, unit: f.unit, pct: (n / f.target) * 100,
-    calendarDays: days.size, minCalendarDays: MIN_CALENDAR_DAYS,
+    calendarDays: days.size, minCalendarDays,
     regimeShare, minRegimeShare: MIN_REGIME_SHARE,
+    groups, minPerGroup: f.minPerGroup ?? null, groupReady,
     lastT: times[times.length - 1] ?? null,
-    ready: n >= f.target && days.size >= MIN_CALENDAR_DAYS && (regimeShare ?? 0) >= MIN_REGIME_SHARE,
+    ready: n >= f.target && days.size >= minCalendarDays &&
+      (regimeShare ?? 0) >= MIN_REGIME_SHARE && groupReady,
   };
 }
 
@@ -281,7 +347,7 @@ export function handleForwardBreakdown(req, res) {
 
   let payload;
   try {
-    const rows = readJsonl(f.file);
+    const rows = rowsFor(f);
     const prog = progressOf(f, rows);
     const reg = registryEntry(id);
     const head = {
@@ -289,6 +355,7 @@ export function handleForwardBreakdown(req, res) {
       progress: prog,
       // Правило печатает фронт по-английски из порогов: в реестре оно русское.
       description: reg?.description || null,
+      note: f.note || null,
     };
     const peek = req.query?.peek === "1";
     if (!prog.ready && !peek) { res.json({ ...head, locked: true }); return; }

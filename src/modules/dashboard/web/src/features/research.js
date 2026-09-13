@@ -68,6 +68,12 @@ function renderForward(f) {
   if (f.regimeShare != null && f.minRegimeShare && f.regimeShare < f.minRegimeShare) {
     gates.push(`regime split ${Math.round(f.regimeShare * 100)}% (needs ${Math.round(f.minRegimeShare * 100)}%)`);
   }
+  if (f.groups && !f.groupReady) {
+    const cohorts = Object.entries(f.groups)
+      .map(([name, n]) => `${name} ${n}/${f.minPerGroup}`)
+      .join(", ");
+    gates.push(`cohorts ${cohorts || `0/${f.minPerGroup}`}`);
+  }
 
   // 🚨 Зелёная строка = стоп-правило выполнено ЦЕЛИКОМ, не только счётчик.
   // Набранное n при незакрытых гейтах читается как «пора смотреть» и толкает
@@ -211,6 +217,7 @@ function stopRuleHtml(p) {
   if (p?.target == null) return "";
   const parts = [`${p.target} ${escapeHtml(p.unit || "")}`];
   if (p.minCalendarDays) parts.push(`${p.minCalendarDays} calendar days`);
+  if (p.minPerGroup) parts.push(`${p.minPerGroup} observations in each cohort`);
   if (p.minRegimeShare) parts.push(`both BTC regimes at ${Math.round(p.minRegimeShare * 100)}%+`);
   return `<div class="fw-rule"><b>Stop rule:</b> ${parts.join(" · ")}. Evaluated once, ` +
     `and it clears only with the mean above zero, a clustered CI off zero, and the same sign in both regimes.</div>`;

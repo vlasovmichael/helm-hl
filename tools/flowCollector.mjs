@@ -34,6 +34,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import WebSocket from 'ws';
+import { advancePressureForward, installPressureForward } from './pressureForward.mjs';
 
 const HL_API = process.env.HL_INFO_URL || 'https://api.hyperliquid.xyz/info';
 const HL_WS  = process.env.HL_WS_URL   || 'wss://api.hyperliquid.xyz/ws';
@@ -102,6 +103,7 @@ db.exec(`
     PRIMARY KEY (ts, addr)
   ) WITHOUT ROWID;
 `);
+installPressureForward(db);
 
 const insCoin = db.prepare('INSERT OR IGNORE INTO coins (name) VALUES (?)');
 const getCoin = db.prepare('SELECT id FROM coins WHERE name = ?');
@@ -146,6 +148,15 @@ const upDay = db.prepare(`
     mbuy = mbuy + excluded.mbuy, msell = msell + excluded.msell,
     fills = fills + excluded.fills`);
 
+const upMarket = db.prepare(`
+  INSERT INTO market_bars (bar, coin, o, h, l, c, volume, tbuy, tsell, fills, closed)
+  VALUES (@bar, @coin, @o, @h, @l, @c, @volume, @tbuy, @tsell, @fills, @closed)
+  ON CONFLICT (bar, coin) DO UPDATE SET
+    h = MAX(h, excluded.h), l = MIN(l, excluded.l), c = excluded.c,
+    volume = volume + excluded.volume,
+    tbuy = tbuy + excluded.tbuy, tsell = tsell + excluded.tsell,
+    fills = fills + excluded.fills, closed = MAX(closed, excluded.closed)`);
+
 const insPos = db.prepare(`INSERT OR REPLACE INTO positions
   (ts, addr, coin, szi, entry, liq, lev, ntl) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
 const insAcc = db.prepare(`INSERT OR REPLACE INTO accounts
@@ -157,6 +168,7 @@ const insAcc = db.prepare(`INSERT OR REPLACE INTO accounts
 // 9.7М вставок в сутки.
 let bar = Math.floor(Date.now() / BAR_MS);
 let acc = new Map();
+let marketAcc = new Map();
 let lastMsgAt = Date.now();
 let fillsSeen = 0;
 let usdSeen = 0;
@@ -170,7 +182,26 @@ function bump(coin, addr, usd, taker, buy) {
   r.fills += 1;
 }
 
-const flushTx = db.transaction((rows, barId, dayId) => {
+function bumpMarket(coin, px, usd, takerBuy, time) {
+  let row = marketAcc.get(coin);
+  if (!row) {
+    row = {
+      coin, o: px, h: px, l: px, c: px, firstTime: time, lastTime: time,
+      volume: 0, tbuy: 0, tsell: 0, fills: 0,
+    };
+    marketAcc.set(coin, row);
+  }
+  if (time < row.firstTime) { row.firstTime = time; row.o = px; }
+  if (time >= row.lastTime) { row.lastTime = time; row.c = px; }
+  row.h = Math.max(row.h, px);
+  row.l = Math.min(row.l, px);
+  row.volume += usd;
+  if (takerBuy) row.tbuy += usd;
+  else row.tsell += usd;
+  row.fills += 1;
+}
+
+const flushTx = db.transaction((rows, marketRows, barId, dayId, closed) => {
   for (const r of rows) {
     const coin = coinId(r.coin);
     const addr = addrId(r.addr);
@@ -178,17 +209,28 @@ const flushTx = db.transaction((rows, barId, dayId) => {
     upFlow.run({ ...rec, bar: barId });
     upDay.run({ ...rec, day: dayId });
   }
+  for (const { firstTime: _first, lastTime: _last, ...r } of marketRows) {
+    upMarket.run({ ...r, coin: coinId(r.coin), bar: barId, closed: closed ? 1 : 0 });
+  }
 });
 
-function flush(barId) {
+function flush(barId, closed = true) {
   const rows = [...acc.values()].filter(
     (r) => r.tbuy + r.tsell + r.mbuy + r.msell >= MIN_USD,
   );
-  acc = new Map();
-  if (!rows.length) return;
+  const marketRows = [...marketAcc.values()];
+  if (!marketRows.length) return;
   const dayId = Math.floor((barId * BAR_MS) / 86_400_000);
-  flushTx(rows, barId, dayId);
+  flushTx(rows, marketRows, barId, dayId, closed);
+  acc = new Map();
+  marketAcc = new Map();
+  const pressure = closed
+    ? advancePressureForward(db, barId)
+    : { added: 0, resolved: 0, invalidated: 0 };
   log(`бар ${barId}: строк ${rows.length}, филлов ${fillsSeen}, оборот $${(usdSeen / 1e6).toFixed(1)}М`);
+  if (pressure.added || pressure.resolved || pressure.invalidated) {
+    log(`pressure-forward: +${pressure.added}, закрыто ${pressure.resolved}, пропущено ${pressure.invalidated}`);
+  }
   fillsSeen = 0; usdSeen = 0;
 }
 
@@ -197,10 +239,19 @@ function onTrades(list) {
     const px = Number(t.px);
     const sz = Number(t.sz);
     if (!(px > 0) || !(sz > 0)) continue;
+    const time = Number(t.time) || Date.now();
+    const tradeBar = Math.floor(time / BAR_MS);
+    if (tradeBar > bar) {
+      try { flush(bar); } catch (e) { log(`flush: ${e.message}`); return; }
+      bar = tradeBar;
+    }
+    // Запоздавший филл уже нельзя дописать: бар мог породить неизменяемый сигнал.
+    if (tradeBar !== bar) continue;
     const usd = px * sz;
     const [buyer, seller] = t.users;
     if (!buyer || !seller) continue;
     const takerIsBuyer = t.side === 'B';
+    bumpMarket(t.coin, px, usd, takerIsBuyer, time);
     bump(t.coin, buyer,  usd, takerIsBuyer,  true);
     bump(t.coin, seller, usd, !takerIsBuyer, false);
     fillsSeen += 1;
@@ -328,8 +379,8 @@ function prune() {
 }
 
 // ── Жизненный цикл ──────────────────────────────────────────────────────────
-process.on('SIGTERM', () => { flush(bar); db.close(); process.exit(0); });
-process.on('SIGINT',  () => { flush(bar); db.close(); process.exit(0); });
+process.on('SIGTERM', () => { flush(bar, false); db.close(); process.exit(0); });
+process.on('SIGINT',  () => { flush(bar, false); db.close(); process.exit(0); });
 
 await connect();
 
@@ -341,7 +392,9 @@ for (;;) {
   const now = Date.now();
 
   const cur = Math.floor(now / BAR_MS);
-  if (cur !== bar) { try { flush(bar); } catch (e) { log(`flush: ${e.message}`); } bar = cur; }
+  if (cur > bar) {
+    try { flush(bar); bar = cur; } catch (e) { log(`flush: ${e.message}`); }
+  }
 
   if (ws?.readyState === WebSocket.OPEN) {
     ws.ping();

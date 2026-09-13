@@ -51,6 +51,8 @@ data/calibrator/
 data/xvenue/
 diag/
 temp/
+# Локальные исследовательские материалы и транскрипты.
+local-research/
 plaintext.txt
 
 # backtest data snapshot (not tracked)
