@@ -64,11 +64,16 @@ nohup caffeinate -dimsu > /dev/null 2>&1 &
 echo $! > "$SCRATCH/caffeinate.pid"
 ```
 
-Убедиться, что ассерт реально висит (без проверки не считать включённым):
+Убедиться, что висит ИМЕННО свой кофеин (без проверки не считать включённым):
 
 ```sh
-pmset -g assertions | grep PreventUserIdleSystemSleep
+PID=$(cat "$SCRATCH/caffeinate.pid") && kill -0 "$PID" && pmset -g assertions | grep "pid $PID"
 ```
+
+🚨 Проверять только по своему pid. `grep PreventUserIdleSystemSleep` и даже
+`grep caffeinate` дают ложное «включено»: на машине постоянно висят чужие
+ассерты и чужие процессы `caffeinate`, и проверка пройдёт, даже если свой
+кофеин не запустился вовсе.
 
 Выключить, когда прогон закончен и отчёт написан:
 
