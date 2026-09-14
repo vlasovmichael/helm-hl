@@ -33,6 +33,8 @@ import { EDGE_DISCOVERY_FAMILY, auditLegacyFdrCoverage } from "./fdrFamily.mjs";
 import { appendCellRegistrations, appendCellRuns } from "./hypothesisCells.mjs";
 import { assertRegistry } from "./hypothesisRegistrySchema.mjs";
 import { resolveStageBranch } from "./hypothesisStages.mjs";
+import { deflatedSharpeRatio } from "./deflatedSharpe.mjs";
+import { probabilityOfBacktestOverfitting } from "./pbo.mjs";
 
 const DIR = join("data", "hypotheses");
 const REGISTRY = join(DIR, "registry.json");
@@ -250,7 +252,134 @@ function fixedOrDash(value, digits) {
   return Number.isFinite(value) ? value.toFixed(digits) : "—";
 }
 
-export function report() {
+function analysisId(value, index, kind) {
+  if (typeof value === "string" && value.trim()) return value;
+  return `${kind}-${index + 1}`;
+}
+
+function reproducibleDsrSource(source, sampleLength) {
+  if (Array.isArray(source?.returns)) {
+    if (source.returns.length !== sampleLength) {
+      return `длина ряда ${source.returns.length} не совпадает с sampleLength ${sampleLength}`;
+    }
+    if (!source.returns.every(Number.isFinite)) return "ряд доходностей содержит нечисловые значения";
+    return null;
+  }
+
+  const data = source?.data;
+  const hasCommand = typeof source?.reproduceCommand === "string" && source.reproduceCommand.trim();
+  const hasUrl = typeof data?.url === "string" && data.url.trim();
+  const hasBytes = Number.isSafeInteger(data?.bytes) && data.bytes > 0;
+  const hasSha256 = typeof data?.sha256 === "string" && /^[0-9a-f]{64}$/i.test(data.sha256);
+  if (hasCommand && hasUrl && hasBytes && hasSha256) return null;
+  return "нет ряда доходностей или полной команды воспроизведения с URL, размером и SHA-256";
+}
+
+function evaluateDsr(items) {
+  const included = [];
+  const excluded = [];
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    const id = analysisId(item?.id, index, "dsr");
+    const sourceError = reproducibleDsrSource(item?.source, item?.inputs?.sampleLength);
+    if (sourceError) {
+      excluded.push({ id, status: "EXCLUDED", reason: sourceError });
+      continue;
+    }
+    included.push({
+      id,
+      status: "INCLUDED",
+      independentTrials: item.inputs.independentTrials,
+      result: deflatedSharpeRatio(item.inputs),
+    });
+  }
+  return { included, excluded };
+}
+
+function validateVariantIds(item) {
+  if (!Array.isArray(item.variantIds)) return "variantIds должен быть массивом";
+  const width = Array.isArray(item.returns?.[0]) ? item.returns[0].length : null;
+  if (item.variantIds.length !== width) return "число variantIds не совпадает с числом столбцов матрицы";
+  if (item.variantIds.some((id) => typeof id !== "string" || !id.trim())) {
+    return "variantIds должен содержать непустые строки";
+  }
+  if (new Set(item.variantIds).size !== item.variantIds.length) return "variantIds содержит повторы";
+  if (typeof item.metricName !== "string" || !item.metricName.trim()) {
+    return "metricName должен быть непустой строкой";
+  }
+  return null;
+}
+
+function evaluatePbo(items) {
+  const included = [];
+  const excluded = [];
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    const id = analysisId(item?.id, index, "pbo");
+    const metadataError = validateVariantIds(item ?? {});
+    if (metadataError) {
+      excluded.push({ id, status: "EXCLUDED", reason: metadataError });
+      continue;
+    }
+    try {
+      included.push({
+        id,
+        status: "INCLUDED",
+        blockCount: item.blockCount,
+        metricName: item.metricName,
+        variantIds: [...item.variantIds],
+        result: probabilityOfBacktestOverfitting({
+          returns: item.returns,
+          blockCount: item.blockCount,
+          metric: item.metric,
+        }),
+      });
+    } catch (error) {
+      if (!/метрика дала ничью на (?:IS|OOS)/.test(error.message)) throw error;
+      excluded.push({ id, status: "EXCLUDED", reason: error.message });
+    }
+  }
+  return { included, excluded };
+}
+
+/** Считает DSR/PBO только для явно переданных воспроизводимых рядов. */
+export function overfittingMeasures({ dsr = [], pbo = [] } = {}) {
+  if (!Array.isArray(dsr) || !Array.isArray(pbo)) {
+    throw new TypeError("overfitting.dsr и overfitting.pbo должны быть массивами");
+  }
+  return { dsr: evaluateDsr(dsr), pbo: evaluatePbo(pbo) };
+}
+
+function appendOverfittingReport(lines, measures) {
+  lines.push("\nЗащита от переобучения (только воспроизводимые ряды):");
+  if (!measures.dsr.included.length && !measures.dsr.excluded.length) {
+    lines.push("  DSR: входы не переданы; результата нет");
+  }
+  for (const row of measures.dsr.included) {
+    lines.push(
+      `  DSR ${row.id}: вероятность ${fixedOrDash(row.result.probability, 4)}, ` +
+      `N=${row.independentTrials}`,
+    );
+  }
+  for (const row of measures.dsr.excluded) {
+    lines.push(`  DSR ${row.id}: EXCLUDED — ${row.reason}`);
+  }
+
+  if (!measures.pbo.included.length && !measures.pbo.excluded.length) {
+    lines.push("  PBO: матрицы не переданы; результата нет");
+  }
+  for (const row of measures.pbo.included) {
+    lines.push(
+      `  PBO ${row.id}: ${fixedOrDash(row.result.pbo, 4)}, ` +
+      `S=${row.blockCount}, разбиений ${row.result.splitCount}, метрика ${row.metricName}`,
+    );
+  }
+  for (const row of measures.pbo.excluded) {
+    lines.push(`  PBO ${row.id}: EXCLUDED — ${row.reason}`);
+  }
+}
+
+export function report({ overfitting } = {}) {
   const reg = loadRegistry();
   const lines = [];
   lines.push(`гипотез зарегистрировано: ${reg.hypotheses.length}, прогонов: ${reg.runs.length}\n`);
@@ -290,6 +419,7 @@ export function report() {
       lines.push(`    ${id}: нулевых моделей пройдено ${passed.length}/3 (${passed.join(", ") || "—"})`);
     }
   }
+  appendOverfittingReport(lines, overfittingMeasures(overfitting));
   return lines.join("\n");
 }
 

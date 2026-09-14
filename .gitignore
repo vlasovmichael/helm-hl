@@ -110,6 +110,7 @@ tools/ratchetSim.mjs
 tools/pressureRetro.mjs
 logs/dsr-*.log
 logs/pbo-*.log
+logs/harness-overfitting-*.log
 tools/liqWickBacktest.mjs
 tools/fundingSpreadEval.mjs
 tools/oiEntry.mjs
