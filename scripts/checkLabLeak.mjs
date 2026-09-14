@@ -1,6 +1,4 @@
 #!/usr/bin/env node
-// Сторож приватности: 🚨 файл под путями лабы, отслеживаемый публичным helm-hl,
-// уедет на GitHub при ближайшем push. Пути берутся из блока лабы в .gitignore.
 import { filesUnderLab } from './lab.mjs';
 
 const leaked = filesUnderLab('cached');
