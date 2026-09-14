@@ -108,6 +108,8 @@ tools/feeAudit.mjs
 tools/postOnlySim.mjs
 tools/ratchetSim.mjs
 tools/pressureRetro.mjs
+tools/overfittingCalibration.mjs
+tests/overfittingCalibration.test.js
 logs/dsr-*.log
 logs/pbo-*.log
 logs/harness-overfitting-*.log
