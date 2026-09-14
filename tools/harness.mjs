@@ -257,43 +257,125 @@ function analysisId(value, index, kind) {
   return `${kind}-${index + 1}`;
 }
 
-function reproducibleDsrSource(source, sampleLength) {
-  if (Array.isArray(source?.returns)) {
-    if (source.returns.length !== sampleLength) {
-      return `длина ряда ${source.returns.length} не совпадает с sampleLength ${sampleLength}`;
-    }
-    if (!source.returns.every(Number.isFinite)) return "ряд доходностей содержит нечисловые значения";
-    return null;
-  }
+const DSR_SERIES_TOLERANCE = 1e-12;
 
+function completeDsrCommand(source) {
   const data = source?.data;
   const hasCommand = typeof source?.reproduceCommand === "string" && source.reproduceCommand.trim();
   const hasUrl = typeof data?.url === "string" && data.url.trim();
   const hasBytes = Number.isSafeInteger(data?.bytes) && data.bytes > 0;
   const hasSha256 = typeof data?.sha256 === "string" && /^[0-9a-f]{64}$/i.test(data.sha256);
-  if (hasCommand && hasUrl && hasBytes && hasSha256) return null;
-  return "нет ряда доходностей или полной команды воспроизведения с URL, размером и SHA-256";
+  return Boolean(hasCommand && hasUrl && hasBytes && hasSha256);
+}
+
+function dsrSeriesStatistics(returns, periodsPerYear) {
+  if (returns.length < 2) return { error: "ряд доходностей должен содержать не меньше двух значений" };
+  if (!returns.every(Number.isFinite)) return { error: "ряд доходностей содержит нечисловые значения" };
+  const sampleLength = returns.length;
+  const mean = returns.reduce((sum, value) => sum + value, 0) / sampleLength;
+  const deviations = returns.map((value) => value - mean);
+  const centralMoment = (power) => deviations.reduce(
+    (sum, value) => sum + value ** power,
+    0,
+  ) / sampleLength;
+  const secondMoment = centralMoment(2);
+  if (!(secondMoment > 0) || !Number.isFinite(secondMoment)) {
+    return { error: "ряд доходностей должен иметь положительную конечную дисперсию" };
+  }
+  const periodSharpe = mean / Math.sqrt(secondMoment);
+  return {
+    sampleLength,
+    periodSharpe,
+    observedSharpe: periodSharpe * Math.sqrt(periodsPerYear),
+    skewness: centralMoment(3) / secondMoment ** 1.5,
+    kurtosis: centralMoment(4) / secondMoment ** 2,
+  };
+}
+
+function closeEnough(actual, expected) {
+  return Number.isFinite(actual)
+    && Math.abs(actual - expected) <= DSR_SERIES_TOLERANCE * Math.max(1, Math.abs(expected));
+}
+
+function dsrInputMismatch(inputs, statistics) {
+  if (inputs.sampleLength !== undefined && inputs.sampleLength !== statistics.sampleLength) {
+    return `sampleLength из inputs ${inputs.sampleLength} не совпадает с вычисленным из ряда ${statistics.sampleLength}`;
+  }
+  if (inputs.periodSharpe !== undefined && !closeEnough(inputs.periodSharpe, statistics.periodSharpe)) {
+    return `periodSharpe из inputs ${inputs.periodSharpe} не совпадает с вычисленным из ряда `
+      + `${statistics.periodSharpe} (допуск ${DSR_SERIES_TOLERANCE})`;
+  }
+  for (const field of ["observedSharpe", "skewness", "kurtosis"]) {
+    if (inputs[field] !== undefined && !closeEnough(inputs[field], statistics[field])) {
+      return `${field} из inputs ${inputs[field]} не совпадает с вычисленным из ряда ${statistics[field]} `
+        + `(допуск ${DSR_SERIES_TOLERANCE})`;
+    }
+  }
+  return null;
 }
 
 function evaluateDsr(items) {
   const included = [];
   const excluded = [];
+  const unverified = [];
   for (let index = 0; index < items.length; index++) {
     const item = items[index];
     const id = analysisId(item?.id, index, "dsr");
-    const sourceError = reproducibleDsrSource(item?.source, item?.inputs?.sampleLength);
-    if (sourceError) {
-      excluded.push({ id, status: "EXCLUDED", reason: sourceError });
+    if (Array.isArray(item?.source?.returns)) {
+      if (!item?.inputs || typeof item.inputs !== "object") {
+        excluded.push({
+          id,
+          status: "EXCLUDED",
+          reason: "нет inputs с числом испытаний, дисперсией Sharpe и частотой ряда",
+        });
+        continue;
+      }
+      const statistics = dsrSeriesStatistics(item.source.returns, item.inputs.periodsPerYear);
+      if (statistics.error) {
+        excluded.push({ id, status: "EXCLUDED", reason: statistics.error });
+        continue;
+      }
+      const mismatch = dsrInputMismatch(item.inputs, statistics);
+      if (mismatch) {
+        excluded.push({ id, status: "EXCLUDED", reason: mismatch });
+        continue;
+      }
+      const inputs = {
+        ...item.inputs,
+        observedSharpe: statistics.observedSharpe,
+        sampleLength: statistics.sampleLength,
+        skewness: statistics.skewness,
+        kurtosis: statistics.kurtosis,
+      };
+      included.push({
+        id,
+        status: "INCLUDED",
+        independentTrials: inputs.independentTrials,
+        seriesStatistics: {
+          periodSharpe: statistics.periodSharpe,
+          sampleLength: statistics.sampleLength,
+          skewness: statistics.skewness,
+          kurtosis: statistics.kurtosis,
+        },
+        result: deflatedSharpeRatio(inputs),
+      });
       continue;
     }
-    included.push({
+    if (completeDsrCommand(item?.source)) {
+      unverified.push({
+        id,
+        status: "UNVERIFIED",
+        reason: "команда воспроизведения не выполнена харнессом",
+      });
+      continue;
+    }
+    excluded.push({
       id,
-      status: "INCLUDED",
-      independentTrials: item.inputs.independentTrials,
-      result: deflatedSharpeRatio(item.inputs),
+      status: "EXCLUDED",
+      reason: "нет ряда доходностей или полной команды воспроизведения с URL, размером и SHA-256",
     });
   }
-  return { included, excluded };
+  return { included, unverified, excluded };
 }
 
 function validateVariantIds(item) {
@@ -360,6 +442,9 @@ function appendOverfittingReport(lines, measures) {
       `  DSR ${row.id}: вероятность ${fixedOrDash(row.result.probability, 4)}, ` +
       `N=${row.independentTrials}`,
     );
+  }
+  for (const row of measures.dsr.unverified) {
+    lines.push(`  DSR ${row.id}: UNVERIFIED — ${row.reason}`);
   }
   for (const row of measures.dsr.excluded) {
     lines.push(`  DSR ${row.id}: EXCLUDED — ${row.reason}`);
