@@ -31,16 +31,18 @@ import {
 } from "./hypothesisStatus.mjs";
 import { EDGE_DISCOVERY_FAMILY, auditLegacyFdrCoverage } from "./fdrFamily.mjs";
 import { appendCellRegistrations, appendCellRuns } from "./hypothesisCells.mjs";
+import { assertRegistry } from "./hypothesisRegistrySchema.mjs";
 
 const DIR = join("data", "hypotheses");
 const REGISTRY = join(DIR, "registry.json");
 
 export function loadRegistry(path = REGISTRY) {
   if (!existsSync(path)) return { hypotheses: [], runs: [], cells: [], cellRuns: [] };
-  return JSON.parse(readFileSync(path, "utf8"));
+  return assertRegistry(JSON.parse(readFileSync(path, "utf8")));
 }
 
 function saveRegistry(reg, path = REGISTRY) {
+  assertRegistry(reg);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify(reg, null, 2));
 }
@@ -50,6 +52,7 @@ function formatRootValue(value) {
 }
 
 function saveCellStorage(reg, path, source) {
+  assertRegistry(reg);
   const marker = source.lastIndexOf(',\n  "cells": [');
   const rootEnd = source.lastIndexOf("\n}");
   if (marker < 0 || rootEnd < marker) {
@@ -65,7 +68,7 @@ function saveCellStorage(reg, path, source) {
 /** Замораживает все ячейки батареи одним действием до просмотра результатов. */
 export function preregisterCells(id, { stageId, cells }, { registryPath = REGISTRY, now = () => new Date().toISOString() } = {}) {
   const source = readFileSync(registryPath, "utf8");
-  const reg = JSON.parse(source);
+  const reg = assertRegistry(JSON.parse(source));
   const records = appendCellRegistrations(reg, id, {
     stageId,
     cells,
@@ -78,7 +81,7 @@ export function preregisterCells(id, { stageId, cells }, { registryPath = REGIST
 /** Пишет отдельный результат каждой ячейки; primary p-value вычисляется внутри. */
 export function recordCellRuns(id, payload, { registryPath = REGISTRY, now = () => new Date().toISOString() } = {}) {
   const source = readFileSync(registryPath, "utf8");
-  const reg = JSON.parse(source);
+  const reg = assertRegistry(JSON.parse(source));
   const records = appendCellRuns(reg, id, { ...payload, ranAt: now() });
   saveCellStorage(reg, registryPath, source);
   return records;

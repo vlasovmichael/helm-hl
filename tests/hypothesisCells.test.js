@@ -11,7 +11,16 @@ function withRegistry(run) {
   const dir = mkdtempSync(join(tmpdir(), "hypothesis-cells-"));
   const registryPath = join(dir, "registry.json");
   writeFileSync(registryPath, JSON.stringify({
-    hypotheses: [{ id: "battery" }],
+    hypotheses: [{
+      id: "battery",
+      status: "OPEN",
+      resultStatus: null,
+      description: "Тестовая батарея",
+      condition: "Фиктивное условие",
+      side: "both",
+      rationale: "Проверка хранения",
+      preregisteredAt: "2026-09-14T11:00:00.000Z",
+    }],
     runs: [],
     cells: [],
     cellRuns: [],
