@@ -32,6 +32,7 @@ function registryFixture() {
       ranAt: "2026-09-14T11:00:00.000Z",
       results: { time: { p: 0.4 } },
     }],
+    stageLinks: [],
     cells: [{
       hypothesisId: "battery",
       cellId: "long-1h",
@@ -61,7 +62,7 @@ test("schema принимает полный согласованный реес
 test("schema принимает настоящий legacy-реестр лаборатории", { skip: NO_REGISTRY }, () => {
   const registry = validateRegistryFile();
   assert.equal(registry.hypotheses.length, 49);
-  assert.equal(registry.runs.length, 114);
+  assert.equal(registry.runs.length, 117);
 });
 
 test("schema ловит повтор id и неверную пару жизненного статуса с исходом", () => {
@@ -106,4 +107,18 @@ test("schema запрещает неизвестные поля в новом ap
   const registry = registryFixture();
   registry.cells[0].primaryPValue = 0.01;
   assert.throws(() => assertRegistry(registry), /cells\[0\]\.primaryPValue: неизвестное поле/);
+});
+
+test("schema проверяет направление и однозначность связей стадий", () => {
+  const registry = registryFixture();
+  registry.hypotheses.push({ ...registry.hypotheses[0], id: "holdout" });
+  registry.stageLinks.push({
+    fromHypothesisId: "battery",
+    toHypothesisId: "holdout",
+    fromStage: "holdout",
+    toStage: "development",
+    scope: "ячейка",
+    registeredAt: "2026-09-14T12:00:00.000Z",
+  });
+  assert.throws(() => assertRegistry(registry), /следующая стадия должна быть позже/);
 });

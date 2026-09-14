@@ -121,6 +121,7 @@ tools/f2Momentum.mjs
 tools/migrateHypothesisStatus.mjs
 tools/migrateHypothesisResultStatus.mjs
 tools/closeUnreproducibleHypotheses.mjs
+tools/migrateHypothesisStages.mjs
 tools/generateResearchProgress.mjs
 tests/binanceF2Dataset.test.js
 tests/f2Audit.test.js
@@ -128,10 +129,12 @@ tests/f2Momentum.test.js
 tests/hypothesisStatusMigration.test.js
 tests/hypothesisResultStatusMigration.test.js
 tests/closeUnreproducibleHypotheses.test.js
+tests/hypothesisStagesMigration.test.js
 tests/hypothesisCellsMigration.test.js
 tests/researchProgressGeneration.test.js
 logs/harness-progress-generation-*.log
 logs/harness-unreproducible-closures-*.log
+logs/harness-stage-links-*.log
 
 # Восстановимый архив Binance для аудита F2: ZIP, manifest и недельная сетка.
 data/binance-f2/

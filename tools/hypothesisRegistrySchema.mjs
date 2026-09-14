@@ -5,8 +5,12 @@ import { pathToFileURL } from "node:url";
 
 import { EDGE_DISCOVERY_FAMILY } from "./fdrFamily.mjs";
 import { isLifecycleStatus, isResultStatus, LIFECYCLE_STATUS } from "./hypothesisStatus.mjs";
+import { STAGE_ORDER } from "./hypothesisStages.mjs";
 
-const ROOT_FIELDS = new Set(["hypotheses", "runs", "cells", "cellRuns"]);
+const ROOT_FIELDS = new Set(["hypotheses", "runs", "stageLinks", "cells", "cellRuns"]);
+const STAGE_LINK_FIELDS = new Set([
+  "fromHypothesisId", "toHypothesisId", "fromStage", "toStage", "scope", "registeredAt",
+]);
 const CELL_FIELDS = new Set([
   "hypothesisId", "cellId", "stageId", "familyId", "definition", "requiredPValues", "registeredAt",
 ]);
@@ -125,6 +129,54 @@ function validateRuns(rows, hypothesisIds, errors) {
       }
     }
   });
+}
+
+function validateStageLinks(rows, hypothesisIds, errors) {
+  const outgoing = new Map();
+  const incoming = new Map();
+  rows.forEach((row, index) => {
+    const path = `stageLinks[${index}]`;
+    if (!isObject(row)) {
+      errors.push(`${path}: нужна запись-объект`);
+      return;
+    }
+    validateKnownFields(row, STAGE_LINK_FIELDS, path, errors);
+    for (const field of ["fromHypothesisId", "toHypothesisId", "fromStage", "toStage", "scope"]) {
+      validateText(row[field], `${path}.${field}`, errors);
+    }
+    validateDate(row.registeredAt, `${path}.registeredAt`, errors);
+    if (!hypothesisIds.has(row.fromHypothesisId)) {
+      errors.push(`${path}.fromHypothesisId: гипотеза «${row.fromHypothesisId}» не зарегистрирована`);
+    }
+    if (!hypothesisIds.has(row.toHypothesisId)) {
+      errors.push(`${path}.toHypothesisId: гипотеза «${row.toHypothesisId}» не зарегистрирована`);
+    }
+    if (row.fromHypothesisId === row.toHypothesisId) errors.push(`${path}: стадия не может ссылаться на себя`);
+    const fromOrder = STAGE_ORDER.indexOf(row.fromStage);
+    const toOrder = STAGE_ORDER.indexOf(row.toStage);
+    if (fromOrder < 0) errors.push(`${path}.fromStage: неизвестная стадия`);
+    if (toOrder < 0) errors.push(`${path}.toStage: неизвестная стадия`);
+    if (fromOrder >= 0 && toOrder >= 0 && toOrder <= fromOrder) {
+      errors.push(`${path}: следующая стадия должна быть позже предыдущей`);
+    }
+    if (outgoing.has(row.fromHypothesisId)) errors.push(`${path}: у исходной стадии уже есть продолжение`);
+    else outgoing.set(row.fromHypothesisId, row.toHypothesisId);
+    if (incoming.has(row.toHypothesisId)) errors.push(`${path}: у следующей стадии уже есть предшественник`);
+    else incoming.set(row.toHypothesisId, row.fromHypothesisId);
+  });
+
+  for (const start of outgoing.keys()) {
+    const seen = new Set();
+    let current = start;
+    while (outgoing.has(current)) {
+      if (seen.has(current)) {
+        errors.push(`stageLinks: цикл стадий от «${start}»`);
+        break;
+      }
+      seen.add(current);
+      current = outgoing.get(current);
+    }
+  }
 }
 
 function validateCells(rows, hypothesisIds, errors) {
@@ -253,6 +305,7 @@ export function validateRegistry(registry) {
 
   const hypothesisIds = validateHypotheses(registry.hypotheses, errors);
   validateRuns(registry.runs, hypothesisIds, errors);
+  validateStageLinks(registry.stageLinks, hypothesisIds, errors);
   const registrations = validateCells(registry.cells, hypothesisIds, errors);
   validateCellRuns(registry.cellRuns, hypothesisIds, registrations, errors);
   return { ok: errors.length === 0, errors };
@@ -278,6 +331,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const registry = validateRegistryFile(path);
   console.log(
     `✅ schema реестра: ${registry.hypotheses.length} гипотез, ${registry.runs.length} прогонов, ` +
-    `${registry.cells.length} ячеек, ${registry.cellRuns.length} исполнений ячеек`,
+    `${registry.stageLinks.length} связей стадий, ${registry.cells.length} ячеек, ` +
+    `${registry.cellRuns.length} исполнений ячеек`,
   );
 }

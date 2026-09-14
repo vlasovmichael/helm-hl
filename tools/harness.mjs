@@ -32,12 +32,13 @@ import {
 import { EDGE_DISCOVERY_FAMILY, auditLegacyFdrCoverage } from "./fdrFamily.mjs";
 import { appendCellRegistrations, appendCellRuns } from "./hypothesisCells.mjs";
 import { assertRegistry } from "./hypothesisRegistrySchema.mjs";
+import { resolveStageBranch } from "./hypothesisStages.mjs";
 
 const DIR = join("data", "hypotheses");
 const REGISTRY = join(DIR, "registry.json");
 
 export function loadRegistry(path = REGISTRY) {
-  if (!existsSync(path)) return { hypotheses: [], runs: [], cells: [], cellRuns: [] };
+  if (!existsSync(path)) return { hypotheses: [], runs: [], stageLinks: [], cells: [], cellRuns: [] };
   return assertRegistry(JSON.parse(readFileSync(path, "utf8")));
 }
 
@@ -212,22 +213,34 @@ export function status(id) {
   if (!hypothesis) throw new Error(`гипотеза «${id}» не зарегистрирована`);
   const runs = reg.runs.filter((row) => row.id === id);
   const regimes = [...new Set(runs.map((row) => row.regime).filter(Boolean))];
-  const resultStatus = hypothesis.resultStatus;
+  const stageResultStatus = hypothesis.resultStatus;
   if (!isLifecycleStatus(hypothesis.status)) {
     throw new Error(`у гипотезы «${id}» неизвестный жизненный статус`);
   }
   if (hypothesis.status === LIFECYCLE_STATUS.OPEN) {
-    if (resultStatus !== null) throw new Error(`у открытой гипотезы «${id}» появился преждевременный исход`);
-    return { id, lifecycleStatus: hypothesis.status, resultStatus: null, status: "ОТКРЫТА", runs: runs.length, regimes };
+    if (stageResultStatus !== null) throw new Error(`у открытой гипотезы «${id}» появился преждевременный исход`);
   }
-  if (!isResultStatus(resultStatus)) {
+  if (hypothesis.status === LIFECYCLE_STATUS.CLOSED && !isResultStatus(stageResultStatus)) {
     throw new Error(`у закрытой гипотезы «${id}» нет машинного исхода`);
   }
+  const branch = resolveStageBranch(reg, id);
+  const terminal = branch.terminalHypothesis;
+  const resultStatus = terminal.resultStatus;
+  const finalLabel = terminal.status === LIFECYCLE_STATUS.OPEN
+    ? "ОТКРЫТА"
+    : RESULT_STATUS_LABEL[resultStatus];
   return {
     id,
-    lifecycleStatus: hypothesis.status,
+    lifecycleStatus: terminal.status,
     resultStatus,
-    status: RESULT_STATUS_LABEL[resultStatus],
+    status: finalLabel,
+    stageLifecycleStatus: hypothesis.status,
+    stageResultStatus,
+    stageStatus: hypothesis.status === LIFECYCLE_STATUS.OPEN
+      ? "ОТКРЫТА"
+      : RESULT_STATUS_LABEL[stageResultStatus],
+    terminalHypothesisId: branch.terminalHypothesisId,
+    stageChain: branch.chain,
     runs: runs.length,
     regimes,
   };
@@ -243,7 +256,10 @@ export function report() {
   lines.push(`гипотез зарегистрировано: ${reg.hypotheses.length}, прогонов: ${reg.runs.length}\n`);
   for (const h of reg.hypotheses) {
     const s = status(h.id);
-    lines.push(`  ${h.id.padEnd(22)} ${s.status}`);
+    const branchNote = s.terminalHypothesisId === h.id
+      ? ""
+      : ` (итог ${s.terminalHypothesisId}; исход этапа: ${s.stageStatus})`;
+    lines.push(`  ${h.id.padEnd(22)} ${s.status}${branchNote}`);
     lines.push(`    ${h.description}`);
     const runs = reg.runs.filter((r) => r.id === h.id);
     for (const r of runs) {

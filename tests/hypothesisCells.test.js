@@ -22,6 +22,7 @@ function withRegistry(run) {
       preregisteredAt: "2026-09-14T11:00:00.000Z",
     }],
     runs: [],
+    stageLinks: [],
     cells: [],
     cellRuns: [],
   }, null, 2));
