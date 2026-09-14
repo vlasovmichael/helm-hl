@@ -15,9 +15,12 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import { WIDE_STOP, SESSION_REV, SQUEEZE, RULES, findWideStop, findSqueeze, findSessionReversal } from "../tools/forwardRules.mjs";
+
+// Реестр живёт в приватной лаборатории: без её рабочей копии сверка пропускается.
+const REGISTRY = "data/hypotheses/registry.json";
 
 test("параметры правил заморожены ровно в предзаявленных значениях", () => {
   assert.deepEqual({ ...WIDE_STOP }, {
@@ -43,10 +46,10 @@ test("объекты параметров действительно замор�
   for (const p of [WIDE_STOP, SESSION_REV, SQUEEZE]) assert.ok(Object.isFrozen(p));
 });
 
-test("пороги в коллекторе совпадают с реестром гипотез", () => {
+test("пороги в коллекторе совпадают с реестром гипотез", { skip: !existsSync(REGISTRY) && "нет реестра лаборатории" }, () => {
   // Две копии порога (коллектор и реестр) обязаны сходиться. Разойдись они —
   // оценка запустится не там, где заявлено, и это уже другой тест.
-  const registry = JSON.parse(readFileSync("data/hypotheses/registry.json", "utf8"));
+  const registry = JSON.parse(readFileSync(REGISTRY, "utf8"));
   const src = readFileSync("scripts/forwardMulti.mjs", "utf8");
   for (const [id, expected] of [
     ["wide-stop-premium-4h", 700],

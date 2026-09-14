@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 import {
   PRESSURE_FORWARD,
@@ -11,8 +11,11 @@ import {
   installPressureForward,
 } from '../tools/pressureForward.mjs';
 
-test('замороженные параметры совпадают с предзаявкой', () => {
-  const registry = JSON.parse(readFileSync('data/hypotheses/registry.json', 'utf8'));
+// Реестр живёт в приватной лаборатории: без её рабочей копии сверка пропускается.
+const REGISTRY = 'data/hypotheses/registry.json';
+
+test('замороженные параметры совпадают с предзаявкой', { skip: !existsSync(REGISTRY) && 'нет реестра лаборатории' }, () => {
+  const registry = JSON.parse(readFileSync(REGISTRY, 'utf8'));
   const hypothesis = registry.hypotheses.find((row) => row.id === PRESSURE_FORWARD.id);
   assert.ok(hypothesis);
   assert.ok(Object.isFrozen(PRESSURE_FORWARD));

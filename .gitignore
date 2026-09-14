@@ -77,3 +77,53 @@ data/entry-timing/
 
 # Поток ордеров с адресами — собственная база коллектора, не в репозиторий
 data/flow/
+
+# Лаборатория исследований — приватный репозиторий hl-lab (git lab …).
+# Живёт в той же рабочей копии через отдельный git-dir; сюда не попадает.
+.lab.git/
+AGENTS.md
+data/hypotheses/
+docs/edge-search/
+docs/hypothesis-harness.md
+docs/hypothesis-nanny-rising-window.md
+docs/journal-decomposition-2026-07-16.md
+docs/winners-preregistration.md
+docs/channel-a-signals-audit.md
+docs/channel-b-signals-backtest.md
+docs/external-calls-log.md
+docs/TRADING_RULES.md
+tools/journal-recalc/
+tools/post-exit-drift/
+tools/prereg-*.mjs
+tools/oiHypotheses.mjs
+tools/carryProbe.mjs
+tools/rsiExtremes.mjs
+tools/retro.mjs
+tools/regimeCut.mjs
+tools/adoptExitSweep.mjs
+tools/adoptShadowTrailStats.mjs
+tools/adoptTrailProbe.mjs
+tools/entryTimingAudit.mjs
+tools/claimCheck.mjs
+tools/feeAudit.mjs
+tools/postOnlySim.mjs
+tools/ratchetSim.mjs
+tools/pressureRetro.mjs
+tools/liqWickBacktest.mjs
+tools/fundingSpreadEval.mjs
+tools/oiEntry.mjs
+tools/volPerCandle.mjs
+tools/tgChannelScreen.mjs
+tools/tgSignalsAudit.mjs
+tools/tgSignalsFetch.mjs
+tools/binanceF2Dataset.mjs
+tools/f2Audit.mjs
+tools/f2Momentum.mjs
+tools/migrateHypothesisStatus.mjs
+tools/migrateHypothesisResultStatus.mjs
+tests/binanceF2Dataset.test.js
+tests/f2Audit.test.js
+tests/f2Momentum.test.js
+tests/hypothesisStatusMigration.test.js
+tests/hypothesisResultStatusMigration.test.js
+tests/hypothesisCellsMigration.test.js
