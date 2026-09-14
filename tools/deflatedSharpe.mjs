@@ -96,6 +96,7 @@ export function expectedMaximumSharpe({ sharpeVariance, independentTrials }) {
 /**
  * DSR принимает Sharpe и его дисперсию в одном годовом масштабе.
  * periodsPerYear явно переводит обе величины к частоте наблюдений формулы.
+ * kurtosis — обычный эксцесс (у нормального распределения 3), не избыточный.
  */
 export function deflatedSharpeRatio({
   observedSharpe,
@@ -109,6 +110,9 @@ export function deflatedSharpeRatio({
   finite("observedSharpe", observedSharpe);
   finite("skewness", skewness);
   finite("kurtosis", kurtosis);
+  if (kurtosis < 1 + skewness ** 2) {
+    throw new RangeError("ожидается обычный эксцесс (у нормального 3), не избыточный");
+  }
   positive("periodsPerYear", periodsPerYear);
   if (!Number.isSafeInteger(sampleLength) || sampleLength < 2) {
     throw new RangeError("sampleLength должен быть целым числом не меньше 2");

@@ -78,4 +78,15 @@ test("DSR отклоняет неявную частоту и невозможн
     () => deflatedSharpeRatio({ ...PAPER_EXAMPLE, sharpeVariance: -0.1 }),
     /sharpeVariance не может быть отрицательной/,
   );
+  assert.throws(
+    () => deflatedSharpeRatio({ ...PAPER_EXAMPLE, skewness: 0, kurtosis: 0 }),
+    /ожидается обычный эксцесс \(у нормального 3\), не избыточный/,
+  );
+  assert.throws(
+    () => deflatedSharpeRatio({ ...PAPER_EXAMPLE, skewness: -3, kurtosis: 9.9 }),
+    /ожидается обычный эксцесс \(у нормального 3\), не избыточный/,
+  );
+  assert.doesNotThrow(
+    () => deflatedSharpeRatio({ ...PAPER_EXAMPLE, skewness: -3, kurtosis: 10 }),
+  );
 });
