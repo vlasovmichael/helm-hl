@@ -127,3 +127,6 @@ tests/f2Momentum.test.js
 tests/hypothesisStatusMigration.test.js
 tests/hypothesisResultStatusMigration.test.js
 tests/hypothesisCellsMigration.test.js
+
+# Восстановимый архив Binance для аудита F2: ZIP, manifest и недельная сетка.
+data/binance-f2/
