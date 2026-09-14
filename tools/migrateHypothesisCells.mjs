@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
-import { constants, copyFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+
+export const BEFORE_COMMIT = "42490befd7d1a8dc17d9acae787c53e9dd7e052b";
+export const BEFORE_SHA256 = "0cd72a52a86e212c7dc56361df3eb4fcd9182b0853a763b75f57a80c731b112e";
 
 export function sha256(text) {
   return createHash("sha256").update(text).digest("hex");
@@ -52,43 +55,37 @@ export function assertPreviousRecordsPreserved(beforeText, currentText) {
 }
 
 function parseArgs(argv) {
-  const args = {
-    registry: "data/hypotheses/registry.json",
-    backup: "data/hypotheses/registry.before-cell-storage-migration-2026-09-14.json",
-  };
+  const args = { registry: "data/hypotheses/registry.json" };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--registry") args.registry = argv[++i];
-    else if (argv[i] === "--backup") args.backup = argv[++i];
     else throw new Error(`неизвестный аргумент: ${argv[i]}`);
   }
   return args;
 }
 
-export function migrateFile({ registry, backup }) {
+export function migrateFile({ registry }) {
   const source = readFileSync(registry, "utf8");
   const migrated = migrateRegistryText(source);
   const alreadyMigrated = migrated === source;
 
   if (!alreadyMigrated) {
-    if (existsSync(backup)) throw new Error(`копия уже существует: ${backup}`);
-    copyFileSync(registry, backup, constants.COPYFILE_EXCL);
+    if (sha256(source) !== BEFORE_SHA256) {
+      throw new Error(`вход не совпадает с ${BEFORE_COMMIT}: SHA-256 ${sha256(source)}`);
+    }
     writeFileSync(registry, migrated);
   }
 
-  const backupText = readFileSync(backup, "utf8");
   const currentText = readFileSync(registry, "utf8");
-  assertPreviousRecordsPreserved(backupText, currentText);
   const current = JSON.parse(currentText);
   return {
     registry,
-    backup,
+    beforeCommit: BEFORE_COMMIT,
+    beforeSha256: BEFORE_SHA256,
     alreadyMigrated,
     hypotheses: current.hypotheses.length,
     runs: current.runs.length,
     cells: current.cells.length,
     cellRuns: current.cellRuns.length,
-    beforeBytes: Buffer.byteLength(backupText),
-    beforeSha256: sha256(backupText),
     afterBytes: Buffer.byteLength(currentText),
     afterSha256: sha256(currentText),
   };
