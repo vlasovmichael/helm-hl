@@ -120,12 +120,15 @@ tools/f2Audit.mjs
 tools/f2Momentum.mjs
 tools/migrateHypothesisStatus.mjs
 tools/migrateHypothesisResultStatus.mjs
+tools/generateResearchProgress.mjs
 tests/binanceF2Dataset.test.js
 tests/f2Audit.test.js
 tests/f2Momentum.test.js
 tests/hypothesisStatusMigration.test.js
 tests/hypothesisResultStatusMigration.test.js
 tests/hypothesisCellsMigration.test.js
+tests/researchProgressGeneration.test.js
+logs/harness-progress-generation-*.log
 
 # Восстановимый архив Binance для аудита F2: ZIP, manifest и недельная сетка.
 data/binance-f2/
