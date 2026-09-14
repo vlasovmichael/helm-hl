@@ -108,6 +108,7 @@ tools/feeAudit.mjs
 tools/postOnlySim.mjs
 tools/ratchetSim.mjs
 tools/pressureRetro.mjs
+logs/dsr-*.log
 tools/liqWickBacktest.mjs
 tools/fundingSpreadEval.mjs
 tools/oiEntry.mjs
