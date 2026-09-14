@@ -393,6 +393,7 @@ function validateVariantIds(item) {
 }
 
 function evaluatePbo(items) {
+  const maxExcludedSplitRate = 0.20;
   const included = [];
   const excluded = [];
   for (let index = 0; index < items.length; index++) {
@@ -403,23 +404,29 @@ function evaluatePbo(items) {
       excluded.push({ id, status: "EXCLUDED", reason: metadataError });
       continue;
     }
-    try {
-      included.push({
+    const result = probabilityOfBacktestOverfitting({
+      returns: item.returns,
+      blockCount: item.blockCount,
+      metric: item.metric,
+    });
+    if (result.excludedSplitRate > maxExcludedSplitRate) {
+      excluded.push({
         id,
-        status: "INCLUDED",
-        blockCount: item.blockCount,
-        metricName: item.metricName,
-        variantIds: [...item.variantIds],
-        result: probabilityOfBacktestOverfitting({
-          returns: item.returns,
-          blockCount: item.blockCount,
-          metric: item.metric,
-        }),
+        status: "EXCLUDED",
+        reason: `ничья за первое место на IS исключила ${result.excludedSplitCount}/`
+          + `${result.splitCount} разбиений (${(result.excludedSplitRate * 100).toFixed(2)}%), порог 20%`,
+        result,
       });
-    } catch (error) {
-      if (!/метрика дала ничью на (?:IS|OOS)/.test(error.message)) throw error;
-      excluded.push({ id, status: "EXCLUDED", reason: error.message });
+      continue;
     }
+    included.push({
+      id,
+      status: "INCLUDED",
+      blockCount: item.blockCount,
+      metricName: item.metricName,
+      variantIds: [...item.variantIds],
+      result,
+    });
   }
   return { included, excluded };
 }
@@ -456,7 +463,8 @@ function appendOverfittingReport(lines, measures) {
   for (const row of measures.pbo.included) {
     lines.push(
       `  PBO ${row.id}: ${fixedOrDash(row.result.pbo, 4)}, ` +
-      `S=${row.blockCount}, разбиений ${row.result.splitCount}, метрика ${row.metricName}`,
+      `S=${row.blockCount}, разбиений ${row.result.evaluatedSplitCount}/${row.result.splitCount}, ` +
+      `исключено ${fixedOrDash(row.result.excludedSplitRate * 100, 2)}%, метрика ${row.metricName}`,
     );
   }
   for (const row of measures.pbo.excluded) {

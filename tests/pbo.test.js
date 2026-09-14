@@ -22,6 +22,9 @@ test("PBO равен нулю для варианта, лучшего в каж�
 
   assert.equal(result.pbo, 0);
   assert.equal(result.splitCount, 6);
+  assert.equal(result.evaluatedSplitCount, 6);
+  assert.equal(result.excludedSplitCount, 0);
+  assert.equal(result.excludedSplitRate, 0);
   assert.deepEqual(result.selectedVariants, [0, 0, 0, 0, 0, 0]);
   assert.deepEqual(result.oosRanks, [3, 3, 3, 3, 3, 3]);
   assert.ok(result.lambdas.every((lambda) => lambda > 0));
@@ -107,23 +110,69 @@ test("PBO отклоняет нечётные блоки, остаток стр�
   );
 });
 
-test("PBO отклоняет ничьи и не вводит tie-break по номеру столбца", () => {
-  assert.throws(
-    () => probabilityOfBacktestOverfitting({
-      returns: [[1, 1], [2, 0]],
-      blockCount: 2,
-      metric: mean,
-    }),
-    /ничью на IS/,
-  );
-  assert.throws(
-    () => probabilityOfBacktestOverfitting({
-      returns: [[2, 1], [1, 1]],
-      blockCount: 2,
-      metric: mean,
-    }),
-    /ничью на OOS/,
-  );
+test("OOS-ничья выбранного варианта получает средний ранг", () => {
+  const result = probabilityOfBacktestOverfitting({
+    returns: [[3, 1, 2], [1, 1, 3]],
+    blockCount: 2,
+    metric: mean,
+  });
+
+  assert.deepEqual(result.selectedVariants, [0, 2]);
+  assert.deepEqual(result.oosRanks, [1.5, 2]);
+  assert.ok(Math.abs(result.lambdas[0] - Math.log(0.6)) < 1e-12);
+  assert.equal(result.lambdas[1], 0);
+  assert.equal(result.pbo, 1);
+  assert.equal(result.excludedSplitRate, 0);
+});
+
+test("ничьи невыбранных вариантов не меняют PBO", () => {
+  const strict = probabilityOfBacktestOverfitting({
+    returns: [[3, 2, 1], [3, 2, 1]],
+    blockCount: 2,
+    metric: mean,
+  });
+  const tiedNonWinners = probabilityOfBacktestOverfitting({
+    returns: [[3, 1, 1], [3, 1, 1]],
+    blockCount: 2,
+    metric: mean,
+  });
+
+  assert.equal(tiedNonWinners.pbo, strict.pbo);
+  assert.deepEqual(tiedNonWinners.oosRanks, strict.oosRanks);
+  assert.equal(tiedNonWinners.excludedSplitCount, 0);
+});
+
+test("ничья за первое место IS исключает только это разбиение", () => {
+  const result = probabilityOfBacktestOverfitting({
+    returns: [[1, 1], [2, 0]],
+    blockCount: 2,
+    metric: mean,
+  });
+
+  assert.equal(result.splitCount, 2);
+  assert.equal(result.evaluatedSplitCount, 1);
+  assert.equal(result.excludedSplitCount, 1);
+  assert.equal(result.excludedSplitRate, 0.5);
+  assert.deepEqual(result.excludedSplits, [{
+    inSampleBlocks: [0],
+    reason: "ничья за первое место на IS",
+    tiedVariants: [0, 1],
+  }]);
+  assert.equal(result.pbo, 1);
+});
+
+test("PBO равен null, если IS-ничьи исключили все разбиения", () => {
+  const result = probabilityOfBacktestOverfitting({
+    returns: [[1, 1], [1, 1]],
+    blockCount: 2,
+    metric: mean,
+  });
+
+  assert.equal(result.pbo, null);
+  assert.equal(result.evaluatedSplitCount, 0);
+  assert.equal(result.excludedSplitCount, 2);
+  assert.equal(result.excludedSplitRate, 1);
+  assert.deepEqual(result.lambdas, []);
 });
 
 test("PBO проверяет метрику и её результат", () => {

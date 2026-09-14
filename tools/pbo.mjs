@@ -45,24 +45,6 @@ function* combinations(n, k, start = 0, prefix = []) {
   }
 }
 
-function rankScores(scores, sampleName) {
-  const ranked = scores
-    .map((score, variant) => ({ score, variant }))
-    .sort((a, b) => {
-      if (a.score < b.score) return -1;
-      if (a.score > b.score) return 1;
-      return a.variant - b.variant;
-    });
-
-  for (let i = 1; i < ranked.length; i++) {
-    if (ranked[i - 1].score === ranked[i].score) {
-      throw new RangeError(`метрика дала ничью на ${sampleName}; статья не задаёт tie-break`);
-    }
-  }
-
-  return ranked;
-}
-
 function scoreColumns(columns, metric, sampleName) {
   return columns.map((values, variant) => {
     const score = metric(values);
@@ -73,9 +55,25 @@ function scoreColumns(columns, metric, sampleName) {
   });
 }
 
+function isWinner(scores) {
+  const maximum = Math.max(...scores);
+  const variants = scores.reduce((out, score, variant) => {
+    if (score === maximum) out.push(variant);
+    return out;
+  }, []);
+  return variants.length === 1 ? { variant: variants[0] } : { tiedVariants: variants };
+}
+
+function selectedMidrank(scores, selectedVariant) {
+  const selectedScore = scores[selectedVariant];
+  const below = scores.filter((score) => score < selectedScore).length;
+  const equal = scores.filter((score) => score === selectedScore).length;
+  return below + (equal + 1) / 2;
+}
+
 /**
  * PBO по CSCV. Ранги возрастают от худшего (1) к лучшему (N).
- * Ничьи отклоняются: статья определяет ранги как перестановки 1…N.
+ * Ничья IS-победителей исключает split; OOS-ничья выбранного получает midrank.
  */
 export function probabilityOfBacktestOverfitting({ returns, blockCount, metric }) {
   if (typeof metric !== "function") throw new TypeError("metric должна быть функцией");
@@ -99,6 +97,7 @@ export function probabilityOfBacktestOverfitting({ returns, blockCount, metric }
   const lambdas = [];
   const selectedVariants = [];
   const oosRanks = [];
+  const excludedSplits = [];
 
   for (const inSampleBlocks of combinations(blockCount, half)) {
     const inSampleSet = new Set(inSampleBlocks);
@@ -113,11 +112,18 @@ export function probabilityOfBacktestOverfitting({ returns, blockCount, metric }
     }
 
     const inSampleScores = scoreColumns(inSample, metric, "IS");
+    const winner = isWinner(inSampleScores);
+    if (winner.tiedVariants) {
+      excludedSplits.push({
+        inSampleBlocks: [...inSampleBlocks],
+        reason: "ничья за первое место на IS",
+        tiedVariants: winner.tiedVariants,
+      });
+      continue;
+    }
     const outOfSampleScores = scoreColumns(outOfSample, metric, "OOS");
-    const inSampleRanking = rankScores(inSampleScores, "IS");
-    const outOfSampleRanking = rankScores(outOfSampleScores, "OOS");
-    const selectedVariant = inSampleRanking[variantCount - 1].variant;
-    const oosRank = outOfSampleRanking.findIndex(({ variant }) => variant === selectedVariant) + 1;
+    const selectedVariant = winner.variant;
+    const oosRank = selectedMidrank(outOfSampleScores, selectedVariant);
     const omega = oosRank / (variantCount + 1);
     const lambda = Math.log(omega / (1 - omega));
 
@@ -127,10 +133,17 @@ export function probabilityOfBacktestOverfitting({ returns, blockCount, metric }
   }
 
   const overfitCount = lambdas.filter((lambda) => lambda <= 0).length;
+  const splitCount = Number(count);
+  const evaluatedSplitCount = lambdas.length;
+  const excludedSplitCount = excludedSplits.length;
   return {
-    pbo: overfitCount / lambdas.length,
+    pbo: evaluatedSplitCount ? overfitCount / evaluatedSplitCount : null,
     lambdas,
-    splitCount: Number(count),
+    splitCount,
+    evaluatedSplitCount,
+    excludedSplitCount,
+    excludedSplitRate: excludedSplitCount / splitCount,
+    excludedSplits,
     selectedVariants,
     oosRanks,
   };

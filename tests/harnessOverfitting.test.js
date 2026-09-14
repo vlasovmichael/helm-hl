@@ -175,7 +175,7 @@ test("PBO с аналитической матрицей попадает в с�
   );
 });
 
-test("ничья исключает PBO-ячейку целиком и не роняет остальные меры", () => {
+test("харнесс исключает PBO при более чем 20% IS-разбиений с ничьёй за первое место", () => {
   const result = overfittingMeasures({
     dsr: [{
       id: "dsr-продолжает-работать",
@@ -194,11 +194,10 @@ test("ничья исключает PBO-ячейку целиком и не ро
 
   assert.equal(result.dsr.included.length, 1);
   assert.equal(result.pbo.included.length, 0);
-  assert.deepEqual(result.pbo.excluded, [{
-    id: "нулевой-блок",
-    status: "EXCLUDED",
-    reason: "метрика дала ничью на IS; статья не задаёт tie-break",
-  }]);
+  assert.equal(result.pbo.excluded[0].id, "нулевой-блок");
+  assert.equal(result.pbo.excluded[0].status, "EXCLUDED");
+  assert.match(result.pbo.excluded[0].reason, /1\/2 разбиений \(50\.00%\), порог 20%/);
+  assert.equal(result.pbo.excluded[0].result.excludedSplitRate, 0.5);
 });
 
 test("текстовый отчёт показывает DSR/PBO рядом с явными исключениями", () => {
@@ -223,7 +222,7 @@ test("текстовый отчёт показывает DSR/PBO рядом с �
 
   assert.match(text, /Защита от переобучения \(только воспроизводимые ряды\)/);
   assert.match(text, /DSR без-ряда: EXCLUDED — нет ряда доходностей/);
-  assert.match(text, /PBO аналитика: 0\.3333, S=4, разбиений 6, метрика mean/);
+  assert.match(text, /PBO аналитика: 0\.3333, S=4, разбиений 6\/6, исключено 0\.00%, метрика mean/);
 });
 
 test("текстовый отчёт не называет непроверенную команду включённой", () => {
