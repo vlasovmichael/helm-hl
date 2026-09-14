@@ -21,20 +21,71 @@
 // это протокол исследования, он должен быть в истории).
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { baselineTest, mean } from "./baseline.mjs";
+import {
+  isLifecycleStatus,
+  isResultStatus,
+  LIFECYCLE_STATUS,
+  RESULT_STATUS_LABEL,
+} from "./hypothesisStatus.mjs";
+import { EDGE_DISCOVERY_FAMILY, auditLegacyFdrCoverage } from "./fdrFamily.mjs";
+import { appendCellRegistrations, appendCellRuns } from "./hypothesisCells.mjs";
+import { assertRegistry } from "./hypothesisRegistrySchema.mjs";
+import { resolveStageBranch } from "./hypothesisStages.mjs";
 
 const DIR = join("data", "hypotheses");
 const REGISTRY = join(DIR, "registry.json");
 
-export function loadRegistry() {
-  if (!existsSync(REGISTRY)) return { hypotheses: [], runs: [] };
-  return JSON.parse(readFileSync(REGISTRY, "utf8"));
+export function loadRegistry(path = REGISTRY) {
+  if (!existsSync(path)) return { hypotheses: [], runs: [], stageLinks: [], cells: [], cellRuns: [] };
+  return assertRegistry(JSON.parse(readFileSync(path, "utf8")));
 }
 
-function saveRegistry(reg) {
-  mkdirSync(DIR, { recursive: true });
-  writeFileSync(REGISTRY, JSON.stringify(reg, null, 2));
+function saveRegistry(reg, path = REGISTRY) {
+  assertRegistry(reg);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify(reg, null, 2));
+}
+
+function formatRootValue(value) {
+  return JSON.stringify(value, null, 2).replaceAll("\n", "\n  ");
+}
+
+function saveCellStorage(reg, path, source) {
+  assertRegistry(reg);
+  const marker = source.lastIndexOf(',\n  "cells": [');
+  const rootEnd = source.lastIndexOf("\n}");
+  if (marker < 0 || rootEnd < marker) {
+    throw new Error("реестр не мигрирован: не найден хвост cells/cellRuns");
+  }
+  const cellTail = (
+    `,\n  "cells": ${formatRootValue(reg.cells)},` +
+    `\n  "cellRuns": ${formatRootValue(reg.cellRuns)}`
+  );
+  writeFileSync(path, source.slice(0, marker) + cellTail + source.slice(rootEnd));
+}
+
+/** Замораживает все ячейки батареи одним действием до просмотра результатов. */
+export function preregisterCells(id, { stageId, cells }, { registryPath = REGISTRY, now = () => new Date().toISOString() } = {}) {
+  const source = readFileSync(registryPath, "utf8");
+  const reg = assertRegistry(JSON.parse(source));
+  const records = appendCellRegistrations(reg, id, {
+    stageId,
+    cells,
+    registeredAt: now(),
+  });
+  saveCellStorage(reg, registryPath, source);
+  return records;
+}
+
+/** Пишет отдельный результат каждой ячейки; primary p-value вычисляется внутри. */
+export function recordCellRuns(id, payload, { registryPath = REGISTRY, now = () => new Date().toISOString() } = {}) {
+  const source = readFileSync(registryPath, "utf8");
+  const reg = assertRegistry(JSON.parse(source));
+  const records = appendCellRuns(reg, id, { ...payload, ranAt: now() });
+  saveCellStorage(reg, registryPath, source);
+  return records;
 }
 
 /**
@@ -61,6 +112,8 @@ export function preregister({ id, description, side, holdMin, rationale, conditi
   }
   reg.hypotheses.push({
     id,
+    status: LIFECYCLE_STATUS.OPEN,
+    resultStatus: null,
     description,
     condition,
     side,
@@ -121,17 +174,19 @@ export function run(id, events, { window: win, regime, k = 300, seed = 7, modes 
 }
 
 /**
- * Benjamini-Hochberg по всем прогонам реестра.
- * Считаем по режиму 'time' — это основной тест; остальные диагностические.
- * Берём ВСЕ прогоны, включая пустые: гипотеза, не давшая событий, всё равно
- * была попыткой, и молча выкинуть её значит занизить поправку.
+ * Устаревший адаптер Benjamini-Hochberg по results.time.p.
+ * 🚨 Это не полное семейство edge-discovery-v1: run не равен ячейке теста,
+ * батареи пока хранятся summary-строками. Покрытие возвращается явно.
  */
 export function fdr(q = 0.1) {
   const reg = loadRegistry();
+  const coverage = auditLegacyFdrCoverage(reg);
   const tests = reg.runs
-    .filter((r) => r.results?.time?.p != null)
+    .filter((r) => Number.isFinite(r.results?.time?.p))
     .map((r) => ({ id: r.id, window: r.window, regime: r.regime, p: r.results.time.p }));
-  if (!tests.length) return { tests: [], threshold: null, survivors: [] };
+  if (!tests.length) return {
+    tests: [], threshold: null, survivors: [], familyId: EDGE_DISCOVERY_FAMILY.id, coverage,
+  };
 
   const sorted = [...tests].sort((a, b) => a.p - b.p);
   const m = sorted.length;
@@ -144,6 +199,8 @@ export function fdr(q = 0.1) {
     tests: sorted,
     m,
     q,
+    familyId: EDGE_DISCOVERY_FAMILY.id,
+    coverage,
     threshold,
     survivors: sorted.slice(0, kMax),
   };
@@ -152,26 +209,45 @@ export function fdr(q = 0.1) {
 /** Статус гипотезы: что про неё можно честно сказать на сегодня. */
 export function status(id) {
   const reg = loadRegistry();
-  const runs = reg.runs.filter((r) => r.id === id && r.results?.time?.p != null);
-  if (!runs.length) return { id, status: "не прогонялась" };
+  const hypothesis = reg.hypotheses.find((row) => row.id === id);
+  if (!hypothesis) throw new Error(`гипотеза «${id}» не зарегистрирована`);
+  const runs = reg.runs.filter((row) => row.id === id);
+  const regimes = [...new Set(runs.map((row) => row.regime).filter(Boolean))];
+  const stageResultStatus = hypothesis.resultStatus;
+  if (!isLifecycleStatus(hypothesis.status)) {
+    throw new Error(`у гипотезы «${id}» неизвестный жизненный статус`);
+  }
+  if (hypothesis.status === LIFECYCLE_STATUS.OPEN) {
+    if (stageResultStatus !== null) throw new Error(`у открытой гипотезы «${id}» появился преждевременный исход`);
+  }
+  if (hypothesis.status === LIFECYCLE_STATUS.CLOSED && !isResultStatus(stageResultStatus)) {
+    throw new Error(`у закрытой гипотезы «${id}» нет машинного исхода`);
+  }
+  const branch = resolveStageBranch(reg, id);
+  const terminal = branch.terminalHypothesis;
+  const resultStatus = terminal.resultStatus;
+  const finalLabel = terminal.status === LIFECYCLE_STATUS.OPEN
+    ? "ОТКРЫТА"
+    : RESULT_STATUS_LABEL[resultStatus];
+  return {
+    id,
+    lifecycleStatus: terminal.status,
+    resultStatus,
+    status: finalLabel,
+    stageLifecycleStatus: hypothesis.status,
+    stageResultStatus,
+    stageStatus: hypothesis.status === LIFECYCLE_STATUS.OPEN
+      ? "ОТКРЫТА"
+      : RESULT_STATUS_LABEL[stageResultStatus],
+    terminalHypothesisId: branch.terminalHypothesisId,
+    stageChain: branch.chain,
+    runs: runs.length,
+    regimes,
+  };
+}
 
-  const regimes = [...new Set(runs.map((r) => r.regime))];
-  const hits = runs.filter((r) => r.results.time.p < 0.05);
-  const hitRegimes = [...new Set(hits.map((r) => r.regime))];
-
-  if (!hits.length) return { id, status: "ОТВЕРГНУТА", runs: runs.length, regimes };
-  if (regimes.length < 2) {
-    return { id, status: "ПРЕДВАРИТЕЛЬНО (один режим рынка — не результат)", runs: runs.length, regimes };
-  }
-  if (hitRegimes.length < 2) {
-    return { id, status: "ОТВЕРГНУТА (сработала лишь в одном режиме = бета)", runs: runs.length, regimes, hitRegimes };
-  }
-  // Знак эффекта должен совпадать, иначе это инверсия, как у няньки
-  const signs = [...new Set(hits.map((r) => Math.sign(r.results.time.actual - r.results.time.surrogateMean)))];
-  if (signs.length > 1) {
-    return { id, status: "ОТВЕРГНУТА (знак эффекта инвертируется)", runs: runs.length, regimes };
-  }
-  return { id, status: "ВЫЖИЛА на двух режимах — кандидат на holdout", runs: runs.length, regimes };
+function fixedOrDash(value, digits) {
+  return Number.isFinite(value) ? value.toFixed(digits) : "—";
 }
 
 export function report() {
@@ -180,7 +256,10 @@ export function report() {
   lines.push(`гипотез зарегистрировано: ${reg.hypotheses.length}, прогонов: ${reg.runs.length}\n`);
   for (const h of reg.hypotheses) {
     const s = status(h.id);
-    lines.push(`  ${h.id.padEnd(22)} ${s.status}`);
+    const branchNote = s.terminalHypothesisId === h.id
+      ? ""
+      : ` (итог ${s.terminalHypothesisId}; исход этапа: ${s.stageStatus})`;
+    lines.push(`  ${h.id.padEnd(22)} ${s.status}${branchNote}`);
     lines.push(`    ${h.description}`);
     const runs = reg.runs.filter((r) => r.id === h.id);
     for (const r of runs) {
@@ -188,13 +267,18 @@ export function report() {
       if (!t) { lines.push(`      ${r.window} (${r.regime}): ${r.note || "нет данных"}`); continue; }
       if (t.error) { lines.push(`      ${r.window} (${r.regime}): ошибка ${t.error}`); continue; }
       lines.push(
-        `      ${r.window} (${r.regime}): n=${t.n} реально ${t.actual.toFixed(3)}% против случайного ${t.surrogateMean.toFixed(3)}%  p=${t.p.toFixed(4)}`,
+        `      ${r.window} (${r.regime}): n=${t.n ?? "—"} реально ${fixedOrDash(t.actual, 3)}% ` +
+        `против случайного ${fixedOrDash(t.surrogateMean, 3)}%  p=${fixedOrDash(t.p, 4)}`,
       );
     }
   }
   const f = fdr();
   if (f.m) {
-    lines.push(`\nFDR (Benjamini-Hochberg, q=${f.q}): тестов ${f.m}, порог p<${f.threshold.toFixed(4)}`);
+    lines.push(`\nFDR legacy results.time.p (Benjamini-Hochberg, q=${f.q}): записей ${f.m}, порог p<${f.threshold.toFixed(4)}`);
+    lines.push(
+      `  🚨 не полное семейство ${f.familyId}: уникальных координат ${f.coverage.legacy.uniqueCoordinates}, ` +
+      `без числового time.p ${f.coverage.legacy.runsWithoutFiniteTimeP}`,
+    );
     const uniq = [...new Set(f.survivors.map((s) => s.id))];
     lines.push(uniq.length ? `  переживших поправку: ${uniq.join(", ")}` : "  поправку не пережил никто");
     // Прохождение только по 'time' — слабейшее свидетельство: настоящий сигнал
