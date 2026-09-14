@@ -121,29 +121,13 @@ export const handleFvgForward = served("fvg", () => {
 // ни одной метрики результата: только сколько набрано, с какой скоростью и
 // когда последняя запись.
 //
-// 🚨 Гипотеза с ВЕРДИКТОМ из списка убирается: витрина показывает идущее, а
-// закрытое живёт в data/hypotheses/registry.json (runs). Снято отсюда:
-// liqwick-net-edge-n277 и exec-hour-cost-n400 — обе отвергнуты 05.09.
+// 🚨 Гипотеза со статусом CLOSED в реестре из списка убирается: витрина
+// показывает идущее, закрытое живёт в data/hypotheses/registry.json.
 const FORWARDS = [
   {
     id: "fvg-wide-retest-4h", label: "FVG wide retest 4h",
     file: join("data", "fvg-forward", "trades.jsonl"),
     target: 1500, unit: "trades", tField: "entryT", startedISO: "2026-08-29",
-  },
-  {
-    id: "wide-stop-premium-4h", label: "Wide stop premium",
-    file: join("data", "forward", "wide-stop-premium-4h.jsonl"),
-    target: 700, unit: "pairs", tField: "entryT", startedISO: "2026-09-01",
-  },
-  {
-    id: "session-open-reversal", label: "Session open reversal",
-    file: join("data", "forward", "session-open-reversal.jsonl"),
-    target: 60, unit: "days", tField: "entryT", startedISO: "2026-09-01", byDay: true,
-  },
-  {
-    id: "squeeze-expansion-4h", label: "Squeeze expansion 4h",
-    file: join("data", "forward", "squeeze-expansion-4h.jsonl"),
-    target: 1200, unit: "trades", tField: "entryT", startedISO: "2026-09-01",
   },
   {
     id: "flow-pressure-exhaustion-2026-09", label: "Flow pressure exhaustion",
@@ -177,11 +161,6 @@ const DB_FORWARDS = [
     id: "exec-stop-slippage-n60", label: "Stop trigger slippage",
     target: 60, unit: "stops", startedISO: "2026-09-05",
     rows: () => getFillCosts(0).filter((r) => r.slip_bp != null),
-  },
-  {
-    id: "exec-alert-lag-n40", label: "Alert to trade lag",
-    target: 40, unit: "trades", startedISO: "2026-09-05",
-    rows: () => getFillCosts(0).filter((r) => r.alert_lag_ms != null),
   },
   {
     id: "venue-hip3-premium-45d", label: "HIP-3 venue premium",
