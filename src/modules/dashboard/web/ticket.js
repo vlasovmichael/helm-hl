@@ -84,18 +84,22 @@ const base = {
   maxLeverage: 10,
   stopDistPct: 7.2,
   adoptEnabled: true,
-  day: { netUsd: -1.77, limitUsd: 5, halted: false },
+  equity: 14.39,
+  riskPct: 5,
+  spreadBp: 6.4,
+  fees: { takerBp: 4.32, makerBp: 1.44 },
+  day: { netUsd: -1.77, limitUsd: 5, halted: false, feesUsd: 0.05, feeBudgetPct: 1.5 },
   positions,
 };
 
 const scenarios = {
   normal: { ctx: base, opts: { coin: "CHIP", side: "short" } },
   rich: {
-    ctx: { ...base, available: 120, day: { netUsd: 0.4, limitUsd: 5, halted: false } },
+    ctx: { ...base, available: 120, equity: 120, day: { ...base.day, netUsd: 0.4 } },
     opts: { coin: "CHIP", side: "long" },
   },
   halted: {
-    ctx: { ...base, day: { netUsd: -5.2, limitUsd: 5, halted: true } },
+    ctx: { ...base, day: { ...base.day, netUsd: -5.2, halted: true } },
     opts: { coin: "CHIP", side: "short" },
   },
   nonanny: { ctx: { ...base, adoptEnabled: false }, opts: { coin: "CHIP", side: "short" } },

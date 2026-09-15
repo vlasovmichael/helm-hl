@@ -26,11 +26,11 @@ import {
 } from "../../binancePositioning.js";
 
 // Комиссии HL по факту наших филлов. Круг = вход + выход.
-const TAKER_FEE_BP = 4.32;
+export const TAKER_FEE_BP = 4.32;
 const ROUND_TRIP_FEE_BP = TAKER_FEE_BP * 2;
 // Лимитка стоит в книге и спред не платит вовсе — отсюда и разрыв с тейкером
 // втрое. Показываем обе цифры рядом: это цена одного и того же входа.
-const MAKER_FEE_BP = 1.44;
+export const MAKER_FEE_BP = 1.44;
 const MAKER_ROUND_TRIP_BP = MAKER_FEE_BP * 2;
 
 // metaAndAssetCtxs весит 20 (не в списке лёгких). Кэш 120с → 10 веса/мин из

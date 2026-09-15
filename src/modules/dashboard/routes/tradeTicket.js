@@ -37,6 +37,7 @@ import { getLastDailyRiskStatus } from "../../dailyRisk.js";
 import { computeTradesToday, computeCooldown } from "../../tradeGuards.js";
 import { getHistorySince, getActiveAdoptPositions, getActivePosition } from "../../../core/database.js";
 import { getUniverse } from "../../../core/universe.js";
+import { liveCoinSnapshot, MAKER_FEE_BP, TAKER_FEE_BP } from "./screen.js";
 
 // Биржевой минимум ордера на HL. Меньше — гарантированный отказ.
 const MIN_ORDER_USD = 10;
@@ -241,6 +242,9 @@ export async function handleContext(req, res) {
     const day = getLastDailyRiskStatus();
     const budget = tradesTodayStatus();
     const cooldown = coin ? reentryCooldown(coin) : null;
+    // Спред из кэша Screen — тот же, что в колонке Friction. null: монета не
+    // прошла порог трения или экран ещё не строился.
+    const live = coin ? liveCoinSnapshot(coin) : null;
     res.json({
       coin,
       coinKnown,
@@ -262,6 +266,8 @@ export async function handleContext(req, res) {
       equity,                                  // депо целиком — база для риска
       riskPct: config.trading.adoptRiskPct,    // порог риска на сделку
       adoptEnabled: config.trading.adoptEnabled,
+      spreadBp: live?.spreadBp ?? null,
+      fees: { takerBp: TAKER_FEE_BP, makerBp: MAKER_FEE_BP },
       hasPosition: positions.some((p) => p.coin === coin),
       positions,
       day: {
@@ -277,6 +283,10 @@ export async function handleContext(req, res) {
         tradesToday: budget.today,
         tradesCap: budget.cap,
         tradesOver: budget.over,
+        // Бюджет комиссий дня: сколько попыток ещё оплачено, считает клиент
+        // по размеру, который сейчас стоит в форме.
+        feesUsd: day?.feesUsd ?? null,
+        feeBudgetPct: config.trading.dailyFeeBudgetPct,
       },
       cooldown,
       generatedAt: Date.now(),

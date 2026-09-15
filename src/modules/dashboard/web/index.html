@@ -158,22 +158,6 @@
         <p class="hm-fwd" id="hm-chase-fwd" hidden></p>
       </section>
 
-      <!-- 01.3 / Pre-trade — что известно про монету ДО входа. Порядок строк
-           обратный привычному: цена попытки и размер идут раньше выбора, а
-           стороны нет вовсе — направление в цене не предсказуемо. -->
-      <section class="card" id="sec-pretrade">
-        <div class="card-header">
-          <div
-            class="card-title"
-            data-card="What is known before an entry: how far the coin typically travels, what one round trip costs, which target/stop pair breaks even, what size holds your risk, and how many attempts today's fee budget still pays for. Side is deliberately absent — direction does not persist in price (autocorrelation −0.01), amplitude does (0.25)."
-          >
-            Pre-trade
-          </div>
-          <div class="seg" id="pt-coins"></div>
-        </div>
-        <div id="pt-body"></div>
-      </section>
-
       <!-- 01.4 / Screen — монеты, отобранные по цене входа, + бюджет дня.
            Заменяет Hot Movers в роли «куда смотреть»: отбор идёт по трению
            (спред + комиссии), а не по движению. Обоснование и порог —

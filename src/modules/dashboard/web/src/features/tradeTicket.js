@@ -114,6 +114,49 @@ export function riskVsEquity({ riskUsd, equity, riskPct, stopDistPct }) {
   return { pctOfEquity, suggestedNotional, over: hasLimit && pctOfEquity > limit };
 }
 
+/**
+ * Круг издержек: вход по типу ордера + выход тейкером (нянька добивает маркетом).
+ * Тейкер платит полспреда на своей ноге, лимитка на входе спред не платит.
+ * rOfStop — доля стопа, которую съедает круг: издержки в R = круг / ширина стопа.
+ */
+export function roundTripCost({ notional, orderType, spreadBp, fees, stopDistPct }) {
+  const taker = Number(fees?.takerBp);
+  const maker = Number(fees?.makerBp);
+  if (!(notional > 0) || !Number.isFinite(taker) || !Number.isFinite(maker)) return null;
+  const spreadKnown = spreadBp != null && Number.isFinite(Number(spreadBp));
+  const half = spreadKnown ? Number(spreadBp) / 2 : 0;
+  const bp = (orderType === "limit" ? maker : taker + half) + taker + half;
+  const stop = Number(stopDistPct);
+  return {
+    bp,
+    usd: (notional * bp) / 10_000,
+    spreadKnown,
+    rOfStop: Number.isFinite(stop) && stop > 0 ? bp / (stop * 100) : null,
+  };
+}
+
+/** Маржа под порог риска на стопе няньки при текущем плече, в пределах свободного. */
+export function marginForRisk({ equity, riskPct, stopDistPct, leverage, available }) {
+  const eq = Number(equity);
+  const pct = Number(riskPct);
+  const stop = Number(stopDistPct);
+  const lev = Number(leverage);
+  if (!(eq > 0) || !(pct > 0) || !(stop > 0) || !(lev > 0)) return null;
+  const notional = (eq * (pct / 100)) / (stop / 100);
+  const margin = Math.floor((notional / lev) * 100) / 100;
+  const free = Number(available);
+  const capped = free > 0 && margin > free;
+  return { notional, margin: capped ? free : margin, capped };
+}
+
+/** Сколько кругов такого размера ещё оплачивает дневной бюджет комиссий. */
+export function attemptsLeft({ equity, feeBudgetPct, feesUsd, costUsd }) {
+  const eq = Number(equity);
+  const pct = Number(feeBudgetPct);
+  if (!(eq > 0) || !(pct > 0) || !(costUsd > 0) || feesUsd == null) return null;
+  return Math.max(0, Math.floor(((eq * pct) / 100 - Number(feesUsd)) / costUsd));
+}
+
 /** Валидация открытия. { ok, blockers[], warnings[], entry, notional } */
 export function validateOpen(s, ctx) {
   const blockers = [];
@@ -310,6 +353,51 @@ function createModal(io) {
     return `${escapeHtml(fmtPrice(botStop))} <i class="tt-row__sub">−${Number(ctx.stopDistPct).toFixed(1)}% ATR</i>`;
   }
 
+  /** Маржа под порог риска при текущем плече; null — нет депо или стопа. */
+  function riskSizing() {
+    return marginForRisk({
+      equity: ctx.equity,
+      riskPct: ctx.riskPct,
+      stopDistPct: ctx.stopDistPct,
+      leverage: state.leverage,
+      available: ctx.available,
+    });
+  }
+
+  function costBlock(notional) {
+    const cost = roundTripCost({
+      notional,
+      orderType: state.orderType,
+      spreadBp: ctx.spreadBp,
+      fees: ctx.fees,
+      stopDistPct: ctx.stopDistPct,
+    });
+    const tries = attemptsLeft({
+      equity: ctx.equity,
+      feeBudgetPct: ctx.day?.feeBudgetPct,
+      feesUsd: ctx.day?.feesUsd,
+      costUsd: cost?.usd,
+    });
+    return { cost, tries };
+  }
+
+  /** Содержимое строк Round trip / Attempts — общее для render и точечного обновления. */
+  function roundTripHtml(cost) {
+    if (!cost) return "—";
+    const notes = [`${cost.bp.toFixed(1)} bp`];
+    if (cost.rOfStop != null) notes.push(`${cost.rOfStop.toFixed(2)}R of the stop`);
+    if (!cost.spreadKnown) notes.push("fees only, spread unknown");
+    return `−$${cost.usd.toFixed(cost.usd < 1 ? 3 : 2)} <i class="tt-row__sub">${notes.join(" · ")}</i>`;
+  }
+
+  function attemptsHtml(tries) {
+    return tries == null ? "—" : `${tries} <i class="tt-row__sub">left in today's fee budget</i>`;
+  }
+
+  function riskButtonHtml(sizing) {
+    return `size for ${escapeHtml(String(ctx.riskPct ?? "—"))}% risk: <b>${sizing ? escapeHtml(fmtUsd(sizing.margin)) : "—"}</b> margin`;
+  }
+
   function renderOpen() {
     const v = validateOpen(state, ctx);
     const isShort = state.side === "short";
@@ -326,6 +414,8 @@ function createModal(io) {
     const maxLev = leverageCap(ctx);
     const available = Number(ctx.available) || 0;
     const tooSmall = notional > 0 && notional < MIN_ORDER_USD;
+    const sizing = riskSizing();
+    const { cost, tries } = costBlock(notional);
 
     return `
       <!-- Тикер в заголовке — только когда он РЕАЛЬНЫЙ: иначе на полпути ввода
@@ -426,16 +516,23 @@ function createModal(io) {
               : "—"
           }</b>
         </div>
-        ${riskEq?.over && riskEq.suggestedNotional != null
-          ? `<div class="tt-row tt-row--sub">
-               <span></span>
-               <b class="tt-row__sub">${ctx.riskPct}% would be ${fmtUsd(riskEq.suggestedNotional)}${
-                 riskEq.suggestedNotional < MIN_ORDER_USD
-                   ? ` — below the ${fmtUsd(MIN_ORDER_USD)} minimum`
-                   : ""
-               }</b>
-             </div>`
-          : ""}
+        <!-- Размер от риска одной кнопкой: стоп двигать нельзя (он по ATR),
+             двигается маржа. Строка есть всегда — контекст может приехать позже. -->
+        <div class="tt-row tt-row--sub">
+          <span></span>
+          <button type="button" class="tt-row__toggle" data-size-risk ${sizing ? "" : "disabled"}
+                  data-card="Sets the margin so that the bot's stop loses exactly your risk share of equity at the current leverage">
+            ${riskButtonHtml(sizing)}
+          </button>
+        </div>
+        <div class="tt-row">
+          <span>Round trip <i class="tt-row__by">entry + taker exit</i></span>
+          <b data-roundtrip>${roundTripHtml(cost)}</b>
+        </div>
+        <div class="tt-row">
+          <span>Attempts left today</span>
+          <b data-attempts>${attemptsHtml(tries)}</b>
+        </div>
       </div>
 
       ${listBlock("tt-blockers", v.blockers)}
@@ -515,6 +612,16 @@ function createModal(io) {
         const px = plainPrice(ctx.price);
         if (!px) return;
         state.limitPx = px;
+        state.error = null;
+        render();
+      }),
+    );
+
+    q("[data-size-risk]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const sizing = riskSizing();
+        if (!sizing) return;
+        state.marginUsd = sizing.margin;
         state.error = null;
         render();
       }),
@@ -621,6 +728,18 @@ function createModal(io) {
     if (sizeEl) {
       sizeEl.textContent =
         notional > 0 ? `${fmtUsd(notional)} = ${coinAmount(coins)} ${state.coin || ""}` : "—";
+    }
+
+    const { cost, tries } = costBlock(notional);
+    const roundTripEl = bodyEl.querySelector("[data-roundtrip]");
+    if (roundTripEl) roundTripEl.innerHTML = roundTripHtml(cost);
+    const attemptsEl = bodyEl.querySelector("[data-attempts]");
+    if (attemptsEl) attemptsEl.innerHTML = attemptsHtml(tries);
+    const riskBtn = bodyEl.querySelector("[data-size-risk]");
+    if (riskBtn) {
+      const sizing = riskSizing();
+      riskBtn.innerHTML = riskButtonHtml(sizing);
+      riskBtn.disabled = !sizing;
     }
 
     const btn = bodyEl.querySelector("[data-submit]");

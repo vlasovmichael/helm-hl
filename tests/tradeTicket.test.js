@@ -20,7 +20,47 @@ import {
   validateClose,
   suggestCoins,
   leverageCap,
+  roundTripCost,
+  marginForRisk,
+  attemptsLeft,
 } from "../src/modules/dashboard/web/src/features/tradeTicket.js";
+
+const FEES = { takerBp: 4.32, makerBp: 1.44 };
+const near = (a, b) => Math.abs(a - b) < 1e-9;
+
+test("круг: лимитка на входе без спреда, тейкер платит полспреда на своей ноге", () => {
+  const limit = roundTripCost({ notional: 100, orderType: "limit", spreadBp: 6, fees: FEES, stopDistPct: 7.2 });
+  assert.ok(near(limit.bp, 1.44 + 4.32 + 3));
+  assert.ok(near(limit.usd, 0.0876));
+  assert.ok(near(limit.rOfStop, 8.76 / 720));
+  const market = roundTripCost({ notional: 100, orderType: "market", spreadBp: 6, fees: FEES, stopDistPct: 7.2 });
+  assert.ok(near(market.bp, 2 * (4.32 + 3)));
+});
+
+test("круг без спреда считает только комиссии и помечает это", () => {
+  const cost = roundTripCost({ notional: 100, orderType: "limit", spreadBp: null, fees: FEES, stopDistPct: null });
+  assert.ok(near(cost.bp, 5.76));
+  assert.equal(cost.spreadKnown, false);
+  assert.equal(cost.rOfStop, null);
+  assert.equal(roundTripCost({ notional: 0, orderType: "limit", spreadBp: 6, fees: FEES }), null);
+});
+
+test("маржа под риск: нотионал из депо и стопа, делится на плечо, не больше свободного", () => {
+  const sizing = marginForRisk({ equity: 14.39, riskPct: 5, stopDistPct: 7.2, leverage: 5, available: 14.39 });
+  assert.ok(near(sizing.notional, (14.39 * 0.05) / 0.072));
+  assert.equal(sizing.margin, 1.99);
+  assert.equal(sizing.capped, false);
+  const capped = marginForRisk({ equity: 14.39, riskPct: 5, stopDistPct: 7.2, leverage: 1, available: 5 });
+  assert.equal(capped.margin, 5);
+  assert.equal(capped.capped, true);
+  assert.equal(marginForRisk({ equity: 14.39, riskPct: 5, stopDistPct: null, leverage: 5 }), null);
+});
+
+test("попытки: остаток бюджета комиссий дня делится на круг текущего размера", () => {
+  assert.equal(attemptsLeft({ equity: 14.39, feeBudgetPct: 1.5, feesUsd: 0.05, costUsd: 0.0876 }), 1);
+  assert.equal(attemptsLeft({ equity: 14.39, feeBudgetPct: 1.5, feesUsd: 1, costUsd: 0.0876 }), 0);
+  assert.equal(attemptsLeft({ equity: 14.39, feeBudgetPct: 1.5, feesUsd: null, costUsd: 0.0876 }), null);
+});
 
 // Числа из реальной сделки.
 const CHIP = 0.027763;
