@@ -116,6 +116,9 @@ logs/harness-overfitting-*.log
 tools/fvgE5Audit.mjs
 tests/fvgE5Audit.test.js
 logs/fvg-e5-*.log
+tools/executionCostDecomposition.mjs
+tests/executionCostDecomposition.test.js
+logs/execution-cost-decomposition-*.log
 tools/liqWickBacktest.mjs
 tools/fundingSpreadEval.mjs
 tools/oiEntry.mjs
