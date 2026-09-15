@@ -11,7 +11,7 @@ import { bindTheme } from "./src/core/shell.js";
 import { mountTopnav } from "./src/core/topnav.js";
 import { analyzeMultiTF } from "../../chartCoach.js";
 import { segmented } from "./src/core/ui.js";
-import { mountTradeLog } from "./src/features/tradeLog.js";
+import { mountTradeLog, setUrlCoin } from "./src/features/tradeLog.js";
 
 mountTopnav("journal");
 bindTheme();
@@ -298,7 +298,7 @@ async function addCoinByTicker(raw) {
     const match = Object.keys(mids).find((k) => k.toLowerCase() === t.toLowerCase());
     if (!match) return false;
     if (!allCoins().includes(match)) { customCoins.push(match); localStorage.setItem(COINS_KEY, JSON.stringify(customCoins)); }
-    switchCoin(match); return true;
+    switchCoin(match); setUrlCoin(match); return true;
   } catch (err) { return false; }
 }
 function removeCoin(c) {
@@ -308,7 +308,7 @@ function removeCoin(c) {
 G("tabs").addEventListener("click", (e) => {
   const rm = e.target.closest(".j-rm"); if (rm) { e.stopPropagation(); removeCoin(rm.dataset.rm); return; }
   if (e.target.closest("#addCoin")) { showAddInput(); return; }
-  const t = e.target.closest(".tabs__tab"); if (t && t.dataset.coin) switchCoin(t.dataset.coin);
+  const t = e.target.closest(".tabs__tab"); if (t && t.dataset.coin) { switchCoin(t.dataset.coin); setUrlCoin(t.dataset.coin); }
 });
 
 // ── калькулятор стопа/размера ──
@@ -400,7 +400,13 @@ function setView(view) {
   if (trades) url.searchParams.set("view", "trades");
   else url.searchParams.delete("view");
   history.replaceState(null, "", url);
-  if (trades) mountTradeLog();
+  if (trades) {
+    mountTradeLog();
+    return;
+  }
+  // Монета в адресе могла смениться в Trade log — дрилл открывает её же.
+  const linked = url.searchParams.get("coin");
+  if (linked && linked.toUpperCase() !== coin.toUpperCase()) addCoinByTicker(linked);
 }
 G("journalViews").addEventListener("click", (e) => {
   const button = e.target.closest("[data-view]");
@@ -411,9 +417,6 @@ wireHelp();
 wireCalc();
 switchCoin("BTC");
 setView(new URLSearchParams(location.search).get("view") === "trades" ? "trades" : "drill");
-// ?coin= приходит с /oi: монета добавляется во вкладки и открывается.
-const linkedCoin = new URLSearchParams(location.search).get("coin");
-if (linkedCoin) addCoinByTicker(linkedCoin);
 
 // <i data-icon="…"> в статической разметке → настоящие svg.
 paintIcons();

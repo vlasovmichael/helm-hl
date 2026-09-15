@@ -10,11 +10,11 @@ import { buildTradeJournal } from "../src/modules/tradeJournal.js";
 const PORT = Number(process.env.PORT || 3010);
 const app = express();
 
-app.get("/api/trade-journal", (_req, res) => {
+app.get("/api/trade-journal", (req, res) => {
   const archive = JSON.parse(readFileSync("data/history_archive.json", "utf8"));
   const trades = archive.filter((row) => row.mode === "PRODUCTION");
   const asOf = trades.length ? Math.max(...trades.map((row) => row.closed_at)) : Date.now();
-  res.json(buildTradeJournal(trades, { now: asOf }));
+  res.json(buildTradeJournal(trades, { now: asOf, coin: req.query.coin || null }));
 });
 
 app.listen(PORT, "127.0.0.1", () => {

@@ -139,13 +139,18 @@ function breakdown(trades, groups) {
   return groups.map(({ key, label, match }) => ({ key, label, ...summarize(trades.filter(match)) }));
 }
 
-export function buildTradeJournal(rows, { now = Date.now(), recent = 50 } = {}) {
-  const trades = enrichTrades(rows.filter((row) => finite(row.closed_at)));
-  if (!trades.length) return { empty: true, flags: FLAGS, notes: OUTCOME_NOTES };
+export function buildTradeJournal(rows, { now = Date.now(), recent = 50, coin = null } = {}) {
+  const wanted = coin ? String(coin).toUpperCase() : null;
+  // 🚨 Метки считаются по всем сделкам и только потом режутся по монете:
+  // отыгрыш и счёт сделок дня зависят от соседних сделок на других монетах.
+  const all = enrichTrades(rows.filter((row) => finite(row.closed_at)));
+  const trades = wanted ? all.filter((trade) => String(trade.coin).toUpperCase() === wanted) : all;
+  if (!trades.length) return { empty: true, coin: wanted, flags: FLAGS, notes: OUTCOME_NOTES };
   const flagged = trades.filter((trade) => trade.flags.length);
   const holdKey = (seconds) => HOLD_BUCKETS.find((bucket) => seconds < bucket.maxSeconds)?.key;
   return {
     asOf: now,
+    coin: wanted,
     period: { from: Math.min(...trades.map((t) => t.closedAt)), to: Math.max(...trades.map((t) => t.closedAt)) },
     flags: FLAGS,
     notes: OUTCOME_NOTES,

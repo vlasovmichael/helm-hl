@@ -82,6 +82,18 @@ test("сводка без пяти дней не выдумывает CI", () =>
   assert.equal(result.ci95, null);
 });
 
+test("фильтр по монете: метки считаются по всем сделкам, в ответе только эта монета", () => {
+  const rows = [
+    trade({ coin: "ETH", realized_pnl: -1, mfe_pct: 0.5, closed_at: T0 + 5 * MIN }),
+    trade({ coin: "sol", entry_time: T0 + 20 * MIN, closed_at: T0 + 40 * MIN }),
+  ];
+  const journal = buildTradeJournal(rows, { now: T0 + 60 * MIN, coin: "SOL" });
+  assert.equal(journal.coin, "SOL");
+  assert.equal(journal.overall.n, 1);
+  assert.deepEqual(journal.trades[0].flags, ["revenge"]);
+  assert.equal(buildTradeJournal(rows, { coin: "BTC" }).empty, true);
+});
+
 test("журнал: неделя считается от asOf, пустой вход — пустой ответ", () => {
   const day = 86_400_000;
   const rows = [trade({ closed_at: T0 }), trade({ entry_time: T0 - 9 * day, closed_at: T0 - 9 * day })];

@@ -1,11 +1,11 @@
 // ─────────────────────────────────────────────────
 //  Вкладка Trade log на /journal: журнал сделок, всё из закрытых сделок,
 //  ручного ввода нет. Данные — /api/trade-journal (src/modules/tradeJournal.js).
-//  Грузится один раз, при первом открытии вкладки.
+//  Фильтр по монете — параметр ?coin= в адресе, общий с Chart drill.
 // ─────────────────────────────────────────────────
 
 import { fetchJson } from "../net/api.js";
-import { badge, segmented, stat } from "../core/ui.js";
+import { badge, chip, segmented, stat } from "../core/ui.js";
 import { emptyRow, emptyState, skeletonRows, skeletonText } from "../core/placeholders.js";
 import { escapeHtml, fmtMoney } from "../utils/format.js";
 
@@ -39,12 +39,23 @@ const dateOnly = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Warsaw", d
 
 let journal = null;
 let dimension = "session";
-let mounted = false;
+let bound = false;
+let loadedCoin;
+let requestId = 0;
 
 const $ = (id) => document.getElementById(id);
 const statTone = (value) => (value > 0 ? "positive" : value < 0 ? "negative" : "");
 const cellTone = (value) => (value > 0 ? "num-pos" : value < 0 ? "num-neg" : "num-muted");
 const grid = (tiles) => `<div class="data-grid">${tiles.join("")}</div>`;
+const urlCoin = () => new URLSearchParams(location.search).get("coin") || null;
+
+/** Монета в адресе общая для Chart drill и фильтра Trade log. */
+export function setUrlCoin(coin) {
+  const url = new URL(location.href);
+  if (coin) url.searchParams.set("coin", coin);
+  else url.searchParams.delete("coin");
+  history.replaceState(null, "", url);
+}
 
 function signedPct(value, digits = 1) {
   if (!Number.isFinite(value)) return "—";
@@ -67,6 +78,16 @@ function ciText(summary) {
 function ciTone(summary) {
   if (!summary.ci95 || (summary.ci95[0] <= 0 && summary.ci95[1] >= 0)) return "num-muted";
   return cellTone(summary.avg);
+}
+
+function renderFilter(coin) {
+  $("tj-filter").innerHTML = coin
+    ? chip({
+        label: coin,
+        title: "Trade log is filtered to this coin",
+        remove: { title: "Show all coins", attrs: { "data-clear-coin": true } },
+      })
+    : "";
 }
 
 function renderOverview({ overall, period }) {
@@ -143,6 +164,7 @@ function renderTrades({ trades, flags, notes }) {
   $("tj-trades-meta").textContent = `last ${trades.length}`;
   $("tj-trades").innerHTML = trades
     .map((trade) => {
+      const coin = escapeHtml(trade.coin);
       const trendCard = trade.trend1hPct == null ? "No 1h data at entry" : `1h move at entry ${signedPct(trade.trend1hPct)}`;
       const marks = [
         ...trade.flags.map((key) => badge({ label: BADGE_LABELS[key], tone: "accent", title: flags[key] })),
@@ -151,7 +173,7 @@ function renderTrades({ trades, flags, notes }) {
       return `
       <tr>
         <td>${dateTime.format(trade.entryTime)}</td>
-        <td>${escapeHtml(trade.coin)}</td>
+        <td><a href="/journal?view=trades&amp;coin=${encodeURIComponent(trade.coin)}" data-coin-filter="${coin}" data-card="Show only ${coin}">${coin}</a></td>
         <td>${badge({ label: trade.side, tone: trade.side })}</td>
         <td>${SESSION_LABELS[trade.session]}</td>
         <td data-card="${escapeHtml(trendCard)}">${TREND_LABELS[trade.trend]}</td>
@@ -167,13 +189,17 @@ function renderTrades({ trades, flags, notes }) {
 
 function renderUnavailable(title) {
   for (const id of ["tj-overview", "tj-week"]) $(id).innerHTML = emptyState({ title });
+  $("tj-period").textContent = "";
+  $("tj-week-meta").textContent = "";
+  $("tj-trades-meta").textContent = "";
+  $("tj-dims").innerHTML = "";
   $("tj-breakdown").innerHTML = emptyRow(BREAKDOWN_COLS, { title });
   $("tj-trades").innerHTML = emptyRow(TRADE_COLS, { title });
 }
 
-export async function mountTradeLog() {
-  if (mounted) return;
-  mounted = true;
+function bindOnce() {
+  if (bound) return;
+  bound = true;
   $("tj-dims").addEventListener("click", (event) => {
     const button = event.target.closest("[data-dim]");
     if (!button || !journal) return;
@@ -181,18 +207,45 @@ export async function mountTradeLog() {
     renderDimensions();
     renderBreakdown();
   });
+  $("tj-filter").addEventListener("click", (event) => {
+    if (!event.target.closest("[data-clear-coin]")) return;
+    setUrlCoin(null);
+    mountTradeLog();
+  });
+  $("tj-trades").addEventListener("click", (event) => {
+    const link = event.target.closest("[data-coin-filter]");
+    // Ссылка остаётся настоящей: средний клик и «открыть в новой вкладке» работают.
+    if (!link || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+    event.preventDefault();
+    setUrlCoin(link.dataset.coinFilter);
+    mountTradeLog();
+  });
+}
+
+/** Показать журнал для монеты из адреса; повторный вызов с той же монетой ничего не делает. */
+export async function mountTradeLog() {
+  bindOnce();
+  const coin = urlCoin();
+  if (loadedCoin !== undefined && coin === loadedCoin) return;
+  loadedCoin = coin;
+  const request = ++requestId;
+  renderFilter(coin);
   $("tj-overview").innerHTML = skeletonText(2);
   $("tj-week").innerHTML = skeletonText(2);
   $("tj-breakdown").innerHTML = skeletonRows(BREAKDOWN_COLS);
   $("tj-trades").innerHTML = skeletonRows(TRADE_COLS, 8);
+  let data;
   try {
-    journal = await fetchJson("/api/trade-journal");
+    data = await fetchJson(`/api/trade-journal${coin ? `?coin=${encodeURIComponent(coin)}` : ""}`);
   } catch {
-    renderUnavailable("Trade log is unavailable");
+    if (request === requestId) renderUnavailable("Trade log is unavailable");
     return;
   }
+  // Ответ на прежнюю монету, пришедший после смены фильтра, не рисуем.
+  if (request !== requestId) return;
+  journal = data;
   if (journal.empty) {
-    renderUnavailable("No closed trades yet");
+    renderUnavailable(coin ? `No closed trades on ${coin}` : "No closed trades yet");
     return;
   }
   renderOverview(journal);
