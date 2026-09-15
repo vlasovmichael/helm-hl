@@ -122,6 +122,9 @@ logs/execution-cost-decomposition-*.log
 tools/postOnlyChaseFresh.mjs
 tests/postOnlyChaseFresh.test.js
 logs/post-only-chase-fresh-*.log
+tools/tgChannelEntryAudit.mjs
+tests/tgChannelEntryAudit.test.js
+logs/tg-channel-entry-audit-*.log
 tools/liqWickBacktest.mjs
 tools/fundingSpreadEval.mjs
 tools/oiEntry.mjs
