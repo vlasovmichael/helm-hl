@@ -411,6 +411,9 @@ wireHelp();
 wireCalc();
 switchCoin("BTC");
 setView(new URLSearchParams(location.search).get("view") === "trades" ? "trades" : "drill");
+// ?coin= приходит с /oi: монета добавляется во вкладки и открывается.
+const linkedCoin = new URLSearchParams(location.search).get("coin");
+if (linkedCoin) addCoinByTicker(linkedCoin);
 
 // <i data-icon="…"> в статической разметке → настоящие svg.
 paintIcons();

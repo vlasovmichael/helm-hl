@@ -265,7 +265,7 @@ function renderRows() {
         // потом повесит стоп (см. границу ответственности в tradeTicket.js).
         `<tr class="scr-row" data-coin="${c.coin}" tabindex="0" role="button"` +
           ` data-card="Open trade ticket for ${c.coin}">` +
-          `<td class="scr-coin">${c.coin}</td>` +
+          `<td class="scr-coin"><a href="/oi?coin=${encodeURIComponent(c.coin)}" data-card="Open ${c.coin} on OI">${c.coin}</a></td>` +
           `<td class="num scr-payoff ${payoffClass(c.payoff)}">${
             c.payoff == null ? "—" : c.payoff.toFixed(1) + "×"
           }</td>` +
@@ -416,6 +416,8 @@ export function initScreenInteractions(openTicket) {
   });
 
   const openFor = (el) => {
+    // Тикер в первой ячейке — ссылка на /oi: переход, а не тикет.
+    if (el.closest?.("a")) return;
     const row = el.closest?.(".scr-row");
     if (row?.dataset.coin && typeof openTicket === "function") openTicket(row.dataset.coin);
   };

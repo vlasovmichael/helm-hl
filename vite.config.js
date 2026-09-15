@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 // Дашборда — multi-page, без фреймворка, чистые ES-модули.
@@ -33,8 +33,29 @@ function sharedHead() {
   };
 }
 
+/**
+ * Чистые пути страниц в деве. В проде /oi и /journal раздаёт server.js, а
+ * дев-сервер знает только /oi.html — без переписывания ссылки между страницами
+ * в деве ведут в пустоту.
+ */
+function cleanPagePaths() {
+  return {
+    name: "helm-clean-page-paths",
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        const [path, query] = req.url.split("?");
+        const name = path.slice(1);
+        if (/^[a-z-]+$/.test(name) && existsSync(resolve(webRoot, `${name}.html`))) {
+          req.url = `/${name}.html${query ? `?${query}` : ""}`;
+        }
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [sharedHead()],
+  plugins: [sharedHead(), cleanPagePaths()],
   root: webRoot,
   publicDir: "static",
   base: "/",
@@ -66,7 +87,15 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: {
-      "/api": { target: API_TARGET, changeOrigin: true },
+      // DASHBOARD_DEV_COOKIE — сессия прода для показа через ssh-туннель: без неё
+      // закрытые /api отвечают 401. Секрет живёт только в окружении запуска.
+      "/api": {
+        target: API_TARGET,
+        changeOrigin: true,
+        ...(process.env.DASHBOARD_DEV_COOKIE
+          ? { headers: { cookie: process.env.DASHBOARD_DEV_COOKIE } }
+          : {}),
+      },
     },
   },
 });

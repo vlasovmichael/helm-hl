@@ -663,6 +663,10 @@ async function selectCoin(coin, { scroll = true } = {}) {
   // браузер учитывает сам.
   if (scroll) detail.scrollIntoView({ behavior: "smooth", block: "start" });
   document.getElementById("oi-detail-coin").textContent = coin;
+  document.getElementById("oi-to-journal").href = `/journal?coin=${encodeURIComponent(coin)}`;
+  const url = new URL(location.href);
+  url.searchParams.set("coin", coin);
+  history.replaceState(null, "", url);
   document.getElementById("oi-detail-sub").textContent = "loading…";
   document.getElementById("oi-series-body").innerHTML = "";
   const data = await fetchJson(
@@ -779,4 +783,8 @@ document.querySelectorAll("#oi-ranges .seg__btn").forEach((b) =>
 paintIcons();
 
 loadCoinOfDay();
-loadOverview();
+// ?coin= приходит со Screen: история этой монеты открывается сразу.
+const linkedCoin = new URLSearchParams(location.search).get("coin");
+loadOverview().then(() => {
+  if (linkedCoin) selectCoin(linkedCoin);
+});

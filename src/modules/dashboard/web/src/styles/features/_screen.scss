@@ -136,6 +136,17 @@
     font-family: var(--font-mono);
     font-weight: 600;
     letter-spacing: 0.3px;
+
+    // Тикер ведёт на /oi; строка вокруг открывает тикет, поэтому ссылка
+    // выглядит текстом и выдаёт себя только наведением.
+    a {
+      color: inherit;
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
   }
 
   td {
