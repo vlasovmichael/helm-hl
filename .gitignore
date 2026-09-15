@@ -119,6 +119,9 @@ logs/fvg-e5-*.log
 tools/executionCostDecomposition.mjs
 tests/executionCostDecomposition.test.js
 logs/execution-cost-decomposition-*.log
+tools/postOnlyChaseFresh.mjs
+tests/postOnlyChaseFresh.test.js
+logs/post-only-chase-fresh-*.log
 tools/liqWickBacktest.mjs
 tools/fundingSpreadEval.mjs
 tools/oiEntry.mjs
