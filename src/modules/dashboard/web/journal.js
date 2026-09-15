@@ -10,6 +10,8 @@ import { icon, paintIcons } from "./src/core/icon.js";
 import { bindTheme } from "./src/core/shell.js";
 import { mountTopnav } from "./src/core/topnav.js";
 import { analyzeMultiTF } from "../../chartCoach.js";
+import { segmented } from "./src/core/ui.js";
+import { mountTradeLog } from "./src/features/tradeLog.js";
 
 mountTopnav("journal");
 bindTheme();
@@ -384,9 +386,31 @@ function switchCoin(c) {
   fillForm(entries(c)[todayKey()] || null); renderYesterday(); renderHist();
   loadAnchor(); if (liveTimer) clearInterval(liveTimer); liveTimer = setInterval(loadAnchor, 20000);
 }
+// ── вкладки: дрилл графика / журнал сделок (?view=trades) ──
+const VIEWS = [
+  { value: "drill", label: "Chart drill" },
+  { value: "trades", label: "Trade log" },
+];
+function setView(view) {
+  const trades = view === "trades";
+  G("journalViews").innerHTML = segmented({ options: VIEWS, value: view, name: "view" });
+  for (const id of ["drillView", "tabs", "helpToggle", "conn"]) G(id).hidden = trades;
+  G("tradeLogView").hidden = !trades;
+  const url = new URL(location.href);
+  if (trades) url.searchParams.set("view", "trades");
+  else url.searchParams.delete("view");
+  history.replaceState(null, "", url);
+  if (trades) mountTradeLog();
+}
+G("journalViews").addEventListener("click", (e) => {
+  const button = e.target.closest("[data-view]");
+  if (button) setView(button.dataset.view);
+});
+
 wireHelp();
 wireCalc();
 switchCoin("BTC");
+setView(new URLSearchParams(location.search).get("view") === "trades" ? "trades" : "drill");
 
 // <i data-icon="…"> в статической разметке → настоящие svg.
 paintIcons();
