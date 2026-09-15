@@ -2,8 +2,9 @@
 //   npm run lab:setup            подключить лабу (новая машина или прод)
 //   npm run lab:status           что изменилось в лабе
 //   npm run lab:save -- "текст"  сохранить всё из лабы: add, commit, push
+//   npm run lab:pull             прод: обновить реестр из hl-lab (cron и deploy.sh)
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -95,13 +96,36 @@ function save(message) {
   console.log('✅ Сохранено в hl-lab:', lab(['log', '--oneline', '-1']).trim());
 }
 
+// Прод читает из лабы только реестр. 🚨 peeks.jsonl рядом пишет сам дашборд —
+// его не трогаем; HEAD лабы на проде не двигаем, файл берём из origin/main.
+const PULLED = ['data/hypotheses/registry.json'];
+
+function pull() {
+  requireLab();
+  lab(['fetch', '-q', 'origin', '+refs/heads/main:refs/remotes/origin/main']);
+  const rev = lab(['rev-parse', '--short', 'origin/main']).trim();
+  for (const path of PULLED) {
+    const next = lab(['show', `origin/main:${path}`], { maxBuffer: 64 * 1024 * 1024 });
+    const full = join(ROOT, path);
+    if (existsSync(full) && readFileSync(full, 'utf8') === next) {
+      console.log(`✅ ${path} актуален (${rev})`);
+      continue;
+    }
+    const tmp = `${full}.lab-pull.tmp`;
+    writeFileSync(tmp, next);
+    renameSync(tmp, full);
+    console.log(`✅ ${path} обновлён до ${rev}`);
+  }
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [cmd, ...rest] = process.argv.slice(2);
   if (cmd === 'setup') setup();
   else if (cmd === 'status') status();
   else if (cmd === 'save') save(rest.join(' '));
+  else if (cmd === 'pull') pull();
   else {
-    console.error('Команды: setup · status · save "сообщение"');
+    console.error('Команды: setup · status · save "сообщение" · pull');
     process.exit(1);
   }
 }
