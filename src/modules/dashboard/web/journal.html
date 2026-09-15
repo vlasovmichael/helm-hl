@@ -10,6 +10,7 @@
 
       <main class="j-wrap">
         <div class="j-toolbar">
+          <div id="journalViews"></div>
           <nav class="tabs j-nav" id="tabs"></nav>
           <button
             class="j-help-btn"
@@ -23,6 +24,7 @@
           <span class="j-status" id="conn">…</span>
         </div>
 
+        <div id="drillView">
         <!-- Обучающая панель: что это и что делать -->
         <section class="j-card j-help" id="helpCard">
           <div class="j-help-head">
@@ -310,6 +312,79 @@
           reads itself. The edge is still in the exit; reading is what keeps you from
           fighting the trend and lets you set sensible stops.
         </p>
+        </div>
+
+        <!-- Trade log: журнал сделок, пишется из закрытых сделок (features/tradeLog.js) -->
+        <div id="tradeLogView" hidden>
+          <section class="j-card">
+            <div class="card-header">
+              <div class="card-title">Overview</div>
+              <div class="card-meta" id="tj-period"></div>
+            </div>
+            <div id="tj-overview"></div>
+          </section>
+
+          <section class="j-card">
+            <div class="card-header">
+              <div class="card-title">This week</div>
+              <div class="card-meta" id="tj-week-meta"></div>
+            </div>
+            <div id="tj-week"></div>
+          </section>
+
+          <section class="j-card">
+            <div class="card-header">
+              <div class="card-title">Where the result comes from</div>
+              <div class="card-tools" id="tj-dims"></div>
+            </div>
+            <div class="table-wrap">
+              <table class="table table--compact">
+                <thead>
+                  <tr>
+                    <th>Group</th>
+                    <th class="num">Trades</th>
+                    <th class="num">Win rate</th>
+                    <th class="num">Net</th>
+                    <th class="num">Avg / trade</th>
+                    <th
+                      class="num"
+                      data-card="Range the average per trade lands in 95% of the time, resampling whole days. If it spans zero, this group is not distinguishable from break-even yet."
+                    >
+                      95% CI
+                    </th>
+                  </tr>
+                </thead>
+                <tbody id="tj-breakdown"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="j-card">
+            <div class="card-header">
+              <div class="card-title">Recent trades</div>
+              <div class="card-meta" id="tj-trades-meta"></div>
+            </div>
+            <div class="table-wrap">
+              <table class="table table--compact table--sticky-head">
+                <thead>
+                  <tr>
+                    <th>Entry</th>
+                    <th>Coin</th>
+                    <th>Side</th>
+                    <th>Session</th>
+                    <th data-card="Direction of the last hour at entry, relative to the trade side">1h trend</th>
+                    <th class="num">Hold</th>
+                    <th class="num" data-card="Best and worst unrealized move while the trade was open">Peak / worst</th>
+                    <th class="num">Net</th>
+                    <th class="num">Net %</th>
+                    <th data-card="Accent marks describe the entry; grey marks describe the outcome and are not used in the breakdown">Marks</th>
+                  </tr>
+                </thead>
+                <tbody id="tj-trades"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
       </main>
     </div>
     <script type="module" src="/journal.js"></script>

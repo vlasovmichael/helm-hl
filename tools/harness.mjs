@@ -33,6 +33,8 @@ import { EDGE_DISCOVERY_FAMILY, auditLegacyFdrCoverage } from "./fdrFamily.mjs";
 import { appendCellRegistrations, appendCellRuns } from "./hypothesisCells.mjs";
 import { assertRegistry } from "./hypothesisRegistrySchema.mjs";
 import { resolveStageBranch } from "./hypothesisStages.mjs";
+import { deflatedSharpeRatio } from "./deflatedSharpe.mjs";
+import { probabilityOfBacktestOverfitting } from "./pbo.mjs";
 
 const DIR = join("data", "hypotheses");
 const REGISTRY = join(DIR, "registry.json");
@@ -250,7 +252,227 @@ function fixedOrDash(value, digits) {
   return Number.isFinite(value) ? value.toFixed(digits) : "—";
 }
 
-export function report() {
+function analysisId(value, index, kind) {
+  if (typeof value === "string" && value.trim()) return value;
+  return `${kind}-${index + 1}`;
+}
+
+const DSR_SERIES_TOLERANCE = 1e-12;
+
+function completeDsrCommand(source) {
+  const data = source?.data;
+  const hasCommand = typeof source?.reproduceCommand === "string" && source.reproduceCommand.trim();
+  const hasUrl = typeof data?.url === "string" && data.url.trim();
+  const hasBytes = Number.isSafeInteger(data?.bytes) && data.bytes > 0;
+  const hasSha256 = typeof data?.sha256 === "string" && /^[0-9a-f]{64}$/i.test(data.sha256);
+  return Boolean(hasCommand && hasUrl && hasBytes && hasSha256);
+}
+
+function dsrSeriesStatistics(returns, periodsPerYear) {
+  if (returns.length < 2) return { error: "ряд доходностей должен содержать не меньше двух значений" };
+  if (!returns.every(Number.isFinite)) return { error: "ряд доходностей содержит нечисловые значения" };
+  const sampleLength = returns.length;
+  const mean = returns.reduce((sum, value) => sum + value, 0) / sampleLength;
+  const deviations = returns.map((value) => value - mean);
+  const centralMoment = (power) => deviations.reduce(
+    (sum, value) => sum + value ** power,
+    0,
+  ) / sampleLength;
+  const secondMoment = centralMoment(2);
+  if (!(secondMoment > 0) || !Number.isFinite(secondMoment)) {
+    return { error: "ряд доходностей должен иметь положительную конечную дисперсию" };
+  }
+  const periodSharpe = mean / Math.sqrt(secondMoment);
+  return {
+    sampleLength,
+    periodSharpe,
+    observedSharpe: periodSharpe * Math.sqrt(periodsPerYear),
+    skewness: centralMoment(3) / secondMoment ** 1.5,
+    kurtosis: centralMoment(4) / secondMoment ** 2,
+  };
+}
+
+function closeEnough(actual, expected) {
+  return Number.isFinite(actual)
+    && Math.abs(actual - expected) <= DSR_SERIES_TOLERANCE * Math.max(1, Math.abs(expected));
+}
+
+function dsrInputMismatch(inputs, statistics) {
+  if (inputs.sampleLength !== undefined && inputs.sampleLength !== statistics.sampleLength) {
+    return `sampleLength из inputs ${inputs.sampleLength} не совпадает с вычисленным из ряда ${statistics.sampleLength}`;
+  }
+  if (inputs.periodSharpe !== undefined && !closeEnough(inputs.periodSharpe, statistics.periodSharpe)) {
+    return `periodSharpe из inputs ${inputs.periodSharpe} не совпадает с вычисленным из ряда `
+      + `${statistics.periodSharpe} (допуск ${DSR_SERIES_TOLERANCE})`;
+  }
+  for (const field of ["observedSharpe", "skewness", "kurtosis"]) {
+    if (inputs[field] !== undefined && !closeEnough(inputs[field], statistics[field])) {
+      return `${field} из inputs ${inputs[field]} не совпадает с вычисленным из ряда ${statistics[field]} `
+        + `(допуск ${DSR_SERIES_TOLERANCE})`;
+    }
+  }
+  return null;
+}
+
+function evaluateDsr(items) {
+  const included = [];
+  const excluded = [];
+  const unverified = [];
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    const id = analysisId(item?.id, index, "dsr");
+    if (Array.isArray(item?.source?.returns)) {
+      if (!item?.inputs || typeof item.inputs !== "object") {
+        excluded.push({
+          id,
+          status: "EXCLUDED",
+          reason: "нет inputs с числом испытаний, дисперсией Sharpe и частотой ряда",
+        });
+        continue;
+      }
+      const statistics = dsrSeriesStatistics(item.source.returns, item.inputs.periodsPerYear);
+      if (statistics.error) {
+        excluded.push({ id, status: "EXCLUDED", reason: statistics.error });
+        continue;
+      }
+      const mismatch = dsrInputMismatch(item.inputs, statistics);
+      if (mismatch) {
+        excluded.push({ id, status: "EXCLUDED", reason: mismatch });
+        continue;
+      }
+      const inputs = {
+        ...item.inputs,
+        observedSharpe: statistics.observedSharpe,
+        sampleLength: statistics.sampleLength,
+        skewness: statistics.skewness,
+        kurtosis: statistics.kurtosis,
+      };
+      included.push({
+        id,
+        status: "INCLUDED",
+        independentTrials: inputs.independentTrials,
+        seriesStatistics: {
+          periodSharpe: statistics.periodSharpe,
+          sampleLength: statistics.sampleLength,
+          skewness: statistics.skewness,
+          kurtosis: statistics.kurtosis,
+        },
+        result: deflatedSharpeRatio(inputs),
+      });
+      continue;
+    }
+    if (completeDsrCommand(item?.source)) {
+      unverified.push({
+        id,
+        status: "UNVERIFIED",
+        reason: "команда воспроизведения не выполнена харнессом",
+      });
+      continue;
+    }
+    excluded.push({
+      id,
+      status: "EXCLUDED",
+      reason: "нет ряда доходностей или полной команды воспроизведения с URL, размером и SHA-256",
+    });
+  }
+  return { included, unverified, excluded };
+}
+
+function validateVariantIds(item) {
+  if (!Array.isArray(item.variantIds)) return "variantIds должен быть массивом";
+  const width = Array.isArray(item.returns?.[0]) ? item.returns[0].length : null;
+  if (item.variantIds.length !== width) return "число variantIds не совпадает с числом столбцов матрицы";
+  if (item.variantIds.some((id) => typeof id !== "string" || !id.trim())) {
+    return "variantIds должен содержать непустые строки";
+  }
+  if (new Set(item.variantIds).size !== item.variantIds.length) return "variantIds содержит повторы";
+  if (typeof item.metricName !== "string" || !item.metricName.trim()) {
+    return "metricName должен быть непустой строкой";
+  }
+  return null;
+}
+
+function evaluatePbo(items) {
+  const maxExcludedSplitRate = 0.20;
+  const included = [];
+  const excluded = [];
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    const id = analysisId(item?.id, index, "pbo");
+    const metadataError = validateVariantIds(item ?? {});
+    if (metadataError) {
+      excluded.push({ id, status: "EXCLUDED", reason: metadataError });
+      continue;
+    }
+    const result = probabilityOfBacktestOverfitting({
+      returns: item.returns,
+      blockCount: item.blockCount,
+      metric: item.metric,
+    });
+    if (result.excludedSplitRate > maxExcludedSplitRate) {
+      excluded.push({
+        id,
+        status: "EXCLUDED",
+        reason: `ничья за первое место на IS исключила ${result.excludedSplitCount}/`
+          + `${result.splitCount} разбиений (${(result.excludedSplitRate * 100).toFixed(2)}%), порог 20%`,
+        result,
+      });
+      continue;
+    }
+    included.push({
+      id,
+      status: "INCLUDED",
+      blockCount: item.blockCount,
+      metricName: item.metricName,
+      variantIds: [...item.variantIds],
+      result,
+    });
+  }
+  return { included, excluded };
+}
+
+/** Считает DSR/PBO только для явно переданных воспроизводимых рядов. */
+export function overfittingMeasures({ dsr = [], pbo = [] } = {}) {
+  if (!Array.isArray(dsr) || !Array.isArray(pbo)) {
+    throw new TypeError("overfitting.dsr и overfitting.pbo должны быть массивами");
+  }
+  return { dsr: evaluateDsr(dsr), pbo: evaluatePbo(pbo) };
+}
+
+function appendOverfittingReport(lines, measures) {
+  lines.push("\nЗащита от переобучения (только воспроизводимые ряды):");
+  if (!measures.dsr.included.length && !measures.dsr.excluded.length) {
+    lines.push("  DSR: входы не переданы; результата нет");
+  }
+  for (const row of measures.dsr.included) {
+    lines.push(
+      `  DSR ${row.id}: вероятность ${fixedOrDash(row.result.probability, 4)}, ` +
+      `N=${row.independentTrials}`,
+    );
+  }
+  for (const row of measures.dsr.unverified) {
+    lines.push(`  DSR ${row.id}: UNVERIFIED — ${row.reason}`);
+  }
+  for (const row of measures.dsr.excluded) {
+    lines.push(`  DSR ${row.id}: EXCLUDED — ${row.reason}`);
+  }
+
+  if (!measures.pbo.included.length && !measures.pbo.excluded.length) {
+    lines.push("  PBO: матрицы не переданы; результата нет");
+  }
+  for (const row of measures.pbo.included) {
+    lines.push(
+      `  PBO ${row.id}: ${fixedOrDash(row.result.pbo, 4)}, ` +
+      `S=${row.blockCount}, разбиений ${row.result.evaluatedSplitCount}/${row.result.splitCount}, ` +
+      `исключено ${fixedOrDash(row.result.excludedSplitRate * 100, 2)}%, метрика ${row.metricName}`,
+    );
+  }
+  for (const row of measures.pbo.excluded) {
+    lines.push(`  PBO ${row.id}: EXCLUDED — ${row.reason}`);
+  }
+}
+
+export function report({ overfitting } = {}) {
   const reg = loadRegistry();
   const lines = [];
   lines.push(`гипотез зарегистрировано: ${reg.hypotheses.length}, прогонов: ${reg.runs.length}\n`);
@@ -290,6 +512,7 @@ export function report() {
       lines.push(`    ${id}: нулевых моделей пройдено ${passed.length}/3 (${passed.join(", ") || "—"})`);
     }
   }
+  appendOverfittingReport(lines, overfittingMeasures(overfitting));
   return lines.join("\n");
 }
 

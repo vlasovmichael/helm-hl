@@ -86,6 +86,7 @@ import { handleScreen } from "./routes/screen.js";
 import { getManualTrades } from "./routes/manualTrades.js";
 import { handlePnlSummary, handleInsights, handleDayJournal, handleDayNoteSave } from "./routes/pnl.js";
 import { handleTradeBreakdown } from "./routes/tradeBreakdown.js";
+import { handleTradeJournal } from "./routes/tradeJournal.js";
 import { handlePositionNanny } from "./routes/positionNanny.js";
 import { handleCoinOfDay } from "./routes/coinOfDay.js";
 import { handleEntryFilter } from "./routes/entryFilter.js";
@@ -1124,6 +1125,7 @@ export function startDashboard() {
 
   app.get("/api/insights", handleInsights);
   app.get("/api/my-trades", handleTradeBreakdown);
+  app.get("/api/trade-journal", handleTradeJournal);
   app.get("/api/day-journal", handleDayJournal);
   app.post("/api/day-journal", handleDayNoteSave);
   app.get("/api/trade-markers", handleTradeMarkers);
