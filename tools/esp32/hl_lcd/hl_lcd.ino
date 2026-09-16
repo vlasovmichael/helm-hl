@@ -75,26 +75,23 @@ static String biggestPosition(JsonDocument &perp) {
          (bestPnl >= 0 ? "+" : "") + String(bestPnl, 2);
 }
 
-// Эквити unified-аккаунта = spot USDC + нереализованный PnL перпов, как считает
-// сам бот (src/core/balanceCache.js). 🚨 не marginSummary.accountValue: это лишь
-// залог под открытыми перпами, он меньше реальных денег на счету.
-static bool readEquity(JsonDocument &perp, double &equity) {
+// Эквити unified-аккаунта = spot USDC total, копейка в копейку с accountValue
+// из info-эндпоинта portfolio.
+//
+// 🚨 не прибавлять сюда unrealizedPnl: залог hold внутри spot-баланса уже
+// переоценён по рынку, и убыток вычтется дважды.
+// 🚨 не marginSummary.accountValue: это стоимость только перп-части счёта.
+static bool readEquity(double &equity) {
   JsonDocument spot;
   if (!fetchInfo("spotClearinghouseState", spot)) return false;
 
-  double usdc = 0;
   for (JsonObject b : spot["balances"].as<JsonArray>()) {
-    if (strcmp(b["coin"] | "", "USDC") == 0) usdc = b["total"].as<String>().toDouble();
+    if (strcmp(b["coin"] | "", "USDC") == 0) {
+      equity = b["total"].as<String>().toDouble();
+      return true;
+    }
   }
-
-  // totalUnrealizedPnl в marginSummary не приходит — складываем по позициям.
-  double upnl = 0;
-  for (JsonObject ap : perp["assetPositions"].as<JsonArray>()) {
-    upnl += ap["position"]["unrealizedPnl"].as<String>().toDouble();
-  }
-
-  equity = usdc + upnl;
-  return true;
+  return false;
 }
 
 void setup() {
@@ -107,6 +104,10 @@ void setup() {
 
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
+  // Пики тока передатчика проваливают напряжение, и подсветка LCD дрожит в такт.
+  // Опрос раз в 15с не требует полной мощности: 11 dBm дома хватает с запасом.
+  WiFi.setTxPower(WIFI_POWER_11dBm);
+  WiFi.setSleep(true);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 }
 
@@ -132,7 +133,7 @@ void loop() {
   }
 
   double equity = 0;
-  if (readEquity(perp, equity)) {
+  if (readEquity(equity)) {
     line(0, "EQ $" + String(equity, 2));
     Serial.printf("[hl] equity=%.2f\n", equity);
   }
