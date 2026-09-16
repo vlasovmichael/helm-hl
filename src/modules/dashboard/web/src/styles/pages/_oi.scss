@@ -31,6 +31,35 @@
   overflow-x: auto;
 }
 
+// Отбивка блоков, разъехавшихся по разметке: пояснение под карточкой, ряд во
+// времени под графиком, подзаголовки внутри разбора монеты дня.
+.oi-note--sp {
+  margin-top: var(--sp-3);
+}
+.oi-series-wrap {
+  margin-top: var(--sp-4);
+}
+.cod-grid--sp,
+.cod-sub--sp,
+.cod-detail--sp {
+  margin-top: var(--sp-4);
+}
+.cod-fwd-warn {
+  margin-top: var(--sp-2);
+}
+.cod-score {
+  font-size: var(--fs-small);
+}
+
+// Ключ к линиям графика. 🚨 Цвета обязаны совпадать с OI_COLOR / PX_COLOR в
+// charts/oiChart.js — легенда, которая врёт цветом, хуже отсутствующей.
+.oi-legend-oi {
+  background: #5b9dff;
+}
+.oi-legend-px {
+  background: #e8b84b;
+}
+
 // Таблица OI — общий `.table` (core/_table.scss). Своего здесь: все колонки
 // числовые (кроме монеты), тикер акцентом и подсветка строки одной переменной.
 .oi-table {

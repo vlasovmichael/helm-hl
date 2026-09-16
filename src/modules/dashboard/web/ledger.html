@@ -7,87 +7,9 @@
   <body>
     <div class="container">
       <nav class="topnav" id="topnav" aria-label="Primary"></nav>
-
-      <div class="ledger-head">
-        <div>
-          <h1>Monthly Ledger</h1>
-          <div class="sub">
-            Source: Hyperliquid on-chain fills · since
-            <span id="start-date"><span class="sk sk-num"></span></span>
-          </div>
-        </div>
-      </div>
-
-      <div class="summary-grid" id="summary">
-        <div class="sk sk-block" style="--sk-h: 82px"></div>
-        <div class="sk sk-block" style="--sk-h: 82px"></div>
-        <div class="sk sk-block" style="--sk-h: 82px"></div>
-        <div class="sk sk-block" style="--sk-h: 82px"></div>
-      </div>
-
-      <div class="table-card">
-        <div id="table-host">
-          <div class="sk-text" style="padding: var(--sp-4) 0">
-            <span class="sk sk-line"></span>
-            <span class="sk sk-line"></span>
-            <span class="sk sk-line"></span>
-            <span class="sk sk-line"></span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Tax Summary (перенесено с дашборды; рендерит app.js через /api/tax-summary) -->
-      <section class="card">
-        <div class="card-header">
-          <div class="card-title">
-            Tax Summary
-            <span
-              style="
-                font-size: var(--fs-base);
-                color: var(--text-muted);
-                font-family: var(--font-mono);
-                font-style: normal;
-                letter-spacing: 0.08em;
-              "
-              >PIT-38</span
-            >
-          </div>
-          <div id="tax-year" class="tax-year-label">2026</div>
-        </div>
-        <div class="data-grid">
-          <div class="grid-item">
-            <div class="item-label">Koszty (Costs)</div>
-            <div class="item-value" id="tax-costs">0.00 PLN</div>
-          </div>
-          <div class="grid-item">
-            <div class="item-label">Przychody (Revenue)</div>
-            <div class="item-value" id="tax-revenue">0.00 PLN</div>
-          </div>
-          <div class="grid-item">
-            <div class="item-label">Profit / Loss</div>
-            <div class="item-value" id="tax-profit">0.00 PLN</div>
-          </div>
-          <div class="grid-item">
-            <div class="item-label">Est. Tax (19%)</div>
-            <div class="item-value" id="tax-est" style="color: var(--green)">
-              0.00 PLN
-            </div>
-          </div>
-        </div>
-      </section>
+      <main id="outlet"></main>
     </div>
 
-    <!-- Trade detail modal (для кликов по Recent Activity) -->
-    <div id="trade-modal" class="modal" hidden>
-      <div class="modal__backdrop" data-close="1"></div>
-      <div class="modal__panel" role="dialog" aria-modal="true">
-        <div class="modal__content"></div>
-      </div>
-    </div>
-
-
-    <!-- app.js: рендерит Recent Activity + Tax Summary через tick().
-         Остальные секции дашборды отсутствуют → их рендеры делают no-op (guarded). -->
-    <script type="module" src="/ledger.js"></script>
+    <script type="module" src="/app.js"></script>
   </body>
 </html>

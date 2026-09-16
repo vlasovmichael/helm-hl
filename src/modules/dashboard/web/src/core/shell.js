@@ -57,8 +57,22 @@ const THEME_LABEL = {
   dark: "Theme: dark",
 };
 
+// Перекрасчики графиков. Набор живёт отдельно от bindTheme: шапка с кнопкой
+// темы одна на все экраны роутера, а график принадлежит конкретной странице.
+const themers = new Set();
+
+/**
+ * Подписать перекрасчик графика на смену темы.
+ * @returns {() => void} отписка: зовётся при уходе со страницы.
+ */
+export function onThemeChange(fn) {
+  themers.add(fn);
+  return () => themers.delete(fn);
+}
+
 // chartThemers — фабрики тем графиков страницы (само-гардятся, если графика нет).
 export function bindTheme(chartThemers = []) {
+  for (const fn of chartThemers) themers.add(fn);
   const btn = document.getElementById("theme-toggle");
   const svg = document.getElementById("theme-ico");
   // Морф не поднимаем, если кнопки нет (напр. login.html без topnav).
@@ -79,7 +93,7 @@ export function bindTheme(chartThemers = []) {
     if (btn) {
       btn.setAttribute("aria-label", THEME_LABEL[mode]);
     }
-    chartThemers.forEach((fn) => fn());
+    for (const fn of themers) fn();
   };
 
   btn?.addEventListener("click", () => {
@@ -153,8 +167,23 @@ export function renderFooter() {
   }
 }
 
+let footerTimer = null;
+
+/**
+ * Секундный тик футера.
+ * @returns {() => void} остановка: без неё на каждом возврате на страницу
+ * добавляется ещё один тик поверх живого.
+ */
 export function startFooterTimer() {
-  setInterval(renderFooter, 1000);
+  stopFooterTimer();
+  footerTimer = setInterval(renderFooter, 1000);
+  return stopFooterTimer;
+}
+
+export function stopFooterTimer() {
+  if (!footerTimer) return;
+  clearInterval(footerTimer);
+  footerTimer = null;
 }
 
 // handlers = { onStatus(data), onLogsInit(entries), onLog(entry), onDivergence() }
@@ -193,14 +222,15 @@ export function initWebSocket(handlers = {}) {
   const host = import.meta.env.DEV
     ? import.meta.env.VITE_WS_HOST || "localhost:3010"
     : window.location.host;
-  socket = new WebSocket(`${protocol}//${host}`);
+  const ws = new WebSocket(`${protocol}//${host}`);
+  socket = ws;
 
-  socket.onopen = () => {
+  ws.onopen = () => {
     wsRetryDelay = 1000;
     setWsState("connecting"); // станет 'live' после первого msg
   };
 
-  socket.onmessage = (event) => {
+  ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === "status") {
@@ -223,17 +253,34 @@ export function initWebSocket(handlers = {}) {
     }
   };
 
-  socket.onerror = () => {
+  ws.onerror = () => {
     try {
-      socket.close();
+      ws.close();
     } catch {
       /* already closed */
     }
   };
 
-  socket.onclose = () => {
+  ws.onclose = () => {
+    // 🚨 Сокет, закрытый уходом со страницы, не переподключаем: иначе каждый
+    // возврат добавляет ещё одно соединение поверх живого.
+    if (socket !== ws) return;
     setWsState("reconnecting");
     wsReconnectTimer = setTimeout(() => initWebSocket(handlers), wsRetryDelay);
     wsRetryDelay = Math.min(wsRetryDelay * 2, WS_RETRY_MAX);
   };
+
+  return stopWebSocket;
+}
+
+/** Закрыть сокет и отменить переподключение — при уходе со страницы. */
+export function stopWebSocket() {
+  wsHandlers = null;
+  if (wsReconnectTimer) {
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = null;
+  }
+  const ws = socket;
+  socket = null;
+  ws?.close();
 }

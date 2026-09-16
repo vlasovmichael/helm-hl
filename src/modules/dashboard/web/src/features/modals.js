@@ -337,12 +337,19 @@ async function onActivityClick(e) {
   }
 }
 
+// 🚨 Делегированный слушатель ставится один раз на документ: страницы роутера
+// зовут initModals на каждом входе, и второй такой слушатель открывал бы
+// диалог дважды на один клик.
+let delegated = false;
+
 // Закрытие (крестик, подложка, Escape, фокус) — в core/dialog.js.
 export function initModals() {
   ["trade-modal", "help-modal"].forEach((id) => {
     const el = document.getElementById(id);
     if (el) dialog.bindClose(el);
   });
+  if (delegated) return;
+  delegated = true;
   document.addEventListener("click", (e) => {
     const helpBtn = e.target.closest(".help-btn[data-help]");
     if (helpBtn) {

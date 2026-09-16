@@ -120,6 +120,19 @@ export function mountTopnav(active) {
 }
 
 /**
+ * Подсветка активной ссылки при переходе без перезагрузки: шапка живёт одна
+ * на все экраны роутера, а `aria-current` обязан ехать за адресом.
+ */
+export function setTopnavActive(active) {
+  for (const a of document.querySelectorAll(".topnav .nav-link[data-nav]")) {
+    const on = a.dataset.nav === active;
+    a.classList.toggle("active", on);
+    if (on) a.setAttribute("aria-current", "page");
+    else a.removeAttribute("aria-current");
+  }
+}
+
+/**
  * Меню Research. Открытие/закрытие ведёт класс .is-open (анимация в CSS,
  * тот же приём, что у панели уведомлений), [hidden] снимается заранее и
  * ставится обратно после выезда — иначе анимации закрытия не видно.

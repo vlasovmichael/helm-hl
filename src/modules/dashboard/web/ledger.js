@@ -1,11 +1,10 @@
 import "./src/styles/ledger.scss";
 // ─────────────────────────────────────────────────
-//  ledger.html — месячный P&L-реестр.
+//  Ledger — месячный P&L-реестр.
 //
 // Отсюда: таблица месяцев (/api/ledger), Tax Summary (tick), trade-модалка,
-// bans-strip. 🚨 Логику страницы держим здесь, а не в <script> разметки: там
-// она не проходит ни eslint, ни сборку и не может ничего импортировать.
-// Тема: inline-IIFE гасит FOUC, bindTheme вешает клики на topnav-свитчер.
+// bans-strip. Страница живёт под роутером: разметку рисует render(), а всё
+// живое — тик, сокет, секундный футер — гасит возвращённая им остановка.
 // ─────────────────────────────────────────────────
 
 import {
@@ -13,15 +12,17 @@ import {
   initWebSocket,
   markSuccess,
   startFooterTimer,
-  bindTheme,
 } from "./src/core/shell.js";
-import { mountTopnav } from "./src/core/topnav.js";
 import { stat } from "./src/core/ui.js";
 import { emptyState } from "./src/core/placeholders.js";
 import { fetchJson } from "./src/net/api.js";
 import { initModals } from "./src/features/modals.js";
 import { renderTax } from "./src/features/pnlInsights.js";
 import { renderBans } from "./src/features/accountStatus.js";
+
+// Экран жив, пока его не сменили. Ответы, приехавшие после ухода, писать
+// некуда: разметки этой страницы в документе уже нет.
+let alive = false;
 
 // Твисти месяца: свёрнут / раскрыт. Разметка, а не символ — присваивать
 // только через innerHTML.
@@ -303,6 +304,7 @@ async function load() {
     const r = await fetch("/api/ledger");
     if (!r.ok) throw new Error("HTTP " + r.status);
     const data = await r.json();
+    if (!alive) return;
     document.getElementById("start-date").textContent =
       data.startDate || "—";
     if (!data.live || !data.months.length) {
@@ -315,6 +317,7 @@ async function load() {
     renderSummary(data.totals);
     renderTable(data);
   } catch (e) {
+    if (!alive) return;
     showEmpty(
       "Ledger did not load",
       e.message + ". Reload the page to try again.",
@@ -331,16 +334,97 @@ function onStatus(data) {
 async function tick() {
   // Recent Activity переехала на главную (index) — здесь остаётся только Tax Summary.
   const [taxR] = await Promise.allSettled([fetchJson("/api/tax-summary")]);
+  if (!alive) return;
   if (taxR.status === "fulfilled") renderTax(taxR.value);
   markSuccess();
 }
 
-// ── Bootstrap ──
-mountTopnav("ledger");
-load();
-bindTheme();
-initModals();
-initWebSocket({ onStatus });
-tick();
-setInterval(tick, REFRESH_MS);
-startFooterTimer();
+function view() {
+  return `
+    <div class="ledger-head">
+      <div>
+        <h1>Monthly Ledger</h1>
+        <div class="sub">
+          Source: Hyperliquid on-chain fills · since
+          <span id="start-date"><span class="sk sk-num"></span></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="summary-grid" id="summary">
+      <div class="sk sk-block ledger-sk-stat"></div>
+      <div class="sk sk-block ledger-sk-stat"></div>
+      <div class="sk sk-block ledger-sk-stat"></div>
+      <div class="sk sk-block ledger-sk-stat"></div>
+    </div>
+
+    <div class="table-card">
+      <div id="table-host">
+        <div class="sk-text ledger-sk-rows">
+          <span class="sk sk-line"></span>
+          <span class="sk sk-line"></span>
+          <span class="sk sk-line"></span>
+          <span class="sk sk-line"></span>
+        </div>
+      </div>
+    </div>
+
+    <section class="card">
+      <div class="card-header">
+        <div class="card-title">
+          Tax Summary
+          <span class="tax-code">PIT-38</span>
+        </div>
+        <div id="tax-year" class="tax-year-label">2026</div>
+      </div>
+      <div class="data-grid">
+        <div class="grid-item">
+          <div class="item-label">Koszty (Costs)</div>
+          <div class="item-value" id="tax-costs">0.00 PLN</div>
+        </div>
+        <div class="grid-item">
+          <div class="item-label">Przychody (Revenue)</div>
+          <div class="item-value" id="tax-revenue">0.00 PLN</div>
+        </div>
+        <div class="grid-item">
+          <div class="item-label">Profit / Loss</div>
+          <div class="item-value" id="tax-profit">0.00 PLN</div>
+        </div>
+        <div class="grid-item">
+          <div class="item-label">Est. Tax (19%)</div>
+          <div class="item-value pos" id="tax-est">0.00 PLN</div>
+        </div>
+      </div>
+    </section>
+
+    <div id="trade-modal" class="modal" hidden>
+      <div class="modal__backdrop" data-close="1"></div>
+      <div class="modal__panel" role="dialog" aria-modal="true">
+        <div class="modal__content"></div>
+      </div>
+    </div>`;
+}
+
+export default {
+  title: "Ledger · Helm",
+  nav: "ledger",
+
+  render(outlet) {
+    alive = true;
+    outlet.innerHTML = view();
+
+    load();
+    initModals();
+    const stopWs = initWebSocket({ onStatus });
+    tick();
+    const ticker = setInterval(tick, REFRESH_MS);
+    const stopFooter = startFooterTimer();
+
+    return () => {
+      alive = false;
+      clearInterval(ticker);
+      stopFooter();
+      stopWs();
+    };
+  },
+};

@@ -3,26 +3,20 @@ import { icon, paintIcons } from "./src/core/icon.js";
 import { emptyRow, emptyState, settle } from "./src/core/placeholders.js";
 import { mountPageHeader } from "./src/core/pageHeader.js";
 // ─────────────────────────────────────────────────
-//  oi.html — витрина истории open interest (все монеты).
+//  OI — витрина истории open interest (все монеты).
 //  Читает /api/oi-collector/* (данные от tools/oiCollector.mjs). Сверху —
 //  сортируемая таблица-обзор по всем монетам с ΔOI 24ч/1ч; клик по монете →
 //  ряд во времени (dual-axis спарклайн OI vs цена + таблица).
 //  ЭТО ПОКАЗ ДАННЫХ, не сигнал — вывод про эдж требует месяца разных режимов.
 // ─────────────────────────────────────────────────
 
-import { bindTheme } from "./src/core/shell.js";
-import { mountTopnav } from "./src/core/topnav.js";
+import { onThemeChange } from "./src/core/shell.js";
 import { fetchJson } from "./src/net/api.js";
 import { drawOiChart, clearOiChart, applyOiChartTheme } from "./src/charts/oiChart.js";
 
-mountPageHeader({
-  eyebrow: "Open Interest",
-  title: "OI history · all coins",
-  note:
-    "Long-term OI snapshot (HL has no historical API). Rising OI on a flat price = leverage building up. <b>This is data, not a signal.</b>",
-});
-mountTopnav("oi");
-bindTheme([applyOiChartTheme]);
+// Экран жив, пока его не сменили. Ответы, приехавшие после ухода, писать
+// некуда: разметки этой страницы в документе уже нет.
+let alive = false;
 
 // ── форматтеры ──
 const fmtUsd = (n) => {
@@ -108,8 +102,7 @@ const fmtFunding = (n) => {
   );
 };
 // Местное время, не UTC: страницу читает человек, сверяющий её со своими
-// часами. На UTC-метках свежий снимок (13:45 UTC при 15:56 на часах) читался
-// как двухчасовое отставание коллектора.
+// часами. 🚨 UTC-метки читались как отставание коллектора на пару часов.
 const pad2 = (n) => String(n).padStart(2, "0");
 const fmtTime = (t) => {
   const d = new Date(t);
@@ -165,8 +158,8 @@ const codSegs = (score, side) => {
   return `<span class="ss-segs cod-segs--${tone}" data-card="${n} of 5 conditions met">${segs}</span>`;
 };
 
-// Балла `move` здесь больше нет: он дублировал отсечку по ходу и потому
-// начислялся всем, кто до неё дошёл. Осталось 5 независимых признаков.
+// 5 независимых признаков: балл за сам ход сюда не входит — он дублировал бы
+// отсечку, через которую монета уже прошла.
 const COD_HIT_LABEL = {
   edge: "Pinned at the edge of the 72h range",
   rollover: "4h momentum has already rolled over",
@@ -244,12 +237,12 @@ function codRenderTradedToday(p) {
         <span class="cod-donebadge">day closed</span>
         <span class="ss-coin">${p.coin}</span>
         ${codSegs(p.score, null)}
-        <span class="oi-muted" style="font-size:13px">${p.score == null ? "—" : `${p.score}/5`}</span>
+        <span class="oi-muted cod-score">${p.score == null ? "—" : `${p.score}/5`}</span>
       </div>
       <div class="cod-verdict none">${p.headline}</div>
     </div>
     <p class="cod-detail">${p.detail}</p>
-    <div class="cod-grid" style="margin-top:16px">
+    <div class="cod-grid cod-grid--sp">
       <div>
         <p class="cod-sub">Day result for this coin</p>
         <table class="cod-t">
@@ -314,7 +307,7 @@ function codRenderHeld(p) {
       <div class="cod-verdict ${st.cls}">${p.headline}</div>
     </div>
     <p class="cod-detail">${p.detail}</p>
-    <div class="cod-grid" style="margin-top:16px">
+    <div class="cod-grid cod-grid--sp">
       <div>
         <p class="cod-sub">Your position</p>
         <table class="cod-t">${posRows}</table>
@@ -328,13 +321,13 @@ function codRenderHeld(p) {
         <table class="cod-t">${factRows}</table>
         ${
           notes.length
-            ? `<p class="cod-sub" style="margin-top:16px">What to watch</p>
+            ? `<p class="cod-sub cod-sub--sp">What to watch</p>
                <ul class="cod-flags">${notes.map((t) => `<li class="med">${t}</li>`).join("")}</ul>`
             : ""
         }
       </div>
     </div>
-    <p class="cod-detail" style="margin-top:14px">
+    <p class="cod-detail cod-detail--sp">
       The card deliberately does not compute a new entry here: suggesting an add to
       an open position is an averaging-down machine.
     </p>`;
@@ -411,12 +404,12 @@ function codRenderBody() {
         <span class="ss-badge ss-badge--${p.side.toLowerCase()}">${icon(p.side === "SHORT" ? "short" : "long")} ${p.side}</span>
         <span class="ss-coin">${p.coin}</span>
         ${codSegs(p.score, p.side)}
-        <span class="oi-muted" style="font-size:13px">${p.score}/5</span>
+        <span class="oi-muted cod-score">${p.score}/5</span>
       </div>
       <div class="cod-verdict ${p.verdict.tone}">${p.verdict.headline}</div>
     </div>
     <p class="cod-detail">${p.verdict.detail}</p>
-    <div class="cod-grid" style="margin-top:16px">
+    <div class="cod-grid cod-grid--sp">
       <div>
         <p class="cod-sub">What lined up · ${p.score}/5</p>
         <table class="cod-t">${hitRows}</table>
@@ -428,7 +421,7 @@ function codRenderBody() {
       <div>
         <p class="cod-sub">Trade plan</p>
         <table class="cod-t cod-levels">${levelRows}</table>
-        <p class="cod-sub" style="margin-top:16px">What argues against</p>
+        <p class="cod-sub cod-sub--sp">What argues against</p>
         ${flags}
       </div>
     </div>`,
@@ -465,7 +458,7 @@ function codRenderForward() {
 
   const verdict = fw.enoughForVerdict
     ? ""
-    : `<div class="oi-neg" style="margin-top:6px">n &lt; 20 at 24h — NO conclusions about edge, this is still noise.</div>`;
+    : `<div class="oi-neg cod-fwd-warn">n &lt; 20 at 24h — NO conclusions about edge, this is still noise.</div>`;
 
   el.innerHTML = `<b>Forward log:</b> <b>${fw.total}</b> picks, <b>${fw.pending}</b> still maturing.
     ${rows}${verdict}`;
@@ -476,6 +469,7 @@ async function loadCoinOfDay(force = false) {
   meta.textContent = "scanning…";
   try {
     codData = await fetchJson(`/api/coin-of-day${force ? "?refresh=1" : ""}`);
+    if (!alive) return;
     if (codData.error) throw new Error(codData.error);
     const age = codData.cached ? ` · cached ${codData.ageSec}s ago` : "";
     meta.textContent = codData.scanned == null
@@ -486,6 +480,7 @@ async function loadCoinOfDay(force = false) {
     codRenderBody();
     codRenderForward();
   } catch (err) {
+    if (!alive) return;
     meta.textContent = "error";
     document.getElementById("cod-body").innerHTML =
       emptyState({
@@ -495,8 +490,6 @@ async function loadCoinOfDay(force = false) {
       });
   }
 }
-
-
 
 // ── состояние обзора ──
 const PAGE_SIZE = 10;
@@ -515,8 +508,9 @@ async function loadOverview() {
   try {
     data = await fetchJson("/api/oi-collector/overview");
   } catch (err) {
-    // Без этого catch запрос падал молча, и скелетон таблицы мигал вечно —
-    // «ещё грузится» было не отличить от «дашборда не отвечает».
+    // 🚨 Без этого catch запрос падает молча, и скелетон таблицы мигает вечно:
+    // «ещё грузится» не отличить от «дашборда не отвечает».
+    if (!alive) return;
     document.getElementById("oi-tbody").innerHTML = emptyRow(8, {
       glyph: "danger",
       title: "Overview did not load",
@@ -525,6 +519,7 @@ async function loadOverview() {
     spanEl.textContent = "";
     return;
   }
+  if (!alive) return;
   if (!data.ok) {
     document.getElementById("oi-tbody").innerHTML = emptyRow(8, {
       glyph: "clock",
@@ -619,37 +614,6 @@ function renderTable() {
   document.getElementById("oi-next").disabled = page >= pages - 1;
 }
 
-document.getElementById("oi-prev").addEventListener("click", () => {
-  if (page > 0) {
-    page--;
-    renderTable();
-  }
-});
-document.getElementById("oi-next").addEventListener("click", () => {
-  page++;
-  renderTable();
-});
-
-document.querySelectorAll("#oi-table thead th").forEach((th) =>
-  th.addEventListener("click", () => {
-    const key = th.dataset.key;
-    if (!key) return;
-    if (sortKey === key) sortAsc = !sortAsc;
-    else {
-      sortKey = key;
-      sortAsc = key === "coin"; // текст по возрастанию, числа по убыванию
-    }
-    page = 0;
-    renderTable();
-  }),
-);
-
-document.getElementById("oi-search").addEventListener("input", (e) => {
-  filter = e.target.value.trim().toUpperCase();
-  page = 0;
-  renderTable();
-});
-
 // ── детализация по монете ──
 async function selectCoin(coin, { scroll = true } = {}) {
   activeCoin = coin;
@@ -657,7 +621,7 @@ async function selectCoin(coin, { scroll = true } = {}) {
   const detail = document.getElementById("oi-detail");
   detail.hidden = false;
   // Карточка с графиком лежит НИЖЕ таблицы, и на десятой строке она за краем
-  // экрана: клик «срабатывал», а на вид не происходило ничего. Прокрутка —
+  // экрана: клик «срабатывает», а на вид не происходит ничего. Прокрутка —
   // часть ответа на клик, а не удобство. `smooth` уже включён глобально
   // (html { scroll-behavior }), поэтому системную настройку «меньше движения»
   // браузер учитывает сам.
@@ -672,6 +636,7 @@ async function selectCoin(coin, { scroll = true } = {}) {
   const data = await fetchJson(
     `/api/oi-collector/coin?coin=${encodeURIComponent(coin)}&hours=${detailHours}`,
   );
+  if (!alive) return;
   if (!data.ok || !data.points.length) {
     document.getElementById("oi-detail-sub").textContent = "no history for this range";
     clearOiChart();
@@ -761,30 +726,260 @@ function renderSeries(pts, bucketH) {
     .join("");
 }
 
-document.querySelectorAll("#oi-ranges .seg__btn").forEach((b) =>
-  b.addEventListener("click", () => {
-    document
-      .querySelectorAll("#oi-ranges .seg__btn")
-      .forEach((r) => r.classList.remove("active"));
-    b.classList.add("active");
-    detailHours = Number(b.dataset.hours);
-    // Смена диапазона — не переход к графику: он уже перед глазами.
-    if (activeCoin) selectCoin(activeCoin, { scroll: false });
-  }),
-);
+const SKELETON_ROW = `<tr class="sk-row">${'<td><span class="sk"></span></td>'.repeat(8)}</tr>`;
 
-// Подпись зоны в шапке таблицы: без неё «14:00» не отличить от UTC-метки.
-{
-  const tzEl = document.getElementById("oi-tz");
-  if (tzEl) tzEl.textContent = TZ_LABEL;
+function view() {
+  return `
+    <header id="page-header"></header>
+
+    <section class="card" id="cod-card">
+      <div class="card-header">
+        <div class="card-title">Coin of the day · fading an exhausted tail</div>
+        <div class="card-tools">
+          <span class="card-meta" id="cod-meta"></span>
+          <button class="btn btn--sm" id="cod-refresh" type="button">
+            <i data-icon="recompute"></i>Recompute
+          </button>
+        </div>
+      </div>
+      <div class="tabs tabs--wrap cod-tabs" id="cod-tabs" hidden></div>
+      <div id="cod-body">
+        <!-- Скелетон формы карточки: заголовок + бейдж стороны + две
+             колонки таблицы. Пока данных нет, место под них уже занято —
+             при подстановке макет не прыгает. -->
+        <div class="cod-head">
+          <div class="cod-head-main">
+            <span class="sk sk-num sk-num--lg"></span>
+            <span class="sk sk-pill"></span>
+          </div>
+          <span class="sk sk-chip"></span>
+        </div>
+        <div class="cod-grid">
+          <div class="sk-text">
+            <span class="sk sk-line"></span>
+            <span class="sk sk-line"></span>
+            <span class="sk sk-line"></span>
+          </div>
+          <div class="sk-text">
+            <span class="sk sk-line"></span>
+            <span class="sk sk-line"></span>
+            <span class="sk sk-line"></span>
+          </div>
+        </div>
+      </div>
+      <div class="cod-fwd" id="cod-fwd" hidden></div>
+      <p class="oi-note oi-note--sp">
+        Score 0–5: <b>edge of the 72h range · 4h reversal · 15m structure · volume
+        decay · OI not overheated</b>. The 24h move sets the side and the ordering, but
+        <b>filters nothing out</b>: coins used to vanish from the screen as the fade
+        played out. Default side is short (journal edge: payoff 0.70 on shorts vs 0.44
+        on longs). <b>This is analysis, not a proven-edge signal</b> — every pick is
+        written to a forward log alongside BTC's move over the same window, and no
+        conclusion is drawn before 20+ closed.
+      </p>
+    </section>
+
+    <section class="card">
+      <div class="card-header">
+        <div class="card-title">Overview · all coins</div>
+        <div class="card-tools">
+          <input
+            id="oi-search"
+            class="field field--ticker"
+            type="search"
+            placeholder="Filter by coin"
+            aria-label="Filter by coin"
+            maxlength="12"
+          />
+          <span class="card-meta" id="oi-span"></span>
+        </div>
+      </div>
+      <div class="oi-table-wrap">
+        <table class="table signals-table oi-table" id="oi-table">
+          <thead>
+            <tr>
+              <th data-key="coin">Coin</th>
+              <th data-key="oiUsd" class="sorted" data-card="Dollar value of all open positions (both sides). Size of the crowd, not its direction.">OI $</th>
+              <th data-key="dOi24hPct" data-card="Change in open interest over 24h. Rising = money coming in; falling = positions being closed.">ΔOI 24h</th>
+              <th data-key="dOi1hPct" data-card="Same over the last hour — catches a position being built right now.">ΔOI 1h</th>
+              <th data-key="px">Price</th>
+              <th data-key="dPx24hPct" data-card="Price change over 24h. Read next to ΔOI: OI up with price flat is the interesting cell.">ΔPrice 24h</th>
+              <th data-key="f" data-card="Hourly funding, with the daily cost below it. Positive = longs pay shorts. ×N appears when a coin runs at least 5× the exchange median — that is a real crowd imbalance, and a real cost of holding.">Funding/h</th>
+              <th data-key="v" data-card="24h traded volume. On Hyperliquid OI above volume is normal — it is not an anomaly.">Volume 24h</th>
+            </tr>
+          </thead>
+          <tbody id="oi-tbody">${SKELETON_ROW.repeat(6)}</tbody>
+        </table>
+      </div>
+      <div class="oi-pager" id="oi-pager" hidden>
+        <button class="btn btn--sm" id="oi-prev" type="button">
+          <i data-icon="prev"></i>Prev
+        </button>
+        <span class="oi-pg-info" id="oi-pg-info"></span>
+        <button class="btn btn--sm" id="oi-next" type="button">
+          Next<i data-icon="next"></i>
+        </button>
+      </div>
+    </section>
+
+    <section class="card oi-detail" id="oi-detail" hidden>
+      <div class="card-header">
+        <div class="card-title">Coin history</div>
+        <div class="seg" id="oi-ranges" role="group" aria-label="Range">
+          <button class="seg__btn active" type="button" data-hours="24">24h</button>
+          <button class="seg__btn" type="button" data-hours="72">3d</button>
+          <button class="seg__btn" type="button" data-hours="168">7d</button>
+          <button class="seg__btn" type="button" data-hours="720">30d</button>
+        </div>
+      </div>
+      <div class="oi-detail-head">
+        <h3 id="oi-detail-coin">—</h3>
+        <span class="card-meta" id="oi-detail-sub"></span>
+        <a
+          class="btn btn--sm"
+          id="oi-to-journal"
+          href="/journal"
+          data-card="Open this coin in the chart drill: levels, scenarios, stop and size"
+        >
+          Chart drill
+        </a>
+      </div>
+      <div class="oi-legend">
+        <span><i class="oi-legend-oi"></i> OI (tokens)</span>
+        <span><i class="oi-legend-px"></i> Price</span>
+      </div>
+      <div class="oi-chart" id="oi-chart"></div>
+      <p class="oi-note oi-note--sp">
+        <b>The blue line counts tokens, not dollars.</b> OI&nbsp;$ is <b>tokens × price</b>,
+        so a dollar line would carry price inside it — up 10% on price alone, with not a
+        single new position. That is arithmetic, not money arriving, and it makes the two
+        lines look related when they are not. Tokens carry no price, so what you see here
+        is the real thing. Dollars stay in the header and the table.
+      </p>
+      <p class="oi-note oi-note--sp">
+        <b>Two scales, on purpose:</b> OI on the right, price on the left — not comparable,
+        so never one axis. Price sits behind, shaded: it is context here, not the subject.
+        Hover for the exact hour and both values; times are <b>local</b>, same as the table.
+        What the shape means: lines moving <b>together</b> is ordinary churn — positions
+        opened and closed as price moves, no information. Lines <b>diverging</b> is the
+        readable case: OI stepping up while price stalls or drops means someone built a
+        position and is <b>still holding it</b>. A flat OI shelf is that position sitting
+        there; when the shelf breaks down, they left. OI counts <b>both sides at once</b>,
+        so it can never tell you long or short — this page shows positioning, not direction.
+      </p>
+      <div class="oi-table-wrap oi-series-wrap">
+        <table class="table signals-table oi-table" id="oi-series">
+          <thead>
+            <tr>
+              <th data-key="t" data-card="Your local time — the chart axis uses it too. Rows are bucket averages, so the newest row is the bucket for the hour that is still running.">Time · <span id="oi-tz">local</span></th>
+              <th>Price</th>
+              <th data-card="Open positions counted in coins. Price-free, so this is the honest answer to «did anyone actually build a position».">OI (tokens)</th>
+              <th data-card="tokens × price. Moves when price moves, even with zero new positions — do not read a rise here as money arriving.">OI $</th>
+              <th data-card="Hourly funding. Positive = longs pay shorts, negative = shorts pay longs. Anything past ±0.1%/h is a real crowd imbalance, not noise — and a real cost of holding.">Funding/h</th>
+              <th>Volume 24h</th>
+            </tr>
+          </thead>
+          <tbody id="oi-series-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <footer id="footer-status">
+      <span>Source: OI collector (snapshot every 15 min) · read-only</span>
+    </footer>`;
 }
 
-// <i data-icon="…"> в статической разметке → настоящие svg.
-paintIcons();
+/** Слушатели статичной разметки экрана. Живут ровно столько же, сколько она. */
+function bindControls() {
+  document.getElementById("cod-refresh").addEventListener("click", () => loadCoinOfDay(true));
 
-loadCoinOfDay();
-// ?coin= приходит со Screen: история этой монеты открывается сразу.
-const linkedCoin = new URLSearchParams(location.search).get("coin");
-loadOverview().then(() => {
-  if (linkedCoin) selectCoin(linkedCoin);
-});
+  document.getElementById("oi-prev").addEventListener("click", () => {
+    if (page > 0) {
+      page--;
+      renderTable();
+    }
+  });
+  document.getElementById("oi-next").addEventListener("click", () => {
+    page++;
+    renderTable();
+  });
+
+  document.querySelectorAll("#oi-table thead th").forEach((th) =>
+    th.addEventListener("click", () => {
+      const key = th.dataset.key;
+      if (!key) return;
+      if (sortKey === key) sortAsc = !sortAsc;
+      else {
+        sortKey = key;
+        sortAsc = key === "coin"; // текст по возрастанию, числа по убыванию
+      }
+      page = 0;
+      renderTable();
+    }),
+  );
+
+  document.getElementById("oi-search").addEventListener("input", (e) => {
+    filter = e.target.value.trim().toUpperCase();
+    page = 0;
+    renderTable();
+  });
+
+  document.querySelectorAll("#oi-ranges .seg__btn").forEach((b) =>
+    b.addEventListener("click", () => {
+      document
+        .querySelectorAll("#oi-ranges .seg__btn")
+        .forEach((r) => r.classList.remove("active"));
+      b.classList.add("active");
+      detailHours = Number(b.dataset.hours);
+      // Смена диапазона — не переход к графику: он уже перед глазами.
+      if (activeCoin) selectCoin(activeCoin, { scroll: false });
+    }),
+  );
+}
+
+export default {
+  title: "OI · Helm",
+  nav: "oi",
+
+  render(outlet) {
+    alive = true;
+    overview = [];
+    codData = null;
+    codActive = null;
+    activeCoin = null;
+    filter = "";
+    page = 0;
+    sortKey = "oiUsd";
+    sortAsc = false;
+    detailHours = 24;
+
+    outlet.innerHTML = view();
+    mountPageHeader({
+      eyebrow: "Open Interest",
+      title: "OI history · all coins",
+      note:
+        "Long-term OI snapshot (HL has no historical API). Rising OI on a flat price = leverage building up. <b>This is data, not a signal.</b>",
+    });
+    bindControls();
+
+    // Подпись зоны в шапке таблицы: без неё «14:00» не отличить от UTC-метки.
+    document.getElementById("oi-tz").textContent = TZ_LABEL;
+    // <i data-icon="…"> в статической разметке → настоящие svg.
+    paintIcons();
+
+    const offTheme = onThemeChange(applyOiChartTheme);
+
+    loadCoinOfDay();
+    // ?coin= приходит со Screen: история этой монеты открывается сразу.
+    const linkedCoin = new URLSearchParams(location.search).get("coin");
+    loadOverview().then(() => {
+      if (alive && linkedCoin) selectCoin(linkedCoin);
+    });
+
+    return () => {
+      alive = false;
+      offTheme();
+      clearOiChart();
+    };
+  },
+};

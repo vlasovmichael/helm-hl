@@ -169,6 +169,22 @@ table.ledger > tfoot > tr > td.dim {
   display: block;
   margin-top: 2px;
 }
+// Скелетоны занимают место будущих плиток и строк: при подстановке данных
+// макет не прыгает.
+.ledger-sk-stat {
+  --sk-h: 82px;
+}
+.ledger-sk-rows {
+  padding: var(--sp-4) 0;
+}
+// Код декларации рядом с заголовком: подпись к цифрам, не заголовок.
+.tax-code {
+  font-size: var(--fs-base);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-style: normal;
+  letter-spacing: 0.08em;
+}
 table.ledger tfoot td {
   font-family: var(--font-mono);
   font-weight: 700;
