@@ -20,5 +20,6 @@ route("/oi", () => import("./oi.js"));
 route("/ledger", () => import("./ledger.js"));
 route("/statistics", () => import("./statistics.js"));
 route("/lab", () => import("./lab.js"));
+route("/journal", () => import("./journal.js"));
 
 start(document.getElementById("outlet"));

@@ -1,20 +1,17 @@
-import "./src/styles/journal.scss";
-import { icon, paintIcons } from "./src/core/icon.js";
 // ─────────────────────────────────────────────────
-//  journal.html — журнал чтения графика (дрилл «на сутки вперёд»).
+//  Journal — журнал чтения графика (дрилл «на сутки вперёд»).
 //  Читает свечи/цену HL напрямую (publicWS/REST), ничего не торгует.
 //  Цикл: читаю (разметка сценариев) → проверяю (прошлая) → журнал. По 3 якорным
-// монетам (BTC/HYPE/SOL) + любая своя. Хранение — localStorage..
+//  монетам (BTC/HYPE/SOL) + любая своя. Хранение — localStorage.
+//
+//  🚨 Страница держит СВОЙ сокет к HL и 20-секундный опрос свечей: и то, и
+//  другое обязано гаснуть при уходе, иначе сокет переподключается вечно.
 // ─────────────────────────────────────────────────
-
-import { bindTheme } from "./src/core/shell.js";
-import { mountTopnav } from "./src/core/topnav.js";
+import "./src/styles/journal.scss";
+import { icon, paintIcons } from "./src/core/icon.js";
 import { analyzeMultiTF } from "../../chartCoach.js";
 import { segmented } from "./src/core/ui.js";
 import { mountTradeLog, setUrlCoin } from "./src/features/tradeLog.js";
-
-mountTopnav("journal");
-bindTheme();
 
 const COINS = ["BTC", "HYPE", "SOL"];
 const KEY = "helm_chartjournal_v1";
@@ -82,13 +79,15 @@ function atrPctOf(D) {
   return last > 0 ? (atr / last) * 100 : null;
 }
 function setPx(px) {
-  const el = G("px"); const prev = lastPx[coin];
+  const el = G("px"); if (!el) return;
+  const prev = lastPx[coin];
   el.textContent = px ? "$" + fmtPx(px) : "—";
   if (px && prev != null && px !== prev) { el.classList.remove("j-up", "j-down"); void el.offsetWidth; el.classList.add(px > prev ? "j-up" : "j-down"); }
   if (px) lastPx[coin] = px;
 }
 async function loadAnchor() {
-  const conn = G("conn"); conn.textContent = "loading HL…";
+  const conn = G("conn"); if (!conn) return;
+  conn.textContent = "loading HL…";
   try {
     const now = Date.now(), day = 864e5;
     const snap = (interval, from) => hl({ type: "candleSnapshot", req: { coin, interval, startTime: now - from, endTime: now } });
@@ -102,6 +101,8 @@ async function loadAnchor() {
       soft(snap("5m", 12 * 3600e3)),// ~144 бара
       coin !== "BTC" ? soft(hl({ type: "candleSnapshot", req: { coin: "BTC", interval: "1d", startTime: now - 9 * day, endTime: now } })) : Promise.resolve(null),
     ]);
+    // Ответ мог приехать уже после ухода со страницы — писать его некуда.
+    if (!G("conn")) return;
     const price = parseFloat(mids[coin]); setPx(price);
     lastCandles = { coin, c4r, c1r, c5r };
     renderCoach(price, c4r, c1r, c5r);
@@ -120,6 +121,7 @@ async function loadAnchor() {
     renderVsBtc(dchg, btcd);
     conn.textContent = wsAlive ? "HL · live (WS)" : "HL · updated " + new Date().toLocaleTimeString("en-GB", { timeZone: "Europe/Warsaw", hour: "2-digit", minute: "2-digit" });
   } catch (err) {
+    if (!G("conn")) return;
     conn.textContent = "HL unavailable — check the price in TradingView"; setPx(null);
   }
 }
@@ -128,7 +130,9 @@ async function loadAnchor() {
 // Свечи по-прежнему тянет REST-цикл (20с) — WS даёт только свежий mid, и
 // разбор пересчитывается чистой функцией на кэшированных свечах.
 let ws = null, wsAlive = false, lastWsRender = 0;
+let wsRetryTimer = null, wsStopped = false;
 function wireWs() {
+  if (wsStopped) return;
   let sock;
   try { sock = new WebSocket("wss://api.hyperliquid.xyz/ws"); } catch { return; }
   ws = sock;
@@ -140,15 +144,29 @@ function wireWs() {
     const now = Date.now();
     if (now - lastWsRender < 1000) return; // не чаще 1 Гц — разбор пересчитывать чаще незачем
     lastWsRender = now;
+    if (!G("conn")) return;
     setPx(px);
     if (lastRail?.coin === coin) renderRail(px, lastRail.lo, lastRail.hi, lastRail.cur);
     if (lastCandles?.coin === coin) renderCoach(px, lastCandles.c4r, lastCandles.c1r, lastCandles.c5r);
     G("conn").textContent = "HL · live (WS)";
   };
-  sock.onclose = () => { wsAlive = false; setTimeout(wireWs, 5000); };
+  // 🚨 Переподключаемся, только пока страница жива и сокет наш: иначе уход со
+  // страницы оставляет за собой бесконечный цикл реконнектов.
+  sock.onclose = () => {
+    wsAlive = false;
+    if (wsStopped || ws !== sock) return;
+    wsRetryTimer = setTimeout(wireWs, 5000);
+  };
   sock.onerror = () => { try { sock.close(); } catch { /* already closed */ } };
 }
-wireWs();
+function stopWs() {
+  wsStopped = true;
+  if (wsRetryTimer) { clearTimeout(wsRetryTimer); wsRetryTimer = null; }
+  const sock = ws;
+  ws = null;
+  wsAlive = false;
+  try { sock?.close(); } catch { /* already closed */ }
+}
 function renderRail(price, lo, hi, cur) {
   const span = (hi - lo) || 1; const pct = (v) => Math.max(2, Math.min(98, ((v - lo) / span) * 100));
   G("pin").style.left = pct(price) + "%"; G("pinPx").textContent = "$" + fmtPx(price);
@@ -167,11 +185,11 @@ function renderRail(price, lo, hi, cur) {
 function renderVsBtc(dchg, btcd) {
   const wrap = G("vsWrap"), el = G("vsbtc");
   if (coin === "BTC" || !btcd) {
-    if (coin === "BTC") { wrap.style.display = "flex"; el.innerHTML = '<span style="color:var(--text-muted)">— anchor</span>'; }
-    else wrap.style.display = "none";
+    if (coin === "BTC") { wrap.hidden = false; el.innerHTML = '<span class="j-vs-none">— anchor</span>'; }
+    else wrap.hidden = true;
     return;
   }
-  wrap.style.display = "flex";
+  wrap.hidden = false;
   const btcChg = dayChg(btcd.map((c) => ({ o: +c.o, c: +c.c }))); const rel = dchg - btcChg;
   const corr = Math.sign(dchg) === Math.sign(btcChg) && dchg !== 0;
   el.innerHTML = `<span class="j-vschip"><span class="j-num ${rel >= 0 ?"j-up" : "j-down"}">${rel >= 0 ? "+" : ""}${rel.toFixed(1)}%</span><span class="j-badge ${corr ?"corr" : "div"}">${corr ? "tracks" : "diverges"}</span></span>`;
@@ -198,6 +216,7 @@ function tfCell(tf, role, d) {
 }
 function renderCoach(price, c4r, c1r, c5r) {
   const vEl = G("coachVerdict"), tEl = G("coachTfs"), nEl = G("coachNote");
+  if (!vEl) return;
   const out = analyzeMultiTF({ candles4h: mkCandles(c4r), candles1h: mkCandles(c1r), candles5m: mkCandles(c5r), price });
   if (!out.ok) {
     vEl.className = "j-coach-verdict neutral";
@@ -213,6 +232,7 @@ function renderCoach(price, c4r, c1r, c5r) {
 
 // ── сегменты ──
 let curTrend = "", curReg = "";
+let segT = null, segR = null;
 function wireSeg(id, set) {
   const el = G(id);
   const mark = (v) => el.querySelectorAll(".seg__btn").forEach((b) => {
@@ -225,7 +245,6 @@ function wireSeg(id, set) {
   });
   return { set: mark };
 }
-const segT = wireSeg("segTrend", (v) => (curTrend = v)), segR = wireSeg("segReg", (v) => (curReg = v));
 
 function readForm() {
   return { trend: curTrend, regime: curReg, resAbove: G("resAbove").value.trim(), supBelow: G("supBelow").value.trim(), scenA: G("scenA").value.trim(), scenB: G("scenB").value.trim(), bias: G("bias").value.trim(), rr: G("rr").value.trim(), px: G("px").textContent, ts: Date.now() };
@@ -263,7 +282,7 @@ function renderHist() {
   if (!days.length) { h.innerHTML = '<p class="j-empty">Empty.</p>'; return; }
   h.innerHTML = days.map((d) => {
     const x = e[d];
-    return `<details class="j-log-item"><summary><span class="j-date">${d}</span> ${pill(x.trend)} ${x.bias ? '<span style="color:var(--text-secondary)">' + x.bias.slice(0, 42) + (x.bias.length > 42 ? "…" : "") + "</span>" : ""} ${x.grade ? `<span class="j-done">${icon("check")} reviewed</span>` : ""}</summary>
+    return `<details class="j-log-item"><summary><span class="j-date">${d}</span> ${pill(x.trend)} ${x.bias ? '<span class="j-log-bias">' + x.bias.slice(0, 42) + (x.bias.length > 42 ? "…" : "") + "</span>" : ""} ${x.grade ? `<span class="j-done">${icon("check")} reviewed</span>` : ""}</summary>
       <div class="j-log-body">
         <div class="j-kv"><b>Above</b> <span class="j-mono">${x.resAbove || "—"}</span> · <b>Below</b> <span class="j-mono">${x.supBelow || "—"}</span></div>
         <div class="j-kv"><b>A:</b> ${x.scenA || "—"}</div><div class="j-kv"><b>B:</b> ${x.scenB || "—"}</div>
@@ -272,7 +291,6 @@ function renderHist() {
   }).join("");
 }
 function flashSaved() { const s = G("saved"); s.classList.add("show"); setTimeout(() => s.classList.remove("show"), 1500); }
-G("save").onclick = () => { entries(coin)[todayKey()] = { ...(entries(coin)[todayKey()] || {}), ...readForm() }; saveDb(); flashSaved(); renderHist(); };
 
 // ── вкладки монет ──
 function renderTabs() {
@@ -305,11 +323,6 @@ function removeCoin(c) {
   customCoins = customCoins.filter((x) => x !== c); localStorage.setItem(COINS_KEY, JSON.stringify(customCoins));
   if (coin === c) switchCoin("BTC"); else renderTabs();
 }
-G("tabs").addEventListener("click", (e) => {
-  const rm = e.target.closest(".j-rm"); if (rm) { e.stopPropagation(); removeCoin(rm.dataset.rm); return; }
-  if (e.target.closest("#addCoin")) { showAddInput(); return; }
-  const t = e.target.closest(".tabs__tab"); if (t && t.dataset.coin) { switchCoin(t.dataset.coin); setUrlCoin(t.dataset.coin); }
-});
 
 // ── калькулятор стопа/размера ──
 const CALC_KEY = "helm_cj_calc";
@@ -317,6 +330,7 @@ const num = (id) => { const v = parseFloat((G(id).value || "").replace(/[,\s]/g,
 const WALLET_LEV_CAP = 10; // практический потолок плеча кошелька (как в боте)
 function renderCalc() {
   const out = G("calcOut"), sideEl = G("calcSide");
+  if (!out) return;
   const entry = num("calcEntry"), stop = num("calcStop"), target = num("calcTarget");
   const eq = num("calcEq"), risk = num("calcRisk");
   // запоминаем депо/риск (стабильные)
@@ -333,8 +347,8 @@ function renderCalc() {
   let atrNote = "";
   if (currentAtrPct != null) {
     atrNote = stopDist < currentAtrPct
-      ? `<small style="color:var(--red)">already ATR(1D)≈${currentAtrPct.toFixed(2)}% — a wick will take it out</small>`
-      : `<small style="color:var(--green)">wider than ATR(1D)≈${currentAtrPct.toFixed(2)}% ${icon("check")}</small>`;
+      ? `<small class="j-calc-bad">already ATR(1D)≈${currentAtrPct.toFixed(2)}% — a wick will take it out</small>`
+      : `<small class="j-calc-ok">wider than ATR(1D)≈${currentAtrPct.toFixed(2)}% ${icon("check")}</small>`;
   }
   rows.push(`<div class="j-calc-row"><b>Distance to stop</b><span class="v">${stopDist.toFixed(2)}%${atrNote}</span></div>`);
   // размер от риска
@@ -344,7 +358,7 @@ function renderCalc() {
     const lev = sizeUsd / eq;
     const levHot = lev > WALLET_LEV_CAP;
     rows.push(`<div class="j-calc-row"><b>Risk per trade</b><span class="v">$${riskUsd.toFixed(2)}<small>${risk}% of $${eq.toFixed(0)}</small></span></div>`);
-    rows.push(`<div class="j-calc-row"><b>Position size</b><span class="v">$${sizeUsd.toFixed(2)}<small style="color:${levHot ? "var(--red)" : "var(--text-muted)"}">leverage ~${lev.toFixed(1)}×${levHot ? ` › cap ${WALLET_LEV_CAP}×` : ""}</small></span></div>`);
+    rows.push(`<div class="j-calc-row"><b>Position size</b><span class="v">$${sizeUsd.toFixed(2)}<small class="${levHot ? "j-calc-bad" : "j-calc-dim"}">leverage ~${lev.toFixed(1)}×${levHot ? ` › cap ${WALLET_LEV_CAP}×` : ""}</small></span></div>`);
   } else {
     rows.push('<div class="j-calc-row"><b>Position size</b><span class="v">—<small>fill in account and risk %</small></span></div>');
   }
@@ -353,10 +367,10 @@ function renderCalc() {
     const valid = long ? target > entry : target < entry;
     if (valid) {
       const rr = Math.abs(target - entry) / Math.abs(entry - stop);
-      const col = rr >= 2 ? "var(--green)" : rr < 1 ? "var(--red)" : "var(--text-secondary)";
-      rows.push(`<div class="j-calc-row"><b>R:R to target</b><span class="v" style="color:${col}">1 : ${rr.toFixed(2)}</span></div>`);
+      const tone = rr >= 2 ? "j-calc-ok" : rr < 1 ? "j-calc-bad" : "";
+      rows.push(`<div class="j-calc-row"><b>R:R to target</b><span class="v ${tone}">1 : ${rr.toFixed(2)}</span></div>`);
     } else {
-      rows.push(`<div class="j-calc-row"><b>R:R to target</b><span class="v"><small style="color:var(--red)">target is not on the ${long ? "long side (above entry)" : "short side (below entry)"}</small></span></div>`);
+      rows.push(`<div class="j-calc-row"><b>R:R to target</b><span class="v"><small class="j-calc-bad">target is not on the ${long ? "long side (above entry)" : "short side (below entry)"}</small></span></div>`);
     }
   }
   out.innerHTML = rows.join("");
@@ -384,7 +398,9 @@ function switchCoin(c) {
   G("anchorCoin").textContent = c; G("histCoin").textContent = c;
   G("anchorDate").textContent = "markup for " + todayKey();
   fillForm(entries(c)[todayKey()] || null); renderYesterday(); renderHist();
-  loadAnchor(); if (liveTimer) clearInterval(liveTimer); liveTimer = setInterval(loadAnchor, 20000);
+  loadAnchor();
+  if (liveTimer) clearInterval(liveTimer);
+  liveTimer = setInterval(loadAnchor, 20000);
 }
 // ── вкладки: дрилл графика / журнал сделок (?view=trades) ──
 const VIEWS = [
@@ -408,15 +424,431 @@ function setView(view) {
   const linked = url.searchParams.get("coin");
   if (linked && linked.toUpperCase() !== coin.toUpperCase()) addCoinByTicker(linked);
 }
-G("journalViews").addEventListener("click", (e) => {
-  const button = e.target.closest("[data-view]");
-  if (button) setView(button.dataset.view);
-});
 
-wireHelp();
-wireCalc();
-switchCoin("BTC");
-setView(new URLSearchParams(location.search).get("view") === "trades" ? "trades" : "drill");
+function view() {
+  return `
+    <div class="j-wrap">
+      <div class="j-toolbar">
+        <div id="journalViews"></div>
+        <nav class="tabs j-nav" id="tabs"></nav>
+        <button
+          class="j-help-btn"
+          id="helpToggle"
+          type="button"
+          data-card="How to use the journal"
+          aria-label="How to use"
+        >
+          <i data-icon="help"></i>
+        </button>
+        <span class="j-status" id="conn">…</span>
+      </div>
 
-// <i data-icon="…"> в статической разметке → настоящие svg.
-paintIcons();
+      <div id="drillView">
+      <!-- Обучающая панель: что это и что делать -->
+      <section class="j-card j-help" id="helpCard">
+        <div class="j-help-head">
+          <h2 class="j-card-title j-card-title--flush">
+            <span class="j-idx">why</span> How to use the journal
+          </h2>
+          <button class="btn btn--ghost btn--sm j-help-x" id="helpClose" type="button">
+            Got it, hide
+          </button>
+        </div>
+        <p class="j-help-lead">
+          This is a drill for learning to read a chart <b>a day ahead</b>. Not to guess
+          price (that is a coin flip), but to map the terrain and keep yourself from
+          entering against the trend. A morning long against a falling BTC is exactly
+          the mistake this page insures against.
+        </p>
+        <div class="j-help-steps">
+          <div class="j-help-step">
+            <span class="j-idx">read</span>
+            <div>
+              <b>Mark up one coin a day.</b> 1D trend (which way the wind blows),
+              levels above and below (where the walls are), two scenarios “if X → A / if
+              Y → B”, and a base bias. One or two minutes per coin. The “Bearing” scale
+              at the top shows where price sits in the weekly range — near the floor or
+              near the ceiling.
+            </div>
+          </div>
+          <div class="j-help-step">
+            <span class="j-idx">size</span>
+            <div>
+              <b>Stop and size before entry.</b> Enter your entry and stop → size is
+              computed <b>from risk</b> (you lose exactly the set % of the account at the
+              stop), not from “how much I can stomach”. A red “already ATR” means the stop
+              is too tight and a wick will take it out.
+            </div>
+          </div>
+          <div class="j-help-step">
+            <span class="j-idx">review</span>
+            <div>
+              <b>Next day, review it.</b> Which scenario fired? Were the levels right?
+              Write a short takeaway. This is where pattern recognition accumulates — not
+              from reading, but from checking your own markups.
+            </div>
+          </div>
+        </div>
+        <p class="j-help-rule">
+          One rule that saves money:
+          <b>do not long against the 1D trend and do not short against it.</b> The goal
+          of the drill is not to guess direction but to train level markup and regime
+          choice. Twenty or thirty entries and structure starts reading itself.
+        </p>
+      </section>
+
+      <!-- HERO · Пеленг -->
+      <section class="j-card">
+        <div class="j-hero-head">
+          <div>
+            <span class="j-coin-name" id="anchorCoin">BTC</span>
+            <span class="j-coin-sub" id="anchorDate"></span>
+          </div>
+          <div class="j-price-block">
+            <span class="j-price j-mono" id="px">—</span>
+            <span class="j-daychg" id="dchg">—</span>
+          </div>
+        </div>
+
+        <div class="j-bearing">
+          <div class="j-rail" id="rail">
+            <!-- 🚨 Положение полосы и пина считает renderRail: left/width ставит
+                 JS, поэтому они инлайновые (см. core/_utilities.scss). -->
+            <div class="j-band" id="band" style="left: 50%; width: 0"></div>
+            <div class="j-pin" id="pin" style="left: 50%">
+              <span class="j-dot"></span
+              ><span class="j-lab j-mono" id="pinPx"></span>
+            </div>
+          </div>
+          <div class="j-legend">
+            <span class="j-end lo"
+              ><small>7d low</small><span id="legLow">—</span></span
+            >
+            <span class="j-read" id="rangeRead">—</span>
+            <span class="j-end hi"
+              ><small>7d high</small><span id="legHigh">—</span></span
+            >
+          </div>
+        </div>
+
+        <div class="j-meta-row">
+          <div class="j-meta">
+            <span class="j-k">7d trend</span
+            ><span class="j-v" id="trend200">—</span>
+          </div>
+          <div class="j-meta" id="vsWrap">
+            <span class="j-k">vs BTC today</span
+            ><span class="j-v" id="vsbtc">—</span>
+          </div>
+        </div>
+
+        <p class="j-principle">
+          First answer “trend or range” — from the structure of highs and lows plus
+          EMA200 — and only then look at RSI. Do not long against the 1D trend and do
+          not short against it.
+        </p>
+      </section>
+
+      <!-- Авто-разбор 4h/1h/5m: куда (направление) и когда (тайминг) -->
+      <section class="j-card j-coach" id="coachCard">
+        <h2 class="j-card-title">
+          <span class="j-idx">breakdown</span> Where and when · 4h → 1h → 5m
+          <span class="j-status j-status--right" id="coachStatus"></span>
+        </h2>
+        <div class="j-coach-verdict neutral" id="coachVerdict">
+          <div class="j-vh">Reading the market…</div>
+        </div>
+        <div class="j-tf-grid" id="coachTfs"></div>
+        <p class="j-coach-note" id="coachNote"></p>
+      </section>
+
+      <div class="j-cols">
+        <section class="j-card">
+          <h2 class="j-card-title">
+            <span class="j-idx">read</span> Markup for tomorrow
+            <span class="j-saved" id="saved"><i data-icon="check"></i>saved</span>
+          </h2>
+          <div class="j-field">
+            <label class="j-f">1D trend</label>
+            <div class="seg seg--wide" id="segTrend" role="group">
+              <button type="button" class="seg__btn seg__btn--long" data-v="up" aria-pressed="false"><i data-icon="rising"></i>up</button
+              ><button type="button" class="seg__btn seg__btn--flat" data-v="range" aria-pressed="false"><i data-icon="flat"></i>range</button
+              ><button type="button" class="seg__btn seg__btn--short" data-v="down" aria-pressed="false"><i data-icon="falling"></i>down</button>
+            </div>
+          </div>
+          <div class="j-field">
+            <label class="j-f">Regime</label>
+            <div class="seg seg--wide" id="segReg" role="group">
+              <button type="button" class="seg__btn" data-v="up" aria-pressed="false">trend</button
+              ><button type="button" class="seg__btn" data-v="range" aria-pressed="false">range</button>
+            </div>
+          </div>
+          <div class="j-field j-row2">
+            <div>
+              <label class="j-f">Resistance above</label
+              ><input class="field field--block field--lg" type="text" id="resAbove" placeholder="60.8k / 61.9k" />
+            </div>
+            <div>
+              <label class="j-f">Support below</label
+              ><input class="field field--block field--lg" type="text" id="supBelow" placeholder="58.9k / 58.0k" />
+            </div>
+          </div>
+          <div class="j-field">
+            <label class="j-f">Scenario A — if…</label
+            ><textarea
+              class="field field--block field--lg"
+              id="scenA"
+              placeholder="holds 58k → bounce to 60.8 (sell the rally)"
+            ></textarea>
+          </div>
+          <div class="j-field">
+            <label class="j-f">Scenario B — if…</label
+            ><textarea
+              class="field field--block field--lg"
+              id="scenB"
+              placeholder="loses 58.0k on volume → down to 56k"
+            ></textarea>
+          </div>
+          <div class="j-field j-row2">
+            <div>
+              <label class="j-f">Base bias</label
+              ><input class="field field--block field--lg" type="text" id="bias" placeholder="sell the bounces" />
+            </div>
+            <div>
+              <label class="j-f">Plan R:R</label
+              ><input class="field field--block field--lg" type="text" id="rr" placeholder="1:3, stop beyond 61.1" />
+            </div>
+          </div>
+          <button class="btn btn--primary j-btn" id="save" type="button">Save markup</button>
+        </section>
+
+        <section class="j-card">
+          <h2 class="j-card-title">
+            <span class="j-idx">review</span> Yesterday’s markup
+          </h2>
+          <div id="yBody">
+            <p class="j-empty">
+              No previous entry for this coin yet. Fill one in today and tomorrow you can
+              check which scenario fired.
+            </p>
+          </div>
+          <!-- 🚨 Блок показывает/прячет renderYesterday через style.display —
+               поэтому здесь инлайн, а не класс. -->
+          <div id="yGradeBox" style="display: none">
+            <div class="j-field">
+              <label class="j-f"
+                >Which scenario fired? Were the levels right?</label
+              ><textarea
+                class="field field--block field--lg"
+                id="grade"
+                placeholder="B fired, broke 58 as expected; the 60.8 level was exact"
+              ></textarea>
+            </div>
+            <button class="btn j-btn ghost" id="saveGrade" type="button">Save the takeaway</button>
+          </div>
+        </section>
+      </div>
+
+      <section class="j-card">
+        <h2 class="j-card-title">
+          <span class="j-idx">size</span> Stop and size
+          <span class="j-coin-sub" id="calcSide"></span>
+        </h2>
+        <div class="j-field j-calc-grid">
+          <div>
+            <label class="j-f">Entry $</label
+            ><input
+              class="field field--block field--lg"
+              type="text"
+              id="calcEntry"
+              inputmode="decimal"
+              placeholder="59300"
+            />
+          </div>
+          <div>
+            <label class="j-f">Stop $</label
+            ><input
+              class="field field--block field--lg"
+              type="text"
+              id="calcStop"
+              inputmode="decimal"
+              placeholder="61100"
+            />
+          </div>
+          <div>
+            <label class="j-f">Target $ (opt.)</label
+            ><input
+              class="field field--block field--lg"
+              type="text"
+              id="calcTarget"
+              inputmode="decimal"
+              placeholder="58300"
+            />
+          </div>
+          <div>
+            <label class="j-f">Account $</label
+            ><input
+              class="field field--block field--lg"
+              type="text"
+              id="calcEq"
+              inputmode="decimal"
+              placeholder="50"
+            />
+          </div>
+          <div>
+            <label class="j-f">Risk % of account</label
+            ><input
+              class="field field--block field--lg"
+              type="text"
+              id="calcRisk"
+              inputmode="decimal"
+              placeholder="2"
+            />
+          </div>
+        </div>
+        <button class="btn j-btn ghost j-calc-fill" id="calcFill" type="button">
+          Entry = current price
+        </button>
+        <div class="j-calc-out" id="calcOut"></div>
+        <p class="j-calc-hint">
+          Stop level first (below support / above resistance, plus a buffer), size
+          second — not the other way round. Size is computed so that hitting the stop
+          costs exactly the risk you set.
+        </p>
+      </section>
+
+      <section class="j-card">
+        <h2 class="j-card-title">
+          <span class="j-idx">journal</span> History ·
+          <span id="histCoin">BTC</span>
+        </h2>
+        <div id="hist"><p class="j-empty">Empty.</p></div>
+      </section>
+
+      <p class="j-footnote">
+        The goal of the drill is to check level markup and regime choice, not to
+        guess direction — that is a coin flip. Twenty or thirty entries and structure
+        reads itself. The edge is still in the exit; reading is what keeps you from
+        fighting the trend and lets you set sensible stops.
+      </p>
+      </div>
+
+      <!-- Trade log: журнал сделок, пишется из закрытых сделок (features/tradeLog.js) -->
+      <div id="tradeLogView" hidden>
+        <section class="j-card">
+          <div class="card-header">
+            <div class="card-title">Overview</div>
+            <div class="card-tools">
+              <span id="tj-filter"></span>
+              <span class="card-meta" id="tj-period"></span>
+            </div>
+          </div>
+          <div id="tj-overview"></div>
+        </section>
+
+        <section class="j-card">
+          <div class="card-header">
+            <div class="card-title">This week</div>
+            <div class="card-meta" id="tj-week-meta"></div>
+          </div>
+          <div id="tj-week"></div>
+        </section>
+
+        <section class="j-card">
+          <div class="card-header">
+            <div class="card-title">Where the result comes from</div>
+            <div class="card-tools" id="tj-dims"></div>
+          </div>
+          <div class="table-wrap">
+            <table class="table table--compact">
+              <thead>
+                <tr>
+                  <th>Group</th>
+                  <th class="num">Trades</th>
+                  <th class="num">Win rate</th>
+                  <th class="num">Net</th>
+                  <th class="num">Avg / trade</th>
+                  <th
+                    class="num"
+                    data-card="Range the average per trade lands in 95% of the time, resampling whole days. If it spans zero, this group is not distinguishable from break-even yet."
+                  >
+                    95% CI
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="tj-breakdown"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="j-card">
+          <div class="card-header">
+            <div class="card-title">Recent trades</div>
+            <div class="card-meta" id="tj-trades-meta"></div>
+          </div>
+          <div class="table-wrap">
+            <table class="table table--compact table--sticky-head">
+              <thead>
+                <tr>
+                  <th>Entry</th>
+                  <th>Coin</th>
+                  <th>Side</th>
+                  <th>Session</th>
+                  <th data-card="Direction of the last hour at entry, relative to the trade side">1h trend</th>
+                  <th class="num">Hold</th>
+                  <th class="num" data-card="Best and worst unrealized move while the trade was open">Peak / worst</th>
+                  <th class="num">Net</th>
+                  <th class="num">Net %</th>
+                  <th data-card="Accent marks describe the entry; grey marks describe the outcome and are not used in the breakdown">Marks</th>
+                </tr>
+              </thead>
+              <tbody id="tj-trades"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>`;
+}
+
+export default {
+  title: "Helm · Journal",
+  nav: "journal",
+
+  render(outlet) {
+    outlet.innerHTML = view();
+
+    segT = wireSeg("segTrend", (v) => (curTrend = v));
+    segR = wireSeg("segReg", (v) => (curReg = v));
+
+    G("save").onclick = () => {
+      entries(coin)[todayKey()] = { ...(entries(coin)[todayKey()] || {}), ...readForm() };
+      saveDb(); flashSaved(); renderHist();
+    };
+    G("tabs").addEventListener("click", (e) => {
+      const rm = e.target.closest(".j-rm"); if (rm) { e.stopPropagation(); removeCoin(rm.dataset.rm); return; }
+      if (e.target.closest("#addCoin")) { showAddInput(); return; }
+      const t = e.target.closest(".tabs__tab"); if (t && t.dataset.coin) { switchCoin(t.dataset.coin); setUrlCoin(t.dataset.coin); }
+    });
+    G("journalViews").addEventListener("click", (e) => {
+      const button = e.target.closest("[data-view]");
+      if (button) setView(button.dataset.view);
+    });
+
+    wireHelp();
+    wireCalc();
+    // Монета помнится между заходами — возвращаемся к той, что была открыта.
+    switchCoin(coin);
+    setView(new URLSearchParams(location.search).get("view") === "trades" ? "trades" : "drill");
+
+    // <i data-icon="…"> в статической разметке → настоящие svg.
+    paintIcons();
+
+    wsStopped = false;
+    wireWs();
+
+    return () => {
+      if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+      stopWs();
+    };
+  },
+};

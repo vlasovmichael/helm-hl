@@ -141,6 +141,40 @@
   }
 }
 
+// Заголовок в шапке обучающей панели: отбивку там держит сама шапка.
+.j-card-title--flush {
+  margin: 0;
+}
+// Метка состояния, прижатая к правому краю заголовка.
+.j-status--right {
+  margin-left: auto;
+}
+
+// Тон подсказок калькулятора: стоп уже ATR, плечо выше потолка, R:R.
+// 🚨 Специфичность не случайная: `.j-calc-row .v small` уже красит подстрочник
+// приглушённым, и голого класса не хватило бы, чтобы его перебить.
+.j-calc-row .v small.j-calc-ok,
+.j-calc-row .v.j-calc-ok,
+.j-calc-ok {
+  color: var(--green);
+}
+.j-calc-row .v small.j-calc-bad,
+.j-calc-row .v.j-calc-bad,
+.j-calc-bad {
+  color: var(--red);
+}
+.j-calc-row .v small.j-calc-dim,
+.j-calc-dim {
+  color: var(--text-muted);
+}
+// Подписи в ленте журнала и «— anchor» в блоке vs BTC.
+.j-log-bias {
+  color: var(--text-secondary);
+}
+.j-vs-none {
+  color: var(--text-muted);
+}
+
 .j-card-title {
   display: flex;
   align-items: center;
