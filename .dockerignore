@@ -10,3 +10,19 @@ src/modules/dashboard/dist
 .git
 *.log
 logs/*.log
+
+# 🚨 data/ и logs/ — bind-mount тома во всех сервисах: в образе они мёртвый
+# груз (на проде это ~1 ГБ в каждом слое), а в рантайме всё равно перекрыты.
+data
+logs
+
+# Разработка: в рантайме не грузится ничего из этого.
+# 🚨 tools/ НЕ исключать — из него импортируют dashboard/server и fvgAlerts.
+tests
+docs
+.claude
+.github
+*.md
+.vscode
+.eslintrc*
+eslint.config.js
