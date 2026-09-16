@@ -62,6 +62,9 @@ export default defineConfig({
   build: {
     outDir: resolve(__dirname, "src/modules/dashboard/dist"),
     emptyOutDir: true,
+    // 🚨 Один CSS на все страницы, а не по файлу на вход: ядро (67 КБ) сидит в
+    // шести постраничных стилях, и каждый переход качал его заново.
+    cssCodeSplit: false,
     rollupOptions: {
       input: {
         index: resolve(webRoot, "index.html"),
