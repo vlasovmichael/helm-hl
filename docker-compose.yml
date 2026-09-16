@@ -142,6 +142,9 @@ services:
     env_file: .env
     environment:
       TZ: ${TZ:-Europe/Warsaw}
+      # 🚨 Потолок кучи задаём сами: из cgroup нода выводит его ВЫШЕ лимита
+      # контейнера, и тогда ядро убивает процесс раньше, чем V8 соберёт мусор.
+      NODE_OPTIONS: --max-old-space-size=256
     volumes:
       - ./data:/app/data
     # Не веб-сервер → HEALTHCHECK из Dockerfile (пинг :3010) тут не применим.
@@ -150,8 +153,9 @@ services:
     deploy:
       resources:
         limits:
-          # Агрегат живёт в памяти между барами: ~6-7k пар на бар.
-          memory: 256M
+          # Агрегат живёт в памяти между барами (~6-7k пар), но упирается в
+          # потолок не он: page cache базы больше лимита и занимает весь зазор.
+          memory: 512M
     networks:
       - gateway_net
 
