@@ -1,21 +1,35 @@
 // Витрина счёта на LCD1602 (I2C 0x27, пины 21/22) для ESP32 DevKit.
-// Данные тянем прямо у Hyperliquid по публичному адресу кошелька: ключей не
-// нужно, экран не зависит ни от дашборда, ни от прода.
 //
+// Эквити и параметры позиции — REST раз в 30с, цена — потоком по WS
+// (подписка activeAssetCtx на монету позиции, ~300 байт на кадр). PnL считаем
+// локально из szi и entryPx, поэтому нижняя строка живёт в реальном времени.
+//
+// 🚨 не подписываться на allMids: кадр 19 КБ на 1000+ монет, это память ESP32.
 // 🚨 secrets.h в git не едет: WiFi-пароль и адрес кошелька лежат только локально.
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
+#include <ArduinoWebsockets.h>
 #include <LiquidCrystal_I2C.h>
+#include "ca_cert.h"
 #include "secrets.h"
+
+using namespace websockets;
 
 static const int PIN_SDA = 21;
 static const int PIN_SCL = 22;
 static const uint8_t LCD_ADDR = 0x27;
-static const uint32_t POLL_MS = 15000;
+static const uint32_t REST_MS = 30000;
+static const uint32_t PING_MS = 30000;
 
 LiquidCrystal_I2C lcd(LCD_ADDR, 16, 2);
+WebsocketsClient ws;
+
+static String posCoin;      // монета открытой позиции, пустая — позиции нет
+static double posSzi = 0;   // знак = сторона, модуль = размер
+static double posEntry = 0;
+static String wsCoin;       // на что подписаны сейчас
 
 // Экран узкий: строка ровно 16 символов, хвост режем, недостаток добиваем
 // пробелами — иначе на месте коротких значений остаются буквы прошлого кадра.
@@ -26,7 +40,7 @@ static void line(uint8_t row, const String &text) {
   lcd.print(s);
 }
 
-static bool fetchInfo(const char *type, JsonDocument &doc) {
+static bool fetchInfo(const String &body, JsonDocument &doc) {
   WiFiClientSecure client;
   // Без проверки сертификата: на экранчик идут только публичные числа, а
   // хранить и обновлять корневой CA в прошивке дороже, чем эта уступка.
@@ -36,10 +50,9 @@ static bool fetchInfo(const char *type, JsonDocument &doc) {
   if (!http.begin(client, "https://api.hyperliquid.xyz/info")) return false;
   http.addHeader("Content-Type", "application/json");
 
-  String body = String("{\"type\":\"") + type + "\",\"user\":\"" + HL_WALLET + "\"}";
   int code = http.POST(body);
   if (code != 200) {
-    Serial.printf("[hl] %s: HTTP %d\n", type, code);
+    Serial.printf("[hl] HTTP %d\n", code);
     http.end();
     return false;
   }
@@ -47,51 +60,97 @@ static bool fetchInfo(const char *type, JsonDocument &doc) {
   DeserializationError err = deserializeJson(doc, http.getStream());
   http.end();
   if (err) {
-    Serial.printf("[hl] %s: json %s\n", type, err.c_str());
+    Serial.printf("[hl] json %s\n", err.c_str());
     return false;
   }
   return true;
 }
 
-// Вторая строка — самая крупная позиция по модулю нереализованного PnL:
-// на 16 символах имеет смысл показывать ту, что сейчас решает исход дня.
-static String biggestPosition(JsonDocument &perp) {
-  const char *coin = nullptr;
-  double bestAbs = -1, bestPnl = 0, bestSzi = 0;
-
-  for (JsonObject ap : perp["assetPositions"].as<JsonArray>()) {
-    JsonObject p = ap["position"];
-    double pnl = p["unrealizedPnl"].as<String>().toDouble();
-    if (fabs(pnl) > bestAbs) {
-      bestAbs = fabs(pnl);
-      bestPnl = pnl;
-      bestSzi = p["szi"].as<String>().toDouble();
-      coin = p["coin"];
-    }
-  }
-
-  if (!coin) return "no position";
-  return String(coin) + " " + (bestSzi < 0 ? "S" : "L") + " " +
-         (bestPnl >= 0 ? "+" : "") + String(bestPnl, 2);
-}
-
 // Эквити unified-аккаунта = spot USDC total, копейка в копейку с accountValue
 // из info-эндпоинта portfolio.
 //
-// 🚨 не прибавлять сюда unrealizedPnl: залог hold внутри spot-баланса уже
-// переоценён по рынку, и убыток вычтется дважды.
-// 🚨 не marginSummary.accountValue: это стоимость только перп-части счёта.
+// 🚨 не прибавлять сюда unrealizedPnl: залог hold внутри spot уже переоценён
+// по рынку, и убыток вычтется дважды.
 static bool readEquity(double &equity) {
-  JsonDocument spot;
-  if (!fetchInfo("spotClearinghouseState", spot)) return false;
+  JsonDocument doc;
+  String body = String("{\"type\":\"spotClearinghouseState\",\"user\":\"") + HL_WALLET + "\"}";
+  if (!fetchInfo(body, doc)) return false;
 
-  for (JsonObject b : spot["balances"].as<JsonArray>()) {
+  for (JsonObject b : doc["balances"].as<JsonArray>()) {
     if (strcmp(b["coin"] | "", "USDC") == 0) {
       equity = b["total"].as<String>().toDouble();
       return true;
     }
   }
   return false;
+}
+
+// Берём позицию с наибольшим модулем PnL: на 16 символах смысл показывать ту,
+// что сейчас решает исход дня.
+static void readPosition() {
+  JsonDocument doc;
+  String body = String("{\"type\":\"clearinghouseState\",\"user\":\"") + HL_WALLET + "\"}";
+  if (!fetchInfo(body, doc)) return;
+
+  double bestAbs = -1;
+  String coin;
+  double szi = 0, entry = 0;
+
+  for (JsonObject ap : doc["assetPositions"].as<JsonArray>()) {
+    JsonObject p = ap["position"];
+    double pnl = fabs(p["unrealizedPnl"].as<String>().toDouble());
+    if (pnl > bestAbs) {
+      bestAbs = pnl;
+      coin = String(p["coin"] | "");
+      szi = p["szi"].as<String>().toDouble();
+      entry = p["entryPx"].as<String>().toDouble();
+    }
+  }
+
+  posCoin = coin;
+  posSzi = szi;
+  posEntry = entry;
+}
+
+static void drawPnl(double markPx) {
+  if (posCoin.isEmpty()) {
+    line(1, "no position");
+    return;
+  }
+  double pnl = posSzi * (markPx - posEntry);
+  line(1, posCoin + " " + (posSzi < 0 ? "S" : "L") + " " +
+              (pnl >= 0 ? "+" : "") + String(pnl, 2));
+}
+
+static void onWsMessage(WebsocketsMessage msg) {
+  JsonDocument doc;
+  if (deserializeJson(doc, msg.data())) return;
+  if (strcmp(doc["channel"] | "", "activeAssetCtx") != 0) return;
+
+  double markPx = doc["data"]["ctx"]["markPx"].as<String>().toDouble();
+  if (markPx > 0) drawPnl(markPx);
+}
+
+// Переподписка нужна при смене монеты: подписка привязана к активу.
+static void wsResubscribe() {
+  if (posCoin == wsCoin || posCoin.isEmpty()) return;
+
+  if (!ws.available()) {
+    // 🚨 не setInsecure(): у этой библиотеки он работает только на ESP8266,
+    // на ESP32 молча оставляет клиента без корня доверия и connect падает.
+    ws.setCACert(HL_ROOT_CA);
+    ws.onMessage(onWsMessage);
+    if (!ws.connect("wss://api.hyperliquid.xyz/ws")) {
+      Serial.println("[ws] connect failed");
+      return;
+    }
+    Serial.println("[ws] connected");
+  }
+
+  ws.send(String("{\"method\":\"subscribe\",\"subscription\":{\"type\":\"activeAssetCtx\",\"coin\":\"") +
+          posCoin + "\"}}");
+  wsCoin = posCoin;
+  Serial.printf("[ws] subscribed %s\n", posCoin.c_str());
 }
 
 void setup() {
@@ -105,14 +164,13 @@ void setup() {
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
   // Пики тока передатчика проваливают напряжение, и подсветка LCD дрожит в такт.
-  // Опрос раз в 15с не требует полной мощности: 11 dBm дома хватает с запасом.
   WiFi.setTxPower(WIFI_POWER_11dBm);
   WiFi.setSleep(true);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
 }
 
 void loop() {
-  static uint32_t lastPoll = 0;
+  static uint32_t lastRest = 0, lastPing = 0;
 
   if (WiFi.status() != WL_CONNECTED) {
     line(1, "wifi...");
@@ -120,22 +178,27 @@ void loop() {
     return;
   }
 
-  if (millis() - lastPoll < POLL_MS && lastPoll != 0) {
-    delay(200);
-    return;
-  }
-  lastPoll = millis();
+  if (ws.available()) ws.poll();
 
-  JsonDocument perp;
-  if (!fetchInfo("clearinghouseState", perp)) {
-    line(1, "API error");
-    return;
+  uint32_t now = millis();
+
+  if (lastRest == 0 || now - lastRest >= REST_MS) {
+    lastRest = now;
+    double equity = 0;
+    if (readEquity(equity)) {
+      line(0, "EQ $" + String(equity, 2));
+      Serial.printf("[hl] equity=%.2f\n", equity);
+    }
+    readPosition();
+    wsResubscribe();
+    if (posCoin.isEmpty()) line(1, "no position");
   }
 
-  double equity = 0;
-  if (readEquity(equity)) {
-    line(0, "EQ $" + String(equity, 2));
-    Serial.printf("[hl] equity=%.2f\n", equity);
+  // Молчащее соединение рвут посредники: пингуем, пока ждём кадров.
+  if (ws.available() && now - lastPing >= PING_MS) {
+    lastPing = now;
+    ws.ping();
   }
-  line(1, biggestPosition(perp));
+
+  delay(20);
 }
