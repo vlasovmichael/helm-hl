@@ -1599,6 +1599,25 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
 // Лента живёт под таблицей выбранных адресов и раньше была самодельным
 // flex-списком с инлайн-стилями на каждой строке. Теперь это та же .table,
 // что и таблица выше в этой карточке: одна порода на весь дашборд.
+// Подписи-метки карточек Lab: счётчик у заголовка, сводка под таблицей и
+// моноширинное тело форвард-теста.
+.lab-meta {
+  font-size: var(--fs-label);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+.lab-stats {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-label);
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+.lab-mono-body {
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+}
+
 .win-log-block {
   margin-top: var(--sp-3);
 }
