@@ -169,7 +169,7 @@ table.ledger > tfoot > tr > td.dim {
   display: block;
   margin-top: 2px;
 }
-tfoot td {
+table.ledger tfoot td {
   font-family: var(--font-mono);
   font-weight: 700;
   background: var(--canvas-subtle);
@@ -227,7 +227,7 @@ tfoot td {
 }
 
 /* разворот месяца → календарь Пн–Вс + колонка недельного итога */
-tr.expandable {
+table.ledger tr.expandable {
   cursor: pointer;
 
   &:hover {
@@ -275,10 +275,10 @@ table.ledger > tbody > tr.daybreak.is-open > td {
     transform var(--dur) var(--ease-out),
     padding var(--dur-slow) var(--ease-out);
 }
-tr.daybreak.is-open .daybreak__wrap {
+table.ledger tr.daybreak.is-open .daybreak__wrap {
   grid-template-rows: 1fr;
 }
-tr.daybreak.is-open .daybreak__inner {
+table.ledger tr.daybreak.is-open .daybreak__inner {
   opacity: 1;
   transform: none;
   padding: 14px;

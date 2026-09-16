@@ -1,6 +1,9 @@
 @use "../core/breakpoints" as *;
 // Login page — было инлайн <style> в login.html (автономная страница входа).
-body {
+// 🚨 Страница живёт под body[data-page="login"]: собранный CSS общий на все
+// страницы, а голый body-флекс делает .container флекс-элементом — тот не
+// ужимается ниже min-content, и на узком экране адаптив пропадает целиком.
+body[data-page="login"] {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -144,7 +147,7 @@ body {
 }
 
 @include until($bp-sm) {
-  body {
+  body[data-page="login"] {
     padding: 16px;
   }
   .login-shell {
