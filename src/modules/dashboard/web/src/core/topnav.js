@@ -40,6 +40,11 @@ const RESEARCH = [
     title: "Calibrator",
     note: "How much edge a coin demands before costs are paid",
   },
+  {
+    href: "/orderbook-sim",
+    title: "Order book trainer",
+    note: "Execution mechanics on a model book — slippage, walls, stop cost",
+  },
 ];
 
 const navLink = (l, active) => {

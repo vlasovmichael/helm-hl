@@ -1,0 +1,353 @@
+//  orderbook-sim.html — тренажёр стакана. Автономная палитра: страница живёт
+//  на тёмном терминальном фоне независимо от темы дашборда.
+//
+//  🚨 Всё под body[data-page="ob-sim"]: сборка кладёт CSS всех страниц в один
+//  файл (cssCodeSplit: false), и незаскоупленные :root / button / .card
+//  перетёрли бы токены и кнопки на остальных страницах.
+
+body[data-page="ob-sim"] {
+  --bg: #0b0e13;
+  --panel: #11161f;
+  --panel-2: #161d29;
+  --line: #1e2735;
+  --txt: #c9d4e3;
+  --dim: #6b7888;
+  --bid: #2bbf73;
+  --bid-bg: rgb(43 191 115 / 12%);
+  --bid-wall: rgb(43 191 115 / 30%);
+  --ask: #f0556b;
+  --ask-bg: rgb(240 85 107 / 12%);
+  --ask-wall: rgb(240 85 107 / 30%);
+  --accent: #5b9dff;
+  --gold: #e8b84b;
+
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--txt);
+  font-family: "SF Mono", "JetBrains Mono", "Menlo", monospace;
+  font-size: var(--fs-body);
+  display: flex;
+  flex-direction: column;
+
+  * {
+    box-sizing: border-box;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+  .brand {
+    font-weight: 700;
+    letter-spacing: 0.5px;
+
+    small {
+      color: var(--dim);
+      font-weight: 400;
+      margin-left: 6px;
+    }
+  }
+  .warn {
+    margin-left: auto;
+    color: var(--dim);
+    font-size: var(--fs-label);
+
+    b {
+      color: var(--gold);
+    }
+  }
+
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 380px 1fr 340px;
+    gap: 1px;
+    background: var(--line);
+    min-height: 0;
+  }
+  .col {
+    background: var(--bg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  .ladder {
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+
+    &.asks {
+      justify-content: flex-end;
+    }
+  }
+
+  // Уровень стакана: цена, объём и полоса глубины под ними.
+  .row {
+    position: relative;
+    display: grid;
+    grid-template-columns: 60px 1fr 76px;
+    align-items: center;
+    height: 24px;
+    padding: 0 14px;
+    flex: none;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    cursor: pointer;
+
+    &:hover {
+      background: rgb(91 157 255 / 7%);
+    }
+    .bar {
+      position: absolute;
+      top: 2px;
+      bottom: 2px;
+      right: 0;
+      border-radius: 3px;
+      z-index: 0;
+    }
+    &.ask .bar {
+      background: var(--ask-bg);
+    }
+    &.bid .bar {
+      background: var(--bid-bg);
+    }
+    &.wall.ask .bar {
+      background: var(--ask-wall);
+    }
+    &.wall.bid .bar {
+      background: var(--bid-wall);
+    }
+    &.eaten .bar {
+      background: rgb(232 184 75 / 35%);
+    }
+    > span {
+      position: relative;
+      z-index: 1;
+    }
+    .tag {
+      color: var(--gold);
+      font-size: var(--fs-micro);
+      font-weight: 700;
+    }
+    .px {
+      text-align: right;
+      font-weight: 600;
+    }
+    &.ask .px {
+      color: var(--ask);
+    }
+    &.bid .px {
+      color: var(--bid);
+    }
+    .sz {
+      text-align: right;
+    }
+    &.mine .sz {
+      color: var(--accent);
+      font-weight: 700;
+
+      &::after {
+        content: " (mine)";
+        font-size: var(--fs-micro);
+        opacity: 0.7;
+      }
+    }
+  }
+
+  .mid {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    height: 52px;
+    background: var(--panel);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+
+    .price {
+      font-size: var(--fs-h2);
+      font-weight: 700;
+      color: #fff;
+      font-variant-numeric: tabular-nums;
+    }
+    .spread {
+      color: var(--dim);
+      font-size: var(--fs-small);
+
+      b {
+        color: var(--gold);
+      }
+    }
+  }
+
+  .chartwrap {
+    flex: 1;
+    position: relative;
+    padding: 14px;
+    min-height: 0;
+  }
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  .side {
+    background: var(--panel);
+    padding: 16px;
+    overflow-y: auto;
+
+    h3 {
+      margin: 0 0 9px;
+      font-size: var(--fs-micro);
+      letter-spacing: 1.5px;
+      color: var(--dim);
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+  }
+  .card {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 13px;
+    margin-bottom: 14px;
+  }
+
+  label {
+    display: block;
+    color: var(--dim);
+    font-size: var(--fs-label);
+    margin-bottom: 4px;
+  }
+  input {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--bg);
+    color: var(--txt);
+    font-family: inherit;
+    font-size: var(--fs-body);
+
+    &:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+  }
+  .grid2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  button {
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--panel-2);
+    color: var(--txt);
+    font-family: inherit;
+    font-size: var(--fs-small);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.12s;
+
+    &:hover {
+      border-color: #2c3a4f;
+      color: #fff;
+    }
+    &.buy {
+      background: rgb(43 191 115 / 16%);
+      border-color: var(--bid);
+      color: var(--bid);
+
+      &:hover {
+        background: var(--bid);
+        color: #04120a;
+      }
+    }
+    &.sell {
+      background: rgb(240 85 107 / 16%);
+      border-color: var(--ask);
+      color: var(--ask);
+
+      &:hover {
+        background: var(--ask);
+        color: #1a0409;
+      }
+    }
+    &.ghost {
+      font-weight: 400;
+      color: var(--dim);
+    }
+  }
+
+  .kv {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 5px 0;
+    border-bottom: 1px dashed var(--line);
+
+    &:last-child {
+      border-bottom: none;
+    }
+    .k {
+      color: var(--dim);
+      font-size: var(--fs-label);
+    }
+    .v {
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+  }
+  .v.bad {
+    color: var(--ask);
+  }
+  .v.good {
+    color: var(--bid);
+  }
+  .v.gold {
+    color: var(--gold);
+  }
+
+  .hint {
+    color: var(--dim);
+    font-size: var(--fs-label);
+    line-height: 1.65;
+
+    b {
+      color: var(--txt);
+    }
+    .gold {
+      color: var(--gold);
+    }
+  }
+  .toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--dim);
+    font-size: var(--fs-label);
+    cursor: pointer;
+
+    input {
+      width: auto;
+    }
+  }
+  .empty {
+    color: var(--dim);
+    font-size: var(--fs-label);
+    text-align: center;
+    padding: 10px 0;
+  }
+}
