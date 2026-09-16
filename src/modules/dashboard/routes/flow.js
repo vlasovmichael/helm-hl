@@ -55,6 +55,74 @@ function latestPosTs(d) {
   return d.prepare('SELECT MAX(ts) ts FROM positions').get()?.ts ?? null;
 }
 
+// ── Ближайшие ликвидации для плашки BTC ─────────────────────────────────────
+// Цены ликвидации РЕАЛЬНЫХ позиций HL, а не оценка плеча по обороту: выше цены
+// стоят вынужденные закрытия шортов, ниже — лонгов. С каждой стороны берём
+// самую крупную корзину в пределах ±LIQ_NEAR_PCT.
+//
+// ⛔ Это описание расстановки, а не цель движения: «цена идёт за ликвидациями»
+// форвардом не проверено, и плашка такого не утверждает.
+const LIQ_NEAR_PCT = 5;
+
+export function nearLiqLevels(coin = 'BTC') {
+  const d = conn();
+  if (!d) return null;
+  const ts = latestPosTs(d);
+  if (!ts) return null;
+
+  let rows;
+  try {
+    rows = d.prepare(`
+      SELECT p.szi AS szi, p.liq AS liq, p.ntl AS ntl
+        FROM positions p JOIN coins c ON c.id = p.coin
+       WHERE p.ts = ? AND c.name = ? AND p.liq IS NOT NULL AND p.liq > 0`).all(ts, coin);
+  } catch (err) {
+    logger.warn(`[Flow] liqnear: ${err.message}`);
+    return null;
+  }
+  if (!rows.length) return null;
+
+  // Опорная цена — живая из буфера бота; медиана входа остаётся фолбэком.
+  const entries = rows.map((r) => r.ntl / Math.abs(r.szi)).sort((a, b) => a - b);
+  const live = getLatestPrice(coin);
+  const ref = live > 0 ? live : entries[Math.floor(entries.length / 2)];
+  if (!(ref > 0)) return null;
+
+  // Корзина — целый процент от цены. 🚨 Нулевой корзины быть не должно: она
+  // попала бы одновременно и «выше», и «ниже».
+  const buckets = new Map();
+  let upUsd = 0;
+  let downUsd = 0;
+  for (const r of rows) {
+    const pct = ((r.liq - ref) / ref) * 100;
+    if (Math.abs(pct) > LIQ_NEAR_PCT) continue;
+    if (pct > 0) upUsd += r.ntl; else downUsd += r.ntl;
+    const k = pct > 0 ? Math.max(1, Math.round(pct)) : Math.min(-1, Math.round(pct));
+    const b = buckets.get(k) ?? { pct: k, usd: 0, n: 0 };
+    b.usd += r.ntl;
+    b.n += 1;
+    buckets.set(k, b);
+  }
+
+  const heaviest = (sign) => {
+    const side = [...buckets.values()].filter((b) => Math.sign(b.pct) === sign);
+    if (!side.length) return null;
+    const top = side.reduce((a, b) => (b.usd > a.usd ? b : a));
+    return { px: ref * (1 + top.pct / 100), pct: top.pct, usd: top.usd, n: top.n };
+  };
+
+  return {
+    ref,
+    ts,
+    rangePct: LIQ_NEAR_PCT,
+    up: heaviest(1),
+    down: heaviest(-1),
+    upUsd,
+    downUsd,
+    wallets: rows.length,
+  };
+}
+
 // ── Кошельки ────────────────────────────────────────────────────────────────
 // Роль кошелька определяет доля тейкера в его обороте: 0% — маркет-мейкер,
 // стоящий лимитками, 100% — агрессор, который платит за немедленность.

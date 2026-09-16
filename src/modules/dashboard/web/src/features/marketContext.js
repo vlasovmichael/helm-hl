@@ -8,6 +8,7 @@
 
 
 import { sparkSvg } from "../utils/spark.js";
+import { icon } from "../core/icon.js";
 
 function fmtPrice(p) {
   if (p == null || !Number.isFinite(p)) return "—";
@@ -38,7 +39,25 @@ const STAT_CELLS = [
   ["oiUsd", "OI"],
   ["funding", "Funding 1h"],
   ["bias", "Bias 15m"],
+  ["liq", "Liq ±5%"],
 ];
+
+// Ближайшие ликвидации: где по цене стоят чужие вынужденные закрытия. Данные —
+// цены ликвидации реальных позиций HL, поэтому подпись честная: это расстановка
+// на нашей площадке, а не карта всего рынка и не цель движения.
+const LIQ_CARD =
+  "Liquidation prices of real Hyperliquid positions within 5% of spot — " +
+  "above sits forced short covering, below forced long selling. " +
+  "Hyperliquid only, and a description of positioning: not a target, not a signal.";
+
+function liqRow(d, side) {
+  const glyph = side === "up" ? "rising" : "falling";
+  const who = side === "up" ? "shorts" : "longs";
+  const body = d
+    ? `<b>${fmtPrice(d.px)}</b><span class="mc-liq-usd">${fmtUsd(d.usd)}</span>`
+    : `<b>—</b>`;
+  return `<span class="mc-liq-row">${icon(glyph)}<i>${who}</i>${body}</span>`;
+}
 
 // Порог хода BTC, ниже которого сторона не называется. 10 бп — не круглое число
 // с потолка: на 105 сделках оператора входы по направлению BTC дали −30.7 бп
@@ -94,6 +113,16 @@ function buildStructure(el) {
   stats.innerHTML = STAT_CELLS.map(
     ([k, label]) => `<span class="mc-cell"><i>${label}</i><b data-k="${k}"></b></span>`,
   ).join("");
+  // Строки ликвидаций живут отдельным блоком под статистикой: это пара
+  // «цена + объём», которой тесно в колонке label/value.
+  if (!el.querySelector("#mc-liq")) {
+    const liq = document.createElement("div");
+    liq.id = "mc-liq";
+    liq.className = "mc-liq";
+    liq.setAttribute("data-card", LIQ_CARD);
+    liq.hidden = true;
+    el.appendChild(liq);
+  }
   el.classList.remove("mc-loading");
   el.classList.add("mc-enter"); // одноразовый вход (стаггер в CSS)
   setTimeout(() => el.classList.remove("mc-enter"), 1200);
@@ -189,6 +218,17 @@ export function renderMarketContext(d) {
   setVal(el, "funding", fund == null ? "—" : fmtPct(fund, 4), pctCls(fund));
   const [biasTxt, biasCls] = biasCell(b.m15);
   setVal(el, "bias", biasTxt, biasCls);
+
+  const liq = b.liq;
+  const box = el.querySelector("#mc-liq");
+  // Сбор мог ещё не стартовать (база потока — чужая и необязательная): тогда
+  // строк просто нет, а выдуманного «—» в плашке не появляется.
+  setVal(el, "liq", liq ? fmtUsd((liq.upUsd || 0) + (liq.downUsd || 0)) : "—");
+  if (box) {
+    const has = liq && (liq.up || liq.down);
+    box.hidden = !has;
+    if (has) box.innerHTML = liqRow(liq.up, "up") + liqRow(liq.down, "down");
+  }
 }
 
 // Живая цена BTC из WS-кадра статуса (≤2с) — зовётся из onStatus. Обновляет

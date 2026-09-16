@@ -7,6 +7,7 @@
 //   • metaAndAssetCtxs → markPx, prevDayPx (24h), dayNtlVlm, openInterest, funding.
 
 import { hlInfo, HL_PRIORITY } from "../../../core/hlClient.js";
+import { nearLiqLevels } from "./flow.js";
 
 const TTL_MS = 60_000; // кэш, чтобы не дёргать HL на каждый поллинг дашборды
 let cache = { payload: null, ts: 0 };
@@ -120,6 +121,9 @@ async function refreshCache() {
       volUsd: stats?.volUsd ?? null,
       oiUsd: stats?.oiUsd ?? null,
       funding: stats?.funding ?? null,
+      // Читается из базы потока (свой контейнер, только чтение) — биржу не
+      // трогает и в весовой бюджет HL не входит.
+      liq: nearLiqLevels("BTC"),
     },
     ts: Date.now(),
   };

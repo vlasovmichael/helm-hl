@@ -144,6 +144,46 @@
     }
   }
 
+  /* Ближайшие ликвидации: две строки во всю ширину плашки, под статистикой.
+     Цветом НЕ красим: уровень сверху и уровень снизу равноправны, а зелёный
+     против красного читался бы как «куда пойдёт». */
+  .mc-liq {
+    display: flex;
+    gap: var(--sp-5);
+    flex-wrap: wrap;
+    width: 100%;
+    padding-top: var(--sp-2);
+    border-top: 1px solid var(--hairline);
+    font-size: var(--fs-small);
+  }
+  .mc-liq-row {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--sp-2);
+    min-width: 0;
+
+    svg {
+      align-self: center;
+      color: var(--text-faint);
+    }
+    i {
+      font-style: normal;
+      font-size: var(--fs-micro);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    b {
+      font-weight: 600;
+      color: var(--text-secondary);
+      font-variant-numeric: tabular-nums;
+    }
+    .mc-liq-usd {
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
   /* Светофор: зелёный = чёткий фонд (RISK-ON/OFF), жёлтый = MIXED. */
   &.go {
     border-color: var(--green-line);
@@ -167,7 +207,7 @@
     .mc-spark-wrap {
       animation-delay: 0.06s;
     }
-    @for $i from 1 through 7 {
+    @for $i from 1 through 8 {
       .mc-stats .mc-cell:nth-child(#{$i}) {
         animation-delay: #{0.06 + $i * 0.05}s;
       }
