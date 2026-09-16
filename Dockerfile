@@ -10,7 +10,10 @@ COPY package*.json ./
 # который на этой стадии не загружается.
 RUN npm ci --ignore-scripts
 # Копируем только вход Vite: правка бота не должна пересобирать витрину.
+# 🚨 chartCoach.js лежит вне web/, но journal.js импортирует его — без него
+# сборка витрины падает на UNRESOLVED_IMPORT.
 COPY vite.config.js ./
+COPY src/modules/chartCoach.js ./src/modules/chartCoach.js
 COPY src/modules/dashboard/web ./src/modules/dashboard/web
 RUN npm run build:dash
 
