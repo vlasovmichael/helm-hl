@@ -540,3 +540,10 @@ export function initManualPaperActive() {
     if (!document.hidden) refreshActive();
   }, 15_000);
 }
+
+/** Остановить поллинг при уходе со страницы. */
+export function stopManualPaperActive() {
+  if (!listTimer) return;
+  clearInterval(listTimer);
+  listTimer = null;
+}

@@ -577,10 +577,19 @@ function ensureFloorTimerStyle() {
   document.head.appendChild(st);
 }
 let _floorTickStarted = false;
+let _floorTimer = null;
+
+/** Остановить секундный тик таймера Floor при уходе со страницы. */
+export function stopFloorTimerTick() {
+  if (_floorTimer) clearInterval(_floorTimer);
+  _floorTimer = null;
+  _floorTickStarted = false;
+}
+
 function startFloorTimerTick() {
   if (_floorTickStarted) return;
   _floorTickStarted = true;
-  setInterval(() => {
+  _floorTimer = setInterval(() => {
     document.querySelectorAll(".floor-timer-chip[data-mtimer]").forEach((el) => {
       const ms = Number(el.getAttribute("data-mtimer"));
       if (!Number.isFinite(ms)) return;

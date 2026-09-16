@@ -303,10 +303,19 @@ async function runCheck(coin, side) {
   }
 }
 
+// 🚨 Слушатели ниже делегированы на документ: без флага повторный вызов
+// (страница смонтирована заново) вешал бы второй комплект, и одна кнопка
+// открывала бы разбор дважды.
+let bound = false;
+
 export function initWhatIf() {
   // Закрытие, Escape, замок прокрутки и возврат фокуса — core/dialog.js.
+  // Оболочку ищем каждый раз: разметка страницы могла перерисоваться.
   const modal = dialog.shell("whatif-modal");
   if (modal) dialog.bindClose(modal);
+
+  if (bound) return;
+  bound = true;
 
   document.addEventListener("click", (e) => {
     if (e.target.closest("#whatif-btn")) {

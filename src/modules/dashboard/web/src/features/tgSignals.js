@@ -234,6 +234,13 @@ export function initTgSignalPositions() {
   }, POLL_MS);
 }
 
+/** Остановить поллинг при уходе со страницы. */
+export function stopTgSignalPositions() {
+  if (!listTimer) return;
+  clearInterval(listTimer);
+  listTimer = null;
+}
+
 // ── Витрина форварда (лаборатория) ──────────────────────────────────────────
 
 /** Вердикт по интервалу: пока он накрывает ноль, показывать нечего. */

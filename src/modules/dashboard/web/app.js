@@ -16,6 +16,7 @@ import { route, start } from "./src/core/router.js";
 mountTopnav("");
 bindTheme();
 
+route("/", () => import("./index.js"));
 route("/oi", () => import("./oi.js"));
 route("/ledger", () => import("./ledger.js"));
 route("/statistics", () => import("./statistics.js"));
