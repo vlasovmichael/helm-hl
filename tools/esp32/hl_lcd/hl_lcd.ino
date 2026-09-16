@@ -26,7 +26,7 @@ static void line(uint8_t row, const String &text) {
   lcd.print(s);
 }
 
-static bool fetchState(JsonDocument &doc) {
+static bool fetchInfo(const char *type, JsonDocument &doc) {
   WiFiClientSecure client;
   // Без проверки сертификата: на экранчик идут только публичные числа, а
   // хранить и обновлять корневой CA в прошивке дороже, чем эта уступка.
@@ -36,10 +36,10 @@ static bool fetchState(JsonDocument &doc) {
   if (!http.begin(client, "https://api.hyperliquid.xyz/info")) return false;
   http.addHeader("Content-Type", "application/json");
 
-  String body = String("{\"type\":\"clearinghouseState\",\"user\":\"") + HL_WALLET + "\"}";
+  String body = String("{\"type\":\"") + type + "\",\"user\":\"" + HL_WALLET + "\"}";
   int code = http.POST(body);
   if (code != 200) {
-    Serial.printf("[hl] HTTP %d\n", code);
+    Serial.printf("[hl] %s: HTTP %d\n", type, code);
     http.end();
     return false;
   }
@@ -47,7 +47,7 @@ static bool fetchState(JsonDocument &doc) {
   DeserializationError err = deserializeJson(doc, http.getStream());
   http.end();
   if (err) {
-    Serial.printf("[hl] json: %s\n", err.c_str());
+    Serial.printf("[hl] %s: json %s\n", type, err.c_str());
     return false;
   }
   return true;
@@ -55,11 +55,11 @@ static bool fetchState(JsonDocument &doc) {
 
 // Вторая строка — самая крупная позиция по модулю нереализованного PnL:
 // на 16 символах имеет смысл показывать ту, что сейчас решает исход дня.
-static String biggestPosition(JsonDocument &doc) {
+static String biggestPosition(JsonDocument &perp) {
   const char *coin = nullptr;
   double bestAbs = -1, bestPnl = 0, bestSzi = 0;
 
-  for (JsonObject ap : doc["assetPositions"].as<JsonArray>()) {
+  for (JsonObject ap : perp["assetPositions"].as<JsonArray>()) {
     JsonObject p = ap["position"];
     double pnl = p["unrealizedPnl"].as<String>().toDouble();
     if (fabs(pnl) > bestAbs) {
@@ -73,6 +73,28 @@ static String biggestPosition(JsonDocument &doc) {
   if (!coin) return "no position";
   return String(coin) + " " + (bestSzi < 0 ? "S" : "L") + " " +
          (bestPnl >= 0 ? "+" : "") + String(bestPnl, 2);
+}
+
+// Эквити unified-аккаунта = spot USDC + нереализованный PnL перпов, как считает
+// сам бот (src/core/balanceCache.js). 🚨 не marginSummary.accountValue: это лишь
+// залог под открытыми перпами, он меньше реальных денег на счету.
+static bool readEquity(JsonDocument &perp, double &equity) {
+  JsonDocument spot;
+  if (!fetchInfo("spotClearinghouseState", spot)) return false;
+
+  double usdc = 0;
+  for (JsonObject b : spot["balances"].as<JsonArray>()) {
+    if (strcmp(b["coin"] | "", "USDC") == 0) usdc = b["total"].as<String>().toDouble();
+  }
+
+  // totalUnrealizedPnl в marginSummary не приходит — складываем по позициям.
+  double upnl = 0;
+  for (JsonObject ap : perp["assetPositions"].as<JsonArray>()) {
+    upnl += ap["position"]["unrealizedPnl"].as<String>().toDouble();
+  }
+
+  equity = usdc + upnl;
+  return true;
 }
 
 void setup() {
@@ -103,14 +125,16 @@ void loop() {
   }
   lastPoll = millis();
 
-  JsonDocument doc;
-  if (!fetchState(doc)) {
+  JsonDocument perp;
+  if (!fetchInfo("clearinghouseState", perp)) {
     line(1, "API error");
     return;
   }
 
-  double equity = doc["marginSummary"]["accountValue"].as<String>().toDouble();
-  line(0, "EQ $" + String(equity, 2));
-  line(1, biggestPosition(doc));
-  Serial.printf("[hl] equity=%.2f\n", equity);
+  double equity = 0;
+  if (readEquity(perp, equity)) {
+    line(0, "EQ $" + String(equity, 2));
+    Serial.printf("[hl] equity=%.2f\n", equity);
+  }
+  line(1, biggestPosition(perp));
 }
