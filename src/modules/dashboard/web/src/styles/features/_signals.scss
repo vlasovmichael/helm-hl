@@ -153,45 +153,46 @@
    ставит JS, и это числа строк, а не замеры.
    🚨 Ничего не мерить и не отдавать высоту содержимому: строки разной высоты
    (иконка Enter, живая стрелка), состав ленты меняется каждый тик, а уходящая
-   строка живёт в DOM до конца анимации — любая из этих величин дёргает высоту.
-   Только десктоп: ниже $bp-lg строка — карточка, её высоту задаёт контент. */
+   строка живёт в DOM до конца анимации — любая из этих величин дёргает высоту. */
 .hm-scroll-wrap {
   --hm-row-h: 34px;
   --hm-head-h: 30px;
   --hm-pos-h: 26px;
+  height: calc(
+    var(--hm-head-h) + var(--hm-rows, 8) * var(--hm-row-h) + var(--hm-pos-rows, 0) *
+      var(--hm-pos-h) + var(--hm-xbar-h, 0px)
+  );
+  overflow-y: hidden;
 }
-@include from($bp-lg + 1) {
+@include until($bp-lg) {
   .hm-scroll-wrap {
-    height: calc(
-      var(--hm-head-h) + var(--hm-rows, 8) * var(--hm-row-h) + var(--hm-pos-rows, 0) *
-        var(--hm-pos-h)
-    );
-    overflow-y: hidden;
+    --hm-xbar-h: 12px;
+    scrollbar-width: thin;
   }
-  .hm-scroll-wrap .hm-table thead th {
-    height: var(--hm-head-h);
-    padding-top: 0;
-    padding-bottom: 0;
-  }
-  .hm-scroll-wrap .hm-table tbody tr[data-hmkey^="m:"],
-  .hm-scroll-wrap .hm-table tbody tr.hm-placeholder-row {
-    height: var(--hm-row-h);
-  }
-  .hm-scroll-wrap .hm-table tbody tr[data-hmkey^="m:"] > td,
-  .hm-scroll-wrap .hm-table tbody tr.hm-placeholder-row > td {
-    height: var(--hm-row-h);
-    padding-top: 0;
-    padding-bottom: 0;
-  }
-  .hm-scroll-wrap .hm-table tbody tr.hm-pos-row > td {
-    height: var(--hm-pos-h);
-  }
-  /* Прелоадер занимает ровно те же строки, что займёт лента: иначе карточка
-     подрастает в момент, когда монеты приехали. */
-  .hm-scroll-wrap .hm-table tbody tr.hm-status-row .hm-status-cell {
-    height: calc(var(--hm-rows, 8) * var(--hm-row-h));
-    padding: 0;
-  }
+}
+.hm-scroll-wrap .hm-table thead th {
+  height: var(--hm-head-h);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.hm-scroll-wrap .hm-table tbody tr[data-hmkey^="m:"],
+.hm-scroll-wrap .hm-table tbody tr.hm-placeholder-row {
+  height: var(--hm-row-h);
+}
+.hm-scroll-wrap .hm-table tbody tr[data-hmkey^="m:"] > td,
+.hm-scroll-wrap .hm-table tbody tr.hm-placeholder-row > td {
+  height: var(--hm-row-h);
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.hm-scroll-wrap .hm-table tbody tr.hm-pos-row > td {
+  height: var(--hm-pos-h);
+}
+/* Прелоадер занимает ровно те же строки, что займёт лента: иначе карточка
+   подрастает в момент, когда монеты приехали. */
+.hm-scroll-wrap .hm-table tbody tr.hm-status-row .hm-status-cell {
+  height: calc(var(--hm-rows, 8) * var(--hm-row-h));
+  padding: 0;
 }
 .hm-scroll-wrap .hm-table thead th {
   position: sticky;
@@ -216,70 +217,67 @@
 /* Hot Movers: фиксируем ширины колонок, чтобы таблица не «прыгала» при смене
    цены (у разных монет разное число знаков: $0.00001 vs $104k, % меняет знак/
    разряд). table-layout:fixed → ширина колонки не зависит от контента. Шрифт уже
-   моноширинный (tabular). card-вёрстка ниже включается раньше — на ≤$bp-lg (там же,
-   где мобильная нижняя навигация): на узком дашборде (рядом с графиком) 12 колонок
-   не влезали и резались в «+0…». Десктоп-таблица — только выше $bp-lg. */
-@include from($bp-lg + 1) {
-  .hm-table {
-    table-layout: fixed;
-  }
-  .hm-table th,
-  .hm-table td {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .hm-table th:nth-child(1),
-  .hm-table td:nth-child(1) {
-    width: 26px;
-  } /* # */
-  .hm-table th:nth-child(2),
-  .hm-table td:nth-child(2) {
-    width: 104px;
-  } /* Coin (+ чипы 1h-тренд / OI×V) */
-  .hm-table th:nth-child(3),
-  .hm-table td:nth-child(3) {
-    width: 108px;
-  } /* Setup (+ метка COSTLY) */
-  .hm-table th:nth-child(4),
-  .hm-table td:nth-child(4) {
-    width: 52px;
-  } /* Enter */
-  .hm-table th:nth-child(5),
-  .hm-table td:nth-child(5) {
-    width: 120px;
-  } /* Price (+спарклайн слева) */
-  .hm-table th:nth-child(6),
-  .hm-table td:nth-child(6),
-  .hm-table th:nth-child(7),
-  .hm-table td:nth-child(7),
-  .hm-table th:nth-child(8),
-  .hm-table td:nth-child(8) {
-    width: 58px;
-  } /* 2m/5m/15m % */
-  .hm-table th:nth-child(9),
-  .hm-table td:nth-child(9) {
-    width: 48px;
-  } /* Acc */
-  .hm-table th:nth-child(10),
-  .hm-table td:nth-child(10) {
-    width: 64px;
-  } /* OI 5m */
-  .hm-table th:nth-child(11),
-  .hm-table td:nth-child(11) {
-    width: 52px;
-  } /* Trend */
-  .hm-table th:nth-child(12),
-  .hm-table td:nth-child(12) {
-    width: 72px;
-  } /* Move */
-  /* Под-строка позиции (colspan=12) — не зажимать в 26px nth-child(1), дать всю ширину. */
-  .hm-table .hm-pos-row td {
-    width: auto;
-    overflow: visible;
-    white-space: nowrap;
-    text-overflow: clip;
-  }
+   моноширинный (tabular). Ширины в px и на всех экранах: узкий не ужимает
+   таблицу, а прокручивает. */
+.hm-table {
+  table-layout: fixed;
+}
+.hm-table th,
+.hm-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hm-table th:nth-child(1),
+.hm-table td:nth-child(1) {
+  width: 26px;
+} /* # */
+.hm-table th:nth-child(2),
+.hm-table td:nth-child(2) {
+  width: 104px;
+} /* Coin (+ чипы 1h-тренд / OI×V) */
+.hm-table th:nth-child(3),
+.hm-table td:nth-child(3) {
+  width: 108px;
+} /* Setup (+ метка COSTLY) */
+.hm-table th:nth-child(4),
+.hm-table td:nth-child(4) {
+  width: 52px;
+} /* Enter */
+.hm-table th:nth-child(5),
+.hm-table td:nth-child(5) {
+  width: 120px;
+} /* Price (+спарклайн слева) */
+.hm-table th:nth-child(6),
+.hm-table td:nth-child(6),
+.hm-table th:nth-child(7),
+.hm-table td:nth-child(7),
+.hm-table th:nth-child(8),
+.hm-table td:nth-child(8) {
+  width: 58px;
+} /* 2m/5m/15m % */
+.hm-table th:nth-child(9),
+.hm-table td:nth-child(9) {
+  width: 48px;
+} /* Acc */
+.hm-table th:nth-child(10),
+.hm-table td:nth-child(10) {
+  width: 64px;
+} /* OI 5m */
+.hm-table th:nth-child(11),
+.hm-table td:nth-child(11) {
+  width: 52px;
+} /* Trend */
+.hm-table th:nth-child(12),
+.hm-table td:nth-child(12) {
+  width: 72px;
+} /* Move */
+/* Под-строка позиции (colspan=12) — не зажимать в 26px nth-child(1), дать всю ширину. */
+.hm-table .hm-pos-row td {
+  width: auto;
+  overflow: visible;
+  white-space: nowrap;
+  text-overflow: clip;
 }
 .signals-table tr.is-active {
   background: var(--grad-brand-soft);
@@ -1045,205 +1043,55 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   }
 }
 
-/* ── Hot Movers — мобильная card-вёрстка (≤720px) ──
-   12 колонок не влезают в телефон → каждая монета становится карточкой:
-   строка 1 = ранг · тикер(+чип) · цена(справа) · тайминг входа;
-   строка 2 = Setup-вердикт во всю ширину;
-   строка 3 = окна 2m/5m/15m; строка 4 = Acc / OI / Trend.
-   Лейблы (2M, ACC…) — через td[data-w]::before только на метрик-ячейках.
-   Хот-муверс — единственная таблица с .signals-table+data-w. */
+/* Узкий экран: та же таблица, вбок прокруткой; Costly скрыт.
+   🚨 Ширины свои, шире десктопных: на десктопе колонку растягивает остаток
+   ширины таблицы, здесь его нет — и «+1.23%» режется в «+1…».
+   🚨 Скрывать только в thead и tr.hm-main: у под-строк одна ячейка с colspan. */
 @include until($bp-lg) {
-  .hm-table,
-  .hm-table tbody {
-    display: block;
+  .hm-table {
+    min-width: 1064px;
   }
-  .hm-table thead {
+  .hm-table thead th:nth-child(3),
+  .hm-table tbody tr.hm-main > td:nth-child(3) {
     display: none;
   }
-  .hm-table tbody tr.hm-main {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 7px 10px;
-    padding: 11px 12px 12px;
-    border-bottom: 1px solid var(--border);
-    /* Единая высота карточки-ряда: секция не прыгает при смене числа монет
-       (как ряды на десктопе). Сколько их — решает rowTarget в render.js. */
-    min-height: var(--hm-card-min-h, 150px);
-    box-sizing: border-box;
+  .hm-table th:nth-child(1),
+  .hm-table td:nth-child(1) {
+    width: 36px;
   }
-  .hm-table tbody tr.hm-main td {
-    display: block;
-    padding: 0;
-    border: none;
-    white-space: nowrap;
+  .hm-table th:nth-child(2),
+  .hm-table td:nth-child(2) {
+    width: 140px;
   }
-  /* строка 1 */
-  .hm-table tr.hm-main td:nth-child(1) {
-    order: 1;
-    flex: 0 0 auto;
-    width: auto;
-    font-size: var(--fs-small);
-    color: var(--text-muted);
+  .hm-table th:nth-child(4),
+  .hm-table td:nth-child(4) {
+    width: 72px;
   }
-  .hm-table tr.hm-main td:nth-child(2) {
-    order: 2;
-    flex: 1 1 auto;
-    font-size: var(--fs-base);
-    font-weight: 700;
+  .hm-table th:nth-child(5),
+  .hm-table td:nth-child(5) {
+    width: 170px;
   }
-  .hm-table tr.hm-main td.hm-price-cell {
-    order: 3;
-    flex: 0 0 auto;
-    margin-left: auto;
-    font-size: var(--fs-body);
-    text-align: right;
+  .hm-table th:nth-child(6),
+  .hm-table td:nth-child(6),
+  .hm-table th:nth-child(7),
+  .hm-table td:nth-child(7),
+  .hm-table th:nth-child(8),
+  .hm-table td:nth-child(8) {
+    width: 96px;
   }
-  /* В card-вёрстке ячейка ужимается под контент → иннеру не нужна вся ширина
-     (иначе space-between растащил бы спарк и число по краям карточки). Сужаем до
-     контента: спарк + число рядом, прижаты вправо (margin-left:auto у ячейки). */
-  .hm-table tr.hm-main td.hm-price-cell .hm-price-inner {
-    width: auto;
-    justify-content: flex-end;
+  .hm-table th:nth-child(9),
+  .hm-table td:nth-child(9) {
+    width: 76px;
   }
-  .hm-table tr.hm-main td.hm-entry {
-    order: 4;
-    flex: 0 0 auto;
-    padding: 0;
+  .hm-table th:nth-child(10),
+  .hm-table td:nth-child(10),
+  .hm-table th:nth-child(11),
+  .hm-table td:nth-child(11) {
+    width: 96px;
   }
-  /* строка 2: Setup на своей строке, но пилл обнимает контент (не растягивается
-     во всю ширину). Бокс снимаем с ячейки и вешаем на внутренний .hm-setup-pill,
-     цвет фона/рамки берём из currentColor (он уже выставлен по состоянию
-     long/short/wait) — так один блок покрывает все варианты сетапа. */
-  .hm-table tr.hm-main td.hm-setup {
-    order: 5;
-    flex: 0 0 100%;
-    text-align: left;
-    padding: 0;
-    background: transparent !important;
-    box-shadow: none !important;
-  }
-  .hm-table tr.hm-main td.hm-setup .hm-setup-pill {
-    display: inline-block;
-    padding: 4px 10px;
-    border-radius: 5px;
-    background: color-mix(in srgb, currentColor 15%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 40%, transparent);
-  }
-  /* WAIT/нет сигнала — без бокса, просто приглушённый текст (как было). */
-  .hm-table tr.hm-main td.hm-setup.setup-wait .hm-setup-pill,
-  .hm-table tr.hm-main td.hm-setup.setup-wait-short .hm-setup-pill,
-  .hm-table tr.hm-main td.hm-setup.setup-wait-long .hm-setup-pill,
-  .hm-table tr.hm-main td.hm-setup.setup-fade-wait-short .hm-setup-pill,
-  .hm-table tr.hm-main td.hm-setup.setup-fade-wait-long .hm-setup-pill,
-  .hm-table tr.hm-main td.hm-setup.setup-none .hm-setup-pill {
-    padding-left: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-  /* строка 3: окна; строка 4: Acc/OI/Trend (по трети) */
-  .hm-table tr.hm-main td.hm-window {
-    order: 6;
-    flex: 1 1 26%;
-    text-align: left;
-  }
-  .hm-table tr.hm-main td[data-w="Acc"] {
-    order: 7;
-  }
-  .hm-table tr.hm-main td[data-w="OI"] {
-    order: 8;
-  }
-  .hm-table tr.hm-main td[data-w="Trend"] {
-    order: 9;
-  }
-  .hm-table tr.hm-main td[data-w="Acc"],
-  .hm-table tr.hm-main td[data-w="OI"],
-  .hm-table tr.hm-main td[data-w="Trend"] {
-    flex: 1 1 26%;
-    text-align: left;
-  }
-  /* Move — последним в четвёртой строке, рядом с Acc/OI/Trend */
-  .hm-table tr.hm-main td.hm-move {
-    order: 10;
-    flex: 1 1 26%;
-    text-align: left;
-  }
-  .hm-table tr.hm-main td.hm-costly {
-    order: 5;
-    flex: 0 0 100%;
-    text-align: left;
-  }
-  /* лейблы только на метрик-ячейках (окна + Acc/OI/Trend) */
-  .hm-table tr.hm-main td[data-w]::before {
-    content: attr(data-w);
-    display: block;
-    font-size: var(--fs-micro);
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    margin-bottom: 1px;
-    opacity: 0.7;
-  }
-  .hm-table tr.hm-main td.hm-setup::before,
-  .hm-table tr.hm-main td.hm-entry::before {
-    content: none;
-  }
-  /* 🚨 Кромки-box-shadow на карточке-ряде нет: направление уже несут цвет цены
-     и проценты, а своя монета — фон .is-active. */
-  .hm-table tr.hm-main.is-active {
-    box-shadow: none !important;
-  }
-  /* плейсхолдер (empty-state / waiting) обычным блоком */
-  .hm-table tbody tr:not(.hm-main):not(.hm-pos-row) {
-    display: block;
-  }
-
-  /* Скелетон: на десктопе это 12 ячеек в ряд, на карточной вёрстке они
-     выстраиваются столбиком и сливаются в сплошную штриховку. Оставляем
-     столько строк, сколько у настоящей карточки (ранг+пара+цена, спайк,
-     тренд), остальные прячем и разводим отступом. */
-  .hm-table tbody tr.sk-row {
-    display: block;
-    padding: 11px 12px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    margin-bottom: 6px;
-    min-height: var(--hm-card-min-h, 96px);
-  }
-  .hm-table tbody tr.sk-row td {
-    display: block;
-    padding: 0;
-    margin-bottom: 8px;
-  }
-  .hm-table tbody tr.sk-row td:nth-child(n + 4) {
-    display: none;
-  }
-  .hm-table tbody tr.sk-row td:nth-child(1) .sk {
-    width: 38%;
-  }
-  .hm-table tbody tr.sk-row td:nth-child(2) .sk {
-    width: 64%;
-  }
-  .hm-table tbody tr.sk-row td:nth-child(3) .sk {
-    width: 46%;
-  }
-  /* Добивочные карточки до HM_MAX_ROWS на мобиле ТОЖЕ резервируют высоту — всегда
-     8 рядов, чтобы секция не прыгала при смене числа монет (просьба оператора). Пустой
-     слот высотой с карточку, тот же border-bottom, без контента/тинта/ховера. */
-  .hm-table tbody tr.hm-placeholder-row {
-    display: block;
-    min-height: var(--hm-card-min-h, 150px);
-    box-sizing: border-box;
-    background: transparent;
-    border-bottom: 1px solid var(--border);
-  }
-  .hm-table tbody tr.hm-placeholder-row .hm-ph-cell {
-    display: none;
-  }
-  .hm-table tbody tr .empty-state {
-    display: block;
-    padding: 18px 12px;
-    text-align: center;
+  .hm-table th:nth-child(12),
+  .hm-table td:nth-child(12) {
+    width: 90px;
   }
 }
 
@@ -1270,20 +1118,20 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     margin: 0;
     padding: 0;
   }
-  .signals-table {
+  .signals-table:not(.hm-table) {
     display: block;
     font-size: var(--fs-small);
   }
-  .signals-table thead {
+  .signals-table:not(.hm-table) thead {
     display: none;
   }
-  .signals-table tbody {
+  .signals-table:not(.hm-table) tbody {
     display: flex;
     flex-direction: column;
     gap: 8px;
   }
 
-  .signals-table tr {
+  .signals-table:not(.hm-table) tr {
     display: grid;
     grid-template-columns: auto 1fr auto;
     grid-template-areas:
@@ -1300,95 +1148,95 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   /* Сторона красит рамку карточки-строки целиком. Раньше это была полоска
      border-left: на карточном (мобильном) виде она шла по всей высоте
      развёрнутой строки и перевешивала сам сигнал. */
-  .signals-table tr.row-short {
+  .signals-table:not(.hm-table) tr.row-short {
     border-color: var(--red-line);
   }
-  .signals-table tr.row-long {
+  .signals-table:not(.hm-table) tr.row-long {
     border-color: var(--green-line);
   }
-  .signals-table tr.is-active {
+  .signals-table:not(.hm-table) tr.is-active {
     border-color: var(--accent-line);
     background: var(--accent-soft);
   }
 
-  .signals-table td {
+  .signals-table:not(.hm-table) td {
     display: block;
     padding: 0;
     border: none;
     background: transparent !important; /* overrides .num-pos / .num-neg pill bg */
     border-radius: 0 !important;
   }
-  .signals-table td:first-child {
+  .signals-table:not(.hm-table) td:first-child {
     box-shadow: none !important;
   }
 
   /* Column → grid area mapping */
-  .signals-table td:nth-child(1) {
+  .signals-table:not(.hm-table) td:nth-child(1) {
     grid-area: rank;
     color: var(--text-muted);
     font-size: var(--fs-label);
     font-weight: 600;
   }
-  .signals-table td:nth-child(2) {
+  .signals-table:not(.hm-table) td:nth-child(2) {
     grid-area: pair;
     font-weight: 700;
     font-size: var(--fs-body);
     color: var(--text-primary);
   }
-  .signals-table td:nth-child(3) {
+  .signals-table:not(.hm-table) td:nth-child(3) {
     grid-area: price;
     text-align: right;
     font-weight: 600;
     font-size: var(--fs-body);
   }
-  .signals-table td:nth-child(4),
-  .signals-table td:nth-child(5) {
+  .signals-table:not(.hm-table) td:nth-child(4),
+  .signals-table:not(.hm-table) td:nth-child(5) {
     /* Spike / Trend — keep coloured pill but inline */
     font-size: var(--fs-label);
   }
-  .signals-table td:nth-child(4) {
+  .signals-table:not(.hm-table) td:nth-child(4) {
     grid-area: spike;
   }
-  .signals-table td:nth-child(5) {
+  .signals-table:not(.hm-table) td:nth-child(5) {
     grid-area: trend;
   }
 
   /* Restore the small coloured-background pill on Spike/Trend cells (mobile) */
-  .signals-table td.num-pos-strong {
+  .signals-table:not(.hm-table) td.num-pos-strong {
     background: var(--tier-pos-strong) !important;
   }
-  .signals-table td.num-pos {
+  .signals-table:not(.hm-table) td.num-pos {
     background: var(--tier-pos-normal) !important;
   }
-  .signals-table td.num-pos-weak {
+  .signals-table:not(.hm-table) td.num-pos-weak {
     background: var(--tier-pos-weak) !important;
   }
-  .signals-table td.num-neg-strong {
+  .signals-table:not(.hm-table) td.num-neg-strong {
     background: var(--tier-neg-strong) !important;
   }
-  .signals-table td.num-neg {
+  .signals-table:not(.hm-table) td.num-neg {
     background: var(--tier-neg-normal) !important;
   }
-  .signals-table td.num-neg-weak {
+  .signals-table:not(.hm-table) td.num-neg-weak {
     background: var(--tier-neg-weak) !important;
   }
-  .signals-table td.num-pos-strong,
-  .signals-table td.num-pos,
-  .signals-table td.num-pos-weak,
-  .signals-table td.num-neg-strong,
-  .signals-table td.num-neg,
-  .signals-table td.num-neg-weak {
+  .signals-table:not(.hm-table) td.num-pos-strong,
+  .signals-table:not(.hm-table) td.num-pos,
+  .signals-table:not(.hm-table) td.num-pos-weak,
+  .signals-table:not(.hm-table) td.num-neg-strong,
+  .signals-table:not(.hm-table) td.num-neg,
+  .signals-table:not(.hm-table) td.num-neg-weak {
     border-radius: 4px !important;
     padding: 2px 6px !important;
     width: fit-content;
   }
 
-  .signals-table td:nth-child(6) {
+  .signals-table:not(.hm-table) td:nth-child(6) {
     grid-area: suggest;
     text-align: right;
     font-size: var(--fs-label);
   }
-  .signals-table td:nth-child(7) {
+  .signals-table:not(.hm-table) td:nth-child(7) {
     grid-area: sltp;
     color: var(--text-muted);
     font-size: var(--fs-label);
@@ -1396,8 +1244,8 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     border-top: 1px solid var(--hairline);
   }
   /* Re-add small spacing on top edge of sltp row */
-  .signals-table td:nth-child(7).num-pos,
-  .signals-table td:nth-child(7).num-neg {
+  .signals-table:not(.hm-table) td:nth-child(7).num-pos,
+  .signals-table:not(.hm-table) td:nth-child(7).num-neg {
     padding-top: 4px !important;
   }
 }
@@ -1489,21 +1337,6 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   #ww-table th:nth-child(8),
   #ww-table td:nth-child(8) {
     font-size: var(--fs-micro);
-  }
-}
-
-/* Hot Movers под-строка подсказок (colspan) на мобильной card-вёрстке (≤720px):
-   рендерим обычным блоком на всю ширину, без per-cell ::before лейблов. */
-@include until($bp-lg) {
-  .signals-table tr.hm-pos-row td {
-    display: block;
-    width: 100%;
-    padding: 6px 12px !important;
-    white-space: normal;
-    box-shadow: none;
-  }
-  .signals-table tr.hm-pos-row td::before {
-    content: none !important;
   }
 }
 
