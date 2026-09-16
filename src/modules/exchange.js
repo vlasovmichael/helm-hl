@@ -342,11 +342,10 @@ export async function fetchSpotUsdcBalance() {
 }
 
 /**
- * Fetcher для balanceCache. 🚨 Источник баланса — spotClearinghouseState:
- * perp-часть unified-аккаунта by design $0 и годится только для unrealized PnL.
- * accountValue = spot.USDC.total + perp.unrealizedPnl
- * withdrawable = spot.USDC.total − spot.USDC.hold
- * unrealizedPnl = perp.marginSummary.totalUnrealizedPnl
+ * Fetcher для balanceCache: accountValue = spot.USDC.total (сходится с
+ * portfolio-эндпоинтом HL в ноль), withdrawable = total − hold.
+ * 🚨 upnl ниже всегда 0 — totalUnrealizedPnl в marginSummary HL не отдаёт.
+ * 🚨 PnL позиций в accountValue не складывать: hold переоценён, убыток дважды.
  */
 async function fetchBalanceFromSdk() {
   // Оба чтения идут через hlInfo (единый rate-limiter + внутренний retry).

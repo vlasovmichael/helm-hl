@@ -30,9 +30,11 @@ export async function runBalanceDiag() {
       sdk.info.spot.getSpotClearinghouseState(config.wallet.address),
     ]);
 
-    const ms = perp?.marginSummary ?? {};
-    const perpUnrealized = parseFloat(
-      ms.totalUnrealizedPnl ?? ms.unrealizedPnl ?? '0',
+    // 🚨 не marginSummary: totalUnrealizedPnl HL не отдаёт, в логе выходил
+    // вечный uPnl=+$0.00 при живой позиции. Считаем по самим позициям.
+    const perpUnrealized = (perp?.assetPositions ?? []).reduce(
+      (sum, ap) => sum + (parseFloat(ap?.position?.unrealizedPnl ?? '0') || 0),
+      0,
     );
     const perpPositions = (perp?.assetPositions ?? []).filter(
       (ap) => parseFloat(ap?.position?.szi ?? '0') !== 0,
@@ -47,7 +49,8 @@ export async function runBalanceDiag() {
     const spotTotal = usdcEntry ? parseFloat(usdcEntry.total ?? '0') : 0;
     const spotHold  = usdcEntry ? parseFloat(usdcEntry.hold ?? '0')  : 0;
     const free = Math.max(0, spotTotal - spotHold);
-    const equity = spotTotal + (Number.isFinite(perpUnrealized) ? perpUnrealized : 0);
+    // 🚨 uPnl сюда не прибавлять: hold внутри spot уже переоценён по рынку.
+    const equity = spotTotal;
 
     const otherSpot = balances
       .filter((b) => !isUsdc(b.coin))
@@ -62,8 +65,7 @@ export async function runBalanceDiag() {
         (otherSpot.length ? ` other=[${otherSpot.join(',')}]` : ''),
     );
 
-    // Equity-снапшот для Performance-графика. Раньше использовали perp
-    // accountValue; в unified mode источник = spot.total + perp.uPnl.
+    // Equity-снапшот для Performance-графика: источник = spot.USDC.total.
     if (equity > 0) {
       saveEquitySnapshot(equity);
     }

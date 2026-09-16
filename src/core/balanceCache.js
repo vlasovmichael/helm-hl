@@ -3,9 +3,12 @@
 // ─────────────────────────────────────────────────
 //
 // Источник правды — spotClearinghouseState (unified-аккаунт):
-// accountValue = spot.USDC.total + perp.unrealizedPnl
+// accountValue = spot.USDC.total (сходится с portfolio-эндпоинтом HL в ноль)
 // withdrawable = spot.USDC.total - spot.USDC.hold
-// unrealizedPnl = perp.marginSummary.totalUnrealizedPnl
+//
+// 🚨 unrealizedPnl тут всегда 0: totalUnrealizedPnl в marginSummary HL не
+// отдаёт. Складывать PnL позиций в accountValue нельзя — hold уже переоценён,
+// убыток уйдёт дважды.
 //
 // 🚨 Индексатор HL иногда залипает и отдаёт 0 при живых деньгах на счету.
 // Если ему верить:
