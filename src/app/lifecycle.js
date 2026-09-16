@@ -15,7 +15,14 @@ import { stopWsExitLoop } from './wsExitTick.js';
 import { stopTickWatchdog } from './tickWatchdog.js';
 import { stopMemWatch } from './memWatch.js';
 import { markCleanShutdown } from './restartWatch.js';
-import { state, BOT_STATE_PATH, BOT_STATE_FLUSH_INTERVAL_MS } from './state.js';
+import { snapshot as snapshotPriceHistory, restore as restorePriceHistory } from '../core/priceHistory.js';
+import {
+  state,
+  BOT_STATE_PATH,
+  BOT_STATE_FLUSH_INTERVAL_MS,
+  PRICE_HISTORY_PATH,
+  PRICE_HISTORY_KEEP_MIN,
+} from './state.js';
 
 /**
  * Ожидает завершения текущего тика.
@@ -96,6 +103,49 @@ export async function saveBotState(activePosition, reason) {
 }
 
 /**
+ * Снимок буфера цен в data/price_history.json (tmp + rename, как bot_state).
+ * Fail-soft у вызывающих: потеря снимка стоит 15 минут прогрева, не больше.
+ */
+export async function savePriceHistory(reason) {
+  const snap = snapshotPriceHistory(PRICE_HISTORY_KEEP_MIN);
+  const json = JSON.stringify(snap);
+  const tmpPath = join('data', `.price_history_${process.pid}.tmp`);
+
+  await mkdir('data', { recursive: true });
+  await writeFile(tmpPath, json, 'utf-8');
+  await rename(tmpPath, PRICE_HISTORY_PATH);
+
+  logger.info(
+    `[System] ✅ Price history saved — ${snap.samples} сэмплов / ${Object.keys(snap.coins).length} монет | ` +
+      `${(json.length / 1024).toFixed(0)} КБ | reason: ${reason}`,
+  );
+  return snap;
+}
+
+/**
+ * Поднимает снимок буфера цен при старте — до первого тика, чтобы окна
+ * 2/5/15м были заполнены сразу. Отсутствие файла — норма (первый запуск).
+ */
+export async function loadPriceHistory() {
+  try {
+    const raw = await readFile(PRICE_HISTORY_PATH, 'utf-8');
+    const payload = JSON.parse(raw);
+    const { coins, samples } = restorePriceHistory(payload);
+    const ageMin = payload.savedAt ? (Date.now() - payload.savedAt) / 60_000 : null;
+    logger.info(
+      `[System] ✅ Price history restored — ${samples} сэмплов / ${coins} монет` +
+        (ageMin != null ? ` | снимку ${ageMin.toFixed(1)} мин` : ''),
+    );
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      logger.info('[System] Price history: снимка нет — окна наполнятся сканом (~15 мин)');
+    } else {
+      logger.warn(`[System] Price history restore failed: ${err.message}`);
+    }
+  }
+}
+
+/**
  * Периодический snapshot из главного tick'а. Throttle: не чаще, чем раз в
  * BOT_STATE_FLUSH_INTERVAL_MS. Тихий по умолчанию — debug-лог при skip'е,
  * ошибка не пробрасывается (tick должен продолжаться).
@@ -112,6 +162,7 @@ export async function flushBotStatePeriodic() {
   try {
     const activePosition = getActivePosition();
     await saveBotState(activePosition, 'periodic');
+    await savePriceHistory('periodic');
   } catch (err) {
     logger.warn(`[System] Periodic state flush failed: ${err.message}`);
   }
@@ -189,6 +240,7 @@ export async function shutdown(signal) {
   logger.info('[System] [4/6] Persisting bot state…');
   try {
     await saveBotState(activePosition, signal);
+    await savePriceHistory(signal);
     logger.info('[System] [4/6] ✅ State persisted');
   } catch (err) {
     logger.error(`[System] [4/6] ❌ State save failed: ${err.message}`);

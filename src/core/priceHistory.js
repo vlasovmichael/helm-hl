@@ -115,3 +115,64 @@ export function getBufferLength(coin) {
 export function clearAll() {
   buffers.clear();
 }
+
+// ── Тёплый старт ────────────────────────────────────────────────────────────
+// Буфер живёт в памяти, поэтому после рестарта окна 2/5/15м пусты, пока их не
+// накопит скаут — это ~15 минут слепоты на каждую пересборку. Снимок пишется на
+// диск (data/ — том, переживает пересборку образа) и поднимается при старте.
+//
+// 🚨 Формат [ts, price], а не {ts, price}: снимок пишется раз в минуту, на 234
+// монетах разница в разы по размеру файла и времени сериализации.
+const SNAPSHOT_VERSION = 1;
+
+/**
+ * Снимок буфера за последние `maxAgeMin` минут.
+ * Глубже часа из буфера никто не читает (Screen — 60м, тренд — ≤20м,
+ * fadeHot-прегейт — 30м), поэтому весь 4-часовой буфер не сохраняем.
+ */
+export function snapshot(maxAgeMin = 60, now = Date.now()) {
+  const cutoff = now - maxAgeMin * 60_000;
+  const coins = {};
+  let samples = 0;
+  for (const [coin, arr] of buffers) {
+    const out = [];
+    for (const s of arr) if (s.ts >= cutoff) out.push([s.ts, s.price]);
+    if (out.length === 0) continue;
+    coins[coin] = out;
+    samples += out.length;
+  }
+  return { v: SNAPSHOT_VERSION, savedAt: now, coins, samples };
+}
+
+/**
+ * Поднимает снимок в буфер. Мусор и протухшее отбрасывает молча: снимок —
+ * ускорение, а не источник правды, и он не должен ронять старт.
+ * Если скаут успел положить свежие сэмплы — снимок кладётся ПЕРЕД ними.
+ * @returns {{coins: number, samples: number}}
+ */
+export function restore(payload, now = Date.now()) {
+  if (!payload || payload.v !== SNAPSHOT_VERSION || !payload.coins) {
+    return { coins: 0, samples: 0 };
+  }
+  const cutoff = now - HISTORY_WINDOW_MS;
+  let coins = 0;
+  let samples = 0;
+  for (const [coin, pairs] of Object.entries(payload.coins)) {
+    if (!Array.isArray(pairs)) continue;
+    const arr = [];
+    for (const pair of pairs) {
+      const ts = Array.isArray(pair) ? pair[0] : null;
+      const price = Array.isArray(pair) ? pair[1] : null;
+      if (!Number.isFinite(ts) || !Number.isFinite(price) || price <= 0) continue;
+      if (ts < cutoff || ts > now) continue;
+      arr.push({ ts, price });
+    }
+    if (arr.length === 0) continue;
+    arr.sort((a, b) => a.ts - b.ts);
+    const live = buffers.get(coin);
+    buffers.set(coin, live?.length ? arr.filter((s) => s.ts < live[0].ts).concat(live) : arr);
+    coins++;
+    samples += arr.length;
+  }
+  return { coins, samples };
+}

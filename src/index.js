@@ -29,7 +29,7 @@ import { startWatchlistAlerts } from './modules/watchlistAlerts.js';
 import { startFvgAlerts } from './modules/fvgAlerts.js';
 import { startWinnersWatch } from './modules/winnersWatch.js';
 import { sendDailyDigest } from './modules/mailDigest.js';
-import { shutdown } from './app/lifecycle.js';
+import { shutdown, loadPriceHistory } from './app/lifecycle.js';
 import { startToastBridge } from './app/toastBridge.js';
 import { startEquityHeal } from './app/equityHeal.js';
 
@@ -87,6 +87,10 @@ async function main() {
   // Gated на HL_WS_FEED_ENABLED. Поднимает allMids-фид + сверяет с поллингом,
   // торговую логику не трогает. Fail-soft: ошибки WS не валят бота.
   startPriceFeed();
+
+  // Буфер цен из снимка прошлого запуска — до первого тика, иначе окна
+  // 2/5/15м пусты первые ~15 минут после каждой пересборки.
+  await loadPriceHistory();
 
   // ── Наблюдатель здоровья данных ────────────────
   // Плашка в шапке дашборда молчалива по природе: она видна, только пока на неё

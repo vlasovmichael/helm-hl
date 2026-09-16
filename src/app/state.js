@@ -26,6 +26,8 @@ export const INTEGRITY_FILL_RECHECK_MS  = 3 * 60_000;    // 3 мин
 export const BOT_STATE_PATH             = 'data/bot_state.json';
 export const SHUTDOWN_TIMEOUT_MS        = 15_000;        // 15с на завершение
 export const BOT_STATE_FLUSH_INTERVAL_MS = 60_000;       // 60с периодический snapshot
+export const PRICE_HISTORY_PATH         = 'data/price_history.json';
+export const PRICE_HISTORY_KEEP_MIN     = 60;            // глубже часа буфер не читают
 
 // ── Мутабельное состояние ──────────────────────
 
