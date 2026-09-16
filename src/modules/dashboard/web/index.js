@@ -31,6 +31,7 @@ import {
   setDailyPnl,
   setActivePositionsPnl,
   stopFloorTimerTick,
+  resetAccountStatus,
 } from "./src/features/accountStatus.js";
 import {
   renderHotMovers,
@@ -40,7 +41,11 @@ import {
   renderScreen,
   initScreenInteractions,
 } from "./src/features/screen.js";
-import { renderMarketContext, updateBtcLivePrice } from "./src/features/marketContext.js";
+import {
+  renderMarketContext,
+  updateBtcLivePrice,
+  resetMarketContext,
+} from "./src/features/marketContext.js";
 import { initModals, renderActivity } from "./src/features/modals.js";
 import { initWhatIf } from "./src/features/whatif.js";
 import {
@@ -616,6 +621,10 @@ export default {
 
   render(outlet) {
     outlet.innerHTML = view();
+    // 🚨 Разметка новая, а модули помнят прошлую: без сброса плашка BTC висит
+    // на спиннере, а секция позиций остаётся пустой до смены состава монет.
+    resetMarketContext();
+    resetAccountStatus();
 
     // <i data-icon="…"> в статической разметке → настоящие svg.
     paintIcons();

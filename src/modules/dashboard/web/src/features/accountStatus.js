@@ -279,6 +279,21 @@ let _lastNetVal = null;
 const _manualLastUpnl = new Map();
 let _manualKeys = "";
 
+/**
+ * Сбросить кэши отрисовки — звать при монтировании страницы.
+ *
+ * 🚨 renderManualPositions при совпадении ключей только патчит существующие
+ * карточки. После перемонтирования разметка пустая, а ключи помнят прошлый
+ * набор — патчить нечего, и секция позиций остаётся пустой до смены состава.
+ */
+export function resetAccountStatus() {
+  _manualKeys = "";
+  _manualLastUpnl.clear();
+  _posCoin = null;
+  _lastNetVal = null;
+  _lastNetSign = null;
+}
+
 export function renderHeader(status) {
   // Секция-хост только на дашборде; на /strategies.html её нет → no-op.
   if (!document.getElementById("uptime-val")) return;
