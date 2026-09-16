@@ -8,6 +8,7 @@ import { cssVar, hexToRgba, fmtUsd } from "../utils/format.js";
 let equityChart = null;
 let equitySeries = null;
 let equityData = []; // [{time, value}]
+let onResize = null;
 
 // Оверлей-лоадер графика Performance (#chart-loader).
 export function showChartLoader() {
@@ -149,13 +150,32 @@ export async function initEquityChart() {
     equityChart.timeScale().fitContent();
   }
 
-  if (!window.__equityChartResizeBound) {
-    window.__equityChartResizeBound = true;
-    window.addEventListener("resize", () => {
-      if (equityChart && container)
-        equityChart.resize(container.clientWidth, container.clientHeight);
-    });
+  // 🚨 Слушатель замыкает контейнер, поэтому снимается только вместе с графиком
+  // (destroyEquityChart): иначе он держит выброшенный узел и на каждом изменении
+  // окна дёргает мёртвый инстанс.
+  onResize = () => {
+    if (equityChart && container)
+      equityChart.resize(container.clientWidth, container.clientHeight);
+  };
+  window.addEventListener("resize", onResize);
+}
+
+/**
+ * Снять график при уходе со страницы.
+ *
+ * 🚨 Обязательно: initEquityChart выходит по `if (equityChart) return`, и без
+ * снятия инстанс остаётся привязан к выброшенному контейнеру — на возврате
+ * график не рисуется вовсе.
+ */
+export function destroyEquityChart() {
+  if (onResize) {
+    window.removeEventListener("resize", onResize);
+    onResize = null;
   }
+  if (equityChart) equityChart.remove();
+  equityChart = null;
+  equitySeries = null;
+  // equityData оставляем: на возврате линия рисуется сразу, не дожидаясь /api/history.
 }
 
 export function renderEquityPill() {

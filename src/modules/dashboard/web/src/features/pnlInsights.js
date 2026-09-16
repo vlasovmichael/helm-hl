@@ -494,6 +494,23 @@ export function renderTax(tax) {
     `${(profit > 0 ? profit * 0.19 : 0).toLocaleString()} PLN`;
 }
 
+/**
+ * Привести свежую разметку к запомненному состоянию: период и вкладка живут в
+ * модуле и переживают уход со страницы, а разметка рисуется заново и всегда
+ * открывает первую панель — без этого вид разойдётся с состоянием.
+ */
+export function syncInsightsUi() {
+  for (const b of document.querySelectorAll("#pnl-periods .seg__btn")) {
+    b.classList.toggle("active", b.dataset.period === currentPnlPeriod);
+  }
+  for (const b of document.querySelectorAll("#insights-tabs .seg__btn")) {
+    b.classList.toggle("active", b.dataset.tab === currentInsightsTab);
+  }
+  for (const pane of document.querySelectorAll("#insights-container .insights-pane")) {
+    pane.style.display = pane.id === `insights-pane-${currentInsightsTab}` ? "" : "none";
+  }
+}
+
 // Биндинги переключателей периода/вкладок/сортировки. Зовётся из bootstrap.
 export function initPnlInsights({ fmtTime } = {}) {
   if (typeof fmtTime === "function") _fmtTime = fmtTime;

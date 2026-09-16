@@ -265,6 +265,11 @@
   height: 20px;
   border-radius: 4px;
 }
+// Первая строка скелетона P&L держит место под крупное число-герой.
+.skeleton-row--hero {
+  height: 44px;
+  width: 45%;
+}
 .activity-skeleton {
   display: flex;
   flex-direction: column;

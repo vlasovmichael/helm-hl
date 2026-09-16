@@ -18,5 +18,6 @@ bindTheme();
 
 route("/oi", () => import("./oi.js"));
 route("/ledger", () => import("./ledger.js"));
+route("/statistics", () => import("./statistics.js"));
 
 start(document.getElementById("outlet"));
