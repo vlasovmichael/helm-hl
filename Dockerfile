@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # ───────────────────────────────────────────────────────────────
 #  build-stage: собираем дашборду (Vite). node:22 — Vite 8 требует
 #  Node ≥20.19/≥22.12. Тут нужны devDeps (vite), в рантайм они не едут.
@@ -9,7 +8,7 @@ COPY package*.json ./
 # 🚨 --ignore-scripts: витрине нужен только Vite, а postinstall у better-sqlite3
 # зовёт node-gyp — это минуты сборки и тулчейн python3/make/g++ ради модуля,
 # который на этой стадии не загружается.
-RUN --mount=type=cache,target=/root/.npm npm ci --ignore-scripts
+RUN npm ci --ignore-scripts
 # Копируем только вход Vite: правка бота не должна пересобирать витрину.
 COPY vite.config.js ./
 COPY src/modules/dashboard/web ./src/modules/dashboard/web
@@ -30,8 +29,7 @@ WORKDIR /app
 
 ARG INCLUDE_DEV=false
 COPY package*.json ./
-RUN --mount=type=cache,target=/root/.npm \
-  if [ "$INCLUDE_DEV" = "true" ]; then npm ci; else npm ci --omit=dev; fi
+RUN if [ "$INCLUDE_DEV" = "true" ]; then npm ci; else npm ci --omit=dev; fi
 
 COPY . .
 
