@@ -55,52 +55,6 @@
       <div class="login-meta">Hyperliquid trading copilot</div>
     </div>
 
-    <script>
-      (function () {
-        const form = document.getElementById('login-form');
-        const errEl = document.getElementById('login-error');
-        const btn = document.getElementById('login-submit');
-
-        const params = new URLSearchParams(window.location.search);
-        if (params.get('error') === '1') {
-          errEl.textContent = 'Invalid username or password.';
-          errEl.classList.add('visible');
-        }
-
-        form.addEventListener('submit', async (e) => {
-          e.preventDefault();
-          errEl.classList.remove('visible');
-          btn.disabled = true;
-          btn.textContent = 'Signing in…';
-          try {
-            const body = new URLSearchParams({
-              user: document.getElementById('user').value,
-              pass: document.getElementById('pass').value,
-            });
-            const r = await fetch('/login', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-              body,
-              redirect: 'manual',
-            });
-            if (r.status === 204 || r.type === 'opaqueredirect') {
-              const next = params.get('next') || '/';
-              window.location.href = next;
-              return;
-            }
-            const data = await r.json().catch(() => ({}));
-            errEl.textContent = data.error || 'Invalid username or password.';
-            errEl.classList.add('visible');
-          } catch (_) {
-            errEl.textContent = 'Network error. Try again.';
-            errEl.classList.add('visible');
-          } finally {
-            btn.disabled = false;
-            btn.textContent = 'Sign in';
-          }
-        });
-      })();
-    </script>
     <script type="module" src="/login.js"></script>
   </body>
 </html>

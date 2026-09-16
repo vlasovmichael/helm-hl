@@ -17,6 +17,10 @@ import {
   startFooterTimer,
 } from "./src/core/shell.js";
 import { mountTopnav } from "./src/core/topnav.js";
+import { stampEdition, initBottomNav } from "./src/core/pageChrome.js";
+import { initReveal } from "./src/core/reveal.js";
+import { initTapeBar } from "./src/features/tapeBar.js";
+import { initRadarAccordions } from "./src/features/radarAccordions.js";
 import { fetchJson } from "./src/net/api.js";
 import { updateActiveCoinSet } from "./src/state/activeCoins.js";
 import {
@@ -220,6 +224,7 @@ function initTradeButton() {
 paintIcons();
 
 // ── Bootstrap ──
+stampEdition();
 mountTopnav("dashboard");
 bindTheme([]);
 bindRange(() => tick());
@@ -236,6 +241,13 @@ initWebSocket({ onStatus });
 tick();
 setInterval(tick, REFRESH_MS);
 startFooterTimer();
+
+// Обвязка страницы. Каждая возвращает функцию остановки — она понадобится
+// роутеру, когда переходы пойдут без перезагрузки.
+initTapeBar();
+initBottomNav();
+initRadarAccordions();
+initReveal("section.card, #market-context");
 
 // Счётчик форвард-замера под таблицей: сколько сделок из 60 набрано с момента
 // регистрации гипотезы, за которую отвечают метка COSTLY и колонка Move. Раз в

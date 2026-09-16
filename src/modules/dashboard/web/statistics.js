@@ -18,6 +18,7 @@ import {
   startFooterTimer,
 } from "./src/core/shell.js";
 import { mountTopnav } from "./src/core/topnav.js";
+import { initReveal } from "./src/core/reveal.js";
 import { fetchJson } from "./src/net/api.js";
 import {
   initEquityChart,
@@ -88,3 +89,4 @@ initPnlInsights({ fmtTime });
 tick();
 setInterval(tick, REFRESH_MS);
 startFooterTimer();
+initReveal();
