@@ -2,7 +2,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { parseTpGrid, buildTpGrid, gridRemainder } from '../src/modules/tpGrid.js';
+import {
+  parseTpGrid,
+  buildTpGrid,
+  gridRemainder,
+  gridMinNotionalUsd,
+} from '../src/modules/tpGrid.js';
 
 // ── parseTpGrid ─────────────────────────────────────────────────────────────
 
@@ -77,6 +82,31 @@ test('мусорный вход → пустая сетка, а не исклю�
   assert.deepEqual(buildTpGrid({ legs, entry: 0, stopDistPct: 2, isShort: true, sizeSz: 10 }), []);
   assert.deepEqual(buildTpGrid({ legs, entry: 100, stopDistPct: 0, isShort: true, sizeSz: 10 }), []);
   assert.deepEqual(buildTpGrid({ legs, entry: 100, stopDistPct: 2, isShort: true, sizeSz: 0 }), []);
+});
+
+// ── gridMinNotionalUsd ──────────────────────────────────────────────────────
+
+test('порог позиции задаёт самая мелкая доля, а не первая', () => {
+  assert.equal(gridMinNotionalUsd([{ frac: 0.5, r: 1 }], 11), 22);
+  assert.equal(gridMinNotionalUsd([{ frac: 0.5, r: 1 }, { frac: 0.25, r: 2 }], 11), 44);
+  assert.equal(gridMinNotionalUsd([{ frac: 0.3, r: 0.5 }, { frac: 0.3, r: 1 }], 11), 11 / 0.3);
+});
+
+test('порог согласован с пропуском ступени в buildTpGrid', () => {
+  // На пороге встают все ступени, центом ниже — уже не все.
+  const legs = [{ frac: 0.5, r: 1 }, { frac: 0.25, r: 2 }];
+  const need = gridMinNotionalUsd(legs, 11);
+  const at = buildTpGrid({ legs, entry: 1, stopDistPct: 2, isShort: true, sizeSz: need, minSz: 11 });
+  const below = buildTpGrid({ legs, entry: 1, stopDistPct: 2, isShort: true, sizeSz: need - 0.01, minSz: 11 });
+  assert.equal(at.length, legs.length);
+  assert.ok(below.length < legs.length);
+});
+
+test('нет сетки или мусорный минимум → порога нет, а не ноль', () => {
+  assert.equal(gridMinNotionalUsd([], 11), null);
+  assert.equal(gridMinNotionalUsd(null, 11), null);
+  assert.equal(gridMinNotionalUsd([{ frac: 0.5, r: 1 }], 0), null);
+  assert.equal(gridMinNotionalUsd([{ frac: 0.5, r: 1 }], NaN), null);
 });
 
 test('ступени сетки стоят БЛИЖЕ цели — иначе они бессмысленны', () => {

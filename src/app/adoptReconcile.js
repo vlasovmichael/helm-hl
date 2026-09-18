@@ -21,7 +21,7 @@ import { placeExitTrigger } from '../modules/executor/triggers.js';
 import { resolveAsset } from '../modules/executor/fill-parser.js';
 import { placeLimit } from '../modules/exchange.js';
 import { formatHlPrice, MIN_ORDER_USD } from '../modules/executor/math.js';
-import { buildTpGrid } from '../modules/tpGrid.js';
+import { buildTpGrid, gridMinNotionalUsd } from '../modules/tpGrid.js';
 import { fetchUserFills } from '../modules/userFills.js';
 import { getLiveFills, fillKey } from '../core/fillFeed.js';
 import { isQuietHour } from '../core/ntfy.js';
@@ -576,6 +576,26 @@ export async function maybeAdoptManualPosition(manualPositions) {
               minSz: MIN_ORDER_USD / entry,
               roundSz: (n) => Number(n.toFixed(szDecimals ?? 0)),
             });
+            // Ступень мельче минимума биржи отбрасывается молча: на мелкой позе
+            // сетка не встанет вовсе, и это надо назвать вслух.
+            if (rungs.length < gridLegs.length) {
+              const needUsd = gridMinNotionalUsd(gridLegs, MIN_ORDER_USD);
+              const needLabel = needUsd ? ` | вся сетка работает от $${needUsd.toFixed(2)}` : '';
+              logger.warn(
+                `[Adopt] 🪜 #${coin}: ступеней встало ${rungs.length} из ${gridLegs.length} — ` +
+                `поза $${sizeUsd.toFixed(2)}, минимум $${MIN_ORDER_USD} на ступень${needLabel}`,
+              );
+              await fireAdoptNtfy(
+                `🪜 #${coin}: сетка не встала целиком`,
+                `Поза $${sizeUsd.toFixed(2)}: ступеней ${rungs.length} из ${gridLegs.length}.\n` +
+                `Минимум биржи $${MIN_ORDER_USD} на ступень` +
+                (needUsd
+                  ? `, сетка «${config.trading.adoptTpGridSpec}» целиком работает от $${needUsd.toFixed(2)}.`
+                  : '.') +
+                `\nСтоп и цель стоят, поза защищена — забрана будет одной лимиткой, не частями.`,
+                ['ladder'],
+              );
+            }
             for (const rung of rungs) {
               try {
                 const rpx = formatHlPrice(rung.px, szDecimals);

@@ -105,3 +105,19 @@ export function gridRemainder(sizeSz, grid) {
   const rest = sizeSz - used;
   return rest > 0 ? rest : 0;
 }
+
+/**
+ * Нотионал позиции, при котором встают ВСЕ ступени спецификации.
+ * В минимум ордера первой упирается самая мелкая доля — она и задаёт порог.
+ *
+ * @param {Array<{frac:number}>} legs — из parseTpGrid
+ * @param {number} minOrderUsd — минимальный ордер биржи
+ * @returns {number|null} null, если сетки нет или минимум задан мусором
+ */
+export function gridMinNotionalUsd(legs, minOrderUsd) {
+  if (!Array.isArray(legs) || legs.length === 0) return null;
+  if (!Number.isFinite(minOrderUsd) || minOrderUsd <= 0) return null;
+  const minFrac = Math.min(...legs.map((l) => l.frac));
+  if (!(minFrac > 0)) return null;
+  return minOrderUsd / minFrac;
+}

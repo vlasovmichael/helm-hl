@@ -474,6 +474,7 @@ function loadConfig() {
       adoptTargetTrailArmR,
       adoptTargetTrailGiveBackR,
       adoptTpGridLegs: adoptTpGrid.legs || [],
+      adoptTpGridSpec,
       adoptTrailFloorOrder,
       adoptTrailFloorStepPct,
       adoptTrailArmPct,
