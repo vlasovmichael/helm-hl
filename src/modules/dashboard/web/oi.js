@@ -12,7 +12,7 @@ import { mountPageHeader } from "./src/core/pageHeader.js";
 
 import { onThemeChange } from "./src/core/shell.js";
 import { fetchJson } from "./src/net/api.js";
-import { drawOiChart, clearOiChart, applyOiChartTheme } from "./src/charts/oiChart.js";
+import { drawOiChart, clearOiChart, destroyOiChart, applyOiChartTheme } from "./src/charts/oiChart.js";
 
 // Экран жив, пока его не сменили. Ответы, приехавшие после ухода, писать
 // некуда: разметки этой страницы в документе уже нет.
@@ -979,7 +979,7 @@ export default {
     return () => {
       alive = false;
       offTheme();
-      clearOiChart();
+      destroyOiChart();
     };
   },
 };

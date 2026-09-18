@@ -27,6 +27,7 @@ let oiSeries = null;
 let pxSeries = null;
 let tooltip = null;
 let lastPoints = [];
+let onResize = null;
 
 const pad2 = (n) => String(n).padStart(2, "0");
 // 🚨 Время МЕСТНОЕ — и здесь, и в таблице. Пробовали UTC (как отдаёт биржа):
@@ -147,7 +148,10 @@ export async function drawOiChart(points) {
   if (!container) return;
   lastPoints = points;
 
-  if (!chart) {
+  // 🚨 Пересобирать и когда инстанс жив, но сидит в выброшенном узле: роутер
+  // заменяет разметку экрана целиком, и на возврате контейнер уже другой.
+  if (!chart || !container.contains(chart.chartElement())) {
+    destroyOiChart();
     const { createChart, AreaSeries, LineSeries } = await import("lightweight-charts");
     const c = themeColors();
     chart = createChart(container, {
@@ -215,12 +219,12 @@ export async function drawOiChart(points) {
     container.appendChild(tooltip);
     chart.subscribeCrosshairMove(renderTooltip);
 
-    if (!window.__oiChartResizeBound) {
-      window.__oiChartResizeBound = true;
-      window.addEventListener("resize", () => {
-        if (chart && container) chart.resize(container.clientWidth, container.clientHeight);
-      });
-    }
+    // 🚨 Слушатель замыкает контейнер: снимать только вместе с графиком, иначе
+    // держит выброшенный узел и дёргает мёртвый инстанс.
+    onResize = () => {
+      if (chart && container) chart.resize(container.clientWidth, container.clientHeight);
+    };
+    window.addEventListener("resize", onResize);
   }
 
   // 🚨 Сборка ниже падает НЕ здесь, если серии не создались: chart уже не null,
@@ -240,9 +244,29 @@ export async function drawOiChart(points) {
   chart.timeScale().fitContent();
 }
 
+/** Стереть линии, оставив график на месте: у монеты нет истории за диапазон. */
 export function clearOiChart() {
   lastPoints = [];
   if (tooltip) tooltip.style.display = "none";
   oiSeries?.setData([]);
   pxSeries?.setData([]);
+}
+
+/**
+ * Снять график при уходе со страницы.
+ *
+ * 🚨 Обязательно: drawOiChart переиспользует живой инстанс, и без снятия он
+ * остаётся привязан к выброшенному контейнеру — на возврате карточка пустая.
+ */
+export function destroyOiChart() {
+  if (onResize) {
+    window.removeEventListener("resize", onResize);
+    onResize = null;
+  }
+  if (chart) chart.remove();
+  chart = null;
+  oiSeries = null;
+  pxSeries = null;
+  tooltip = null;
+  lastPoints = [];
 }

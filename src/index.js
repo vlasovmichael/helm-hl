@@ -18,6 +18,7 @@ import { state, TICK_INTERVAL_MS, INTEGRITY_GRACE_PERIOD_MS, SHUTDOWN_TIMEOUT_MS
 import { tick } from './app/tick.js';
 import { reportRestartIfUnclean } from './app/restartWatch.js';
 import { startPriceFeed } from './core/priceFeed.js';
+import { startLiqEvents } from './core/liqEvents.js';
 import { startHealthWatch } from './app/healthWatch.js';
 import { startFillFeed } from './core/fillFeed.js';
 import { markFillDirty } from './app/integrity.js';
@@ -87,6 +88,7 @@ async function main() {
   // Gated на HL_WS_FEED_ENABLED. Поднимает allMids-фид + сверяет с поллингом,
   // торговую логику не трогает. Fail-soft: ошибки WS не валят бота.
   startPriceFeed();
+  startLiqEvents();
 
   // Буфер цен из снимка прошлого запуска — до первого тика, иначе окна
   // 2/5/15м пусты первые ~15 минут после каждой пересборки.

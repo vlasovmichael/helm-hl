@@ -59,6 +59,22 @@ function liqRow(d, side) {
   return `<span class="mc-liq-row">${icon(glyph)}<i>${who}</i>${body}</span>`;
 }
 
+// Случившееся, а не расстановка: отдельный блок и отдельная подсказка, чтобы
+// событие не читалось как продолжение строк с уровнями.
+const LIQEV_CARD =
+  "Positions actually liquidated across the OKX crypto market over the last 15 minutes, " +
+  "sized in dollars by contract multiplier. BTC alone is listed only when it was hit — " +
+  "single coins stay quiet for minutes at a time. Different from the levels above: a level " +
+  "is recomputed from the live price and always sits ahead of it, an event has already " +
+  "happened. Another venue than Hyperliquid, and still not a signal.";
+
+// Вынесенные шорты толкают цену вверх (squeeze), вынесенные лонги вниз (flush).
+function liqEventRow(usd, side) {
+  const glyph = side === "short" ? "squeeze" : "flush";
+  const who = side === "short" ? "shorts hit" : "longs hit";
+  return `<span class="mc-liq-row">${icon(glyph)}<i>${who}</i><b>${fmtUsd(usd)}</b></span>`;
+}
+
 // Порог хода BTC, ниже которого сторона не называется. 10 бп — не круглое число
 // с потолка: на 105 сделках оператора входы по направлению BTC дали −30.7 бп
 // против −50.1 у входов против него, а сделки при штиле BTC — худшие (−104 бп).
@@ -138,6 +154,14 @@ function buildStructure(el) {
     liq.setAttribute("data-card", LIQ_CARD);
     liq.hidden = true;
     el.appendChild(liq);
+  }
+  if (!el.querySelector("#mc-liqev")) {
+    const ev = document.createElement("div");
+    ev.id = "mc-liqev";
+    ev.className = "mc-liq";
+    ev.setAttribute("data-card", LIQEV_CARD);
+    ev.hidden = true;
+    el.appendChild(ev);
   }
   el.classList.remove("mc-loading");
   el.classList.add("mc-enter"); // одноразовый вход (стаггер в CSS)
@@ -244,6 +268,27 @@ export function renderMarketContext(d) {
     const has = liq && (liq.up || liq.down);
     box.hidden = !has;
     if (has) box.innerHTML = liqRow(liq.up, "up") + liqRow(liq.down, "down");
+  }
+
+  // Поток выключен или ещё не подключился — строк нет вовсе. Нули показывать
+  // нельзя: «вынесло $0» и «мы не смотрим» — разные утверждения.
+  // Считаем по рынку: одна монета молчит минутами, и строка по BTC была бы
+  // скрыта почти всегда. BTC добавляется отдельной строкой, когда его задело.
+  const ev = b.liqEvents;
+  const evBox = el.querySelector("#mc-liqev");
+  if (evBox) {
+    const hasEv = ev && ev.connected && ev.marketN > 0;
+    evBox.hidden = !hasEv;
+    if (hasEv) {
+      evBox.innerHTML =
+        `<span class="mc-liq-row"><i>${ev.venue} ${ev.windowMin}m</i></span>` +
+        liqEventRow(ev.marketShortUsd, "short") +
+        liqEventRow(ev.marketLongUsd, "long") +
+        (ev.n > 0
+          ? `<span class="mc-liq-row"><i>${ev.coin}</i>` +
+            `<b>${fmtUsd(ev.longUsd + ev.shortUsd)}</b></span>`
+          : "");
+    }
   }
 }
 

@@ -11,6 +11,7 @@ import { disconnectExchange } from '../modules/exchange.js';
 import { serializeCircuitBreaker, serializeOiCapBans } from '../modules/executor/state.js';
 import { stopDashboard } from '../modules/dashboard/server.js';
 import { stopPriceFeed } from '../core/priceFeed.js';
+import { stopLiqEvents } from '../core/liqEvents.js';
 import { stopWsExitLoop } from './wsExitTick.js';
 import { stopTickWatchdog } from './tickWatchdog.js';
 import { stopMemWatch } from './memWatch.js';
@@ -206,6 +207,7 @@ export async function shutdown(signal) {
   stopTickWatchdog();
   stopMemWatch();
   stopPriceFeed();
+  stopLiqEvents();
   try {
     await stopDashboard();
   } catch (err) {
