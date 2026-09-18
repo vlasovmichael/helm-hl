@@ -614,10 +614,10 @@ export async function maybeAdoptManualPosition(manualPositions) {
                 sizeForTp -= rung.sz;
                 gridOids.push(roid);
                 logger.info(
-                  `[Adopt] 🪜 ступень #${coin} ${rung.r}R @ $${rpx} × ${rung.sz} | oid=${roid}`,
+                  `[Adopt] 🪜 ступень #${coin} ${rung.label} @ $${rpx} × ${rung.sz} | oid=${roid}`,
                 );
               } catch (err) {
-                logger.warn(`[Adopt] ⚠️ ступень ${rung.r}R #${coin} не встала (${err.message}) — объём уходит на цель`);
+                logger.warn(`[Adopt] ⚠️ ступень ${rung.label} #${coin} не встала (${err.message}) — объём уходит на цель`);
               }
             }
           }

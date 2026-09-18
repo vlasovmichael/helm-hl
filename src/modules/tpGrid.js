@@ -18,16 +18,18 @@
 /**
  * Разбор спецификации сетки из строки.
  *
- * Формат: `доля@R, доля@R, …` — «какую часть позиции снять на каком ходе в R».
- * Пример: `0.5@1.0, 0.3@1.5` — половину на 1R, ещё треть на 1.5R, остаток
- * (20%) остаётся под обычную цель/трейл.
+ * Два формата, в одной спеке не смешиваются:
+ * - `доля@R` — ход в долях стопа: `0.5@1.0` = половину на 1R. Стоп плавает по
+ *   ATR, значит плавает и процент хода;
+ * - `доля@N%` — ход в процентах от входа: `0.5@1%` = половину на +1% всегда,
+ *   независимо от стопа и монеты.
  *
  * Доли считаются от ИСХОДНОГО размера позиции и в сумме обязаны быть < 1:
  * сетка, снимающая всё, — это просто цель по частям, и остатка под трейл не
  * останется. Такую спецификацию отвергаем, а не подрезаем молча.
  *
  * @param {string} spec
- * @returns {{legs: Array<{frac:number, r:number}>}|{error:string}}
+ * @returns {{legs: Array<{frac:number, r?:number, pct?:number}>}|{error:string}}
  */
 export function parseTpGrid(spec) {
   const raw = String(spec ?? '').trim();
@@ -37,37 +39,50 @@ export function parseTpGrid(spec) {
   for (const part of raw.split(',')) {
     const piece = part.trim();
     if (!piece) continue;
-    const m = /^([0-9.]+)@([0-9.]+)$/.exec(piece);
-    if (!m) return { error: `ступень "${piece}" не в формате доля@R` };
+    const m = /^([0-9.]+)@([0-9.]+)(%?)$/.exec(piece);
+    if (!m) return { error: `ступень "${piece}" не в формате доля@R или доля@N%` };
     const frac = Number(m[1]);
-    const r = Number(m[2]);
+    const dist = Number(m[2]);
     if (!(frac > 0) || !(frac < 1)) return { error: `доля в "${piece}" должна быть в (0, 1)` };
-    if (!(r > 0)) return { error: `R в "${piece}" должен быть > 0` };
-    legs.push({ frac, r });
+    if (!(dist > 0)) return { error: `ход в "${piece}" должен быть > 0` };
+    legs.push(m[3] === '%' ? { frac, pct: dist } : { frac, r: dist });
+  }
+
+  // 🚨 Не смешивать R и проценты в одной спеке: до подхвата позиции дистанция
+  // стопа неизвестна, ступени несравнимы и не раскладываются по возрастанию.
+  const pctCount = legs.filter((l) => l.pct != null).length;
+  if (pctCount > 0 && pctCount < legs.length) {
+    return { error: 'в одной спеке либо все ступени в R, либо все в процентах' };
   }
 
   const total = legs.reduce((a, l) => a + l.frac, 0);
   if (total >= 1) {
     return { error: `сумма долей ${total.toFixed(2)} ≥ 1 — под остаток ничего не остаётся` };
   }
-  // Ступени по возрастанию R: ближняя к рынку исполнится первой, и порядок в
-  // логе должен совпадать с порядком в жизни.
-  legs.sort((a, b) => a.r - b.r);
+  // Ступени по возрастанию хода: ближняя к рынку исполнится первой, и порядок
+  // в логе должен совпадать с порядком в жизни.
+  legs.sort((a, b) => (a.pct ?? a.r) - (b.pct ?? b.r));
   return { legs };
+}
+
+/** Подпись ступени: «1%» или «1.5R». Ею же ступени различаются между собой. */
+export function rungLabel(leg) {
+  return leg.pct != null ? `${leg.pct}%` : `${leg.r}R`;
 }
 
 /**
  * Цены и размеры ступеней для конкретной позиции.
  *
  * @param {object} p
- * @param {Array<{frac:number,r:number}>} p.legs — из parseTpGrid
+ * @param {Array<{frac:number,r?:number,pct?:number}>} p.legs — из parseTpGrid
  * @param {number} p.entry
  * @param {number} p.stopDistPct — дистанция вход→стоп в % (это и есть 1R)
  * @param {boolean} p.isShort
  * @param {number} p.sizeSz — размер позиции в КОНТРАКТАХ
  * @param {number} [p.minSz=0] — минимальный размер ордера в контрактах
  * @param {(n:number)=>number} [p.roundSz] — округление размера под szDecimals
- * @returns {Array<{px:number, sz:number, r:number}>} — ступени, ближняя первой
+ * @returns {Array<{px:number, sz:number, r:number|null, pct:number|null,
+ *                  label:string}>} — ступени, ближняя первой
  */
 export function buildTpGrid({
   legs,
@@ -84,7 +99,7 @@ export function buildTpGrid({
   const out = [];
   let allocated = 0;
   for (const leg of legs) {
-    const distPct = stopDistPct * leg.r;
+    const distPct = leg.pct ?? stopDistPct * leg.r;
     const px = isShort ? entry * (1 - distPct / 100) : entry * (1 + distPct / 100);
     const sz = roundSz(sizeSz * leg.frac);
     // Ступень мельче минимального ордера биржи — пропускаем её целиком, а не
@@ -94,7 +109,7 @@ export function buildTpGrid({
     // претендовать больше, чем есть позиции.
     if (allocated + sz >= sizeSz) break;
     allocated += sz;
-    out.push({ px, sz, r: leg.r });
+    out.push({ px, sz, r: leg.r ?? null, pct: leg.pct ?? null, label: rungLabel(leg) });
   }
   return out;
 }

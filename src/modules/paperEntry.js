@@ -49,7 +49,7 @@ export async function safeEquity() {
  * @param {number} p.stopDistPct — дистанция вход→стоп в %, это и есть 1R
  * @param {number} p.sizeUsd
  * @returns {{slPrice:number, tpPrice:number|null, tpDistPct:number|null,
- *            rungs:Array<{px:number, usd:number, r:number}>}}
+ *            rungs:Array<{px:number, usd:number, label:string}>}}
  */
 export function planPaperExit({ side, entry, stopDistPct, sizeUsd }) {
   const isShort = side === 'short';
@@ -66,7 +66,7 @@ export function planPaperExit({ side, entry, stopDistPct, sizeUsd }) {
   const legs = t.adoptTpGridLegs || [];
   const rungs = legs.length
     ? buildTpGrid({ legs, entry, stopDistPct, isShort, sizeSz: sizeUsd })
-        .map((r) => ({ px: r.px, usd: r.sz, r: r.r }))
+        .map((r) => ({ px: r.px, usd: r.sz, label: r.label }))
     : [];
 
   return {

@@ -62,10 +62,10 @@ function takeRung(pos, rung) {
     0,
     MAKER_FEE_RATE,
   );
-  legs.push({ r: rung.r, usd: rung.usd, px: rung.px, pnl: realizedPnl });
+  legs.push({ label: rung.label, usd: rung.usd, px: rung.px, pnl: realizedPnl });
   partialLegs.set(pos.id, legs);
   logger.info(
-    `[PaperNanny] 🪜 ступень #${pos.coin} ${rung.r}R @ ${rung.px.toPrecision(6)} ` +
+    `[PaperNanny] 🪜 ступень #${pos.coin} ${rung.label} @ ${rung.px.toPrecision(6)} ` +
       `× $${rung.usd.toFixed(2)} → ${realizedPnl >= 0 ? '+' : ''}$${realizedPnl.toFixed(4)}`,
   );
 }
@@ -159,7 +159,7 @@ export async function superviseManualPaperPositions(priceFn = getLivePrice) {
       // 2. Ступени сетки — reduce-only лимитки, мейкерский филл по цене ступени.
       const done = partialLegs.get(pos.id) || [];
       for (const rung of rungsFor(pos)) {
-        if (done.some((l) => l.r === rung.r)) continue;
+        if (done.some((l) => l.label === rung.label)) continue;
         if (reached(side, price, rung.px)) takeRung(pos, rung);
       }
 

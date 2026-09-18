@@ -32,7 +32,7 @@ test('кривой формат и границы долей отвергают�
   assert.match(parseTpGrid('0.5-1.0').error, /не в формате/);
   assert.match(parseTpGrid('1.0@1').error, /должна быть в \(0, 1\)/);
   assert.match(parseTpGrid('0@1').error, /должна быть в \(0, 1\)/);
-  assert.match(parseTpGrid('0.5@0').error, /R.*> 0/);
+  assert.match(parseTpGrid('0.5@0').error, /ход.*> 0/);
 });
 
 // ── buildTpGrid ─────────────────────────────────────────────────────────────
@@ -82,6 +82,58 @@ test('мусорный вход → пустая сетка, а не исклю�
   assert.deepEqual(buildTpGrid({ legs, entry: 0, stopDistPct: 2, isShort: true, sizeSz: 10 }), []);
   assert.deepEqual(buildTpGrid({ legs, entry: 100, stopDistPct: 0, isShort: true, sizeSz: 10 }), []);
   assert.deepEqual(buildTpGrid({ legs, entry: 100, stopDistPct: 2, isShort: true, sizeSz: 0 }), []);
+});
+
+// ── проценты вместо R ───────────────────────────────────────────────────────
+
+test('доля@N% разбирается как ход в процентах от входа', () => {
+  assert.deepEqual(parseTpGrid('0.5@1%').legs, [{ frac: 0.5, pct: 1 }]);
+  assert.deepEqual(parseTpGrid('0.25@1.5%').legs, [{ frac: 0.25, pct: 1.5 }]);
+});
+
+test('смешивать R и проценты в одной спеке нельзя', () => {
+  assert.match(parseTpGrid('0.3@1, 0.3@1%').error, /либо все ступени в R, либо все в процентах/);
+  assert.match(parseTpGrid('0.3@1%, 0.3@2').error, /либо все ступени в R, либо все в процентах/);
+});
+
+test('процентные ступени сортируются по ходу, как и R', () => {
+  assert.deepEqual(parseTpGrid('0.2@2%, 0.3@0.5%').legs, [{ frac: 0.3, pct: 0.5 }, { frac: 0.2, pct: 2 }]);
+});
+
+test('процентная ступень не зависит от дистанции стопа — в этом весь смысл', () => {
+  const legs = parseTpGrid('0.5@1%').legs;
+  for (const stopDistPct of [2, 4, 8]) {
+    const [rung] = buildTpGrid({ legs, entry: 100, stopDistPct, isShort: false, sizeSz: 1000 });
+    assert.equal(rung.px, 101, `стоп ${stopDistPct}% не должен двигать ступень`);
+  }
+  // Та же доля в R едет вслед за стопом — контраст к процентам.
+  const rLegs = parseTpGrid('0.5@0.5').legs;
+  const a = buildTpGrid({ legs: rLegs, entry: 100, stopDistPct: 2, isShort: false, sizeSz: 1000 })[0];
+  const b = buildTpGrid({ legs: rLegs, entry: 100, stopDistPct: 8, isShort: false, sizeSz: 1000 })[0];
+  assert.equal(a.px, 101);
+  assert.equal(b.px, 104);
+});
+
+test('подпись ступени различает проценты и R — по ней идёт дедупликация', () => {
+  const pct = buildTpGrid({
+    legs: parseTpGrid('0.3@1%, 0.3@2%').legs,
+    entry: 100, stopDistPct: 2, isShort: false, sizeSz: 1000,
+  });
+  assert.deepEqual(pct.map((g) => g.label), ['1%', '2%']);
+  assert.deepEqual(pct.map((g) => g.r), [null, null]);
+
+  const r = buildTpGrid({
+    legs: parseTpGrid('0.3@1, 0.3@1.5').legs,
+    entry: 100, stopDistPct: 2, isShort: false, sizeSz: 1000,
+  });
+  assert.deepEqual(r.map((g) => g.label), ['1R', '1.5R']);
+  assert.deepEqual(r.map((g) => g.pct), [null, null]);
+});
+
+test('сообщение о кривом формате называет оба варианта', () => {
+  assert.match(parseTpGrid('0.5').error, /доля@R или доля@N%/);
+  assert.match(parseTpGrid('0.5@%').error, /доля@R или доля@N%/);
+  assert.match(parseTpGrid('0.5@0%').error, /ход.*> 0/);
 });
 
 // ── gridMinNotionalUsd ──────────────────────────────────────────────────────
