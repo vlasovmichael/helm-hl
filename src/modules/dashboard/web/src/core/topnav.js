@@ -36,6 +36,11 @@ const RESEARCH = [
     note: "Who trades on HL — wallets, liquidation map, net taker flow",
   },
   {
+    href: "/levels",
+    title: "Levels",
+    note: "Rule-drawn support and resistance — stop, target and the ratio between them",
+  },
+  {
     href: "/calibrator",
     title: "Calibrator",
     note: "How much edge a coin demands before costs are paid",

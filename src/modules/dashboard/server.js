@@ -90,6 +90,7 @@ import { handleTradeJournal } from "./routes/tradeJournal.js";
 import { handlePositionNanny } from "./routes/positionNanny.js";
 import { handleCoinOfDay } from "./routes/coinOfDay.js";
 import { handleEntryFilter } from "./routes/entryFilter.js";
+import { handleLevels } from "./routes/levels.js";
 import {
   handleFlowWallets,
   handleFlowLiqMap,
@@ -135,7 +136,7 @@ const PUBLIC_DIR = join(__dirname, "dist");
 const PAGES = [
   "index", "ledger", "journal", "statistics", "lab", "oi",
   "orderbook", "orderbook-sim", "ticket", "unlocks", "calibrator",
-  "flow",
+  "flow", "levels",
 ];
 
 function sendPage(name, res) {
@@ -1146,6 +1147,8 @@ export function startDashboard() {
   app.get("/api/position-nanny", handlePositionNanny);
   app.get("/api/coin-of-day", handleCoinOfDay);
   app.get("/api/entry-filter", handleEntryFilter);
+  // Механические уровни: зоны считаются правилом, страница даёт только геометрию сделки.
+  app.get("/api/levels", handleLevels);
   // Карточка решения перед входом: цель, стоп, размер, остаток бюджета дня.
   // Поток ордеров с адресами: витрина читает базу коллектора hl-flow.
   app.get("/api/flow/wallets", handleFlowWallets);

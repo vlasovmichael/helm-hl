@@ -1,0 +1,132 @@
+/* ──────────────────────── Levels — уровни и план входа */
+
+/* График выше обычного: зоны и свечи читаются вместе, тесная рамка их слепляет. */
+#lv-chart {
+  height: 520px;
+}
+
+.lv-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.lv-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  padding: var(--sp-4) 0 var(--sp-2);
+
+  .field {
+    max-width: 200px;
+  }
+}
+
+/* Вердикт — единственное, ради чего страница открыта: он крупнее остального. */
+.lv-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+
+  b {
+    font-family: var(--font-display);
+    font-size: var(--fs-h3);
+    letter-spacing: var(--ls-tight);
+  }
+
+  span {
+    font-size: var(--fs-body);
+    color: var(--text-secondary);
+    max-width: 68ch;
+  }
+}
+
+.lv-verdict--go b {
+  color: var(--pnl-up);
+}
+
+.lv-verdict--no b,
+.lv-verdict--none b {
+  color: var(--pnl-down);
+}
+
+.lv-nums {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+}
+
+.lv-num {
+  padding: var(--sp-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.lv-num-val {
+  font-size: var(--fs-h2);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text-primary);
+}
+
+.lv-num-sub {
+  margin-top: var(--sp-1);
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+}
+
+.lv-num--stop .lv-num-val {
+  color: var(--pnl-down);
+}
+
+.lv-num--target .lv-num-val {
+  color: var(--pnl-up);
+}
+
+.lv-num--go .lv-num-val {
+  color: var(--pnl-up);
+}
+
+.lv-num--no .lv-num-val {
+  color: var(--pnl-down);
+}
+
+.lv-warn {
+  margin-top: var(--sp-3);
+  padding: var(--sp-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+}
+
+.lv-note {
+  margin-top: var(--sp-3);
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  max-width: 88ch;
+}
+
+.lv-empty {
+  padding: var(--sp-5);
+  text-align: center;
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+}
+
+/* Сторона зоны читается цветом строки: выше цены — сопротивление, ниже — поддержка. */
+.lv-row--above td:first-child {
+  border-left: 2px solid var(--pnl-down);
+}
+
+.lv-row--below td:first-child {
+  border-left: 2px solid var(--pnl-up);
+}

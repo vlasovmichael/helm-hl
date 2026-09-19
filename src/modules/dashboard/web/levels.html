@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!--#head-->
+    <title>Helm · Levels</title>
+  </head>
+  <body data-page="levels">
+    <div class="container">
+      <nav class="topnav" id="topnav" aria-label="Primary"></nav>
+
+      <header id="page-header"></header>
+
+      <!-- 01 / График с зонами. Линии считает сервер по фиксированному правилу,
+           поэтому повторный запрос даёт те же линии. -->
+      <section class="card" id="sec-lv-chart">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-card="Levels are computed by a rule, not drawn by hand: fractal swings, previous UTC day high and low, volume profile POC and value area, and round numbers. Two runs on the same candles give the same lines."
+          >
+            Levels
+          </div>
+          <div class="lv-controls">
+            <div id="lv-coin"></div>
+            <div class="seg" id="lv-tf"></div>
+          </div>
+        </div>
+        <div class="chart-container" id="lv-chart"></div>
+      </section>
+
+      <!-- 02 / Решение. Единственный вывод страницы — число RR и порог. -->
+      <section class="card" id="sec-lv-plan">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-card="The stop goes behind the nearest zone against the position, the target at the nearest zone in its favour. What comes out is a ratio. The ratio decides whether the trade is payable — it says nothing about direction."
+          >
+            Entry plan
+          </div>
+          <div class="seg" id="lv-side"></div>
+        </div>
+        <div class="lv-entry">
+          <label class="label" for="lv-price">Entry price</label>
+          <input
+            class="field mono"
+            id="lv-price"
+            type="text"
+            inputmode="decimal"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button class="btn btn--ghost" id="lv-market" type="button">Use market</button>
+        </div>
+        <div id="lv-plan"></div>
+      </section>
+
+      <!-- 03 / Те же зоны списком. -->
+      <section class="card" id="sec-lv-zones">
+        <div class="card-header">
+          <div class="card-title" data-card="The same zones as on the chart. Strength counts separate approaches plus a bonus when more than one source lands on the same price.">
+            Zones
+          </div>
+          <div class="seg" id="lv-count"></div>
+        </div>
+        <div class="table-wrap" id="lv-zones"></div>
+        <div class="lv-note" id="lv-sources"></div>
+      </section>
+
+      <footer class="footer" id="footer"></footer>
+    </div>
+    <script type="module" src="/levels.js"></script>
+  </body>
+</html>
