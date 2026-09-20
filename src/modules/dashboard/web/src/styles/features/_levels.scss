@@ -5,6 +5,28 @@
   height: 520px;
 }
 
+.lv-steps {
+  margin: 0;
+  padding-left: var(--sp-5);
+  display: grid;
+  gap: var(--sp-2);
+  font-size: var(--fs-base);
+  color: var(--text-primary);
+
+  li::marker {
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: var(--fs-small);
+  }
+}
+
+.lv-how-note {
+  margin: var(--sp-4) 0 0;
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  max-width: 76ch;
+}
+
 .lv-controls {
   display: flex;
   align-items: center;

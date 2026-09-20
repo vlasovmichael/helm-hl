@@ -10,6 +10,29 @@
 
       <header id="page-header"></header>
 
+      <!-- 00 / Порядок работы. Страница бесполезна, пока непонятно, что она
+           отвечает: вопрос у неё один и ответ тоже один. -->
+      <section class="card lv-how" id="sec-lv-how">
+        <div class="card-header">
+          <div class="card-title">How to use this page</div>
+        </div>
+        <ol class="lv-steps">
+          <li>Pick a coin and timeframe in the chart below — the zones redraw for it.</li>
+          <li>Choose the side you are considering: <b>Long</b> or <b>Short</b>.</li>
+          <li>Type the price you would enter at, or press <b>Use market</b>.</li>
+          <li>Read the verdict. Either the ratio clears the floor, or there is no trade.</li>
+          <li>
+            At market price the ratio is usually poor. <b>Ready entries</b> below lists
+            the prices at the zones where it is not — press <b>Use</b> to load one.
+          </li>
+        </ol>
+        <p class="lv-how-note">
+          The page never says where price will go. It answers one question: given
+          this entry, is there a level to put the stop behind and a level to aim
+          at, and does what is left over pay for the risk and the fees.
+        </p>
+      </section>
+
       <!-- 01 / График с зонами. Линии считает сервер по фиксированному правилу,
            поэтому повторный запрос даёт те же линии. -->
       <section class="card" id="sec-lv-chart">
@@ -52,6 +75,22 @@
           <button class="btn btn--ghost" id="lv-market" type="button">Use market</button>
         </div>
         <div id="lv-plan"></div>
+      </section>
+
+      <!-- 02b / Готовые входы. Без них страница отвечает только про рыночную
+           цену, где геометрия почти всегда негодная, и читается как «нельзя
+           никогда». -->
+      <section class="card" id="sec-lv-suggest">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-card="Entries taken at the edge of each zone, keeping only those whose ratio clears the floor and whose stop is wider than 0.15% of price. A stop tighter than that is not a stop — any wick takes it, and the ratio it produces is an artefact of dividing by almost zero."
+          >
+            Ready entries
+          </div>
+          <div class="seg" id="lv-suggest-count"></div>
+        </div>
+        <div class="table-wrap" id="lv-suggest"></div>
       </section>
 
       <!-- 03 / Те же зоны списком. -->

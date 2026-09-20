@@ -16,7 +16,14 @@ import {
   loadCoinUniverse,
 } from "./src/core/coinCombo.js";
 import { drawLevels, drawPlan, applyLevelsTheme } from "./src/charts/levelsChart.js";
-import { buildPlan, renderPlan, renderZones, SOURCE_NOTE } from "./src/features/levelPlan.js";
+import {
+  buildPlan,
+  renderPlan,
+  renderZones,
+  renderSuggestions,
+  greenEntries,
+  SOURCE_NOTE,
+} from "./src/features/levelPlan.js";
 
 mountTopnav("levels");
 mountPageHeader({
@@ -80,6 +87,9 @@ function recalc() {
   const plan = buildPlan(state.data, { side: state.side, entry });
   renderPlan(el("lv-plan"), plan, state.side);
   drawPlan(plan && !plan.incomplete ? plan : null);
+  renderSuggestions(el("lv-suggest"), state.data, state.side);
+  const found = greenEntries(state.data, state.side).length;
+  el("lv-suggest-count").textContent = found ? `${found} found` : "none";
 }
 
 async function load() {
@@ -87,12 +97,17 @@ async function load() {
   node.innerHTML = `<div class="lv-empty">Loading…</div>`;
   try {
     const r = await fetch(`/api/levels?coin=${encodeURIComponent(state.coin)}&tf=${state.tf}`);
-    if (!r.ok) throw new Error(String(r.status));
+    // Причину отказа показываем на странице: в консоли её видит только автор.
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(body.error || `Request failed with status ${r.status}.`);
+    }
     state.data = await r.json();
-  } catch {
+  } catch (err) {
     state.data = null;
-    node.innerHTML = `<div class="lv-empty">No candles for this ticker and timeframe.</div>`;
-    el("lv-plan").innerHTML = "";
+    node.innerHTML = `<div class="lv-empty">${err.message}</div>`;
+    el("lv-plan").innerHTML = `<div class="lv-empty">No data — nothing to plan.</div>`;
+    el("lv-count").textContent = "";
     return;
   }
 
@@ -107,6 +122,16 @@ async function load() {
 el("lv-price").addEventListener("input", (e) => {
   const v = parseFloat(String(e.target.value).replace(",", "."));
   state.entry = Number.isFinite(v) && v > 0 ? v : null;
+  recalc();
+});
+
+// Кнопка у готового входа только подставляет цену: решение остаётся за полем.
+el("lv-suggest").addEventListener("click", (e) => {
+  const raw = e.target.closest("[data-entry]")?.dataset.entry;
+  const v = parseFloat(raw ?? "");
+  if (!Number.isFinite(v) || v <= 0) return;
+  state.entry = v;
+  el("lv-price").value = String(v);
   recalc();
 });
 

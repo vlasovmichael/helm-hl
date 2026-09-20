@@ -21,6 +21,17 @@ const fmtPx = (p) =>
 
 const pct = (a, b) => (Math.abs(a - b) / b) * 100;
 
+// Округление до того же шага, каким цена показана: сырой float в поле ввода и
+// в заявке читается как мусор и не совпадает с числом на графике.
+const roundPx = (p) =>
+  !Number.isFinite(p)
+    ? p
+    : p >= 1000
+      ? Math.round(p * 10) / 10
+      : p >= 1
+        ? Math.round(p * 1e4) / 1e4
+        : Number(p.toPrecision(4));
+
 /**
  * Строит план входа. Возвращает null, если с одной из сторон зоны нет:
  * без уровня для стопа или цели считать нечего, и угадывать их нельзя.
@@ -66,6 +77,32 @@ export function buildPlan(data, { side, entry }) {
     rewardPct: pct(target, entry),
     ok: netRr >= MIN_RR,
   };
+}
+
+// Стоп уже этого — риск вырождается в буфер, и отношение перестаёт быть отношением.
+export const MIN_STOP_PCT = 0.15;
+
+/**
+ * Входы у краёв зон, где отношение проходит порог. Ближние к цене — первыми.
+ * 🚨 Список симметричен по сторонам: зеркальный вход с другой стороны зоны даёт
+ * то же число. Это геометрия, а не выбор направления.
+ */
+export function greenEntries(data, side) {
+  if (!data?.zones?.length || !Number.isFinite(data.price)) return [];
+  const isLong = side === "long";
+  const out = [];
+  for (const zone of data.zones) {
+    // Вход чуть ЗА краем зоны: ровно на границе она не попадёт в опору.
+    const entry = roundPx(isLong ? zone.hi * (1 + 1e-6) : zone.lo * (1 - 1e-6));
+    // 🚨 Лимитка стоит по свою сторону рынка: покупка ниже цены, продажа выше.
+    // Иначе ордер исполнится сразу по рынку, и план посчитан не про этот вход.
+    if (isLong ? entry >= data.price : entry <= data.price) continue;
+    // План строится от округлённой цены: в поле, на графике и в ордере одно число.
+    const plan = buildPlan(data, { side, entry });
+    if (!plan || plan.incomplete || !plan.ok || plan.riskPct < MIN_STOP_PCT) continue;
+    out.push({ ...plan, entry, distPct: ((entry - data.price) / data.price) * 100 });
+  }
+  return out.sort((a, b) => Math.abs(a.distPct) - Math.abs(b.distPct));
 }
 
 function verdictBlock(plan) {
@@ -115,6 +152,49 @@ export function renderPlan(node, plan, side) {
     return;
   }
   node.innerHTML = verdictBlock(plan) + numbers(plan) + longWarning(side);
+}
+
+/**
+ * Готовые входы у зон. Считаются сами при каждой загрузке: цена по рынку почти
+ * всегда даёт негодную геометрию, и без этого списка страница выглядит так,
+ * будто входа нет вообще.
+ */
+export function renderSuggestions(node, data, side) {
+  if (!node) return;
+  if (!data) {
+    node.innerHTML = "";
+    return;
+  }
+  const list = greenEntries(data, side);
+  if (!list.length) {
+    node.innerHTML = `<div class="lv-empty">No entry on this side clears the ${MIN_RR} floor with a stop wider than ${MIN_STOP_PCT}% of price.</div>`;
+    return;
+  }
+  const rows = list
+    .map(
+      (p) => `<tr>
+        <td class="mono strong">${fmtPx(p.entry)}</td>
+        <td class="num mono muted">${p.distPct >= 0 ? "+" : "−"}${Math.abs(p.distPct).toFixed(2)}%</td>
+        <td class="num mono">${p.riskPct.toFixed(2)}%</td>
+        <td class="num mono">${p.rewardPct.toFixed(2)}%</td>
+        <td class="num mono strong">${p.netRr.toFixed(2)}</td>
+        <td class="muted">${esc(p.stopZone.sources.join("+"))}</td>
+        <td><button class="btn btn--sm btn--${side === "long" ? "long" : "short"}" type="button" data-entry="${p.entry}">Use</button></td>
+      </tr>`,
+    )
+    .join("");
+  node.innerHTML = `
+    <div class="lv-note">These are resting limit prices, not the price right now. A long waits
+      below the market and a short waits above it, so the order fills only if price comes back to
+      the zone — the distance column says how far that is. Nothing happens until it does.</div>
+    <table class="table table--compact">
+      <thead><tr>
+        <th>Entry</th><th class="num">Distance</th><th class="num">Stop</th>
+        <th class="num">Target</th><th class="num">Net R:R</th><th>Stop behind</th><th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="lv-warn">The same list exists for the other side at nearly the same ratios — the number is built from distances, so it is mirror-symmetric. It says the geometry pays, never which way price goes.</div>`;
 }
 
 /** Таблица зон: то же, что на графике, но с расстоянием до цены. */

@@ -10,7 +10,7 @@
 // числом, а не глазом.
 
 import { getFifteenMinCandles, getHourlyCandles, getFourHourCandles } from "../../candleCache.js";
-import { resolveApiCoin } from "../../../core/universe.js";
+import { findAsset, getUniverse } from "../../../core/universe.js";
 
 // Окно на таймфрейм: столько баров хватает для свингов и профиля, но не
 // заставляет HL отдавать историю, которую всё равно никто не смотрит.
@@ -171,17 +171,29 @@ function strength(z) {
 }
 
 export async function handleLevels(req, res) {
-  const coin = String(req.query.coin || "BTC").toUpperCase().replace(/[^A-Z0-9:_-]/g, "");
+  // 🚨 Регистр тикера брать из вселенной, а не приводить к верхнему: у k-монет
+  // имя в API со строчной k, и candleSnapshot на KPEPE отдаёт пустоту.
+  const asked = String(req.query.coin || "BTC").trim().replace(/[^A-Za-z0-9:_-]/g, "");
+  const asset = findAsset(asked);
+  const coin = asset ? asset.name : asked.toUpperCase();
   const tf = FRAMES[req.query.tf] ? req.query.tf : "1h";
+
+  if (!asset && getUniverse().length) {
+    return res.status(404).json({ error: `Unknown ticker "${asked}" — not listed on Hyperliquid.` });
+  }
 
   let candles;
   try {
-    candles = await FRAMES[tf].load(resolveApiCoin(coin));
+    candles = await FRAMES[tf].load(asset ? asset.name : asked);
   } catch {
-    return res.status(502).json({ error: "candles unavailable" });
+    return res.status(502).json({ error: "Exchange did not return candles. Try again in a moment." });
   }
-  if (!Array.isArray(candles) || candles.length < SWING_WING * 2 + 20) {
-    return res.status(404).json({ error: "not enough candles" });
+  const need = SWING_WING * 2 + 20;
+  if (!Array.isArray(candles) || candles.length < need) {
+    const got = Array.isArray(candles) ? candles.length : 0;
+    return res
+      .status(404)
+      .json({ error: `Not enough history: ${got} of ${need} candles on ${tf}. Try a shorter timeframe.` });
   }
 
   const price = candles[candles.length - 1].close;
