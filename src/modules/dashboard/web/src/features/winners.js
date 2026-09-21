@@ -338,6 +338,10 @@ export async function refreshWinners() {
     if (stats) stats.innerHTML = "";
   };
 
+  // Лента читается с диска и от /api/winners не зависит: запускается до
+  // ранних выходов, иначе при отказе таблицы остаётся скелетоном навсегда.
+  refreshLog();
+
   let res;
   try {
     res = await fetchJson("/api/winners");
@@ -375,7 +379,4 @@ export async function refreshWinners() {
   renderRows(tbody, res);
   bindToggle(tbody);
   if (stats) stats.innerHTML = renderSummary(res);
-  // Лента читается с диска и от /api/winners не зависит — её отказ не должен
-  // гасить таблицу, поэтому запускается отдельно и свои ошибки ловит сама.
-  refreshLog();
 }

@@ -20,6 +20,8 @@ logs
 # 🚨 tools/ НЕ исключать — из него импортируют dashboard/server и fvgAlerts.
 tests
 docs
+# 🚨 файл заморозки читают витрина, winnersWatch и крон tools/winners.mjs.
+!docs/winners-preregistration.json
 .claude
 .github
 *.md
