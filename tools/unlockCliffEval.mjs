@@ -1,7 +1,7 @@
 // Оценка unlock-cliff ровно при 60 чистых закрытых событиях. До этого молчит.
 import { readJsonl } from './researchStats.mjs';
 import { rng } from './baseline.mjs';
-import { getVenueSnapshots } from '../src/core/database.js';
+import { getVenueSnapshots, initDB } from '../src/core/database.js';
 
 const DAY = 86_400_000;
 const START = Date.parse('2026-09-09T00:00:00Z');
@@ -80,6 +80,7 @@ export async function placeboMedians(events, schedule, now, { sets = 200, seed =
 if (process.argv[1]?.endsWith('unlockCliffEval.mjs')) {
   const rows = readJsonl(FORWARD).filter((r) => r.status === 'closed' && r.clean);
   if (rows.length < 60) process.exit(0);
+  initDB();
   const snapshots = getVenueSnapshots(0), schedule = readJsonl(SCHEDULE), now = Date.now();
   const events = rows.map((r) => {
     const cost = unlockCostBp(r, snapshots); return { ...r, cost, netBp: r.grossBp - cost };
