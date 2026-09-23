@@ -13,17 +13,19 @@
 //  Раз в час его зовёт дашборд; руками:
 //    docker exec hl-paper-scanner node tools/venueCollector.mjs
 // ─────────────────────────────────────────────────────────────────────────────
-import { initDB, recordVenueSnapshot } from '../src/core/database.js';
+import { getVenueSnapshots, initDB, recordVenueSnapshot } from '../src/core/database.js';
 import { hlInfo, HL_PRIORITY } from '../src/core/hlClient.js';
 import { KNOWN_BUILDER_DEXES } from '../src/modules/winnersPositions.js';
 
 const DEXES = ['', ...KNOWN_BUILDER_DEXES];
 
-/** Один часовой снимок всех площадок. Повтор в тот же час ничего не пишет. */
+/** Часовой снимок площадок, которых ещё нет в этом часе. */
 export async function collectVenues(now = Date.now()) {
   const ts = Math.floor(now / 3_600_000) * 3_600_000; // час — ключ снимка
+  const done = new Set(getVenueSnapshots(ts).filter((r) => r.ts === ts).map((r) => r.dex));
   let saved = 0;
   for (const dex of DEXES) {
+    if (done.has(dex || 'main')) continue;
     let res;
     try {
       res = await hlInfo(

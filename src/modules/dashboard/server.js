@@ -1388,12 +1388,14 @@ export function startDashboard() {
   setTimeout(unlocksTick, 60_000);
   setInterval(unlocksTick, 6 * 3600_000);
 
-  // Площадки HIP-3: истории у них нет, пропущенный час не восстановить.
+  // Площадки HIP-3: истории у них нет, пропущенный час не восстановить. Снимок
+  // ключуется часом, поэтому проход раз в 15 минут дозаполняет площадки, которые
+  // не дождались лимита запросов, и ничего не дублирует.
   const venuesTick = () =>
     probeAlloc("dash:venueCollector", async () => collectVenues())
       .catch((err) => logger.debug(`[Venues] tick failed: ${err.message}`));
   setTimeout(venuesTick, 90_000);
-  setInterval(venuesTick, 3600_000);
+  setInterval(venuesTick, 15 * 60_000);
 
   // Калибратор: сетка целей и стопов по монетам. Считается долго и меняется
   // медленно (часовой размах — величина недельного масштаба), поэтому раз в
