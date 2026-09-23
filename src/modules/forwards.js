@@ -93,7 +93,7 @@ export const FORWARDS = [
     rows: pressureRows, latest: pressureLatest,
     target: 300, unit: "events", tField: "entryT", startedISO: "2026-09-14",
     minCalendarDays: 60, minRegimeShare: 0.2, groupField: "cohort", minPerGroup: 100,
-    maxSilentHours: 1,
+    maxSilentHours: 1, evalCommand: ["tools/flowPressureEval.mjs"],
     note: "This mechanism test is evaluated once with a clustered cohort comparison from the registry.",
   },
   {
@@ -130,7 +130,7 @@ export const FORWARDS = [
     id: "unlock-cliff-front-2026-09", label: "Unlock cliff · short a week before",
     rows: unlockRows, latest: unlockLatest,
     target: 60, unit: "events", tField: "unlockTs", startedISO: "2026-09-09",
-    maxSilentHours: 24 * 7,
+    maxSilentHours: 24 * 7, evalCommand: ["tools/unlockCliffEval.mjs"],
   },
 ];
 
