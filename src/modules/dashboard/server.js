@@ -54,7 +54,7 @@ import {
 } from "./auth.js";
 import { handleMarketContext } from "./routes/marketContext.js";
 import { handleOiOverview, handleOiCoin } from "./routes/oiCollector.js";
-import { handleFvgForward, handleForwards, handleForwardBreakdown, handleForwardPeeks } from "./routes/research.js";
+import { handleForwards, handleForwardBreakdown, handleForwardPeeks } from "./routes/research.js";
 import { handleWinners, handleWinnersPositions, handleWinnersEvents } from "./routes/winners.js";
 import {
   handleList as handleManualPaperList,
@@ -106,6 +106,7 @@ import {
   settle as settleUnlocks,
   report as unlocksReport,
 } from "../../../tools/unlocksForward.mjs";
+import { collectVenues } from "../../../tools/venueCollector.mjs";
 import {
   DIVERGENCE_WATCHLIST,
   DIVERGENCE_SNAPSHOT_MS,
@@ -1140,7 +1141,6 @@ export function startDashboard() {
   // пропустить — здесь событие остаётся с цифрами.
   app.get("/api/winners/events", handleWinnersEvents);
   // Прогресс форварда FVG — только счётчик и даты, метрик по определению нет.
-  app.get("/api/fvg-forward", handleFvgForward);
   app.get("/api/forwards", handleForwards);
   app.get("/api/forwards/peeks", handleForwardPeeks);
   app.get("/api/forwards/:id/breakdown", handleForwardBreakdown);
@@ -1387,6 +1387,13 @@ export function startDashboard() {
     }).catch((err) => logger.debug(`[Unlocks] tick failed: ${err.message}`));
   setTimeout(unlocksTick, 60_000);
   setInterval(unlocksTick, 6 * 3600_000);
+
+  // Площадки HIP-3: истории у них нет, пропущенный час не восстановить.
+  const venuesTick = () =>
+    probeAlloc("dash:venueCollector", async () => collectVenues())
+      .catch((err) => logger.debug(`[Venues] tick failed: ${err.message}`));
+  setTimeout(venuesTick, 90_000);
+  setInterval(venuesTick, 3600_000);
 
   // Калибратор: сетка целей и стопов по монетам. Считается долго и меняется
   // медленно (часовой размах — величина недельного масштаба), поэтому раз в

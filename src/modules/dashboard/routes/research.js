@@ -1,65 +1,20 @@
 // ─────────────────────────────────────────────────
-//  Research routes — витрина накопителя чужих прогнозов
+//  Research routes — витрина форвард-тестов
 // ─────────────────────────────────────────────────
-// Здесь остался прогресс форварда FVG, и он по устройству не отдаёт ни одной
-// метрики результата.
+// Список форвардов и их прогресс — из src/modules/forwards.js, того же модуля,
+// что у сторожа: витрина и пуши не должны разойтись в том, что считать живым.
 //
-// 🚨 Накопитель, которого не видно, тихо умирает и месяцами показывает
-// замёрзший снимок как живой. Поэтому каждая карточка обязана показывать
-// ВОЗРАСТ данных,
-// и роут отдаёт его явным полем, а не оставляет фронту догадываться.
-//
-// Счёт — из tools/researchStats.mjs, тот же модуль, что у CLI-инструментов:
-// иначе дашборд и консоль разъедутся в цифрах.
+// Каждая карточка обязана показывать возраст данных: замёрзший снимок без
+// него выглядит живым.
 
 import { join } from "node:path";
-import { readFileSync, existsSync, appendFileSync, mkdirSync } from "node:fs";
-import Database from "better-sqlite3";
+import { existsSync, appendFileSync, mkdirSync } from "node:fs";
 import { readJsonl, stats, clusterCi, winLose } from "../../../../tools/researchStats.mjs";
-import { getFillCosts, getVenueSnapshots } from "../../../core/database.js";
+import { FORWARDS, classifyHypotheses, forwardProgress, readRegistry } from "../../forwards.js";
+import { latestAutoEvals } from "../../../app/forwardWatch.js";
 
 const CACHE_TTL_MS = 60_000;
 const cache = new Map();
-const FLOW_DB = join("data", "flow", "flow.db");
-const BAR_MS = 300_000;
-
-let flowDb = null;
-function pressureDb() {
-  if (flowDb) return flowDb;
-  if (!existsSync(FLOW_DB)) return null;
-  flowDb = new Database(FLOW_DB, { readonly: true, fileMustExist: true });
-  flowDb.pragma("busy_timeout = 3000");
-  return flowDb;
-}
-
-function hasPressureTable(db) {
-  return !!db?.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pressure_events'").get();
-}
-
-// flow.db пишет отдельный контейнер: её отсутствие, блокировка или битый файл
-// обязаны гасить одну карточку, а не весь список форвардов через served().
-function pressureRows() {
-  try {
-    const db = pressureDb();
-    if (!hasPressureTable(db)) return [];
-    return db.prepare(`
-      SELECT c.name AS coin, e.side, e.cohort,
-             e.entry_bar * ? AS entryT, e.fade_bp AS fadeBp,
-             e.btc_regime AS btcRegime
-        FROM pressure_events e JOIN coins c ON c.id = e.coin
-       WHERE e.status = 'resolved'
-       ORDER BY e.entry_bar`).all(BAR_MS);
-  } catch { return []; }
-}
-
-function pressureLatest() {
-  try {
-    const db = pressureDb();
-    if (!hasPressureTable(db)) return null;
-    const bar = db.prepare("SELECT MAX(bar) AS bar FROM market_bars WHERE closed = 1").get()?.bar;
-    return Number.isFinite(bar) ? bar * BAR_MS : null;
-  } catch { return null; }
-}
 
 /** Общая обёртка: кэш + fail-soft. Ни одна витрина не должна ронять дашборд. */
 function served(key, build) {
@@ -78,185 +33,37 @@ function served(key, build) {
   };
 }
 
-// ── Форвард FVG: ТОЛЬКО прогресс ────────────────────────────────────────────
-// Карточка существует, чтобы накопитель было видно: невидимый накопитель тихо
-// умирает (Spike-Fade простоял так три недели). Но показывать она обязана
-// только счётчик и даты — ни E[R], ни winrate, ни даже знак последней сделки.
-// Причина не в стиле: гипотеза предзаявлена со stopRule n=1500, и подглядывание
-// в промежуточный результат ломает тест независимо от того, как честно потом
-// посчитан сам критерий. Поле `r` из журнала сюда не попадает намеренно.
-const FVG_JOURNAL = join("data", "fvg-forward", "trades.jsonl");
-const FVG_TARGET = 1500;
-export const handleFvgForward = served("fvg", () => {
-  const rows = readJsonl(FVG_JOURNAL);
-  const n = rows.length;
-  const times = rows.map((t) => t.entryT).filter(Number.isFinite).sort((a, b) => a - b);
-  const firstT = times[0] ?? null;
-  const lastT = times[times.length - 1] ?? null;
-  const startedMs = Date.parse("2026-08-29T00:00:00Z");
-  const daysRunning = Math.max(0, (Date.now() - startedMs) / 86_400_000);
-  const perDay = daysRunning >= 1 && n ? n / daysRunning : null;
-  const etaDays = perDay && perDay > 0 ? (FVG_TARGET - n) / perDay : null;
-  return {
-    n,
-    target: FVG_TARGET,
-    pct: (n / FVG_TARGET) * 100,
-    firstT,
-    lastT,
-    daysRunning,
-    perDay,
-    etaISO: etaDays != null && Number.isFinite(etaDays)
-      ? new Date(Date.now() + etaDays * 86_400_000).toISOString().slice(0, 10)
-      : null,
-    // возраст последней записи — чтобы молчащий коллектор было видно сразу,
-    // а не через месяц при разборе
-    staleHours: lastT ? (Date.now() - lastT) / 3_600_000 : null,
-    decisionRule: `evaluated exactly once, at n=${FVG_TARGET}`,
-  };
-});
-
-// ── Все форвард-накопители одним списком ────────────────────────────────────
-// Держать под каждую гипотезу свою ручку значит однажды забыть одну из них — а
-// забытый накопитель это и есть тихо умерший накопитель. Здесь по-прежнему НЕТ
-// ни одной метрики результата: только сколько набрано, с какой скоростью и
-// когда последняя запись.
-//
-// 🚨 Гипотеза со статусом CLOSED в реестре из списка убирается: витрина
-// показывает идущее, закрытое живёт в data/hypotheses/registry.json.
-const FORWARDS = [
-  {
-    id: "fvg-wide-retest-4h", label: "FVG wide retest 4h",
-    file: join("data", "fvg-forward", "trades.jsonl"),
-    target: 1500, unit: "trades", tField: "entryT", startedISO: "2026-08-29",
-  },
-  {
-    id: "flow-pressure-exhaustion-2026-09", label: "Flow pressure exhaustion",
-    rows: pressureRows, latest: pressureLatest,
-    target: 300, unit: "events", tField: "entryT", startedISO: "2026-09-14",
-    minCalendarDays: 60, groupField: "cohort", minPerGroup: 100,
-    note: "This mechanism test is evaluated once with a clustered cohort comparison from the registry.",
-  },
-];
-
-// Накопители, которые живут в БД, а не в jsonl. Считаются теми же полями, что
-// проверяет стоп-правило в реестре: иначе витрина и вердикт разъедутся.
-//
-// 🚨 Здесь по-прежнему ТОЛЬКО счётчики. У гипотез про издержки подглядывание в
-// счётчик разрешено предзаявкой (в отличие от предсказательных), но метрики
-// результата на витрину всё равно не идут — их печатает execCostStats.mjs один
-// раз при взятии порога.
-const DB_FORWARDS = [
-  {
-    // 🚨 Гипотеза про ИЗМЕНЕНИЕ, поэтому счёт идёт только с момента включения
-    // post-only. Пока EXEC_POSTONLY_SINCE не выставлен, накопитель честно стоит
-    // на нуле: 2000 залитых филлов — это база «до», а не прогресс.
-    id: "exec-maker-share-n200", label: "Execution cost · maker share",
-    target: 200, unit: "fills", startedISO: "2026-09-05",
-    rows: () => {
-      const since = Date.parse(process.env.EXEC_POSTONLY_SINCE || "");
-      return Number.isFinite(since) ? getFillCosts(since) : [];
-    },
-  },
-  {
-    id: "exec-stop-slippage-n60", label: "Stop trigger slippage",
-    target: 60, unit: "stops", startedISO: "2026-09-05",
-    rows: () => getFillCosts(0).filter((r) => r.slip_bp != null),
-  },
-  {
-    id: "venue-hip3-premium-45d", label: "HIP-3 venue premium",
-    target: 45, unit: "days", startedISO: "2026-09-05", byDay: true,
-    rows: () => getVenueSnapshots(0),
-  },
-];
-
-// Условия остановки сверх n — общие для гипотез, предзаявленных 31.08.
-const MIN_CALENDAR_DAYS = 45;
-const MIN_REGIME_SHARE = 0.2;
-const rowsFor = (f) => f.rows ? f.rows() : readJsonl(f.file);
-const minCalendarDaysFor = (f) => f.minCalendarDays ?? MIN_CALENDAR_DAYS;
-
-function groupProgress(f, rows) {
-  if (!f.groupField || !f.minPerGroup) return { groups: null, groupReady: true };
-  const groups = {};
-  for (const row of rows) {
-    const key = row[f.groupField];
-    if (key) groups[key] = (groups[key] || 0) + 1;
-  }
-  return {
-    groups,
-    groupReady: Object.keys(groups).length >= 2 && Object.values(groups).every((n) => n >= f.minPerGroup),
-  };
-}
-
+// ── Все форварды одним списком ──────────────────────────────────────────────
+// Идущие — со счётчиком, завершённые — с исходом из реестра, открытые без
+// сборщика — одной строкой. Метрик результата здесь нет.
 export const handleForwards = served("forwards", () => {
-  const items = FORWARDS.map((f) => {
-    const rows = rowsFor(f);
-    const times = rows.map((r) => r[f.tField]).filter(Number.isFinite).sort((a, b) => a - b);
-    const dayKeys = new Set(times.map((t) => new Date(t).toISOString().slice(0, 10)));
-    const n = f.byDay ? dayKeys.size : rows.length;
-    const startedMs = Date.parse(`${f.startedISO}T00:00:00Z`);
-    const daysRunning = Math.max(0, (Date.now() - startedMs) / 86_400_000);
-    const perDay = daysRunning >= 1 && n ? n / daysRunning : null;
-    const etaDays = perDay && perDay > 0 && n < f.target ? (f.target - n) / perDay : null;
-    // Режимы пишутся только у гипотез 31.08 — у остальных поля просто нет.
-    let up = 0, down = 0;
-    for (const r of rows) {
-      if (r.btcRegime === "btc_up") up++;
-      else if (r.btcRegime === "btc_down") down++;
-    }
-    const regimeTotal = up + down;
-    const { groups, groupReady } = groupProgress(f, rows);
-    const latest = f.latest?.() ?? times[times.length - 1] ?? null;
-    return {
-      id: f.id, label: f.label, unit: f.unit,
-      n, target: f.target, pct: (n / f.target) * 100,
-      daysRunning, perDay,
-      etaISO: etaDays != null && Number.isFinite(etaDays)
-        ? new Date(Date.now() + etaDays * 86_400_000).toISOString().slice(0, 10)
-        : null,
-      staleHours: latest ? (Date.now() - latest) / 3_600_000 : null,
-      calendarDays: dayKeys.size,
-      minCalendarDays: minCalendarDaysFor(f),
-      regimeShare: regimeTotal ? Math.min(up, down) / regimeTotal : null,
-      minRegimeShare: MIN_REGIME_SHARE,
-      groups,
-      minPerGroup: f.minPerGroup ?? null,
-      groupReady,
-    };
-  });
-  // Накопители из БД — тем же payload'ом, фронту различать источник незачем.
-  for (const f of DB_FORWARDS) {
+  const now = Date.now();
+  const registry = readRegistry();
+  const { running, finished, idle } = classifyHypotheses(registry, FORWARDS, now);
+  const evals = latestAutoEvals();
+  const items = [];
+  for (const f of running) {
     let rows;
     try {
       rows = f.rows() || [];
     } catch {
       continue; // таблицы ещё нет — накопитель просто не показываем
     }
-    const times = rows.map((r) => r.ts).filter(Number.isFinite).sort((a, b) => a - b);
-    const dayKeys = new Set(times.map((t) => new Date(t).toISOString().slice(0, 10)));
-    const n = f.byDay ? dayKeys.size : rows.length;
-    const startedMs = Date.parse(`${f.startedISO}T00:00:00Z`);
-    const daysRunning = Math.max(0, (Date.now() - startedMs) / 86_400_000);
-    const perDay = daysRunning >= 1 && n ? n / daysRunning : null;
-    const etaDays = perDay && perDay > 0 && n < f.target ? (f.target - n) / perDay : null;
+    const p = forwardProgress(f, rows, now);
+    const { lastT: _lastT, ...progress } = p;
     items.push({
-      id: f.id, label: f.label, unit: f.unit,
-      n, target: f.target, pct: (n / f.target) * 100,
-      daysRunning, perDay,
-      etaISO: etaDays != null && Number.isFinite(etaDays)
-        ? new Date(Date.now() + etaDays * 86_400_000).toISOString().slice(0, 10)
-        : null,
-      staleHours: times.length ? (Date.now() - times[times.length - 1]) / 3_600_000 : null,
-      calendarDays: dayKeys.size,
-      // Условия про календарь и режимы касаются предсказательных гипотез 31.08;
-      // у накопителей про издержки их нет, и рисовать «ещё нужно» было бы враньём.
-      minCalendarDays: null,
-      regimeShare: null,
-      minRegimeShare: null,
+      id: f.id, label: f.label, note: f.note ?? null,
+      ...progress,
+      autoEvalAt: evals[f.id]?.at ?? null,
     });
   }
-
-  return { items, decisionRule: "each one is evaluated exactly once, on its own terms from the registry" };
+  return {
+    items,
+    finished,
+    idle,
+    registryLoaded: !!registry,
+    decisionRule: "each one is evaluated exactly once, on its own terms from the registry",
+  };
 });
 
 // ── Разбор одного форварда ──────────────────────────────────────────────────
@@ -268,51 +75,9 @@ const PEEK_LOG = join("data", "hypotheses", "peeks.jsonl");
 // Величина гипотезы — по одной на форвард. Нет строки = метрики на строку нет.
 const METRICS = {
   "fvg-wide-retest-4h": { field: "rNet", unit: "R", label: "net R per trade" },
-  "wide-stop-premium-4h": {
-    field: "diffNet", unit: "R", label: "net R difference, wide − narrow (paired)",
-    legs: { wide: (r) => r.wide?.rNet, narrow: (r) => r.narrow?.rNet },
-  },
-  "session-open-reversal": { field: "rNet", unit: "R", label: "net R per trade" },
-  "squeeze-expansion-4h": { field: "rNet", unit: "R", label: "net R per trade" },
 };
 
 const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
-
-function registryEntry(id) {
-  try {
-    const reg = JSON.parse(readFileSync(join("data", "hypotheses", "registry.json"), "utf8"));
-    return (reg.hypotheses || []).find((h) => h.id === id) || null;
-  } catch {
-    return null;
-  }
-}
-
-/** Прогресс и условия остановки — те же поля, что у списка форвардов. */
-function progressOf(f, rows) {
-  const times = rows.map((r) => r[f.tField]).filter(Number.isFinite).sort((a, b) => a - b);
-  const days = new Set(times.map(dayOf));
-  const n = f.byDay ? days.size : rows.length;
-  let up = 0, down = 0;
-  for (const r of rows) {
-    if (r.btcRegime === "btc_up") up++;
-    else if (r.btcRegime === "btc_down") down++;
-  }
-  const regimeTotal = up + down;
-  const regimeShare = regimeTotal ? Math.min(up, down) / regimeTotal : null;
-  const { groups, groupReady } = groupProgress(f, rows);
-  const minCalendarDays = minCalendarDaysFor(f);
-  return {
-    n, target: f.target, unit: f.unit, pct: (n / f.target) * 100,
-    calendarDays: days.size, minCalendarDays,
-    regimeShare, minRegimeShare: MIN_REGIME_SHARE,
-    groups, minPerGroup: f.minPerGroup ?? null, groupReady,
-    // Возраст данных — по накопителю, а не по последнему зрелому наблюдению:
-    // при редком сигнале второе отстаёт на часы и живой сбор выглядит мёртвым.
-    lastT: f.latest?.() ?? times[times.length - 1] ?? null,
-    ready: n >= f.target && days.size >= minCalendarDays &&
-      (regimeShare ?? 0) >= MIN_REGIME_SHARE && groupReady,
-  };
-}
 
 /** Одна клетка разбора: среднее с CI + таблица «выиграло/проиграло». */
 function cell(label, values, dayKeys) {
@@ -322,21 +87,13 @@ function cell(label, values, dayKeys) {
 export function handleForwardBreakdown(req, res) {
   const id = String(req.params.id || "");
   const f = FORWARDS.find((x) => x.id === id);
-  if (!f) {
-    // Накопители из БД считает execCostStats.mjs: величина там не на строку.
-    const db = DB_FORWARDS.find((x) => x.id === id);
-    res.json(db
-      ? { ok: true, id, label: db.label, hasMetric: false,
-          note: "This one is a cost counter, not a per-trade bet — it is read once by tools/execCostStats.mjs." }
-      : { ok: false, reason: "unknown-forward" });
-    return;
-  }
+  if (!f) { res.json({ ok: false, reason: "unknown-forward" }); return; }
 
   let payload;
   try {
-    const rows = rowsFor(f);
-    const prog = progressOf(f, rows);
-    const reg = registryEntry(id);
+    const rows = f.rows() || [];
+    const prog = forwardProgress(f, rows);
+    const reg = (readRegistry()?.hypotheses || []).find((h) => h.id === id) || null;
     const head = {
       ok: true, id, label: f.label, hasMetric: !!METRICS[id],
       progress: prog,
@@ -344,10 +101,20 @@ export function handleForwardBreakdown(req, res) {
       description: reg?.description || null,
       note: f.note || null,
     };
+    // Без величины на строку разбора нет: есть только вывод оценки по предзаявке,
+    // который сторож снял на пороге.
+    if (!METRICS[id]) {
+      const ev = latestAutoEvals()[id] || null;
+      res.json({
+        ...head, locked: false,
+        autoEval: ev ? { at: ev.at, command: ev.command, exitCode: ev.exitCode, output: ev.output } : null,
+        evalCommand: f.evalCommand ? f.evalCommand.join(" ") : null,
+      });
+      return;
+    }
     const peek = req.query?.peek === "1";
     if (!prog.ready && !peek) { res.json({ ...head, locked: true }); return; }
     const m = METRICS[id];
-    if (!m) { res.json({ ...head, locked: false }); return; }
 
     const usable = rows.filter((r) => Number.isFinite(r[m.field]) && Number.isFinite(r[f.tField]));
     const values = usable.map((r) => r[m.field]);

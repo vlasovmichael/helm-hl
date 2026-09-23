@@ -33,6 +33,7 @@ import { sendDailyDigest } from './modules/mailDigest.js';
 import { shutdown, loadPriceHistory } from './app/lifecycle.js';
 import { startToastBridge } from './app/toastBridge.js';
 import { startEquityHeal } from './app/equityHeal.js';
+import { startForwardWatch } from './app/forwardWatch.js';
 
 async function main() {
   logger.info('═══════════════════════════════════════════════');
@@ -137,6 +138,9 @@ async function main() {
   // Наблюдение за замороженным списком, вердикт теста 10.11 не трогает.
   // WINNERS_WATCH_ENABLED (default on). Fail-soft.
   startWinnersWatch();
+
+  // Сторож форвардов: пуш на молчание сборщика и однократная оценка на пороге.
+  startForwardWatch();
 
   // ── Ежедневный почтовый дайджест — 21:05 (Europe/Warsaw), после Daily Recap ──
   // Отчёт за сутки (пуши + сводка стратегий) на self-hosted Listmonk. Fail-soft:

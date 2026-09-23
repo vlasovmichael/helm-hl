@@ -8,7 +8,7 @@ import { escapeHtml } from "../utils/format.js";
 import { emptyState } from "../core/placeholders.js";
 import * as dialog from "../core/dialog.js";
 import { icon } from "../core/icon.js";
-import { button } from "../core/ui.js";
+import { badge, button } from "../core/ui.js";
 
 let bound = false;
 
@@ -38,35 +38,79 @@ export async function refreshFvgForward() {
     return;
   }
 
-  const done = res.items.filter((f) => f.n >= f.target).length;
+  const ready = res.items.filter((f) => f.ready).length;
+  const silent = res.items.filter((f) => f.silent).length;
   if (meta) {
-    meta.textContent = `${res.items.length} running${done ? ` · ${done} at threshold` : ""}`;
-    meta.style.color = done ? "var(--green)" : "var(--text-muted)";
+    meta.textContent = [
+      `${res.items.length} running`,
+      ready ? `${ready} at threshold` : "",
+      silent ? `${silent} silent` : "",
+    ].filter(Boolean).join(" · ");
+    meta.classList.toggle("is-ready", ready > 0 && !silent);
+    meta.classList.toggle("is-stale", silent > 0);
   }
 
   body.innerHTML =
-    res.items.map(renderForward).join("") +
+    (res.items.length ? res.items.map(renderForward).join("") : "") +
+    renderFinished(res.finished || []) +
+    renderIdle(res.idle || []) +
     `<div class="fw-note">E[R], winrate and trade signs stay off this card <b>on purpose</b>: ` +
-    `an interim result invalidates the test. Click a row for the breakdown — before the ` +
-    `threshold it asks first and the peek is logged. ${escapeHtml(res.decisionRule || "")}</div>`;
+    `an interim result invalidates the test. When a stop rule is met, the watcher runs the ` +
+    `preregistered evaluation once and pushes the result. Failed verdicts stay listed for a week, ` +
+    `passed ones stay. ${escapeHtml(res.decisionRule || "")}</div>`;
+}
+
+const RESULT = {
+  PASSED_ECONOMICS: { label: "passed", tone: "long" },
+  PASSED_STAT: { label: "stat only", tone: "" },
+  INCONCLUSIVE: { label: "inconclusive", tone: "" },
+  REJECTED: { label: "rejected", tone: "short" },
+};
+
+const shortDate = (t) => (Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : "—");
+
+/** Закрытые недавно: исход из реестра и дата, когда строка уйдёт сама. */
+function renderFinished(list) {
+  if (!list.length) return "";
+  return (
+    `<div class="fw-section">Finished</div>` +
+    list.map((h) => {
+      const r = RESULT[h.resultStatus] || { label: "closed", tone: "" };
+      return (
+        `<div class="fw-done">` +
+          `<span class="fw-label">${escapeHtml(h.label)}</span>` +
+          `<span class="fw-done-meta">${badge({ label: r.label, tone: r.tone })}` +
+            `<span>closed ${shortDate(h.closedAt)}` +
+            (h.hidesAt ? ` · hides ${shortDate(h.hidesAt)}` : " · stays") +
+            `</span></span>` +
+        `</div>`
+      );
+    }).join("")
+  );
+}
+
+/** Открытые в реестре, но без живого сборщика: иначе их не видно нигде. */
+function renderIdle(ids) {
+  if (!ids.length) return "";
+  return (
+    `<div class="fw-section">Open without a collector</div>` +
+    `<div class="fw-idle">${ids.map((id) => `<code>${escapeHtml(id)}</code>`).join(" ")}</div>`
+  );
 }
 
 /** Одна строка накопителя. Метрик результата здесь нет и быть не должно. */
 function renderForward(f) {
   const pct = Math.min(100, f.pct || 0);
-  // Молчание коллектора видно сразу и красным: замёрзший снимок, выданный за
-  // живой, уже стоил трёх недель на Spike-Fade.
-  const stale = f.staleHours != null && f.staleHours > 72;
   const notStarted = f.n === 0 && f.daysRunning < 1;
 
   // Условия сверх счётчика: без них порог можно набрать за неделю внутри
   // одного рыночного режима, и результат будет про погоду, а не про правило.
   const gates = [];
-  if (f.calendarDays != null && f.minCalendarDays && f.calendarDays < f.minCalendarDays) {
+  if (f.minCalendarDays && f.calendarDays < f.minCalendarDays) {
     gates.push(`${f.calendarDays}/${f.minCalendarDays} calendar days`);
   }
-  if (f.regimeShare != null && f.minRegimeShare && f.regimeShare < f.minRegimeShare) {
-    gates.push(`regime split ${Math.round(f.regimeShare * 100)}% (needs ${Math.round(f.minRegimeShare * 100)}%)`);
+  if (f.minRegimeShare && (f.regimeShare ?? 0) < f.minRegimeShare) {
+    gates.push(`regime split ${Math.round((f.regimeShare ?? 0) * 100)}% (needs ${Math.round(f.minRegimeShare * 100)}%)`);
   }
   if (f.groups && !f.groupReady) {
     const cohorts = Object.entries(f.groups)
@@ -75,10 +119,13 @@ function renderForward(f) {
     gates.push(`cohorts ${cohorts || `0/${f.minPerGroup}`}`);
   }
 
-  // 🚨 Зелёная строка = стоп-правило выполнено ЦЕЛИКОМ, не только счётчик.
-  // Набранное n при незакрытых гейтах читается как «пора смотреть» и толкает
-  // подглядывать в незрелый форвард.
-  const ready = f.n >= f.target && gates.length === 0;
+  // Зелёная строка = стоп-правило выполнено целиком, не только счётчик:
+  // набранное n при незакрытых гейтах толкает подглядывать в незрелый форвард.
+  const status = f.ready
+    ? f.autoEvalAt
+      ? ` · evaluated ${shortDate(Date.parse(f.autoEvalAt))}, awaiting the registry`
+      : " · stop rule met, awaiting evaluation"
+    : "";
 
   const pace = notStarted
     ? "starts with the next collector run"
@@ -86,17 +133,21 @@ function renderForward(f) {
       ? `pace ${f.perDay.toFixed(1)}/day` + (f.etaISO ? ` · threshold near <b>${f.etaISO}</b>` : "")
       : "pace shows up after the first full day";
 
+  const silence = f.silent
+    ? ` · <span class="fw-stale">silent ${f.staleHours == null ? "since start" : `${Math.round(f.staleHours)}h`}</span>`
+    : "";
+
   return (
-    `<button type="button" class="fw-row${ready ? " is-ready" : ""}" data-forward="${escapeHtml(f.id)}">` +
+    `<button type="button" class="fw-row${f.ready ? " is-ready" : ""}" data-forward="${escapeHtml(f.id)}">` +
       `<div class="fw-head">` +
         `<span class="fw-label">${escapeHtml(f.label)}</span>` +
-        `<span class="fw-count${stale ? " is-stale" : ""}"><b>${f.n}</b> / ${f.target} ${escapeHtml(f.unit)}` +
+        `<span class="fw-count${f.silent ? " is-stale" : ""}"><b>${f.n}</b> / ${f.target} ${escapeHtml(f.unit)}` +
         `${icon("collapsed", { cls: "fw-caret" })}</span>` +
       `</div>` +
-      `<div class="fw-bar"><span style="width:${pct.toFixed(1)}%"></span></div>` +
+      `<progress class="fw-bar" max="100" value="${pct.toFixed(1)}"></progress>` +
       `<div class="fw-meta">${pace}` +
         (gates.length ? ` · still needs ${escapeHtml(gates.join(", "))}` : "") +
-        (stale ? ` · <span class="fw-stale">silent ${Math.round(f.staleHours)}h</span>` : "") +
+        status + silence +
       `</div>` +
     `</button>`
   );
@@ -158,7 +209,20 @@ async function openBreakdown(id, peek) {
   }
 
   if (!r.hasMetric) {
-    show(r.label, `<div class="fw-lead">${escapeHtml(r.note || "No per-row metric for this counter.")}</div>`, sub);
+    const ev = r.autoEval;
+    const lead = ev
+      ? `Evaluated once by the watcher on ${escapeHtml(ev.at.slice(0, 16).replace("T", " "))} UTC ` +
+        `with <code>${escapeHtml(ev.command)}</code>. The verdict goes into the registry by hand.`
+      : r.evalCommand
+        ? `The watcher runs <code>${escapeHtml(r.evalCommand)}</code> once, when the stop rule is met.`
+        : "No evaluation script yet: when the stop rule is met, the watcher pushes a reminder instead.";
+    show(
+      r.label,
+      `<div class="fw-lead">${lead}</div>` +
+        (ev ? `<pre class="fw-output">${escapeHtml(ev.output || "(no output)")}</pre>` : "") +
+        (r.note ? `<div class="fw-rule">${escapeHtml(r.note)}</div>` : ""),
+      sub,
+    );
     return;
   }
 
