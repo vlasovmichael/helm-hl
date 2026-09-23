@@ -14,6 +14,7 @@ import { stopPriceFeed } from '../core/priceFeed.js';
 import { stopLiqEvents } from '../core/liqEvents.js';
 import { stopWsExitLoop } from './wsExitTick.js';
 import { stopTickWatchdog } from './tickWatchdog.js';
+import { stopAgentExpiryWatch } from './agentExpiryWatch.js';
 import { stopMemWatch } from './memWatch.js';
 import { markCleanShutdown } from './restartWatch.js';
 import { snapshot as snapshotPriceHistory, restore as restorePriceHistory } from '../core/priceHistory.js';
@@ -205,6 +206,7 @@ export async function shutdown(signal) {
   }
   stopWsExitLoop();
   stopTickWatchdog();
+  stopAgentExpiryWatch();
   stopMemWatch();
   stopPriceFeed();
   stopLiqEvents();

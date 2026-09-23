@@ -415,6 +415,7 @@ function loadConfig() {
       address:         walletAddress,
       privateKey,                                        // основной ключ (fallback)
       agentPrivateKey: process.env.HL_AGENT_PRIVATE_KEY || null,  // ключ агента для торговли
+      agentExpiresAt: process.env.HL_AGENT_EXPIRES_AT || '',
     },
 
     trading: {

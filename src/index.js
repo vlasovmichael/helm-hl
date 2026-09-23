@@ -20,6 +20,7 @@ import { reportRestartIfUnclean } from './app/restartWatch.js';
 import { startPriceFeed } from './core/priceFeed.js';
 import { startLiqEvents } from './core/liqEvents.js';
 import { startHealthWatch } from './app/healthWatch.js';
+import { startAgentExpiryWatch } from './app/agentExpiryWatch.js';
 import { startFillFeed } from './core/fillFeed.js';
 import { markFillDirty } from './app/integrity.js';
 import { recordFill } from './modules/execCosts.js';
@@ -100,6 +101,7 @@ async function main() {
   // смотрят. Этот наблюдатель звонит в ntfy, когда состояние держится плохим
   // несколько минут подряд. Ничего не считает сам — читает healthRegistry.
   startHealthWatch();
+  startAgentExpiryWatch();
 
   // ── WS-фид собственных филлов ──────────────────
   // Бот узнаёт о своей сделке в момент исполнения, а не следующим опросом:
