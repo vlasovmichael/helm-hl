@@ -40,6 +40,12 @@ test("сборщик без единой строки после суток ра
   assert.equal(forwardProgress(fwd({ startedISO: "2026-09-23" }), [], NOW).silent, false);
 });
 
+test("гейт дней работы держит готовность при набранном n", () => {
+  const rows = [{ t: NOW }, { t: NOW }, { t: NOW }];
+  assert.equal(forwardProgress(fwd({ minDaysRunning: 30 }), rows, NOW).ready, false);
+  assert.equal(forwardProgress(fwd({ minDaysRunning: 20 }), rows, NOW).ready, true);
+});
+
 test("гейты режима и когорт держат готовность при набранном n", () => {
   const rows = [
     { t: NOW, btcRegime: "btc_up", cohort: "a" },

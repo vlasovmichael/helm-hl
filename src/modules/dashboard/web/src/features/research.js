@@ -106,6 +106,9 @@ function renderForward(f) {
   // Условия сверх счётчика: без них порог можно набрать за неделю внутри
   // одного рыночного режима, и результат будет про погоду, а не про правило.
   const gates = [];
+  if (f.minDaysRunning && f.daysRunning < f.minDaysRunning) {
+    gates.push(`${Math.floor(f.daysRunning)}/${f.minDaysRunning} days running`);
+  }
   if (f.minCalendarDays && f.calendarDays < f.minCalendarDays) {
     gates.push(`${f.calendarDays}/${f.minCalendarDays} calendar days`);
   }

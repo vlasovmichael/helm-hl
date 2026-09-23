@@ -12,6 +12,7 @@ import Database from "better-sqlite3";
 import { readJsonl } from "../../tools/researchStats.mjs";
 import { resolveStageBranch } from "../../tools/hypothesisStages.mjs";
 import { getFillCosts, getVenueSnapshots } from "../core/database.js";
+import { PREREG_AT as WEEKEND_PREREG_AT, buildEvents as weekendEvents } from "../../tools/weekendFade.mjs";
 
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
@@ -127,6 +128,14 @@ export const FORWARDS = [
     note: "Stop rule: 100 closed pairs or 2027-06-11, whichever comes first.",
   },
   {
+    // Стоп-правило — 20 выходных с предзаявки и 40 событий: выходные идут гейтом дней.
+    id: "hip3-weekend-overshoot-2026-09", label: "HIP-3 weekend overshoot",
+    rows: () => weekendEvents(getVenueSnapshots(WEEKEND_PREREG_AT - 7 * DAY)),
+    latest: () => getVenueSnapshots(Date.now() - DAY).at(-1)?.ts ?? null,
+    target: 40, unit: "events", tField: "t", startedISO: "2026-09-23", minDaysRunning: 140,
+    maxSilentHours: 3, evalCommand: ["tools/weekendFade.mjs"],
+  },
+  {
     id: "unlock-cliff-front-2026-09", label: "Unlock cliff · short a week before",
     rows: unlockRows, latest: unlockLatest,
     target: 60, unit: "events", tField: "unlockTs", startedISO: "2026-09-09",
@@ -167,6 +176,7 @@ export function forwardProgress(f, rows, now = Date.now()) {
   const staleHours = lastT != null ? (now - lastT) / HOUR : null;
   const minCalendarDays = f.minCalendarDays ?? null;
   const ready = n >= f.target &&
+    (!f.minDaysRunning || daysRunning >= f.minDaysRunning) &&
     (!minCalendarDays || days.size >= minCalendarDays) &&
     (!f.minRegimeShare || (regimeShare ?? 0) >= f.minRegimeShare) &&
     groupReady;
@@ -179,7 +189,7 @@ export function forwardProgress(f, rows, now = Date.now()) {
     // Сборщик, не давший ни строки за сутки работы, тоже молчит.
     silent: staleHours != null ? staleHours > f.maxSilentHours : daysRunning > 1,
     maxSilentHours: f.maxSilentHours,
-    calendarDays: days.size, minCalendarDays,
+    calendarDays: days.size, minCalendarDays, minDaysRunning: f.minDaysRunning ?? null,
     regimeShare, minRegimeShare: f.minRegimeShare ?? null,
     groups, minPerGroup: f.minPerGroup ?? null, groupReady,
     ready,
