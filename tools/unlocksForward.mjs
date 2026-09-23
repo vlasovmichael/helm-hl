@@ -158,20 +158,23 @@ export function report() {
   const pending = rows.filter((r) => r.status === "pending" && !closedKeys.has(r.key) && r.clean);
   const dirty = rows.filter((r) => !r.clean).length;
   const net = closed.map((r) => r.netBp);
+  // До стоп-правила результат не отдаётся вовсе: подписи «не вердикт» мало,
+  // увиденное промежуточное число уже ломает предзаявку.
+  const allowed = closed.length >= 60;
   return {
     hypothesis: "unlock-cliff-front-2026-09",
     evaluateAt: 60,
     closed: closed.length,
     pending: pending.length,
     skippedLookahead: dirty,
-    medianNetBp: net.length ? median(net) : null,
-    meanNetBp: net.length ? net.reduce((s, x) => s + x, 0) / net.length : null,
-    winShare: net.length ? (net.filter((x) => x > 0).length / net.length) * 100 : null,
+    medianNetBp: allowed && net.length ? median(net) : null,
+    meanNetBp: allowed && net.length ? net.reduce((s, x) => s + x, 0) / net.length : null,
+    winShare: allowed && net.length ? (net.filter((x) => x > 0).length / net.length) * 100 : null,
     coins: new Set(closed.map((r) => r.coin)).size,
-    // 🚨 Промежуточный итог показывается, но решением не является: стоп-правило
-    // гипотезы разрешает оценку ровно один раз, при n=60.
-    verdictAllowed: closed.length >= 60,
-    trades: closed.slice(-50),
+    verdictAllowed: allowed,
+    trades: closed.slice(-50).map((r) => (allowed
+      ? r
+      : { coin: r.coin, entryTs: r.entryTs, unlockTs: r.unlockTs })),
     upcoming: pending.sort((a, b) => a.unlockTs - b.unlockTs).slice(0, 40),
   };
 }

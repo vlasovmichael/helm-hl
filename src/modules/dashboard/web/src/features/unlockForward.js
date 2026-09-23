@@ -2,10 +2,8 @@
 //  Unlock forward — витрина форварда `unlock-cliff-front-2026-09`.
 //  Считает и копит бэкенд (tools/unlocksForward.mjs), здесь только показ.
 //
-//  🚨 Витрина намеренно не выводит вердикт: стоп-правило гипотезы разрешает
-//  оценку ровно один раз, при n=60. Промежуточная медиана показывается, но
-//  подписана как «не вердикт» — иначе форвард превратится в подглядывание,
-//  а оно ломает p-value независимо от того, как честно посчитан тест.
+//  До n=60 бэкенд результата не отдаёт: витрина показывает счётчик, даты и
+//  расписание. Подглядывание ломает предзаявку, как бы честно ни был посчитан тест.
 // ─────────────────────────────────────────────────
 
 const d10 = (ts) => new Date(ts).toISOString().slice(0, 10);
@@ -22,7 +20,7 @@ function statusBlock(r) {
         <div class="label">settled trades</div>
       </div>
       <div class="unlock-progress">
-        <div class="unlock-bar"><i style="width:${pct.toFixed(0)}%"></i></div>
+        <progress class="unlock-bar" max="100" value="${pct.toFixed(0)}"></progress>
         <div class="unlock-meta">
           <b>${r.pending}</b> queued
           · <b>${r.skippedLookahead}</b> discarded — found after their own entry date,
@@ -62,6 +60,21 @@ function settledBlock(r) {
     const first = r.upcoming.length ? d10(r.upcoming[0].unlockTs) : "—";
     return `<div class="unlock-empty">Nothing settled yet. First unlock in this batch resolves on <b>${first}</b>.</div>`;
   }
+  if (!r.verdictAllowed) {
+    return `
+      <div class="table-wrap"><table class="table table--compact">
+        <thead><tr><th>Coin</th><th class="num">Entry</th><th class="num">Unlock</th></tr></thead>
+        <tbody>${r.trades
+          .map((t) => `<tr>
+            <td class="strong">${t.coin}</td>
+            <td class="num mono">${d10(t.entryTs)}</td>
+            <td class="num mono muted">${d10(t.unlockTs)}</td>
+          </tr>`)
+          .join("")}</tbody>
+      </table></div>
+      <div class="unlock-note">Results stay hidden until n = ${r.evaluateAt}: the pre-registration allows
+        exactly one evaluation, and the watcher runs it on its own.</div>`;
+  }
   return `
     <div class="table-wrap"><table class="table table--compact">
       <thead><tr><th>Coin</th><th class="num">Entry</th><th class="num">Unlock</th><th class="num">Net, bp</th></tr></thead>
@@ -78,7 +91,7 @@ function settledBlock(r) {
     </table></div>
     <div class="unlock-note">
       Median ${r.medianNetBp?.toFixed(0)} bp · win share ${r.winShare?.toFixed(0)}% · ${r.coins} coins.
-      <b>This is not a verdict.</b> The pre-registration allows exactly one evaluation, at n = ${r.evaluateAt}.
+      The stop rule is met: the watcher evaluates this once against the placebo baseline.
     </div>`;
 }
 
