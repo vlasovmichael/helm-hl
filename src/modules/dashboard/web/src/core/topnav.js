@@ -13,8 +13,7 @@ import { initHoverCards } from "./hoverCard.js";
 
 const LINKS = [
   { key: "dashboard", href: "/", label: "Dashboard" },
-  // Order Book остаётся как страница (/orderbook), но ссылку из навбара
-  // убрали — стакан оператору тяжело читается, не нужен на видном месте.
+  // Order Book живёт в меню исследований: в ряду ссылок ему не место.
   { key: "statistics", href: "/statistics", label: "Statistics" },
   { key: "oi", href: "/oi", label: "OI" },
   { key: "lab", href: "/lab", label: "Lab" },
@@ -44,6 +43,11 @@ const RESEARCH = [
     href: "/calibrator",
     title: "Calibrator",
     note: "How much edge a coin demands before costs are paid",
+  },
+  {
+    href: "/orderbook",
+    title: "Order book",
+    note: "Live Hyperliquid book — walls, pressure around mid",
   },
   {
     href: "/orderbook-sim",

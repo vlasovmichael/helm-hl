@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────
-//  orderbook.html — терминал стакана.
+//  Стакан: живая книга и тренажёр делят одну лесенку.
 //
 //  🚨 --ob-* выводятся из токенов темы, своей палитры у страницы нет: иначе
 //  на светлой теме она остаётся чёрной, а белый текст исчезает на плашках.
@@ -8,10 +8,8 @@
 //  две стороны книги, и правится их вид в одном месте.
 // ─────────────────────────────────────────────────────────────────────
 
-/* ── Терминал стакана ─────────────────────────────────────────────── */
+/* ── Карточка стакана ─────────────────────────────────────────────── */
 .ob-terminal {
-  --ob-panel: var(--card-bg-elev);
-  --ob-panel-2: var(--canvas-subtle);
   --ob-line: var(--border);
   --ob-txt: var(--text-primary);
   --ob-dim: var(--text-secondary);
@@ -24,50 +22,46 @@
   --ob-accent: var(--accent);
   --ob-gold: var(--warn);
 
-  background: var(--canvas-inset);
-  color: var(--ob-txt);
-  border: 1px solid var(--ob-line);
-  border-radius: var(--radius-lg);
+  padding: 0;
   overflow: hidden;
-  font-family: var(--font-mono);
-  font-size: var(--fs-body);
+  color: var(--ob-txt);
 }
+
 .ob-head {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 12px 16px;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-5);
+  margin: 0;
   border-bottom: 1px solid var(--ob-line);
-  background: var(--ob-panel);
   flex-wrap: wrap;
 }
 // Площадки — общий `.tabs.tabs--wrap` (core/_tabs.scss).
 // Поле монеты — общий `.field.field--ticker` (core/_controls.scss).
 .ob-input { width: 90px; }
 .ob-input.active { color: var(--ob-accent); border-color: var(--ob-accent); background: var(--accent-soft); font-weight: 600; }
-.ob-conn { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--ob-dim); }
-.ob-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ob-dim); }
-.ob-dot.live { background: var(--ob-bid); box-shadow: 0 0 8px var(--ob-bid); }
+.ob-conn { margin-left: auto; display: flex; align-items: center; gap: var(--sp-2); color: var(--ob-dim); font-size: var(--fs-small); }
+.ob-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ob-dim); transition: background-color 0.3s var(--ease); }
+.ob-dot.live { background: var(--ob-bid); }
 .ob-dot.dead { background: var(--ob-ask); }
 
-.ob-main { display: grid; grid-template-columns: 1fr 320px; gap: 1px; background: var(--ob-line); }
-.ob-col { background: var(--canvas-inset); display: flex; flex-direction: column; min-width: 0; }
-.ob-ladder { overflow-y: auto; max-height: 360px; }
-.ob-ladder.ob-bids { max-height: 360px; }
+.ob-main { display: grid; grid-template-columns: 1fr 340px; }
+.ob-col { display: flex; flex-direction: column; min-width: 0; }
+.ob-ladder { overflow-y: auto; max-height: 360px; padding: var(--sp-1) 0; }
 .ob-row {
   position: relative; display: grid; grid-template-columns: 1fr 110px 90px 70px;
-  align-items: center; height: 22px; padding: 0 14px;
+  align-items: center; height: 22px; padding: 0 var(--sp-4);
+  font-family: var(--font-mono); font-size: var(--fs-body);
   font-variant-numeric: tabular-nums; white-space: nowrap;
+  transition: background-color 0.2s var(--ease);
 }
-.ob-row .ob-bar { position: absolute; top: 1px; bottom: 1px; right: 0; border-radius: 3px; z-index: 0; }
-.ob-row.ask .ob-bar { background: var(--ob-ask-bg); }
-.ob-row.bid .ob-bar { background: var(--ob-bid-bg); }
-.ob-row.wall.ask .ob-bar { background: var(--ob-ask-wall); }
-.ob-row.wall.bid .ob-bar { background: var(--ob-bid-wall); }
+.ob-row .ob-bar { position: absolute; top: 1px; left: 0; width: 100%; height: calc(100% - 2px); z-index: 0; }
+.ob-row .ob-bar rect { transition: x 0.25s var(--ease), width 0.25s var(--ease); }
+.ob-row.ask .ob-bar rect { fill: var(--ob-ask-bg); }
+.ob-row.bid .ob-bar rect { fill: var(--ob-bid-bg); }
+.ob-row.wall.ask .ob-bar rect { fill: var(--ob-ask-wall); }
+.ob-row.wall.bid .ob-bar rect { fill: var(--ob-bid-wall); }
 .ob-row > span { position: relative; z-index: 1; }
-/* Скелетон уровня: ступеньки разной длины, как настоящий стакан. Пока книга
-   не приехала, здесь стояла чёрная пустота на пол-экрана. */
-.ob-row > .sk { align-self: center; }
 .ob-row .ob-tag { color: var(--ob-dim); font-size: var(--fs-label); text-align: left; }
 .ob-row .ob-px { text-align: right; font-weight: 600; }
 .ob-row.ask .ob-px { color: var(--ob-ask); }
@@ -77,40 +71,51 @@
 /* Метка стены — словом. Глиф ▮ в моношрифте занимает целую ячейку и
    в разных сборках JetBrains Mono рисуется разной высоты. */
 .ob-row.wall .ob-tag::before { content: "WALL"; color: var(--ob-gold); font-weight: 700; letter-spacing: var(--ls-wide); }
-.ob-row.wall .ob-sz { color: var(--text-primary); font-weight: 700; }
+.ob-row.wall .ob-sz { font-weight: 700; }
+
+/* Скелетон уровня: ступеньки разной длины, как настоящий стакан. */
+.ob-row--sk { display: flex; }
+.ob-row--sk .sk { height: 8px; width: 55%; }
+.ob-row--sk:nth-child(3n) .sk { width: 68%; }
+.ob-row--sk:nth-child(3n + 1) .sk { width: 46%; }
 
 .ob-mid {
-  display: flex; align-items: center; justify-content: center; gap: 16px;
-  height: 46px; background: var(--ob-panel);
+  display: flex; align-items: center; justify-content: center; gap: var(--sp-4);
+  height: 46px; background: var(--canvas-subtle);
   border-top: 1px solid var(--ob-line); border-bottom: 1px solid var(--ob-line);
 }
-.ob-mid .ob-price { font-size: var(--fs-h2); font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-.ob-mid .ob-spread { color: var(--ob-dim); }
-.ob-mid .ob-spread b { color: var(--ob-gold); }
+.ob-mid .ob-price { font-family: var(--font-mono); font-size: var(--fs-h2); font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.ob-mid .ob-spread { color: var(--ob-dim); font-size: var(--fs-small); }
+.ob-mid .ob-spread b { color: var(--ob-gold); font-family: var(--font-mono); }
 
-.ob-side { background: var(--ob-panel); padding: 16px; overflow-y: auto; }
-.ob-side h3 { margin: 0 0 10px; font-size: var(--fs-label); letter-spacing: 1.5px; color: var(--ob-dim); text-transform: uppercase; font-weight: 600; }
-.ob-card { background: var(--ob-panel-2); border: 1px solid var(--ob-line); border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+.ob-side { padding: var(--sp-5); border-left: 1px solid var(--ob-line); display: flex; flex-direction: column; gap: var(--sp-5); }
+.ob-block { display: flex; flex-direction: column; gap: var(--sp-2); }
 
-.ob-imb-bar { height: 26px; border-radius: 6px; overflow: hidden; display: flex; margin: 8px 0 6px; }
-.ob-imb-bar .b { background: linear-gradient(90deg, var(--ob-bid), color-mix(in srgb, var(--ob-bid) 70%, #000)); }
-.ob-imb-bar .a { background: linear-gradient(90deg, color-mix(in srgb, var(--ob-ask) 70%, #000), var(--ob-ask)); }
-.ob-imb-legend { display: flex; justify-content: space-between; font-size: var(--fs-small); }
+.ob-imb-bar { display: block; width: 100%; height: 12px; border-radius: var(--radius-sm); overflow: hidden; }
+.ob-imb-bar rect { transition: x 0.4s var(--ease), width 0.4s var(--ease); }
+.ob-imb-bar .b { fill: var(--ob-bid); }
+.ob-imb-bar .a { fill: var(--ob-ask); }
+.ob-imb-legend { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: var(--fs-small); }
 .ob-imb-legend .lb { color: var(--ob-bid); font-weight: 700; }
 .ob-imb-legend .la { color: var(--ob-ask); font-weight: 700; }
 
-.ob-wallrow { display: flex; align-items: baseline; justify-content: space-between; padding: 7px 0; border-bottom: 1px dashed var(--ob-line); }
-.ob-wallrow:last-child { border-bottom: none; }
-.ob-wallrow .lbl { color: var(--ob-dim); font-size: var(--fs-small); }
-.ob-wallrow .ceiling { color: var(--ob-ask); font-weight: 700; }
-.ob-wallrow .floor { color: var(--ob-bid); font-weight: 700; }
-.ob-wallrow .dist { font-size: var(--fs-label); color: var(--ob-dim); margin-left: 6px; }
+.ob-wallrow { display: flex; align-items: baseline; justify-content: space-between; padding: var(--sp-2) 0; border-bottom: 1px dashed var(--ob-line); }
+.ob-wallrow:last-of-type { border-bottom: none; }
+.ob-wallrow .lbl { color: var(--ob-dim); font-size: var(--fs-body); }
+.ob-wallrow .ceiling { color: var(--ob-ask); font-weight: 700; font-family: var(--font-mono); }
+.ob-wallrow .floor { color: var(--ob-bid); font-weight: 700; font-family: var(--font-mono); }
+.ob-wallrow .dist { font-size: var(--fs-label); color: var(--ob-dim); margin-left: 6px; font-family: var(--font-mono); }
 
-.ob-hint { color: var(--ob-dim); font-size: var(--fs-label); line-height: 1.6; }
+.ob-hint { margin: 0; color: var(--ob-dim); font-size: var(--fs-body); line-height: 1.55; }
 .ob-hint b { color: var(--ob-txt); }
-.ob-gold { color: var(--ob-gold); }
+.ob-list { margin: 0; padding-left: var(--sp-4); display: grid; gap: var(--sp-1); color: var(--ob-dim); font-size: var(--fs-body); line-height: 1.5; }
+.ob-list b { color: var(--ob-txt); }
+.ob-gold { color: var(--ob-gold); font-family: var(--font-mono); font-weight: 700; }
+.ob-up { color: var(--ob-bid); font-weight: 600; }
+.ob-down { color: var(--ob-ask); font-weight: 600; }
 
 @media (max-width: 760px) {
   .ob-main { grid-template-columns: 1fr; }
-  .ob-side { border-top: 1px solid var(--ob-line); }
+  .ob-side { border-left: none; border-top: 1px solid var(--ob-line); }
+  .ob-row { grid-template-columns: 1fr 90px 70px 60px; padding: 0 var(--sp-3); }
 }

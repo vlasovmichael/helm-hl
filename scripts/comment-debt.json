@@ -34,7 +34,6 @@
   "src/modules/dashboard/routes/winners.js": 2,
   "src/modules/dashboard/server.js": 11,
   "src/modules/dashboard/web/oi.js": 1,
-  "src/modules/dashboard/web/orderbook.js": 1,
   "src/modules/dashboard/web/src/charts/oiChart.js": 2,
   "src/modules/dashboard/web/src/core/coinCombo.js": 1,
   "src/modules/dashboard/web/src/core/dialog.js": 1,

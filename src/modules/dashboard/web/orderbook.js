@@ -1,5 +1,3 @@
-import "./src/styles/orderbook.scss";
-import { mountPageHeader } from "./src/core/pageHeader.js";
 // ─────────────────────────────────────────────────
 //  orderbook.html — живой стакан Hyperliquid (DOM-лесенка).
 //  Коннектится НАПРЯМУЮ к публичному WS HL (как web/src/net/orderbook.js),
@@ -8,7 +6,10 @@ import { mountPageHeader } from "./src/core/pageHeader.js";
 //  реальные уровни поддержки/сопротивления + давление bid/ask у центра.
 // ─────────────────────────────────────────────────
 
-import { bindTheme } from "./src/core/shell.js";
+import "./src/styles/orderbook.scss";
+import { mountPageHeader } from "./src/core/pageHeader.js";
+import { bindTheme, startFooterTimer } from "./src/core/shell.js";
+import { ladderRows, ladderSkeleton, pressureBar } from "./src/features/bookLadder.js";
 import { mountTopnav } from "./src/core/topnav.js";
 
 mountPageHeader({
@@ -19,6 +20,10 @@ mountPageHeader({
 });
 mountTopnav("orderbook");
 bindTheme();
+startFooterTimer();
+
+document.getElementById("ob-asks").innerHTML = ladderSkeleton();
+document.getElementById("ob-bids").innerHTML = ladderSkeleton();
 
 const COINS = ["HYPE", "SOL", "BTC"];
 const WS_URL = "wss://api.hyperliquid.xyz/ws";
@@ -153,21 +158,21 @@ function render(data) {
 
 function renderSide(elId, levels, side, maxSz, wallThr, mid) {
   const el = document.getElementById(elId);
-  el.innerHTML = "";
-  for (const l of levels) {
-    const isWall = l.sz >= wallThr;
-    const row = document.createElement("div");
-    row.className = "ob-row " + side + (isWall ? " wall" : "");
-    const w = Math.max(2, (l.sz / maxSz) * 100);
-    const dist = ((l.px - mid) / mid) * 100;
-    row.innerHTML =
-      `<span class="ob-bar" style="width:${w}%"></span>` +
-      `<span class="ob-tag"></span>` +
-      `<span class="ob-px">${fmtPx(l.px)}</span>` +
-      `<span class="ob-sz">${l.sz.toLocaleString("en-US", { maximumFractionDigits: 2 })}</span>` +
-      `<span class="ob-usd">${(dist >= 0 ? "+" : "") + dist.toFixed(2)}%</span>`;
-    el.appendChild(row);
-  }
+  el.innerHTML = ladderRows(
+    levels.map((l) => ({ ...l, wall: l.sz >= wallThr })),
+    {
+      side,
+      maxSz,
+      cells: (l) => {
+        const dist = ((l.px - mid) / mid) * 100;
+        return [
+          fmtPx(l.px),
+          l.sz.toLocaleString("en-US", { maximumFractionDigits: 2 }),
+          `${dist >= 0 ? "+" : ""}${dist.toFixed(2)}%`,
+        ];
+      },
+    },
+  );
   if (side === "ask") el.scrollTop = el.scrollHeight; // ближние аски — у центра
 }
 
@@ -186,13 +191,12 @@ function renderImbalance(bids, asks, mid) {
   }
   const tot = bUsd + aUsd || 1;
   const bp = (bUsd / tot) * 100;
-  document.getElementById("ob-imbB").style.flexBasis = bp + "%";
-  document.getElementById("ob-imbA").style.flexBasis = 100 - bp + "%";
+  document.getElementById("ob-imb").innerHTML = pressureBar(bp / 100);
   document.getElementById("ob-imbBt").textContent = "bids " + bp.toFixed(0) + "% · " + fmtUsd(bUsd);
   document.getElementById("ob-imbAt").textContent = fmtUsd(aUsd) + " · asks " + (100 - bp).toFixed(0) + "%";
   let h;
-  if (bp >= 62) h = '<span style="color:var(--ob-bid)">Buyers pressing</span> — backdrop favours upside.';
-  else if (bp <= 38) h = '<span style="color:var(--ob-ask)">Sellers pressing</span> — backdrop favours downside.';
+  if (bp >= 62) h = '<span class="ob-up">Buyers pressing</span> — backdrop favours upside.';
+  else if (bp <= 38) h = '<span class="ob-down">Sellers pressing</span> — backdrop favours downside.';
   else h = "Balanced — no clear skew.";
   document.getElementById("ob-imbHint").innerHTML = h;
 }

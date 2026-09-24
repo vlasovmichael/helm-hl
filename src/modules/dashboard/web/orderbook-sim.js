@@ -4,7 +4,24 @@
 //  (проскальзывание, цену стоп-маркета в тонкой монете), а не рынок.
 // ─────────────────────────────────────────────────────────────
 
+import "./src/styles/orderbook.scss";
 import "./src/styles/orderbook-sim.scss";
+import { bindTheme, startFooterTimer } from "./src/core/shell.js";
+import { mountPageHeader } from "./src/core/pageHeader.js";
+import { mountTopnav } from "./src/core/topnav.js";
+import { segmented } from "./src/core/ui.js";
+import { initReveal } from "./src/core/reveal.js";
+import { ladderRows } from "./src/features/bookLadder.js";
+import { mountSimChart, drawSimCandles, applySimTheme } from "./src/charts/simChart.js";
+
+mountTopnav("orderbook-sim");
+mountPageHeader({
+  eyebrow: "Research · execution mechanics",
+  title: "Order book trainer",
+  note: "Price here moves only from your own trades. This models cost, not the market.",
+});
+bindTheme([applySimTheme]);
+startFooterTimer();
 
 const TICK = 0.5,
   DEPTH = 10,
@@ -13,6 +30,7 @@ let asks = [],
   bids = []; // [{px, sz, mine}] — asks по возрастанию, bids по убыванию
 let candles = [],
   cur = null;
+let seq = 0; // порядковый номер свечи — её «время» на шкале
 let lastEaten = new Set(); // цены, съеденные последней сделкой (для подсветки)
 let mmRefill = true;
 let lastPx = START_MID; // последняя цена сделки — опора, когда сторона выедена дочиста
@@ -148,7 +166,7 @@ function addLimit(side, price, size, silent) {
 // ── свечи ──────────────────────────────────────────────────
 function pushTrade(price, size) {
   lastPx = price;
-  if (!cur) cur = { o: price, h: price, l: price, c: price, v: 0 };
+  if (!cur) cur = { n: seq++, o: price, h: price, l: price, c: price, v: 0 };
   cur.h = Math.max(cur.h, price);
   cur.l = Math.min(cur.l, price);
   cur.c = price;
@@ -166,99 +184,16 @@ function newCandle() {
 //  Рендер
 // ─────────────────────────────────────────────────────────────
 function renderLadder(el, levels, side, maxSz) {
-  el.innerHTML = "";
   const list = side === "ask" ? [...levels].reverse() : levels;
-  for (const l of list) {
-    const wall = l.sz > maxSz * 0.55;
-    const row = document.createElement("div");
-    row.className = `row ${side}${wall ? " wall" : ""}${l.mine > 0 ? " mine" : ""}${lastEaten.has(l.px) ? " eaten" : ""}`;
-    row.innerHTML =
-      `<span class="tag">${wall ? "WALL" : ""}</span>` +
-      `<span class="px">${px2(l.px)}</span>` +
-      `<span class="sz">${Math.round(l.sz)}</span>` +
-      `<div class="bar" style="width:${Math.max(3, (l.sz / maxSz) * 100)}%"></div>`;
-    row.onclick = () => {
-      $("lpx").value = px2(l.px);
-    };
-    el.appendChild(row);
-  }
-}
-
-function drawChart() {
-  const cv = $("chart"),
-    ctx = cv.getContext("2d");
-  const dpr = window.devicePixelRatio || 1;
-  const w = cv.clientWidth,
-    h = cv.clientHeight;
-  cv.width = w * dpr;
-  cv.height = h * dpr;
-  ctx.scale(dpr, dpr);
-  ctx.clearRect(0, 0, w, h);
-
-  const all = cur ? [...candles, cur] : candles;
-  if (!all.length) {
-    ctx.fillStyle = "#6b7888";
-    ctx.font = "12px monospace";
-    ctx.textAlign = "center";
-    ctx.fillText("candles appear after the first trade", w / 2, h / 2);
-    return;
-  }
-  const hi = Math.max(...all.map((c) => c.h)),
-    lo = Math.min(...all.map((c) => c.l));
-  const pad = (hi - lo) * 0.15 || 1;
-  const top = hi + pad,
-    bot = lo - pad;
-  const y = (p) => h - ((p - bot) / (top - bot)) * h;
-
-  // сетка
-  ctx.strokeStyle = "#1e2735";
-  ctx.fillStyle = "#6b7888";
-  ctx.font = "10px monospace";
-  ctx.textAlign = "left";
-  ctx.lineWidth = 1;
-  for (let i = 0; i <= 4; i++) {
-    const p = bot + ((top - bot) * i) / 4,
-      yy = Math.round(y(p)) + 0.5;
-    ctx.beginPath();
-    ctx.moveTo(0, yy);
-    ctx.lineTo(w - 44, yy);
-    ctx.stroke();
-    ctx.fillText(p.toFixed(2), w - 40, yy + 3);
-  }
-
-  const cw = Math.min(26, (w - 50) / Math.max(all.length, 8));
-  all.forEach((c, i) => {
-    const x = i * cw + cw / 2,
-      up = c.c >= c.o;
-    const forming = cur && i === all.length - 1;
-    ctx.strokeStyle = ctx.fillStyle = up ? "#2bbf73" : "#f0556b";
-    ctx.globalAlpha = forming ? 0.55 : 1;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x, y(c.h));
-    ctx.lineTo(x, y(c.l));
-    ctx.stroke();
-    const yo = y(c.o),
-      yc = y(c.c);
-    ctx.fillRect(x - cw * 0.32, Math.min(yo, yc), cw * 0.64, Math.max(2, Math.abs(yc - yo)));
-    ctx.globalAlpha = 1;
-  });
-
-  if (cur) {
-    ctx.strokeStyle = "#e8b84b";
-    ctx.setLineDash([3, 3]);
-    ctx.globalAlpha = 0.6;
-    const yy = Math.round(y(cur.c)) + 0.5;
-    ctx.beginPath();
-    ctx.moveTo(0, yy);
-    ctx.lineTo(w - 44, yy);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = "#e8b84b";
-    ctx.textAlign = "left";
-    ctx.fillText("candle forming", 4, yy - 5);
-  }
+  el.innerHTML = ladderRows(
+    list.map((l) => ({
+      ...l,
+      wall: l.sz > maxSz * 0.55,
+      eaten: lastEaten.has(l.px),
+    })),
+    { side, maxSz, cells: (l) => [px2(l.px), String(Math.round(l.sz)), l.mine > 0 ? `mine ${Math.round(l.mine)}` : ""] },
+  );
+  if (side === "ask") el.scrollTop = el.scrollHeight;
 }
 
 function render() {
@@ -267,38 +202,38 @@ function render() {
   renderLadder($("bids"), bids, "bid", maxSz);
   $("midPx").textContent = px2(midPrice());
   $("spread").textContent = px2(spread());
-  drawChart();
+  drawSimCandles(candles, cur);
+  $("chartHint").hidden = candles.length > 0 || cur != null;
 }
+
+const kvTable = (rows) =>
+  `<table class="table table--compact obs-kv"><tbody>${rows
+    .map(([k, v, c]) => `<tr><td class="muted">${k}</td><td class="num mono ${c}">${v}</td></tr>`)
+    .join("")}</tbody></table>`;
 
 function showFill(r, crossed) {
   if (!r) {
-    $("fillCard").innerHTML = '<div class="empty">not enough liquidity — the book is empty</div>';
+    $("fillCard").innerHTML = '<div class="obs-empty">Not enough liquidity — the book is empty.</div>';
     return;
   }
-  const dir = r.side === "buy" ? "buy" : "sell";
   const rows = [
-    ["side", dir, ""],
+    ["Side", r.side, ""],
     [
-      "filled",
+      "Filled",
       `${Math.round(r.filled)}${r.partial ? ` (${Math.round(r.partial)} unfilled)` : ""}`,
-      r.partial ? "bad" : "",
+      r.partial ? "down" : "",
     ],
-    ["average price", px2(r.avg), ""],
-    ["mid before the click", px2(r.midBefore), ""],
-    ["slippage", `${px2(r.slipAbs)} / ${r.slipPct.toFixed(3)}%`, "gold"],
-    ["extra cost", usd(r.slipAbs * r.filled), "bad"],
-    ["levels eaten", String(r.levels), ""],
-    [
-      "price moved",
-      `${r.movePct >= 0 ? "+" : ""}${r.movePct.toFixed(2)}%`,
-      r.movePct >= 0 ? "good" : "bad",
-    ],
+    ["Average price", px2(r.avg), ""],
+    ["Mid before the click", px2(r.midBefore), ""],
+    ["Slippage", `${px2(r.slipAbs)} / ${r.slipPct.toFixed(3)}%`, "obs-warn"],
+    ["Extra cost", usd(r.slipAbs * r.filled), "down"],
+    ["Levels eaten", String(r.levels), ""],
+    ["Price moved", `${r.movePct >= 0 ? "+" : ""}${r.movePct.toFixed(2)}%`, r.movePct >= 0 ? "up" : "down"],
   ];
   $("fillCard").innerHTML =
     (crossed
-      ? '<div class="hint" style="margin-bottom:8px"><span class="gold">The limit order crossed the spread</span> → it filled like a market order. A limit order protects you from slippage only while it rests BEHIND the spread.'
-      : "") +
-    rows.map(([k, v, c]) => `<div class="kv"><span class="k">${k}</span><span class="v ${c}">${v}</span></div>`).join("");
+      ? '<p class="obs-note obs-note--warn">The limit order crossed the spread, so it filled like a market order. A limit order protects you from slippage only while it rests behind the spread.</p>'
+      : "") + kvTable(rows);
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -306,7 +241,7 @@ function showFill(r, crossed) {
 // ─────────────────────────────────────────────────────────────
 async function measureReal() {
   const coin = $("realCoin").value.trim();
-  $("realOut").innerHTML = '<div class="empty">requesting…</div>';
+  $("realOut").innerHTML = '<div class="obs-empty">Requesting…</div>';
   try {
     const meta = await fetch("https://api.hyperliquid.xyz/info", {
       method: "POST",
@@ -339,12 +274,14 @@ async function measureReal() {
     const [c, btc] = await Promise.all([cost(asset.name), cost("BTC")]);
     const ratio = btc.up / c.up;
     $("realOut").innerHTML =
-      `<div class="kv"><span class="k">${asset.name} · up 0.5%</span><span class="v gold">${usd(c.up)}</span></div>` +
-      `<div class="kv"><span class="k">${asset.name} · down 0.5%</span><span class="v gold">${usd(c.down)}</span></div>` +
-      `<div class="kv"><span class="k">BTC · up 0.5%</span><span class="v">${usd(btc.up)}</span></div>` +
-      `<div class="hint" style="margin-top:9px">BTC is <b>${ratio.toFixed(0)}×</b> deeper. Your size moves neither market — depth matters not for the entry but for the <b>stop</b>: the thinner the book, the more a stop-market costs you.</div>`;
+      kvTable([
+        [`${asset.name} · up 0.5%`, usd(c.up), "obs-warn"],
+        [`${asset.name} · down 0.5%`, usd(c.down), "obs-warn"],
+        ["BTC · up 0.5%", usd(btc.up), ""],
+      ]) +
+      `<p class="obs-note">BTC is <b>${ratio.toFixed(0)}×</b> deeper. Your size moves neither market — depth matters not for the entry but for the <b>stop</b>: the thinner the book, the more a stop-market costs you.</p>`;
   } catch (e) {
-    $("realOut").innerHTML = `<div class="hint"><span class="gold">failed:</span> ${e.message}</div>`;
+    $("realOut").innerHTML = `<p class="obs-note obs-note--warn">Failed: ${e.message}</p>`;
   }
 }
 
@@ -381,14 +318,38 @@ $("reset").onclick = () => {
   candles = [];
   cur = null;
   lastEaten = new Set();
-  $("fillCard").innerHTML = '<div class="empty">make your first trade</div>';
+  seq = 0;
+  $("fillCard").innerHTML = '<div class="obs-empty">Make your first trade.</div>';
   render();
 };
-$("mm").onchange = (e) => {
-  mmRefill = e.target.checked;
+function mountRefill() {
+  $("mm").innerHTML = segmented({
+    name: "mm",
+    value: mmRefill ? "on" : "off",
+    options: [
+      { value: "on", label: "Refill the book" },
+      { value: "off", label: "Thin coin" },
+    ],
+  });
+}
+$("mm").onclick = (e) => {
+  const v = e.target.closest("[data-mm]")?.dataset.mm;
+  if (!v) return;
+  mmRefill = v === "on";
+  mountRefill();
 };
 $("realBtn").onclick = measureReal;
-window.addEventListener("resize", drawChart);
 
+// Клик по строке стакана подставляет её цену в лимитку.
+for (const id of ["asks", "bids"]) {
+  $(id).addEventListener("click", (e) => {
+    const p = e.target.closest("[data-px]")?.dataset.px;
+    if (p) $("lpx").value = px2(Number(p));
+  });
+}
+
+mountRefill();
 initBook();
+mountSimChart($("chart")).then(render);
 render();
+initReveal();

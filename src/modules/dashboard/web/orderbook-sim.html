@@ -1,102 +1,120 @@
 <!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Helm · Order book trainer</title>
-<!--
-  ТРЕНАЖЁР СТАКАНА — механика исполнения на управляемой модели.
+<html lang="en">
+  <head>
+    <!--#head-->
+    <title>Helm · Order book trainer</title>
+    <!--
+      ТРЕНАЖЁР СТАКАНА — механика исполнения на управляемой модели.
+      Действующий один — ты: клик «купить маркетом» показывает, какие уровни
+      съедены, куда ушёл mid и во что обошёлся вход. Рынок не моделируется:
+      цена двигается только твоими сделками, модель объясняет издержки.
+    -->
+  </head>
+  <body data-page="ob-sim">
+    <div class="container">
+      <nav class="topnav" id="topnav" aria-label="Primary"></nav>
 
-  ЗАЧЕМ отдельно от tools/orderbook.html: тот показывает ЖИВОЙ стакан HL, где
-  тридцать изменений в секунду от сотен участников и ни одно из них не твоё.
-  Наблюдение за шумом не учит механизму. Здесь действующий один — ты: жмёшь
-  «купить маркетом» и видишь, какие уровни съедены, куда ушёл mid и во что тебе
-  обошёлся вход. Причина и следствие связаны одним кликом.
+      <header id="page-header"></header>
 
-  Это НЕ симулятор рынка и не предсказывает ничего. Цена здесь двигается
-  только твоими сделками. Модель объясняет ИЗДЕРЖКИ (проскальзывание, почему
-  стоп-маркет в тонкой монете исполняется хуже) — то есть сантехнику, а не эдж.
+      <!-- 01 / Книга и свечи рядом: причина и следствие одного клика. -->
+      <div class="obs-stage">
+        <section class="card ob-terminal obs-book">
+          <div class="card-header ob-head">
+            <div class="card-title" data-card="A model book: ten levels a side, half-dollar ticks, an occasional wall. Click a row to use its price for a limit order.">
+              Book
+            </div>
+          </div>
+          <div class="ob-ladder ob-asks" id="asks"></div>
+          <div class="ob-mid">
+            <span class="ob-price" id="midPx">—</span>
+            <span class="ob-spread">spread <b id="spread">—</b></span>
+          </div>
+          <div class="ob-ladder ob-bids" id="bids"></div>
+        </section>
 
-  Кнопка «а как в реальности» подтягивает настоящий l2Book с HL и отвечает на
-  единственный вопрос, ради которого стакан вообще стоит смотреть при мелком
-  депозите: сколько долларов нужно, чтобы сдвинуть цену на 0.5%.
--->
-</head>
-<body data-page="ob-sim">
-  <header>
-    <span class="brand">Helm <small>order book trainer — execution mechanics</small></span>
-    <span class="warn"><b>Note:</b> price here moves only from your own trades. This models cost, not the market.</span>
-  </header>
-
-  <main>
-    <!-- ── стакан ── -->
-    <div class="col">
-      <div class="ladder asks" id="asks"></div>
-      <div class="mid">
-        <span class="price" id="midPx">—</span>
-        <span class="spread">spread <b id="spread">—</b></span>
+        <section class="card obs-chart-card">
+          <div class="card-header">
+            <div class="card-title" data-card="Each trade prints into the forming candle. New candle closes it and starts the next one.">
+              Candles
+            </div>
+            <span class="obs-note obs-head-note" id="chartHint">Candles appear after the first trade.</span>
+          </div>
+          <div class="chart-container obs-chart" id="chart"></div>
+        </section>
       </div>
-      <div class="ladder bids" id="bids"></div>
+
+      <!-- 02 / Управление и отчёт о сделке. -->
+      <div class="obs-controls">
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title">Order</div>
+          </div>
+          <div class="obs-form">
+            <label class="label" for="qty">Size</label>
+            <input class="field mono" id="qty" value="150" inputmode="decimal" autocomplete="off" />
+            <label class="label" for="lpx">Limit price</label>
+            <input class="field mono" id="lpx" value="98.00" inputmode="decimal" autocomplete="off" />
+          </div>
+          <div class="obs-buttons">
+            <button class="btn btn--long" id="mBuy" type="button">Market buy</button>
+            <button class="btn btn--short" id="mSell" type="button">Market sell</button>
+            <button class="btn" id="lBuy" type="button">Limit buy</button>
+            <button class="btn" id="lSell" type="button">Limit sell</button>
+          </div>
+          <p class="obs-note">Clicking a book row fills in its price.</p>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title">What the trade cost</div>
+          </div>
+          <div id="fillCard"><div class="obs-empty">Make your first trade.</div></div>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title">Session</div>
+          </div>
+          <div class="obs-buttons">
+            <button class="btn btn--ghost" id="newCandle" type="button">New candle</button>
+            <button class="btn btn--ghost" id="reset" type="button">Reset</button>
+          </div>
+          <div class="label">Market makers</div>
+          <div id="mm"></div>
+          <p class="obs-note">
+            Switch refills off and the book stays eaten. That is what a thin coin looks like: every
+            trade makes the next one more expensive.
+          </p>
+        </section>
+
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title">And in reality</div>
+          </div>
+          <div class="obs-form">
+            <label class="label" for="realCoin">Coin</label>
+            <input class="field field--ticker" id="realCoin" value="kSHIB" autocomplete="off" />
+            <button class="btn" id="realBtn" type="button">Measure</button>
+          </div>
+          <div id="realOut"><div class="obs-empty">Depth of the live HL book.</div></div>
+        </section>
+      </div>
+
+      <!-- 03 / Вывод. -->
+      <section class="card">
+        <div class="card-header">
+          <div class="card-title">What to take away</div>
+        </div>
+        <ul class="ob-list">
+          <li>A <b>market order</b> eats the book from the top down: best price first, then worse. The average fill is always worse than what you saw before clicking — that is <span class="ob-gold">slippage</span>.</li>
+          <li><b>The bigger the size</b>, the deeper you eat and the worse the average. Double the size and slippage more than doubles.</li>
+          <li>A <b>limit order</b> eats nothing — it adds size to the book. A large limit order is a “level”: price stalls against it because someone has to trade through it first.</li>
+          <li>A <b>stop-market</b> is a market order at the worst possible moment. That is where the gap between “a 1.5% stop” and the real loss comes from.</li>
+        </ul>
+      </section>
+
+      <footer class="footer" id="footer"></footer>
     </div>
-
-    <!-- ── свечи ── -->
-    <div class="col">
-      <div class="chartwrap"><canvas id="chart"></canvas></div>
-    </div>
-
-    <!-- ── управление ── -->
-    <div class="side">
-      <h3>Order</h3>
-      <div class="card">
-        <div class="grid2" style="margin-bottom:10px">
-          <div><label>size</label><input id="qty" value="150" /></div>
-          <div><label>price (for a limit order)</label><input id="lpx" value="98.00" /></div>
-        </div>
-        <div class="grid2" style="margin-bottom:8px">
-          <button class="buy" id="mBuy">Market buy</button>
-          <button class="sell" id="mSell">Market sell</button>
-        </div>
-        <div class="grid2">
-          <button id="lBuy">Limit buy</button>
-          <button id="lSell">Limit sell</button>
-        </div>
-        <div class="hint" style="margin-top:10px">Clicking a book row fills in its price.</div>
-      </div>
-
-      <h3>What the trade cost</h3>
-      <div class="card" id="fillCard"><div class="empty">make your first trade</div></div>
-
-      <h3>Session</h3>
-      <div class="card">
-        <div class="grid2" style="margin-bottom:8px">
-          <button class="ghost" id="newCandle">New candle</button>
-          <button class="ghost" id="reset">Reset</button>
-        </div>
-        <label class="toggle"><input type="checkbox" id="mm" checked /> market makers refill the book</label>
-        <div class="hint" style="margin-top:8px">
-          Untick it and the book will not refill. That is what a thin coin looks like: every trade makes the next one more expensive.
-        </div>
-      </div>
-
-      <h3>And in reality</h3>
-      <div class="card">
-        <div class="grid2" style="margin-bottom:8px">
-          <input id="realCoin" value="kSHIB" />
-          <button id="realBtn">Measure</button>
-        </div>
-        <div id="realOut"><div class="empty">depth of the live HL book</div></div>
-      </div>
-
-      <h3>What to take away</h3>
-      <div class="card hint">
-        • A <b>market order</b> eats the book from the top down: best price first, then worse. The average fill is always worse than what you saw before clicking — that is <span class="gold">slippage</span>.<br>
-        • <b>The bigger the size</b>, the deeper you eat and the worse the average. Double the size and slippage more than doubles.<br>
-        • A <b>limit order</b> eats nothing — it <span class="gold">adds</span> size to the book. A large limit order is a “level”: price stalls against it because someone has to trade through it first.<br>
-        • A <b>stop-market</b> is a market order at the worst possible moment. That is where the gap between “a 1.5% stop” and the real loss comes from.
-      </div>
-    </div>
-  </main>
-
-  <script type="module" src="/orderbook-sim.js"></script>
-</body>
+    <script type="module" src="/orderbook-sim.js"></script>
+  </body>
 </html>

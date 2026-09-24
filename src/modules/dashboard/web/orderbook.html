@@ -1,17 +1,19 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <!--#head-->
     <title>Helm · Order book</title>
   </head>
-  <body>
+  <body data-page="orderbook">
     <div class="container">
       <nav class="topnav" id="topnav" aria-label="Primary"></nav>
 
       <header id="page-header"></header>
 
-      <section class="ob-terminal">
-        <div class="ob-head">
+      <!-- 01 / Книга и чтение её. Лесенка — общий компонент с тренажёром. -->
+      <section class="card ob-terminal">
+        <div class="card-header ob-head">
+          <div class="card-title">Book</div>
           <div class="tabs tabs--wrap ob-tabs" id="ob-tabs"></div>
           <input id="ob-custom" class="field field--ticker ob-input" placeholder="coin" maxlength="10" />
           <div class="ob-conn">
@@ -20,68 +22,46 @@
         </div>
         <div class="ob-main">
           <div class="ob-col">
-            <div class="ob-ladder" id="ob-asks">
-              <div class="ob-row"><span class="sk" style="height:8px;width:62%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:48%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:71%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:55%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:66%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:44%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:58%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:50%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:68%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:52%"></span></div>
-            </div>
+            <div class="ob-ladder ob-asks" id="ob-asks"></div>
             <div class="ob-mid">
               <span class="ob-price" id="ob-midPx">—</span>
               <span class="ob-spread">spread <b id="ob-spread">—</b></span>
             </div>
-            <div class="ob-ladder ob-bids" id="ob-bids">
-              <div class="ob-row"><span class="sk" style="height:8px;width:62%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:48%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:71%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:55%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:66%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:44%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:58%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:50%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:68%"></span></div>
-              <div class="ob-row"><span class="sk" style="height:8px;width:52%"></span></div>
-            </div>
+            <div class="ob-ladder ob-bids" id="ob-bids"></div>
           </div>
 
           <div class="ob-side">
-            <h3>Pressure (±0.5% around mid)</h3>
-            <div class="ob-card">
-              <div class="ob-imb-bar"><div class="b" id="ob-imbB"></div><div class="a" id="ob-imbA"></div></div>
+            <div class="ob-block">
+              <div class="label">Pressure, ±0.5% around mid</div>
+              <div id="ob-imb"></div>
               <div class="ob-imb-legend"><span class="lb" id="ob-imbBt">bids —</span><span class="la" id="ob-imbAt">asks —</span></div>
-              <div class="ob-hint" id="ob-imbHint" style="margin-top: 8px"></div>
+              <p class="ob-hint" id="ob-imbHint"></p>
             </div>
 
-            <h3>Levels from the book</h3>
-            <div class="ob-card">
+            <div class="ob-block">
+              <div class="label">Levels from the book</div>
               <div class="ob-wallrow"><span class="lbl">Nearest wall above</span><span><span class="ceiling" id="ob-ceilPx">—</span><span class="dist" id="ob-ceilD"></span></span></div>
               <div class="ob-wallrow"><span class="lbl">Nearest wall below</span><span><span class="floor" id="ob-floorPx">—</span><span class="dist" id="ob-floorD"></span></span></div>
-              <div class="ob-hint" style="margin-top: 10px">
+              <p class="ob-hint">
                 <span class="ob-gold">WALL</span> = a resting order much larger than its neighbours. A real level where money sits.
-              </div>
+              </p>
             </div>
 
-            <h3>How to read it (entry and exit)</h3>
-            <div class="ob-card ob-hint">
-              • <b>Wall above</b> = ceiling. Do not long into it — that is where sellers sit (like HYPE 64.5).<br />
-              • <b>Wall below</b> = floor. A long off it with the stop under the wall keeps risk tight.<br />
-              • <b>Bids &gt;&gt; asks</b> = buyers pressing, backdrop favours upside. And vice versa.<br />
-              • <b>Wall vanished</b> and price walked through = the level broke, the move is tradable.<br />
-              • On the <b>exit</b>: if there is a wall ahead, take profit before it instead of hoping it breaks.
+            <div class="ob-block">
+              <div class="label">How to read it</div>
+              <ul class="ob-list">
+                <li><b>Wall above</b> = ceiling. Do not long into it — that is where sellers sit.</li>
+                <li><b>Wall below</b> = floor. A long off it with the stop under the wall keeps risk tight.</li>
+                <li><b>Bids &gt;&gt; asks</b> = buyers pressing, backdrop favours upside. And vice versa.</li>
+                <li><b>Wall vanished</b> and price walked through = the level broke.</li>
+                <li>On the <b>exit</b>: if there is a wall ahead, take profit before it.</li>
+              </ul>
             </div>
           </div>
         </div>
       </section>
 
-      <footer id="footer-status">
-        <span>The book connects straight to the public Hyperliquid WS · read only</span>
-      </footer>
+      <footer class="footer" id="footer"></footer>
     </div>
 
     <script type="module" src="/orderbook.js"></script>
