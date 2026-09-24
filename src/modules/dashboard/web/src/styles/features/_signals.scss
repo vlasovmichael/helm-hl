@@ -25,7 +25,7 @@
   border: 1px solid color-mix(in srgb, var(--neg, #e5484d) 35%, transparent);
 }
 /* Счётчик форвард-замера под таблицей. Пунктир — «счётчик ещё идёт, вывода
-   тут нет»: тот же приём, что у .cod-fwd на /oi. */
+   тут нет». */
 .hm-fwd {
   margin: var(--sp-3) 0 0;
   padding: var(--sp-3);

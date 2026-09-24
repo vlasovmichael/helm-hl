@@ -1,5 +1,5 @@
 import "./src/styles/oi.scss";
-import { icon, paintIcons } from "./src/core/icon.js";
+import { paintIcons } from "./src/core/icon.js";
 import { emptyRow, emptyState, settle } from "./src/core/placeholders.js";
 import { mountPageHeader } from "./src/core/pageHeader.js";
 // ─────────────────────────────────────────────────
@@ -126,369 +126,81 @@ const fmtAge = (t) => {
   return h < 36 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`;
 };
 
-// ── Монета дня (карточка 01) ──
-// Разбор сетапа «выдохшийся хвост» из /api/coin-of-day. Табы = монеты, прошедшие
-// порог score. Карточка обязана показывать не только «за», но и «против» —
-// блок флагов не сворачивается и не прячется.
-const codFmtPx = (n) => {
-  if (n == null || !Number.isFinite(n)) return "—";
-  if (n >= 1000) return n.toLocaleString("en-US", { maximumFractionDigits: 1 });
-  if (n >= 1) return n.toFixed(4);
-  return n.toPrecision(4);
-};
-const codPct = (n, digits = 2) =>
-  n == null || !Number.isFinite(n) ? "—" : `${n >= 0 ? "+" : ""}${n.toFixed(digits)}%`;
-const codSigned = (n, digits = 2) => {
-  if (n == null || !Number.isFinite(n)) return '<span class="oi-muted">—</span>';
-  return `<span class="${n > 0 ?"oi-pos" : n < 0 ? "oi-neg" : "oi-muted"}">${codPct(n, digits)}</span>`;
-};
+// ── Carry (карточка 01) ──
+// Спот в лонг + перп в шорт: цена гасится, остаётся фандинг. Карточка считает
+// окупаемость круга комиссий по среднему фандингу за неделю, а не «сигнал».
+const carryNum = (v, digits = 1) => (v == null || !Number.isFinite(v) ? "—" : v.toFixed(digits));
+const carryDays = (v) => (v == null ? "never" : v > 365 ? ">1y" : `${v.toFixed(v < 10 ? 1 : 0)}d`);
+const carryBreakEven = (r) =>
+  r.dailyBp == null
+    ? "—"
+    : `${carryDays(r.breakEvenDaysTaker)} <span class="oi-muted">/ ${carryDays(r.breakEvenDaysMaker)}</span>`;
 
-/**
- * Полоски силы сигнала: закрашено ровно score из 5, цвет — по стороне сделки.
- * Класс-обёртка обязателен: правило .ss-seg.on живёт под .cod-segs--*,
- * без обёртки полоски остаются серыми при любом score.
- */
-const codSegs = (score, side) => {
-  const tone = side === "SHORT" ? "short" : side === "LONG" ? "long" : "muted";
-  const n = Number.isFinite(score) ? score : 0;
-  const segs = Array.from(
-    { length: 5 },
-    (_, i) => `<span class="ss-seg${i < n ?" on" : ""}"></span>`,
-  ).join("");
-  return `<span class="ss-segs cod-segs--${tone}" data-card="${n} of 5 conditions met">${segs}</span>`;
-};
-
-// 5 независимых признаков: балл за сам ход сюда не входит — он дублировал бы
-// отсечку, через которую монета уже прошла.
-const COD_HIT_LABEL = {
-  edge: "Pinned at the edge of the 72h range",
-  rollover: "4h momentum has already rolled over",
-  structure: "15m structure broken (3+ legs)",
-  volDecay: "Volume decayed (≤ 40% of peak)",
-  notCrowded: "OI not overheated (pump is not leverage-driven)",
-};
-
-let codData = null;
-let codActive = null;
-
-// Все табы = сначала монеты в позиции (их вести важнее, чем искать новый вход),
-// потом кандидаты на вход.
-const codAllTabs = () => [...(codData?.held ?? []), ...(codData?.picks ?? [])];
-
-function codRenderTabs() {
-  const el = document.getElementById("cod-tabs");
-  const tabs = codAllTabs();
-  if (tabs.length < 2) {
-    el.hidden = true;
-    return;
+function carryLead(rows) {
+  const best = rows.find((r) => r.breakEvenDaysTaker != null);
+  if (!best) {
+    return rows.some((r) => r.dailyBp != null)
+      ? "No pair pays right now: average funding over the week is not positive on any hedgeable coin."
+      : "Funding history did not load, so break-even is not computed yet.";
   }
-  el.hidden = false;
-  el.innerHTML = tabs
-    .map(
-      (p) => `<button type="button" class="tabs__tab cod-tab${p.coin === codActive ? " is-active" : ""}${p.held ? " cod-tab--held" : ""}" data-coin="${p.coin}">
-        ${
-          p.tradedToday
-            ? '<span class="cod-tab-held cod-tab-done">day closed</span>'
-            : p.held
-              ? '<span class="cod-tab-held">in position</span>'
-              : p.dayContext
-                ? '<span class="cod-tab-held cod-tab-done">2nd attempt</span>'
-                : ""
-        }
-        <span class="cod-tab-coin">${p.coin}</span>
-        ${p.side ? `<span class="cod-tab-side ${p.side.toLowerCase()}">${p.side}</span>` : ""}
-        <span class="oi-muted">${p.score == null ? "—" : `${p.score}/5`}</span>
-      </button>`,
-    )
-    .join("");
-  el.querySelectorAll(".cod-tab").forEach((b) =>
-    b.addEventListener("click", () => {
-      codActive = b.dataset.coin;
-      codRenderTabs();
-      codRenderBody();
-    }),
+  return (
+    `Best now: <b>${best.coin}</b> pays <b>${carryNum(best.dailyBp, 2)} bp/day</b> on the weekly average. ` +
+    `The round trip is earned back in <b>${carryDays(best.breakEvenDaysTaker)}</b> with market orders, ` +
+    `<b>${carryDays(best.breakEvenDaysMaker)}</b> with post-only.`
   );
 }
 
-const COD_STATUS = {
-  thesis_intact:      { cls: "setup", label: "thesis intact" },
-  thesis_weakened:    { cls: "watch", label: "thesis weakened" },
-  thesis_faded:       { cls: "watch", label: "setup faded" },
-  thesis_invalidated: { cls: "none",  label: "plan stop broken" },
-  target_reached:     { cls: "setup", label: "target reached" },
-  wrong_side:         { cls: "none",  label: "position against the analysis" },
-};
-
-/** Монета, отторгованная сегодня: день закрыт, вход не предлагаем. */
-function codRenderTradedToday(p) {
-  const f = p.features;
-  const d = p.day;
-  const factRows = f
-    ? `
-    <tr><td>24h move</td><td>${codSigned(f.chg24h, 1)}</td></tr>
-    <tr><td>Last 4h</td><td>${codSigned(f.chg4h)}</td></tr>
-    <tr><td>Position in the 72h range</td><td>${(f.rangePos * 100).toFixed(0)}%</td></tr>
-    <tr><td>1h trend</td><td>${f.trend1h === "up" ? `${icon("rising")} up` : f.trend1h === "down" ? `${icon("falling")} down` : `${icon("flat")} range`}</td></tr>`
-    : `<tr><td colspan="2" class="oi-muted">The coin no longer passes the entry filter</td></tr>`;
-
+function carryTable(rows) {
   return `
-    <div class="cod-head">
-      <div class="cod-head-main">
-        <span class="cod-donebadge">day closed</span>
-        <span class="ss-coin">${p.coin}</span>
-        ${codSegs(p.score, null)}
-        <span class="oi-muted cod-score">${p.score == null ? "—" : `${p.score}/5`}</span>
-      </div>
-      <div class="cod-verdict none">${p.headline}</div>
-    </div>
-    <p class="cod-detail">${p.detail}</p>
-    <div class="cod-grid cod-grid--sp">
-      <div>
-        <p class="cod-sub">Day result for this coin</p>
-        <table class="cod-t">
-          <tr><td>Trades</td><td>${d.count}</td></tr>
-          <tr><td>Result</td><td class="${d.pnl >= 0 ?"cod-rr-ok" : "cod-rr-bad"}">${d.pnl < 0 ? "-" : "+"}$${Math.abs(d.pnl).toFixed(2)}</td></tr>
-          <tr><td>Last exit</td><td>${d.lastCloseAt ? new Date(d.lastCloseAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : "—"}</td></tr>
-          ${d.side ? `<tr><td>Side</td><td>${d.side}</td></tr>` : ""}
-        </table>
-      </div>
-      <div>
-        <p class="cod-sub">Where the coin stands now</p>
-        <table class="cod-t">${factRows}</table>
-      </div>
-      <div>
-        <p class="cod-sub">Why no entry is offered</p>
-        <ul class="cod-flags">${(p.notes || []).map((t) => `<li class="med">${t}</li>`).join("")}</ul>
-      </div>
-    </div>`;
+    <div class="table-wrap"><table class="table table--compact">
+      <thead><tr>
+        <th>Coin</th><th class="num">Funding now, APR</th><th class="num">Week avg, APR</th>
+        <th class="num col-opt">Hours paid</th><th class="num col-opt">Spot vs perp</th>
+        <th class="num">Break-even</th><th class="num">Per $1k a day</th>
+      </tr></thead>
+      <tbody>${rows
+        .map((r) => `<tr>
+          <td class="strong">${r.coin}</td>
+          <td class="num mono ${r.aprNow > 0 ? "up" : "down"}">${carryNum(r.aprNow)}%</td>
+          <td class="num mono ${(r.aprAvg ?? 0) > 0 ? "up" : "down"}">${r.aprAvg == null ? "—" : `${carryNum(r.aprAvg)}%`}</td>
+          <td class="num mono col-opt">${r.positiveShare == null ? "—" : `${Math.round(r.positiveShare * 100)}%`}</td>
+          <td class="num mono col-opt">${carryNum(r.basisBp)} bp</td>
+          <td class="num mono">${carryBreakEven(r)}</td>
+          <td class="num mono">${r.usdPerDayPer1k == null ? "—" : `$${r.usdPerDayPer1k.toFixed(2)}`}</td>
+        </tr>`)
+        .join("")}</tbody>
+    </table></div>`;
 }
 
-/** Разбор монеты, в которой оператор сидит: ведение позиции, а не вход. */
-function codRenderHeld(p) {
-  const st = COD_STATUS[p.status] || { cls: "watch", label: p.status };
-  const pos = p.position;
-  const f = p.features;
-  const pl = p.plan;
-
-  const posRows = `
-    <tr><td>Your entry</td><td>${codFmtPx(pos.entryPx)}</td></tr>
-    <tr><td>Now</td><td>${codSigned(pos.gainPct)}</td></tr>
-    <tr><td>Position size</td><td>${fmtUsd(pos.notionalUsd)}</td></tr>
-    <tr><td>Unrealized</td><td>${pos.unrealizedPnl < 0 ? "-" : "+"}$${Math.abs(pos.unrealizedPnl).toFixed(2)}</td></tr>`;
-
-  const planRows = pl
-    ? `
-    <tr><td>Planned entry</td><td>${codFmtPx(pl.entry)}</td></tr>
-    <tr><td>Plan stop</td><td>${codFmtPx(pl.stop)} · ${pl.toStopPct.toFixed(2)}% away</td></tr>
-    <tr><td>Plan target</td><td>${codFmtPx(pl.target)} · ${pl.toTargetPct.toFixed(2)}% away</td></tr>
-    <tr><td>Now in R</td><td class="${pl.rNow >= 0 ?"cod-rr-ok" : "cod-rr-bad"}">${pl.rNow == null ? "—" : `${pl.rNow >= 0 ? "+" : ""}${pl.rNow.toFixed(2)}R`}</td></tr>
-    <tr><td>Progress to target</td><td>${pl.progressPct == null ? "—" : `${pl.progressPct.toFixed(0)}%`}</td></tr>`
-    : `<tr><td colspan="2" class="oi-muted">Entry did not come from this card — no plan to compare against</td></tr>`;
-
-  const factRows = f
-    ? `
-    <tr><td>24h move</td><td>${codSigned(f.chg24h, 1)}</td></tr>
-    <tr><td>Last 4h</td><td>${codSigned(f.chg4h)}</td></tr>
-    <tr><td>Position in the 72h range</td><td>${(f.rangePos * 100).toFixed(0)}%</td></tr>
-    <tr><td>15m structure</td><td>${f.structLegs} ${p.side === "SHORT" ? "lower-high" : "higher-low"}</td></tr>
-    <tr><td>Volume now / peak</td><td>${f.volDecay == null ? "—" : `${(f.volDecay * 100).toFixed(0)}%`}</td></tr>
-    <tr><td>1h trend</td><td>${f.trend1h === "up" ? `${icon("rising")} up` : f.trend1h === "down" ? `${icon("falling")} down` : `${icon("flat")} range`}</td></tr>`
-    : `<tr><td colspan="2" class="oi-muted">The coin no longer passes the entry filter</td></tr>`;
-
-  const notes = (p.notes || []).concat((p.flags || []).map((x) => x.text));
-
-  return `
-    <div class="cod-head">
-      <div class="cod-head-main">
-        <span class="cod-heldbadge">in position</span>
-        <span class="ss-badge ss-badge--${p.side.toLowerCase()}">${icon(p.side === "SHORT" ? "short" : "long")} ${p.side}</span>
-        <span class="ss-coin">${p.coin}</span>
-      </div>
-      <div class="cod-verdict ${st.cls}">${p.headline}</div>
-    </div>
-    <p class="cod-detail">${p.detail}</p>
-    <div class="cod-grid cod-grid--sp">
-      <div>
-        <p class="cod-sub">Your position</p>
-        <table class="cod-t">${posRows}</table>
-      </div>
-      <div>
-        <p class="cod-sub">The plan you entered on</p>
-        <table class="cod-t cod-levels">${planRows}</table>
-      </div>
-      <div>
-        <p class="cod-sub">Where the coin stands now</p>
-        <table class="cod-t">${factRows}</table>
-        ${
-          notes.length
-            ? `<p class="cod-sub cod-sub--sp">What to watch</p>
-               <ul class="cod-flags">${notes.map((t) => `<li class="med">${t}</li>`).join("")}</ul>`
-            : ""
-        }
-      </div>
-    </div>
-    <p class="cod-detail cod-detail--sp">
-      The card deliberately does not compute a new entry here: suggesting an add to
-      an open position is an averaging-down machine.
-    </p>`;
-}
-
-function codRenderBody() {
-  const body = document.getElementById("cod-body");
-  const tabs = codAllTabs();
-  if (!tabs.length) {
-    const others = codData?.others?.length ?? 0;
+async function loadCarry() {
+  const body = document.getElementById("carry-body");
+  const meta = document.getElementById("carry-meta");
+  let data;
+  try {
+    data = await fetchJson("/api/carry");
+  } catch {
+    data = null;
+  }
+  if (!alive || !body) return;
+  if (!data?.ok) {
     body.innerHTML = emptyState({
-      glyph: "pause",
-      title: "No setup today",
-      hint:
-        `No coin reached ${codData?.thresholds?.SHOW_MIN_SCORE ?? 3}/5. ` +
-        (others ? `Candidates reviewed: ${others} — each fell short. ` : "") +
-        "Skipping the day is a decision too.",
+      glyph: "danger",
+      title: "Carry is unavailable",
+      hint: data?.message || "The dashboard did not answer. Reload the page to try again.",
     });
     return;
   }
-  const p = tabs.find((x) => x.coin === codActive) || tabs[0];
-  codActive = p.coin;
-  if (p.tradedToday) {
-    settle(body, codRenderTradedToday(p));
-    return;
+  if (meta) {
+    const f = data.fees;
+    meta.textContent = `fees ${f.source}: perp ${carryNum(f.perpTaker, 2)} / spot ${carryNum(f.spotTaker, 2)} bp taker`;
   }
-  if (p.held) {
-    settle(body, codRenderHeld(p));
-    return;
-  }
-  const f = p.features;
-  const l = p.levels;
-  const rrOk = l && l.rr >= (codData?.thresholds?.MIN_RR ?? 1.5);
-
-  const hitRows = Object.entries(COD_HIT_LABEL)
-    .map(
-      ([k, label]) =>
-        `<tr><td class="${p.hits[k] ?"cod-hit" : "cod-miss"}">${icon(p.hits[k] ? "check" : "flat")}${label}</td><td>${p.hits[k] ? "yes" : "no"}</td></tr>`,
-    )
-    .join("");
-
-  const factRows = `
-    <tr><td>Price</td><td>${codFmtPx(f.price)}</td></tr>
-    <tr><td>Move 24h / 48h</td><td>${codSigned(f.chg24h, 1)} / ${codSigned(f.chg48h, 1)}</td></tr>
-    <tr><td>Last 4h</td><td>${codSigned(f.chg4h)}</td></tr>
-    <tr><td>Position in the 72h range</td><td>${(f.rangePos * 100).toFixed(0)}%</td></tr>
-    <tr><td>72h range</td><td>${codFmtPx(f.lo72)} — ${codFmtPx(f.hi72)}</td></tr>
-    <tr><td>15m structure</td><td>${f.structLegs} ${p.side === "SHORT" ? "lower-high" : "higher-low"}</td></tr>
-    <tr><td>Volume now / peak</td><td>${f.volDecay == null ? "—" : `${(f.volDecay * 100).toFixed(0)}%`}</td></tr>
-    <tr><td>ATR(1h) · ER(24h)</td><td>${f.atr1hPct == null ? "—" : `${f.atr1hPct.toFixed(2)}%`} · ${f.er24 == null ? "—" : f.er24.toFixed(2)}</td></tr>
-    <tr><td>OI / 24h turnover</td><td>${fmtUsd(f.oiUsd)} / ${fmtUsd(f.volume24hUsd)}${f.oiVolRatio != null ? ` (${f.oiVolRatio.toFixed(2)}×)` : ""}</td></tr>
-    <tr><td>Funding APR</td><td>${f.fundingApr == null ? "—" : `${f.fundingApr >= 0 ? "+" : ""}${f.fundingApr.toFixed(0)}%`}</td></tr>
-    <tr><td>1h trend</td><td>${f.trend1h === "up" ? `${icon("rising")} up` : f.trend1h === "down" ? `${icon("falling")} down` : `${icon("flat")} range`}</td></tr>`;
-
-  const levelRows = l
-    ? `
-    <tr><td>Entry</td><td>${codFmtPx(l.entry)}</td></tr>
-    <tr><td>Stop <span class="oi-muted">(place it BEFORE entry)</span></td><td>${codFmtPx(l.stop)} · ${l.riskPct.toFixed(2)}%</td></tr>
-    <tr><td>Target${l.targetProjected ? ' <span class="oi-muted">(projected)</span>' : ""}</td><td>${codFmtPx(l.target)} · ${l.rewardPct.toFixed(2)}%</td></tr>
-    ${l.farTarget ? `<tr><td>Far level <span class="oi-muted">(runner)</span></td><td>${codFmtPx(l.farTarget)}</td></tr>` : ""}
-    <tr><td>R:R</td><td class="${rrOk ?"cod-rr-ok" : "cod-rr-bad"}">${l.rr.toFixed(2)}</td></tr>`
-    : `<tr><td colspan="2" class="oi-muted">Levels could not be built</td></tr>`;
-
-  const flags = p.flags.length
-    ? `<ul class="cod-flags">${p.flags.map((fl) => `<li class="${fl.severity}">${fl.text}</li>`).join("")}</ul>`
-    : `<p class="cod-detail">The engine found no obvious red flags — which does not make the setup safe.</p>`;
-
-  settle(
-    body,
-    `
-    <div class="cod-head">
-      <div class="cod-head-main">
-        ${p.dayContext ? '<span class="cod-donebadge">already traded today</span>' : ""}
-        <span class="ss-badge ss-badge--${p.side.toLowerCase()}">${icon(p.side === "SHORT" ? "short" : "long")} ${p.side}</span>
-        <span class="ss-coin">${p.coin}</span>
-        ${codSegs(p.score, p.side)}
-        <span class="oi-muted cod-score">${p.score}/5</span>
-      </div>
-      <div class="cod-verdict ${p.verdict.tone}">${p.verdict.headline}</div>
-    </div>
-    <p class="cod-detail">${p.verdict.detail}</p>
-    <div class="cod-grid cod-grid--sp">
-      <div>
-        <p class="cod-sub">What lined up · ${p.score}/5</p>
-        <table class="cod-t">${hitRows}</table>
-      </div>
-      <div>
-        <p class="cod-sub">Numbers</p>
-        <table class="cod-t">${factRows}</table>
-      </div>
-      <div>
-        <p class="cod-sub">Trade plan</p>
-        <table class="cod-t cod-levels">${levelRows}</table>
-        <p class="cod-sub cod-sub--sp">What argues against</p>
-        ${flags}
-      </div>
-    </div>`,
-  );
-}
-
-// Форвард-лог. Главное число здесь — excess (ход монеты минус ход BTC за то же
-// окно), а не сырой ход: без вычета бенчмарка падение альты на общем сливе
-// неотличимо от отработавшего фейда.
-function codRenderForward() {
-  const el = document.getElementById("cod-fwd");
-  const fw = codData?.forward;
-  if (!fw) {
-    el.hidden = true;
-    return;
-  }
-  el.hidden = false;
-
-  const rows = Object.entries(fw.horizons || {})
-    .map(([key, h]) => {
-      const hours = key.replace("h", "");
-      if (!h.n) return `<div>${hours}h — no data yet</div>`;
-      const raw = h.avgPct == null ? "—" : `${h.avgPct >= 0 ? "+" : ""}${h.avgPct.toFixed(2)}%`;
-      const ex =
-        h.avgExcessPct == null
-          ? "—"
-          : `<b class="${h.avgExcessPct > 0 ?"oi-pos" : h.avgExcessPct < 0 ? "oi-neg" : ""}">${
-              h.avgExcessPct >= 0 ? "+" : ""
-            }${h.avgExcessPct.toFixed(2)}%</b>`;
-      const wr = h.excessWinRate == null ? "—" : `${h.excessWinRate.toFixed(0)}%`;
-      return `<div>${hours}h · n=<b>${h.n}</b> · move <b>${raw}</b> · vs BTC ${ex} · beats market ${wr}</div>`;
-    })
-    .join("");
-
-  const verdict = fw.enoughForVerdict
-    ? ""
-    : `<div class="oi-neg cod-fwd-warn">n &lt; 20 at 24h — NO conclusions about edge, this is still noise.</div>`;
-
-  el.innerHTML = `<b>Forward log:</b> <b>${fw.total}</b> picks, <b>${fw.pending}</b> still maturing.
-    ${rows}${verdict}`;
-}
-
-async function loadCoinOfDay(force = false) {
-  const meta = document.getElementById("cod-meta");
-  meta.textContent = "scanning…";
-  try {
-    codData = await fetchJson(`/api/coin-of-day${force ? "?refresh=1" : ""}`);
-    if (!alive) return;
-    if (codData.error) throw new Error(codData.error);
-    const age = codData.cached ? ` · cached ${codData.ageSec}s ago` : "";
-    meta.textContent = codData.scanned == null
-      ? ""
-      : `reviewed ${codData.scanned} of ${codData.universe}${age}`;
-      if (!codAllTabs().some((p) => p.coin === codActive)) codActive = codAllTabs()[0]?.coin ?? null;
-    codRenderTabs();
-    codRenderBody();
-    codRenderForward();
-  } catch (err) {
-    if (!alive) return;
-    meta.textContent = "error";
-    document.getElementById("cod-body").innerHTML =
-      emptyState({
-        glyph: "danger",
-        title: "Scan failed",
-        hint: `${err.message}. Press Recompute to try again.`,
+  body.innerHTML = data.rows.length
+    ? `<p class="oi-note">${carryLead(data.rows)}</p>${carryTable(data.rows)}`
+    : emptyState({
+        glyph: "info",
+        title: "No hedgeable pair right now",
+        hint: "Spot and perp prices disagree by more than 1% on every pair, so none is shown.",
       });
-  }
 }
 
 // ── состояние обзора ──
@@ -732,50 +444,27 @@ function view() {
   return `
     <header id="page-header"></header>
 
-    <section class="card" id="cod-card">
+    <section class="card" id="carry-card">
       <div class="card-header">
-        <div class="card-title">Coin of the day · fading an exhausted tail</div>
+        <div class="card-title">Carry · hedged funding</div>
         <div class="card-tools">
-          <span class="card-meta" id="cod-meta"></span>
-          <button class="btn btn--sm" id="cod-refresh" type="button">
-            <i data-icon="recompute"></i>Recompute
-          </button>
+          <span class="card-meta" id="carry-meta"></span>
         </div>
       </div>
-      <div class="tabs tabs--wrap cod-tabs" id="cod-tabs" hidden></div>
-      <div id="cod-body">
-        <!-- Скелетон формы карточки: заголовок + бейдж стороны + две
-             колонки таблицы. Пока данных нет, место под них уже занято —
-             при подстановке макет не прыгает. -->
-        <div class="cod-head">
-          <div class="cod-head-main">
-            <span class="sk sk-num sk-num--lg"></span>
-            <span class="sk sk-pill"></span>
-          </div>
-          <span class="sk sk-chip"></span>
-        </div>
-        <div class="cod-grid">
-          <div class="sk-text">
-            <span class="sk sk-line"></span>
-            <span class="sk sk-line"></span>
-            <span class="sk sk-line"></span>
-          </div>
-          <div class="sk-text">
-            <span class="sk sk-line"></span>
-            <span class="sk sk-line"></span>
-            <span class="sk sk-line"></span>
-          </div>
+      <div id="carry-body">
+        <div class="sk-text">
+          <span class="sk sk-line"></span>
+          <span class="sk sk-line"></span>
+          <span class="sk sk-line"></span>
         </div>
       </div>
-      <div class="cod-fwd" id="cod-fwd" hidden></div>
       <p class="oi-note oi-note--sp">
-        Score 0–5: <b>edge of the 72h range · 4h reversal · 15m structure · volume
-        decay · OI not overheated</b>. The 24h move sets the side and the ordering, but
-        <b>filters nothing out</b>: coins used to vanish from the screen as the fade
-        played out. Default side is short (journal edge: payoff 0.70 on shorts vs 0.44
-        on longs). <b>This is analysis, not a proven-edge signal</b> — every pick is
-        written to a forward log alongside BTC's move over the same window, and no
-        conclusion is drawn before 20+ closed.
+        Buy the coin on spot and short the same size on the perp: the price cancels out,
+        the funding the short collects stays. Only coins with a live spot market on
+        Hyperliquid are listed. Break-even is the round trip of both legs divided by the
+        week's average funding, market orders / post-only. <b>Funding flips</b> — a pair that
+        pays today can cost tomorrow, so the week average and the share of paid hours
+        matter more than the rate now.
       </p>
     </section>
 
@@ -891,8 +580,6 @@ function view() {
 
 /** Слушатели статичной разметки экрана. Живут ровно столько же, сколько она. */
 function bindControls() {
-  document.getElementById("cod-refresh").addEventListener("click", () => loadCoinOfDay(true));
-
   document.getElementById("oi-prev").addEventListener("click", () => {
     if (page > 0) {
       page--;
@@ -944,8 +631,6 @@ export default {
   render(outlet) {
     alive = true;
     overview = [];
-    codData = null;
-    codActive = null;
     activeCoin = null;
     filter = "";
     page = 0;
@@ -969,7 +654,7 @@ export default {
 
     const offTheme = onThemeChange(applyOiChartTheme);
 
-    loadCoinOfDay();
+    loadCarry();
     // ?coin= приходит со Screen: история этой монеты открывается сразу.
     const linkedCoin = new URLSearchParams(location.search).get("coin");
     loadOverview().then(() => {

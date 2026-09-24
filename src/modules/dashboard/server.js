@@ -88,7 +88,7 @@ import { handlePnlSummary, handleInsights, handleDayJournal, handleDayNoteSave }
 import { handleTradeBreakdown } from "./routes/tradeBreakdown.js";
 import { handleTradeJournal } from "./routes/tradeJournal.js";
 import { handlePositionNanny } from "./routes/positionNanny.js";
-import { handleCoinOfDay } from "./routes/coinOfDay.js";
+import { handleCarry } from "./routes/carry.js";
 import { handleEntryFilter } from "./routes/entryFilter.js";
 import { handleLevels } from "./routes/levels.js";
 import {
@@ -99,7 +99,6 @@ import {
   handleFlowCoins,
 } from "./routes/flow.js";
 import { isTargetTrailArmed } from "../../app/adoptSupervise.js";
-import { resolveOpenPicks } from "../coinOfDayLog.js";
 import { rebuild as rebuildCalibrator, readCache as calibratorCache } from "../calibrator.js";
 import {
   scan as scanUnlocks,
@@ -1145,7 +1144,7 @@ export function startDashboard() {
   app.get("/api/forwards/peeks", handleForwardPeeks);
   app.get("/api/forwards/:id/breakdown", handleForwardBreakdown);
   app.get("/api/position-nanny", handlePositionNanny);
-  app.get("/api/coin-of-day", handleCoinOfDay);
+  app.get("/api/carry", handleCarry);
   app.get("/api/entry-filter", handleEntryFilter);
   // Механические уровни: зоны считаются правилом, страница даёт только геометрию сделки.
   app.get("/api/levels", handleLevels);
@@ -1405,14 +1404,6 @@ export function startDashboard() {
       .catch((err) => logger.debug(`[Calibrator] rebuild failed: ${err.message}`));
   setTimeout(calibTick, 3 * 60_000);
   setInterval(calibTick, 12 * 3600_000);
-
-  // Резолвер «Монеты дня»: догоняет ход монеты и BTC на 4/8/24ч.
-  // Раз в 15 минут = темп закрытия бара; measurement-only, торговлю не трогает.
-  setInterval(() => {
-    resolveOpenPicks().catch((err) =>
-      logger.debug(`[CoinOfDay] resolve tick failed: ${err.message}`),
-    );
-  }, 15 * 60_000);
 
   broadcastTimer = setInterval(async () => {
     if (!wss || wss.clients.size === 0) return;
