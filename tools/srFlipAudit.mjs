@@ -243,7 +243,7 @@ async function readZip(path) {
   return rows;
 }
 
-async function loadSymbol(files, verification) {
+export async function loadSymbol(files, verification) {
   const rows = [];
   for (const file of files) {
     const size = statSync(file.rawPath).size;
