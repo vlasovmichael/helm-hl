@@ -10,53 +10,63 @@
 
       <header id="page-header"></header>
 
-      <!-- 00 / Порядок работы. Страница бесполезна, пока непонятно, что она
-           отвечает: вопрос у неё один и ответ тоже один. -->
+      <!-- 00 / Порядок работы: три шага, иначе страница читается как свалка линий. -->
       <section class="card lv-how" id="sec-lv-how">
-        <div class="card-header">
-          <div class="card-title">How to use this page</div>
-        </div>
         <ol class="lv-steps">
+          <li>Pick a coin. The chart keeps only the nearest zones: <b>R</b> above price, <b>S</b> below.</li>
           <li>
-            Bring the idea with you — a chart read, a channel call, a video. The page does
-            not produce one; it only checks whether that idea's stop and target pay.
+            Two plans are drawn from them: <b>A</b> buys the bounce off support, <b>B</b> sells the
+            rejection at resistance. The shaded box is the trade — green to the target, red to the stop.
           </li>
-          <li>Pick a coin and timeframe in the chart below — the zones redraw for it.</li>
-          <li>Choose the side the idea points to: <b>Long</b> or <b>Short</b>.</li>
-          <li>Type the price you would enter at, or press <b>Use market</b>.</li>
-          <li>Read the verdict. Either the ratio clears the floor, or there is no trade.</li>
-          <li>
-            At market price the ratio is usually poor. <b>Ready entries</b> below lists
-            the prices at the zones where it is not — press <b>Use</b> to load one.
-          </li>
+          <li>Pick the one your read agrees with, then size it from your risk below.</li>
         </ol>
-        <p class="lv-how-note">
-          The page never says where price will go. It answers one question: given
-          this entry, is there a level to put the stop behind and a level to aim
-          at, and does what is left over pay for the risk and the fees.
-        </p>
-        <p class="lv-how-note">
-          A retest of a broken level is not a reason to enter on its own: across five
-          years of Binance history it earned about as much as the fees took.
-        </p>
       </section>
 
-      <!-- 01 / График с зонами. Линии считает сервер по фиксированному правилу,
-           поэтому повторный запрос даёт те же линии. -->
+      <!-- 01 / График: зоны, Фибо, стрелки сценариев и коробка плана. -->
       <section class="card" id="sec-lv-chart">
         <div class="card-header">
           <div
             class="card-title"
-            data-card="Levels are computed by a rule, not drawn by hand: fractal swings, previous UTC day high and low, volume profile POC and value area, and round numbers. Two runs on the same candles give the same lines."
+            data-card="Levels are computed by a rule, not drawn by hand: fractal swings, previous UTC day high and low, volume profile POC and value area, and round numbers. Fibonacci is drawn from the window's lowest low to its highest high, in the order they happened."
           >
             Levels
           </div>
           <div class="lv-controls">
             <div id="lv-coin"></div>
             <div class="seg" id="lv-tf"></div>
+            <div class="lv-layers" id="lv-layers"></div>
           </div>
         </div>
         <div class="chart-container" id="lv-chart"></div>
+      </section>
+
+      <!-- 01b / Сценарии. Обе стороны всегда рядом: одна стрелка читалась бы как прогноз. -->
+      <section class="card" id="sec-lv-scenarios">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-card="Each plan enters at the edge of the nearest zone whose ratio clears the floor, stops behind it and aims at the next zone. The percentage replays every bar of the loaded window with the same stop and target distance."
+          >
+            Scenarios
+          </div>
+        </div>
+        <div id="lv-scenarios"></div>
+      </section>
+
+      <!-- 01c / Размер от риска: убыток на стопе задаётся долей депо. -->
+      <section class="card" id="sec-lv-size">
+        <div class="card-header">
+          <div class="card-title" data-card="Size follows from the stop: the loss at the stop, fees included, equals the risk you set. A wider stop means a smaller position, never a bigger loss.">
+            Position size
+          </div>
+        </div>
+        <div class="lv-entry">
+          <label class="label" for="lv-equity">Account, $</label>
+          <input class="field mono" id="lv-equity" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />
+          <label class="label" for="lv-risk">Risk per trade, %</label>
+          <input class="field mono" id="lv-risk" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />
+        </div>
+        <div id="lv-size"></div>
       </section>
 
       <!-- 02 / Решение. Единственный вывод страницы — число RR и порог. -->
@@ -66,7 +76,7 @@
             class="card-title"
             data-card="The stop goes behind the nearest zone against the position, the target at the nearest zone in its favour. What comes out is a ratio. The ratio decides whether the trade is payable — it says nothing about direction."
           >
-            Entry plan
+            Custom entry
           </div>
           <div class="seg" id="lv-side"></div>
         </div>

@@ -1,9 +1,5 @@
 /* ──────────────────────── Levels — уровни и план входа */
 
-/* График выше обычного: зоны и свечи читаются вместе, тесная рамка их слепляет. */
-#lv-chart {
-  height: 520px;
-}
 
 .lv-steps {
   margin: 0;
@@ -151,4 +147,410 @@
 
 .lv-row--below td:first-child {
   border-left: 2px solid var(--pnl-up);
+}
+
+/* ── Слой сценариев поверх графика */
+
+#lv-chart {
+  height: 560px;
+}
+
+.lv-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
+  overflow: visible;
+}
+
+.lv-box--win {
+  fill: var(--green-soft);
+  stroke: var(--green-line);
+}
+
+.lv-box--loss {
+  fill: var(--red-soft);
+  stroke: var(--red-line);
+}
+
+.lv-box {
+  stroke-width: 1;
+  transform-box: fill-box;
+}
+
+/* Половина коробки над входом растёт вверх от его линии, под входом — вниз. */
+.lv-box--up {
+  transform-origin: 50% 100%;
+}
+
+.lv-box--down {
+  transform-origin: 50% 0%;
+}
+
+.lv-box-entry {
+  stroke: var(--text-primary);
+  stroke-width: 1.5;
+}
+
+.lv-box-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  font-weight: 700;
+}
+
+.lv-box-label--win {
+  fill: var(--green);
+}
+
+.lv-box-label--loss {
+  fill: var(--red);
+}
+
+.lv-path {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.lv-path--long,
+.lv-head--long {
+  stroke: var(--green);
+  fill: var(--green);
+}
+
+.lv-path--short,
+.lv-head--short {
+  stroke: var(--red);
+  fill: var(--red);
+}
+
+.lv-path.lv-path--long,
+.lv-path.lv-path--short {
+  fill: none;
+}
+
+/* Неактивный сценарий виден как альтернатива, но не спорит с выбранным. */
+.lv-path--dim {
+  opacity: 0.32;
+  stroke-dasharray: 0.012 0.012;
+}
+
+.lv-dot {
+  stroke: var(--card-bg);
+  stroke-width: 2;
+}
+
+.lv-dot--long {
+  fill: var(--green);
+}
+
+.lv-dot--short {
+  fill: var(--red);
+}
+
+.lv-path-tag {
+  font-family: var(--font-display);
+  font-size: var(--fs-base);
+  font-weight: 700;
+  fill: var(--text-primary);
+}
+
+/* Вход плана — одна мысль по порядку: коробка раскрывается от входа,
+   путь тянется от цены к цели, подписи догоняют. Играет только на смену плана. */
+@keyframes lv-grow {
+  from {
+    transform: scaleY(0);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes lv-draw {
+  from {
+    stroke-dashoffset: 1;
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+}
+
+@keyframes lv-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes lv-meter-fill {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.lv-box.is-anim {
+  animation: lv-grow 0.5s var(--ease) both;
+}
+
+.lv-box-entry.is-anim {
+  animation: lv-fade 0.3s var(--ease) both;
+}
+
+.lv-path--draw:not(.lv-path--dim) {
+  stroke-dasharray: 1;
+  animation: lv-draw 0.9s var(--ease) 0.25s both;
+}
+
+.lv-path--draw.lv-path--dim {
+  animation: lv-fade 0.5s var(--ease) 0.5s both;
+}
+
+.lv-dot.is-anim,
+.lv-path-tag.is-anim,
+.lv-box-label.is-anim {
+  animation: lv-fade 0.35s var(--ease) 0.7s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lv-box.is-anim,
+  .lv-box-entry.is-anim,
+  .lv-path--draw,
+  .lv-dot.is-anim,
+  .lv-path-tag.is-anim,
+  .lv-box-label.is-anim,
+  .lv-meter-fill {
+    animation: none;
+  }
+}
+
+/* ── Карточки сценариев */
+
+.lv-steps b {
+  font-family: var(--font-mono);
+}
+
+.lv-sc-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-4);
+
+  @media (max-width: 760px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lv-sc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  width: 100%;
+  padding: var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.25s var(--ease),
+    box-shadow 0.25s var(--ease),
+    transform 0.25s var(--ease);
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+.lv-sc--long.is-on {
+  border-color: var(--green-line);
+  box-shadow: inset 3px 0 0 var(--green);
+}
+
+.lv-sc--short.is-on {
+  border-color: var(--red-line);
+  box-shadow: inset 3px 0 0 var(--red);
+}
+
+.lv-sc--off {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.lv-sc-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+
+  b {
+    font-family: var(--font-display);
+    font-size: var(--fs-lead);
+    letter-spacing: var(--ls-tight);
+  }
+}
+
+.lv-sc-sub {
+  margin: 0;
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+}
+
+.lv-sc-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--sp-2);
+
+  @media (max-width: 520px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.lv-sc-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+
+  b {
+    font-size: var(--fs-lead);
+  }
+
+  small {
+    font-size: var(--fs-small);
+    color: var(--text-secondary);
+  }
+}
+
+.lv-sc-cell--stop b,
+.lv-sc-cell--no b {
+  color: var(--red);
+}
+
+.lv-sc-cell--target b,
+.lv-sc-cell--go b {
+  color: var(--green);
+}
+
+.lv-odds {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border);
+}
+
+.lv-odds-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--sp-3);
+  font-size: var(--fs-body);
+
+  b {
+    font-size: var(--fs-h3);
+  }
+}
+
+.lv-odds-row--sub {
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+}
+
+.lv-meter {
+  width: 100%;
+  height: 8px;
+  display: block;
+}
+
+.lv-meter-track {
+  fill: var(--canvas-subtle);
+}
+
+.lv-meter-fill {
+  fill: var(--text-secondary);
+  transform-box: fill-box;
+  transform-origin: 0 50%;
+  animation: lv-meter-fill 0.7s var(--ease) 0.15s both;
+}
+
+.lv-odds--go .lv-meter-fill {
+  fill: var(--green);
+}
+
+.lv-odds--no .lv-meter-fill {
+  fill: var(--red);
+}
+
+.lv-meter-need {
+  stroke: var(--text-primary);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.lv-odds-say {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.lv-odds--go .lv-odds-say {
+  color: var(--green);
+}
+
+.lv-odds--no .lv-odds-say {
+  color: var(--red);
+}
+
+.lv-odds-foot {
+  margin: 0;
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+}
+
+.lv-fib {
+  stroke: var(--text-secondary);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+  opacity: 0.55;
+}
+
+.lv-fib-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  fill: var(--text-secondary);
+}
+
+.lv-layers {
+  display: flex;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 760px) {
+  #lv-chart {
+    height: 420px;
+  }
 }

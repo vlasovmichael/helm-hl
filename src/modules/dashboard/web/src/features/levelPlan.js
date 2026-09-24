@@ -10,13 +10,13 @@
 // ─────────────────────────────────────────────────
 
 export const MIN_RR = 1.5;
-const ROUND_TRIP_BP = 8.64; // круг тейкером на HL
+export const ROUND_TRIP_BP = 8.64; // круг тейкером на HL
 const BUFFER_ATR = 0.25; // стоп прячется за зону на эту долю ATR
 
-const esc = (s) =>
+export const esc = (s) =>
   String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-const fmtPx = (p) =>
+export const fmtPx = (p) =>
   !Number.isFinite(p) ? "—" : p >= 1000 ? p.toFixed(1) : p >= 1 ? p.toFixed(4) : p.toPrecision(4);
 
 const pct = (a, b) => (Math.abs(a - b) / b) * 100;
