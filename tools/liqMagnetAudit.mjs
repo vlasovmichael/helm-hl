@@ -58,7 +58,7 @@ export function nyOpenUtc(dayStart) {
   return null;
 }
 
-function readOi(dir) {
+export function readOi(dir) {
   const oi = new Map();
   for (const file of readdirSync(dir).filter((name) => name.endsWith(".zip")).sort()) {
     const text = spawnSync("unzip", ["-p", `${dir}/${file}`], { encoding: "utf8", maxBuffer: 1 << 26 }).stdout;
