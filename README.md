@@ -107,7 +107,7 @@ smaller than the fees is a dead edge no matter how small the p-value.
 npm install
 cp .env.example .env      # set PUBLIC_WALLET_ADDRESS at minimum
 
-npm test                  # 573 tests + 4 CI guards
+npm run verify            # guards + lint + tests, same as CI
 npm run build:dash        # build the dashboard front-end
 npm start                 # bot + dashboard on :3010
 ```
@@ -165,16 +165,18 @@ Everything is environment variables; `.env.example` carries the full list with c
 <summary><b>Testing and the four guards</b></summary>
 
 ```bash
-npm test        # node:test, no framework
-npm run lint    # eslint
+npm test          # node:test, no framework
+npm run guards    # the guards below
+npm run lint      # eslint
+npm run verify    # all three; CI and deploy run this
 ```
 
-Before a single test runs, four guards sweep the codebase. Each one exists because a rule that lived
-only in prose failed to hold:
+The guards sweep the codebase and report every failure at once. Each one exists because a rule that
+lived only in prose failed to hold:
 
 | Guard | Fails when |
 |---|---|
-| `checkImports` | A relative import does not resolve. A dangling one once survived 378 green tests and would have killed the bot on start. |
+| `checkImports` | A relative import does not resolve, or server code reaches a devDependency that the production image does not install. |
 | `checkGlyphs` | An icon is an emoji instead of `icon()`, or a tooltip bypasses `data-tip`. |
 | `checkUiLanguage` | Russian text reaches a surface the browser can render. |
 | `checkComments` | A comment carries a date, a commit hash, or a changelog of how the code got written. Debt is ratcheted per file, so it can only go down. |

@@ -18,8 +18,8 @@ logs() {
 
 if [[ "${1:-}" == "--check" ]]; then logs; exit 0; fi
 
-echo "── локальные тесты ──"
-npm test >/dev/null || { echo "❌ тесты красные — выкатка отменена"; exit 1; }
+echo "── локальный verify ──"
+npm run -s verify >/dev/null || { echo "❌ verify красный — выкатка отменена"; exit 1; }
 
 if [[ -n "$(git status --porcelain)" ]]; then
   echo "❌ есть незакоммиченное: прод тянет из git, локальная папка не в счёт"
