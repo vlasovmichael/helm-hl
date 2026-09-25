@@ -18,10 +18,14 @@ import {
   readPrice,
   planFromZone,
   shownZones,
+  scenarios,
+  scenarioKey,
   renderRead,
+  renderScenarios,
   renderContext,
   renderOi,
   renderPlan,
+  renderSize,
   renderZones,
   SOURCE_NOTE,
 } from "./src/features/levelPlan.js";
@@ -65,6 +69,7 @@ const state = {
   coin: query.get("coin") || "BTC",
   tf: ["15m", "1h", "4h"].includes(query.get("tf")) ? query.get("tf") : "1h",
   data: null,
+  read: null,
   plan: null,
   coins: [],
 };
@@ -101,10 +106,25 @@ function sizeInputs() {
   return { equity: num("lv-equity"), riskPct: num("lv-risk") };
 }
 
+/** Смена плана проигрывает вход содержимого: видно, что числа сменились. */
+function settleIn(node) {
+  node.classList.remove("is-settling");
+  void node.offsetWidth;
+  node.classList.add("is-settling");
+  node.addEventListener("animationend", () => node.classList.remove("is-settling"), { once: true });
+}
+
 function showPlan(plan) {
+  const changed = scenarioKey(plan) !== scenarioKey(state.plan) || !plan;
   state.plan = plan;
   drawScene(shownZones(state.data, plan), plan, state.data?.thin || []);
-  renderPlan(el("lv-plan"), plan, sizeInputs());
+  renderScenarios(el("lv-scenarios"), state.read, plan);
+  renderPlan(el("lv-plan"), plan);
+  renderSize(el("lv-size"), plan, sizeInputs());
+  if (changed) {
+    settleIn(el("lv-plan"));
+    settleIn(el("lv-size"));
+  }
 }
 
 async function load() {
@@ -122,15 +142,18 @@ async function load() {
     state.data = null;
     node.innerHTML = `<div class="lv-empty">${err.message}</div>`;
     el("lv-read").innerHTML = "";
+    el("lv-scenarios").innerHTML = "";
     el("lv-context").innerHTML = "";
     el("lv-oi").innerHTML = "";
+    el("lv-size").innerHTML = "";
     el("lv-plan").innerHTML = `<div class="lv-empty">No data — nothing to plan.</div>`;
     el("lv-count").textContent = "";
     return;
   }
 
   const read = readPrice(state.data);
-  renderRead(el("lv-read"), read);
+  state.read = read;
+  renderRead(el("lv-read"), read, state.data.price);
   renderContext(el("lv-context"), state.data);
   renderOi(el("lv-oi"), state.data.coin, state.data.oi);
   await drawLevels(el("lv-chart"), state.data, (z) => showPlan(planFromZone(state.data, z)));
@@ -172,20 +195,16 @@ async function loadJournal() {
   }
 }
 
-el("lv-read").addEventListener("click", (e) => {
-  const btn = e.target.closest("[data-zone]");
-  const z = state.data?.zones.find((x) => x.name === btn?.dataset.zone);
-  if (!z) return;
-  if (btn.dataset.kind === "break") {
-    const read = readPrice(state.data);
-    showPlan([read.breakUp, read.breakDown].find((p) => p?.stopZone === z) || null);
-  } else showPlan(planFromZone(state.data, z));
+el("lv-scenarios").addEventListener("click", (e) => {
+  const key = e.target.closest("[data-scenario]")?.dataset.scenario;
+  const plan = state.read && scenarios(state.read).find((p) => scenarioKey(p) === key);
+  if (plan) showPlan(plan);
 });
 
 for (const id of ["lv-equity", "lv-risk"]) {
   el(id).addEventListener("input", () => {
     saveSize({ equity: el("lv-equity").value, risk: el("lv-risk").value });
-    renderPlan(el("lv-plan"), state.plan, sizeInputs());
+    renderSize(el("lv-size"), state.plan, sizeInputs());
   });
 }
 
@@ -201,7 +220,7 @@ el("lv-help-btn").addEventListener("click", () => {
     body: help.querySelector("[data-help-body]").innerHTML,
   });
 });
-paintIcons(el("sec-lv-chart"));
+paintIcons(el("sec-lv-plan"));
 
 setInterval(refreshOi, OI_REFRESH_MS);
 

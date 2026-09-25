@@ -84,6 +84,40 @@
   }
 }
 
+/* Легенда свечного графика, как у TV: монета и OHLC бара под курсором. */
+.chart-legend {
+  position: absolute;
+  top: var(--sp-2);
+  left: var(--sp-3);
+  /* Шкала цен справа шириной около 80px: легенда на неё не заходит. */
+  right: 88px;
+  z-index: 3;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-1) var(--sp-3);
+  pointer-events: none;
+  font-size: var(--fs-small);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+
+  strong {
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+  b {
+    margin-left: 3px;
+    font-family: var(--font-mono);
+    font-weight: 500;
+  }
+  .up {
+    color: var(--pnl-up);
+  }
+  .down {
+    color: var(--pnl-down);
+  }
+}
+
 /* Тултип графиков (OI, карта ликвидаций) — общий: курсор на канве один и
    тот же, а стиль подсказки не может зависеть от страницы. */
 .oi-tip {

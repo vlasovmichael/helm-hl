@@ -52,46 +52,22 @@
   color: var(--pnl-down);
 }
 
-.lv-nums {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: var(--sp-3);
+/* Сценарии в широком сегменте: на узком экране переносятся по два в ряд. */
+.lv-scenarios {
   margin-top: var(--sp-4);
+
+  .seg--wide {
+    flex-wrap: wrap;
+  }
+
+  .seg__btn {
+    flex: 1 1 220px;
+  }
 }
 
-.lv-num {
-  padding: var(--sp-3);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-}
-
-.lv-num-val {
-  font-size: var(--fs-h2);
-  font-weight: 700;
-  line-height: 1.1;
-  color: var(--text-primary);
-}
-
-.lv-num-sub {
-  margin-top: var(--sp-1);
-  font-size: var(--fs-small);
-  color: var(--text-secondary);
-}
-
-.lv-num--stop .lv-num-val {
-  color: var(--pnl-down);
-}
-
-.lv-num--target .lv-num-val {
-  color: var(--pnl-up);
-}
-
-.lv-num--go .lv-num-val {
-  color: var(--pnl-up);
-}
-
-.lv-num--no .lv-num-val {
-  color: var(--pnl-down);
+#lv-plan,
+#lv-size {
+  margin-top: var(--sp-4);
 }
 
 .lv-warn {
@@ -126,128 +102,15 @@
   border-left: 2px solid var(--pnl-up);
 }
 
-/* ── Слой зон и плана поверх графика */
+/* ── График */
 
 #lv-chart {
-  height: 560px;
+  height: 600px;
   margin-top: var(--sp-4);
 }
 
 #lv-chart.is-zone-hover {
   cursor: pointer;
-}
-
-.lv-overlay {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 3;
-  overflow: visible;
-}
-
-/* Тонкий объём — фон под зонами, пунктир отличает его от зоны. */
-.lv-thin {
-  fill: var(--accent-soft);
-  stroke: var(--accent-line);
-  stroke-dasharray: 4 4;
-}
-
-.lv-thin-name {
-  font-family: var(--font-mono);
-  font-size: var(--fs-small);
-  fill: var(--accent);
-  text-anchor: end;
-}
-
-/* Плотность прямоугольника — сила зоны: слабая почти прозрачная. */
-.lv-zone {
-  stroke-width: 1;
-}
-
-.lv-zone--sup {
-  fill: var(--green);
-  stroke: var(--green-line);
-}
-
-.lv-zone--res {
-  fill: var(--red);
-  stroke: var(--red-line);
-}
-
-.lv-zone--weak {
-  fill-opacity: 0.08;
-}
-
-.lv-zone--mid {
-  fill-opacity: 0.16;
-}
-
-.lv-zone--strong {
-  fill-opacity: 0.28;
-}
-
-.lv-zone.is-on {
-  stroke-width: 2;
-}
-
-.lv-zone-name {
-  font-family: var(--font-mono);
-  font-size: var(--fs-small);
-  font-weight: 700;
-}
-
-.lv-zone-name--sup {
-  fill: var(--green);
-}
-
-.lv-zone-name--res {
-  fill: var(--red);
-}
-
-.lv-box {
-  stroke-width: 1;
-}
-
-.lv-box--win {
-  fill: var(--green-soft);
-  stroke: var(--green-line);
-}
-
-.lv-box--loss {
-  fill: var(--red-soft);
-  stroke: var(--red-line);
-}
-
-.lv-box-entry {
-  stroke: var(--text-primary);
-  stroke-width: 1.5;
-}
-
-.lv-box-label {
-  font-family: var(--font-mono);
-  font-size: var(--fs-small);
-  font-weight: 700;
-}
-
-.lv-box-label--win {
-  fill: var(--green);
-}
-
-.lv-box-label--loss {
-  fill: var(--red);
-}
-
-.lv-box-label--entry {
-  fill: var(--text-primary);
-}
-
-.lv-picks {
-  display: flex;
-  gap: var(--sp-2);
-  flex-wrap: wrap;
-  margin-top: var(--sp-2);
 }
 
 /* Контекст BTC: подписи слева, числа моноширинные, вывод отдельной строкой. */

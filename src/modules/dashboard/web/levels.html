@@ -10,14 +10,14 @@
 
       <header id="page-header"></header>
 
-      <!-- 01 / График: вывод про цену сверху, зоны прямоугольниками, клик по зоне строит план. -->
-      <section class="card" id="sec-lv-chart">
+      <!-- 01 / План: что делать сейчас, сценарии и размер от риска. -->
+      <section class="card" id="sec-lv-plan">
         <div class="card-header">
           <div
             class="card-title"
-            data-card="Zones are computed by a rule, not drawn by hand: fractal swings, previous UTC day high and low, volume profile POC and value area, and round numbers. A denser box means more touches and more sources on the same price."
+            data-card="Entry at the edge of the zone, stop behind it, target at the next zone. Size follows from the stop: the loss at the stop, fees included, equals the risk you set."
           >
-            Levels
+            Plan
           </div>
           <button type="button" class="help-btn" id="lv-help-btn" data-card="How to use this page" aria-label="How to use this page">
             <i data-icon="help"></i>
@@ -28,8 +28,27 @@
           </div>
         </div>
         <div id="lv-read"></div>
-        <div id="lv-context"></div>
-        <div id="lv-oi"></div>
+        <div class="lv-scenarios" id="lv-scenarios"></div>
+        <div id="lv-plan"></div>
+        <div class="lv-entry">
+          <label class="label" for="lv-equity">Account, $</label>
+          <input class="field mono" id="lv-equity" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />
+          <label class="label" for="lv-risk">Risk per trade, %</label>
+          <input class="field mono" id="lv-risk" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />
+        </div>
+        <div id="lv-size"></div>
+      </section>
+
+      <!-- 02 / График: зоны прямоугольниками, клик по зоне строит план. -->
+      <section class="card" id="sec-lv-chart">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-card="Zones are computed by a rule, not drawn by hand: fractal swings, previous UTC day high and low, volume profile POC and value area, and round numbers. A denser box means more touches and more sources on the same price."
+          >
+            Chart
+          </div>
+        </div>
         <div class="chart-container" id="lv-chart"></div>
         <div class="lv-note">
           Click a zone to plan a trade from it: support plans a long, resistance plans a short. Dashed bands are thin volume — price
@@ -37,26 +56,16 @@
         </div>
       </section>
 
-      <!-- 02 / План выбранной зоны и размер от риска. -->
-      <section class="card" id="sec-lv-plan">
+      <!-- 03 / Контекст: чей ход и кто действовал по OI. -->
+      <section class="card" id="sec-lv-context">
         <div class="card-header">
-          <div
-            class="card-title"
-            data-card="Entry at the edge of the zone, stop behind it, target at the next zone. Size follows from the stop: the loss at the stop, fees included, equals the risk you set."
-          >
-            Plan
-          </div>
+          <div class="card-title" data-card="Whether the move belongs to the coin or to the market, and who acted by open interest.">Context</div>
         </div>
-        <div class="lv-entry">
-          <label class="label" for="lv-equity">Account, $</label>
-          <input class="field mono" id="lv-equity" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />
-          <label class="label" for="lv-risk">Risk per trade, %</label>
-          <input class="field mono" id="lv-risk" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />
-        </div>
-        <div id="lv-plan"></div>
+        <div id="lv-context"></div>
+        <div id="lv-oi"></div>
       </section>
 
-      <!-- 03 / Те же зоны списком. -->
+      <!-- 04 / Те же зоны списком. -->
       <section class="card" id="sec-lv-zones">
         <div class="card-header">
           <div class="card-title" data-card="All zones in the window. Strength counts separate approaches plus a bonus when more than one source lands on the same price.">
@@ -68,7 +77,7 @@
         <div class="lv-note" id="lv-sources"></div>
       </section>
 
-      <!-- 04 / Журнал разборов: что стало с каждым сценарием через 4 и 24 часа. -->
+      <!-- 05 / Журнал разборов: что стало с каждым сценарием через 4 и 24 часа. -->
       <section class="card" id="sec-lv-journal">
         <div class="card-header">
           <div
@@ -93,10 +102,10 @@
             <table class="table table--compact help-table">
               <tbody>
                 <tr><td>1. Монета и ТФ</td><td>15m — для входа внутри дня, 1h и 4h — чтобы увидеть общую картину.</td></tr>
-                <tr><td>2. Вывод</td><td>Строка над графиком: цена у поддержки, у сопротивления, посередине или только что пробила зону.</td></tr>
+                <tr><td>2. Вывод</td><td>Заголовок плана: что делать сейчас — входить, пропустить или ждать. Под ним — где цена и сколько до ближайших зон.</td></tr>
                 <tr><td>3. BTC</td><td>Чей ход: рынка или самой монеты. Если ход объясняется бетой к BTC, монета просто повторяет рынок.</td></tr>
                 <tr><td>OI</td><td>Открытый интерес сейчас и за те же окна, обновляется раз в 30 секунд. Цена вверх и OI вниз — закрываются шорты; цена вверх и OI вверх — открываются лонги. OI считает обе стороны сразу, поэтому говорит, кто действовал, но не куда пойдёт цена.</td></tr>
-                <tr><td>4. План</td><td>Кнопка сценария или клик по зоне на графике строит вход, стоп, цель и R:R.</td></tr>
+                <tr><td>4. План</td><td>Сценарий в ряду под выводом или клик по зоне на графике строит вход, стоп, цель и R:R.</td></tr>
                 <tr><td>5. Размер</td><td>Впиши депо и риск в процентах — страница посчитает позицию и плечо так, чтобы убыток на стопе с комиссией равнялся риску.</td></tr>
                 <tr><td>6. Решение</td><td>Вход только когда R:R не ниже 1.5 и триггер выполнен. Нет триггера — нет сделки.</td></tr>
               </tbody>
@@ -111,7 +120,7 @@
                 <tr><td>Красная зона</td><td>Сопротивление над ценой, R1 — ближайшее.</td></tr>
                 <tr><td>Плотность</td><td>Чем плотнее прямоугольник, тем больше касаний и источников на этой цене.</td></tr>
                 <tr><td>Пунктир thin</td><td>Тонкий объём между двумя полками профиля. Принятую в него цену обычно быстро протаскивает к следующей полке — в любую сторону.</td></tr>
-                <tr><td>Коробка</td><td>План сделки: зелёная часть — до цели, красная — до стопа.</td></tr>
+                <tr><td>Коробка</td><td>Позиция, как в TradingView: зелёная часть — до цели, красная — до стопа, итог R:R на линии входа.</td></tr>
               </tbody>
             </table>
           </div>

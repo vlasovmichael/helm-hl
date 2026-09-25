@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-const { planFromZone, readPrice, sizing, shownZones } = await import(
+const { planFromZone, readPrice, sizing, shownZones, scenarios, scenarioKey } = await import(
   "../src/modules/dashboard/web/src/features/levelPlan.js"
 );
 
@@ -64,4 +64,15 @@ test("sizing: убыток на стопе с комиссией равен за
   assert.ok(Math.abs(z.notional - 500) < 1e-9);
   assert.ok(Math.abs(z.profitUsd - 20) < 1e-9);
   assert.ok(sizing({ equity: 1000, riskPct: 1, plan }).notional < 500);
+});
+
+test("scenarios: отскоки и пробои без незавершённых, ключи различают отскок и пробой одной зоны", () => {
+  const zs = [zone(80), zone(90), zone(110), zone(120)];
+  const read = readPrice(market(100, zs));
+  const list = scenarios(read);
+  assert.ok(list.length >= 2);
+  assert.ok(list.every((p) => !p.incomplete));
+  const keys = list.map(scenarioKey);
+  assert.equal(new Set(keys).size, keys.length);
+  assert.equal(scenarioKey(null), "");
 });

@@ -6,6 +6,8 @@
 //  Порог RR 1.5: ниже него сделка при винрейте оператора минусовая после комиссий.
 // ─────────────────────────────────────────────────
 
+import { segmented, stat } from "../core/ui.js";
+
 export const MIN_RR = 1.5;
 export const ROUND_TRIP_BP = 8.64; // круг тейкером на HL
 const BUFFER_ATR = 0.25; // стоп прячется за зону на эту долю ATR
@@ -198,64 +200,86 @@ export function shownZones(data, plan) {
   return data.zones.filter((z) => keep.has(z));
 }
 
-const rrTag = (p) =>
-  !p ? "no zone" : p.incomplete ? "no target zone" : `R:R ${p.netRr.toFixed(2)}${p.ok ? "" : p.tooTight ? " · stop too tight" : " · too low"}`;
-
-function pickButton(p, label) {
-  if (!p) return "";
-  return `<button class="btn btn--sm btn--${p.side}" type="button" data-zone="${esc(p.stopZone.name)}" data-kind="${p.kind}">${esc(label)} · ${esc(rrTag(p))}</button>`;
+/** Сценарии страницы по порядку: отскок от S1 и R1, пробой вверх и вниз. */
+export function scenarios(read) {
+  return [read.long, read.short, read.breakUp, read.breakDown].filter((p) => p && !p.incomplete);
 }
 
-/** Подпись пробоя: где триггер и сколько закрытий уже за ним. */
-function breakLabel(p) {
+export const scenarioKey = (p) => (p ? `${p.kind}:${p.stopZone.name}:${p.side}` : "");
+
+function scenarioLabel(p) {
   const dir = p.side === "long" ? "above" : "below";
-  const via = p.thin ? " · thin volume" : "";
-  return p.accepted
-    ? `Broke ${dir} ${p.stopZone.name}${via}`
-    : `Break ${dir} ${p.stopZone.name} ${fmtPx(p.trigger)}${via}`;
+  const what =
+    p.kind === "break"
+      ? `${p.side === "long" ? "Long" : "Short"} ${p.accepted ? "after break" : "on break"} ${dir} ${p.stopZone.name}`
+      : `${p.side === "long" ? "Long" : "Short"} from ${p.stopZone.name}`;
+  return `${what} · R:R ${p.netRr.toFixed(2)}`;
 }
 
-/** Одна строка над графиком: что делать сейчас. */
-export function renderRead(node, read) {
+/** Выбор сценария — сегментный ряд: один выбран, остальные рядом для сравнения. */
+export function renderScenarios(node, read, plan) {
+  if (!node) return;
+  const list = read.kind === "empty" ? [] : scenarios(read);
+  node.innerHTML = list.length
+    ? segmented({
+        name: "scenario",
+        value: scenarioKey(plan),
+        wide: true,
+        options: list.map((p) => ({ value: scenarioKey(p), label: scenarioLabel(p), tone: p.side })),
+      })
+    : "";
+}
+
+/** Где цена относительно ближайших зон, одной фразой с расстоянием. */
+function where(read, price) {
+  const dist = (v) => (v == null ? "—" : `${v.toFixed(2)}%`);
+  const s = read.s1 ? `${read.s1.name} ${dist(read.toSPct)} below` : "no support below";
+  const r = read.r1 ? `${read.r1.name} ${dist(read.toRPct)} above` : "no resistance above";
+  return `Price ${fmtPx(price)} · support ${s} · resistance ${r}.`;
+}
+
+/** Вывод над планом: заголовок — что делать, строка под ним — почему. */
+export function renderRead(node, read, price) {
   if (!node) return;
   if (read.kind === "empty") {
     node.innerHTML = `<div class="lv-verdict lv-verdict--none"><b>No zones</b><span>Nothing cleared the strength floor in this window. Try another timeframe.</span></div>`;
     return;
   }
-  const dist = (v) => (v == null ? "—" : `${v.toFixed(2)}%`);
   let cls = "lv-verdict--none";
-  let head = "Price is between zones — wait";
-  let say = `Down to ${read.s1?.name ?? "support"}: ${dist(read.toSPct)} · up to ${read.r1?.name ?? "resistance"}: ${dist(read.toRPct)}. No setup until price comes to a zone or closes ${ACCEPT_BARS} bars past one.`;
+  let head = "Wait — price is between zones";
+  let say = `No setup until price comes to a zone or closes ${ACCEPT_BARS} bars past one.`;
   const at = read.kind === "support" ? read.long : read.kind === "resistance" ? read.short : null;
   const broke = [read.breakUp, read.breakDown].find((p) => p?.accepted && !p.incomplete);
   if (broke) {
     const dir = broke.side === "long" ? "above" : "below";
+    const side = broke.side === "long" ? "Long" : "Short";
     cls = broke.ok ? "lv-verdict--go" : "lv-verdict--no";
-    head = `Price broke ${dir} ${broke.stopZone.name} — ${broke.side} on the break, R:R ${broke.netRr.toFixed(2)}`;
-    say = `${broke.held} closed bars ${dir} ${fmtPx(broke.trigger)}. Stop ${fmtPx(broke.stop)} back inside ${broke.stopZone.name}, target ${fmtPx(broke.target)} at ${broke.targetZone.name}${broke.thin ? ", through thin volume" : ""}.${broke.ok ? "" : ` Below ${MIN_RR} the trade does not pay.`}`;
+    head = broke.ok
+      ? `${side} the break ${dir} ${broke.stopZone.name} · R:R ${broke.netRr.toFixed(2)}`
+      : `Skip the break ${dir} ${broke.stopZone.name} · R:R ${broke.netRr.toFixed(2)}`;
+    say = `${broke.held} closed bars ${dir} ${fmtPx(broke.trigger)}.${broke.thin ? " The path to the target runs through thin volume." : ""}${broke.ok ? "" : ` Below ${MIN_RR} the trade does not pay.`}`;
   } else if (at) {
     const zone = at.stopZone.name;
-    const where = read.kind === "support" ? `at support ${zone}` : `at resistance ${zone}`;
+    const side = at.side === "long" ? "Long" : "Short";
+    const kind = read.kind === "support" ? "support" : "resistance";
     if (at.incomplete) {
-      head = `Price is ${where} — no target`;
-      say = "There is no zone beyond it to aim at, so the ratio cannot be counted.";
+      head = `No target beyond ${zone}`;
+      say = `Price is at ${kind} ${zone}, but there is no zone past it to aim at, so the ratio cannot be counted.`;
     } else if (at.ok) {
       cls = "lv-verdict--go";
-      head = `Price is ${where} — ${at.side} setup, R:R ${at.netRr.toFixed(2)}`;
-      say = `Entry ${fmtPx(at.entry)}, stop ${fmtPx(at.stop)} behind ${zone}, target ${fmtPx(at.target)} at ${at.targetZone.name}. The ratio pays; the chart does not say price will turn here.`;
+      head = `${side} from ${kind} ${zone} · R:R ${at.netRr.toFixed(2)}`;
+      say = "The ratio pays. The chart does not say price will turn here — the stop does the work if it does not.";
     } else {
       cls = "lv-verdict--no";
-      head = `Price is ${where} — skip, R:R ${at.netRr.toFixed(2)}`;
+      head = `Skip ${side.toLowerCase()} from ${zone} · R:R ${at.netRr.toFixed(2)}`;
       say = at.tooTight
         ? `The stop is under ${MIN_STOP_PCT}% away — any wick takes it.`
-        : `The next zone ${at.targetZone.name} is too close for the stop behind ${zone}. Below ${MIN_RR} the trade does not pay.`;
+        : `The next zone ${at.targetZone.name} is too close for a stop behind ${zone}. Below ${MIN_RR} the trade does not pay.`;
     }
   }
   node.innerHTML = `<div class="lv-verdict ${cls}">
     <b>${esc(head)}</b>
-    <span>${esc(say)}</span>
-    <div class="lv-picks">${pickButton(read.long, `Long from ${read.s1?.name}`)}${pickButton(read.short, `Short from ${read.r1?.name}`)}</div>
-    <div class="lv-picks">${read.breakUp ? pickButton(read.breakUp, breakLabel(read.breakUp)) : ""}${read.breakDown ? pickButton(read.breakDown, breakLabel(read.breakDown)) : ""}</div>
+    <span>${esc(where(read, price))} ${esc(say)}</span>
   </div>`;
 }
 
@@ -342,14 +366,10 @@ export function sizing({ equity, riskPct, plan, costBp = ROUND_TRIP_BP }) {
   return { riskUsd, notional, qty, profitUsd, leverage: notional / equity };
 }
 
-const cell = (label, value, sub, cls = "") => `<div class="lv-num${cls ? " " + cls : ""}">
-    <div class="label">${esc(label)}</div>
-    <div class="lv-num-val mono">${esc(value)}</div>
-    ${sub ? `<div class="lv-num-sub mono">${esc(sub)}</div>` : ""}
-  </div>`;
+const grid = (tiles) => `<div class="data-grid">${tiles.join("")}</div>`;
 
-/** Карточка плана: числа сделки и размер от риска. */
-export function renderPlan(node, plan, { equity, riskPct }) {
+/** Числа плана: вход, стоп, цель и чистое R:R. */
+export function renderPlan(node, plan) {
   if (!node) return;
   if (!plan) {
     node.innerHTML = `<div class="lv-empty">Click a zone on the chart: support plans a long, resistance plans a short.</div>`;
@@ -359,10 +379,8 @@ export function renderPlan(node, plan, { equity, riskPct }) {
     node.innerHTML = `<div class="lv-empty">No zone beyond ${esc(plan.stopZone.name)} to aim at — no target, no ratio.</div>`;
     return;
   }
-  const side = plan.side === "long" ? "Long" : "Short";
   const isBreak = plan.kind === "break";
   const dir = plan.side === "long" ? "above" : "below";
-  const entryHead = isBreak ? `${side} on break of ${plan.stopZone.name}` : `${side} from ${plan.stopZone.name}`;
   const entrySub = isBreak
     ? plan.accepted
       ? `at market · ${plan.held} closes ${dir} ${fmtPx(plan.trigger)}`
@@ -372,27 +390,47 @@ export function renderPlan(node, plan, { equity, riskPct }) {
       : "limit order, waits for the zone";
   const stopSub = isBreak ? `back inside ${plan.stopZone.name}` : `behind ${plan.stopZone.name}`;
   const targetSub = plan.thin ? `at ${plan.targetZone.name} · through thin volume` : `at ${plan.targetZone.name}`;
-  const nums = `<div class="lv-nums">
-    ${cell(entryHead, fmtPx(plan.entry), entrySub)}
-    ${cell("Stop", fmtPx(plan.stop), `−${plan.riskPct.toFixed(2)}% · ${stopSub}`, "lv-num--stop")}
-    ${cell("Target", fmtPx(plan.target), `+${plan.rewardPct.toFixed(2)}% · ${targetSub}`, "lv-num--target")}
-    ${cell("Net R:R", plan.netRr.toFixed(2), `floor ${MIN_RR} · fees ${ROUND_TRIP_BP} bp`, plan.ok ? "lv-num--go" : "lv-num--no")}
-  </div>`;
+  node.innerHTML = grid([
+    stat({ label: `Entry · ${plan.side}`, value: fmtPx(plan.entry), sub: entrySub }),
+    stat({ label: "Stop", value: fmtPx(plan.stop), sub: `−${plan.riskPct.toFixed(2)}% · ${stopSub}`, tone: "negative" }),
+    stat({ label: "Target", value: fmtPx(plan.target), sub: `+${plan.rewardPct.toFixed(2)}% · ${targetSub}`, tone: "positive" }),
+    stat({
+      label: "Net R:R",
+      value: plan.netRr.toFixed(2),
+      sub: `floor ${MIN_RR} · fees ${ROUND_TRIP_BP} bp`,
+      tone: plan.ok ? "positive" : "negative",
+      primary: true,
+    }),
+  ]);
+}
+
+/** Размер позиции от риска и правило журнала для лонгов. */
+export function renderSize(node, plan, { equity, riskPct }) {
+  if (!node) return;
+  if (!plan || plan.incomplete) {
+    node.innerHTML = "";
+    return;
+  }
   const z = sizing({ equity, riskPct, plan });
   const size = z
-    ? `<div class="lv-nums">
-        ${cell("Position size", usd(z.notional), `${z.qty.toPrecision(4)} coins`)}
-        ${cell("Leverage", `${z.leverage.toFixed(1)}×`, z.leverage > LEV_CAP ? `above the ${LEV_CAP}× cap` : "", z.leverage > LEV_CAP ? "lv-num--no" : "")}
-        ${cell("Loss at stop", `−${usd(z.riskUsd)}`, "fees included", "lv-num--stop")}
-        ${cell("Profit at target", `+${usd(z.profitUsd)}`, "after fees", "lv-num--target")}
-      </div>`
+    ? grid([
+        stat({ label: "Position size", value: usd(z.notional), sub: `${z.qty.toPrecision(4)} coins` }),
+        stat({
+          label: "Leverage",
+          value: `${z.leverage.toFixed(1)}×`,
+          sub: z.leverage > LEV_CAP ? `above the ${LEV_CAP}× cap` : `cap ${LEV_CAP}×`,
+          tone: z.leverage > LEV_CAP ? "negative" : "",
+        }),
+        stat({ label: "Loss at stop", value: `−${usd(z.riskUsd)}`, sub: "fees included", tone: "negative" }),
+        stat({ label: "Profit at target", value: `+${usd(z.profitUsd)}`, sub: "after fees", tone: "positive" }),
+      ])
     : `<div class="lv-note">Fill in account and risk to get the position size.</div>`;
   // Правило из журнала оператора, а не из теории, поэтому висит рядом с лонгом.
   const warn =
     plan.side === "long"
       ? `<div class="lv-warn">Longs ran at a loss across the journal while shorts did not. Taking one needs a reason beyond this chart.</div>`
       : "";
-  node.innerHTML = nums + size + warn;
+  node.innerHTML = size + warn;
 }
 
 /** Таблица зон: то же, что на графике, с расстоянием до цены. */
