@@ -153,6 +153,8 @@ html[data-theme="light"] {
   /* --yellow: акцентный текст «ручное/таймер» (HANDS-OFF, floor-timer). На
      светлой (кремовой) теме чистый #eab308 не читался — берём тёмное золото. */
   --yellow: #8a6400;
+  /* Линия EMA на графиках — чистый жёлтый в обеих темах, как на TradingView. */
+  --chart-ema: #ffd60a;
   --info: #0969da;
 
   --grid-line: #eaeef2;
@@ -219,6 +221,7 @@ html[data-theme="dark"] {
   --warn: #d29922;
   --warn-soft: rgba(187, 128, 9, 0.15);
   --yellow: #eab308; /* на тёмной теме яркий жёлтый читается — оставляем */
+  --chart-ema: #ffd60a;
   --info: #4493f8;
 
   --grid-line: #21262d;

@@ -34,7 +34,7 @@ function palette() {
     up: cssVar("--pnl-up") || "#0ecb81",
     down: cssVar("--pnl-down") || "#f6465d",
     accent: cssVar("--accent") || "#0969da",
-    ema: cssVar("--yellow") || "#eab308",
+    ema: cssVar("--chart-ema") || "#ffd60a",
     font: cssVar("--font-sans") || "sans-serif",
     mono: cssVar("--font-mono") || "monospace",
   };

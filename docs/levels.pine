@@ -19,7 +19,7 @@ bool  showEma     = input.bool(false, "EMA 200", display = display.none)
 color supColor    = input.color(#0ecb81, "Support", display = display.none)
 color resColor    = input.color(#f6465d, "Resistance", display = display.none)
 color thinColor   = input.color(#8b949e, "Thin volume", display = display.none)
-color emaColor    = input.color(#eab308, "EMA 200 color", display = display.none)
+color emaColor    = input.color(#ffd60a, "EMA 200 color", display = display.none)
 
 // Коды источников: бит в маске зоны. Сила берёт число разных источников, а не уровней.
 const int K_SWING = 0
