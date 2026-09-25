@@ -3,7 +3,8 @@
 // ─────────────────────────────────────────────────
 // Уровень считается машиной по фиксированному правилу, поэтому два запроса на
 // одних свечах дают одни и те же линии. Источники: фрактальные свинги, границы
-// прошлой сессии UTC, профиль объёма (POC/VAH/VAL) и круглые числа.
+// прошлой сессии UTC, профиль объёма (POC/VAH/VAL) и круглые числа. Тонкие
+// коридоры профиля и связь с BTC идут рядом как контекст, зонами не становятся.
 //
 // 🚨 Уровень здесь — не сигнал входа: ни один из источников не проверен
 // форвардом. Он нужен как место для стопа и цели, чтобы плечо риска считалось
@@ -11,6 +12,8 @@
 
 import { getFifteenMinCandles, getHourlyCandles, getFourHourCandles } from "../../candleCache.js";
 import { findAsset, getUniverse } from "../../../core/universe.js";
+import { recordLevelRead } from "../../levelReads.js";
+import { levelsOi } from "./levelsOi.js";
 
 // Окно на таймфрейм: столько баров хватает для свингов и профиля, но не
 // заставляет HL отдавать историю, которую всё равно никто не смотрит.
@@ -25,6 +28,21 @@ const PROFILE_BINS = 64;
 const VALUE_AREA = 0.7; // доля объёма внутри области стоимости, стандарт профиля
 const MERGE_ATR = 0.35; // ближе этой доли ATR уровни считаются одной зоной
 const TOUCH_GAP_BARS = 3; // столько баров вне зоны разделяют два касания
+const THIN_SHARE = 0.5; // бин тоньше этой доли меньшей из соседних полок — тонкий объём
+const THIN_MIN_BINS = 3; // коридор уже этого — шум профиля, а не провал
+// Окна хода для строки BTC: в барах своего ТФ.
+const MOVE_WINDOWS = {
+  "15m": [["1h", 4], ["4h", 16]],
+  "1h": [["1h", 1], ["4h", 4]],
+  "4h": [["4h", 1], ["24h", 6]],
+};
+const HOUR_MS = 3_600_000;
+// Те же окна для OI, в миллисекундах: история OI живёт не в барах, а в снимках.
+const OI_WINDOWS = {
+  "15m": [["1h", HOUR_MS], ["4h", 4 * HOUR_MS]],
+  "1h": [["1h", HOUR_MS], ["4h", 4 * HOUR_MS]],
+  "4h": [["4h", 4 * HOUR_MS], ["24h", 24 * HOUR_MS]],
+};
 
 /** Средний размах бара — единица допуска для склейки зон и ширины полосы. */
 function atr(candles, period = 14) {
@@ -75,11 +93,11 @@ function priorDay(candles) {
  */
 function volumeProfile(candles) {
   const withVol = candles.filter((c) => Number.isFinite(c.vol) && c.vol > 0);
-  if (withVol.length < 20) return { levels: [], bins: [] };
+  if (withVol.length < 20) return { levels: [], bins: [], step: 0 };
 
   const lo = Math.min(...withVol.map((c) => c.low));
   const hi = Math.max(...withVol.map((c) => c.high));
-  if (!(hi > lo)) return { levels: [], bins: [] };
+  if (!(hi > lo)) return { levels: [], bins: [], step: 0 };
 
   const step = (hi - lo) / PROFILE_BINS;
   const bins = new Array(PROFILE_BINS).fill(0);
@@ -107,12 +125,89 @@ function volumeProfile(candles) {
 
   const mid = (i) => lo + step * (i + 0.5);
   return {
+    step,
     levels: [
       { price: mid(poc), kind: "poc" },
       { price: mid(upper), kind: "vah" },
       { price: mid(lower), kind: "val" },
     ],
     bins: bins.map((v, i) => ({ price: mid(i), vol: v })),
+  };
+}
+
+/**
+ * Тонкие коридоры: провал между двумя соседними полками профиля. Полка — локальная
+ * вершина не ниже среднего бина; тонкий бин — тоньше THIN_SHARE меньшей из двух полок.
+ * Края профиля не в счёт: там объём тонкий по построению.
+ */
+export function thinCorridors(bins, step) {
+  if (!bins?.length || !(step > 0)) return [];
+  const vols = bins.map((b) => b.vol);
+  const total = vols.reduce((a, b) => a + b, 0);
+  const mean = total / vols.length;
+  const peaks = [];
+  for (let i = 0; i < vols.length; i++) {
+    const left = i > 0 ? vols[i - 1] : -Infinity;
+    const right = i < vols.length - 1 ? vols[i + 1] : -Infinity;
+    if (vols[i] >= mean && vols[i] >= left && vols[i] > right) peaks.push(i);
+  }
+  const out = [];
+  for (let k = 1; k < peaks.length; k++) {
+    const a = peaks[k - 1];
+    const b = peaks[k];
+    const floor = Math.min(vols[a], vols[b]) * THIN_SHARE;
+    let from = -1;
+    for (let i = a + 1; i <= b; i++) {
+      const thin = i < b && vols[i] < floor;
+      if (thin && from < 0) from = i;
+      if (!thin && from >= 0) {
+        if (i - from >= THIN_MIN_BINS) {
+          const share = vols.slice(from, i).reduce((x, y) => x + y, 0) / total;
+          out.push({ lo: bins[from].price - step / 2, hi: bins[i - 1].price + step / 2, share });
+        }
+        from = -1;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Ход монеты и BTC по окнам, корреляция и бета доходностей баров.
+ * Бары сводятся по времени: пропуск у одной стороны не сдвигает другую.
+ */
+export function btcLink(coinBars, btcBars, windows) {
+  const btcAt = new Map(btcBars.map((c) => [c.time, c.close]));
+  const pairs = [];
+  for (let i = 1; i < coinBars.length; i++) {
+    const a0 = coinBars[i - 1];
+    const a1 = coinBars[i];
+    const b0 = btcAt.get(a0.time);
+    const b1 = btcAt.get(a1.time);
+    if (a0.close > 0 && b0 > 0 && b1 > 0) pairs.push([a1.close / a0.close - 1, b1 / b0 - 1]);
+  }
+  if (pairs.length < 20) return null;
+  const n = pairs.length;
+  const mx = pairs.reduce((s, p) => s + p[0], 0) / n;
+  const my = pairs.reduce((s, p) => s + p[1], 0) / n;
+  let sxy = 0;
+  let sxx = 0;
+  let syy = 0;
+  for (const [x, y] of pairs) {
+    sxy += (x - mx) * (y - my);
+    sxx += (x - mx) ** 2;
+    syy += (y - my) ** 2;
+  }
+  if (!(sxx > 0) || !(syy > 0)) return null;
+  const change = (bars, k) => {
+    const last = bars[bars.length - 1]?.close;
+    const prev = bars[bars.length - 1 - k]?.close;
+    return last > 0 && prev > 0 ? (last / prev - 1) * 100 : NaN;
+  };
+  return {
+    corr: sxy / Math.sqrt(sxx * syy),
+    beta: sxy / syy,
+    windows: windows.map(([label, k]) => ({ label, coin: change(coinBars, k), btc: change(btcBars, k) })),
   };
 }
 
@@ -209,7 +304,19 @@ export async function handleLevels(req, res) {
     .filter((z) => z.strength >= 2)
     .sort((x, y) => x.price - y.price);
 
-  res.json({
+  let btc = null;
+  if (coin !== "BTC") {
+    try {
+      const btcBars = await FRAMES[tf].load("BTC");
+      if (Array.isArray(btcBars)) btc = btcLink(candles, btcBars, MOVE_WINDOWS[tf]);
+    } catch {
+      btc = null;
+    }
+  }
+
+  const oi = await levelsOi(coin, OI_WINDOWS[tf]);
+
+  const body = {
     coin,
     tf,
     price,
@@ -230,6 +337,21 @@ export async function handleLevels(req, res) {
       close: c.close,
     })),
     profile: profile.bins,
+    thin: thinCorridors(profile.bins, profile.step),
     zones,
-  });
+    btc,
+    oi,
+  };
+  recordLevelRead(body, candles[candles.length - 1].time);
+  res.json(body);
+}
+
+/** Только OI: страница перечитывает его чаще, чем свечи. */
+export async function handleLevelsOi(req, res) {
+  const asked = String(req.query.coin || "BTC").trim().replace(/[^A-Za-z0-9:_-]/g, "");
+  const asset = findAsset(asked);
+  const coin = asset ? asset.name : asked.toUpperCase();
+  const tf = OI_WINDOWS[req.query.tf] ? req.query.tf : "1h";
+  const oi = await levelsOi(coin, OI_WINDOWS[tf]);
+  res.json({ coin, tf, oi });
 }

@@ -10,6 +10,8 @@ import { initReveal } from "./src/core/reveal.js";
 import { mountPageHeader } from "./src/core/pageHeader.js";
 import { mountTopnav } from "./src/core/topnav.js";
 import { segmented } from "./src/core/ui.js";
+import { paintIcons } from "./src/core/icon.js";
+import * as dialog from "./src/core/dialog.js";
 import { coinCombo, attachCoinCombo, cleanTicker, loadCoinUniverse } from "./src/core/coinCombo.js";
 import { drawLevels, drawScene, applyLevelsTheme } from "./src/charts/levelsChart.js";
 import {
@@ -17,10 +19,13 @@ import {
   planFromZone,
   shownZones,
   renderRead,
+  renderContext,
+  renderOi,
   renderPlan,
   renderZones,
   SOURCE_NOTE,
 } from "./src/features/levelPlan.js";
+import { renderJournal, renderJournalSummary } from "./src/features/levelJournal.js";
 
 mountTopnav("levels");
 mountPageHeader({
@@ -98,7 +103,7 @@ function sizeInputs() {
 
 function showPlan(plan) {
   state.plan = plan;
-  drawScene(shownZones(state.data, plan), plan);
+  drawScene(shownZones(state.data, plan), plan, state.data?.thin || []);
   renderPlan(el("lv-plan"), plan, sizeInputs());
 }
 
@@ -117,6 +122,8 @@ async function load() {
     state.data = null;
     node.innerHTML = `<div class="lv-empty">${err.message}</div>`;
     el("lv-read").innerHTML = "";
+    el("lv-context").innerHTML = "";
+    el("lv-oi").innerHTML = "";
     el("lv-plan").innerHTML = `<div class="lv-empty">No data — nothing to plan.</div>`;
     el("lv-count").textContent = "";
     return;
@@ -124,18 +131,55 @@ async function load() {
 
   const read = readPrice(state.data);
   renderRead(el("lv-read"), read);
+  renderContext(el("lv-context"), state.data);
+  renderOi(el("lv-oi"), state.data.coin, state.data.oi);
   await drawLevels(el("lv-chart"), state.data, (z) => showPlan(planFromZone(state.data, z)));
   // У зоны план открыт сразу; посередине между зонами выбирать нечего.
   showPlan(read.kind === "support" ? read.long : read.kind === "resistance" ? read.short : null);
   renderZones(node, state.data);
   el("lv-count").textContent = `${state.data.zones.length} zones`;
   el("lv-sources").textContent = SOURCE_NOTE;
+  // Разбор записан сервером при этом запросе — журнал перечитывается после него.
+  loadJournal();
+}
+
+// OI меняется быстрее свечей: строка перечитывается отдельно, график не трогается.
+const OI_REFRESH_MS = 30_000;
+
+async function refreshOi() {
+  if (!state.data || document.hidden) return;
+  const { coin, tf } = state.data;
+  try {
+    const r = await fetch(`/api/levels/oi?coin=${encodeURIComponent(coin)}&tf=${tf}`);
+    if (!r.ok) return;
+    const body = await r.json();
+    if (state.data?.coin === coin) renderOi(el("lv-oi"), coin, body.oi);
+  } catch {
+    /* следующий проход перечитает */
+  }
+}
+
+async function loadJournal() {
+  try {
+    const r = await fetch("/api/levels/journal");
+    if (!r.ok) throw new Error(`Request failed with status ${r.status}.`);
+    const j = await r.json();
+    renderJournalSummary(el("lv-journal-sum"), j);
+    renderJournal(el("lv-journal"), j);
+    el("lv-journal-count").textContent = `${j.open} waiting for outcome`;
+  } catch (err) {
+    el("lv-journal-sum").innerHTML = `<div class="lv-empty">${err.message}</div>`;
+  }
 }
 
 el("lv-read").addEventListener("click", (e) => {
-  const name = e.target.closest("[data-zone]")?.dataset.zone;
-  const z = state.data?.zones.find((x) => x.name === name);
-  if (z) showPlan(planFromZone(state.data, z));
+  const btn = e.target.closest("[data-zone]");
+  const z = state.data?.zones.find((x) => x.name === btn?.dataset.zone);
+  if (!z) return;
+  if (btn.dataset.kind === "break") {
+    const read = readPrice(state.data);
+    showPlan([read.breakUp, read.breakDown].find((p) => p?.stopZone === z) || null);
+  } else showPlan(planFromZone(state.data, z));
 });
 
 for (const id of ["lv-equity", "lv-risk"]) {
@@ -144,6 +188,22 @@ for (const id of ["lv-equity", "lv-risk"]) {
     renderPlan(el("lv-plan"), state.plan, sizeInputs());
   });
 }
+
+// Справка — в разметке страницы, диалог общий для дашборда.
+el("lv-help-btn").addEventListener("click", () => {
+  const help = el("lv-help").content;
+  dialog.show({
+    id: "lv-help-modal",
+    wide: true,
+    glyph: "help",
+    title: help.querySelector("[data-help-title]").textContent,
+    sub: help.querySelector("[data-help-sub]").textContent,
+    body: help.querySelector("[data-help-body]").innerHTML,
+  });
+});
+paintIcons(el("sec-lv-chart"));
+
+setInterval(refreshOi, OI_REFRESH_MS);
 
 const saved = readSize();
 el("lv-equity").value = saved.equity ?? "";

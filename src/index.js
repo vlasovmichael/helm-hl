@@ -35,6 +35,7 @@ import { shutdown, loadPriceHistory } from './app/lifecycle.js';
 import { startToastBridge } from './app/toastBridge.js';
 import { startEquityHeal } from './app/equityHeal.js';
 import { startForwardWatch } from './app/forwardWatch.js';
+import { startLevelReads } from './modules/levelReads.js';
 
 async function main() {
   logger.info('═══════════════════════════════════════════════');
@@ -143,6 +144,9 @@ async function main() {
 
   // Сторож форвардов: пуш на молчание сборщика и однократная оценка на пороге.
   startForwardWatch();
+
+  // Исходы разборов страницы уровней: через сутки после разбора, по 15m барам.
+  startLevelReads();
 
   // ── Ежедневный почтовый дайджест — 21:05 (Europe/Warsaw), после Daily Recap ──
   // Отчёт за сутки (пуши + сводка стратегий) на self-hosted Listmonk. Fail-soft:

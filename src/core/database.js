@@ -446,6 +446,22 @@ export function initDB() {
     );
     CREATE INDEX IF NOT EXISTS venue_snapshots_ts_idx ON venue_snapshots (ts);
     CREATE INDEX IF NOT EXISTS venue_snapshots_dex_idx ON venue_snapshots (dex);
+
+    CREATE TABLE IF NOT EXISTS level_reads (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      ts          INTEGER NOT NULL,
+      coin        TEXT    NOT NULL,
+      tf          TEXT    NOT NULL,
+      bar_time    INTEGER NOT NULL,
+      price       REAL    NOT NULL,
+      scenarios   TEXT    NOT NULL,
+      context     TEXT,
+      status      TEXT    NOT NULL DEFAULT 'open',
+      outcome     TEXT,
+      resolved_at INTEGER,
+      UNIQUE (coin, tf, bar_time)
+    );
+    CREATE INDEX IF NOT EXISTS level_reads_status_idx ON level_reads (status);
   `);
 
   logger.info(`[DB] Initialized at ${DB_PATH}`);
@@ -952,6 +968,46 @@ export function recordVenueSnapshot(row) {
 }
 
 /** Снимки площадок за период. */
+// ── Журнал разборов страницы уровней ────────────────────────────────────────
+
+/** Один разбор на монету, ТФ и бар: перезагрузка страницы не плодит строки. */
+export function recordLevelReadRow(r) {
+  try {
+    getDb()
+      .prepare(`INSERT OR IGNORE INTO level_reads (ts, coin, tf, bar_time, price, scenarios, context)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .run(r.ts, r.coin, r.tf, r.barTime, r.price, JSON.stringify(r.scenarios), r.context ? JSON.stringify(r.context) : null);
+  } catch (err) {
+    logger.warn(`[DB] recordLevelReadRow(${r?.coin}) failed: ${err.message}`);
+  }
+}
+
+export function getOpenLevelReads() {
+  try {
+    return getDb().prepare(`SELECT * FROM level_reads WHERE status = 'open' ORDER BY ts`).all();
+  } catch {
+    return [];
+  }
+}
+
+export function resolveLevelRead(id, status, outcome, resolvedAt = Date.now()) {
+  try {
+    getDb()
+      .prepare(`UPDATE level_reads SET status = ?, outcome = ?, resolved_at = ? WHERE id = ?`)
+      .run(status, outcome ? JSON.stringify(outcome) : null, resolvedAt, id);
+  } catch (err) {
+    logger.warn(`[DB] resolveLevelRead(${id}) failed: ${err.message}`);
+  }
+}
+
+export function getLevelReads(limit = 1000) {
+  try {
+    return getDb().prepare(`SELECT * FROM level_reads ORDER BY ts DESC LIMIT ?`).all(limit);
+  } catch {
+    return [];
+  }
+}
+
 export function getVenueSnapshots(sinceMs = 0) {
   return getDb()
     .prepare('SELECT * FROM venue_snapshots WHERE ts >= ? ORDER BY ts ASC')

@@ -147,6 +147,20 @@
   overflow: visible;
 }
 
+/* Тонкий объём — фон под зонами, пунктир отличает его от зоны. */
+.lv-thin {
+  fill: var(--accent-soft);
+  stroke: var(--accent-line);
+  stroke-dasharray: 4 4;
+}
+
+.lv-thin-name {
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  fill: var(--accent);
+  text-anchor: end;
+}
+
 /* Плотность прямоугольника — сила зоны: слабая почти прозрачная. */
 .lv-zone {
   stroke-width: 1;
@@ -234,6 +248,35 @@
   gap: var(--sp-2);
   flex-wrap: wrap;
   margin-top: var(--sp-2);
+}
+
+/* Контекст BTC: подписи слева, числа моноширинные, вывод отдельной строкой. */
+.lv-context {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  margin-top: var(--sp-3);
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+}
+
+.lv-context-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+
+  .label {
+    min-width: 5ch;
+  }
+
+  b {
+    color: var(--text-primary);
+  }
+}
+
+#lv-journal {
+  margin-top: var(--sp-4);
 }
 
 @media (max-width: 760px) {

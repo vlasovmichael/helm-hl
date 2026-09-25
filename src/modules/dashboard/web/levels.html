@@ -19,14 +19,22 @@
           >
             Levels
           </div>
+          <button type="button" class="help-btn" id="lv-help-btn" data-card="How to use this page" aria-label="How to use this page">
+            <i data-icon="help"></i>
+          </button>
           <div class="lv-controls">
             <div id="lv-coin"></div>
             <div class="seg" id="lv-tf"></div>
           </div>
         </div>
         <div id="lv-read"></div>
+        <div id="lv-context"></div>
+        <div id="lv-oi"></div>
         <div class="chart-container" id="lv-chart"></div>
-        <div class="lv-note">Click a zone to plan a trade from it: support plans a long, resistance plans a short.</div>
+        <div class="lv-note">
+          Click a zone to plan a trade from it: support plans a long, resistance plans a short. Dashed bands are thin volume — price
+          that is accepted into one tends to cross it to the next shelf, in either direction.
+        </div>
       </section>
 
       <!-- 02 / План выбранной зоны и размер от риска. -->
@@ -59,6 +67,83 @@
         <div class="table-wrap" id="lv-zones"></div>
         <div class="lv-note" id="lv-sources"></div>
       </section>
+
+      <!-- 04 / Журнал разборов: что стало с каждым сценарием через 4 и 24 часа. -->
+      <section class="card" id="sec-lv-journal">
+        <div class="card-header">
+          <div
+            class="card-title"
+            data-card="Every read opened on this page is saved with its scenarios. A day later the machine checks on 15m bars whether each trigger fired and what came first, stop or target. The placebo is a break of a random level with the same geometry — a group is worth something only if it beats the placebo."
+          >
+            Journal
+          </div>
+          <div class="muted" id="lv-journal-count"></div>
+        </div>
+        <div class="table-wrap" id="lv-journal-sum"></div>
+        <div class="table-wrap" id="lv-journal"></div>
+      </section>
+
+      <!-- Справка страницы по-русски по просьбе оператора: текст живёт здесь, диалог — общий. -->
+      <template id="lv-help">
+        <div data-help-title>Как пользоваться страницей уровней</div>
+        <div data-help-sub>Страница не предсказывает цену. Она показывает, где цена относительно зон, и считает, окупается ли сделка.</div>
+        <div data-help-body>
+          <div class="help-section">
+            <div class="help-section-title">Порядок работы</div>
+            <table class="table table--compact help-table">
+              <tbody>
+                <tr><td>1. Монета и ТФ</td><td>15m — для входа внутри дня, 1h и 4h — чтобы увидеть общую картину.</td></tr>
+                <tr><td>2. Вывод</td><td>Строка над графиком: цена у поддержки, у сопротивления, посередине или только что пробила зону.</td></tr>
+                <tr><td>3. BTC</td><td>Чей ход: рынка или самой монеты. Если ход объясняется бетой к BTC, монета просто повторяет рынок.</td></tr>
+                <tr><td>OI</td><td>Открытый интерес сейчас и за те же окна, обновляется раз в 30 секунд. Цена вверх и OI вниз — закрываются шорты; цена вверх и OI вверх — открываются лонги. OI считает обе стороны сразу, поэтому говорит, кто действовал, но не куда пойдёт цена.</td></tr>
+                <tr><td>4. План</td><td>Кнопка сценария или клик по зоне на графике строит вход, стоп, цель и R:R.</td></tr>
+                <tr><td>5. Размер</td><td>Впиши депо и риск в процентах — страница посчитает позицию и плечо так, чтобы убыток на стопе с комиссией равнялся риску.</td></tr>
+                <tr><td>6. Решение</td><td>Вход только когда R:R не ниже 1.5 и триггер выполнен. Нет триггера — нет сделки.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="help-section">
+            <div class="help-section-title">Что на графике</div>
+            <table class="table table--compact help-table">
+              <tbody>
+                <tr><td>Зелёная зона</td><td>Поддержка под ценой, S1 — ближайшая.</td></tr>
+                <tr><td>Красная зона</td><td>Сопротивление над ценой, R1 — ближайшее.</td></tr>
+                <tr><td>Плотность</td><td>Чем плотнее прямоугольник, тем больше касаний и источников на этой цене.</td></tr>
+                <tr><td>Пунктир thin</td><td>Тонкий объём между двумя полками профиля. Принятую в него цену обычно быстро протаскивает к следующей полке — в любую сторону.</td></tr>
+                <tr><td>Коробка</td><td>План сделки: зелёная часть — до цели, красная — до стопа.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="help-section">
+            <div class="help-section-title">Два типа сделок</div>
+            <table class="table table--compact help-table">
+              <tbody>
+                <tr><td>Отскок</td><td>Лимитка у края зоны, стоп за зоной, цель у следующей зоны. От поддержки — лонг, от сопротивления — шорт.</td></tr>
+                <tr><td>Пробой</td><td>Вход только после двух закрытых баров за краем зоны. Стоп — возврат внутрь зоны. Пометка thin volume значит, что путь к цели идёт через тонкий объём.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="help-section">
+            <div class="help-section-title">Журнал</div>
+            <div class="help-section-sub">
+              Каждый открытый разбор сохраняется. Через сутки машина по 15m барам проверяет, сработал ли триггер и что было первым — стоп или цель.
+              R считается после комиссии. Плацебо — пробой случайного уровня той же геометрии: группа чего-то стоит, только если бьёт плацебо.
+              Серые строки — меньше 30 срабатываний, выводов по ним не делать.
+            </div>
+          </div>
+
+          <div class="help-section">
+            <div class="help-section-title">Правила</div>
+            <div class="help-section-sub">
+              Зона — место для стопа и цели, а не сигнал. Пропустил триггер — сделки нет; вход в обратную сторону без своего триггера — другая сделка без плана.
+              Лонги по журналу оператора в минусе, шорты нет: лонгу нужна причина сверх графика.
+            </div>
+          </div>
+        </div>
+      </template>
 
       <footer class="footer" id="footer"></footer>
     </div>

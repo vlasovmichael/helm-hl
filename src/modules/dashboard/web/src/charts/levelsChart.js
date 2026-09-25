@@ -27,7 +27,7 @@ let candles = null;
 let overlay = null;
 let host = null;
 let bars = [];
-let scene = { zones: [], plan: null };
+let scene = { zones: [], plan: null, thin: [] };
 let axisLines = [];
 let onPick = () => {};
 
@@ -108,10 +108,10 @@ export async function drawLevels(container, data, pick) {
   return true;
 }
 
-/** Зоны и выбранный план. Цена зоны и плана подписана на шкале справа. */
-export function drawScene(zones, plan) {
+/** Зоны, тонкие коридоры профиля и выбранный план. Цена зоны и плана подписана на шкале справа. */
+export function drawScene(zones, plan, thin = []) {
   if (!candles) return;
-  scene = { zones, plan };
+  scene = { zones, plan, thin };
   for (const l of axisLines) candles.removePriceLine(l);
   axisLines = [];
   const c = themeColors();
@@ -162,6 +162,20 @@ function renderOverlay() {
   const right = x(bars.length - 1 + FUTURE_BARS);
   if (right == null) return;
   const plan = scene.plan && !scene.plan.incomplete ? scene.plan : null;
+
+  // Коридоры под зонами: это фон, клик по ним не ловится.
+  const left0 = Math.max(0, x(0) ?? 0);
+  for (const t of scene.thin) {
+    const top = y(t.hi);
+    const bottom = y(t.lo);
+    if (top == null || bottom == null) continue;
+    overlay.appendChild(
+      node("rect", { x: left0, y: top, width: Math.max(0, right - left0), height: Math.max(2, bottom - top) }, "lv-thin"),
+    );
+    const label = node("text", { x: right - 8, y: top + 14 }, "lv-thin-name");
+    label.textContent = "thin";
+    overlay.appendChild(label);
+  }
 
   for (const z of scene.zones) {
     const top = y(z.hi);
@@ -220,5 +234,5 @@ export function applyLevelsTheme() {
     rightPriceScale: { borderColor: c.grid },
     timeScale: { borderColor: c.grid },
   });
-  drawScene(scene.zones, scene.plan);
+  drawScene(scene.zones, scene.plan, scene.thin);
 }
