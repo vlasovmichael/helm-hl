@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────
-//  Levels chart — свечи, зоны, Фибо и сценарии поверх них.
-//  Зоны и Фибо — ценовые линии графика; стрелки сценариев и коробки стопа и
-//  цели — SVG-слой сверху, пересчитываемый при сдвиге и масштабе шкалы.
+//  Levels chart — свечи, зоны прямоугольниками и коробка плана.
+//  Фигуры — SVG-слой поверх графика, пересчитываемый при сдвиге и масштабе.
+//  Клик ловит сам график: слой пропускает мышь, иначе по зонам не тащится шкала.
 // ─────────────────────────────────────────────────
 
 const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -11,39 +11,35 @@ function themeColors() {
   return {
     bg: cssVar("--card-bg") || "#0d1117",
     text: cssVar("--text-secondary") || "#8b949e",
-    muted: cssVar("--border-strong") || "#484f58",
     grid: cssVar("--border") || "rgba(127,127,127,0.18)",
     up: cssVar("--pnl-up") || "#0ecb81",
     down: cssVar("--pnl-down") || "#f6465d",
   };
 }
 
-// Столько пустых баров справа от последней свечи: в них рисуется будущее.
-const FUTURE_BARS = 44;
-// Окно истории на старте: всё окно сплющивает будущее в полоску у шкалы.
+// Пустые бары справа от последней свечи: в них стоит коробка плана.
+const FUTURE_BARS = 30;
 const VISIBLE_BARS = 160;
+const HIT_PX = 5; // допуск клика по тонкой зоне
 
 let chart = null;
 let candles = null;
 let overlay = null;
-let lastIndex = 0;
-let lastPrice = null;
-let zoneLines = [];
-let fib = null;
-let planLines = [];
-let scene = { scenarios: [], plan: null, key: "" };
-// Шкала дотягивается после смены плана; перерисовка в это окно играет вход заново,
-// иначе событие шкалы срезает анимацию на первом кадре.
-let animUntil = 0;
-const ANIM_GRACE_MS = 150;
+let host = null;
+let bars = [];
+let scene = { zones: [], plan: null };
+let axisLines = [];
+let onPick = () => {};
 
 const fmtPx = (p) => (p >= 1000 ? p.toFixed(1) : p >= 1 ? p.toFixed(3) : p.toPrecision(4));
 
-export async function drawLevels(container, data, zones) {
+export async function drawLevels(container, data, pick) {
   if (!container || !Array.isArray(data?.candles) || !data.candles.length) return false;
+  onPick = pick;
 
   if (!chart || !container.contains(chart.chartElement())) {
     container.innerHTML = "";
+    host = container;
     const { createChart, CandlestickSeries } = await import("lightweight-charts");
     const c = themeColors();
     chart = createChart(container, {
@@ -58,12 +54,7 @@ export async function drawLevels(container, data, zones) {
       },
       grid: { vertLines: { visible: false }, horzLines: { color: c.grid } },
       rightPriceScale: { borderColor: c.grid, scaleMargins: { top: 0.08, bottom: 0.08 } },
-      timeScale: {
-        borderColor: c.grid,
-        timeVisible: true,
-        secondsVisible: false,
-        rightOffset: FUTURE_BARS,
-      },
+      timeScale: { borderColor: c.grid, timeVisible: true, secondsVisible: false, rightOffset: FUTURE_BARS },
       crosshair: { mode: 0 },
     });
     candles = chart.addSeries(CandlestickSeries, {
@@ -74,17 +65,16 @@ export async function drawLevels(container, data, zones) {
       wickUpColor: c.up,
       wickDownColor: c.down,
       priceFormat: { type: "custom", formatter: fmtPx },
-      // Коробки плана должны влезать в шкалу, иначе цель уезжает за край.
+      // Стоп и цель плана должны влезать в шкалу, иначе коробка уезжает за край.
       autoscaleInfoProvider: (base) => {
         const r = base();
         const p = scene.plan;
         if (!r || !p || p.incomplete) return r;
-        const pts = [p.stop, p.target].filter(Number.isFinite);
         return {
           ...r,
           priceRange: {
-            minValue: Math.min(r.priceRange.minValue, ...pts),
-            maxValue: Math.max(r.priceRange.maxValue, ...pts),
+            minValue: Math.min(r.priceRange.minValue, p.stop, p.target),
+            maxValue: Math.max(r.priceRange.maxValue, p.stop, p.target),
           },
         };
       },
@@ -95,99 +85,64 @@ export async function drawLevels(container, data, zones) {
     overlay.setAttribute("aria-hidden", "true");
     container.appendChild(overlay);
 
-    chart.timeScale().subscribeVisibleLogicalRangeChange(() => renderOverlay(Date.now() < animUntil));
+    chart.subscribeClick((e) => {
+      const z = e.point && zoneAt(e.point);
+      if (z) onPick(z);
+    });
+    chart.subscribeCrosshairMove((e) => {
+      host.classList.toggle("is-zone-hover", Boolean(e.point && zoneAt(e.point)));
+    });
+    chart.timeScale().subscribeVisibleLogicalRangeChange(renderOverlay);
     new ResizeObserver(() => {
       chart.applyOptions({ width: container.clientWidth, height: container.clientHeight });
-      renderOverlay(Date.now() < animUntil);
+      renderOverlay();
     }).observe(container);
   }
 
-  candles.setData(data.candles);
-  lastIndex = data.candles.length - 1;
-  lastPrice = data.price;
-  drawZones(data, zones);
+  bars = data.candles;
+  candles.setData(bars);
   chart.timeScale().setVisibleLogicalRange({
-    from: Math.max(0, lastIndex - VISIBLE_BARS),
-    to: lastIndex + FUTURE_BARS,
+    from: Math.max(0, bars.length - 1 - VISIBLE_BARS),
+    to: bars.length - 1 + FUTURE_BARS,
   });
   return true;
 }
 
-/** Зоны — пунктир с подписью R1/S1: ближайшая к цене получает номер 1. */
-export function drawZones(data, zones) {
+/** Зоны и выбранный план. Цена зоны и плана подписана на шкале справа. */
+export function drawScene(zones, plan) {
   if (!candles) return;
-  for (const l of zoneLines) candles.removePriceLine(l);
-  zoneLines = [];
+  scene = { zones, plan };
+  for (const l of axisLines) candles.removePriceLine(l);
+  axisLines = [];
   const c = themeColors();
-  const above = zones.filter((z) => z.price > data.price).sort((a, b) => a.price - b.price);
-  const below = zones.filter((z) => z.price <= data.price).sort((a, b) => b.price - a.price);
-  const add = (z, title, color) =>
-    zoneLines.push(
-      candles.createPriceLine({
-        price: z.price,
-        color,
-        lineWidth: z.strength >= 8 ? 2 : 1,
-        lineStyle: 2,
-        axisLabelVisible: true,
-        title,
-      }),
-    );
-  above.forEach((z, i) => add(z, `R${i + 1}`, c.down));
-  below.forEach((z, i) => add(z, `S${i + 1}`, c.up));
-}
-
-/** Фибо рисуется слоем сверху: подпись коэффициента и цены стоит у самой линии. */
-export function drawFib(next) {
-  fib = next;
-  renderOverlay(false);
-}
-
-/**
- * Сценарии и текущий план. Стрелки рисуются обоим, коробки — только плану.
- * Анимация входа играет только при смене содержимого, не при сдвиге шкалы.
- */
-export function drawScenarios(scenarios, plan) {
-  if (!candles) return;
-  const key = JSON.stringify([
-    scenarios.map((s) => [s.side, s.plan?.entry, s.plan?.target]),
-    plan && [plan.side, plan.entry, plan.stop, plan.target],
-  ]);
-  const changed = key !== scene.key;
-  scene = { scenarios, plan, key };
-  drawPlanLabels(plan);
-  // Шкала подстраивается под новые коробки до того, как по ней считать пиксели.
-  if (changed) {
-    chart.priceScale("right").applyOptions({ autoScale: true });
-    animUntil = Date.now() + ANIM_GRACE_MS;
+  const label = (price, color, title) =>
+    axisLines.push(candles.createPriceLine({ price, color, lineVisible: false, axisLabelVisible: true, title }));
+  for (const z of zones) label(z.price, z.name.startsWith("R") ? c.down : c.up, z.name);
+  if (plan && !plan.incomplete) {
+    label(plan.entry, cssVar("--text-primary") || "#e6edf3", "entry");
+    label(plan.stop, c.down, "stop");
+    label(plan.target, c.up, "target");
   }
-  requestAnimationFrame(() => renderOverlay(changed));
+  chart.priceScale("right").applyOptions({ autoScale: true });
+  requestAnimationFrame(renderOverlay);
 }
 
-/** На шкале цены — только числа плана: линии через весь график дублируют коробки. */
-function drawPlanLabels(plan) {
-  for (const l of planLines) candles.removePriceLine(l);
-  planLines = [];
-  if (!plan || plan.incomplete) return;
-  const c = themeColors();
-  const rows = [
-    { price: plan.entry, color: cssVar("--text-primary") || "#e6edf3", title: "entry" },
-    { price: plan.stop, color: c.down, title: "stop" },
-    { price: plan.target, color: c.up, title: "target" },
-  ];
-  for (const r of rows) {
-    planLines.push(
-      candles.createPriceLine({
-        price: r.price,
-        color: r.color,
-        lineVisible: false,
-        axisLabelVisible: true,
-        title: r.title,
-      }),
-    );
+/** Зона начинается с первой свечи, которая в неё зашла. */
+function firstTouch(z) {
+  const i = bars.findIndex((b) => b.high >= z.lo && b.low <= z.hi);
+  return i < 0 ? 0 : i;
+}
+
+function zoneAt(point) {
+  for (const z of scene.zones) {
+    const top = candles.priceToCoordinate(z.hi);
+    const bottom = candles.priceToCoordinate(z.lo);
+    const left = chart.timeScale().logicalToCoordinate(firstTouch(z));
+    if (top == null || bottom == null) continue;
+    if (point.y >= top - HIT_PX && point.y <= bottom + HIT_PX && point.x >= (left ?? 0)) return z;
   }
+  return null;
 }
-
-const clampBars = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
 function node(tag, attrs, cls) {
   const n = document.createElementNS(SVG_NS, tag);
@@ -196,119 +151,63 @@ function node(tag, attrs, cls) {
   return n;
 }
 
-function renderOverlay(animate) {
+const tier = (s) => (s >= 8 ? "strong" : s >= 4 ? "mid" : "weak");
+
+function renderOverlay() {
   if (!overlay || !chart) return;
   overlay.replaceChildren();
   const ts = chart.timeScale();
-  // Шкала понимает только целые индексы баров: дробный уводит точку к краю.
-  const x = (bars) => ts.logicalToCoordinate(lastIndex + Math.round(bars));
+  const x = (i) => ts.logicalToCoordinate(i);
   const y = (p) => candles.priceToCoordinate(p);
+  const right = x(bars.length - 1 + FUTURE_BARS);
+  if (right == null) return;
+  const plan = scene.plan && !scene.plan.incomplete ? scene.plan : null;
 
-  const defs = node("defs", {});
-  for (const side of ["long", "short"]) {
-    const m = node(
-      "marker",
-      { id: `lv-head-${side}`, viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" },
-      `lv-head lv-head--${side}`,
+  for (const z of scene.zones) {
+    const top = y(z.hi);
+    const bottom = y(z.lo);
+    if (top == null || bottom == null) continue;
+    const left = Math.max(0, x(firstTouch(z)) ?? 0);
+    const side = z.name.startsWith("R") ? "res" : "sup";
+    const on = plan && (plan.stopZone === z || plan.targetZone === z) ? " is-on" : "";
+    overlay.appendChild(
+      node(
+        "rect",
+        { x: left, y: top, width: Math.max(0, right - left), height: Math.max(2, bottom - top) },
+        `lv-zone lv-zone--${side} lv-zone--${tier(z.strength)}${on}`,
+      ),
     );
-    m.appendChild(node("path", { d: "M0,0 L10,5 L0,10 z" }));
-    defs.appendChild(m);
-  }
-  overlay.appendChild(defs);
-
-  if (fib) drawFibLayer(x, y);
-  const plan = scene.plan;
-  if (plan && !plan.incomplete) drawBox(plan, x, y, animate);
-
-  for (const s of scene.scenarios) {
-    const p = s.plan;
-    if (!p || p.incomplete || s.noTrade) continue;
-    const active = plan && !plan.incomplete && plan.side === p.side && plan.entry === p.entry;
-    drawPath(s, x, y, active, animate);
-  }
-}
-
-/** Линии Фибо от начала импульса до правого края будущего, подпись — у начала. */
-function drawFibLayer(x, y) {
-  const ts = chart.timeScale();
-  const x0 = ts.timeToCoordinate(fib.fromTime) ?? 0;
-  const x1 = x(FUTURE_BARS);
-  if (x1 == null) return;
-  for (const lv of fib.levels) {
-    const yy = y(lv.price);
-    if (yy == null) continue;
-    overlay.appendChild(node("line", { x1: Math.max(0, x0), x2: x1, y1: yy, y2: yy }, "lv-fib"));
-    const t = node("text", { x: Math.max(0, x0) + 4, y: yy - 4 }, "lv-fib-label");
-    t.textContent = `${lv.ratio} · ${fmtPx(lv.price)}`;
+    const t = node("text", { x: left + 6, y: top - 4 }, `lv-zone-name lv-zone-name--${side}`);
+    t.textContent = z.name;
     overlay.appendChild(t);
   }
+
+  if (plan) drawBox(plan, x(bars.length + 1), right - 8, y);
 }
 
-/** Коробка позиции: зелёная от входа до цели, красная от входа до стопа. */
-function drawBox(plan, x, y, animate) {
-  const anim = animate ? " is-anim" : "";
-  const x0 = x(3);
-  const x1 = x(FUTURE_BARS - 3);
+/** Коробка сделки: зелёная от входа до цели, красная от входа до стопа. */
+function drawBox(plan, x0, x1, y) {
   const ye = y(plan.entry);
   const ys = y(plan.stop);
   const yt = y(plan.target);
-  if ([x0, x1, ye, ys, yt].some((v) => v == null)) return;
+  if ([x0, ye, ys, yt].some((v) => v == null) || x1 <= x0) return;
   const rect = (ya, yb, cls) =>
     overlay.appendChild(
-      node("rect", { x: x0, y: Math.min(ya, yb), width: Math.max(0, x1 - x0), height: Math.abs(yb - ya) }, cls),
+      node("rect", { x: x0, y: Math.min(ya, yb), width: x1 - x0, height: Math.abs(yb - ya) }, cls),
     );
-  // Каждая половина растёт от линии входа: план раскрывается из точки решения.
-  const targetUp = plan.target > plan.entry;
-  rect(ye, yt, `lv-box lv-box--win lv-box--${targetUp ? "up" : "down"}${anim}`);
-  rect(ye, ys, `lv-box lv-box--loss lv-box--${targetUp ? "down" : "up"}${anim}`);
-  overlay.appendChild(node("line", { x1: x0, x2: x1, y1: ye, y2: ye }, `lv-box-entry${anim}`));
+  rect(ye, yt, "lv-box lv-box--win");
+  rect(ye, ys, "lv-box lv-box--loss");
+  overlay.appendChild(node("line", { x1: x0, x2: x1, y1: ye, y2: ye }, "lv-box-entry"));
 
+  const up = plan.target > plan.entry;
   const label = (yy, text, cls, below) => {
-    const t = node("text", { x: x1 - 6, y: yy + (below ? 13 : -5), "text-anchor": "end" }, `lv-box-label ${cls}${anim}`);
+    const t = node("text", { x: x0 + 6, y: yy + (below ? 14 : -6) }, `lv-box-label ${cls}`);
     t.textContent = text;
     overlay.appendChild(t);
   };
-  const sign = (a, b) => `${((b - a) / a) * 100 >= 0 ? "+" : "−"}${Math.abs(((b - a) / a) * 100).toFixed(2)}%`;
-  label(yt, `Target ${fmtPx(plan.target)} · ${sign(plan.entry, plan.target)}`, "lv-box-label--win", !targetUp);
-  label(ys, `Stop ${fmtPx(plan.stop)} · ${sign(plan.entry, plan.stop)}`, "lv-box-label--loss", targetUp);
-}
-
-/**
- * Путь сценария: от цены к входу, короткий ретест и ход к цели.
- * Форма фиксирована правилом, а не угадана: это схема плана, не траектория.
- */
-function drawPath(s, x, y, active, animate) {
-  const p = s.plan;
-  // Длина ног — медианное время таких ходов в окне, а не зашитая форма.
-  const toEntry = clampBars(s.entryBars ?? 8, 2, FUTURE_BARS / 2);
-  const toTarget = clampBars(s.rate?.winBars ?? 12, 3, FUTURE_BARS - 4 - toEntry);
-  const move = p.target - p.entry;
-  const pts = [
-    [0, lastPrice],
-    [toEntry, p.entry],
-    [toEntry + toTarget * 0.3, p.entry + move * 0.4],
-    [toEntry + toTarget * 0.55, p.entry + move * 0.12],
-    [toEntry + toTarget, p.target],
-  ].map(([b, pr]) => [x(b), y(pr)]);
-  if (pts.some(([a, b]) => a == null || b == null)) return;
-
-  const d = pts.map(([a, b], i) => `${i ? "L" : "M"}${a.toFixed(1)},${b.toFixed(1)}`).join(" ");
-  const cls = [
-    "lv-path",
-    `lv-path--${p.side}`,
-    active ? "" : "lv-path--dim",
-    animate ? "lv-path--draw" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  overlay.appendChild(node("path", { d, pathLength: 1, "marker-end": `url(#lv-head-${p.side})` }, cls));
-
-  const [ex, ey] = pts[1];
-  const tail = `${active ? "" : " lv-path--dim"}${animate ? " is-anim" : ""}`;
-  overlay.appendChild(node("circle", { cx: ex, cy: ey, r: 4 }, `lv-dot lv-dot--${p.side}${tail}`));
-  const tag = node("text", { x: ex - 10, y: ey + 5, "text-anchor": "end" }, `lv-path-tag${tail}`);
-  tag.textContent = s.id;
-  overlay.appendChild(tag);
+  label(yt, `target +${plan.rewardPct.toFixed(2)}%`, "lv-box-label--win", !up);
+  label(ys, `stop −${plan.riskPct.toFixed(2)}%`, "lv-box-label--loss", up);
+  label(ye, `${plan.side} · R:R ${plan.netRr.toFixed(2)}`, "lv-box-label--entry", !up);
 }
 
 /** Перекраска под тему: bindTheme зовёт это при смене. */
@@ -321,4 +220,5 @@ export function applyLevelsTheme() {
     rightPriceScale: { borderColor: c.grid },
     timeScale: { borderColor: c.grid },
   });
+  drawScene(scene.zones, scene.plan);
 }

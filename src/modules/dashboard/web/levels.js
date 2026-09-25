@@ -1,8 +1,8 @@
 import "./src/styles/index.scss";
 // ─────────────────────────────────────────────────
-// levels.html — механические уровни, два сценария у них и размер от риска.
-// Страница не даёт сигналов: направление выбирает оператор, она считает
-// геометрию сделки и то, как такая геометрия отыгрывала в окне.
+// levels.html — зоны поддержки и сопротивления и план сделки от выбранной зоны.
+// Страница не даёт сигналов: она говорит, где цена относительно зон и годна ли
+// геометрия сделки от зоны.
 // ─────────────────────────────────────────────────
 
 import { bindTheme, startFooterTimer } from "./src/core/shell.js";
@@ -10,32 +10,15 @@ import { initReveal } from "./src/core/reveal.js";
 import { mountPageHeader } from "./src/core/pageHeader.js";
 import { mountTopnav } from "./src/core/topnav.js";
 import { segmented } from "./src/core/ui.js";
+import { coinCombo, attachCoinCombo, cleanTicker, loadCoinUniverse } from "./src/core/coinCombo.js";
+import { drawLevels, drawScene, applyLevelsTheme } from "./src/charts/levelsChart.js";
 import {
-  coinCombo,
-  attachCoinCombo,
-  cleanTicker,
-  loadCoinUniverse,
-} from "./src/core/coinCombo.js";
-import {
-  drawLevels,
-  drawZones,
-  drawFib,
-  drawScenarios,
-  applyLevelsTheme,
-} from "./src/charts/levelsChart.js";
-import {
-  buildScenarios,
-  fibLevels,
-  keyZones,
-  renderScenarios,
-  renderSizing,
-} from "./src/features/levelScenarios.js";
-import {
-  buildPlan,
+  readPrice,
+  planFromZone,
+  shownZones,
+  renderRead,
   renderPlan,
   renderZones,
-  renderSuggestions,
-  greenEntries,
   SOURCE_NOTE,
 } from "./src/features/levelPlan.js";
 
@@ -43,7 +26,7 @@ mountTopnav("levels");
 mountPageHeader({
   eyebrow: "Research · mechanical levels",
   title: "Levels",
-  note: "Rule-drawn zones. They size the risk; they do not predict direction.",
+  note: "Where price sits between the zones, and whether a trade from a zone pays.",
 });
 bindTheme([applyLevelsTheme]);
 startFooterTimer();
@@ -76,14 +59,9 @@ const query = new URLSearchParams(location.search);
 const state = {
   coin: query.get("coin") || "BTC",
   tf: ["15m", "1h", "4h"].includes(query.get("tf")) ? query.get("tf") : "1h",
-  side: "short",
-  entry: null,
   data: null,
+  plan: null,
   coins: [],
-  scenarios: [],
-  zones: "key",
-  fib: true,
-  scKey: "",
 };
 
 const el = (id) => document.getElementById(id);
@@ -94,7 +72,6 @@ function mountControls() {
     getCoins: () => state.coins,
     onPick: (c) => {
       state.coin = cleanTicker(c);
-      state.entry = null;
       load();
     },
   });
@@ -108,61 +85,10 @@ function mountControls() {
     const tf = e.target.closest("[data-tf]")?.dataset.tf;
     if (tf && tf !== state.tf) {
       state.tf = tf;
-      state.entry = null;
       mountControls();
       load();
     }
   };
-
-  el("lv-layers").innerHTML =
-    segmented({
-      name: "zones",
-      value: state.zones,
-      options: [
-        { value: "key", label: "Key zones" },
-        { value: "all", label: "All zones" },
-      ],
-    }) +
-    segmented({
-      name: "fib",
-      value: state.fib ? "on" : "off",
-      options: [
-        { value: "on", label: "Fib" },
-        { value: "off", label: "No fib" },
-      ],
-    });
-  el("lv-layers").onclick = (e) => {
-    const b = e.target.closest("[data-zones],[data-fib]");
-    if (!b) return;
-    if (b.dataset.zones) state.zones = b.dataset.zones;
-    if (b.dataset.fib) state.fib = b.dataset.fib === "on";
-    mountControls();
-    drawLayers();
-  };
-
-  el("lv-side").innerHTML = segmented({
-    name: "side",
-    value: state.side,
-    options: [
-      { value: "long", label: "Long" },
-      { value: "short", label: "Short" },
-    ],
-  });
-  el("lv-side").onclick = (e) => {
-    const side = e.target.closest("[data-side]")?.dataset.side;
-    if (side && side !== state.side) {
-      state.side = side;
-      mountControls();
-      recalc();
-    }
-  };
-}
-
-function drawLayers() {
-  if (!state.data) return;
-  const zones = state.zones === "all" ? state.data.zones : keyZones(state.data, state.scenarios);
-  drawZones(state.data, zones);
-  drawFib(state.fib ? fibLevels(state.data.candles) : null);
 }
 
 function sizeInputs() {
@@ -170,25 +96,10 @@ function sizeInputs() {
   return { equity: num("lv-equity"), riskPct: num("lv-risk") };
 }
 
-function recalc() {
-  if (!state.data) return;
-  const entry = Number.isFinite(state.entry) ? state.entry : state.data.price;
-  const plan = buildPlan(state.data, { side: state.side, entry });
-  const live = plan && !plan.incomplete ? plan : null;
-  renderPlan(el("lv-plan"), plan, state.side);
-  // Коробка на графике — только у плана, прошедшего порог: картинка не спорит с вердиктом.
-  drawScenarios(state.scenarios, live?.ok ? live : null);
-  // Карточки перерисовываются только на смену плана: иначе шкалы заново
-  // заполняются на каждый символ в поле депо.
-  const scKey = `${state.coin}:${state.tf}:${live ? `${live.side}:${live.entry}` : ""}:${state.data.price}`;
-  if (scKey !== state.scKey) {
-    state.scKey = scKey;
-    renderScenarios(el("lv-scenarios"), state.scenarios, live ? `${live.side}:${live.entry}` : "", state.data);
-  }
-  renderSizing(el("lv-size"), live, sizeInputs());
-  renderSuggestions(el("lv-suggest"), state.data, state.side);
-  const found = greenEntries(state.data, state.side).length;
-  el("lv-suggest-count").textContent = found ? `${found} found` : "none";
+function showPlan(plan) {
+  state.plan = plan;
+  drawScene(shownZones(state.data, plan), plan);
+  renderPlan(el("lv-plan"), plan, sizeInputs());
 }
 
 async function load() {
@@ -205,73 +116,34 @@ async function load() {
   } catch (err) {
     state.data = null;
     node.innerHTML = `<div class="lv-empty">${err.message}</div>`;
+    el("lv-read").innerHTML = "";
     el("lv-plan").innerHTML = `<div class="lv-empty">No data — nothing to plan.</div>`;
     el("lv-count").textContent = "";
     return;
   }
 
-  state.scenarios = buildScenarios(state.data);
-  pickDefaultScenario();
-  await drawLevels(el("lv-chart"), state.data, keyZones(state.data, state.scenarios));
-  drawLayers();
+  const read = readPrice(state.data);
+  renderRead(el("lv-read"), read);
+  await drawLevels(el("lv-chart"), state.data, (z) => showPlan(planFromZone(state.data, z)));
+  // У зоны план открыт сразу; посередине между зонами выбирать нечего.
+  showPlan(read.kind === "support" ? read.long : read.kind === "resistance" ? read.short : null);
   renderZones(node, state.data);
   el("lv-count").textContent = `${state.data.zones.length} zones`;
   el("lv-sources").textContent = SOURCE_NOTE;
-  el("lv-price").value = String(Number.isFinite(state.entry) ? state.entry : state.data.price);
-  recalc();
 }
 
-/** По умолчанию открыт сценарий выбранной стороны, а если его нет — любой годный. */
-function pickDefaultScenario() {
-  const usable = state.scenarios.filter((s) => !s.noTrade && s.plan && !s.plan.incomplete);
-  const pick = usable.find((s) => s.side === state.side) || usable[0];
-  if (pick) applyScenario(pick);
-}
-
-function applyScenario(s) {
-  state.side = s.side;
-  state.entry = s.plan.entry;
-  el("lv-price").value = String(s.plan.entry);
-  mountControls();
-}
-
-el("lv-price").addEventListener("input", (e) => {
-  const v = parseFloat(String(e.target.value).replace(",", "."));
-  state.entry = Number.isFinite(v) && v > 0 ? v : null;
-  recalc();
-});
-
-// Кнопка у готового входа только подставляет цену: решение остаётся за полем.
-el("lv-suggest").addEventListener("click", (e) => {
-  const raw = e.target.closest("[data-entry]")?.dataset.entry;
-  const v = parseFloat(raw ?? "");
-  if (!Number.isFinite(v) || v <= 0) return;
-  state.entry = v;
-  el("lv-price").value = String(v);
-  recalc();
-});
-
-el("lv-scenarios").addEventListener("click", (e) => {
-  const id = e.target.closest("[data-sc]")?.dataset.sc;
-  const s = state.scenarios.find((x) => x.id === id);
-  if (!s) return;
-  applyScenario(s);
-  recalc();
+el("lv-read").addEventListener("click", (e) => {
+  const name = e.target.closest("[data-zone]")?.dataset.zone;
+  const z = state.data?.zones.find((x) => x.name === name);
+  if (z) showPlan(planFromZone(state.data, z));
 });
 
 for (const id of ["lv-equity", "lv-risk"]) {
   el(id).addEventListener("input", () => {
     saveSize({ equity: el("lv-equity").value, risk: el("lv-risk").value });
-    recalc();
+    renderPlan(el("lv-plan"), state.plan, sizeInputs());
   });
 }
-
-el("lv-market").addEventListener("click", () => {
-  if (!state.data) return;
-  state.entry = null;
-  el("lv-price").value = String(state.data.price);
-  recalc();
-});
 
 const saved = readSize();
 el("lv-equity").value = saved.equity ?? "";

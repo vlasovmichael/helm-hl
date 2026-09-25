@@ -10,54 +10,33 @@
 
       <header id="page-header"></header>
 
-      <!-- 00 / Порядок работы: три шага, иначе страница читается как свалка линий. -->
-      <section class="card lv-how" id="sec-lv-how">
-        <ol class="lv-steps">
-          <li>Pick a coin. The chart keeps only the nearest zones: <b>R</b> above price, <b>S</b> below.</li>
-          <li>
-            Two plans are drawn from them: <b>A</b> buys the bounce off support, <b>B</b> sells the
-            rejection at resistance. The shaded box is the trade — green to the target, red to the stop.
-          </li>
-          <li>Pick the one your read agrees with, then size it from your risk below.</li>
-        </ol>
-      </section>
-
-      <!-- 01 / График: зоны, Фибо, стрелки сценариев и коробка плана. -->
+      <!-- 01 / График: вывод про цену сверху, зоны прямоугольниками, клик по зоне строит план. -->
       <section class="card" id="sec-lv-chart">
         <div class="card-header">
           <div
             class="card-title"
-            data-card="Levels are computed by a rule, not drawn by hand: fractal swings, previous UTC day high and low, volume profile POC and value area, and round numbers. Fibonacci is drawn from the window's lowest low to its highest high, in the order they happened."
+            data-card="Zones are computed by a rule, not drawn by hand: fractal swings, previous UTC day high and low, volume profile POC and value area, and round numbers. A denser box means more touches and more sources on the same price."
           >
             Levels
           </div>
           <div class="lv-controls">
             <div id="lv-coin"></div>
             <div class="seg" id="lv-tf"></div>
-            <div class="lv-layers" id="lv-layers"></div>
           </div>
         </div>
+        <div id="lv-read"></div>
         <div class="chart-container" id="lv-chart"></div>
+        <div class="lv-note">Click a zone to plan a trade from it: support plans a long, resistance plans a short.</div>
       </section>
 
-      <!-- 01b / Сценарии. Обе стороны всегда рядом: одна стрелка читалась бы как прогноз. -->
-      <section class="card" id="sec-lv-scenarios">
+      <!-- 02 / План выбранной зоны и размер от риска. -->
+      <section class="card" id="sec-lv-plan">
         <div class="card-header">
           <div
             class="card-title"
-            data-card="Each plan enters at the edge of the nearest zone whose ratio clears the floor, stops behind it and aims at the next zone. The percentage replays every bar of the loaded window with the same stop and target distance."
+            data-card="Entry at the edge of the zone, stop behind it, target at the next zone. Size follows from the stop: the loss at the stop, fees included, equals the risk you set."
           >
-            Scenarios
-          </div>
-        </div>
-        <div id="lv-scenarios"></div>
-      </section>
-
-      <!-- 01c / Размер от риска: убыток на стопе задаётся долей депо. -->
-      <section class="card" id="sec-lv-size">
-        <div class="card-header">
-          <div class="card-title" data-card="Size follows from the stop: the loss at the stop, fees included, equals the risk you set. A wider stop means a smaller position, never a bigger loss.">
-            Position size
+            Plan
           </div>
         </div>
         <div class="lv-entry">
@@ -66,55 +45,13 @@
           <label class="label" for="lv-risk">Risk per trade, %</label>
           <input class="field mono" id="lv-risk" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" />
         </div>
-        <div id="lv-size"></div>
-      </section>
-
-      <!-- 02 / Решение. Единственный вывод страницы — число RR и порог. -->
-      <section class="card" id="sec-lv-plan">
-        <div class="card-header">
-          <div
-            class="card-title"
-            data-card="The stop goes behind the nearest zone against the position, the target at the nearest zone in its favour. What comes out is a ratio. The ratio decides whether the trade is payable — it says nothing about direction."
-          >
-            Custom entry
-          </div>
-          <div class="seg" id="lv-side"></div>
-        </div>
-        <div class="lv-entry">
-          <label class="label" for="lv-price">Entry price</label>
-          <input
-            class="field mono"
-            id="lv-price"
-            type="text"
-            inputmode="decimal"
-            autocomplete="off"
-            spellcheck="false"
-          />
-          <button class="btn btn--ghost" id="lv-market" type="button">Use market</button>
-        </div>
         <div id="lv-plan"></div>
-      </section>
-
-      <!-- 02b / Готовые входы. Без них страница отвечает только про рыночную
-           цену, где геометрия почти всегда негодная, и читается как «нельзя
-           никогда». -->
-      <section class="card" id="sec-lv-suggest">
-        <div class="card-header">
-          <div
-            class="card-title"
-            data-card="Entries taken at the edge of each zone, keeping only those whose ratio clears the floor and whose stop is wider than 0.15% of price. A stop tighter than that is not a stop — any wick takes it, and the ratio it produces is an artefact of dividing by almost zero."
-          >
-            Ready entries
-          </div>
-          <div class="seg" id="lv-suggest-count"></div>
-        </div>
-        <div class="table-wrap" id="lv-suggest"></div>
       </section>
 
       <!-- 03 / Те же зоны списком. -->
       <section class="card" id="sec-lv-zones">
         <div class="card-header">
-          <div class="card-title" data-card="The same zones as on the chart. Strength counts separate approaches plus a bonus when more than one source lands on the same price.">
+          <div class="card-title" data-card="All zones in the window. Strength counts separate approaches plus a bonus when more than one source lands on the same price.">
             Zones
           </div>
           <div class="seg" id="lv-count"></div>
