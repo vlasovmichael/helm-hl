@@ -456,7 +456,6 @@ export async function drawLevels(container, data, pick) {
     emaSeries = chart.addSeries(LineSeries, {
       color: palette().ema,
       lineWidth: 2,
-      title: `EMA ${EMA_PERIOD}`,
       priceLineVisible: false,
       crosshairMarkerVisible: false,
       priceFormat: { type: "custom", formatter: fmtPx, minMove: 1e-8 },
