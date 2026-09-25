@@ -3,6 +3,8 @@
 //  номер как минуту, и шкала показывает очерёдность, а не часы.
 // ─────────────────────────────────────────────────
 
+import { monoCandles } from "./candleStyle.js";
+
 const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
 function themeColors() {
@@ -10,8 +12,6 @@ function themeColors() {
     bg: cssVar("--card-bg") || "#0d1117",
     text: cssVar("--text-secondary") || "#8b949e",
     grid: cssVar("--border") || "rgba(127,127,127,0.18)",
-    up: cssVar("--pnl-up") || "#0ecb81",
-    down: cssVar("--pnl-down") || "#f6465d",
     warn: cssVar("--warn") || "#d29922",
   };
 }
@@ -41,12 +41,7 @@ export async function mountSimChart(container) {
     crosshair: { mode: 0 },
   });
   series = chart.addSeries(CandlestickSeries, {
-    upColor: c.up,
-    downColor: c.down,
-    borderUpColor: c.up,
-    borderDownColor: c.down,
-    wickUpColor: c.up,
-    wickDownColor: c.down,
+    ...monoCandles(),
     priceFormat: { type: "price", precision: 2, minMove: 0.01 },
   });
   new ResizeObserver(() => {
@@ -84,4 +79,5 @@ export function applySimTheme() {
     rightPriceScale: { borderColor: c.grid },
     timeScale: { borderColor: c.grid },
   });
+  series.applyOptions(monoCandles());
 }

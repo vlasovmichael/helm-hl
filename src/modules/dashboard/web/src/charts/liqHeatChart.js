@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────
 
 import { cssVar } from "../utils/format.js";
+import { monoCandles } from "./candleStyle.js";
 
 // Две шкалы под тему: на тёмной viridis (тёмное = пусто), на светлой inferno
 // наоборот — бледное = пусто, густое = много. Одна шкала на обе темы всегда
@@ -213,14 +214,7 @@ export function applyLiqHeatTheme() {
     rightPriceScale: { borderColor: c.grid },
     timeScale: { borderColor: c.grid },
   });
-  candles?.applyOptions({
-    upColor: c.bg,
-    downColor: cssVar("--text-primary") || "#18181B",
-    borderUpColor: cssVar("--text-primary") || "#18181B",
-    borderDownColor: cssVar("--text-primary") || "#18181B",
-    wickUpColor: cssVar("--text-primary") || "#18181B",
-    wickDownColor: cssVar("--text-primary") || "#18181B",
-  });
+  candles?.applyOptions(monoCandles());
   // Палитра карты зависит от темы, а холст сам себя не перерисует.
   heat?.redraw();
 }
@@ -278,16 +272,8 @@ export async function drawLiqHeat(container, data, kl) {
       crosshair: { mode: 0 },
       handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
     });
-    // 🚨 Свечи МОНОХРОМНЫЕ: карта под ними уже красно-жёлтая, и зелёно-красная
-    // цена в ней тонула. Направление несёт заливка — полая вверх, залитая вниз,
-    // как в классических hollow candles.
     candles = chart.addSeries(CandlestickSeries, {
-      upColor: cssVar("--card-bg") || "#fff",
-      downColor: cssVar("--text-primary") || "#18181B",
-      borderUpColor: cssVar("--text-primary") || "#18181B",
-      borderDownColor: cssVar("--text-primary") || "#18181B",
-      wickUpColor: cssVar("--text-primary") || "#18181B",
-      wickDownColor: cssVar("--text-primary") || "#18181B",
+      ...monoCandles(),
       priceLineVisible: true,
       priceFormat: { type: "custom", formatter: fmtPx },
     });

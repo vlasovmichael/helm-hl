@@ -6,6 +6,7 @@
 
 import { fmtPx } from "../features/levelPlan.js";
 import { EMA_PERIOD, ema } from "../features/levelMath.js";
+import { monoCandles } from "./candleStyle.js";
 
 const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
@@ -413,18 +414,6 @@ function chartOptions() {
   };
 }
 
-function candleColors() {
-  const c = palette();
-  return {
-    upColor: c.up,
-    downColor: c.down,
-    borderUpColor: c.up,
-    borderDownColor: c.down,
-    wickUpColor: c.up,
-    wickDownColor: c.down,
-  };
-}
-
 export async function drawLevels(container, data, pick) {
   if (!container || !Array.isArray(data?.candles) || !data.candles.length) return false;
   onPick = pick;
@@ -435,7 +424,7 @@ export async function drawLevels(container, data, pick) {
     const { createChart, CandlestickSeries, LineSeries } = await import("lightweight-charts");
     chart = createChart(container, { ...chartOptions(), autoSize: true });
     candles = chart.addSeries(CandlestickSeries, {
-      ...candleColors(),
+      ...monoCandles(),
       priceFormat: { type: "custom", formatter: fmtPx, minMove: 1e-8 },
     });
     emaSeries = chart.addSeries(LineSeries, {
@@ -521,7 +510,7 @@ export function drawScene(zones, plan, thin = []) {
 export function applyLevelsTheme() {
   if (!chart) return;
   chart.applyOptions(chartOptions());
-  candles.applyOptions(candleColors());
+  candles.applyOptions(monoCandles());
   emaSeries.applyOptions({ color: palette().ema });
   layer?.redraw();
 }
