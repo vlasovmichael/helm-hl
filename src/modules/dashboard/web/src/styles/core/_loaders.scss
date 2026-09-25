@@ -218,6 +218,17 @@
   }
 }
 
+/* Вуаль: прежнее содержимое видно сквозь неё, пока едет новое. */
+.local-loader--veil {
+  background: color-mix(in srgb, var(--card-bg) 60%, transparent);
+  animation: veil-in var(--dur) var(--ease-out);
+}
+@keyframes veil-in {
+  from {
+    opacity: 0;
+  }
+}
+
 .loader-spinner {
   width: 24px;
   height: 24px;

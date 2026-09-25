@@ -161,12 +161,24 @@ function waitingBlocks(ids) {
   return ids.filter((id) => el(id).querySelector(".sk"));
 }
 
+/** Вуаль поверх живого графика, пока едут свечи другой монеты или ТФ. */
+function veilChart(on) {
+  const box = el("lv-chart");
+  box.querySelector(".local-loader")?.remove();
+  if (on && !box.querySelector(".sk")) {
+    box.insertAdjacentHTML("beforeend", `<div class="local-loader local-loader--veil"><div class="loader-spinner"></div></div>`);
+  }
+}
+
 // Тихая перезагрузка на закрытии бара: без «Loading…», выбранный сценарий остаётся.
 async function load({ quiet = false } = {}) {
   clearTimeout(barTimer);
   const node = el("lv-zones");
   const keep = quiet ? scenarioKey(state.plan) : "";
-  if (!quiet) showSkeletons();
+  if (!quiet) {
+    veilChart(true);
+    showSkeletons();
+  }
   try {
     const r = await fetch(`/api/levels?coin=${encodeURIComponent(state.coin)}&tf=${state.tf}`);
     // Причину отказа показываем на странице: в консоли её видит только автор.
@@ -177,6 +189,7 @@ async function load({ quiet = false } = {}) {
     state.data = await r.json();
   } catch (err) {
     if (quiet && state.data) return scheduleBarClose();
+    veilChart(false);
     state.data = null;
     node.innerHTML = emptyState({ glyph: "warn", title: "No levels for this coin", hint: err.message });
     if (el("lv-chart").querySelector(".sk")) el("lv-chart").innerHTML = "";
@@ -198,6 +211,7 @@ async function load({ quiet = false } = {}) {
   renderContext(el("lv-context"), state.data);
   renderOi(el("lv-oi"), state.data.coin, state.data.oi);
   await drawLevels(el("lv-chart"), state.data, (z) => showPlan(planFromZone(state.data, z)));
+  veilChart(false);
   const kept = keep && scenarios(read).find((p) => scenarioKey(p) === keep);
   // У зоны план открыт сразу; посередине между зонами выбирать нечего.
   showPlan(kept || autoPlan(read));
