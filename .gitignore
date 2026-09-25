@@ -158,6 +158,13 @@ logs/harness-progress-generation-*.log
 logs/harness-unreproducible-closures-*.log
 logs/harness-stage-links-*.log
 logs/harness-registry-snapshots-*.log
+tools/srFlipAudit.mjs
+logs/sr-flip-audit-*.log
+tools/journalBiasAudit.mjs
+tools/liqMagnetAudit.mjs
+tools/liqMagnetMirror.mjs
+logs/journal-bias-*.log
+logs/liq-magnet-*.log
 
 # Восстановимый архив Binance для аудита F2: ZIP, manifest и недельная сетка.
 data/binance-f2/
