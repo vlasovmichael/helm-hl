@@ -13,7 +13,9 @@ import { logger } from '../core/logger.js';
 import { HL_PRIORITY } from '../core/hlClient.js';
 import { getOpenLevelReads, getLevelReads, recordLevelReadRow, resolveLevelRead } from '../core/database.js';
 import { getFifteenMinCandles } from './candleCache.js';
-import { readPrice, ACCEPT_BARS, ROUND_TRIP_BP } from './dashboard/web/src/features/levelMath.js';
+import { readPrice, simulate, ACCEPT_BARS } from './dashboard/web/src/features/levelMath.js';
+
+export { simulate };
 
 const BAR_MS = 15 * 60_000;
 export const HORIZONS = { h4: 16, h24: 96 };
@@ -91,59 +93,6 @@ export function recordLevelRead(data, barTime, now = Date.now()) {
   } catch (err) {
     logger.warn(`[LevelReads] record ${data?.coin} failed: ${err.message}`);
   }
-}
-
-/**
- * Исход сценария на барах после разбора. Стоп и цель в одном баре — стоп:
- * порядок внутри бара неизвестен. R — после комиссии круга.
- */
-export function simulate(sc, bars, horizon) {
-  const span = bars.slice(0, horizon);
-  const isLong = sc.side === 'long';
-  const beyond = (c, lvl) => (isLong ? c > lvl : c < lvl);
-  let entry = null;
-  let from = 0;
-
-  if (sc.atMarket) {
-    entry = sc.entry;
-  } else if (sc.kind === 'bounce') {
-    const i = span.findIndex((b) => (isLong ? b.low <= sc.entry : b.high >= sc.entry));
-    if (i >= 0) {
-      entry = sc.entry;
-      const b = span[i];
-      // В баре входа цель могла быть до входа, стоп — только после.
-      if (isLong ? b.low <= sc.stop : b.high >= sc.stop) return result(sc, entry, sc.stop, 'stop', i);
-      from = i + 1;
-    }
-  } else {
-    let run = 0;
-    for (let i = 0; i < span.length; i++) {
-      run = beyond(span[i].close, sc.trigger) ? run + 1 : 0;
-      if (run >= ACCEPT_BARS) {
-        entry = span[i].close;
-        from = i + 1;
-        break;
-      }
-    }
-  }
-  if (entry == null) return { triggered: false };
-  if (isLong ? entry >= sc.target : entry <= sc.target) return { triggered: true, how: 'late', r: null };
-
-  for (let i = from; i < span.length; i++) {
-    const b = span[i];
-    if (isLong ? b.low <= sc.stop : b.high >= sc.stop) return result(sc, entry, sc.stop, 'stop', i);
-    if (isLong ? b.high >= sc.target : b.low <= sc.target) return result(sc, entry, sc.target, 'target', i);
-  }
-  const last = span[span.length - 1];
-  return result(sc, entry, last ? last.close : entry, 'open', span.length - 1);
-}
-
-function result(sc, entry, exit, how, bar) {
-  const risk = Math.abs(entry - sc.stop);
-  if (!(risk > 0)) return { triggered: true, how: 'late', r: null };
-  const move = sc.side === 'long' ? exit - entry : entry - exit;
-  const cost = entry * (ROUND_TRIP_BP / 10_000);
-  return { triggered: true, how, bar, entry: round(entry), exit: round(exit), r: round((move - cost) / risk) };
 }
 
 /** Бары, начатые после бара 15m, в котором открыт разбор: всё до них оператор уже видел. */
