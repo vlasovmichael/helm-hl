@@ -27,6 +27,12 @@ let ws = null;
 let reconnectTimer = null;
 let retryDelay = RECONNECT_BASE_MS;
 let started = false;
+let lastMsgAt = 0;
+let hiddenAt = 0;
+let sleepTickAt = 0;
+let sleepWatch = null;
+// Дольше этого вне экрана или во сне — сокет считаем мёртвым, даже если он OPEN.
+const WAKE_STALE_MS = 3_000;
 
 const prices = new Map();       // COIN → { px, ts }
 const watched = new Set();      // монеты, на которые подписаны
@@ -159,6 +165,7 @@ function connect() {
     return;
   }
   ws = sock;
+  lastMsgAt = Date.now();
 
   sock.onopen = () => {
     if (ws !== sock) return;
@@ -169,6 +176,7 @@ function connect() {
 
   sock.onmessage = (e) => {
     if (ws !== sock) return;
+    lastMsgAt = Date.now();
     try {
       const msg = JSON.parse(e.data);
       if (msg.channel === "bbo") handleBbo(msg.data);
@@ -201,21 +209,41 @@ function scheduleReconnect() {
   retryDelay = Math.min(retryDelay * 2, RECONNECT_MAX_MS);
 }
 
-// ── возврат во вкладку ──
-// Телефон замораживает свёрнутую вкладку и рвёт сокет, но onclose при этом
-// доходит не сразу: на резюме цена приезжала через ~5 секунд, тогда как
-// нативный кошелёк успевает за полсекунды. Всё это время ждал не сокет, а наш
-// backoff-таймер, доросший до секунд в фоне. Поэтому на возврате поднимаемся
-// немедленно и с нулевой задержкой — один коннект на разворачивание.
-function wake() {
-  if (!started || document.visibilityState !== "visible") return;
-  if (ws && ws.readyState === WebSocket.OPEN) return; // живой — не трогаем
+// ── возврат во вкладку и из сна ──
+// После заморозки сокет часто остаётся OPEN, а onclose приходит через секунды.
+// Тишина здесь не признак обрыва (bbo молчит, пока книга стоит), поэтому
+// признак — сам факт долгого отсутствия: вкладка была скрыта или таймеры спали.
+function reconnectNow() {
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
   retryDelay = RECONNECT_BASE_MS;
+  const prev = ws;
+  ws = null;
+  prev?.close();
   connect();
+}
+
+function wake() {
+  if (!started) return;
+  if (document.visibilityState !== "visible") {
+    hiddenAt = Date.now();
+    return;
+  }
+  const away = hiddenAt ? Date.now() - hiddenAt : 0;
+  hiddenAt = 0;
+  if (ws?.readyState === WebSocket.OPEN && away < WAKE_STALE_MS) return;
+  // Сторож сна мог уже поднять коннект на этом же пробуждении.
+  if (ws?.readyState === WebSocket.CONNECTING && Date.now() - lastMsgAt < WAKE_STALE_MS) return;
+  reconnectNow();
+}
+
+function checkSleep() {
+  const now = Date.now();
+  const slept = now - sleepTickAt > WAKE_STALE_MS;
+  sleepTickAt = now;
+  if (slept && document.visibilityState === "visible") reconnectNow();
 }
 
 /** Поднять поток. Повторные вызовы безвредны. */
@@ -226,5 +254,24 @@ export function startPriceStream() {
   // может не прийти вовсе.
   document.addEventListener("visibilitychange", wake);
   window.addEventListener("pageshow", wake);
+  window.addEventListener("online", reconnectNow);
+  sleepTickAt = Date.now();
+  sleepWatch = setInterval(checkSleep, 1000);
   connect();
+}
+
+/** Погасить поток: сокет, переподключение и сторож сна. */
+export function stopPriceStream() {
+  if (!started) return;
+  started = false;
+  document.removeEventListener("visibilitychange", wake);
+  window.removeEventListener("pageshow", wake);
+  window.removeEventListener("online", reconnectNow);
+  clearInterval(sleepWatch);
+  sleepWatch = null;
+  clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  const prev = ws;
+  ws = null;
+  prev?.close();
 }

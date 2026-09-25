@@ -187,22 +187,38 @@ export function stopFooterTimer() {
 }
 
 // handlers = { onStatus(data), onLogsInit(entries), onLog(entry), onDivergence() }
-// Статус-сокет просыпается по тем же правилам, что и поток цен: свёрнутая
-// вкладка замораживается, onclose доходит с задержкой, и на возврате данные
-// ждали backoff, а не сеть. Слушатель ставится один раз, handlers запоминаем —
-// initWebSocket сам их и переиспользует при переподключении.
+// После сна и заморозки вкладки сокет часто числится OPEN, хотя соединение
+// мертво, а onclose приходит через секунды. Живость меряем тишиной: статус
+// идёт раз в 2с, и молчание дольше порога значит «переподключиться сейчас».
 let wsHandlers = null;
 let wakeBound = false;
+let lastWsMsgAt = 0;
+let wsWatchdog = null;
+let wsWatchdogTickAt = 0;
+const WS_SILENCE_MS = 6_000;
+const WS_WAKE_SILENCE_MS = 3_000;
+// Интервал, опоздавший больше чем на это, значит, что таймеры спали вместе с машиной.
+const WS_SLEEP_GAP_MS = 3_000;
+
+function reconnectNow() {
+  if (!wsHandlers) return;
+  wsRetryDelay = 1000;
+  initWebSocket(wsHandlers);
+}
 
 function wakeWebSocket() {
   if (document.visibilityState !== "visible" || !wsHandlers) return;
-  if (socket && socket.readyState === WebSocket.OPEN) return;
-  if (wsReconnectTimer) {
-    clearTimeout(wsReconnectTimer);
-    wsReconnectTimer = null;
-  }
-  wsRetryDelay = 1000;
-  initWebSocket(wsHandlers);
+  if (Date.now() - lastWsMsgAt < WS_WAKE_SILENCE_MS) return;
+  reconnectNow();
+}
+
+function checkWsSilence() {
+  const now = Date.now();
+  const slept = now - wsWatchdogTickAt > WS_SLEEP_GAP_MS;
+  wsWatchdogTickAt = now;
+  if (!wsHandlers || document.visibilityState !== "visible") return;
+  const silence = now - lastWsMsgAt;
+  if (silence > WS_SILENCE_MS || (slept && silence > WS_WAKE_SILENCE_MS)) reconnectNow();
 }
 
 export function initWebSocket(handlers = {}) {
@@ -211,6 +227,11 @@ export function initWebSocket(handlers = {}) {
     wakeBound = true;
     document.addEventListener("visibilitychange", wakeWebSocket);
     window.addEventListener("pageshow", wakeWebSocket);
+    window.addEventListener("online", wakeWebSocket);
+  }
+  if (!wsWatchdog) {
+    wsWatchdogTickAt = Date.now();
+    wsWatchdog = setInterval(checkWsSilence, 1000);
   }
   if (wsReconnectTimer) {
     clearTimeout(wsReconnectTimer);
@@ -222,6 +243,11 @@ export function initWebSocket(handlers = {}) {
   const host = import.meta.env.DEV
     ? import.meta.env.VITE_WS_HOST || "localhost:3010"
     : window.location.host;
+  // Старый сокет отвязываем до close: его onclose не должен планировать ещё один коннект.
+  const prev = socket;
+  socket = null;
+  prev?.close();
+  lastWsMsgAt = Date.now();
   const ws = new WebSocket(`${protocol}//${host}`);
   socket = ws;
 
@@ -231,6 +257,8 @@ export function initWebSocket(handlers = {}) {
   };
 
   ws.onmessage = (event) => {
+    if (socket !== ws) return;
+    lastWsMsgAt = Date.now();
     try {
       const msg = JSON.parse(event.data);
       if (msg.type === "status") {
@@ -276,6 +304,10 @@ export function initWebSocket(handlers = {}) {
 /** Закрыть сокет и отменить переподключение — при уходе со страницы. */
 export function stopWebSocket() {
   wsHandlers = null;
+  if (wsWatchdog) {
+    clearInterval(wsWatchdog);
+    wsWatchdog = null;
+  }
   if (wsReconnectTimer) {
     clearTimeout(wsReconnectTimer);
     wsReconnectTimer = null;

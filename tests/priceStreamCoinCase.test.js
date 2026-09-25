@@ -12,7 +12,7 @@
 //
 // Запуск: npm test
 
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
 
 // Модуль браузерный: до startPriceStream() он не трогает ни DOM, ни сокет.
@@ -27,15 +27,16 @@ class FakeWebSocket {
   close() {}
 }
 globalThis.WebSocket = FakeWebSocket;
-globalThis.document = { addEventListener() {}, visibilityState: 'visible' };
-globalThis.window = { addEventListener() {} };
+globalThis.document = { addEventListener() {}, removeEventListener() {}, visibilityState: 'visible' };
+globalThis.window = { addEventListener() {}, removeEventListener() {} };
 globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0);
 
-const { startPriceStream, setWatchedCoins, coinKey } =
+const { startPriceStream, stopPriceStream, setWatchedCoins, coinKey } =
   await import('../src/modules/dashboard/web/src/net/priceStream.js');
 
 startPriceStream();
 FakeWebSocket.last.onopen?.();
+after(stopPriceStream);
 
 test('на биржу уходит имя монеты ровно как его дал сервер', () => {
   sent.length = 0;
