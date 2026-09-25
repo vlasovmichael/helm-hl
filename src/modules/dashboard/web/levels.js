@@ -12,6 +12,7 @@ import { mountTopnav } from "./src/core/topnav.js";
 import { segmented } from "./src/core/ui.js";
 import { paintIcons } from "./src/core/icon.js";
 import * as dialog from "./src/core/dialog.js";
+import { skeletonText, skeletonRows, emptyState } from "./src/core/placeholders.js";
 import { coinCombo, attachCoinCombo, cleanTicker, loadCoinUniverse } from "./src/core/coinCombo.js";
 import { drawLevels, drawScene, applyLevelsTheme, tickPrice } from "./src/charts/levelsChart.js";
 import {
@@ -135,12 +136,37 @@ function showPlan(plan) {
   }
 }
 
+const tableSkeleton = (cols, rows) =>
+  `<table class="table table--compact"><tbody>${skeletonRows(cols, rows)}</tbody></table>`;
+const chip = `<span class="sk sk-chip"></span>`;
+
+// Форма будущего содержимого, чтобы макет не прыгал, когда данные встанут.
+function showSkeletons() {
+  el("lv-read").innerHTML = skeletonText(2);
+  el("lv-scenarios").innerHTML = `<span class="sk sk-pill"></span>`.repeat(4);
+  el("lv-plan").innerHTML = skeletonText(4);
+  el("lv-size").innerHTML = skeletonText(2);
+  el("lv-context").innerHTML = skeletonText(2);
+  el("lv-oi").innerHTML = skeletonText(1);
+  el("lv-zones").innerHTML = tableSkeleton(6, 6);
+  el("lv-count").innerHTML = chip;
+  // Живой график не сносим: на смене монеты он держит место до новых свечей.
+  if (!el("lv-chart").firstChild) el("lv-chart").innerHTML = `<div class="sk sk-block"></div>`;
+}
+
+const LOAD_BLOCKS = ["lv-read", "lv-scenarios", "lv-plan", "lv-size", "lv-context", "lv-oi", "lv-zones"];
+
+/** Вход играет только там, где стоял скелетон: тихие обновления не дёргаются. */
+function waitingBlocks(ids) {
+  return ids.filter((id) => el(id).querySelector(".sk"));
+}
+
 // Тихая перезагрузка на закрытии бара: без «Loading…», выбранный сценарий остаётся.
 async function load({ quiet = false } = {}) {
   clearTimeout(barTimer);
   const node = el("lv-zones");
   const keep = quiet ? scenarioKey(state.plan) : "";
-  if (!quiet) node.innerHTML = `<div class="lv-empty">Loading…</div>`;
+  if (!quiet) showSkeletons();
   try {
     const r = await fetch(`/api/levels?coin=${encodeURIComponent(state.coin)}&tf=${state.tf}`);
     // Причину отказа показываем на странице: в консоли её видит только автор.
@@ -152,18 +178,20 @@ async function load({ quiet = false } = {}) {
   } catch (err) {
     if (quiet && state.data) return scheduleBarClose();
     state.data = null;
-    node.innerHTML = `<div class="lv-empty">${err.message}</div>`;
+    node.innerHTML = emptyState({ glyph: "warn", title: "No levels for this coin", hint: err.message });
+    if (el("lv-chart").querySelector(".sk")) el("lv-chart").innerHTML = "";
     el("lv-read").innerHTML = "";
     el("lv-scenarios").innerHTML = "";
     el("lv-context").innerHTML = "";
     el("lv-oi").innerHTML = "";
     el("lv-size").innerHTML = "";
-    el("lv-plan").innerHTML = `<div class="lv-empty">No data — nothing to plan.</div>`;
+    el("lv-plan").innerHTML = emptyState({ glyph: "info", title: "No data — nothing to plan" });
     el("lv-count").textContent = "";
     return;
   }
 
   setWatchedCoins([state.data.coin]);
+  const waiting = waitingBlocks(LOAD_BLOCKS);
   const read = readPrice(state.data);
   state.read = read;
   renderRead(el("lv-read"), read, state.data.price);
@@ -177,6 +205,7 @@ async function load({ quiet = false } = {}) {
   renderZones(node, state.data);
   el("lv-count").textContent = `${state.data.zones.length} zones`;
   el("lv-sources").textContent = SOURCE_NOTE;
+  waiting.forEach((id) => settleIn(el(id)));
   // Разбор записан сервером при этом запросе — журнал перечитывается после него.
   loadJournal();
 }
@@ -256,6 +285,12 @@ async function refreshOi() {
 }
 
 async function loadJournal() {
+  if (!el("lv-journal-sum").firstChild) {
+    el("lv-journal-sum").innerHTML = tableSkeleton(8, 3);
+    el("lv-journal").innerHTML = tableSkeleton(5, 5);
+    el("lv-journal-count").innerHTML = chip;
+  }
+  const waiting = waitingBlocks(["lv-journal-sum", "lv-journal"]);
   try {
     const r = await fetch("/api/levels/journal");
     if (!r.ok) throw new Error(`Request failed with status ${r.status}.`);
@@ -263,8 +298,11 @@ async function loadJournal() {
     renderJournalSummary(el("lv-journal-sum"), j);
     renderJournal(el("lv-journal"), j);
     el("lv-journal-count").textContent = `${j.open} waiting for outcome`;
+    waiting.forEach((id) => settleIn(el(id)));
   } catch (err) {
-    el("lv-journal-sum").innerHTML = `<div class="lv-empty">${err.message}</div>`;
+    el("lv-journal-sum").innerHTML = emptyState({ glyph: "warn", title: "Journal did not load", hint: err.message });
+    el("lv-journal").innerHTML = "";
+    el("lv-journal-count").textContent = "";
   }
 }
 

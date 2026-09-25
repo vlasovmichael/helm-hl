@@ -54,6 +54,9 @@
 
 /* Сценарии в широком сегменте: на узком экране переносятся по два в ряд. */
 .lv-scenarios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
   margin-top: var(--sp-4);
 
   .seg--wide {
@@ -105,6 +108,7 @@
 /* ── График */
 
 #lv-chart {
+  --sk-h: 100%;
   height: 600px;
   margin-top: var(--sp-4);
 }
