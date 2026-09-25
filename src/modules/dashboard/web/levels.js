@@ -13,10 +13,18 @@ import { segmented } from "./src/core/ui.js";
 import { paintIcons } from "./src/core/icon.js";
 import * as dialog from "./src/core/dialog.js";
 import { coinCombo, attachCoinCombo, cleanTicker, loadCoinUniverse } from "./src/core/coinCombo.js";
-import { drawLevels, drawScene, applyLevelsTheme } from "./src/charts/levelsChart.js";
+import { drawLevels, drawScene, applyLevelsTheme, tickPrice } from "./src/charts/levelsChart.js";
+import {
+  startPriceStream,
+  setWatchedCoins,
+  onPriceTick,
+  getLivePrice,
+  coinKey,
+} from "./src/net/priceStream.js";
 import {
   readPrice,
   planFromZone,
+  breakPlan,
   shownZones,
   scenarios,
   scenarioKey,
@@ -127,9 +135,12 @@ function showPlan(plan) {
   }
 }
 
-async function load() {
+// Тихая перезагрузка на закрытии бара: без «Loading…», выбранный сценарий остаётся.
+async function load({ quiet = false } = {}) {
+  clearTimeout(barTimer);
   const node = el("lv-zones");
-  node.innerHTML = `<div class="lv-empty">Loading…</div>`;
+  const keep = quiet ? scenarioKey(state.plan) : "";
+  if (!quiet) node.innerHTML = `<div class="lv-empty">Loading…</div>`;
   try {
     const r = await fetch(`/api/levels?coin=${encodeURIComponent(state.coin)}&tf=${state.tf}`);
     // Причину отказа показываем на странице: в консоли её видит только автор.
@@ -139,6 +150,7 @@ async function load() {
     }
     state.data = await r.json();
   } catch (err) {
+    if (quiet && state.data) return scheduleBarClose();
     state.data = null;
     node.innerHTML = `<div class="lv-empty">${err.message}</div>`;
     el("lv-read").innerHTML = "";
@@ -151,20 +163,81 @@ async function load() {
     return;
   }
 
+  setWatchedCoins([state.data.coin]);
   const read = readPrice(state.data);
   state.read = read;
   renderRead(el("lv-read"), read, state.data.price);
   renderContext(el("lv-context"), state.data);
   renderOi(el("lv-oi"), state.data.coin, state.data.oi);
   await drawLevels(el("lv-chart"), state.data, (z) => showPlan(planFromZone(state.data, z)));
+  const kept = keep && scenarios(read).find((p) => scenarioKey(p) === keep);
   // У зоны план открыт сразу; посередине между зонами выбирать нечего.
-  showPlan(read.kind === "support" ? read.long : read.kind === "resistance" ? read.short : null);
+  showPlan(kept || autoPlan(read));
+  scheduleBarClose();
   renderZones(node, state.data);
   el("lv-count").textContent = `${state.data.zones.length} zones`;
   el("lv-sources").textContent = SOURCE_NOTE;
   // Разбор записан сервером при этом запросе — журнал перечитывается после него.
   loadJournal();
 }
+
+function autoPlan(read) {
+  return read.kind === "support" ? read.long : read.kind === "resistance" ? read.short : null;
+}
+
+// ── живая цена ──
+// Тик двигает последнюю свечу и пересчитывает разбор; зоны и закрытые бары
+// считает сервер, поэтому на закрытии бара страница перечитывается целиком.
+const TF_SEC = { "15m": 900, "1h": 3600, "4h": 14400 };
+const BAR_CLOSE_LAG_MS = 3_000;
+const REPLAN_MS = 1_000;
+let barTimer = null;
+let replanTimer = null;
+
+function barCloseAt() {
+  const last = state.data?.candles?.at(-1);
+  return last ? (last.time + TF_SEC[state.data.tf]) * 1000 : Infinity;
+}
+
+function scheduleBarClose() {
+  clearTimeout(barTimer);
+  const closeAt = barCloseAt();
+  if (closeAt === Infinity) return;
+  barTimer = setTimeout(() => load({ quiet: true }), Math.max(0, closeAt - Date.now()) + BAR_CLOSE_LAG_MS);
+}
+
+/** Тот же сценарий на новой цене: зона и сторона прежние, числа свежие. */
+function samePlan(plan) {
+  if (!plan) return null;
+  return plan.kind === "break"
+    ? breakPlan(state.data, plan.stopZone, plan.side)
+    : planFromZone(state.data, plan.stopZone);
+}
+
+function replan() {
+  replanTimer = null;
+  if (!state.data) return;
+  const read = readPrice(state.data);
+  state.read = read;
+  renderRead(el("lv-read"), read, state.data.price);
+  showPlan(state.plan ? samePlan(state.plan) : autoPlan(read));
+}
+
+onPriceTick((changed) => {
+  const coin = state.data?.coin;
+  if (!coin || !changed.has(coinKey(coin))) return;
+  const px = getLivePrice(coin);
+  // Бар уже закрыт, новый ещё не пришёл с сервера: закрытую свечу не переписываем.
+  if (!(px > 0) || Date.now() >= barCloseAt()) return;
+  tickPrice(px);
+  state.data.price = px;
+  replanTimer ??= setTimeout(replan, REPLAN_MS);
+});
+
+// Бар мог закрыться, пока вкладка спала: таймер в фоне опаздывает.
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && Date.now() >= barCloseAt()) load({ quiet: true });
+});
 
 // OI меняется быстрее свечей: строка перечитывается отдельно, график не трогается.
 const OI_REFRESH_MS = 30_000;
@@ -231,5 +304,6 @@ mountControls();
 loadCoinUniverse().then((coins) => {
   state.coins = coins;
 });
+startPriceStream();
 load();
 initReveal();

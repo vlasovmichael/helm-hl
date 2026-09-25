@@ -462,6 +462,16 @@ export async function drawLevels(container, data, pick) {
   return true;
 }
 
+/** Живая цена двигает последнюю свечу; закрытый бар не трогаем. */
+export function tickPrice(px) {
+  const last = bars.at(-1);
+  if (!candles || !last || !(px > 0)) return;
+  const bar = { ...last, close: px, high: Math.max(last.high, px), low: Math.min(last.low, px) };
+  bars[bars.length - 1] = bar;
+  candles.update(bar);
+  renderLegend();
+}
+
 /** Зоны, тонкие коридоры профиля и выбранный план. */
 export function drawScene(zones, plan, thin = []) {
   if (!layer) return;
