@@ -15,6 +15,7 @@
 
 import js from '@eslint/js';
 import globals from 'globals';
+import { labPatterns } from './scripts/lab.mjs';
 
 export default [
   {
@@ -27,6 +28,10 @@ export default [
       'temp/**',
       'tools/*.html',
     ],
+  },
+  {
+    // Лаба в CI не приезжает: линт должен видеть те же файлы, что и там.
+    ignores: labPatterns().map((p) => (p.endsWith('/') ? `${p}**` : p)),
   },
 
   js.configs.recommended,

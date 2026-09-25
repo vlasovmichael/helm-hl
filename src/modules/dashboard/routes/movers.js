@@ -191,7 +191,7 @@ async function enrichFadeHot(items, now) {
       const cached = _fadeHotCache.get(it.coin);
       if (cached && now - cached.ts < FADEHOT_VERDICT_TTL_MS) { it.fadeHot = cached.verdict; return; }
 
-      let candles = null;
+      let candles;
       try {
         candles = await getFifteenMinCandles(it.coin, FADEHOT_LOOKBACK_MIN, now);
       } catch { candles = null; }

@@ -24,8 +24,9 @@ export function renderTickValue(el, next, up = null) {
 
   // Общий префикс сравниваем как строки — разряды не разъезжаются, потому что
   // формат один и тот же.
+  const old = was ?? "";
   let i = 0;
-  while (i < next.length && was != null && i < was.length && next[i] === was[i]) i++;
+  while (i < next.length && i < old.length && next[i] === old[i]) i++;
 
   el.textContent = "";
   if (i > 0) {

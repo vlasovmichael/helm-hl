@@ -66,6 +66,7 @@ function writeState(state) {
 
 // Строки логгера и цвет терминала в вердикт не идут.
 const clean = (out) => String(out || '')
+  // eslint-disable-next-line no-control-regex -- ESC открывает ANSI-цвет
   .replace(/\x1b\[[0-9;]*m/g, '')
   .split('\n')
   .filter((l) => !/\[(INFO|DEBUG|WARN)\]/.test(l))
