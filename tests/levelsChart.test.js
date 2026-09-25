@@ -6,6 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 const { withAlpha, tickLabel, emaPoints } = await import("../src/modules/dashboard/web/src/charts/levelsChart.js");
+const { ema } = await import("../src/modules/dashboard/web/src/features/levelMath.js");
 
 test("withAlpha: hex и rgba токены получают заданную прозрачность", () => {
   assert.equal(withAlpha("#0ecb81", 0.2), "rgba(14, 203, 129, 0.2)");
@@ -22,12 +23,17 @@ test("tickLabel: год, месяц, число и часы по местном�
   assert.equal(tickLabel(t, 3), "14:05");
 });
 
-test("emaPoints: затравка SMA, дальше сглаживание с k = 2/(n+1)", () => {
-  const bars = [1, 2, 3, 4, 5].map((close, i) => ({ time: i, close }));
-  assert.deepEqual(emaPoints(bars, 6), [], "короче периода — линии нет");
-  const pts = emaPoints(bars, 3);
-  assert.deepEqual(pts.map((p) => p.time), [2, 3, 4]);
-  assert.equal(pts[0].value, 2);
-  assert.equal(pts[1].value, 3);
-  assert.equal(pts[2].value, 4);
+test("ema: затравка SMA, дальше сглаживание с k = 2/(n+1)", () => {
+  assert.deepEqual(ema([1, 2], 3), [null, null], "короче периода — значений нет");
+  assert.deepEqual(ema([1, 2, 3, 4, 5], 3), [null, null, 2, 3, 4]);
+});
+
+test("ema: seed продолжает линию с первого бара", () => {
+  assert.deepEqual(ema([4, 6], 3, 2), [3, 4.5]);
+});
+
+test("emaPoints: с seed точка на каждом баре, без него — с бара периода", () => {
+  const bars = Array.from({ length: 5 }, (_, i) => ({ time: i, close: 10 }));
+  assert.equal(emaPoints(bars, 10).length, 5);
+  assert.equal(emaPoints(bars).length, 0);
 });

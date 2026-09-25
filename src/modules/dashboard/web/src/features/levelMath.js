@@ -193,3 +193,27 @@ export function scenarios(read) {
 }
 
 export const scenarioKey = (p) => (p ? `${p.kind}:${p.stopZone.name}:${p.side}` : "");
+
+export const EMA_PERIOD = 200;
+
+/**
+ * EMA закрытий по барам. С seed линия идёт с первого бара; без него затравка —
+ * SMA первых period закрытий, а до неё значений нет (null).
+ */
+export function ema(closes, period = EMA_PERIOD, seed = null) {
+  const out = new Array(closes.length).fill(null);
+  const k = 2 / (period + 1);
+  let v = Number.isFinite(seed) ? seed : null;
+  let start = 0;
+  if (v === null) {
+    if (closes.length < period) return out;
+    v = closes.slice(0, period).reduce((s, c) => s + c, 0) / period;
+    out[period - 1] = v;
+    start = period;
+  }
+  for (let i = start; i < closes.length; i++) {
+    v += k * (closes[i] - v);
+    out[i] = v;
+  }
+  return out;
+}

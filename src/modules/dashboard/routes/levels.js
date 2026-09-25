@@ -10,7 +10,8 @@
 // форвардом. Он нужен как место для стопа и цели, чтобы плечо риска считалось
 // числом, а не глазом.
 
-import { getFifteenMinCandles, getHourlyCandles, getFourHourCandles } from "../../candleCache.js";
+import { getFifteenMinCandles, getHourlyCandles, getFourHourCandles, getDeepCandles } from "../../candleCache.js";
+import { EMA_PERIOD, ema } from "../web/src/features/levelMath.js";
 import { findAsset, getUniverse } from "../../../core/universe.js";
 import { recordLevelRead } from "../../levelReads.js";
 import { levelsOi } from "./levelsOi.js";
@@ -23,6 +24,8 @@ const FRAMES = {
   "4h": { bars: 360, load: (coin) => getFourHourCandles(coin, 360 * 4) },
 };
 
+// Прогрев EMA до окна: через три периода вклад затравки меньше процента.
+const EMA_WARM_BARS = EMA_PERIOD * 3;
 const SWING_WING = 5; // баров по каждую сторону от вершины фрактала
 const PROFILE_BINS = 64;
 const VALUE_AREA = 0.7; // доля объёма внутри области стоимости, стандарт профиля
@@ -314,7 +317,7 @@ export async function handleLevels(req, res) {
     }
   }
 
-  const oi = await levelsOi(coin, OI_WINDOWS[tf]);
+  const [oi, seed] = await Promise.all([levelsOi(coin, OI_WINDOWS[tf]), emaSeed(coin, tf, candles)]);
 
   const body = {
     coin,
@@ -336,6 +339,7 @@ export async function handleLevels(req, res) {
       low: c.low,
       close: c.close,
     })),
+    emaSeed: seed,
     profile: profile.bins,
     thin: thinCorridors(profile.bins, profile.step),
     zones,
@@ -344,6 +348,18 @@ export async function handleLevels(req, res) {
   };
   recordLevelRead(body, candles[candles.length - 1].time);
   res.json(body);
+}
+
+/** EMA на входе в окно, по истории до его первого бара; null — истории не хватило. */
+async function emaSeed(coin, tf, window) {
+  try {
+    const deep = await getDeepCandles(coin, tf, FRAMES[tf].bars + EMA_WARM_BARS);
+    const before = (deep || []).filter((c) => c.time < window[0].time).map((c) => c.close);
+    if (before.length < EMA_PERIOD) return null;
+    return ema(before).at(-1);
+  } catch {
+    return null;
+  }
 }
 
 /** Только OI: страница перечитывает его чаще, чем свечи. */

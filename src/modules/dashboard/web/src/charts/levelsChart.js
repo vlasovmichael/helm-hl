@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────
 
 import { fmtPx } from "../features/levelPlan.js";
+import { EMA_PERIOD, ema } from "../features/levelMath.js";
 
 const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
@@ -19,7 +20,6 @@ const PILL_H = 20;
 const PILL_PAD = 8;
 const PILL_GAP = 4;
 const ANIM_MS = 320;
-const EMA_PERIOD = 200;
 
 const reduceMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
@@ -40,17 +40,10 @@ function palette() {
   };
 }
 
-/** EMA по закрытиям, затравка — SMA первых period баров; до неё точек нет. */
-export function emaPoints(series, period = EMA_PERIOD) {
-  if (series.length < period) return [];
-  const k = 2 / (period + 1);
-  let v = series.slice(0, period).reduce((s, b) => s + b.close, 0) / period;
-  const out = [{ time: series[period - 1].time, value: v }];
-  for (let i = period; i < series.length; i++) {
-    v += k * (series[i].close - v);
-    out.push({ time: series[i].time, value: v });
-  }
-  return out;
+/** Точки EMA для графика; seed с сервера продолжает линию с первого бара окна. */
+export function emaPoints(series, seed = null) {
+  const values = ema(series.map((b) => b.close), EMA_PERIOD, seed);
+  return series.flatMap((b, i) => (values[i] === null ? [] : [{ time: b.time, value: values[i] }]));
 }
 
 /** Цвет токена с прозрачностью: токены бывают и hex, и rgba. */
@@ -474,7 +467,7 @@ export async function drawLevels(container, data, pick) {
   meta = { coin: data.coin, tf: data.tf };
   bars = data.candles;
   candles.setData(bars);
-  emaLine = emaPoints(bars);
+  emaLine = emaPoints(bars, data.emaSeed);
   emaSeries.setData(emaLine);
   renderLegend();
   if (fresh) {

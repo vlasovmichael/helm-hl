@@ -347,6 +347,41 @@ export function clearFourHourCache() {
   cache4h.clear();
 }
 
+// ── Глубокая история для прогрева индикаторов ──────────────────────────────
+// Отдельная карта: общие кэши делят одну запись на монету при разной глубине
+// запроса, и длинная история из них протекла бы в сигналы, считаемые по длине массива.
+const DEEP_TTL_MS = 30 * 60_000;
+const DEEP_INTERVAL_MS = { '15m': 15 * 60_000, '1h': 3_600_000, '4h': 4 * 3_600_000 };
+// `${interval}:${coin}` → { fetchedAt, lastAccess, candles, inflight }
+const cacheDeep = new Map();
+
+export async function getDeepCandles(coin, interval, bars, now = Date.now()) {
+  const step = DEEP_INTERVAL_MS[interval];
+  if (!step) throw new Error(`unknown interval ${interval}`);
+  const key = `${interval}:${coin}`;
+  markAccess(cacheDeep, key, now);
+  const cached = cacheDeep.get(key);
+  if (cached?.candles && cached.candles.length >= bars && now - cached.fetchedAt < DEEP_TTL_MS) {
+    return cached.candles;
+  }
+  if (cached?.inflight) {
+    try { return await cached.inflight; } catch { return null; }
+  }
+  const promise = hlInfo(
+    {
+      type: 'candleSnapshot',
+      req:  { coin: resolveApiCoin(coin), interval, startTime: now - bars * step, endTime: now },
+    },
+    { label: `candleCacheDeep/${key}`, priority: HL_PRIORITY.LOW },
+  ).then((data) => {
+    const candles = parseCandles(data);
+    cacheDeep.set(key, { fetchedAt: Date.now(), lastAccess: Date.now(), candles, inflight: null });
+    return candles;
+  }).catch((err) => onFetchFail(cacheDeep, key, err, 'CandleCacheDeep'));
+  cacheDeep.set(key, { ...(cached || {}), inflight: promise });
+  return promise;
+}
+
 // ── Подметалка ──────────────────────────────────────────────────────────────
 // Регистрируем все карты в одном месте (после их объявления), чтобы
 // вытеснение было общим и никакой пятый кэш не завёлся мимо него.
@@ -356,6 +391,7 @@ CACHES.push(
   { name: '5m',  store: cache5m },
   { name: '15m', store: cache15m },
   { name: '4h',  store: cache4h },
+  { name: 'deep', store: cacheDeep },
 );
 
 /**
