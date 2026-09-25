@@ -19,6 +19,7 @@ const PILL_H = 20;
 const PILL_PAD = 8;
 const PILL_GAP = 4;
 const ANIM_MS = 320;
+const EMA_PERIOD = 200;
 
 const reduceMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
@@ -33,9 +34,23 @@ function palette() {
     up: cssVar("--pnl-up") || "#0ecb81",
     down: cssVar("--pnl-down") || "#f6465d",
     accent: cssVar("--accent") || "#0969da",
+    ema: cssVar("--yellow") || "#eab308",
     font: cssVar("--font-sans") || "sans-serif",
     mono: cssVar("--font-mono") || "monospace",
   };
+}
+
+/** EMA по закрытиям, затравка — SMA первых period баров; до неё точек нет. */
+export function emaPoints(series, period = EMA_PERIOD) {
+  if (series.length < period) return [];
+  const k = 2 / (period + 1);
+  let v = series.slice(0, period).reduce((s, b) => s + b.close, 0) / period;
+  const out = [{ time: series[period - 1].time, value: v }];
+  for (let i = period; i < series.length; i++) {
+    v += k * (series[i].close - v);
+    out.push({ time: series[i].time, value: v });
+  }
+  return out;
 }
 
 /** Цвет токена с прозрачностью: токены бывают и hex, и rgba. */
@@ -72,6 +87,8 @@ export function crosshairLabel(time) {
 
 let chart = null;
 let candles = null;
+let emaSeries = null;
+let emaLine = [];
 let layer = null;
 let host = null;
 let legend = null;
@@ -422,10 +439,18 @@ export async function drawLevels(container, data, pick) {
   if (!chart || !container.contains(chart.chartElement())) {
     container.innerHTML = "";
     host = container;
-    const { createChart, CandlestickSeries } = await import("lightweight-charts");
+    const { createChart, CandlestickSeries, LineSeries } = await import("lightweight-charts");
     chart = createChart(container, { ...chartOptions(), autoSize: true });
     candles = chart.addSeries(CandlestickSeries, {
       ...candleColors(),
+      priceFormat: { type: "custom", formatter: fmtPx, minMove: 1e-8 },
+    });
+    emaSeries = chart.addSeries(LineSeries, {
+      color: palette().ema,
+      lineWidth: 2,
+      title: `EMA ${EMA_PERIOD}`,
+      priceLineVisible: false,
+      crosshairMarkerVisible: false,
       priceFormat: { type: "custom", formatter: fmtPx, minMove: 1e-8 },
     });
     layer = makeLayer();
@@ -449,6 +474,8 @@ export async function drawLevels(container, data, pick) {
   meta = { coin: data.coin, tf: data.tf };
   bars = data.candles;
   candles.setData(bars);
+  emaLine = emaPoints(bars);
+  emaSeries.setData(emaLine);
   renderLegend();
   if (fresh) {
     anim.zonesAt = performance.now();
@@ -469,6 +496,13 @@ export function tickPrice(px) {
   const bar = { ...last, close: px, high: Math.max(last.high, px), low: Math.min(last.low, px) };
   bars[bars.length - 1] = bar;
   candles.update(bar);
+  // Последняя точка EMA пересчитывается от предпоследней: та на закрытом баре.
+  if (emaLine.length >= 2 && emaLine.at(-1).time === bar.time) {
+    const prev = emaLine.at(-2).value;
+    const point = { time: bar.time, value: prev + (2 / (EMA_PERIOD + 1)) * (px - prev) };
+    emaLine[emaLine.length - 1] = point;
+    emaSeries.update(point);
+  }
   renderLegend();
 }
 
@@ -495,5 +529,6 @@ export function applyLevelsTheme() {
   if (!chart) return;
   chart.applyOptions(chartOptions());
   candles.applyOptions(candleColors());
+  emaSeries.applyOptions({ color: palette().ema });
   layer?.redraw();
 }
