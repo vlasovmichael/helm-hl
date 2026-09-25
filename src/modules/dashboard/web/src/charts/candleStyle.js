@@ -15,6 +15,22 @@ export function monoCandles() {
   };
 }
 
+/** Цветные свечи: зелёная вверх, красная вниз. */
+export function colorCandles() {
+  const up = cssVar("--pnl-up") || "#0ecb81";
+  const down = cssVar("--pnl-down") || "#f6465d";
+  return {
+    upColor: up,
+    downColor: down,
+    borderUpColor: up,
+    borderDownColor: down,
+    wickUpColor: up,
+    wickDownColor: down,
+  };
+}
+
+export const candleStyle = (mode) => (mode === "color" ? colorCandles() : monoCandles());
+
 const DOTTED = 1; // LineStyle.Dotted
 
 /** Линия текущей цены: тонкий пунктир цвета последней свечи. */

@@ -14,7 +14,7 @@ import { paintIcons } from "./src/core/icon.js";
 import * as dialog from "./src/core/dialog.js";
 import { skeletonText, skeletonRows, emptyState } from "./src/core/placeholders.js";
 import { coinCombo, attachCoinCombo, cleanTicker, loadCoinUniverse } from "./src/core/coinCombo.js";
-import { drawLevels, drawScene, applyLevelsTheme, tickPrice } from "./src/charts/levelsChart.js";
+import { drawLevels, drawScene, applyLevelsTheme, tickPrice, setCandleMode } from "./src/charts/levelsChart.js";
 import {
   startPriceStream,
   setWatchedCoins,
@@ -71,6 +71,25 @@ function saveSize(v) {
   }
 }
 
+// Цвет свечей — удобство одного зрителя, поэтому в браузере, а не в адресе.
+const CANDLES_KEY = "helm_levels_candles";
+
+function loadCandles() {
+  try {
+    return localStorage.getItem(CANDLES_KEY) === "color" ? "color" : "mono";
+  } catch {
+    return "mono";
+  }
+}
+
+function saveCandles(mode) {
+  try {
+    localStorage.setItem(CANDLES_KEY, mode);
+  } catch {
+    /* приватное окно: выбор просто не запомнится */
+  }
+}
+
 // Монета и ТФ из адреса: ссылкой можно поделиться ровно тем разбором.
 const query = new URLSearchParams(location.search);
 
@@ -81,7 +100,9 @@ const state = {
   read: null,
   plan: null,
   coins: [],
+  candles: loadCandles(),
 };
+setCandleMode(state.candles);
 
 const el = (id) => document.getElementById(id);
 
@@ -94,6 +115,24 @@ function mountControls() {
       load();
     },
   });
+
+  el("lv-candles").innerHTML = segmented({
+    name: "candles",
+    value: state.candles,
+    options: [
+      { value: "mono", label: "B/W" },
+      { value: "color", label: "Color" },
+    ],
+  });
+  el("lv-candles").onclick = (e) => {
+    const mode = e.target.closest("[data-candles]")?.dataset.candles;
+    if (mode && mode !== state.candles) {
+      state.candles = mode;
+      saveCandles(mode);
+      setCandleMode(mode);
+      mountControls();
+    }
+  };
 
   el("lv-tf").innerHTML = segmented({
     name: "tf",

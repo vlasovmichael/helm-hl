@@ -6,7 +6,7 @@
 
 import { fmtPx } from "../features/levelPlan.js";
 import { EMA_PERIOD, ema } from "../features/levelMath.js";
-import { lastPriceLine, monoCandles } from "./candleStyle.js";
+import { candleStyle, lastPriceLine } from "./candleStyle.js";
 
 const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
@@ -103,6 +103,7 @@ let bars = [];
 let meta = { coin: "", tf: "" };
 let onPick = () => {};
 let clock = 0;
+let candleMode = "mono";
 
 // ── Анимация ─────────────────────────────────────
 // Коробка перетекает от старых цен к новым, зоны проявляются после загрузки.
@@ -450,7 +451,7 @@ export async function drawLevels(container, data, pick) {
     const { createChart, CandlestickSeries, LineSeries } = await import("lightweight-charts");
     chart = createChart(container, { ...chartOptions(), autoSize: true });
     candles = chart.addSeries(CandlestickSeries, {
-      ...monoCandles(),
+      ...candleStyle(candleMode),
       priceFormat: { type: "custom", formatter: fmtPx, minMove: 1e-8 },
     });
     emaSeries = chart.addSeries(LineSeries, {
@@ -458,6 +459,8 @@ export async function drawLevels(container, data, pick) {
       lineWidth: 2,
       priceLineVisible: false,
       crosshairMarkerVisible: false,
+      // Шкала по свечам, как у TV: далёкая EMA не сжимает цену в полосу.
+      autoscaleInfoProvider: () => null,
       priceFormat: { type: "custom", formatter: fmtPx, minMove: 1e-8 },
     });
     layer = makeLayer();
@@ -534,11 +537,17 @@ export function drawScene(zones, plan, thin = []) {
   kick();
 }
 
+/** Чёрно-белые или цветные свечи. */
+export function setCandleMode(mode) {
+  candleMode = mode;
+  candles?.applyOptions(candleStyle(mode));
+}
+
 /** Перекраска под тему: bindTheme зовёт это при смене. */
 export function applyLevelsTheme() {
   if (!chart) return;
   chart.applyOptions(chartOptions());
-  candles.applyOptions({ ...monoCandles(), ...lastPriceLine(bars.at(-1)) });
+  candles.applyOptions({ ...candleStyle(candleMode), ...lastPriceLine(bars.at(-1)) });
   emaSeries.applyOptions({ color: palette().ema });
   layer?.redraw();
 }
