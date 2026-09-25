@@ -1,0 +1,273 @@
+//@version=6
+// Порт правила страницы Levels (src/modules/dashboard/routes/levels.js) на TradingView:
+// те же источники, склейка, касания и сила. Числа совпадают, если свечи с той же биржи.
+indicator("Helm Levels", "Levels", overlay = true, max_boxes_count = 500, max_labels_count = 100, max_bars_back = 1000)
+
+int   barsIn      = input.int(0, "Bars in window (0 = as on the page)", minval = 0, maxval = 900, display = display.none)
+int   wing        = input.int(5, "Swing: bars on each side", minval = 1, display = display.none)
+int   binsN       = input.int(64, "Volume profile bins", minval = 8, maxval = 200, display = display.none)
+float valueArea   = input.float(0.7, "Value area share", minval = 0.1, maxval = 0.99, display = display.none)
+float mergeAtr    = input.float(0.35, "Merge levels closer than, ATR", minval = 0.05, display = display.none)
+int   touchGap    = input.int(3, "Bars outside between two touches", minval = 1, display = display.none)
+int   minStrength = input.int(2, "Min zone strength", minval = 0, display = display.none)
+float thinShare   = input.float(0.5, "Thin volume: share of the smaller shelf", minval = 0.05, maxval = 0.95, display = display.none)
+int   thinMinBins = input.int(3, "Thin corridor: min bins", minval = 1, display = display.none)
+int   extendBars  = input.int(30, "Extend zones right, bars", minval = 0, maxval = 400, display = display.none)
+int   showEach    = input.int(2, "Zones shown each side of price (0 = all)", minval = 0, display = display.none)
+bool  showThin    = input.bool(true, "Show thin volume", display = display.none)
+bool  showEma     = input.bool(false, "EMA 200", display = display.none)
+color supColor    = input.color(#0ecb81, "Support", display = display.none)
+color resColor    = input.color(#f6465d, "Resistance", display = display.none)
+color thinColor   = input.color(#8b949e, "Thin volume", display = display.none)
+color emaColor    = input.color(#eab308, "EMA 200 color", display = display.none)
+
+// Коды источников: бит в маске зоны. Сила берёт число разных источников, а не уровней.
+const int K_SWING = 0
+const int K_PDH   = 1
+const int K_PDL   = 2
+const int K_POC   = 3
+const int K_VAH   = 4
+const int K_VAL   = 5
+const int K_ROUND = 6
+
+// Окно по умолчанию то же, что у страницы на её таймфреймах.
+pageBars() =>
+    switch timeframe.period
+        "15"  => 288
+        "60"  => 480
+        "240" => 360
+        => 300
+
+hasBit(int mask, int k) =>
+    math.floor(mask / math.pow(2, k)) % 2 == 1
+
+bitCount(int mask) =>
+    int c = 0
+    for k = 0 to 6
+        if hasBit(mask, k)
+            c += 1
+    c
+
+// Прозрачность по силе: те же три ступени, что у заливки на странице.
+tierTransp(int s) =>
+    s >= 8 ? 80 : s >= 4 ? 87 : 93
+
+plot(showEma ? ta.ema(close, 200) : na, "EMA 200", color = emaColor, linewidth = 2)
+
+var array<box> drawn = array.new<box>()
+var array<label> names = array.new<label>()
+
+if barstate.islast
+    while drawn.size() > 0
+        drawn.pop().delete()
+    while names.size() > 0
+        names.pop().delete()
+
+    int n = math.min(barsIn > 0 ? barsIn : pageBars(), bar_index + 1)
+    float px = close
+
+    // ATR страницы — средний размах бара, без гэпов.
+    int an = math.min(14, n)
+    float atrv = 0.0
+    for o = 0 to an - 1
+        atrv += high[o] - low[o]
+    atrv /= an
+    float tol = atrv * mergeAtr
+    if tol <= 0
+        tol := px * 0.001
+
+    array<float> lvPx   = array.new<float>()
+    array<int>   lvKind = array.new<int>()
+
+    // Фрактальные вершины: строго выше (ниже) wing соседей с каждой стороны.
+    if n > 2 * wing
+        for i = wing to n - 1 - wing
+            bool isH = true
+            bool isL = true
+            for j = i - wing to i + wing
+                if j != i
+                    if high[j] >= high[i]
+                        isH := false
+                    if low[j] <= low[i]
+                        isL := false
+            if isH
+                lvPx.push(high[i])
+                lvKind.push(K_SWING)
+            if isL
+                lvPx.push(low[i])
+                lvKind.push(K_SWING)
+
+    // Максимум и минимум прошлых суток UTC внутри окна.
+    int dayMs = 86400000
+    int todayStart = math.floor(time / dayMs) * dayMs
+    float pdh = na
+    float pdl = na
+    float allLo = na
+    float allHi = na
+    float vLo = na
+    float vHi = na
+    int withVol = 0
+    for o = 0 to n - 1
+        allLo := na(allLo) ? low[o] : math.min(allLo, low[o])
+        allHi := na(allHi) ? high[o] : math.max(allHi, high[o])
+        if time[o] >= todayStart - dayMs and time[o] < todayStart
+            pdh := na(pdh) ? high[o] : math.max(pdh, high[o])
+            pdl := na(pdl) ? low[o] : math.min(pdl, low[o])
+        if volume[o] > 0
+            withVol += 1
+            vLo := na(vLo) ? low[o] : math.min(vLo, low[o])
+            vHi := na(vHi) ? high[o] : math.max(vHi, high[o])
+    if not na(pdh)
+        lvPx.push(pdh)
+        lvKind.push(K_PDH)
+        lvPx.push(pdl)
+        lvKind.push(K_PDL)
+
+    // Профиль объёма: объём бара поровну по его диапазону; POC и область стоимости.
+    array<float> bins = array.new<float>(binsN, 0.0)
+    float step = 0.0
+    if withVol >= 20 and vHi > vLo
+        step := (vHi - vLo) / binsN
+        for o = 0 to n - 1
+            float v = volume[o]
+            if v > 0
+                int f = math.max(0, math.floor((low[o] - vLo) / step))
+                int t = math.min(binsN - 1, math.floor((high[o] - vLo) / step))
+                float share = v / (t - f + 1)
+                for k = f to t
+                    bins.set(k, bins.get(k) + share)
+        float total = bins.sum()
+        int poc = 0
+        for k = 1 to binsN - 1
+            if bins.get(k) > bins.get(poc)
+                poc := k
+        int lower = poc
+        int upper = poc
+        float acc = bins.get(poc)
+        while acc < total * valueArea and (lower > 0 or upper < binsN - 1)
+            float down = lower > 0 ? bins.get(lower - 1) : -1.0
+            float up = upper < binsN - 1 ? bins.get(upper + 1) : -1.0
+            if up >= down
+                upper += 1
+                acc += bins.get(upper)
+            else
+                lower -= 1
+                acc += bins.get(lower)
+        lvPx.push(vLo + step * (poc + 0.5))
+        lvKind.push(K_POC)
+        lvPx.push(vLo + step * (upper + 0.5))
+        lvKind.push(K_VAH)
+        lvPx.push(vLo + step * (lower + 0.5))
+        lvKind.push(K_VAL)
+
+    // Круглые числа: шаг — степень десяти от размаха окна, не больше 12 уровней.
+    float span = allHi - allLo
+    if span > 0
+        float rs = math.pow(10, math.floor(math.log10(span)))
+        int first = math.ceil(allLo / rs)
+        int count = math.floor(allHi / rs) - first + 1
+        if count > 0 and count <= 12
+            for k = 0 to count - 1
+                lvPx.push((first + k) * rs)
+                lvKind.push(K_ROUND)
+
+    // Склейка по возрастанию цены: ближе tol к текущей зоне — в неё.
+    array<float> zPx   = array.new<float>()
+    array<int>   zMask = array.new<int>()
+    if lvPx.size() > 0
+        array<int> ord = lvPx.sort_indices(order.ascending)
+        for k = 0 to ord.size() - 1
+            int id = ord.get(k)
+            float p = lvPx.get(id)
+            int bit = int(math.pow(2, lvKind.get(id)))
+            int zn = zPx.size()
+            if zn > 0 and p - zPx.get(zn - 1) <= tol
+                int m = zMask.get(zn - 1)
+                int c = bitCount(m)
+                zPx.set(zn - 1, (zPx.get(zn - 1) * c + p) / (c + 1))
+                if not hasBit(m, lvKind.get(id))
+                    zMask.set(zn - 1, m + bit)
+            else
+                zPx.push(p)
+                zMask.push(bit)
+
+    // Касание — отдельный заход в полосу зоны после touchGap баров вне её.
+    float half = tol / 2
+    array<float> kPx    = array.new<float>()
+    array<int>   kStr   = array.new<int>()
+    array<int>   kFirst = array.new<int>()
+    for z = 0 to zPx.size() - 1
+        if zPx.size() == 0
+            break
+        float zl = zPx.get(z) - half
+        float zh = zPx.get(z) + half
+        int touches = 0
+        int outside = touchGap
+        int firstAt = -1
+        for o = n - 1 to 0
+            if high[o] >= zl and low[o] <= zh
+                if outside >= touchGap
+                    touches += 1
+                if firstAt < 0
+                    firstAt := o
+                outside := 0
+            else
+                outside += 1
+        int s = touches + (bitCount(zMask.get(z)) - 1) * 2
+        if s >= minStrength
+            kPx.push(zPx.get(z))
+            kStr.push(s)
+            kFirst.push(firstAt < 0 ? n - 1 : firstAt)
+
+    // Имена как на странице: R1 — ближайшая над ценой, S1 — ближайшая под ней.
+    int nAbove = 0
+    for k = 0 to kPx.size() - 1
+        if kPx.size() == 0
+            break
+        if kPx.get(k) > px
+            nAbove += 1
+    int nBelow = kPx.size() - nAbove
+    for k = 0 to kPx.size() - 1
+        if kPx.size() == 0
+            break
+        float p = kPx.get(k)
+        bool above = p > px
+        int rank = above ? k - nBelow + 1 : nBelow - k
+        // На графике страницы по две ближайшие с каждой стороны; остальные — только в таблице.
+        if showEach > 0 and rank > showEach
+            continue
+        string name = (above ? "R" : "S") + str.tostring(rank)
+        color col = above ? resColor : supColor
+        drawn.push(box.new(bar_index - kFirst.get(k), p + half, bar_index + extendBars, p - half,
+             border_color = color.new(col, 60), bgcolor = color.new(col, tierTransp(kStr.get(k)))))
+        // Имя меткой у последней свечи: текст внутри тонкой зоны TradingView прячет,
+        // а конец зоны часто за правым краем экрана.
+        names.push(label.new(bar_index + 2, p, name + " · " + str.tostring(kStr.get(k)),
+             style = label.style_label_left, color = color.new(col, 100), textcolor = col, size = size.small))
+
+    // Тонкий объём: провал между двумя полками профиля, пунктиром.
+    if showThin and step > 0
+        float total = bins.sum()
+        float mean = total / binsN
+        array<int> peaks = array.new<int>()
+        for i = 0 to binsN - 1
+            float left = i > 0 ? bins.get(i - 1) : -1.0
+            float right = i < binsN - 1 ? bins.get(i + 1) : -1.0
+            if bins.get(i) >= mean and bins.get(i) >= left and bins.get(i) > right
+                peaks.push(i)
+        if peaks.size() > 1
+            for pk = 1 to peaks.size() - 1
+                int a = peaks.get(pk - 1)
+                int b = peaks.get(pk)
+                float floorV = math.min(bins.get(a), bins.get(b)) * thinShare
+                int from = -1
+                for i = a + 1 to b
+                    bool thin = i < b and bins.get(i) < floorV
+                    if thin and from < 0
+                        from := i
+                    if not thin and from >= 0
+                        if i - from >= thinMinBins
+                            drawn.push(box.new(bar_index - n + 1, vLo + step * i, bar_index + extendBars, vLo + step * from,
+                                 border_color = color.new(thinColor, 40), border_style = line.style_dashed,
+                                 bgcolor = color.new(thinColor, 94)))
+                        from := -1
