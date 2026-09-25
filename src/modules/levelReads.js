@@ -13,7 +13,7 @@ import { logger } from '../core/logger.js';
 import { HL_PRIORITY } from '../core/hlClient.js';
 import { getOpenLevelReads, getLevelReads, recordLevelReadRow, resolveLevelRead } from '../core/database.js';
 import { getFifteenMinCandles } from './candleCache.js';
-import { readPrice, ACCEPT_BARS, ROUND_TRIP_BP } from './dashboard/web/src/features/levelPlan.js';
+import { readPrice, ACCEPT_BARS, ROUND_TRIP_BP } from './dashboard/web/src/features/levelMath.js';
 
 const BAR_MS = 15 * 60_000;
 export const HORIZONS = { h4: 16, h24: 96 };

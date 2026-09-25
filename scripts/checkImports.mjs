@@ -9,7 +9,7 @@
 //
 //  Проверяются относительные импорты JS (`import ... from "./x.js"`) и
 //  партиалы Sass (`@use` / `@forward` / `@import` с относительным путём).
-//  Пакеты из node_modules не наша забота.
+//  Из пакетов проверяется одно: серверный код не достаёт до devDependencies.
 // ─────────────────────────────────────────────────────────────────────
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join, dirname, resolve, relative, basename } from "node:path";
@@ -103,12 +103,56 @@ for (const file of walk(ROOT)) {
   }
 }
 
+// Сервер не должен доходить до devDependencies ни напрямую, ни через фронтовый
+// модуль: в образ они не ставятся (npm ci --omit=dev), и контейнер падает на старте.
+const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+const devOnly = new Set(
+  Object.keys(pkg.devDependencies || {}).filter((n) => !(n in (pkg.dependencies || {}))),
+);
+const WEB = join(ROOT, "src/modules/dashboard/web") + "/";
+const pkgName = (spec) =>
+  spec.startsWith("@") ? spec.split("/").slice(0, 2).join("/") : spec.split("/")[0];
+
+function jsImports(file) {
+  const src = stripComments(readFileSync(file, "utf8"));
+  const specs = [];
+  for (const m of src.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)) specs.push(m[1]);
+  return specs;
+}
+
+const serverRoots = walk(join(ROOT, "src")).filter(
+  (f) => /\.(js|mjs)$/.test(f) && !f.startsWith(WEB),
+);
+const seen = new Map(); // файл → откуда пришли
+const queue = [];
+for (const f of serverRoots) {
+  seen.set(f, null);
+  queue.push(f);
+}
+while (queue.length) {
+  const file = queue.shift();
+  for (const spec of jsImports(file)) {
+    if (spec.startsWith(".")) {
+      const target = resolve(dirname(file), spec.split("?")[0]);
+      if (existsExact(target) && !seen.has(target)) {
+        seen.set(target, file);
+        queue.push(target);
+      }
+      continue;
+    }
+    if (!devOnly.has(pkgName(spec))) continue;
+    const chain = [];
+    for (let f = file; f; f = seen.get(f)) chain.unshift(relative(ROOT, f));
+    problems.push(`${chain.join(" → ")} → "${spec}" — пакет из devDependencies, в прод-образе его нет`);
+  }
+}
+
 if (problems.length) {
-  console.error("Импорты, которых нет на диске (или отличается регистр):\n");
+  console.error("Импорты, которые сломаются в Linux-контейнере:\n");
   for (const p of problems) console.error("  " + p);
   console.error(
-    `\n${problems.length} проблем. 🚨 На macOS такой импорт работает, в Linux-контейнере — нет.`,
+    `\n${problems.length} проблем. Локально такой импорт работает, в прод-образе — нет.`,
   );
   process.exit(1);
 }
-console.log("✓ импорты: пути и регистр совпадают с файлами на диске");
+console.log("✓ импорты: пути и регистр совпадают с файлами, сервер не тянет dev-пакеты");
