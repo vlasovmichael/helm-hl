@@ -206,8 +206,23 @@ async function load({ quiet = false } = {}) {
   el("lv-count").textContent = `${state.data.zones.length} zones`;
   el("lv-sources").textContent = SOURCE_NOTE;
   waiting.forEach((id) => settleIn(el(id)));
+  retrySeed();
   // Разбор записан сервером при этом запросе — журнал перечитывается после него.
   loadJournal();
+}
+
+// Прогрев EMA сервер грузит низким приоритетом, и бюджет HL может его отбросить:
+// один тихий повтор на монету и ТФ, дальше ждём закрытия бара.
+const SEED_RETRY_MS = 10_000;
+let seedRetryKey = "";
+let seedRetryTimer = null;
+
+function retrySeed() {
+  const key = `${state.data.coin}:${state.data.tf}`;
+  if (state.data.emaSeed != null || seedRetryKey === key) return;
+  seedRetryKey = key;
+  clearTimeout(seedRetryTimer);
+  seedRetryTimer = setTimeout(() => load({ quiet: true }), SEED_RETRY_MS);
 }
 
 function autoPlan(read) {
