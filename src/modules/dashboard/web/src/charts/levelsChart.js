@@ -6,7 +6,7 @@
 
 import { fmtPx } from "../features/levelPlan.js";
 import { EMA_PERIOD, ema } from "../features/levelMath.js";
-import { monoCandles } from "./candleStyle.js";
+import { lastPriceLine, monoCandles } from "./candleStyle.js";
 
 const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 
@@ -21,6 +21,8 @@ const PILL_H = 20;
 const PILL_PAD = 8;
 const PILL_GAP = 4;
 const ANIM_MS = 320;
+const TF_SEC = { "15m": 900, "1h": 3600, "4h": 14400 };
+const TIMER_STEP = 16; // метка таймера встаёт под меткой цены, внахлёст на пару пикселей
 
 const reduceMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
@@ -39,6 +41,17 @@ function palette() {
     font: cssVar("--font-sans") || "sans-serif",
     mono: cssVar("--font-mono") || "monospace",
   };
+}
+
+/** Сколько осталось до закрытия свечи: mm:ss, с часами — h:mm:ss. */
+export function candleCountdown(barTime, tf, nowMs) {
+  const dur = TF_SEC[tf];
+  if (!dur) return "";
+  const left = Math.max(0, barTime + dur - Math.floor(nowMs / 1000));
+  const h = Math.floor(left / 3600);
+  const mm = String(Math.floor((left % 3600) / 60)).padStart(2, "0");
+  const ss = String(left % 60).padStart(2, "0");
+  return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
 /** Точки EMA для графика; seed с сервера продолжает линию с первого бара окна. */
@@ -89,6 +102,7 @@ let legend = null;
 let bars = [];
 let meta = { coin: "", tf: "" };
 let onPick = () => {};
+let clock = 0;
 
 // ── Анимация ─────────────────────────────────────
 // Коробка перетекает от старых цен к новым, зоны проявляются после загрузки.
@@ -337,7 +351,19 @@ function makeLayer() {
     visible: () => Boolean(scene.plan),
     tickVisible: () => true,
   });
-  const axisViews = [axis("target", "up"), axis("stop", "down"), axis("entry", "strong")];
+  // Таймер до закрытия свечи под меткой текущей цены, как у TV.
+  const timer = {
+    coordinate: () => {
+      const y = candles.priceToCoordinate(bars.at(-1).close);
+      return y == null ? -100 : y + TIMER_STEP;
+    },
+    text: () => candleCountdown(bars.at(-1).time, meta.tf, Date.now()),
+    textColor: () => "#ffffff",
+    backColor: () => lastPriceLine(bars.at(-1)).priceLineColor,
+    visible: () => bars.length > 0 && Boolean(TF_SEC[meta.tf]),
+    tickVisible: () => false,
+  };
+  const axisViews = [axis("target", "up"), axis("stop", "down"), axis("entry", "strong"), timer];
 
   return {
     scene,
@@ -437,6 +463,7 @@ export async function drawLevels(container, data, pick) {
     });
     layer = makeLayer();
     candles.attachPrimitive(layer);
+    clock ||= setInterval(() => layer?.redraw(), 1000);
 
     legend = document.createElement("div");
     legend.className = "chart-legend";
@@ -456,6 +483,7 @@ export async function drawLevels(container, data, pick) {
   meta = { coin: data.coin, tf: data.tf };
   bars = data.candles;
   candles.setData(bars);
+  candles.applyOptions(lastPriceLine(bars.at(-1)));
   emaLine = emaPoints(bars, data.emaSeed);
   emaSeries.setData(emaLine);
   renderLegend();
@@ -478,6 +506,7 @@ export function tickPrice(px) {
   const bar = { ...last, close: px, high: Math.max(last.high, px), low: Math.min(last.low, px) };
   bars[bars.length - 1] = bar;
   candles.update(bar);
+  candles.applyOptions(lastPriceLine(bar));
   // Последняя точка EMA пересчитывается от предпоследней: та на закрытом баре.
   if (emaLine.length >= 2 && emaLine.at(-1).time === bar.time) {
     const prev = emaLine.at(-2).value;
@@ -510,7 +539,7 @@ export function drawScene(zones, plan, thin = []) {
 export function applyLevelsTheme() {
   if (!chart) return;
   chart.applyOptions(chartOptions());
-  candles.applyOptions(monoCandles());
+  candles.applyOptions({ ...monoCandles(), ...lastPriceLine(bars.at(-1)) });
   emaSeries.applyOptions({ color: palette().ema });
   layer?.redraw();
 }

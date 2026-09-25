@@ -14,3 +14,16 @@ export function monoCandles() {
     wickDownColor: ink,
   };
 }
+
+const DOTTED = 1; // LineStyle.Dotted
+
+/** Линия текущей цены: тонкий пунктир цвета последней свечи. */
+export function lastPriceLine(bar) {
+  const up = !bar || bar.close >= bar.open;
+  return {
+    priceLineVisible: true,
+    priceLineWidth: 1,
+    priceLineStyle: DOTTED,
+    priceLineColor: up ? cssVar("--pnl-up") || "#0ecb81" : cssVar("--pnl-down") || "#f6465d",
+  };
+}

@@ -13,7 +13,7 @@
 // ─────────────────────────────────────────────────
 
 import { cssVar } from "../utils/format.js";
-import { monoCandles } from "./candleStyle.js";
+import { lastPriceLine, monoCandles } from "./candleStyle.js";
 
 // Две шкалы под тему: на тёмной viridis (тёмное = пусто), на светлой inferno
 // наоборот — бледное = пусто, густое = много. Одна шкала на обе темы всегда
@@ -214,7 +214,7 @@ export function applyLiqHeatTheme() {
     rightPriceScale: { borderColor: c.grid },
     timeScale: { borderColor: c.grid },
   });
-  candles?.applyOptions(monoCandles());
+  candles?.applyOptions({ ...monoCandles(), ...lastPriceLine(candles.data().at(-1)) });
   // Палитра карты зависит от темы, а холст сам себя не перерисует.
   heat?.redraw();
 }
@@ -274,7 +274,6 @@ export async function drawLiqHeat(container, data, kl) {
     });
     candles = chart.addSeries(CandlestickSeries, {
       ...monoCandles(),
-      priceLineVisible: true,
       priceFormat: { type: "custom", formatter: fmtPx },
     });
     heat = makeHeat();
@@ -298,6 +297,7 @@ export async function drawLiqHeat(container, data, kl) {
   const half = Math.max((hi - lo) * 0.5, lo * 0.002);
 
   candles.setData(bars);
+  candles.applyOptions(lastPriceLine(bars.at(-1)));
   heat.setBars(bars.map((b) => b.time));
   heat.setBand(Math.max(data.priceLo, lo - half), Math.min(data.priceHi, hi + half));
   heat.setData(data);

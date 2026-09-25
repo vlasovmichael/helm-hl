@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-const { withAlpha, tickLabel, emaPoints } = await import("../src/modules/dashboard/web/src/charts/levelsChart.js");
+const { withAlpha, tickLabel, emaPoints, candleCountdown } = await import("../src/modules/dashboard/web/src/charts/levelsChart.js");
 const { ema } = await import("../src/modules/dashboard/web/src/features/levelMath.js");
 
 test("withAlpha: hex и rgba токены получают заданную прозрачность", () => {
@@ -36,4 +36,12 @@ test("emaPoints: с seed точка на каждом баре, без него 
   const bars = Array.from({ length: 5 }, (_, i) => ({ time: i, close: 10 }));
   assert.equal(emaPoints(bars, 10).length, 5);
   assert.equal(emaPoints(bars).length, 0);
+});
+
+test("candleCountdown: остаток до закрытия свечи", () => {
+  const bar = 1_700_000_000 - (1_700_000_000 % 3600);
+  assert.equal(candleCountdown(bar, "1h", (bar + 3600 - 137) * 1000), "02:17");
+  assert.equal(candleCountdown(bar, "4h", (bar + 60) * 1000), "3:59:00");
+  assert.equal(candleCountdown(bar, "15m", (bar + 2000) * 1000), "00:00");
+  assert.equal(candleCountdown(bar, "1d", bar * 1000), "");
 });
