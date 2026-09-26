@@ -32,11 +32,13 @@ export async function readJson(r, onUnauthorized) {
     // Пустое тело — отдельный случай: 204 и подобные это не ошибка разбора.
     if (!text.trim()) throw new Error(`empty answer from the server (HTTP ${r.status})`);
     const looksLikeHtml = /^\s*</.test(text);
+    if (!looksLikeHtml) throw new Error(`unreadable answer from the server (HTTP ${r.status})`);
+    // 5xx-страницу рисует прокси: сессия тут ни при чём, а ордер мог и уйти.
+    if (r.status >= 500) {
+      throw new Error(`the server or proxy failed (HTTP ${r.status}) — check open positions before retrying`);
+    }
     throw new Error(
-      looksLikeHtml
-        ? `the server answered with a page instead of data (HTTP ${r.status}) — ` +
-          `the session has probably expired, reload the tab`
-        : `unreadable answer from the server (HTTP ${r.status})`,
+      `the server answered with a page instead of data (HTTP ${r.status}) — the session has probably expired, reload the tab`,
     );
   }
 }

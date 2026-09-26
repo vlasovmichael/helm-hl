@@ -38,26 +38,34 @@ import { computeTradesToday, computeCooldown } from "../../tradeGuards.js";
 import { getHistorySince, getActiveAdoptPositions, getActivePosition } from "../../../core/database.js";
 import { getUniverse } from "../../../core/universe.js";
 import { liveCoinSnapshot, MAKER_FEE_BP, TAKER_FEE_BP } from "./screen.js";
+import { stopSafeLeverage } from "../web/src/features/leverageMath.js";
 
 // Биржевой минимум ордера на HL. Меньше — гарантированный отказ.
 const MIN_ORDER_USD = 10;
 
-// Наш собственный потолок плеча — НЕ биржевой. При стопе няньки ~−7% ATR
-// изолированная ликвидация на 20x приходит около −5%, то есть РАНЬШЕ стопа:
-// стоп перестаёт быть стопом. На 10x запас ещё есть.
-//
-// Эффективный потолок = min(биржевой для монеты, WALLET_LEVERAGE_CAP).
-// Биржевые лимиты разные: CASHCAT/CHIP/ACE = 3x, LIT = 5x, DOGE = 10x,
-// ETH = 25x, BTC = 40x. Одним числом их подменять нельзя — проверено.
-const WALLET_LEVERAGE_CAP = 10;
-
-/** Максимальное плечо по монете: биржевое, прижатое нашим потолком. null если тикер неизвестен. */
-function maxLeverageFor(coin) {
+/** Биржевой максимум плеча монеты; null, если тикер неизвестен. */
+function exchangeMaxFor(coin) {
   const asset = getUniverse().find((a) => String(a?.name).toUpperCase() === coin);
-  if (!asset) return null;
-  const exchangeMax = Number(asset.maxLeverage);
-  if (!Number.isFinite(exchangeMax) || exchangeMax < 1) return null;
-  return { exchangeMax, effective: Math.min(WALLET_LEVERAGE_CAP, exchangeMax) };
+  const exchangeMax = Number(asset?.maxLeverage);
+  return Number.isFinite(exchangeMax) && exchangeMax >= 1 ? exchangeMax : null;
+}
+
+/** Стоп няньки для потолка плеча; null — не посчитан или нянька выключена. */
+async function stopForCap(coin) {
+  if (!config.trading.adoptEnabled) return null;
+  try {
+    const { distPct } = await withTimeout(computeStopDistPct(coin, HL_PRIORITY.NORMAL), STOP_AT_OPEN_TIMEOUT_MS);
+    return distPct;
+  } catch {
+    return null;
+  }
+}
+
+/** Почему плечо выше потолка — словами для отказа. */
+function leverageWhy(coin, lev, exchangeMax, stopDistPct) {
+  if (lev.basis === "exchange") return `the exchange maximum for ${coin} is ${exchangeMax}x`;
+  if (lev.basis === "stop") return `above ${lev.cap}x the liquidation comes before the ${Number(stopDistPct).toFixed(1)}% stop`;
+  return `the stop is not known yet, so the cap is ${lev.cap}x`;
 }
 
 // Потолок нотионала на одну ручную сделку. Защита от опечатки и от того, что
@@ -67,6 +75,8 @@ const MAX_NOTIONAL_USD = 60;
 // Потолок ожидания справочного ATR-стопа в контексте модалки. Меньше секунды
 // человек не замечает; больше — форма кажется зависшей.
 const STOP_HINT_TIMEOUT_MS = 900;
+// При открытии стоп нужен для потолка плеча; свечи к этому моменту обычно в кэше.
+const STOP_AT_OPEN_TIMEOUT_MS = 2500;
 
 /** Промис с потолком ожидания. Отвал по времени — обычный reject. */
 function withTimeout(promise, ms) {
@@ -225,19 +235,9 @@ export async function handleContext(req, res) {
       }
     }
 
-    // Потолок плеча — из биржевых метаданных монеты, не из константы.
-    // resolveAsset отдаёт только szDecimals, поэтому universe читаем напрямую.
-    let maxLeverage = WALLET_LEVERAGE_CAP;
-    let exchangeMaxLeverage = null;
-    let coinKnown = null;
-    if (coin) {
-      const lev = maxLeverageFor(coin);
-      coinKnown = lev !== null;
-      if (lev) {
-        maxLeverage = lev.effective;
-        exchangeMaxLeverage = lev.exchangeMax;
-      }
-    }
+    const exchangeMaxLeverage = coin ? exchangeMaxFor(coin) : null;
+    const coinKnown = coin ? exchangeMaxLeverage !== null : null;
+    const lev = exchangeMaxLeverage ? stopSafeLeverage({ exchangeMax: exchangeMaxLeverage, stopDistPct }) : null;
 
     const day = getLastDailyRiskStatus();
     const budget = tradesTodayStatus();
@@ -256,9 +256,9 @@ export async function handleContext(req, res) {
         .sort(),
       price,
       available,
-      maxLeverage,              // эффективный: min(биржевой, наш потолок)
-      exchangeMaxLeverage,      // биржевой — чтобы UI сказал, чей лимит связывает
-      walletLeverageCap: WALLET_LEVERAGE_CAP,
+      maxLeverage: lev?.cap ?? null,
+      leverageBasis: lev?.basis ?? null,
+      exchangeMaxLeverage,
       maxNotionalUsd: MAX_NOTIONAL_USD,
       minOrderUsd: MIN_ORDER_USD,
       stopDistPct,
@@ -352,21 +352,16 @@ export async function handleOpen(req, res) {
   if (!b.side) return res.status(400).json({ error: "side must be long|short" });
   if (!(b.marginUsd > 0)) return res.status(400).json({ error: "marginUsd must be > 0" });
 
-  // Плечо проверяем ПРОТИВ ЛИМИТА КОНКРЕТНОЙ МОНЕТЫ, а не против общей константы.
-  // Раньше тут стояло «1..10», и на CASHCAT (биржевой максимум 3x) проходила
-  // десятка: биржа такой ордер отбивает, а если бы приняла — ликвидация пришла
-  // бы раньше стопа няньки. Найдено.
-  const lev = maxLeverageFor(b.coin);
-  if (!lev) return res.status(422).json({ error: `the exchange does not know the ticker ${b.coin}` });
+  // Плечо — против потолка по стопу этой монеты: ликвидация не должна прийти раньше стопа.
+  const exchangeMax = exchangeMaxFor(b.coin);
+  if (!exchangeMax) return res.status(422).json({ error: `the exchange does not know the ticker ${b.coin}` });
   if (!Number.isInteger(b.leverage) || b.leverage < 1) {
     return res.status(400).json({ error: "leverage must be a positive integer" });
   }
-  if (b.leverage > lev.effective) {
-    const who =
-      lev.exchangeMax <= WALLET_LEVERAGE_CAP
-        ? `the exchange maximum for ${b.coin} is ${lev.exchangeMax}x`
-        : `our cap is ${WALLET_LEVERAGE_CAP}x (the exchange allows ${lev.exchangeMax}x)`;
-    return res.status(422).json({ error: `leverage ${b.leverage}x is not allowed: ${who}` });
+  const stopDistPct = await stopForCap(b.coin);
+  const lev = stopSafeLeverage({ exchangeMax, stopDistPct });
+  if (b.leverage > lev.cap) {
+    return res.status(422).json({ error: `leverage ${b.leverage}x is not allowed: ${leverageWhy(b.coin, lev, exchangeMax, stopDistPct)}` });
   }
 
   const notional = b.marginUsd * b.leverage;
@@ -459,7 +454,7 @@ export async function handleOpen(req, res) {
     await setLeverage(b.coin, b.leverage);
   } catch (err) {
     logger.warn(`[TradeTicket] setLeverage(${b.coin}, ${b.leverage}) failed: ${err.message}`);
-    return res.status(502).json({ error: `could not set leverage: ${err.message}` });
+    return res.status(422).json({ error: `could not set leverage: ${err.message}` });
   }
 
   const isBuy = b.side === "long";
@@ -506,7 +501,7 @@ export async function handleOpen(req, res) {
     });
   } catch (err) {
     logger.error(`[TradeTicket] open #${b.coin} failed: ${err.message}`);
-    return res.status(502).json({ error: err.message });
+    return res.status(422).json({ error: err.message });
   }
 }
 
@@ -532,7 +527,7 @@ export async function handleClose(req, res) {
   try {
     positions = await getPositions();
   } catch (err) {
-    return res.status(502).json({ error: `could not read positions: ${err.message}` });
+    return res.status(422).json({ error: `could not read positions: ${err.message}` });
   }
   const ap = (positions || []).find(
     (x) => String(x?.position?.coin || "").toUpperCase() === coin,
@@ -599,6 +594,6 @@ export async function handleClose(req, res) {
     });
   } catch (err) {
     logger.error(`[TradeTicket] close #${coin} failed: ${err.message}`);
-    return res.status(502).json({ error: err.message });
+    return res.status(422).json({ error: err.message });
   }
 }

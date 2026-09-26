@@ -281,6 +281,13 @@ test("validateOpen: смена монеты на более строгую ло�
   assert.equal(validateOpen(stale, { ...ctx, maxLeverage: 3 }).ok, false);
 });
 
+test("validateOpen: пока потолок монеты не пришёл — ждём, а не режем плечо", () => {
+  const v = validateOpen(openState({ coin: "BTC", leverage: 25, marginUsd: 2 }), { ...ctx, maxLeverage: null });
+  assert.equal(v.ok, false);
+  assert.ok(v.blockers.includes("checking the leverage limit…"));
+  assert.ok(!v.blockers.some((b) => /max leverage/.test(b)));
+});
+
 // ── Регрессии ────────────────────────
 
 test("validateOpen: неизвестный дневной P&L — предупреждение, не тишина", () => {

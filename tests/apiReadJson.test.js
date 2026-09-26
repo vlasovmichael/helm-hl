@@ -53,3 +53,10 @@ test("пустое тело — отдельная причина, не «неч
 test("не-HTML мусор помечается как нечитаемый ответ с кодом", async () => {
   await assert.rejects(() => readJson(res(502, "upstream boom")), /unreadable answer.*502/);
 });
+
+test("HTML-страница с 5xx — сбой сервера или прокси, а не сессия", async () => {
+  await assert.rejects(
+    () => readJson(res(502, "<!DOCTYPE html><html><body>Bad gateway</body></html>")),
+    (err) => /server or proxy failed \(HTTP 502\)/.test(err.message) && !/session/.test(err.message),
+  );
+});

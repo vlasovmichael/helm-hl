@@ -26,17 +26,16 @@ import { attachCoinCombo, coinCombo, suggestCoins } from "../core/coinCombo.js";
 // предупреждение (Rabby показывает ровно его же красным).
 const MIN_ORDER_USD = 10;
 
-// Наш потолок плеча — НЕ биржевой, а страховка: при стопе няньки ~−7% ATR
-// изолированная ликвидация на 20x приходит около −5%, то есть раньше стопа.
-// Используется только как fallback, пока контекст с сервера не приехал.
-// Настоящий лимит у каждой монеты свой (CASHCAT 3x, LIT 5x, ETH 25x, BTC 40x)
-// и приходит в ctx.maxLeverage — подменять его константой нельзя.
+// Потолок плеча считает сервер по стопу монеты (leverageMath.js) и присылает в
+// ctx.maxLeverage. Эта константа — только пока контекст не приехал.
 const FALLBACK_LEVERAGE_CAP = 10;
+
+/** Пришёл ли потолок плеча для выбранной монеты. */
+export const leverageCapKnown = (ctx) => Number(ctx?.maxLeverage) >= 1;
 
 /** Эффективный потолок плеча: что сказал сервер, иначе осторожный fallback. */
 export function leverageCap(ctx) {
-  const n = Number(ctx?.maxLeverage);
-  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : FALLBACK_LEVERAGE_CAP;
+  return leverageCapKnown(ctx) ? Math.floor(Number(ctx.maxLeverage)) : FALLBACK_LEVERAGE_CAP;
 }
 
 // ── Чистая математика (экспортируется — на неё есть тесты) ──────────────────
@@ -187,7 +186,8 @@ export function validateOpen(s, ctx) {
   // переживает смену монеты: выставил 10x на DOGE, переключился на CASHCAT (3x) —
   // без этой проверки ушёл бы заведомо отбойный ордер.
   const cap = leverageCap(ctx);
-  if (Number(s.leverage) > cap) {
+  if (s.coin && !leverageCapKnown(ctx)) blockers.push("checking the leverage limit…");
+  else if (Number(s.leverage) > cap) {
     blockers.push(`max leverage for ${s.coin || "this coin"} is ${cap}x`);
   }
 
@@ -283,6 +283,8 @@ function createModal(io) {
     side: "short",
     marginUsd: 0,
     leverage: 3,
+    // Плечо, выбранное руками; leverage = min(оно, потолок монеты) и возвращается к нему сам.
+    wantLeverage: 3,
     // Лимитка по умолчанию: 97% филлов уходили тейкером, а мейкер снимает не
     // 3 бп комиссии, а медиану ~16 бп спреда. Маркет остался на переключателе.
     orderType: "limit",
@@ -340,9 +342,13 @@ function createModal(io) {
    * биткоине выглядело бы как ограничение биржи, чем оно не является.
    */
   function levCapLabel() {
+    if (state.coin && !leverageCapKnown(ctx)) return "checking the limit…";
     const cap = leverageCap(ctx);
     const ex = Number(ctx.exchangeMaxLeverage);
-    if (Number.isFinite(ex) && ex > cap) return `up to ${cap}x · own cap, venue allows ${ex}x`;
+    if (ctx.leverageBasis === "stop") {
+      return `up to ${cap}x · liquidation beyond the ${Number(ctx.stopDistPct).toFixed(1)}% stop · venue ${ex}x`;
+    }
+    if (ctx.leverageBasis === "unknown-stop" && ex > cap) return `up to ${cap}x until the stop is known · venue allows ${ex}x`;
     return `up to ${cap}x`;
   }
 
@@ -411,7 +417,7 @@ function createModal(io) {
       riskPct: ctx.riskPct,
       stopDistPct: ctx.stopDistPct,
     });
-    const maxLev = leverageCap(ctx);
+    const maxLev = sliderCap();
     const available = Number(ctx.available) || 0;
     const tooSmall = notional > 0 && notional < MIN_ORDER_USD;
     const sizing = riskSizing();
@@ -585,7 +591,7 @@ function createModal(io) {
       el.addEventListener("input", () => {
         const val = Number(el.value);
         if (el.dataset.slider === "margin") state.marginUsd = val;
-        else state.leverage = val;
+        else state.leverage = state.wantLeverage = val;
         const min = Number(el.min);
         const max = Number(el.max);
         el.style.setProperty("--fill", `${max > min ? ((val - min) / (max - min)) * 100 : 0}%`);
@@ -643,16 +649,22 @@ function createModal(io) {
    * оно уходит на сервер.
    */
   function clampState() {
-    const maxLev = leverageCap(ctx);
-    if (state.leverage > maxLev) state.leverage = maxLev;
+    state.leverage = leverageCapKnown(ctx) ? Math.min(state.wantLeverage, leverageCap(ctx)) : state.wantLeverage;
     const maxMargin = Math.max(Number(ctx.available) || 0, 0);
     if (maxMargin > 0 && state.marginUsd > maxMargin) state.marginUsd = maxMargin;
+  }
+
+  let lastCap = FALLBACK_LEVERAGE_CAP;
+  /** Потолок слайдера; пока монета грузится — прежний, чтобы ползунок не прыгал. */
+  function sliderCap() {
+    if (leverageCapKnown(ctx)) lastCap = leverageCap(ctx);
+    return Math.max(lastCap, state.leverage);
   }
 
   /** clampState + синхронизация слайдеров с новым потолком. */
   function clampToLimits() {
     clampState();
-    const maxLev = leverageCap(ctx);
+    const maxLev = sliderCap();
     const levSlider = bodyEl.querySelector('[data-slider="leverage"]');
     if (levSlider) {
       levSlider.max = String(maxLev);
