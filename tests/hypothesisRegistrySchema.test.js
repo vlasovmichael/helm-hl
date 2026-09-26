@@ -61,8 +61,8 @@ test("schema принимает полный согласованный реес
 
 test("schema принимает настоящий legacy-реестр лаборатории", { skip: NO_REGISTRY }, () => {
   const registry = validateRegistryFile();
-  assert.equal(registry.hypotheses.length, 58);
-  assert.equal(registry.runs.length, 133);
+  assert.equal(registry.hypotheses.length, 61);
+  assert.equal(registry.runs.length, 136);
 });
 
 test("schema ловит повтор id и неверную пару жизненного статуса с исходом", () => {

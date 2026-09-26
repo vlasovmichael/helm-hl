@@ -170,3 +170,6 @@ logs/liq-magnet-*.log
 data/binance-f2/
 # OI Binance UM daily metrics для магнита ликвидаций, восстановимо по CHECKSUM.
 data/binance-oi/
+tools/level*Audit.mjs
+tests/level*Audit.test.js
+logs/level-*
