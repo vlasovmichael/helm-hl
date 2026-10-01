@@ -172,5 +172,6 @@ data/binance-f2/
 data/binance-oi/
 tools/level*Audit.mjs
 tools/levelPocZoneSlice.mjs
+tools/nyRangeCisd.mjs
 tests/level*Audit.test.js
 logs/level-*
