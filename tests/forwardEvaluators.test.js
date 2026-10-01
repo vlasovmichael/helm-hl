@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 const { clusteredDifference, clusteredMean, pressureReady } = await import('../tools/flowPressureEval.mjs');
-const { bootstrapCoinMedian, eligibleDays, unlockCostBp } = await import('../tools/unlockCliffEval.mjs');
+const { collapseEvents } = await import('../tools/unlocksForward.mjs');
+const { bootstrapCoinMedian, eligibleDays, passesSelection, placeboMedians, unlockCostBp } = await import('../tools/unlockCliffEval.mjs');
 
 const DAY = 86_400_000;
 
@@ -44,4 +45,27 @@ test('unlock: плацебо не пересекает разлок ±14 дне�
   assert.ok(days.every((d) => !(d <= Date.parse('2026-10-14T00:00:00Z') && d + 7 * DAY >= Date.parse('2026-09-16T00:00:00Z'))));
   const rows = [{ coin: 'A', netBp: 5 }, { coin: 'B', netBp: 15 }];
   assert.deepEqual(bootstrapCoinMedian(rows, { iterations: 300, seed: 9 }), bootstrapCoinMedian(rows, { iterations: 300, seed: 9 }));
+});
+
+test('unlock: плацебо берёт только дни, где разлок события >= оборота', async () => {
+  const start = Date.parse('2026-09-09T00:00:00Z'), now = Date.parse('2026-11-01T00:00:00Z');
+  const bars = new Map();
+  for (let t = start - 90 * DAY; t <= now; t += DAY) bars.set(t, { c: 1, volUsd: t < Date.parse('2026-09-01T00:00:00Z') ? 1000 : 10 });
+  const event = { coin: 'A', tokens: 100, entryTs: start + 20 * DAY, discoveredAt: start + 10 * DAY, cost: 0 };
+  assert.equal(passesSelection(event, Date.parse('2026-09-15T00:00:00Z'), bars), false);
+  assert.equal(passesSelection(event, Date.parse('2026-10-25T00:00:00Z'), bars), true);
+  const res = await placeboMedians([event, { ...event, coin: 'B', tokens: 1 }], [], now, { sets: 5, candles: async () => bars });
+  assert.deepEqual([res.eventsUsed, res.eventsDropped, res.medians.length], [1, 1, 5]);
+});
+
+test('unlock: категории одного разлока и перекрытия за 7 дней — одно событие', () => {
+  const t = Date.parse('2026-09-25T00:00:00Z');
+  const rows = [
+    { key: 'A:1:insiders', coin: 'A', unlockTs: t, usd: 1 },
+    { key: 'A:1:privateSale', coin: 'A', unlockTs: t, usd: 5 },
+    { key: 'A:2:team', coin: 'A', unlockTs: t + 3 * DAY, usd: 9 },
+    { key: 'A:3:team', coin: 'A', unlockTs: t + 8 * DAY, usd: 1 },
+    { key: 'B:1:team', coin: 'B', unlockTs: t, usd: 1 },
+  ];
+  assert.deepEqual(collapseEvents(rows).map((r) => r.key), ['A:1:privateSale', 'B:1:team', 'A:3:team']);
 });

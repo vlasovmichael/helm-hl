@@ -24,7 +24,7 @@ const SCHEDULE = join(DIR, "schedule.jsonl");
 const FORWARD = join(DIR, "forward.jsonl");
 const DAY = 864e5;
 const HOLD_DAYS = 7;
-const MIN_RATIO = 1;          // разлок не меньше одного дневного оборота
+export const MIN_RATIO = 1;          // разлок не меньше одного дневного оборота
 const FEE_TAKER_BP = 5.428;   // факт по филлам оператора
 
 const info = (body) =>
@@ -148,13 +148,29 @@ export async function settle({ quiet = false } = {}) {
   return { settled };
 }
 
+// Предзаявка: одно событие на монету за 7 дней, перекрытия схлопываются в первое, при равной дате — в крупное.
+// Категории одного разлока (insiders, privateSale…) — одно событие, иначе n копит дубли одной свечи.
+export function collapseEvents(rows) {
+  const byKey = new Map(rows.map((r) => [r.key, r]));
+  const sorted = [...byKey.values()].sort((a, b) => a.unlockTs - b.unlockTs || b.usd - a.usd);
+  const lastByCoin = new Map(), out = [];
+  for (const r of sorted) {
+    const last = lastByCoin.get(r.coin);
+    if (last != null && r.unlockTs - last < HOLD_DAYS * DAY) continue;
+    lastByCoin.set(r.coin, r.unlockTs);
+    out.push(r);
+  }
+  return out;
+}
+
 // ── report: состояние форварда ────────────────────
 export function report() {
   const rows = readJsonl(FORWARD);
   // В зачёт гипотезы идут только чистые события; остальные видны в витрине
   // отдельной строкой, чтобы их не спутать с результатом.
-  const closed = rows.filter((r) => r.status === "closed" && r.clean);
-  const closedKeys = new Set(closed.map((r) => r.key));
+  const settled = rows.filter((r) => r.status === "closed" && r.clean);
+  const closed = collapseEvents(settled);
+  const closedKeys = new Set(settled.map((r) => r.key));
   const pending = rows.filter((r) => r.status === "pending" && !closedKeys.has(r.key) && r.clean);
   const dirty = rows.filter((r) => !r.clean).length;
   const net = closed.map((r) => r.netBp);
