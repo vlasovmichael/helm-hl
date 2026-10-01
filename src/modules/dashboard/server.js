@@ -101,11 +101,6 @@ import {
 } from "./routes/flow.js";
 import { isTargetTrailArmed } from "../../app/adoptSupervise.js";
 import { rebuild as rebuildCalibrator, readCache as calibratorCache } from "../calibrator.js";
-import {
-  scan as scanUnlocks,
-  settle as settleUnlocks,
-  report as unlocksReport,
-} from "../../../tools/unlocksForward.mjs";
 import { collectVenues } from "../../../tools/venueCollector.mjs";
 import {
   DIVERGENCE_WATCHLIST,
@@ -136,7 +131,7 @@ const PUBLIC_DIR = join(__dirname, "dist");
 // ссылки в ntfy-пушах не побились.
 const PAGES = [
   "index", "ledger", "journal", "statistics", "lab", "oi",
-  "orderbook", "orderbook-sim", "ticket", "unlocks", "calibrator",
+  "orderbook", "orderbook-sim", "ticket", "calibrator",
   "flow", "levels",
 ];
 
@@ -1158,8 +1153,6 @@ export function startDashboard() {
   app.get("/api/flow/liqheat", handleFlowLiqHeat);
   app.get("/api/flow/coin", handleFlowCoin);
   app.get("/api/flow/coins", handleFlowCoins);
-  // Форвард по разлокам: счётчик, очередь входов и закрытые события.
-  app.get("/api/unlocks", (_req, res) => res.json(unlocksReport()));
   // Калибратор отдаёт готовый кэш: пересчёт идёт по расписанию, не по запросу.
   app.get("/api/calibrator", (_req, res) => {
     const c = calibratorCache();
@@ -1377,18 +1370,6 @@ export function startDashboard() {
   );
 
   setInterval(() => probeAlloc("dash:oiSnapshot", async () => takeOiSnapshot()), OI_SNAPSHOT_MS);
-
-  // Форвард по разлокам: скан расписания и расчёт закрытых событий.
-  // 🚨 Скан обязан идти регулярно: событие, найденное позже собственной даты
-  // входа, в зачёт не идёт (clean:false) — пропущенные сутки съедают выборку.
-  // Раз в 6 часов, первый прогон через минуту после старта.
-  const unlocksTick = () =>
-    probeAlloc("dash:unlocksForward", async () => {
-      await scanUnlocks({ quiet: true });
-      await settleUnlocks({ quiet: true });
-    }).catch((err) => logger.debug(`[Unlocks] tick failed: ${err.message}`));
-  setTimeout(unlocksTick, 60_000);
-  setInterval(unlocksTick, 6 * 3600_000);
 
   // Площадки HIP-3: истории у них нет, пропущенный час не восстановить. Снимок
   // ключуется часом, поэтому проход раз в 15 минут дозаполняет площадки, которые

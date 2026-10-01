@@ -62,21 +62,6 @@ function pressureLatest() {
   } catch { return null; }
 }
 
-// Разлоки: в зачёт идут только чистые закрытые события, а живость сбора видна
-// по последнему найденному событию — закрытия редкие.
-const UNLOCKS = join("data", "unlocks", "forward.jsonl");
-function unlockRows() {
-  return readJsonl(UNLOCKS).filter((r) => r.status === "closed" && r.clean);
-}
-function unlockLatest() {
-  let t = null;
-  for (const r of readJsonl(UNLOCKS)) {
-    const v = r.settledAt ?? r.discoveredAt;
-    if (Number.isFinite(v) && (t == null || v > t)) t = v;
-  }
-  return t;
-}
-
 /**
  * Все форварды, у которых есть живой сборщик.
  * maxSilentHours — сколько сборщик может молчать при исправной работе.
@@ -134,12 +119,6 @@ export const FORWARDS = [
     latest: () => getVenueSnapshots(Date.now() - DAY).at(-1)?.ts ?? null,
     target: 40, unit: "events", tField: "t", startedISO: "2026-09-23", minDaysRunning: 140,
     maxSilentHours: 3, evalCommand: ["tools/weekendFade.mjs"],
-  },
-  {
-    id: "unlock-cliff-front-2026-09", label: "Unlock cliff · short a week before",
-    rows: unlockRows, latest: unlockLatest,
-    target: 60, unit: "events", tField: "unlockTs", startedISO: "2026-09-09",
-    maxSilentHours: 24 * 7, evalCommand: ["tools/unlockCliffEval.mjs"],
   },
 ];
 

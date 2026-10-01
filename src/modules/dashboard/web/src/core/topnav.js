@@ -25,11 +25,6 @@ const LINKS = [
 // редко, а место в ряду ссылок стоит дорого.
 const RESEARCH = [
   {
-    href: "/unlocks",
-    title: "Unlocks",
-    note: "Token unlock forward — schedule, queue, settled trades",
-  },
-  {
     href: "/flow",
     title: "Order Flow",
     note: "Who trades on HL — wallets, liquidation map, net taker flow",

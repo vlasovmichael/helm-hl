@@ -75,7 +75,6 @@ export default defineConfig({
         statistics: resolve(webRoot, "statistics.html"),
         lab: resolve(webRoot, "lab.html"),
         oi: resolve(webRoot, "oi.html"),
-        unlocks: resolve(webRoot, "unlocks.html"),
         calibrator: resolve(webRoot, "calibrator.html"),
         flow: resolve(webRoot, "flow.html"),
         levels: resolve(webRoot, "levels.html"),
