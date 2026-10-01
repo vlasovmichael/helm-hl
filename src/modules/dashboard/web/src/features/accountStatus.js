@@ -387,9 +387,9 @@ function renderHealthPill(health) {
 // Цель/стоп относительные (% от equity) — масштабируются с депо. При минусе
 // ≤ DAILY_STOP_PCT краснеет вся карточка: это нудж, а не замок.
 // $-пороги — фолбэк, пока equity не пришёл (первый кадр WS).
-const DAILY_GOAL_PCT = 5; // ≥ этого % от equity за день → goal reached
+const DAILY_GOAL_PCT = 1; // ≥ этого % от equity за день → goal reached
 const DAILY_STOP_PCT = -10; // ≤ этого % → circuit-breaker (краснеет карточка)
-const DAILY_GOAL_USD = 2; // фолбэк-порог в $ до прихода equity
+const DAILY_GOAL_USD = 1; // фолбэк-порог в $ до прихода equity
 const DAILY_STOP_USD = -5; // фолбэк-порог в $ до прихода equity
 // Последний известный equity (ставит renderHeader по WS) — база для % цели.
 let _lastEquity = null;
