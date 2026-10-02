@@ -7,7 +7,7 @@
 // Что показывать, решает реестр: закрытая гипотеза уходит из «идут» сама.
 
 import { join } from "node:path";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import Database from "better-sqlite3";
 import { readJsonl } from "../../tools/researchStats.mjs";
 import { resolveStageBranch } from "../../tools/hypothesisStages.mjs";
@@ -19,6 +19,7 @@ const DAY = 86_400_000;
 const REGISTRY = join("data", "hypotheses", "registry.json");
 const FLOW_DB = join("data", "flow", "flow.db");
 const BAR_MS = 300_000;
+const NEGFUNDING_DIR = join("data", "negfunding-forward");
 
 /** Сколько дней провалившийся вердикт висит на витрине, прежде чем уйти. */
 export const VERDICT_SHOWN_DAYS = 7;
@@ -62,10 +63,22 @@ function pressureLatest() {
   } catch { return null; }
 }
 
+// Сборщик пишет эпизоды без доходности раз в сутки; свежесть — по файлу снимков.
+function negFundingRows() {
+  try {
+    return JSON.parse(readFileSync(join(NEGFUNDING_DIR, "episodes.json"), "utf8")).filter((r) => r.status === "valid");
+  } catch { return []; }
+}
+
+function negFundingLatest() {
+  try { return statSync(join(NEGFUNDING_DIR, "quotes.jsonl")).mtimeMs; } catch { return null; }
+}
+
 /**
  * Все форварды, у которых есть живой сборщик.
  * maxSilentHours — сколько сборщик может молчать при исправной работе.
  * evalCommand — скрипт оценки по предзаявке; сторож зовёт его один раз на пороге.
+ * deadlineISO — срок из стоп-правила: в этот день форвард готов при любом n.
  */
 export const FORWARDS = [
   {
@@ -120,6 +133,13 @@ export const FORWARDS = [
     target: 40, unit: "events", tField: "t", startedISO: "2026-09-23", minDaysRunning: 140,
     maxSilentHours: 3, evalCommand: ["tools/weekendFade.mjs"],
   },
+  {
+    id: "hl-negfunding-kraken-forward-2026-10", label: "Negative funding HL × Kraken spot",
+    rows: negFundingRows, latest: negFundingLatest,
+    target: 40, unit: "episodes", tField: "t", startedISO: "2026-10-02", deadlineISO: "2027-07-01",
+    maxSilentHours: 2, evalCommand: ["tools/negFundingKrakenForwardEval.mjs"],
+    note: "Stop rule: 40 valid closed episodes or 2027-07-01; fewer than 30 by then is inconclusive.",
+  },
 ];
 
 const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
@@ -154,11 +174,12 @@ export function forwardProgress(f, rows, now = Date.now()) {
   const lastT = f.latest?.() ?? times[times.length - 1] ?? null;
   const staleHours = lastT != null ? (now - lastT) / HOUR : null;
   const minCalendarDays = f.minCalendarDays ?? null;
-  const ready = n >= f.target &&
+  const deadline = f.deadlineISO ? Date.parse(`${f.deadlineISO}T00:00:00Z`) : null;
+  const ready = (n >= f.target &&
     (!f.minDaysRunning || daysRunning >= f.minDaysRunning) &&
     (!minCalendarDays || days.size >= minCalendarDays) &&
     (!f.minRegimeShare || (regimeShare ?? 0) >= f.minRegimeShare) &&
-    groupReady;
+    groupReady) || (deadline != null && now >= deadline);
 
   return {
     n, target: f.target, unit: f.unit, pct: (n / f.target) * 100,
@@ -171,6 +192,7 @@ export function forwardProgress(f, rows, now = Date.now()) {
     calendarDays: days.size, minCalendarDays, minDaysRunning: f.minDaysRunning ?? null,
     regimeShare, minRegimeShare: f.minRegimeShare ?? null,
     groups, minPerGroup: f.minPerGroup ?? null, groupReady,
+    deadlineISO: f.deadlineISO ?? null,
     ready,
   };
 }

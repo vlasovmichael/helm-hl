@@ -77,6 +77,7 @@ data/tg-signals/
 # Сырьё коллектора liq-wick. В git остаётся ПРОТОКОЛ (data/hypotheses/registry.json)
 # с вердиктом и числами, а не журнал событий: он восстановим и растёт.
 data/liq-wick/
+data/negfunding-forward/
 data/entry-timing/
 
 # Поток ордеров с адресами — собственная база коллектора, не в репозиторий
@@ -165,15 +166,16 @@ tools/liqMagnetAudit.mjs
 tools/liqMagnetMirror.mjs
 logs/journal-bias-*.log
 logs/liq-magnet-*.log
+tools/level*Audit.mjs
+tools/levelPocZoneSlice.mjs
+tools/nyRangeCisd.mjs
+tools/negFundingKraken*.mjs
+tests/negFundingKraken*.test.js
+logs/negfunding-*
+tests/level*Audit.test.js
+logs/level-*
 
 # Восстановимый архив Binance для аудита F2: ZIP, manifest и недельная сетка.
 data/binance-f2/
 # OI Binance UM daily metrics для магнита ликвидаций, восстановимо по CHECKSUM.
 data/binance-oi/
-tools/level*Audit.mjs
-tools/levelPocZoneSlice.mjs
-tools/nyRangeCisd.mjs
-tools/negFundingKraken*.mjs
-logs/negfunding-*
-tests/level*Audit.test.js
-logs/level-*

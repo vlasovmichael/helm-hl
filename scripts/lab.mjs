@@ -96,9 +96,14 @@ function save(message) {
   console.log('✅ Сохранено в hl-lab:', lab(['log', '--oneline', '-1']).trim());
 }
 
-// Прод читает из лабы только реестр. 🚨 peeks.jsonl рядом пишет сам дашборд —
-// его не трогаем; HEAD лабы на проде не двигаем, файл берём из origin/main.
-const PULLED = ['data/hypotheses/registry.json'];
+// Прод читает из лабы реестр и код приватных форвардов. 🚨 peeks.jsonl рядом пишет
+// сам дашборд — его не трогаем; HEAD лабы на проде не двигаем, файлы берём из origin/main.
+const PULLED = [
+  'data/hypotheses/registry.json',
+  'tools/negFundingKrakenRule.mjs',
+  'tools/negFundingKrakenForward.mjs',
+  'tools/negFundingKrakenForwardEval.mjs',
+];
 
 function pull() {
   requireLab();

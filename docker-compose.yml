@@ -129,6 +129,30 @@ services:
     networks:
       - gateway_net
 
+  # Paper-forward отрицательного фандинга HL против маржинального спота Kraken.
+  # Ордеров ноль. Код приватный: приезжает из лабы через lab pull до сборки
+  # образа. Пишет data/negfunding-forward/ — часовые котировки обеих ног и флаг
+  # маржи Kraken, которые потом не восстановить.
+  negfunding-forward:
+    build: .
+    container_name: hl-negfunding-forward
+    restart: unless-stopped
+    command: node tools/negFundingKrakenForward.mjs
+    env_file: .env
+    environment:
+      TZ: ${TZ:-Europe/Warsaw}
+    volumes:
+      - ./data:/app/data
+    # Не веб-сервер → HEALTHCHECK из Dockerfile (пинг :3010) тут не применим.
+    healthcheck:
+      disable: true
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    networks:
+      - gateway_net
+
   # Поток ордеров HL с адресами участников + срезы чужих позиций.
   # Отдельный процесс: ордеров ноль, торгового бота не касается. Пишет
   # data/flow/flow.db — агрегат (адрес, монета) по 5-мин барам, суточную сводку

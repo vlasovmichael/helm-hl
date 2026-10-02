@@ -46,6 +46,12 @@ test("гейт дней работы держит готовность при н
   assert.equal(forwardProgress(fwd({ minDaysRunning: 20 }), rows, NOW).ready, true);
 });
 
+test("срок из стоп-правила делает форвард готовым при недоборе", () => {
+  const rows = [{ t: NOW }];
+  assert.equal(forwardProgress(fwd({ deadlineISO: "2026-09-24" }), rows, NOW).ready, false);
+  assert.equal(forwardProgress(fwd({ deadlineISO: "2026-09-23" }), rows, NOW).ready, true);
+});
+
 test("гейты режима и когорт держат готовность при набранном n", () => {
   const rows = [
     { t: NOW, btcRegime: "btc_up", cohort: "a" },
