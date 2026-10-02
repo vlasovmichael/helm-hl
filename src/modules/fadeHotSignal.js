@@ -12,8 +12,7 @@
 // ⚠️ Эдж МАРГИНАЛЬНЫЙ (+0.1-0.5%/сделку в хороших окнах, ~0 в 2 из 5 OOS).
 // Цель — forward-валидация на живых данных ~месяц, не доход. Решение через месяц.
 //
-// Чистый модуль (без I/O): свечи инжектятся вызывающим (candleCache 15m). ER/move
-// зеркалят scripts/backtestExits.js 1:1, чтобы live совпадал с бэктестом.
+// Чистый модуль (без I/O): свечи инжектятся вызывающим (candleCache 15m).
 
 // ── Параметры (env-overrideable, дефолты = выбранные бэктестом) ──
 export const FADEHOT_MOVE_LB       = parseInt(process.env.FADEHOT_MOVE_LB || '2', 10);        // 30м = 2×15m бара
@@ -34,7 +33,7 @@ export const FADEHOT_BTC_COIN    = process.env.FADEHOT_BTC_COIN || 'BTC';
 
 /**
  * Kaufman Efficiency Ratio по закрытиям: |net change| / Σ|bar change| на окне win.
- * 1 = идеально-направленное движение, ~0 = чоп. Зеркало er() в backtestExits.js.
+ * 1 = идеально-направленное движение, ~0 = чоп.
  *
  * @param {number[]} closes — closes oldest→newest
  * @param {number} win — длина окна (баров)

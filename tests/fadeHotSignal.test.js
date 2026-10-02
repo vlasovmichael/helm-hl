@@ -25,7 +25,7 @@ test('kaufmanER: пила вокруг старта = низкий ER', () => {
   assert.ok(er < 0.01, `ожидали ~0, получили ${er}`);
 });
 
-test('kaufmanER: зеркалит формулу backtestExits (net/vol)', () => {
+test('kaufmanER: net/vol по закрытиям', () => {
   const closes = [100, 102, 101, 105]; // win=3
   // net = |105-100| = 5; vol = |102-100|+|101-102|+|105-101| = 2+1+4 = 7
   assert.equal(kaufmanER(closes, 3), 5 / 7);
