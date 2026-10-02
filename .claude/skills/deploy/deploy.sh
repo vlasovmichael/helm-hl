@@ -32,8 +32,10 @@ echo "── pull ──"; $REMOTE "$APP git pull -q origin main && git log --on
 # Реестр гипотез живёт в приватном hl-lab, git pull его не приносит. Сбой не
 # валит выкатку: бот от реестра не зависит, страдает только витрина Lab.
 echo "── лаба ──"; $REMOTE "$APP node scripts/lab.mjs pull" || echo "⚠️ реестр лабы не обновлён — Lab покажет старые данные"
-echo "── build ──"; $REMOTE "$APP docker compose build -q hl-paper-scanner"
-echo "── up ──";    $REMOTE "$APP docker compose up -d hl-paper-scanner"
+# Все сервисы, не только бот: у каждого свой образ, и несобранный сборщик живёт на старом коде.
+# --remove-orphans снимает контейнеры сервисов, убранных из compose.
+echo "── build ──"; $REMOTE "$APP docker compose build -q"
+echo "── up ──";    $REMOTE "$APP docker compose up -d --remove-orphans"
 
 sleep 25
 logs
