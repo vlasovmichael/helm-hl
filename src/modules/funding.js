@@ -22,6 +22,34 @@ export function parseFundingDeltas(data) {
     .filter((x) => Number.isFinite(x.usdc) && Number.isFinite(x.ts));
 }
 
+// userFunding отдаёт не больше 500 записей, от старых к новым: без пагинации
+// всё после 500-й записи теряется.
+const PAGE_LIMIT = 500;
+const MAX_PAGES = 50;
+
+/** Все страницы userFunding от FUNDING_START_MS; null — первая страница не пришла. */
+export async function fetchAllFunding(fetchPage) {
+  const out = [];
+  const seen = new Set();
+  let startTime = FUNDING_START_MS;
+  for (let i = 0; i < MAX_PAGES; i++) {
+    const data = await fetchPage(startTime);
+    if (!Array.isArray(data)) return i === 0 ? null : out;
+    for (const d of parseFundingDeltas(data)) {
+      // Следующая страница начинается с того же часа: в нём бывает несколько монет.
+      const key = `${d.ts}|${d.coin}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(d);
+    }
+    if (data.length < PAGE_LIMIT) break;
+    const lastTs = data[data.length - 1].time;
+    if (!(lastTs > startTime)) break;
+    startTime = lastTs;
+  }
+  return out;
+}
+
 /**
  * Все начисления фандинга с начала торговли, кэш 5 мин.
  * freshAfter: кэш старше этого момента перечитывается — у только что закрытой
@@ -34,12 +62,14 @@ export async function getFundingDeltas({ freshAfter = 0 } = {}) {
     return cache.deltas;
   }
   try {
-    const data = await hlInfo(
-      { type: "userFunding", user: config.wallet.address, startTime: FUNDING_START_MS },
-      { label: "funding/userFunding", timeoutMs: 10_000, priority: HL_PRIORITY.LOW },
+    const deltas = await fetchAllFunding((startTime) =>
+      hlInfo(
+        { type: "userFunding", user: config.wallet.address, startTime },
+        { label: "funding/userFunding", timeoutMs: 10_000, priority: HL_PRIORITY.LOW },
+      ),
     );
-    if (!Array.isArray(data)) return cache.deltas;
-    cache = { ts: Date.now(), deltas: parseFundingDeltas(data) };
+    if (!deltas) return cache.deltas;
+    cache = { ts: Date.now(), deltas };
     return cache.deltas;
   } catch (err) {
     logger.debug(`[Funding] userFunding fetch failed: ${err.message}`);

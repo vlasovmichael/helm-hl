@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-const { parseFundingDeltas, sumFunding, tradeFunding, tradeNet } = await import('../src/modules/funding.js');
+const { parseFundingDeltas, sumFunding, tradeFunding, tradeNet, fetchAllFunding } = await import('../src/modules/funding.js');
 const { attachFunding, closeMoney } = await import('../src/modules/dashboard/routes/manualTrades.js');
 
 const H = 3_600_000;
@@ -74,4 +74,23 @@ test('closeMoney: нет пары на бирже — суммы из БД, фа
   const trips = [{ coin: 'SAND', status: 'closed', closeTime: T + 60_000, pnl: 1, fee: 0, funding: 0 }];
   const row = { coin: 'SAND', closed_at: T, realized_pnl: 0.18, fee_paid: 0.05 };
   assert.deepEqual(closeMoney(trips, row, 5_000), { pnl: 0.18, fee: 0.05, funding: null });
+});
+
+test('fetchAllFunding: склеивает страницы по 500 и не теряет монеты на стыке', async () => {
+  const H0 = Date.UTC(2026, 3, 8);
+  const all = [];
+  for (let i = 0; i < 700; i++) {
+    all.push({ time: H0 + Math.floor(i / 2) * H, delta: { coin: i % 2 ? 'BTC' : 'SAND', usdc: '0.01' } });
+  }
+  const calls = [];
+  const out = await fetchAllFunding(async (startTime) => {
+    calls.push(startTime);
+    return all.filter((r) => r.time >= startTime).slice(0, 500);
+  });
+  assert.equal(out.length, 700);
+  assert.equal(calls.length, 2);
+});
+
+test('fetchAllFunding: первая страница не пришла — null, кэш остаётся прежним', async () => {
+  assert.equal(await fetchAllFunding(async () => null), null);
 });
