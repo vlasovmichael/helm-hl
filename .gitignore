@@ -173,5 +173,7 @@ data/binance-oi/
 tools/level*Audit.mjs
 tools/levelPocZoneSlice.mjs
 tools/nyRangeCisd.mjs
+tools/negFundingKraken*.mjs
+logs/negfunding-*
 tests/level*Audit.test.js
 logs/level-*
