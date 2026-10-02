@@ -104,10 +104,16 @@ export async function initExchange() {
  * HL unified mode: primary source = spotClearinghouseState.
  */
 async function verifyConnection() {
-  const spotUsdc = await retryWithBackoff(
-    () => fetchSpotUsdcBalance(),
-    { label: "verify-connection", maxRetries: 3 },
-  );
+  let spotUsdc;
+  try {
+    spotUsdc = await retryWithBackoff(
+      () => fetchSpotUsdcBalance(),
+      { label: "verify-connection", maxRetries: 3 },
+    );
+  } catch (err) {
+    logger.warn(`[Exchange] ⚠️  Баланс при старте не прочитан: ${err.message}`);
+    return;
+  }
 
   const free = Math.max(0, spotUsdc.total - spotUsdc.hold);
 
@@ -319,26 +325,22 @@ export async function getFrontendOpenOrders() {
  * @returns {Promise<{ total: number, hold: number }>}
  */
 export async function fetchSpotUsdcBalance() {
-  try {
-    const state = await hlInfo(
-      { type: "spotClearinghouseState", user: config.wallet.address },
-      { label: "spot-balance", priority: HL_PRIORITY.HIGH },
-    );
-    const usdc = (state?.balances ?? []).find((b) => {
-      const c = (b.coin ?? "").toUpperCase();
-      return c === "USDC" || c === "USDC-SPOT";
-    });
-    if (!usdc) return { total: 0, hold: 0 };
-    const total = parseFloat(usdc.total ?? "0");
-    const hold  = parseFloat(usdc.hold ?? "0");
-    return {
-      total: Number.isFinite(total) ? total : 0,
-      hold:  Number.isFinite(hold)  ? hold  : 0,
-    };
-  } catch (err) {
-    logger.warn(`[Exchange] fetchSpotUsdcBalance failed: ${err.message}`);
-    return { total: 0, hold: 0 };
-  }
+  // Ошибку не глотать в $0: балансу она нужна как ошибка, иначе кэш принимает 429 за залипший индексатор.
+  const state = await hlInfo(
+    { type: "spotClearinghouseState", user: config.wallet.address },
+    { label: "spot-balance", priority: HL_PRIORITY.HIGH },
+  );
+  const usdc = (state?.balances ?? []).find((b) => {
+    const c = (b.coin ?? "").toUpperCase();
+    return c === "USDC" || c === "USDC-SPOT";
+  });
+  if (!usdc) return { total: 0, hold: 0 };
+  const total = parseFloat(usdc.total ?? "0");
+  const hold  = parseFloat(usdc.hold ?? "0");
+  return {
+    total: Number.isFinite(total) ? total : 0,
+    hold:  Number.isFinite(hold)  ? hold  : 0,
+  };
 }
 
 /**
