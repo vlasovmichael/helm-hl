@@ -178,6 +178,20 @@ test('balanceCache: персист на диск + загрузка после "
   assert.equal(snap.cachedValue.unrealizedPnl, 2.5, 'unrealizedPnl тоже должен сохраниться');
 });
 
+test('balanceCache: тот же баланс не переписывает диск, новый — переписывает', async () => {
+  freshStart();
+  setApi({ accountValue: 80, withdrawable: 80 });
+  await wallet.getAccountEquity();
+  deleteCacheFile();
+
+  await wallet.getAccountEquity();
+  assert.ok(!existsSync(CACHE_FILE), 'тот же баланс не должен писаться повторно');
+
+  setApi({ accountValue: 81, withdrawable: 81 });
+  await wallet.getAccountEquity();
+  assert.ok(existsSync(CACHE_FILE), 'изменившийся баланс должен записаться');
+});
+
 test('balanceCache: устаревший дисковый кэш (>6ч) игнорируется', async () => {
   freshStart();
 

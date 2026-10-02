@@ -41,6 +41,9 @@ let freezeAlerted = false;   // одноразовый TG-алерт на эпи
 let diskLoaded = false;      // попытались ли уже загрузить с диска
 let lastZeroWarnAt = 0;      // throttle спамного warning'а
 const ZERO_WARN_INTERVAL_MS = 5 * 60_000;
+// Тот же баланс на диск — не чаще раза в 10 мин: запрос идёт каждую секунду, а синхронная запись замораживает бота, когда тормозит диск.
+const PERSIST_SAME_EVERY_MS = 10 * 60_000;
+let persisted = { key: null, at: 0 };
 
 /**
  * Ленивая загрузка кэша с диска при первом обращении.
@@ -86,6 +89,8 @@ function loadFromDisk() {
  */
 function persistToDisk() {
   if (!lastGood) return;
+  const key = JSON.stringify(lastGood.value);
+  if (key === persisted.key && lastGood.ts - persisted.at < PERSIST_SAME_EVERY_MS) return;
 
   const payload = JSON.stringify({ value: lastGood.value, ts: lastGood.ts });
   const tmpPath = `${CACHE_FILE}.${process.pid}.tmp`;
@@ -94,6 +99,7 @@ function persistToDisk() {
     mkdirSync('data', { recursive: true });
     writeFileSync(tmpPath, payload, 'utf-8');
     renameSync(tmpPath, CACHE_FILE);
+    persisted = { key, at: lastGood.ts };
   } catch (err) {
     logger.warn(`[BalanceCache] Failed to persist cache: ${err.message}`);
   }
@@ -211,6 +217,7 @@ export function _resetBalanceCache() {
   zeroStreakStart = 0;
   freezeAlerted = false;
   diskLoaded = false;
+  persisted = { key: null, at: 0 };
 }
 
 /**
