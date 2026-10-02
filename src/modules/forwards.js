@@ -7,61 +7,19 @@
 // Что показывать, решает реестр: закрытая гипотеза уходит из «идут» сама.
 
 import { join } from "node:path";
-import { existsSync, readFileSync, statSync } from "node:fs";
-import Database from "better-sqlite3";
-import { readJsonl } from "../../tools/researchStats.mjs";
+import { readFileSync, statSync } from "node:fs";
 import { resolveStageBranch } from "../../tools/hypothesisStages.mjs";
-import { getFillCosts, getVenueSnapshots } from "../core/database.js";
+import { getVenueSnapshots } from "../core/database.js";
 import { PREREG_AT as WEEKEND_PREREG_AT, buildEvents as weekendEvents } from "../../tools/weekendFade.mjs";
 
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
 const REGISTRY = join("data", "hypotheses", "registry.json");
-const FLOW_DB = join("data", "flow", "flow.db");
-const BAR_MS = 300_000;
 const NEGFUNDING_DIR = join("data", "negfunding-forward");
 
 /** Сколько дней провалившийся вердикт висит на витрине, прежде чем уйти. */
 export const VERDICT_SHOWN_DAYS = 7;
 const KEEP_RESULTS = new Set(["PASSED_ECONOMICS"]);
-
-// ── flow.db: пишет отдельный контейнер ──────────────
-// Её отсутствие, блокировка или битый файл гасят одну карточку, а не весь список.
-let flowDb = null;
-function pressureDb() {
-  if (flowDb) return flowDb;
-  if (!existsSync(FLOW_DB)) return null;
-  flowDb = new Database(FLOW_DB, { readonly: true, fileMustExist: true });
-  flowDb.pragma("busy_timeout = 3000");
-  return flowDb;
-}
-
-function hasPressureTable(db) {
-  return !!db?.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pressure_events'").get();
-}
-
-export function pressureRows() {
-  try {
-    const db = pressureDb();
-    if (!hasPressureTable(db)) return [];
-    return db.prepare(`
-      SELECT c.name AS coin, e.side, e.cohort,
-             e.entry_bar * ? AS entryT, e.fade_bp AS fadeBp,
-             e.btc_regime AS btcRegime
-        FROM pressure_events e JOIN coins c ON c.id = e.coin
-       WHERE e.status = 'resolved'
-       ORDER BY e.entry_bar`).all(BAR_MS);
-  } catch { return []; }
-}
-
-function pressureLatest() {
-  try {
-    const db = pressureDb();
-    if (!hasPressureTable(db)) return null;
-    const bar = db.prepare("SELECT MAX(bar) AS bar FROM market_bars WHERE closed = 1").get()?.bar;
-    return Number.isFinite(bar) ? bar * BAR_MS : null;
-  } catch { return null; }
-}
 
 // Сборщик пишет эпизоды без доходности раз в сутки; свежесть — по файлу снимков.
 function negFundingRows() {
@@ -81,50 +39,6 @@ function negFundingLatest() {
  * deadlineISO — срок из стоп-правила: в этот день форвард готов при любом n.
  */
 export const FORWARDS = [
-  {
-    id: "fvg-wide-retest-4h", label: "FVG wide retest 4h",
-    rows: () => readJsonl(join("data", "fvg-forward", "trades.jsonl")),
-    target: 1500, unit: "trades", tField: "entryT", startedISO: "2026-08-29",
-    minCalendarDays: 45, minRegimeShare: 0.2, maxSilentHours: 72,
-  },
-  {
-    id: "flow-pressure-exhaustion-2026-09", label: "Flow pressure exhaustion",
-    rows: pressureRows, latest: pressureLatest,
-    target: 300, unit: "events", tField: "entryT", startedISO: "2026-09-14",
-    minCalendarDays: 60, minRegimeShare: 0.2, groupField: "cohort", minPerGroup: 100,
-    maxSilentHours: 1, evalCommand: ["tools/flowPressureEval.mjs"],
-    note: "This mechanism test is evaluated once with a clustered cohort comparison from the registry.",
-  },
-  {
-    // Гипотеза про изменение: счёт идёт с момента включения post-only, база «до» не в счёт.
-    id: "exec-maker-share-n200", label: "Execution cost · maker share",
-    rows: () => {
-      const since = Date.parse(process.env.EXEC_POSTONLY_SINCE || "");
-      return Number.isFinite(since) ? getFillCosts(since) : [];
-    },
-    target: 200, unit: "fills", tField: "ts", startedISO: "2026-09-05",
-    maxSilentHours: 96, evalCommand: ["tools/execCostStats.mjs"],
-  },
-  {
-    id: "exec-stop-slippage-n60", label: "Stop trigger slippage",
-    rows: () => getFillCosts(0).filter((r) => r.slip_bp != null),
-    target: 60, unit: "stops", tField: "ts", startedISO: "2026-09-05",
-    maxSilentHours: 168,
-  },
-  {
-    id: "venue-hip3-premium-45d", label: "HIP-3 venue premium",
-    rows: () => getVenueSnapshots(0),
-    target: 45, unit: "days", tField: "ts", startedISO: "2026-09-05", byDay: true,
-    maxSilentHours: 3,
-  },
-  {
-    // Пары копятся медленнее календаря: прогресс считается днями до срока из реестра.
-    id: "hl-kraken-funding-forward-2026-09", label: "HL ↔ Kraken funding spread",
-    rows: () => readJsonl(join("data", "funding-spread", "snapshots.jsonl")),
-    target: 273, unit: "days", tField: "t", startedISO: "2026-09-11", byDay: true,
-    maxSilentHours: 3, evalCommand: ["tools/fundingSpreadEval.mjs"],
-    note: "Stop rule: 100 closed pairs or 2027-06-11, whichever comes first.",
-  },
   {
     // Стоп-правило — 20 выходных с предзаявки и 40 событий: выходные идут гейтом дней.
     id: "hip3-weekend-overshoot-2026-09", label: "HIP-3 weekend overshoot",

@@ -4,33 +4,10 @@ import assert from 'node:assert/strict';
 
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-const { clusteredDifference, clusteredMean, pressureReady } = await import('../tools/flowPressureEval.mjs');
 const { collapseEvents } = await import('../tools/unlocksForward.mjs');
 const { bootstrapCoinMedian, eligibleDays, passesSelection, placeboMedians, unlockCostBp } = await import('../tools/unlockCliffEval.mjs');
 
 const DAY = 86_400_000;
-
-test('flow не готов, пока не выполнены все стоп-гейты', () => {
-  const rows = Array.from({ length: 300 }, (_, i) => ({
-    coin: `C${i % 10}`, cohort: i < 150 ? 'exhausted' : 'persistent', fadeBp: i < 150 ? 30 : 0,
-    entryT: Date.parse('2026-09-14T00:00:00Z') + (i % 60) * DAY,
-    btcRegime: i % 10 < 2 ? 'btc_down' : 'btc_up',
-  }));
-  assert.equal(pressureReady(rows), true);
-  assert.equal(pressureReady(rows.slice(0, 299)), false);
-  assert.equal(pressureReady(rows.map((r) => ({ ...r, btcRegime: 'btc_up' }))), false);
-});
-
-test('flow-кластеризация даёт воспроизводимые разницу и CI', () => {
-  const rows = Array.from({ length: 10 }, (_, i) => [
-    { coin: 'A', cohort: 'exhausted', fadeBp: 20, entryT: i * DAY },
-    { coin: 'B', cohort: 'persistent', fadeBp: 0, entryT: i * DAY },
-  ]).flat();
-  const a = clusteredDifference(rows, { iterations: 300, seed: 7 });
-  assert.equal(a.difference, 20);
-  assert.deepEqual(a, clusteredDifference(rows, { iterations: 300, seed: 7 }));
-  assert.equal(clusteredMean(rows.filter((r) => r.cohort === 'exhausted'), { iterations: 300, seed: 7 }).mean, 20);
-});
 
 test('unlock: спред окна, затем весь архив, затем 20 бп', () => {
   const row = { coin: 'A', entryTs: 100, unlockTs: 200, costBp: 10 };

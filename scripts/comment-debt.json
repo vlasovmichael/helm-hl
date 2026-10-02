@@ -2,8 +2,6 @@
   "scripts/backfillEquityFromHL.js": 1,
   "scripts/backfillFees.js": 1,
   "scripts/checkComments.mjs": 1,
-  "scripts/forwardMulti.mjs": 2,
-  "scripts/fvgForward.mjs": 3,
   "src/app/adoptReconcile.js": 1,
   "src/app/healthWatch.js": 1,
   "src/app/lifecycle.js": 2,

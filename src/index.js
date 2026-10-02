@@ -28,7 +28,6 @@ import { startWsExitLoop } from './app/wsExitTick.js';
 import { startTickWatchdog } from './app/tickWatchdog.js';
 import { startMemWatch } from './app/memWatch.js';
 import { startWatchlistAlerts } from './modules/watchlistAlerts.js';
-import { startFvgAlerts } from './modules/fvgAlerts.js';
 import { sendDailyDigest } from './modules/mailDigest.js';
 import { shutdown, loadPriceHistory } from './app/lifecycle.js';
 import { startToastBridge } from './app/toastBridge.js';
@@ -130,10 +129,6 @@ async function main() {
   // Watchlist-будильник: «моя монета (BTC/HYPE/SOL) задвигалась + OI подтверждает».
   // Узкий пуш только по ALERT_WATCHLIST, не сделка. WATCHLIST_ALERT_ENABLED (default on). Fail-soft.
   startWatchlistAlerts();
-
-  // FVG-будильник: ретест широкой зоны 4h → пуш с уровнями. Не поднимается,
-  // если его гипотеза закрыта в реестре. FVG_ALERT_ENABLED (default on). Fail-soft.
-  startFvgAlerts();
 
   // Сторож форвардов: пуш на молчание сборщика и однократная оценка на пороге.
   startForwardWatch();

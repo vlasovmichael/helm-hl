@@ -74,7 +74,6 @@ const PEEK_LOG = join("data", "hypotheses", "peeks.jsonl");
 
 // Величина гипотезы — по одной на форвард. Нет строки = метрики на строку нет.
 const METRICS = {
-  "fvg-wide-retest-4h": { field: "rNet", unit: "R", label: "net R per trade" },
 };
 
 const dayOf = (t) => new Date(t).toISOString().slice(0, 10);
