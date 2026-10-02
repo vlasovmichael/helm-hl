@@ -75,8 +75,8 @@ function setFundingMedian(coins) {
   fundingMedian = abs.length ? abs[Math.floor(abs.length / 2)] : null;
 }
 
-// Множитель показываем только с 5×: на обычной монете он был бы шумом в каждой
-// строке, а смысл приписки — заметить те, что стоят вразрез со всей биржей.
+// Множитель к медиане биржи — в подсказке, с 5×: ниже он шум. С 10× подстрочник
+// подсвечен — монета стоит вразрез со всей биржей.
 const RATIO_FLOOR = 5;
 const RATIO_LOUD = 10;
 
@@ -86,19 +86,21 @@ const fmtFunding = (n) => {
   const cls = n > 0 ? "oi-pos" : n < 0 ? "oi-neg" : "oi-muted";
   const sign = n > 0 ? "+" : "";
   const daily = n * 100 * 24;
+  const yearly = daily * 365;
   const ratio = fundingMedian ? Math.abs(n) / fundingMedian : null;
   const loud = ratio != null && ratio >= RATIO_LOUD;
   // Подстрочник стоит в каждой строке, даже скучной: 233 строки с плавающей
   // высотой сканировать глазами невозможно. Но точность по величине — иначе
   // обычная монета печатает «−0.00%/d», что выглядит сломанным, а не спокойным.
   const day = Math.abs(daily) < 0.1 ? "≈0%/d" : `${daily.toFixed(1)}%/d`;
-  const sub =
+  const year = Math.abs(yearly) < 1 ? "≈0%/yr" : `${Math.round(yearly)}%/yr`;
+  const card =
     ratio != null && ratio >= RATIO_FLOOR
-      ? `${day} · ×${ratio < 10 ? ratio.toFixed(1) : Math.round(ratio)}`
-      : day;
+      ? ` data-card="${ratio < 10 ? ratio.toFixed(1) : Math.round(ratio)}× the exchange median"`
+      : "";
   return (
     `<span class="${cls}">${sign}${(n * 100).toFixed(4)}%</span>` +
-    `<span class="oi-sub${loud ?" oi-sub-loud" : ""}">${sub}</span>`
+    `<span class="oi-sub${loud ? " oi-sub-loud" : ""}"${card}>${day} · ${year}</span>`
   );
 };
 // Местное время, не UTC: страницу читает человек, сверяющий её со своими
@@ -295,13 +297,13 @@ function renderTable() {
       (r) => `
       <tr data-coin="${r.coin}"${r.coin === activeCoin ? ' class="active"' : ""}>
         <td class="oi-coin">#${r.coin}</td>
-        <td>${fmtUsd(r.oiUsd)}</td>
-        <td>${fmtPctCell(r.dOi24hPct)}</td>
-        <td>${fmtPctCell(r.dOi1hPct)}</td>
-        <td>${fmtPx(r.px)}</td>
-        <td>${fmtPctCell(r.dPx24hPct)}</td>
-        <td>${fmtFunding(r.f)}</td>
-        <td class="oi-muted">${fmtUsd(r.v)}</td>
+        <td class="num">${fmtUsd(r.oiUsd)}</td>
+        <td class="num">${fmtPctCell(r.dOi24hPct)}</td>
+        <td class="num">${fmtPctCell(r.dOi1hPct)}</td>
+        <td class="num">${fmtPx(r.px)}</td>
+        <td class="num">${fmtPctCell(r.dPx24hPct)}</td>
+        <td class="num">${fmtFunding(r.f)}</td>
+        <td class="num oi-muted">${fmtUsd(r.v)}</td>
       </tr>`,
     )
       .join(""),
@@ -428,11 +430,11 @@ function renderSeries(pts, bucketH) {
             ? ' <span class="oi-live" data-card="This bucket is still filling — it covers the hour that has not ended yet.">filling</span>'
             : ""
         }</td>
-        <td>${fmtPx(p.px)}</td>
-        <td>${fmtTokAt(p.oi, digits)}</td>
-        <td>${fmtUsd(p.oiUsd)}</td>
-        <td>${fmtFunding(p.f)}</td>
-        <td class="oi-muted">${fmtUsd(p.v)}</td>
+        <td class="num">${fmtPx(p.px)}</td>
+        <td class="num">${fmtTokAt(p.oi, digits)}</td>
+        <td class="num">${fmtUsd(p.oiUsd)}</td>
+        <td class="num">${fmtFunding(p.f)}</td>
+        <td class="num oi-muted">${fmtUsd(p.v)}</td>
       </tr>`,
     )
     .join("");
@@ -488,13 +490,13 @@ function view() {
           <thead>
             <tr>
               <th data-key="coin">Coin</th>
-              <th data-key="oiUsd" class="sorted" data-card="Dollar value of all open positions (both sides). Size of the crowd, not its direction.">OI $</th>
-              <th data-key="dOi24hPct" data-card="Change in open interest over 24h. Rising = money coming in; falling = positions being closed.">ΔOI 24h</th>
-              <th data-key="dOi1hPct" data-card="Same over the last hour — catches a position being built right now.">ΔOI 1h</th>
-              <th data-key="px">Price</th>
-              <th data-key="dPx24hPct" data-card="Price change over 24h. Read next to ΔOI: OI up with price flat is the interesting cell.">ΔPrice 24h</th>
-              <th data-key="f" data-card="Hourly funding, with the daily cost below it. Positive = longs pay shorts. ×N appears when a coin runs at least 5× the exchange median — that is a real crowd imbalance, and a real cost of holding.">Funding/h</th>
-              <th data-key="v" data-card="24h traded volume. On Hyperliquid OI above volume is normal — it is not an anomaly.">Volume 24h</th>
+              <th data-key="oiUsd" class="num sorted" data-card="Dollar value of all open positions (both sides). Size of the crowd, not its direction.">OI $</th>
+              <th data-key="dOi24hPct" class="num" data-card="Change in open interest over 24h. Rising = money coming in; falling = positions being closed.">ΔOI 24h</th>
+              <th data-key="dOi1hPct" class="num" data-card="Same over the last hour — catches a position being built right now.">ΔOI 1h</th>
+              <th data-key="px" class="num">Price</th>
+              <th data-key="dPx24hPct" class="num" data-card="Price change over 24h. Read next to ΔOI: OI up with price flat is the interesting cell.">ΔPrice 24h</th>
+              <th data-key="f" class="num" data-card="Hourly funding, with the cost per day and per year below it. Positive = longs pay shorts. A highlighted line means the coin runs at least 10× the exchange median — a real crowd imbalance, and a real cost of holding.">Funding/h</th>
+              <th data-key="v" class="num" data-card="24h traded volume. On Hyperliquid OI above volume is normal — it is not an anomaly.">Volume 24h</th>
             </tr>
           </thead>
           <tbody id="oi-tbody">${SKELETON_ROW.repeat(6)}</tbody>
@@ -561,11 +563,11 @@ function view() {
           <thead>
             <tr>
               <th data-key="t" data-card="Your local time — the chart axis uses it too. Rows are bucket averages, so the newest row is the bucket for the hour that is still running.">Time · <span id="oi-tz">local</span></th>
-              <th>Price</th>
-              <th data-card="Open positions counted in coins. Price-free, so this is the honest answer to «did anyone actually build a position».">OI (tokens)</th>
-              <th data-card="tokens × price. Moves when price moves, even with zero new positions — do not read a rise here as money arriving.">OI $</th>
-              <th data-card="Hourly funding. Positive = longs pay shorts, negative = shorts pay longs. Anything past ±0.1%/h is a real crowd imbalance, not noise — and a real cost of holding.">Funding/h</th>
-              <th>Volume 24h</th>
+              <th class="num">Price</th>
+              <th class="num" data-card="Open positions counted in coins. Price-free, so this is the honest answer to «did anyone actually build a position».">OI (tokens)</th>
+              <th class="num" data-card="tokens × price. Moves when price moves, even with zero new positions — do not read a rise here as money arriving.">OI $</th>
+              <th class="num" data-card="Hourly funding. Positive = longs pay shorts, negative = shorts pay longs. Anything past ±0.1%/h is a real crowd imbalance, not noise — and a real cost of holding.">Funding/h</th>
+              <th class="num">Volume 24h</th>
             </tr>
           </thead>
           <tbody id="oi-series-body"></tbody>
