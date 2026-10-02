@@ -24,8 +24,8 @@ import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { logger } from '../core/logger.js';
 import { config } from '../core/config.js';
-import { hlInfo } from '../core/hlClient.js';
 import { fetchUserFills, reconstructRoundTrips } from './userFills.js';
+import { getFundingDeltas } from './funding.js';
 import { localDayKey } from './dailyRisk.js';
 import {
   getBotOidsSince,
@@ -152,7 +152,7 @@ export async function getMonthlyLedger() {
 
   // 1. fills + funding с начала торговли (ограничено 60d-окном HL → ниже мерджим снапшот).
   const fills = await fetchUserFills(LEDGER_START_MS);
-  const funding = await fetchFunding(LEDGER_START_MS);
+  const funding = await getFundingDeltas();
 
   // 2. bot oids + bot-сделки (для дедупа bot/adopted/manual).
   const botOidSet = getBotOidsSince(0);
@@ -303,20 +303,4 @@ function emptyTotals() {
 
 function round(x) {
   return Math.round((x + Number.EPSILON) * 100) / 100;
-}
-
-async function fetchFunding(startTime) {
-  try {
-    const data = await hlInfo(
-      { type: 'userFunding', user: config.wallet.address, startTime },
-      { label: 'ledger/userFunding', timeoutMs: 10_000 },
-    );
-    if (!Array.isArray(data)) return [];
-    return data
-      .map((it) => ({ ts: it.time, usdc: parseFloat(it.delta?.usdc ?? '0') }))
-      .filter((x) => Number.isFinite(x.usdc) && Number.isFinite(x.ts));
-  } catch (err) {
-    logger.debug(`[Ledger] funding fetch failed: ${err.message}`);
-    return [];
-  }
 }

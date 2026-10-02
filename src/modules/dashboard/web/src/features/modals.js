@@ -189,6 +189,12 @@ function tmPnlHero(pnl) {
   `;
 }
 
+function tmFundingCell(v) {
+  const cls = v >= 0 ? "positive" : "negative";
+  const sign = v >= 0 ? "+" : "−";
+  return `<div class="tm-cell"><div class="tm-cell-label">Funding</div><div class="tm-cell-value ${cls}">${sign}$${Math.abs(v).toFixed(4)}</div></div>`;
+}
+
 function tradeModalHtmlFromActivity(e) {
   const kindLabel = e.kind === "open" ? "OPEN" : "CLOSE";
   const isManual = e.kind === "manual_close" || e.strategy_id === "manual";
@@ -210,6 +216,12 @@ function tradeModalHtmlFromActivity(e) {
     cells.push(
       `<div class="tm-cell"><div class="tm-cell-label">Size</div><div class="tm-cell-value">$${e.sizeUsd.toFixed(2)}</div></div>`,
     );
+  if (e.fee != null)
+    cells.push(
+      `<div class="tm-cell"><div class="tm-cell-label">Fees</div><div class="tm-cell-value muted">−$${Math.abs(e.fee).toFixed(4)}</div></div>`,
+    );
+  if (e.funding != null)
+    cells.push(tmFundingCell(e.funding));
   if (e.reason)
     cells.push(
       `<div class="tm-cell"><div class="tm-cell-label">Reason</div><div class="tm-cell-value">${e.reason}</div></div>`,
@@ -240,7 +252,9 @@ function tradeDetailHtml(t) {
   const closePx = t.close_price;
   const pnl = t.realized_pnl || 0;
   const fee = t.fee_paid || 0;
-  const grossPnl = pnl + fee;
+  // null — сделку не нашли в fills, фандинг неизвестен: строку не показываем.
+  const funding = t.funding;
+  const grossPnl = pnl + fee - (funding || 0);
   const holdMs =
     t.closed_at && t.entry_time ? t.closed_at - t.entry_time : null;
   const holdStr =
@@ -277,6 +291,8 @@ function tradeDetailHtml(t) {
   cells.push(
     `<div class="tm-cell"><div class="tm-cell-label">Fees</div><div class="tm-cell-value muted">−$${Math.abs(fee).toFixed(4)}</div></div>`,
   );
+  if (funding != null)
+    cells.push(tmFundingCell(funding));
   if (t.reason)
     cells.push(
       `<div class="tm-cell full"><div class="tm-cell-label">Close reason</div><div class="tm-cell-value">${t.reason}</div></div>`,

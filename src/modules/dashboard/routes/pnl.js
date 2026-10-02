@@ -6,12 +6,11 @@
 // 5 периодам (today/yesterday/7d/30d/all). Today/yesterday — server local TZ
 // (как воспринимает пользователь), 7d/30d — rolling N*24h, all — без границы.
 //
-// Funding: query Hyperliquid userFunding API раз в N минут (cache), суммируем
-// по period boundaries — с начала торговли, чтобы «All» совпадал с Ledger.
+// realized_pnl каждой сделки = цена − комиссии + её фандинг (tradeNet).
+// period.funding — весь фандинг аккаунта за период, справочно «из них».
 
 import { config } from "../../../core/config.js";
 import { logger } from "../../../core/logger.js";
-import { hlInfo, HL_PRIORITY } from "../../../core/hlClient.js";
 import { getAccountSummary, getPositionsCached } from "../../exchange.js";
 import { getAccountEquity } from "../../wallet.js";
 import {
@@ -21,6 +20,7 @@ import {
   setDayNote,
 } from "../../../core/database.js";
 import { getAllRoundTrips } from "./manualTrades.js";
+import { getFundingDeltas, sumFunding, tradeNet } from "../../funding.js";
 
 const PERIODS = [
   { key: "today", label: "Today" },
@@ -43,53 +43,6 @@ function periodBoundaries(now = Date.now()) {
   };
 }
 
-const FUNDING_CACHE_TTL_MS = 5 * 60_000;
-let fundingCache = { ts: 0, deltas: [] }; // deltas: [{ts, usdc}]
-
-async function getFundingHistory() {
-  if (
-    Date.now() - fundingCache.ts < FUNDING_CACHE_TTL_MS &&
-    fundingCache.deltas.length > 0
-  ) {
-    return fundingCache.deltas;
-  }
-  // userFunding возвращает все funding-payments (uPnL делится на ts + usdc).
-  // Окно — с начала торговли, как у Ledger: на 60 днях период «All» показывал
-  // funding −$0.08 против +$1.95 в Ledger, и итоги двух витрин расходились.
-  try {
-    const startTime = Date.UTC(2026, 3, 1);
-    const data = await hlInfo(
-      {
-        type: "userFunding",
-        user: config.wallet.address,
-        startTime,
-      },
-      { label: "dash/userFunding", timeoutMs: 8000, priority: HL_PRIORITY.LOW },
-    );
-    if (!Array.isArray(data)) return fundingCache.deltas;
-    // Каждый элемент: { time, hash, delta: { coin, usdc, szi, fundingRate, nSamples } }
-    const deltas = data
-      .map((it) => ({
-        ts: it.time,
-        usdc: parseFloat(it.delta?.usdc ?? "0"),
-      }))
-      .filter((x) => Number.isFinite(x.usdc));
-    fundingCache = { ts: Date.now(), deltas };
-    return deltas;
-  } catch (err) {
-    logger.debug(`[Dashboard] userFunding fetch failed: ${err.message}`);
-    return fundingCache.deltas; // stale-OK
-  }
-}
-
-function sumFundingInRange(deltas, start, end) {
-  let sum = 0;
-  for (const d of deltas) {
-    if (d.ts >= start && d.ts < end) sum += d.usdc;
-  }
-  return sum;
-}
-
 function computeStats(trades, equityRef = 0) {
   if (trades.length === 0) {
     return {
@@ -108,6 +61,7 @@ function computeStats(trades, equityRef = 0) {
       byStrategy: {},
       totalHoldMs: 0,
       totalFees: 0,
+      totalFunding: 0,
       grossPnl: 0,
       feesPctOfGross: 0,
       maxDrawdown: 0,
@@ -122,6 +76,7 @@ function computeStats(trades, equityRef = 0) {
   let bestPnl = -Infinity,
     worstPnl = Infinity;
   let totalFees = 0;
+  let totalFunding = 0;
   const byStrategy = {};
   let totalHoldMs = 0;
   for (const t of trades) {
@@ -129,6 +84,7 @@ function computeStats(trades, equityRef = 0) {
     const fee = t.fee_paid || 0;
     totalPnl += pnl;
     totalFees += fee;
+    totalFunding += t.funding || 0;
     if (pnl > 0) {
       wins++;
       winsSum += pnl;
@@ -158,7 +114,8 @@ function computeStats(trades, equityRef = 0) {
   // expectancy = WR·avgWin + LR·avgLoss; математически = avgPnl.
   // Дублируем explicit как самостоятельную метрику для UI.
   const expectancy = avgPnl;
-  const grossPnl = totalPnl + totalFees;
+  // Gross = чистая цена: net без комиссий и без фандинга.
+  const grossPnl = totalPnl + totalFees - totalFunding;
   const feesPctOfGross = grossPnl !== 0 ? (totalFees / Math.abs(grossPnl)) * 100 : 0;
 
   // Max drawdown по equity-кривой: сортируем по closed_at, считаем cumPnL,
@@ -193,6 +150,7 @@ function computeStats(trades, equityRef = 0) {
     byStrategy,
     totalHoldMs,
     totalFees,
+    totalFunding,
     grossPnl,
     feesPctOfGross,
     maxDrawdown: maxDD,
@@ -204,7 +162,7 @@ export async function handlePnlSummary(_req, res) {
   try {
     const now = Date.now();
     const bounds = periodBoundaries(now);
-    const fundingDeltas = await getFundingHistory();
+    const fundingDeltas = await getFundingDeltas();
 
     // Equity счёта — знаменатель для maxDrawdown %. Падение API не критично:
     // equityNow=0 → computeStats вернёт maxDrawdownPct=null и UI скроет процент.
@@ -226,12 +184,13 @@ export async function handlePnlSummary(_req, res) {
     const roundTrips = (await getAllRoundTrips()).filter((t) => t.status === "closed");
 
     // Приводим к контракту history-строки, который ждёт computeStats:
-    // realized_pnl уже NET комиссий (t.pnl — price PnL ДО них).
+    // realized_pnl = net (комиссии и фандинг учтены), t.pnl — цена ДО них.
     const asHistoryRow = (t) => ({
       coin: t.coin,
       side: t.side,
-      realized_pnl: (t.pnl || 0) - (t.fee || 0),
+      realized_pnl: tradeNet(t),
       fee_paid: t.fee || 0,
+      funding: t.funding || 0,
       strategy_id: t.source === "manual" ? "manual" : t.source === "adopted" ? "adopt" : "bot",
       entry_time: t.entryTime,
       closed_at: t.closeTime,
@@ -270,12 +229,11 @@ export async function handlePnlSummary(_req, res) {
       // Normalize manual trades to the shape computeStats() expects so они
       // попадают во все метрики (avg, expectancy, best/worst, wins/losses,
       // payoff, maxDD, fees) единым набором с bot trades.
-      // m.pnl из реконструкции = price PnL ДО комиссий (Σ closedPnl), m.fee отдельно.
-      // DB-сделки в history несут realized_pnl УЖЕ net of fees → приводим manual к
-      // тому же контракту (net), иначе grossPnl = totalPnl + totalFees задвоит комиссию.
+      // m.pnl из реконструкции = цена ДО комиссий (Σ closedPnl) → приводим к net.
       const manualAsBotShape = manualInRange.map((m) => ({
-        realized_pnl: (m.pnl || 0) - (m.fee || 0),
+        realized_pnl: tradeNet(m),
         fee_paid: m.fee || 0,
+        funding: m.funding || 0,
         strategy_id: "manual",
         entry_time: m.entryTime,
         closed_at: m.closeTime,
@@ -292,25 +250,21 @@ export async function handlePnlSummary(_req, res) {
           : end - start;
       const utilizationPct =
         periodMs > 0 ? Math.min(100, (stats.totalHoldMs / periodMs) * 100) : 0;
-      const funding = sumFundingInRange(fundingDeltas, start, end);
+      const funding = sumFunding(fundingDeltas, { start, end: end - 1 });
 
-      // net (− fee), консистентно с combined-метриками выше.
       const manualPnl = manualInRange.reduce(
-        (s, m) => s + (m.pnl || 0) - (m.fee || 0),
+        (s, m) => s + tradeNet(m),
         0,
       );
       const manualCount = manualInRange.length;
       const manualWins = manualInRange.filter(
-        (m) => (m.pnl || 0) - (m.fee || 0) > 0,
+        (m) => tradeNet(m) > 0,
       ).length;
 
       result[key] = {
         ...stats,
         utilizationPct,
         funding,
-        // Price-only PnL = realized_pnl − funding_collected. Если funding_collected NULL
-        // (старые записи) — fallback: показываем total как есть, отдельно period funding.
-        pricePnl: stats.totalPnl,
         // Bot vs manual split: bot = bot-only stats, manual = reconstructed.
         bot: {
           pnl: botStats.totalPnl,
@@ -522,15 +476,13 @@ export async function handleInsights(_req, res) {
     // ЕДИНЫЙ источник = HL fills (тот же reconstructRoundTrips, что у Monthly
     // Ledger) → Insights сходится с Ledger. Раньше bot брался из trades.db
     // (теряет историю при порче БД, см. ledger.js), а manual — из fills: две
-    // правды не сходились. reconstructRoundTrips отдаёт pnl = price PnL ДО комиссий
-    // (Σ closedPnl), fee отдельно → приводим к net (pnl − fee), чтобы realized_pnl
-    // совпадал с DB-контрактом и итоги Insights сходились с P&L Summary.
+    // правды не сходились. realized_pnl = tradeNet, как в P&L Summary.
     const roundTrips = await getAllRoundTrips();
     const combined = roundTrips
       .filter((t) => t.status === "closed")
       .map((t) => ({
         coin: t.coin,
-        realized_pnl: (t.pnl || 0) - (t.fee || 0),
+        realized_pnl: tradeNet(t),
         fee_paid: t.fee || 0,
         strategy_id: t.source, // bot | adopted | manual
         side: t.side, // long | short
@@ -579,9 +531,9 @@ export async function handleDayJournal(req, res) {
         coin: t.coin,
         side: t.side, // long | short
         source: t.source, // bot | adopted | manual
-        // net (− fee) — совпадает с DB realized_pnl и клеткой хитмапа.
-        pnl: (t.pnl || 0) - (t.fee || 0),
+        pnl: tradeNet(t), // net, совпадает с клеткой хитмапа
         fee: t.fee || 0,
+        funding: t.funding || 0,
         entryTime: t.entryTime || null,
         closeTime: t.closeTime,
       }))
@@ -589,13 +541,14 @@ export async function handleDayJournal(req, res) {
 
     const pnl = trades.reduce((s, t) => s + t.pnl, 0);
     const fees = trades.reduce((s, t) => s + t.fee, 0);
+    const funding = trades.reduce((s, t) => s + t.funding, 0);
     const wins = trades.filter((t) => t.pnl > 0).length;
     const losses = trades.filter((t) => t.pnl < 0).length;
 
     res.json({
       date,
       note: getDayNote(date),
-      summary: { trades: trades.length, pnl, fees, wins, losses },
+      summary: { trades: trades.length, pnl, fees, funding, wins, losses },
       trades,
     });
   } catch (err) {

@@ -15,6 +15,7 @@ import { config } from "../../../core/config.js";
 const TRADING_START_MS = Date.UTC(2026, 3, 1);
 import { logger } from "../../../core/logger.js";
 import { fetchUserFills, reconstructRoundTrips } from "../../userFills.js";
+import { getFundingDeltas, tradeFunding, tradeNet } from "../../funding.js";
 import {
   getHistorySince,
   getArchivedHistorySince,
@@ -59,13 +60,43 @@ export async function getAllRoundTrips() {
         status: "OPEN",
       });
     const botOidSet = getBotOidsSince(0);
-    const trades = reconstructRoundTrips(fills, botTrades, botOidSet);
+    const trades = await withFunding(reconstructRoundTrips(fills, botTrades, botOidSet));
     cache = { ts: Date.now(), trades };
     return trades;
   } catch (err) {
     logger.debug(`[Dashboard] getAllRoundTrips failed: ${err.message}`);
     return cache.trades; // stale-OK
   }
+}
+
+/** Закрытым сделкам — фандинг по их монете за время удержания (поле funding). */
+export function attachFunding(trades, deltas) {
+  return trades.map((t) =>
+    t.status === "closed"
+      ? { ...t, funding: tradeFunding(deltas, t.coin, t.entryTime, t.closeTime) }
+      : t,
+  );
+}
+
+/**
+ * Деньги закрытой DB-сделки из её round-trip'а (та же монета, close в пределах
+ * tolMs). В БД realized_pnl у бота с фандингом, у adopt без него — суммы берём с биржи.
+ */
+export function closeMoney(trips, row, tolMs) {
+  const coin = row.coin?.toUpperCase();
+  const rt = trips.find(
+    (t) =>
+      t.status === "closed" &&
+      t.coin?.toUpperCase() === coin &&
+      Math.abs((t.closeTime || 0) - (row.closed_at || 0)) <= tolMs,
+  );
+  if (!rt) return { pnl: row.realized_pnl, fee: row.fee_paid, funding: null };
+  return { pnl: tradeNet(rt), fee: rt.fee || 0, funding: rt.funding || 0 };
+}
+
+async function withFunding(trades) {
+  const lastClose = trades.reduce((m, t) => Math.max(m, t.closeTime || 0), 0);
+  return attachFunding(trades, await getFundingDeltas({ freshAfter: lastClose }));
 }
 
 /**

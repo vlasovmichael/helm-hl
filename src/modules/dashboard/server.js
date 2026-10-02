@@ -83,7 +83,8 @@ import {
   OI_SNAPSHOT_MS,
 } from "./routes/movers.js";
 import { handleScreen } from "./routes/screen.js";
-import { getManualTrades } from "./routes/manualTrades.js";
+import { getManualTrades, getAllRoundTrips, closeMoney } from "./routes/manualTrades.js";
+import { tradeNet } from "../funding.js";
 import { handlePnlSummary, handleInsights, handleDayJournal, handleDayNoteSave } from "./routes/pnl.js";
 import { handleTradeBreakdown } from "./routes/tradeBreakdown.js";
 import { handleTradeJournal } from "./routes/tradeJournal.js";
@@ -725,21 +726,24 @@ async function handleActivity(req, res) {
     const sourceOf = (sid) =>
       sid === "adopt" ? "adopted" : sid === "manual" ? "manual" : "bot";
 
+    const trips = await getAllRoundTrips();
     const pushClose = (t) => {
       if (!t.coin) return;
       const sid = t.strategy_id || "carry";
+      const money = closeMoney(trips, t, DEDUP_TS_TOLERANCE_MS);
       events.push({
         id: t.id,
         kind: "close",
         ts: t.closed_at,
         coin: t.coin,
-        pnl: t.realized_pnl,
+        pnl: money.pnl,
         reason: t.reason,
         side: t.side,
         sizeUsd: t.size_usd,
         entryPrice: t.entry_price,
         entryTime: t.entry_time,
-        fee: t.fee_paid,
+        fee: money.fee,
+        funding: money.funding,
         strategy_id: sid,
         source: sourceOf(sid),
       });
@@ -772,9 +776,8 @@ async function handleActivity(req, res) {
     // ручные позиции отдельно не дублируем (status endpoint их уже отдаёт как
     // manualPositions карточки HANDS-OFF).
     try {
-      const manualTrades = await getManualTrades();
-      for (const m of manualTrades) {
-        if (m.status !== "closed") continue;
+      for (const m of trips) {
+        if (m.source !== "manual" || m.status !== "closed") continue;
         if (m.closeTime < since) continue;
         // Уже записана ботом как adopted/bot — не дублируем (см. makeHistoryCoverage).
         if (coverage.closedCovered(m.coin, m.closeTime)) continue;
@@ -782,7 +785,9 @@ async function handleActivity(req, res) {
           kind: "manual_close",
           ts: m.closeTime,
           coin: m.coin,
-          pnl: (m.pnl || 0) - (m.fee || 0), // net, как history-сделки
+          pnl: tradeNet(m),
+          fee: m.fee || 0,
+          funding: m.funding || 0,
           side: m.side,
           entryPrice: m.entryPrice,
           closePrice: m.closePrice,
@@ -821,7 +826,7 @@ function handleNearMisses(req, res) {
   }
 }
 
-function handleTradeDetail(req, res) {
+async function handleTradeDetail(req, res) {
   try {
     const id = parseInt(req.params.id, 10);
     if (!Number.isFinite(id) || id <= 0) {
@@ -829,8 +834,10 @@ function handleTradeDetail(req, res) {
     }
     // Ищем сначала в активной истории, потом в архиве.
     const all = [...getHistorySince(0), ...getArchivedHistorySince(0)];
-    const trade = all.find((t) => t.id === id);
-    if (!trade) return res.status(404).json({ error: "trade not found" });
+    const row = all.find((t) => t.id === id);
+    if (!row) return res.status(404).json({ error: "trade not found" });
+    const money = closeMoney(await getAllRoundTrips(), row, DEDUP_TS_TOLERANCE_MS);
+    const trade = { ...row, realized_pnl: money.pnl, fee_paid: money.fee, funding: money.funding };
     res.json({ trade });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -878,6 +885,7 @@ async function handleTradeMarkers(req, res) {
     );
     const closes = [...dbRows, ...archRows];
 
+    const trips = await getAllRoundTrips();
     const events = [];
     for (const t of closes) {
       if (t.entry_time && t.entry_time >= since) {
@@ -893,7 +901,7 @@ async function handleTradeMarkers(req, res) {
         kind: "close",
         ts: t.closed_at,
         price: t.close_price,
-        pnl: t.realized_pnl,
+        pnl: closeMoney(trips, t, DEDUP_TS_TOLERANCE_MS).pnl,
         reason: t.reason,
         side: t.side || "short",
         strategy: t.strategy_id || "carry",
@@ -904,9 +912,8 @@ async function handleTradeMarkers(req, res) {
     // уже добавлены из БД выше (см. makeHistoryCoverage).
     const coverage = makeHistoryCoverage(closes, getActivePosition());
     try {
-      const manualTrades = await getManualTrades();
-      for (const m of manualTrades) {
-        if (m.coin.toUpperCase() !== coin) continue;
+      for (const m of trips) {
+        if (m.source !== "manual" || m.coin.toUpperCase() !== coin) continue;
         const covered =
           m.status === "closed"
             ? coverage.closedCovered(m.coin, m.closeTime)
@@ -926,7 +933,7 @@ async function handleTradeMarkers(req, res) {
             kind: "close",
             ts: m.closeTime,
             price: m.closePrice,
-            pnl: (m.pnl || 0) - (m.fee || 0), // net, как history-сделки
+            pnl: tradeNet(m),
             reason: "manual_close",
             side: m.side,
             strategy: "manual",
