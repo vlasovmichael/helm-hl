@@ -30,6 +30,9 @@ import { HL_PRIORITY } from '../core/hlClient.js';
 import { getFifteenMinCandles } from './candleCache.js';
 import { findLiveSetups, findPendingZones } from '../../tools/fvgZones.mjs';
 import { PARAMS } from '../../tools/fvgRule.mjs';
+import { readHypothesisState } from '../../tools/runWhileOpen.mjs';
+
+const HYPOTHESIS_ID = 'fvg-wide-retest-4h';
 
 const ENABLED = (process.env.FVG_ALERT_ENABLED || 'true').toLowerCase() === 'true';
 const INTERVAL_MS = parseFloat(process.env.FVG_ALERT_INTERVAL_MIN || '5') * 60_000;
@@ -192,6 +195,10 @@ async function runOnce(now = Date.now()) {
 export function startFvgAlerts() {
   if (!ENABLED) {
     logger.info('[FvgAlerts] disabled (FVG_ALERT_ENABLED=false)');
+    return;
+  }
+  if (readHypothesisState(HYPOTHESIS_ID) === 'closed') {
+    logger.info(`[FvgAlerts] ${HYPOTHESIS_ID} закрыта в реестре — будильник не поднят`);
     return;
   }
   loadState();

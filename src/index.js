@@ -29,7 +29,6 @@ import { startTickWatchdog } from './app/tickWatchdog.js';
 import { startMemWatch } from './app/memWatch.js';
 import { startWatchlistAlerts } from './modules/watchlistAlerts.js';
 import { startFvgAlerts } from './modules/fvgAlerts.js';
-import { startWinnersWatch } from './modules/winnersWatch.js';
 import { sendDailyDigest } from './modules/mailDigest.js';
 import { shutdown, loadPriceHistory } from './app/lifecycle.js';
 import { startToastBridge } from './app/toastBridge.js';
@@ -132,15 +131,9 @@ async function main() {
   // Узкий пуш только по ALERT_WATCHLIST, не сделка. WATCHLIST_ALERT_ENABLED (default on). Fail-soft.
   startWatchlistAlerts();
 
-  // FVG-будильник: ретест широкой зоны 4h → пуш с уровнями.
-  // 🚨 НЕ сигнал: гипотеза в форварде, вердикт по критериям реестра.
-  // FVG_ALERT_ENABLED (default on). Fail-soft.
+  // FVG-будильник: ретест широкой зоны 4h → пуш с уровнями. Не поднимается,
+  // если его гипотеза закрыта в реестре. FVG_ALERT_ENABLED (default on). Fail-soft.
   startFvgAlerts();
-
-  // «Гении Уолл-стрит» открыли/закрыли позу → холодный пуш + колокольчик.
-  // Наблюдение за замороженным списком, вердикт теста 10.11 не трогает.
-  // WINNERS_WATCH_ENABLED (default on). Fail-soft.
-  startWinnersWatch();
 
   // Сторож форвардов: пуш на молчание сборщика и однократная оценка на пороге.
   startForwardWatch();

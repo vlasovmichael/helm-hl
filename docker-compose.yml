@@ -52,33 +52,6 @@ services:
       - gateway_net
       - tax_net
 
-  # Liquidation-Wick Collector — форвард-замер фейда ликвидационных фитилей.
-  # Отдельный процесс (НЕ трогает торгового бота): свой poll 1m-свечей HL, ноль
-  # ордеров. Детект по low/high закрытой свечи + лимит-модель входа, ведение до
-  # target/stop/timeout. Пишет в общий data-том (data/liq-wick/events.jsonl),
-  # дашборд показывает на /lab (/api/spike-fade). Параметры — через .env
-  # (LIQ_WICK_PCT, LIQ_TARGET_PCT, LIQ_STOP_PCT, LIQ_HORIZON_MIN, LIQ_COINS…).
-  # Предшественник (spikeFadeMeasure, mid-based) снят — мерил не то (см. memory).
-  liq-wick:
-    build: .
-    container_name: hl-liq-wick
-    restart: unless-stopped
-    command: node tools/liqWickCollector.mjs
-    env_file: .env
-    environment:
-      TZ: ${TZ:-Europe/Warsaw}
-    volumes:
-      - ./data:/app/data
-    # Не веб-сервер → HEALTHCHECK из Dockerfile (пинг :3010) тут не применим.
-    healthcheck:
-      disable: true
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-    networks:
-      - gateway_net
-
   tui:
     profiles: [tui]
     build:
@@ -104,43 +77,20 @@ services:
     networks:
       - gateway_net
 
-  # Фандинг-спред HL против Kraken — форвард по предзаявке
-  # hl-kraken-funding-forward-2026-09. Отдельный процесс: своих ордеров ноль,
-  # торгового бота не касается. Пишет часовые снимки котировок обеих площадок в
-  # data/funding-spread/snapshots.jsonl; ставки и цены при оценке берутся из
-  # истории бирж, а спред восстановить потом нельзя — поэтому он и пишется.
-  funding-spread:
-    build: .
-    container_name: hl-funding-spread
-    restart: unless-stopped
-    command: node tools/fundingSpreadCollector.mjs
-    env_file: .env
-    environment:
-      TZ: ${TZ:-Europe/Warsaw}
-    volumes:
-      - ./data:/app/data
-    # Не веб-сервер → HEALTHCHECK из Dockerfile (пинг :3010) тут не применим.
-    healthcheck:
-      disable: true
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-    networks:
-      - gateway_net
-
   # Paper-forward отрицательного фандинга HL против маржинального спота Kraken.
   # Ордеров ноль. Код приватный: приезжает из лабы через lab pull до сборки
   # образа. Пишет data/negfunding-forward/ — часовые котировки обеих ног и флаг
   # маржи Kraken, которые потом не восстановить.
+  # Сборщик гипотезы сам выходит с кодом 0, когда её закрыли в реестре; on-failure не поднимает его обратно.
   negfunding-forward:
     build: .
     container_name: hl-negfunding-forward
-    restart: unless-stopped
-    command: node tools/negFundingKrakenForward.mjs
+    restart: on-failure
+    command: node tools/runWhileOpen.mjs tools/negFundingKrakenForward.mjs
     env_file: .env
     environment:
       TZ: ${TZ:-Europe/Warsaw}
+      HYPOTHESIS_ID: hl-negfunding-kraken-forward-2026-10
     volumes:
       - ./data:/app/data
     # Не веб-сервер → HEALTHCHECK из Dockerfile (пинг :3010) тут не применим.
@@ -150,36 +100,6 @@ services:
       resources:
         limits:
           memory: 256M
-    networks:
-      - gateway_net
-
-  # Поток ордеров HL с адресами участников + срезы чужих позиций.
-  # Отдельный процесс: ордеров ноль, торгового бота не касается. Пишет
-  # data/flow/flow.db — агрегат (адрес, монета) по 5-мин барам, суточную сводку
-  # по кошелькам и срезы позиций с ценами ликвидации. Данные невосстановимы:
-  # HL не отдаёт историей ни поток, ни чужие позиции.
-  flow:
-    build: .
-    container_name: hl-flow
-    restart: unless-stopped
-    command: node tools/flowCollector.mjs
-    env_file: .env
-    environment:
-      TZ: ${TZ:-Europe/Warsaw}
-      # 🚨 Потолок кучи задаём сами: из cgroup нода выводит его ВЫШЕ лимита
-      # контейнера, и тогда ядро убивает процесс раньше, чем V8 соберёт мусор.
-      NODE_OPTIONS: --max-old-space-size=256
-    volumes:
-      - ./data:/app/data
-    # Не веб-сервер → HEALTHCHECK из Dockerfile (пинг :3010) тут не применим.
-    healthcheck:
-      disable: true
-    deploy:
-      resources:
-        limits:
-          # Агрегат живёт в памяти между барами (~6-7k пар), но упирается в
-          # потолок не он: page cache базы больше лимита и занимает весь зазор.
-          memory: 512M
     networks:
       - gateway_net
 
