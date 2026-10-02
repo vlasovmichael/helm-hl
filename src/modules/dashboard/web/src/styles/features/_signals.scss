@@ -939,14 +939,12 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
 .signals-table td.hm-price-cell {
   border-radius: 4px;
 }
-/* Вдвое дольше самого долгого перехода интерфейса: вспышка обязана пережить
-   взгляд, скользнувший по таблице, но выведена из шкалы, а не выдумана
-   отдельным числом. */
+/* Длительность из шкалы, а не своё число: вспышка отмечает тик и сразу гаснет. */
 .signals-table td.hm-price-cell.hm-flash-up {
-  animation: hmFlashUp calc(var(--dur-slow) * 2) var(--ease-out);
+  animation: hmFlashUp var(--dur-slow) var(--ease-out);
 }
 .signals-table td.hm-price-cell.hm-flash-down {
-  animation: hmFlashDown calc(var(--dur-slow) * 2) var(--ease-out);
+  animation: hmFlashDown var(--dur-slow) var(--ease-out);
 }
 @include reduced-motion {
   .signals-table td.hm-price-cell.hm-flash-up,
