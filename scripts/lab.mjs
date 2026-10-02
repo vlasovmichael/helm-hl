@@ -100,6 +100,7 @@ function save(message) {
 // сам дашборд — его не трогаем; HEAD лабы на проде не двигаем, файлы берём из origin/main.
 const PULLED = [
   'data/hypotheses/registry.json',
+  'tools/fundingSpreadEval.mjs',
   'tools/negFundingKrakenRule.mjs',
   'tools/negFundingKrakenForward.mjs',
   'tools/negFundingKrakenForwardEval.mjs',
