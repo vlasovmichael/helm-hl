@@ -1400,14 +1400,21 @@ export function getStrategyTradesPage(strategyId, mode, limit = 10, offset = 0, 
  * @param {number} sinceMs — Unix timestamp в миллисекундах
  * @returns {Array<Object>}
  */
+// Разобранный архив по mtime+size: его зовут десятки раз за тик, а чтение и
+// разбор файла на каждом вызове держали event loop минутами.
+let archiveCache = { key: null, rows: [] };
+
 export function getArchivedHistorySince(sinceMs) {
   const ARCHIVE_PATH = 'data/history_archive.json';
   try {
-    const raw = readFileSync(ARCHIVE_PATH, 'utf-8');
-    const archive = JSON.parse(raw);
-    if (!Array.isArray(archive)) return [];
-
-    return archive.filter((r) => r.closed_at >= sinceMs);
+    const st = statSync(ARCHIVE_PATH);
+    const key = `${st.mtimeMs}:${st.size}`;
+    if (archiveCache.key !== key) {
+      const archive = JSON.parse(readFileSync(ARCHIVE_PATH, 'utf-8'));
+      archiveCache = { key, rows: Array.isArray(archive) ? archive : [] };
+    }
+    // Копии строк: вызывающие вправе их править, кэш от этого портиться не должен.
+    return archiveCache.rows.filter((r) => r.closed_at >= sinceMs).map((r) => ({ ...r }));
   } catch {
     // файл не существует или пуст
     return [];
