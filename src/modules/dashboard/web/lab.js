@@ -12,7 +12,6 @@ import {
   startFooterTimer,
 } from "./src/core/shell.js";
 import { renderStrategies } from "./src/features/strategies.js";
-import { refreshWinners } from "./src/features/winners.js";
 import { refreshFvgForward } from "./src/features/research.js";
 import { refreshTgSignalLab, mountTgSignalLabSkeleton } from "./src/features/tgSignals.js";
 
@@ -59,60 +58,6 @@ function view() {
           </thead>
           <tbody id="strategies-tbody">${skeletonRow(13).repeat(5)}</tbody>
         </table>
-      </div>
-    </section>
-
-    <!-- 01.8 / Wall Street geniuses — предзаявленный форвардный тест: три
-         адреса с вершины лидерборда против контрольной группы. Правила в
-         docs/winners-preregistration.md. -->
-    <section class="card" id="sec-winners">
-      <div class="card-header">
-        <div
-          class="card-title"
-          data-card="Question: decile medians say nothing about the three best addresses inside a decile. Here the list of three was frozen IN ADVANCE and is checked forward."
-        >
-          Wall Street geniuses
-        </div>
-        <span id="win-meta" class="lab-meta"></span>
-      </div>
-      <div class="u-scroll-x">
-        <table class="table table--sticky-head signals-table" id="win-table">
-          <thead>
-            <tr>
-              <th data-card="Hyperliquid address: the arrow expands its open positions right now (coin, side, leverage, floating PnL); the link itself opens the explorer">Address</th>
-              <th class="num" data-card="Edge the address was selected on: profit per dollar of turnover in the month before the freeze">Selection, bp</th>
-              <th class="num" data-card="Edge AFTER the freeze — the only number here that means anything">Forward, bp</th>
-              <th class="num" data-card="Profit after the freeze">PnL</th>
-              <th class="num" data-card="Turnover after the freeze">Turnover</th>
-            </tr>
-          </thead>
-          <tbody id="win-tbody">${skeletonRow(5).repeat(4)}</tbody>
-        </table>
-      </div>
-      <div id="win-stats" class="lab-stats"></div>
-      <!-- Лента событий: пуш от winnersWatch холодный и живёт сутки, а таблица
-           выше показывает только открытое сейчас. Здесь закрытая позиция
-           остаётся вместе с исходом. -->
-      <div class="win-log-block">
-        <div id="win-log-head">
-          <span>What they did (last 7 days)</span>
-          <span id="win-log-sum"></span>
-        </div>
-        <div class="win-log-scroll">
-          <table class="table table--compact table--sticky-head" id="win-log-table">
-            <thead>
-              <tr>
-                <th data-card="How long ago the event happened">Age</th>
-                <th data-card="OPEN — position opened; CLOSE — closed; FLIP — closed and reopened on the other side">Event</th>
-                <th data-card="Coin, side, leverage and notional at the moment of the event">Position</th>
-                <th class="num" data-card="How long the position was held before it closed">Held</th>
-                <th class="num" data-card="Realised result net of fees; an open position has no result yet">Net</th>
-                <th data-card="Which of the three frozen addresses did it">Address</th>
-              </tr>
-            </thead>
-            <tbody id="win-log">${skeletonRow(6).repeat(3)}</tbody>
-          </table>
-        </div>
       </div>
     </section>
 
@@ -180,8 +125,6 @@ export default {
       onStatus: (data) => renderStrategies(data.strategies),
     });
 
-    // Форварды «гениев» и FVG пересчитываются кроном раз в сутки — поллить незачем.
-    refreshWinners();
     refreshFvgForward();
 
     mountTgSignalLabSkeleton();

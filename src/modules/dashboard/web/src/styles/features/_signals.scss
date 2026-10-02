@@ -1614,58 +1614,8 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   font-family: var(--font-mono);
   color: var(--text-muted);
 }
-.lab-stats {
-  margin-top: var(--sp-2);
-  font-size: var(--fs-label);
-  font-family: var(--font-mono);
-  color: var(--text-muted);
-  line-height: 1.6;
-}
 .lab-mono-body {
   font-family: var(--font-mono);
   font-size: var(--fs-small);
 }
 
-.win-log-block {
-  margin-top: var(--sp-3);
-}
-
-#win-log-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  margin-bottom: var(--sp-1);
-  font-family: var(--font-mono);
-  font-size: var(--fs-label);
-  color: var(--text-muted);
-}
-
-// Лента длиннее карточки: прокрутка внутри блока, шапка таблицы остаётся
-// на месте (.table--sticky-head).
-.win-log-scroll {
-  max-height: 260px;
-  overflow-y: auto;
-}
-
-// Вторичное в строке — сторона, плечо, объём, адрес, возраст. Красит только
-// исход (зелёный/красный), остальное молчит.
-.win-log-dim {
-  color: var(--text-muted);
-}
-
-// Возраст события — первая колонка, а её вес задаёт .table (td:first-child):
-// имя строки в системе весомее остальных ячеек. Здесь остаётся только запрет
-// переноса, чтобы «15m» не ломалось пополам на телефоне.
-.win-log-age {
-  white-space: nowrap;
-}
-
-// Иконка вида события идёт вплотную к слову — это одна метка, а не два столбца.
-.win-log-kind {
-  white-space: nowrap;
-
-  .icon {
-    vertical-align: -2px;
-    margin-right: 3px;
-  }
-}

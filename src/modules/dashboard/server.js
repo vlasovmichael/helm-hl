@@ -55,7 +55,6 @@ import {
 import { handleMarketContext } from "./routes/marketContext.js";
 import { handleOiOverview, handleOiCoin } from "./routes/oiCollector.js";
 import { handleForwards, handleForwardBreakdown, handleForwardPeeks } from "./routes/research.js";
-import { handleWinners, handleWinnersPositions, handleWinnersEvents } from "./routes/winners.js";
 import {
   handleList as handleManualPaperList,
   handleOpen as handleManualPaperOpen,
@@ -1129,12 +1128,7 @@ export function startDashboard() {
   app.get("/api/market-context", handleMarketContext);
   app.get("/api/oi-collector/overview", handleOiOverview);
   app.get("/api/oi-collector/coin", handleOiCoin);
-  app.get("/api/winners", handleWinners);
-  // Клик по адресу в карточке «А если взять троих?» — что у него открыто сейчас.
-  app.get("/api/winners/positions", handleWinnersPositions);
-  // Журнал: что открывали и закрывали, с исходом закрытий. Холодный пуш можно
-  // пропустить — здесь событие остаётся с цифрами.
-  app.get("/api/winners/events", handleWinnersEvents);
+
   // Прогресс форварда FVG — только счётчик и даты, метрик по определению нет.
   app.get("/api/forwards", handleForwards);
   app.get("/api/forwards/peeks", handleForwardPeeks);
