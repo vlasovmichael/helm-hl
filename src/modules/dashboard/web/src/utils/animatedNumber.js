@@ -7,16 +7,15 @@
 // .animated-value (overflow:hidden, 1.1em) → смена значения не меняет ширину.
 // CSS: styles/core/_activity.scss (.animated-value / .digit-reel).
 
-const lastAnimatedValues = new Map(); // elId → последняя показанная строка
-
 export function updateAnimatedNumber(elId, newValueStr) {
   const el = document.getElementById(elId);
   if (!el) return;
-  const prev = lastAnimatedValues.get(elId) || "";
+  // Значение живёт на узле, а не по id: после смены страницы узел новый, со скелетоном.
+  const prev = el.__animatedValue || "";
   if (prev === newValueStr) return;
 
   const oldStr = prev || newValueStr;
-  lastAnimatedValues.set(elId, newValueStr);
+  el.__animatedValue = newValueStr;
 
   el.innerHTML = "";
   const maxLength = Math.max(oldStr.length, newValueStr.length);
