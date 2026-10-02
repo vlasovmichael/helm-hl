@@ -76,7 +76,6 @@ export default defineConfig({
         lab: resolve(webRoot, "lab.html"),
         oi: resolve(webRoot, "oi.html"),
         calibrator: resolve(webRoot, "calibrator.html"),
-        flow: resolve(webRoot, "flow.html"),
         levels: resolve(webRoot, "levels.html"),
         login: resolve(webRoot, "login.html"),
         // Стенд дизайна Trade Ticket на моках (биржи не касается). Живёт в

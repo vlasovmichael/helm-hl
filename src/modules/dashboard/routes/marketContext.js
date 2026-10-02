@@ -7,7 +7,6 @@
 //   • metaAndAssetCtxs → markPx, prevDayPx (24h), dayNtlVlm, openInterest, funding.
 
 import { hlInfo, HL_PRIORITY } from "../../../core/hlClient.js";
-import { nearLiqLevels } from "./flow.js";
 import { liqEventsWindow } from "../../../core/liqEvents.js";
 
 const TTL_MS = 60_000; // кэш, чтобы не дёргать HL на каждый поллинг дашборды
@@ -122,9 +121,6 @@ async function refreshCache() {
       volUsd: stats?.volUsd ?? null,
       oiUsd: stats?.oiUsd ?? null,
       funding: stats?.funding ?? null,
-      // Читается из базы потока (свой контейнер, только чтение) — биржу не
-      // трогает и в весовой бюджет HL не входит.
-      liq: nearLiqLevels("BTC"),
       // Событие ≠ уровень: уровень пересчитывается от живой цены и всегда
       // стоит впереди, событие уже случилось. Держим в памяти процесса.
       liqEvents: liqEventsWindow("BTC"),

@@ -93,13 +93,6 @@ import { handleCarry } from "./routes/carry.js";
 import { handleEntryFilter } from "./routes/entryFilter.js";
 import { handleLevels, handleLevelsOi } from "./routes/levels.js";
 import { levelJournal } from "../levelReads.js";
-import {
-  handleFlowWallets,
-  handleFlowLiqMap,
-  handleFlowLiqHeat,
-  handleFlowCoin,
-  handleFlowCoins,
-} from "./routes/flow.js";
 import { isTargetTrailArmed } from "../../app/adoptSupervise.js";
 import { rebuild as rebuildCalibrator, readCache as calibratorCache } from "../calibrator.js";
 import { collectVenues } from "../../../tools/venueCollector.mjs";
@@ -133,7 +126,7 @@ const PUBLIC_DIR = join(__dirname, "dist");
 const PAGES = [
   "index", "ledger", "journal", "statistics", "lab", "oi",
   "orderbook", "orderbook-sim", "ticket", "calibrator",
-  "flow", "levels",
+  "levels",
 ];
 
 function sendPage(name, res) {
@@ -1155,11 +1148,6 @@ export function startDashboard() {
   app.get("/api/levels/oi", handleLevelsOi);
   // Карточка решения перед входом: цель, стоп, размер, остаток бюджета дня.
   // Поток ордеров с адресами: витрина читает базу коллектора hl-flow.
-  app.get("/api/flow/wallets", handleFlowWallets);
-  app.get("/api/flow/liqmap", handleFlowLiqMap);
-  app.get("/api/flow/liqheat", handleFlowLiqHeat);
-  app.get("/api/flow/coin", handleFlowCoin);
-  app.get("/api/flow/coins", handleFlowCoins);
   // Калибратор отдаёт готовый кэш: пересчёт идёт по расписанию, не по запросу.
   app.get("/api/calibrator", (_req, res) => {
     const c = calibratorCache();

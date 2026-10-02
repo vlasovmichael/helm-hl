@@ -25,11 +25,6 @@ const LINKS = [
 // редко, а место в ряду ссылок стоит дорого.
 const RESEARCH = [
   {
-    href: "/flow",
-    title: "Order Flow",
-    note: "Who trades on HL — wallets, liquidation map, net taker flow",
-  },
-  {
     href: "/levels",
     title: "Levels",
     note: "Rule-drawn support and resistance — stop, target and the ratio between them",
