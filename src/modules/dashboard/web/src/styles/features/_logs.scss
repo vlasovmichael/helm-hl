@@ -10,11 +10,11 @@
 .logs-controls {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--space-2);
   flex-wrap: wrap;
 
   .field {
-    font-family: var(--font-mono);
+    font-family: var(--mono);
     width: 200px;
   }
 }
@@ -22,21 +22,21 @@
 /* Кнопка паузы — общий .btn--icon; здесь только «включено»: пауза автоскролла
    это состояние, а не наведение. */
 .logs-pause-btn.active {
-  color: var(--accent);
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
+  color: var(--accent-2);
+  border-color: var(--accent-2);
+  background: var(--wash);
 }
 
 .logs-viewport {
   position: relative;
   height: 320px;
   overflow-y: auto;
-  background: var(--canvas-subtle);
-  border: 1px solid var(--border);
+  background: var(--panel-sunk);
+  border: 1px solid var(--rule);
   border-radius: var(--radius);
   padding: 6px 0;
-  font-family: var(--font-mono);
-  font-size: var(--fs-body);
+  font-family: var(--mono);
+  font-size: var(--text-body);
   line-height: 1.55;
   scroll-behavior: smooth;
 
@@ -47,11 +47,11 @@
     background: transparent;
   }
   &::-webkit-scrollbar-thumb {
-    background: var(--border-strong);
+    background: var(--rule-strong);
     border-radius: 4px;
   }
   &::-webkit-scrollbar-thumb:hover {
-    background: var(--text-muted);
+    background: var(--ink-3);
   }
 }
 
@@ -68,15 +68,15 @@
   word-break: break-word;
 
   &:hover {
-    background: var(--card-bg-hover);
+    background: var(--sheen);
   }
 }
 .log-time {
-  color: var(--text-muted);
+  color: var(--ink-3);
 }
 .log-level {
   font-weight: 700;
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   letter-spacing: 0.04em;
   align-self: center;
   text-align: center;
@@ -85,68 +85,68 @@
   text-transform: uppercase;
 }
 .log-msg {
-  color: var(--text-primary);
+  color: var(--ink);
 
   mark {
-    background: var(--warn-soft);
-    color: var(--warn);
+    background: var(--caution-wash);
+    color: var(--caution);
     border-radius: 2px;
     padding: 0 2px;
   }
 }
 .log-info .log-level {
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--accent-2);
+  background: var(--wash);
 }
 // Уровень строки виден по бейджу LEVEL и по цвету текста — этого достаточно
 // в моношрифтовой ленте, где строки идут вплотную. Полоска слева добавляла
 // третий носитель того же смысла и на длинных переносах рвалась.
 .log-warn {
   .log-level {
-    color: var(--warn);
-    background: var(--warn-soft);
+    color: var(--caution);
+    background: var(--caution-wash);
   }
   .log-msg {
-    color: var(--warn);
+    color: var(--caution);
   }
 }
 .log-error {
-  background: var(--red-soft);
+  background: var(--loss-wash);
 
   .log-level {
-    color: var(--red);
-    background: var(--red-soft);
+    color: var(--loss);
+    background: var(--loss-wash);
   }
   .log-msg {
-    color: var(--red);
+    color: var(--loss);
   }
 }
 .log-debug {
   .log-level {
-    color: var(--text-muted);
+    color: var(--ink-3);
   }
   .log-msg {
-    color: var(--text-secondary);
+    color: var(--ink-2);
   }
 }
 
 .logs-empty {
   padding: 24px;
   text-align: center;
-  color: var(--text-muted);
-  font-family: var(--font-sans);
-  font-size: var(--fs-base);
+  color: var(--ink-3);
+  font-family: var(--sans);
+  font-size: var(--text-base);
 }
 
 .logs-meta {
   display: flex;
   justify-content: space-between;
   margin-top: 8px;
-  font-family: var(--font-mono);
-  font-size: var(--fs-small);
-  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--text-small);
+  color: var(--ink-3);
 }
 #logs-status {
-  color: var(--green);
+  color: var(--gain);
   font-weight: 600;
 }

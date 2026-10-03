@@ -33,27 +33,27 @@
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-family: var(--font-mono);
-  font-size: var(--fs-body);
+  font-family: var(--mono);
+  font-size: var(--text-body);
   // Цифры одной ширины: без этого колонки дышат на каждом тике.
   font-variant-numeric: tabular-nums;
 
   th {
     padding: 7px 10px;
-    border-bottom: 1px solid var(--border);
-    font-family: var(--font-sans);
-    font-size: var(--fs-micro);
+    border-bottom: 1px solid var(--rule);
+    font-family: var(--sans);
+    font-size: var(--text-micro);
     font-weight: 600;
     letter-spacing: var(--ls-wide);
     text-transform: uppercase;
-    color: var(--text-muted);
+    color: var(--ink-3);
     text-align: left;
     white-space: nowrap;
   }
 
   td {
     padding: 8px 10px;
-    border-bottom: 1px solid var(--hairline);
+    border-bottom: 1px solid var(--rule-soft);
     vertical-align: middle;
     white-space: nowrap;
   }
@@ -73,27 +73,27 @@
   tbody td:first-child {
     text-align: left;
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--ink);
   }
 
   tbody tr:hover {
-    background: var(--card-bg-hover);
+    background: var(--sheen);
   }
 
   // Знак числа красит САМО ЧИСЛО, а не строку: цветная строка читается как
   // статус, а тут цвет — это плюс или минус. Классы ставит разметка.
   td.num-pos,
   td.num-pos * {
-    color: var(--green);
+    color: var(--gain);
     font-weight: 600;
   }
   td.num-neg,
   td.num-neg * {
-    color: var(--red);
+    color: var(--loss);
     font-weight: 600;
   }
   td.num-muted {
-    color: var(--text-muted);
+    color: var(--ink-3);
   }
 
   // Заголовок с подсказкой (data-card): пунктир говорит, что есть что читать.
@@ -106,7 +106,7 @@
 
 // Плотный режим — для длинных списков, где важнее строк на экран.
 .table--compact {
-  font-size: var(--fs-small);
+  font-size: var(--text-small);
 
   th {
     padding: 6px 8px;
@@ -123,12 +123,12 @@
   position: sticky;
   top: 0;
   z-index: 1;
-  background: var(--card-bg);
+  background: var(--panel);
 }
 
 // Строка, к которой привязан экран (раскрытая, выбранная).
 .table tbody tr.is-active {
-  background: var(--accent-soft);
+  background: var(--wash);
 }
 
 // ── Сортировка ──────────────────────────────────────────────────────
@@ -139,7 +139,7 @@
   user-select: none;
 
   &:hover {
-    color: var(--text-primary);
+    color: var(--ink);
   }
   &::after {
     @include mask-icon("chevrons-up-down", 11px);
@@ -147,12 +147,12 @@
     opacity: 0.3;
   }
   &.is-sorted {
-    color: var(--text-primary);
+    color: var(--ink);
 
     &::after {
       @include mask-icon("arrow-down", 11px);
       opacity: 0.9;
-      color: var(--accent);
+      color: var(--accent-2);
     }
   }
   &.is-sorted.is-asc::after {

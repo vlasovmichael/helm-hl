@@ -4,9 +4,9 @@
 import { cssVar } from "../utils/format.js";
 
 export function monoCandles(element) {
-  const ink = cssVar("--text-primary", element) || "#18181B";
+  const ink = cssVar("--ink", element) || "#18181B";
   return {
-    upColor: cssVar("--card-bg", element) || "#fff",
+    upColor: cssVar("--panel", element) || "#fff",
     downColor: ink,
     borderUpColor: ink,
     borderDownColor: ink,

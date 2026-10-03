@@ -18,8 +18,8 @@
 
   &:hover,
   &:focus-visible {
-    background: var(--card-bg-hover);
-    border-color: var(--border);
+    background: var(--sheen);
+    border-color: var(--rule);
     outline: none;
   }
 }
@@ -30,20 +30,20 @@
 }
 .fw-label {
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--ink);
 }
 .fw-count {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: var(--text-muted);
+  color: var(--ink-3);
 
   &.is-stale {
-    color: var(--red);
+    color: var(--loss);
   }
 }
 .fw-caret {
-  color: var(--text-faint);
+  color: var(--ink-3);
 }
 .fw-bar {
   display: block;
@@ -60,41 +60,41 @@
     background: var(--bg-elevated);
   }
   &::-webkit-progress-value {
-    background: var(--accent);
+    background: var(--accent-2);
   }
   &::-moz-progress-bar {
-    background: var(--accent);
+    background: var(--accent-2);
   }
 }
 .fw-row.is-ready .fw-bar {
   &::-webkit-progress-value {
-    background: var(--green);
+    background: var(--gain);
   }
   &::-moz-progress-bar {
-    background: var(--green);
+    background: var(--gain);
   }
 }
 .fw-meta {
-  color: var(--text-muted);
+  color: var(--ink-3);
   line-height: 1.6;
 }
 .fw-stale {
-  color: var(--red);
+  color: var(--loss);
 }
 .lab-meta.is-ready {
-  color: var(--green);
+  color: var(--gain);
 }
 .lab-meta.is-stale {
-  color: var(--red);
+  color: var(--loss);
 }
 .fw-section {
   margin: 14px 0 6px;
   padding: 0 10px;
-  font-size: var(--fs-label);
+  font-size: var(--text-label);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: var(--ls-wide);
-  color: var(--text-muted);
+  color: var(--ink-3);
 }
 .fw-done {
   display: flex;
@@ -107,28 +107,28 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--text-muted);
+  color: var(--ink-3);
 }
 .fw-idle {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   padding: 0 10px;
-  color: var(--text-muted);
+  color: var(--ink-3);
 }
 .fw-note {
   margin-top: 10px;
   line-height: 1.7;
-  color: var(--text-muted);
+  color: var(--ink-3);
 }
 
 // ── Диалог разбора ──
 #fw-modal {
   .fw-lead,
   .fw-rule {
-    font-size: var(--fs-small);
+    font-size: var(--text-small);
     line-height: 1.5;
-    color: var(--text-muted);
+    color: var(--ink-3);
   }
   .fw-output {
     max-height: 320px;
@@ -136,24 +136,24 @@
     padding: 10px 12px;
     overflow: auto;
     border-radius: var(--radius-sm);
-    background: var(--canvas-inset);
-    font-family: var(--font-mono);
-    font-size: var(--fs-small);
+    background: var(--panel-sunk);
+    font-family: var(--mono);
+    font-size: var(--text-small);
     line-height: 1.5;
     white-space: pre-wrap;
-    color: var(--text-secondary);
+    color: var(--ink-2);
   }
   .fw-rule {
     margin: 16px 0 4px;
     padding-top: 12px;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--rule);
   }
   .fw-loading {
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 18px 0;
-    color: var(--text-muted);
+    color: var(--ink-3);
   }
   .fw-warn {
     display: flex;
@@ -162,15 +162,15 @@
     margin: 12px 0;
     padding: 10px 12px;
     border-radius: var(--radius-sm);
-    background: var(--warn-soft, var(--canvas-inset));
-    font-size: var(--fs-small);
+    background: var(--caution-wash, var(--panel-sunk));
+    font-size: var(--text-small);
     line-height: 1.5;
-    color: var(--text-secondary);
+    color: var(--ink-2);
 
     > .icon {
       flex: 0 0 auto;
       margin-top: 2px;
-      color: var(--warn);
+      color: var(--caution);
     }
   }
 
@@ -181,23 +181,23 @@
     margin-bottom: 14px;
     padding: 12px;
     border-radius: 12px;
-    background: var(--canvas-inset);
+    background: var(--panel-sunk);
   }
   .fw-verdict-head {
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--ink);
   }
   .fw-verdict.is-pass .fw-verdict-icon {
-    color: var(--green);
+    color: var(--gain);
   }
   .fw-verdict.is-fail .fw-verdict-icon {
-    color: var(--red);
+    color: var(--loss);
   }
   .fw-checks {
     margin: 6px 0 0;
     padding: 0;
     list-style: none;
-    font-size: var(--fs-small);
+    font-size: var(--text-small);
 
     li {
       display: flex;
@@ -216,30 +216,30 @@
     > div {
       padding: 10px 12px;
       border-radius: 12px;
-      background: var(--canvas-inset);
+      background: var(--panel-sunk);
     }
     span {
       display: block;
-      font-size: var(--fs-label);
-      color: var(--text-muted);
+      font-size: var(--text-label);
+      color: var(--ink-3);
     }
     b {
-      font-family: var(--font-mono);
-      font-size: var(--fs-body);
+      font-family: var(--mono);
+      font-size: var(--text-body);
     }
   }
   .fw-metric-note {
     margin-bottom: 14px;
-    font-size: var(--fs-label);
-    color: var(--text-faint);
+    font-size: var(--text-label);
+    color: var(--ink-3);
   }
   .fw-sub-h {
     margin: 16px 0 6px;
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: var(--ls-wide);
-    color: var(--text-muted);
+    color: var(--ink-3);
   }
   .fw-table {
     width: 100%;
@@ -247,8 +247,8 @@
 }
 
 .fw-pos {
-  color: var(--green);
+  color: var(--gain);
 }
 .fw-neg {
-  color: var(--red);
+  color: var(--loss);
 }

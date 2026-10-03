@@ -10,24 +10,24 @@
   margin: 8px 0 26px;
 
   h1 {
-    font-family: var(--font-display);
-    font-size: var(--fs-h1);
+    font-family: var(--display);
+    font-size: var(--text-h1);
     font-weight: 600;
     letter-spacing: -0.02em;
     margin: 0 0 6px;
-    color: var(--text-primary);
+    color: var(--ink);
   }
   .sub {
-    font-size: var(--fs-base);
-    color: var(--text-muted);
+    font-size: var(--text-base);
+    color: var(--ink-3);
   }
 }
 .back-link {
-  font-size: var(--fs-body);
-  color: var(--text-secondary);
+  font-size: var(--text-body);
+  color: var(--ink-2);
   text-decoration: none;
   padding: 7px 13px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule);
   border-radius: var(--radius);
   transition:
     color var(--dur-fast) var(--ease-out),
@@ -36,9 +36,9 @@
   white-space: nowrap;
 
   &:hover {
-    background: var(--card-bg-hover);
-    color: var(--text-primary);
-    border-color: var(--border-strong);
+    background: var(--sheen);
+    color: var(--ink);
+    border-color: var(--rule-strong);
   }
 }
 
@@ -53,8 +53,8 @@
 
 /* table */
 .table-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: var(--panel);
+  border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
   overflow: hidden;
   margin-bottom: 26px;  // раньше зазор до Tax Summary держал footnote
@@ -67,7 +67,7 @@ table.ledger tbody tr:last-child td {
 table.ledger {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--fs-body);
+  font-size: var(--text-body);
 
   // Все правила ниже — только для СВОИХ ячеек: внутри tr.daybreak живёт
   // вложенная table.cal, и потомковые селекторы перекрашивали её клетки.
@@ -90,83 +90,83 @@ table.ledger {
     padding-right: 20px;
   }
   > thead > tr > th {
-    font-size: var(--fs-micro);
+    font-size: var(--text-micro);
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--text-muted);
+    color: var(--ink-3);
     font-weight: 600;
-    background: var(--canvas-subtle);
-    border-bottom: 1px solid var(--border);
+    background: var(--panel-sunk);
+    border-bottom: 1px solid var(--rule);
     position: sticky;
     top: 0;
 
     &.grp {
-      border-left: 1px solid var(--hairline);
-      color: var(--text-secondary);
+      border-left: 1px solid var(--rule-soft);
+      color: var(--ink-2);
     }
   }
   > tbody > tr > td {
-    font-family: var(--font-mono);
-    border-bottom: 1px solid var(--hairline);
-    color: var(--text-secondary);
+    font-family: var(--mono);
+    border-bottom: 1px solid var(--rule-soft);
+    color: var(--ink-2);
 
     &.month {
-      font-family: var(--font-sans);
+      font-family: var(--sans);
       font-weight: 600;
-      color: var(--text-primary);
+      color: var(--ink);
     }
   }
   > tbody > tr:not(.daybreak):hover > td {
-    background: var(--card-bg-hover);
+    background: var(--sheen);
   }
   > tbody > tr.current > td.month::after {
     content: "live";
-    font-family: var(--font-mono);
-    font-size: var(--fs-micro);
+    font-family: var(--mono);
+    font-size: var(--text-micro);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     margin-left: 7px;
     padding: 1px 5px;
     border-radius: 999px;
-    background: var(--accent-soft);
-    color: var(--accent-strong);
+    background: var(--wash);
+    color: var(--accent-2);
     vertical-align: middle;
   }
 }
 td.grp-edge {
-  border-left: 1px solid var(--hairline);
+  border-left: 1px solid var(--rule-soft);
 }
 // Знак важнее «спокойного» цвета таблицы: правило table.ledger tbody td задаёт
 // color с большей специфичностью, поэтому раскраску повторяем адресно — иначе
 // вся колонка P&L остаётся серой (что и было до 30.08).
 table.ledger > tbody > tr > td.pos,
 table.ledger > tfoot > tr > td.pos {
-  color: var(--green);
+  color: var(--gain);
 }
 table.ledger > tbody > tr > td.neg,
 table.ledger > tfoot > tr > td.neg {
-  color: var(--red);
+  color: var(--loss);
 }
 table.ledger > tbody > tr > td.dim,
 table.ledger > tfoot > tr > td.dim {
-  color: var(--text-faint);
+  color: var(--ink-3);
 }
 
 .pos {
-  color: var(--green);
+  color: var(--gain);
 }
 .neg {
-  color: var(--red);
+  color: var(--loss);
 }
 .dim {
-  color: var(--text-faint);
+  color: var(--ink-3);
 }
 .net-cell {
   font-weight: 700;
 }
 .sub-meta {
-  font-size: var(--fs-micro);
-  color: var(--text-faint);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
   display: block;
   margin-top: 2px;
 }
@@ -176,26 +176,26 @@ table.ledger > tfoot > tr > td.dim {
   --sk-h: 82px;
 }
 .ledger-sk-rows {
-  padding: var(--sp-4) 0;
+  padding: var(--space-4) 0;
 }
 // Код декларации рядом с заголовком: подпись к цифрам, не заголовок.
 .tax-code {
-  font-size: var(--fs-base);
-  color: var(--text-muted);
-  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  color: var(--ink-3);
+  font-family: var(--mono);
   font-style: normal;
   letter-spacing: 0.08em;
 }
 table.ledger tfoot td {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-weight: 700;
-  background: var(--canvas-subtle);
-  border-top: 2px solid var(--border);
-  color: var(--text-primary);
+  background: var(--panel-sunk);
+  border-top: 2px solid var(--rule);
+  color: var(--ink);
   padding: 13px 14px;
 
   &.month {
-    font-family: var(--font-sans);
+    font-family: var(--sans);
   }
 }
 /* .loading и .errbox сняты 04.09.2026: ожидание рисуется скелетоном, а
@@ -214,7 +214,7 @@ table.ledger tfoot td {
     -webkit-overflow-scrolling: touch;
   }
   table.ledger {
-    font-size: var(--fs-small);
+    font-size: var(--text-small);
 
     > thead > tr > th,
     > tbody > tr > td,
@@ -229,11 +229,11 @@ table.ledger tfoot td {
     padding: 12px 13px;
 
     .item-value {
-      font-size: var(--fs-h3);
+      font-size: var(--text-h3);
     }
   }
   table.ledger {
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
 
     > thead > tr > th,
     > tbody > tr > td,
@@ -248,7 +248,7 @@ table.ledger tr.expandable {
   cursor: pointer;
 
   &:hover {
-    background: var(--canvas-subtle);
+    background: var(--panel-sunk);
   }
   // Дефолтный фокус-ринг Chrome (синий) гасим всегда: у tr с tabindex он
   // вылезал после клика мышью и читался как залипший баг. Свою рамку рисуем
@@ -258,7 +258,7 @@ table.ledger tr.expandable {
     outline: none;
   }
   &:focus-visible:not(.is-clicked) {
-    outline: 2px solid var(--text-secondary);
+    outline: 2px solid var(--ink-2);
     outline-offset: -2px;
   }
 }
@@ -270,11 +270,11 @@ table.ledger tr.expandable {
    содержимого без замеров в JS, которые на вложенной таблице врут. */
 table.ledger > tbody > tr.daybreak > td {
   padding: 0;
-  background: var(--canvas-subtle);
+  background: var(--panel-sunk);
   border-top: 0;
 }
 table.ledger > tbody > tr.daybreak.is-open > td {
-  border-top: 1px solid var(--hairline);
+  border-top: 1px solid var(--rule-soft);
 }
 .daybreak__wrap {
   display: grid;
@@ -302,7 +302,7 @@ table.ledger tr.daybreak.is-open .daybreak__inner {
 }
 /* Открытый месяц: подпись акцентом — вместо стрелки. */
 table.ledger > tbody > tr.expandable.is-open > td.month {
-  color: var(--accent);
+  color: var(--accent-2);
   font-weight: 600;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -318,10 +318,10 @@ table.cal {
   table-layout: fixed;
 
   thead th {
-    font-size: var(--fs-micro);
+    font-size: var(--text-micro);
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--text-faint);
+    color: var(--ink-3);
     font-weight: 600;
     text-align: left;
     padding: 0 0 2px 2px;
@@ -337,8 +337,8 @@ table.cal {
     height: 62px;
     border-radius: var(--radius-sm, 6px);
     padding: 6px 8px;
-    border: 1px solid var(--hairline);
-    background: var(--card-bg);
+    border: 1px solid var(--rule-soft);
+    background: var(--panel);
     text-align: left;  // гасим right-align, унаследованный от table.ledger
 
     &.out {
@@ -352,21 +352,21 @@ table.cal {
 
   .dnum {
     display: block;
-    font-size: var(--fs-micro);
-    color: var(--text-faint);
-    font-family: var(--font-mono);
+    font-size: var(--text-micro);
+    color: var(--ink-3);
+    font-family: var(--mono);
   }
   .dpnl {
     display: block;
-    font-family: var(--font-mono);
-    font-size: var(--fs-base);
+    font-family: var(--mono);
+    font-size: var(--text-base);
     font-weight: 600;
     margin-top: 3px;
   }
   .dsub {
     display: block;
-    font-size: var(--fs-micro);
-    color: var(--text-faint);
+    font-size: var(--text-micro);
+    color: var(--ink-3);
     margin-top: 2px;
     white-space: nowrap;
     overflow: hidden;
@@ -375,43 +375,43 @@ table.cal {
 
   // знак дня/недели красит и текст, и подложку
   td.pos {
-    border-color: color-mix(in srgb, var(--green) 40%, transparent);
-    background: color-mix(in srgb, var(--green) 12%, transparent);
+    border-color: color-mix(in srgb, var(--gain) 40%, transparent);
+    background: color-mix(in srgb, var(--gain) 12%, transparent);
 
     .dpnl {
-      color: var(--green);
+      color: var(--gain);
     }
   }
   td.neg {
-    border-color: color-mix(in srgb, var(--red) 40%, transparent);
-    background: color-mix(in srgb, var(--red) 12%, transparent);
+    border-color: color-mix(in srgb, var(--loss) 40%, transparent);
+    background: color-mix(in srgb, var(--loss) 12%, transparent);
 
     .dpnl {
-      color: var(--red);
+      color: var(--loss);
     }
   }
   td.dim .dpnl {
-    color: var(--text-faint);
+    color: var(--ink-3);
   }
 
   // Итог недели — не «ещё один день»: тон вдвое плотнее, чем у клеток, и
   // рамка полностью знакового цвета (у клеток дня она приглушена до 55%).
   td.cal-week {
-    background: var(--card-bg-elev);
+    background: var(--panel-raised);
     text-align: right;
 
     &.pos {
-      background: color-mix(in srgb, var(--green) 24%, var(--card-bg-elev));
-      border-color: var(--green);
+      background: color-mix(in srgb, var(--gain) 24%, var(--panel-raised));
+      border-color: var(--gain);
     }
     &.neg {
-      background: color-mix(in srgb, var(--red) 24%, var(--card-bg-elev));
-      border-color: var(--red);
+      background: color-mix(in srgb, var(--loss) 24%, var(--panel-raised));
+      border-color: var(--loss);
     }
 
-    // На плотной подложке --text-faint проваливается — подпись недели темнее.
+    // На плотной подложке --ink-3 проваливается — подпись недели темнее.
     .dsub {
-      color: var(--text-secondary);
+      color: var(--ink-2);
     }
 
     &.out {

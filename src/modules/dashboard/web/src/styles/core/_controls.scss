@@ -20,15 +20,15 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--sp-2);
+  gap: var(--space-2);
   min-height: var(--ctl-h);
-  padding: 0 var(--sp-3);
-  border: 1px solid var(--border);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule);
   border-radius: var(--radius-sm);
-  background: var(--card-bg-elev);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: var(--fs-small);
+  background: var(--panel-raised);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: var(--text-small);
   font-weight: 600;
   line-height: 1;
   white-space: nowrap;
@@ -41,8 +41,8 @@
     color var(--dur-fast) var(--ease-out);
 
   &:hover:not(:disabled) {
-    background: var(--card-bg-hover);
-    border-color: var(--border-strong);
+    background: var(--sheen);
+    border-color: var(--rule-strong);
   }
   /* Нажатие обязано ощущаться. 1px вниз — меньше, чем заметно как движение,
      но достаточно, чтобы палец получил ответ. */
@@ -63,70 +63,70 @@
 }
 
 .btn--primary {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-2);
+  border-color: var(--accent-2);
   color: #fff;
 
   &:hover:not(:disabled) {
-    background: var(--accent-strong);
-    border-color: var(--accent-strong);
+    background: var(--accent-2);
+    border-color: var(--accent-2);
   }
 }
 
 .btn--danger {
-  background: var(--red-soft);
-  border-color: var(--red-line);
-  color: var(--red);
+  background: var(--loss-wash);
+  border-color: var(--loss-line);
+  color: var(--loss);
 
   &:hover:not(:disabled) {
-    background: var(--red-soft);
-    border-color: var(--red);
+    background: var(--loss-wash);
+    border-color: var(--loss);
   }
 }
 
 /* Тон стороны сделки — только на действии, которое эту сторону открывает. */
 .btn--long {
-  background: var(--green-soft);
-  border-color: var(--green-line);
-  color: var(--green);
+  background: var(--gain-wash);
+  border-color: var(--gain-line);
+  color: var(--gain);
 
   &:hover:not(:disabled) {
-    background: var(--green-soft);
-    border-color: var(--green);
+    background: var(--gain-wash);
+    border-color: var(--gain);
   }
 }
 .btn--short {
-  background: var(--red-soft);
-  border-color: var(--red-line);
-  color: var(--red);
+  background: var(--loss-wash);
+  border-color: var(--loss-line);
+  color: var(--loss);
 
   &:hover:not(:disabled) {
-    background: var(--red-soft);
-    border-color: var(--red);
+    background: var(--loss-wash);
+    border-color: var(--loss);
   }
 }
 
 .btn--ghost {
   background: transparent;
   border-color: transparent;
-  color: var(--text-secondary);
+  color: var(--ink-2);
 
   &:hover:not(:disabled) {
-    background: var(--canvas-subtle);
+    background: var(--panel-sunk);
     border-color: transparent;
-    color: var(--text-primary);
+    color: var(--ink);
   }
 }
 
 .btn--sm {
   min-height: var(--ctl-h-sm);
-  padding: 0 var(--sp-2);
-  font-size: var(--fs-label);
+  padding: 0 var(--space-2);
+  font-size: var(--text-label);
 }
 .btn--lg {
   min-height: var(--ctl-h-lg);
-  padding: 0 var(--sp-4);
-  font-size: var(--fs-base);
+  padding: 0 var(--space-4);
+  font-size: var(--text-base);
 }
 
 /* Полоса действия — главное действие карточки или диалога, во всю ширину
@@ -135,11 +135,11 @@
 .btn--cta {
   width: 100%;
   min-height: 52px;
-  padding: 0 var(--sp-4);
+  padding: 0 var(--space-4);
   border-radius: var(--radius-lg);
-  font-size: var(--fs-lead);
+  font-size: var(--text-lead);
   font-weight: 700;
-  gap: var(--sp-2);
+  gap: var(--space-2);
 
   .icon {
     width: 20px;
@@ -166,38 +166,38 @@
 /* Числа в кнопке (счётчики, «60/60») — моно, иначе ширина кнопки гуляет,
    пока счётчик тикает. */
 .btn__num {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   font-weight: 500;
 }
 
 /* ── Поле ввода ────────────────────────────────────────────────────── */
 .field {
   min-height: var(--ctl-h);
-  padding: 0 var(--sp-3);
-  border: 1px solid var(--border);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--rule);
   border-radius: var(--radius-sm);
-  background: var(--canvas-subtle);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: var(--fs-small);
+  background: var(--panel-sunk);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: var(--text-small);
   transition:
     border-color var(--dur-fast) var(--ease-out),
     background var(--dur-fast) var(--ease-out);
 
   &::placeholder {
-    color: var(--text-faint);
+    color: var(--ink-3);
   }
   &:focus {
     outline: none;
-    border-color: var(--accent-line);
-    background: var(--card-bg);
+    border-color: var(--accent-2);
+    background: var(--panel);
   }
   /* Тикеры монет — моно и капсом: так «SOL» и «WIF» одной ширины и
      совпадают с тем, как монета набрана в таблице. */
   &--ticker {
-    font-family: var(--font-mono);
+    font-family: var(--mono);
     text-transform: uppercase;
     letter-spacing: 0.04em;
 
@@ -206,7 +206,7 @@
     &::placeholder {
       text-transform: none;
       letter-spacing: 0;
-      font-family: var(--font-sans);
+      font-family: var(--sans);
     }
   }
 }
@@ -214,8 +214,8 @@
 /* Компактное поле: фильтр или ввод одного слова в ряду чипов. */
 .field--sm {
   min-height: var(--ctl-h-sm);
-  padding: 0 var(--sp-2);
-  font-size: var(--fs-micro);
+  padding: 0 var(--space-2);
+  font-size: var(--text-micro);
 }
 
 /* Крупное поле формы: там, где поле — главный элемент строки, а не фильтр в
@@ -223,7 +223,7 @@
 .field--lg {
   min-height: var(--ctl-h-lg);
   padding: 10px 12px;
-  font-size: var(--fs-base);
+  font-size: var(--text-base);
 }
 
 /* Многострочное поле. Тянуть можно только по высоте: горизонтальный resize
@@ -249,31 +249,31 @@ textarea.field {
   align-items: center;
   gap: 4px;
   padding: 1px 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule);
   border-radius: var(--radius-pill);
-  background: var(--canvas-subtle);
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
+  background: var(--panel-sunk);
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: var(--text-micro);
   font-weight: 700;
   letter-spacing: var(--ls-wide);
   text-transform: uppercase;
   white-space: nowrap;
 
   &--long {
-    background: var(--green-soft);
-    border-color: var(--green-line);
-    color: var(--green);
+    background: var(--gain-wash);
+    border-color: var(--gain-line);
+    color: var(--gain);
   }
   &--short {
-    background: var(--red-soft);
-    border-color: var(--red-line);
-    color: var(--red);
+    background: var(--loss-wash);
+    border-color: var(--loss-line);
+    color: var(--loss);
   }
   &--accent {
-    background: var(--accent-soft);
-    border-color: var(--accent-line);
-    color: var(--accent);
+    background: var(--wash);
+    border-color: var(--accent-2);
+    color: var(--accent-2);
   }
 }
 
@@ -285,27 +285,27 @@ textarea.field {
   align-items: center;
   gap: 3px;
   padding: 2px 4px 2px 8px;
-  border: 1px solid var(--border-muted);
+  border: 1px solid var(--rule-soft);
   border-radius: var(--radius-sm);
-  background: var(--canvas-subtle);
-  color: var(--text-secondary);
-  font-size: var(--fs-micro);
+  background: var(--panel-sunk);
+  color: var(--ink-2);
+  font-size: var(--text-micro);
   white-space: nowrap;
 
   &--mono {
-    font-family: var(--font-mono);
+    font-family: var(--mono);
   }
 }
 .chip__sub {
   font-style: normal;
-  color: var(--text-faint);
+  color: var(--ink-3);
 }
 .chip__x.btn {
   width: 16px;
   min-height: 16px;
   padding: 0;
   border-radius: 3px;
-  color: var(--text-faint);
+  color: var(--ink-3);
 
   .icon {
     width: 12px;
@@ -320,23 +320,23 @@ textarea.field {
   box-sizing: border-box;
   margin-top: 8px;
   padding: 10px 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule);
   border-radius: 10px;
-  background: var(--card-bg-elev);
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: var(--fs-h3);
+  background: var(--panel-raised);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: var(--text-h3);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   outline: none;
 
   &::placeholder {
-    color: var(--text-faint);
+    color: var(--ink-3);
     font-weight: 400;
   }
   &:focus {
-    border-color: var(--accent-line);
+    border-color: var(--accent-2);
   }
 }
 
@@ -356,18 +356,18 @@ textarea.field {
   padding: 5px;
   overflow-y: auto;
   list-style: none;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule);
   border-radius: 11px;
-  background: var(--card-bg-elev);
-  box-shadow: var(--shadow);
+  background: var(--panel-raised);
+  box-shadow: var(--shadow-lift);
   animation: combo-in 140ms ease-out;
 }
 .combo__item {
   padding: 9px 11px;
   border-radius: 8px;
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--fs-base);
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: var(--text-base);
   font-weight: 600;
   margin-bottom: 1px;
   letter-spacing: 0.03em;
@@ -375,8 +375,8 @@ textarea.field {
 
   &:hover,
   &.is-on {
-    background: var(--accent-soft);
-    color: var(--accent);
+    background: var(--wash);
+    color: var(--accent-2);
   }
 }
 @keyframes combo-in {
@@ -400,9 +400,9 @@ textarea.field {
 .tt-chip {
   padding: 2px 8px;
   border-radius: 6px;
-  background: var(--card-bg-elev);
-  color: var(--text-muted);
-  font-size: var(--fs-micro);
+  background: var(--panel-raised);
+  color: var(--ink-3);
+  font-size: var(--text-micro);
   font-weight: 600;
 }
 
@@ -412,19 +412,19 @@ textarea.field {
   align-items: center;
   gap: 2px;
   padding: 2px;
-  border: 1px solid var(--border-muted);
+  border: 1px solid var(--rule-soft);
   border-radius: var(--radius-sm);
-  background: var(--canvas-subtle);
+  background: var(--panel-sunk);
 }
 .seg__btn {
   min-height: var(--ctl-h-sm);
-  padding: 0 var(--sp-2);
+  padding: 0 var(--space-2);
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-  font-size: var(--fs-small);
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: var(--text-small);
   font-weight: 500;
   cursor: pointer;
   transition:
@@ -432,14 +432,14 @@ textarea.field {
     color var(--dur-fast) var(--ease-out);
 
   &:hover {
-    color: var(--text-primary);
+    color: var(--ink);
   }
   /* Выбранный сегмент поднимается на фон карточки — «этот лист сверху».
      Рамки нет намеренно: она бы прибавила элементу 2px и сдвинула соседей. */
   &.active {
-    background: var(--card-bg);
-    color: var(--text-primary);
-    box-shadow: var(--shadow-sm);
+    background: var(--panel);
+    color: var(--ink);
+    box-shadow: var(--shadow);
   }
 }
 
@@ -447,51 +447,51 @@ textarea.field {
    ТОЛЬКО текст — фон «поднятого листа» у выбранного и так есть, а цветная
    плитка внутри плитки читается статусом. */
 .seg__btn--long.is-on {
-  color: var(--green);
+  color: var(--gain);
 }
 .seg__btn--short.is-on {
-  color: var(--red);
+  color: var(--loss);
 }
 /* «вбок» — третий ответ разметки в журнале (up / range / down). */
 .seg__btn--flat.is-on {
-  color: var(--warn);
+  color: var(--caution);
 }
 
 /* Широкий сегмент — выбор стороны сделки в диалогах: тот же .seg, но во всю
    ширину, выбранный красится тоном стороны. */
 .seg--wide {
   display: flex;
-  gap: var(--sp-1);
+  gap: var(--space-1);
   width: 100%;
   padding: 4px;
   border: 0;
   border-radius: 12px;
-  background: var(--canvas-inset);
+  background: var(--panel-sunk);
 
   .seg__btn {
     flex: 1;
     min-height: 36px;
     border-radius: 9px;
-    font-family: var(--font-sans);
-    font-size: var(--fs-base);
+    font-family: var(--sans);
+    font-size: var(--text-base);
     font-weight: 600;
   }
   .seg__btn.is-on {
-    background: var(--card-bg-elev);
-    color: var(--text-primary);
-    box-shadow: var(--shadow-sm);
+    background: var(--panel-raised);
+    color: var(--ink);
+    box-shadow: var(--shadow);
   }
   .seg__btn--long.is-on {
-    background: var(--green-soft);
-    color: var(--green);
+    background: var(--gain-wash);
+    color: var(--gain);
   }
   .seg__btn--short.is-on {
-    background: var(--red-soft);
-    color: var(--red);
+    background: var(--loss-wash);
+    color: var(--loss);
   }
   .seg__btn--flat.is-on {
-    background: var(--warn-soft);
-    color: var(--warn);
+    background: var(--caution-wash);
+    color: var(--caution);
   }
 }
 
@@ -507,10 +507,10 @@ textarea.field {
   appearance: none;
   background: linear-gradient(
     to right,
-    var(--accent) 0%,
-    var(--accent) var(--fill, 0%),
-    var(--border) var(--fill, 0%),
-    var(--border) 100%
+    var(--accent-2) 0%,
+    var(--accent-2) var(--fill, 0%),
+    var(--rule) var(--fill, 0%),
+    var(--rule) 100%
   );
   outline: none;
   cursor: pointer;
@@ -519,9 +519,9 @@ textarea.field {
     appearance: none;
     width: 16px;
     height: 16px;
-    border: 2px solid var(--card-bg-elev);
+    border: 2px solid var(--panel-raised);
     border-radius: 50%;
-    background: var(--accent);
+    background: var(--accent-2);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
     transition: transform 0.12s var(--ease);
   }
@@ -531,9 +531,9 @@ textarea.field {
   &::-moz-range-thumb {
     width: 16px;
     height: 16px;
-    border: 2px solid var(--card-bg-elev);
+    border: 2px solid var(--panel-raised);
     border-radius: 50%;
-    background: var(--accent);
+    background: var(--accent-2);
   }
 }
 
@@ -542,7 +542,7 @@ textarea.field {
 .field:focus-visible,
 .slider:focus-visible,
 .seg__btn:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent-2);
   outline-offset: 2px;
 }
 

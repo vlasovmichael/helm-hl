@@ -28,11 +28,11 @@ const gapTone = (g) => (g <= 5 ? "calib-up" : g <= 10 ? "calib-warn" : "calib-do
 // и цвет создавал бы видимость знания.
 function cellTone(g) {
   const sure = Math.abs(expect(g)) > g.ci;
-  if (!sure) return { bg: "var(--canvas-subtle)", fg: "var(--text-faint)" };
+  if (!sure) return { bg: "var(--panel-sunk)", fg: "var(--ink-3)" };
   const k = Math.min(Math.abs(expect(g)) / 12, 1);
   return expect(g) > 0
-    ? { bg: `rgba(46,160,67,${(0.1 + k * 0.35).toFixed(2)})`, fg: "var(--green)" }
-    : { bg: `rgba(248,81,73,${(0.07 + k * 0.28).toFixed(2)})`, fg: "var(--red)" };
+    ? { bg: `rgba(46,160,67,${(0.1 + k * 0.35).toFixed(2)})`, fg: "var(--gain)" }
+    : { bg: `rgba(248,81,73,${(0.07 + k * 0.28).toFixed(2)})`, fg: "var(--loss)" };
 }
 
 function rankTable() {

@@ -175,11 +175,11 @@ function renderRail(price, lo, hi, cur) {
   G("legLow").textContent = "$" + fmtPx(lo); G("legHigh").textContent = "$" + fmtPx(hi);
   const rawPct = ((price - lo) / span) * 100;
   let read, col;
-  if (rawPct < 22) { read = "at the range floor"; col = "var(--red)"; }
-  else if (rawPct < 42) { read = "below the middle"; col = "var(--text-secondary)"; }
-  else if (rawPct < 58) { read = "middle of the range"; col = "var(--text-secondary)"; }
-  else if (rawPct < 78) { read = "above the middle"; col = "var(--text-secondary)"; }
-  else { read = "at the range ceiling"; col = "var(--green)"; }
+  if (rawPct < 22) { read = "at the range floor"; col = "var(--loss)"; }
+  else if (rawPct < 42) { read = "below the middle"; col = "var(--ink-2)"; }
+  else if (rawPct < 58) { read = "middle of the range"; col = "var(--ink-2)"; }
+  else if (rawPct < 78) { read = "above the middle"; col = "var(--ink-2)"; }
+  else { read = "at the range ceiling"; col = "var(--gain)"; }
   const r = G("rangeRead"); r.textContent = read; r.style.color = col;
 }
 function renderVsBtc(dchg, btcd) {

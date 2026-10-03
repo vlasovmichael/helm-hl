@@ -18,7 +18,7 @@
 // Отступ сверху — здесь, а не в .btn--cta: полоса используется и там, где она
 // первая в блоке. Без него кнопка лежала вплотную к карточке позиции.
 #tt-trade-btn {
-  margin-top: var(--sp-3);
+  margin-top: var(--space-3);
 }
 
 // ── Шапка карточки ручной позиции: бейдж + #COIN + сторона + Close ──
@@ -30,7 +30,7 @@
 .mcard {
   margin-top: 0.75rem;
   padding: 0.75rem;
-  border: 1px dashed var(--border);
+  border: 1px dashed var(--rule);
   border-radius: 8px;
 }
 
@@ -48,8 +48,8 @@
   border: 1px solid rgba(234, 179, 8, 0.3);
   padding: 2px 8px;
   border-radius: 6px;
-  font-size: var(--fs-label);
-  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-family: var(--mono);
   font-weight: 700;
   // Бейдж переносится по «·», а не вылезает за карточку на узком экране.
   white-space: normal;
@@ -83,17 +83,17 @@
 //  · ИСЧЕЗАЮЩИЙ ТЕКСТ. Сплошная заливка с инвертированным текстом конфликтовала
 //    с ховером. Инверсия осталась ровно в одном месте — «Sure?».
 .pos-close-btn {
-  --tint: var(--text-muted);
+  --tint: var(--ink-3);
   --fill: 0%;
 
   margin-left: auto;
   padding: 4px 14px;
   border: 1px solid color-mix(in srgb, var(--tint) 40%, transparent);
   border-radius: 7px;
-  background: color-mix(in srgb, var(--tint) var(--fill), var(--canvas-inset));
+  background: color-mix(in srgb, var(--tint) var(--fill), var(--panel-sunk));
   color: var(--tint);
-  font-family: var(--font-mono);
-  font-size: var(--fs-label);
+  font-family: var(--mono);
+  font-size: var(--text-label);
   font-weight: 600;
   letter-spacing: 0.03em;
   cursor: pointer;
@@ -104,8 +104,8 @@
   &:hover:not(:disabled) { --fill: 32%; }
   &:disabled { opacity: 0.65; cursor: default; }
 
-  &.is-pos { --tint: var(--green); }
-  &.is-neg { --tint: var(--red); }
+  &.is-pos { --tint: var(--gain); }
+  &.is-neg { --tint: var(--loss); }
 
   &.is-l1 { --fill: 8%; }
   &.is-l2 { --fill: 15%; }
@@ -120,7 +120,7 @@
   // Взвод перебивает окраску по R: это уже не индикатор прибыли, а
   // предупреждение о необратимом действии. Единственная сплошная заливка.
   &.is-armed {
-    --tint: var(--red);
+    --tint: var(--loss);
     --fill: 100%;
     border-color: var(--tint);
     color: #fff;
@@ -128,7 +128,7 @@
   &.is-armed:hover:not(:disabled) { --fill: 100%; }
 
   &.is-failed {
-    --tint: var(--red);
+    --tint: var(--loss);
     --fill: 14%;
   }
   &.is-failed:hover:not(:disabled) { --fill: 24%; }
@@ -152,17 +152,17 @@
     right: 12px;
     z-index: 2;
     margin-left: 0;
-    color: var(--text-faint);
+    color: var(--ink-3);
   }
 }
 
 .tt-panel__body { padding: 14px 18px 18px; }
 .tt-panel__title {
   margin: 6px 0 16px;
-  font-size: var(--fs-lead);
+  font-size: var(--text-lead);
   font-weight: 700;
   text-align: center;
-  color: var(--text-primary);
+  color: var(--ink);
 }
 
 // ── Вкладки Открыть / Закрыть ──
@@ -171,23 +171,23 @@
   gap: 20px;
   justify-content: center;
   margin-top: 8px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--rule);
 }
 .tt-tab {
   position: relative;
   padding: 8px 2px 10px;
   border: none;
   background: none;
-  color: var(--text-muted);
+  color: var(--ink-3);
   font-family: inherit;
-  font-size: var(--fs-body);
+  font-size: var(--text-body);
   font-weight: 600;
   cursor: pointer;
   transition: color 0.15s var(--ease);
 
-  &:hover { color: var(--text-secondary); }
+  &:hover { color: var(--ink-2); }
   &.is-on {
-    color: var(--text-primary);
+    color: var(--ink);
 
     &::after {
       content: "";
@@ -197,7 +197,7 @@
       bottom: -1px;
       height: 2px;
       border-radius: 2px 2px 0 0;
-      background: var(--accent);
+      background: var(--accent-2);
       animation: tt-underline 220ms cubic-bezier(0.22, 1, 0.36, 1);
     }
   }
@@ -208,9 +208,9 @@
   margin-left: 5px;
   padding: 0 4px;
   border-radius: 8px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: var(--fs-micro);
+  background: var(--wash);
+  color: var(--accent-2);
+  font-size: var(--text-micro);
   font-style: normal;
   font-weight: 700;
   line-height: 16px;
@@ -248,7 +248,7 @@
 .tt-rows {
   margin-bottom: 10px;
   padding: 4px 14px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule);
   border-radius: 14px;
 }
 .tt-rows--tight { margin: 10px 0; }
@@ -259,49 +259,49 @@
   gap: 12px;
   padding: 10px 0;
 
-  & + & { border-top: 1px solid var(--border); }
+  & + & { border-top: 1px solid var(--rule); }
 
   > span {
-    font-size: var(--fs-body);
-    color: var(--text-muted);
+    font-size: var(--text-body);
+    color: var(--ink-3);
   }
   > b {
-    font-family: var(--font-mono);
-    font-size: var(--fs-body);
+    font-family: var(--mono);
+    font-size: var(--text-body);
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--ink);
     text-align: right;
 
-    &.is-risk { color: var(--red); }
+    &.is-risk { color: var(--loss); }
   }
-  &--bad > b { color: var(--red); }
+  &--bad > b { color: var(--loss); }
 }
 .tt-row__by {
   margin-left: 5px;
   padding: 1px 5px;
   border-radius: 5px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-size: var(--fs-micro);
+  background: var(--wash);
+  color: var(--accent-2);
+  font-size: var(--text-micro);
   font-style: normal;
   font-weight: 600;
 }
 .tt-row__sub {
   font-style: normal;
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   font-weight: 400;
-  color: var(--text-faint);
+  color: var(--ink-3);
 }
 .tt-row__toggle {
   border: none;
   background: none;
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: var(--fs-body);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: var(--text-body);
   font-weight: 700;
   cursor: pointer;
 
-  i { font-style: normal; color: var(--accent); }
+  i { font-style: normal; color: var(--accent-2); }
   &:hover i { opacity: 0.7; }
 }
 // Строка-приклейка под полем лимитки («use current»). Логически это часть той
@@ -313,11 +313,11 @@
   border-top: none;
 
   .tt-row__toggle {
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
     font-weight: 600;
-    color: var(--text-muted);
+    color: var(--ink-3);
 
-    b { color: var(--accent); font-weight: 700; }
+    b { color: var(--accent-2); font-weight: 700; }
     &:hover b { opacity: 0.7; }
     &:disabled { opacity: 0.4; cursor: default; }
   }
@@ -326,16 +326,16 @@
 .tt-row__input {
   width: 130px;
   padding: 6px 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule);
   border-radius: 8px;
-  background: var(--canvas-inset);
-  color: var(--text-primary);
-  font-family: var(--font-mono);
-  font-size: var(--fs-body);
+  background: var(--panel-sunk);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: var(--text-body);
   text-align: right;
   outline: none;
 
-  &:focus { border-color: var(--accent-line); }
+  &:focus { border-color: var(--accent-2); }
 }
 
 // ── Позиции во вкладке «Закрыть» ──
@@ -343,7 +343,7 @@
   & + & {
     margin-top: 16px;
     padding-top: 16px;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--rule);
   }
 }
 .tt-pos__head {
@@ -352,28 +352,28 @@
   gap: 8px;
 }
 .tt-pos__coin {
-  font-family: var(--font-mono);
-  font-size: var(--fs-lead);
+  font-family: var(--mono);
+  font-size: var(--text-lead);
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--ink);
 }
 .tt-pos__side {
   padding: 2px 7px;
   border-radius: 6px;
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   font-weight: 700;
 
-  &--short { background: var(--red-soft); color: var(--red); }
-  &--long { background: var(--green-soft); color: var(--green); }
+  &--short { background: var(--loss-wash); color: var(--loss); }
+  &--long { background: var(--gain-wash); color: var(--gain); }
 }
 .tt-pos__pnl {
   margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: var(--fs-h3);
+  font-family: var(--mono);
+  font-size: var(--text-h3);
   font-weight: 700;
 
-  &.is-up { color: var(--green); }
-  &.is-down { color: var(--red); }
+  &.is-up { color: var(--gain); }
+  &.is-down { color: var(--loss); }
 }
 
 // ── Блокеры / предупреждения / ответы биржи ──
@@ -381,15 +381,15 @@
 .tt-warnings {
   margin: 0 0 10px;
   padding: 0 0 0 16px;
-  font-size: var(--fs-label);
+  font-size: var(--text-label);
   line-height: 1.55;
 }
-.tt-blockers { color: var(--text-muted); list-style: "· "; }
+.tt-blockers { color: var(--ink-3); list-style: "· "; }
 // 🚨 Глифа в list-style тут больше нет: ⚠ рисуется ТЕКСТОВЫМ шрифтом, поэтому
 // в одном ряду с lucide-иконками он другого веса и другой высоты (а в части
 // шрифтов приезжает цветным эмодзи мимо темы). Иконку несёт сама строка.
 .tt-warnings {
-  color: var(--red);
+  color: var(--loss);
   list-style: none;
   padding-left: 0;
 
@@ -406,23 +406,23 @@
   margin-bottom: 10px;
   padding: 9px 11px;
   border-radius: 10px;
-  font-size: var(--fs-label);
+  font-size: var(--text-label);
   line-height: 1.5;
   animation: tt-view-in 200ms ease-out;
 
-  &--err { border: 1px solid var(--red-line); background: var(--red-soft); color: var(--red); }
-  &--ok { border: 1px solid var(--green-line); background: var(--green-soft); color: var(--green); }
+  &--err { border: 1px solid var(--loss-line); background: var(--loss-wash); color: var(--loss); }
+  &--ok { border: 1px solid var(--gain-line); background: var(--gain-wash); color: var(--gain); }
 }
 .tt-empty {
   padding: 28px 16px;
-  border: 1px dashed var(--border);
+  border: 1px dashed var(--rule);
   border-radius: 14px;
-  font-size: var(--fs-body);
+  font-size: var(--text-body);
   line-height: 1.6;
-  color: var(--text-muted);
+  color: var(--ink-3);
   text-align: center;
 
-  span { font-size: var(--fs-label); color: var(--text-faint); }
+  span { font-size: var(--text-label); color: var(--ink-3); }
 }
 
 // Кнопка «Open Long/Short» — общий .btn.btn--cta с тоном стороны
@@ -430,9 +430,9 @@
 
 .tt-foot {
   margin-top: 10px;
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   line-height: 1.45;
-  color: var(--text-faint);
+  color: var(--ink-3);
   text-align: center;
 }
 

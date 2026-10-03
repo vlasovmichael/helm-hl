@@ -6,8 +6,8 @@
   gap: 8px;
   padding: 6px 8px;
   border-radius: 6px;
-  font-size: var(--fs-label);
-  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  font-family: var(--mono);
 
   & + .near-miss-row {
     margin-top: 2px;
@@ -20,10 +20,10 @@
   font-weight: 700;
 }
 .near-miss-side-long {
-  color: var(--green, #22c55e);
+  color: var(--gain, #22c55e);
 }
 .near-miss-side-short {
-  color: var(--red, #ef4444);
+  color: var(--loss, #ef4444);
 }
 .near-miss-reason {
   display: inline-block;
@@ -32,20 +32,20 @@
   background: rgba(234, 179, 8, 0.1);
   color: var(--yellow, #eab308);
   border: 1px solid rgba(234, 179, 8, 0.25);
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 .near-miss-detail {
-  color: var(--text-muted, #888);
+  color: var(--ink-3, #888);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .near-miss-age {
-  color: var(--text-muted, #888);
-  font-size: var(--fs-micro);
+  color: var(--ink-3, #888);
+  font-size: var(--text-micro);
 }
 .bans-strip {
   margin-bottom: 6px;

@@ -5,8 +5,8 @@
 @use "../core/breakpoints" as *;
 
 .mp-lead {
-  font-size: var(--fs-small);
-  color: var(--text-muted);
+  font-size: var(--text-small);
+  color: var(--ink-3);
   line-height: 1.45;
   margin-bottom: 14px;
 }
@@ -14,8 +14,8 @@
 /* Выбор стороны — общий сегмент (.seg.seg--wide, core/_controls.scss). */
 .mp-err {
   margin: 6px 0;
-  font-size: var(--fs-small);
-  color: var(--red);
+  font-size: var(--text-small);
+  color: var(--loss);
 
   &[hidden] { display: none; }
 }
@@ -27,7 +27,7 @@
 // ── Paper positions block inside the Active Position card ──
 .mp-active {
   margin-top: 10px;
-  border-top: 1px dashed var(--border);
+  border-top: 1px dashed var(--rule);
   padding-top: 10px;
 }
 .mp-active-head {
@@ -36,17 +36,17 @@
   justify-content: space-between;
   gap: 8px;
   margin: 0 0 6px;
-  font-size: var(--fs-label);
+  font-size: var(--text-label);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 .mp-active-meta {
   font-weight: 400;
   text-transform: none;
   letter-spacing: 0;
-  color: var(--text-muted, var(--text-secondary));
+  color: var(--ink-3, var(--ink-2));
 }
 // Таблица активных бумажных поз — общий `.table` (core/_table.scss),
 // включая окраску чисел по знаку.
@@ -54,14 +54,14 @@
 // ── management card bits ──
 .mp-roe {
   display: block;
-  font-size: var(--fs-label);
+  font-size: var(--text-label);
   opacity: 0.8;
 }
 .mp-sub {
   display: block;
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   font-weight: 400;
-  color: var(--text-muted, var(--text-secondary));
+  color: var(--ink-3, var(--ink-2));
   opacity: 0.85;
 }
 /* Close на строке позиции — общий .btn.btn--danger: выход необратим, роль
@@ -82,32 +82,32 @@
   flex-direction: column;
   gap: 2px;
   padding: 8px 10px;
-  border: 1px solid var(--border-muted);
+  border: 1px solid var(--rule-soft);
   border-radius: 6px;
-  background: var(--canvas-subtle);
+  background: var(--panel-sunk);
 
   &:last-child { grid-column: 1 / -1; }
 }
 .mp-confirm-cell-label {
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: var(--text-muted);
+  color: var(--ink-3);
 }
 .mp-confirm-cell-value {
-  font-size: var(--fs-body);
+  font-size: var(--text-body);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
+  color: var(--ink);
 
-  &.num-pos { color: var(--green); }
-  &.num-neg { color: var(--red); }
+  &.num-pos { color: var(--gain); }
+  &.num-neg { color: var(--loss); }
 }
 .mp-confirm-actions {
   display: flex;
-  gap: var(--sp-2);
-  margin-top: var(--sp-3);
+  gap: var(--space-2);
+  margin-top: var(--space-3);
 
   /* Обе кнопки — общие .btn (ghost + danger). Здесь только «поровну по
      ширине»: в подтверждении необратимого действия «Keep it» не должна быть

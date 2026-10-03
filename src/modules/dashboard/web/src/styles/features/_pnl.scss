@@ -16,7 +16,7 @@
     gap: 0.25rem;
   }
   .pnl-hero-value {
-    font-family: var(--font-mono);
+    font-family: var(--mono);
     font-size: 2.1rem;
     font-weight: 700;
     letter-spacing: -0.02em;
@@ -24,16 +24,16 @@
     color: var(--text);
 
     &.positive {
-      color: var(--green);
+      color: var(--gain);
     }
     &.negative {
-      color: var(--red);
+      color: var(--loss);
     }
   }
   .pnl-hero-sub {
-    font-family: var(--font-mono);
+    font-family: var(--mono);
     font-size: 0.78rem;
-    color: var(--text-muted);
+    color: var(--ink-3);
     letter-spacing: 0.04em;
   }
   .pnl-hero-side {
@@ -43,7 +43,7 @@
   }
   .pnl-mini {
     background: var(--bg-elev);
-    border: 1px solid var(--border);
+    border: 1px solid var(--rule);
     border-radius: 8px;
     padding: 0.6rem 0.75rem;
     display: flex;
@@ -51,16 +51,16 @@
     gap: 0.25rem;
   }
   .pnl-mini-value {
-    font-family: var(--font-mono);
+    font-family: var(--mono);
     font-weight: 600;
     font-size: 0.95rem;
     color: var(--text);
 
     &.positive {
-      color: var(--green);
+      color: var(--gain);
     }
     &.negative {
-      color: var(--red);
+      color: var(--loss);
     }
   }
   .pnl-grid {
@@ -71,7 +71,7 @@
 
     .grid-item {
       background: var(--bg-elev);
-      border: 1px solid var(--border);
+      border: 1px solid var(--rule);
       border-radius: 8px;
       padding: 0.55rem 0.75rem;
     }
@@ -88,9 +88,9 @@
     align-items: center;
     padding: 0.45rem 0.75rem;
     background: var(--bg-elev);
-    border: 1px solid var(--border);
+    border: 1px solid var(--rule);
     border-radius: 8px;
-    font-family: var(--font-mono);
+    font-family: var(--mono);
     font-size: 0.82rem;
   }
   .strategy-name {
@@ -100,7 +100,7 @@
   }
   .strategy-bar {
     height: 6px;
-    background: var(--border);
+    background: var(--rule);
     border-radius: 3px;
     overflow: hidden;
     position: relative;
@@ -110,25 +110,25 @@
     top: 0;
     left: 0;
     bottom: 0;
-    background: var(--green);
+    background: var(--gain);
     border-radius: 3px;
 
     &.negative {
-      background: var(--red);
+      background: var(--loss);
     }
   }
   .strategy-pnl {
     color: var(--text);
 
     &.positive {
-      color: var(--green);
+      color: var(--gain);
     }
     &.negative {
-      color: var(--red);
+      color: var(--loss);
     }
   }
   .strategy-meta {
-    color: var(--text-muted);
+    color: var(--ink-3);
     font-size: 0.72rem;
   }
 
@@ -141,7 +141,7 @@
     margin-top: 0.6rem;
     padding: 0.45rem 0.75rem;
     background: var(--bg-elev);
-    border: 1px dashed var(--border);
+    border: 1px dashed var(--rule);
     border-radius: 8px;
   }
   .detector-label {
@@ -154,9 +154,9 @@
     color: var(--text);
   }
   .detector-stats {
-    font-family: var(--font-mono);
+    font-family: var(--mono);
     font-size: 0.74rem;
-    color: var(--text-muted);
+    color: var(--ink-3);
   }
 
   @include until($bp-md) {

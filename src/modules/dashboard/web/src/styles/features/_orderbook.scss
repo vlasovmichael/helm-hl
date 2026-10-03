@@ -16,27 +16,27 @@
   height: 8px;
   border-radius: 4px;
   overflow: hidden;
-  background: var(--canvas-subtle);
-  border: 1px solid var(--border);
+  background: var(--panel-sunk);
+  border: 1px solid var(--rule);
 }
 .orderbook-bid {
-  background: var(--green);
+  background: var(--gain);
   transition: flex-basis 0.4s ease;
   min-width: 0;
 }
 .orderbook-ask {
-  background: var(--red);
+  background: var(--loss);
   transition: flex-basis 0.4s ease;
   min-width: 0;
 }
 .orderbook-label {
-  font-family: var(--font-mono);
-  font-size: var(--fs-label);
-  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--text-label);
+  color: var(--ink-3);
   white-space: nowrap;
 
   @include until($bp-md) {
-    font-size: var(--fs-micro);
+    font-size: var(--text-micro);
   }
 }
 
@@ -54,8 +54,8 @@
 .toolkit-tile {
   display: block;
   padding: 14px 16px;
-  background: var(--card-bg, rgba(255, 255, 255, 0.02));
-  border: 1px solid var(--hairline);
+  background: var(--panel, rgba(255, 255, 255, 0.02));
+  border: 1px solid var(--rule-soft);
   border-radius: 10px;
   text-decoration: none;
   color: var(--text);
@@ -66,8 +66,8 @@
   position: relative;
 
   &:hover {
-    border-color: var(--accent);
-    background: var(--accent-soft);
+    border-color: var(--accent-2);
+    background: var(--wash);
     transform: translateY(-1px);
   }
   &__head {
@@ -77,26 +77,26 @@
     margin-bottom: 6px;
   }
   &__name {
-    font-size: var(--fs-base);
+    font-size: var(--text-base);
     font-weight: 700;
-    font-family: var(--font-sans);
+    font-family: var(--sans);
     letter-spacing: 0.01em;
 
     &::after {
       @include mask-icon("arrow-up-right", 12px);
-      color: var(--text-muted);
+      color: var(--ink-3);
       margin-left: 4px;
     }
   }
   &__sub {
-    font-size: var(--fs-small);
-    color: var(--text-muted);
-    font-family: var(--font-mono);
+    font-size: var(--text-small);
+    color: var(--ink-3);
+    font-family: var(--mono);
     margin-bottom: 8px;
   }
   &__tag {
-    font-size: var(--fs-label);
-    color: var(--accent);
+    font-size: var(--text-label);
+    color: var(--accent-2);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     font-weight: 600;

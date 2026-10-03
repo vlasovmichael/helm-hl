@@ -69,9 +69,9 @@ const px = (n) => {
 function themeColors() {
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
   return {
-    text: cssVar("--text-secondary") || (isDark ? "#71717A" : "#52525B"),
-    grid: cssVar("--hairline") || cssVar("--grid-line") || (isDark ? "#1F1F23" : "#E4E4E7"),
-    bg: cssVar("--card-bg") || (isDark ? "#131316" : "#FFFFFF"),
+    text: cssVar("--ink-2") || (isDark ? "#71717A" : "#52525B"),
+    grid: cssVar("--rule-soft") || cssVar("--plot-grid") || (isDark ? "#1F1F23" : "#E4E4E7"),
+    bg: cssVar("--panel") || (isDark ? "#131316" : "#FFFFFF"),
   };
 }
 
@@ -160,7 +160,7 @@ export async function drawOiChart(points) {
       layout: {
         background: { type: "solid", color: c.bg },
         textColor: c.text,
-        fontFamily: cssVar("--font-mono") || "JetBrains Mono, monospace",
+        fontFamily: cssVar("--mono") || "JetBrains Mono, monospace",
         fontSize: 11,
         // Логотип TradingView садится поверх линий в левом нижнем углу.
         attributionLogo: false,

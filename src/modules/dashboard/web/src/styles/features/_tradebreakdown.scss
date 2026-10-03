@@ -3,16 +3,16 @@
 // ─────────────────────────────────────────────────
 
 .mytrades-period {
-  font-family: var(--font-mono);
-  font-size: var(--fs-small);
+  font-family: var(--mono);
+  font-size: var(--text-small);
   font-weight: 500;
   line-height: 1;
-  color: var(--text-muted);
+  color: var(--ink-3);
 }
 
 .mytrades-body {
-  .positive { color: var(--green); }
-  .negative { color: var(--red); }
+  .positive { color: var(--gain); }
+  .negative { color: var(--loss); }
 }
 
 // ── Хедлайн-метрики ──
@@ -27,41 +27,41 @@
   flex-direction: column;
   gap: 4px;
   padding: 12px 14px;
-  background: var(--card-bg-elev);
-  border: 1px solid var(--border-muted);
+  background: var(--panel-raised);
+  border: 1px solid var(--rule-soft);
   border-radius: 10px;
 }
 .mt-hl-label {
-  font-family: var(--font-sans);
-  font-size: var(--fs-label);
+  font-family: var(--sans);
+  font-size: var(--text-label);
   font-weight: 500;
   line-height: 1;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-muted);
+  color: var(--ink-3);
 }
 .mt-hl-value {
-  font-family: var(--font-mono);
-  font-size: var(--fs-h2);
+  font-family: var(--mono);
+  font-size: var(--text-h2);
   font-weight: 700;
   line-height: 1;
-  color: var(--text-primary);
+  color: var(--ink);
 }
 
 // ── Плашка про комиссии ──
 .mt-fee-note {
-  font-family: var(--font-sans);
-  font-size: var(--fs-body);
+  font-family: var(--sans);
+  font-size: var(--text-body);
   font-weight: 500;
   line-height: 1.5;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   padding: 10px 12px;
   border-radius: 8px;
-  background: var(--card-bg-elev);
+  background: var(--panel-raised);
   margin-bottom: 14px;
-  b { color: var(--text-primary); font-weight: 700; }
+  b { color: var(--ink); font-weight: 700; }
   .mt-flag {
-    color: var(--red);
+    color: var(--loss);
     font-weight: 600;
     margin-left: 4px;
   }
@@ -73,25 +73,25 @@
 .mt-table {
   .mt-strong td {
     font-weight: 700;
-    background: var(--card-bg-elev);
+    background: var(--panel-raised);
   }
   .mt-empty {
-    color: var(--text-faint);
+    color: var(--ink-3);
   }
   // Подзаголовок секции внутри тела таблицы — не строка данных, поэтому без
   // нижней границы и тише кеглем.
   .mt-divider td {
     padding: 10px 10px 4px;
     border-bottom: none;
-    font-family: var(--font-sans);
-    font-size: var(--fs-micro);
+    font-family: var(--sans);
+    font-size: var(--text-micro);
     font-weight: 600;
     letter-spacing: var(--ls-wide);
     text-transform: uppercase;
-    color: var(--text-faint);
+    color: var(--ink-3);
   }
-  .positive { color: var(--green); }
-  .negative { color: var(--red); }
+  .positive { color: var(--gain); }
+  .negative { color: var(--loss); }
 }
 
 // ── Монеты-чипы ──
@@ -102,15 +102,15 @@
   margin-top: 16px;
 }
 .mt-coins-title {
-  font-family: var(--font-sans);
-  font-size: var(--fs-label);
+  font-family: var(--sans);
+  font-size: var(--text-label);
   font-weight: 600;
   line-height: 1;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-bottom: 8px;
-  &.positive { color: var(--green); }
-  &.negative { color: var(--red); }
+  &.positive { color: var(--gain); }
+  &.negative { color: var(--loss); }
 }
 .mt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .mt-chip {
@@ -119,39 +119,39 @@
   gap: 5px;
   padding: 4px 8px;
   border-radius: 7px;
-  background: var(--card-bg-elev);
-  border: 1px solid var(--border-muted);
-  font-family: var(--font-mono);
-  font-size: var(--fs-small);
+  background: var(--panel-raised);
+  border: 1px solid var(--rule-soft);
+  font-family: var(--mono);
+  font-size: var(--text-small);
   font-weight: 500;
   line-height: 1.2;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   b { font-weight: 700; }
-  i { font-style: normal; color: var(--text-faint); font-size: var(--fs-label); }
-  &.positive b { color: var(--green); }
-  &.negative b { color: var(--red); }
+  i { font-style: normal; color: var(--ink-3); font-size: var(--text-label); }
+  &.positive b { color: var(--gain); }
+  &.negative b { color: var(--loss); }
 }
 
 // ── Мои правила ──
 .mytrades-rules {
   margin-top: 20px;
   padding-top: 16px;
-  border-top: 1px dashed var(--border);
+  border-top: 1px dashed var(--rule);
 }
 .mt-rules-title {
-  font-family: var(--font-sans);
-  font-size: var(--fs-base);
+  font-family: var(--sans);
+  font-size: var(--text-base);
   font-weight: 700;
   line-height: 1.3;
-  color: var(--text-primary);
+  color: var(--ink);
   margin-bottom: 12px;
-  span { font-weight: 500; font-size: var(--fs-body); color: var(--text-muted); }
+  span { font-weight: 500; font-size: var(--text-body); color: var(--ink-3); }
 }
 .mt-rule {
   display: flex;
   gap: 12px;
   padding: 10px 0;
-  & + .mt-rule { border-top: 1px solid var(--border-muted); }
+  & + .mt-rule { border-top: 1px solid var(--rule-soft); }
 }
 .mt-rule-n {
   flex: 0 0 28px;
@@ -159,10 +159,10 @@
   display: grid;
   place-items: center;
   border-radius: 8px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  font-family: var(--font-mono);
-  font-size: var(--fs-base);
+  background: var(--wash);
+  color: var(--accent-2);
+  font-family: var(--mono);
+  font-size: var(--text-base);
   font-weight: 700;
   line-height: 1;
 }
@@ -171,30 +171,30 @@
   align-items: baseline;
   gap: 10px;
   flex-wrap: wrap;
-  font-family: var(--font-sans);
-  font-size: var(--fs-base);
+  font-family: var(--sans);
+  font-size: var(--text-base);
   font-weight: 700;
   line-height: 1.3;
-  color: var(--text-primary);
+  color: var(--ink);
   margin-bottom: 3px;
 }
 .mt-rule-metric {
-  font-family: var(--font-mono);
-  font-size: var(--fs-label);
+  font-family: var(--mono);
+  font-size: var(--text-label);
   font-weight: 600;
   line-height: 1;
-  color: var(--text-muted);
+  color: var(--ink-3);
   padding: 3px 7px;
   border-radius: 6px;
-  background: var(--card-bg-elev);
-  border: 1px solid var(--border-muted);
+  background: var(--panel-raised);
+  border: 1px solid var(--rule-soft);
 }
 .mt-rule-body {
-  font-family: var(--font-sans);
-  font-size: var(--fs-body);
+  font-family: var(--sans);
+  font-size: var(--text-body);
   font-weight: 400;
   line-height: 1.55;
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 
 /* .mt-empty-note снят — пустота и ошибка рисуются общим .empty. */

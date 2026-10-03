@@ -271,10 +271,10 @@ function panel() {
   el.id = "mock-panel";
   el.style.cssText =
     "position:fixed;right:12px;bottom:12px;z-index:9999;display:flex;flex-direction:column;gap:6px;" +
-    "background:var(--card-bg,#fff);border:1px solid var(--border,#ccc);border-radius:10px;padding:10px 12px;" +
+    "background:var(--panel,#fff);border:1px solid var(--rule,#ccc);border-radius:10px;padding:10px 12px;" +
     "font:12px/1.3 system-ui;box-shadow:0 6px 24px rgba(0,0,0,.18);min-width:180px";
   el.innerHTML =
-    '<b style="font-size: var(--fs-label);letter-spacing:.04em;opacity:.7">MOCK · UNI SHORT</b>' +
+    '<b style="font-size: var(--text-label);letter-spacing:.04em;opacity:.7">MOCK · UNI SHORT</b>' +
     '<div id="mock-stat" style="font-family:monospace"></div>' +
     `<button id="mock-auto" class="btn btn--sm">${icon("play")} auto tour</button>` +
     `<button id="mock-surge" class="btn btn--sm">${icon("falling")} sharp slide (surge)</button>` +
@@ -282,7 +282,7 @@ function panel() {
   document.body.appendChild(el);
   for (const b of el.querySelectorAll("button"))
     b.style.cssText =
-      "cursor:pointer;padding:6px 8px;border:1px solid var(--border,#ccc);border-radius:6px;background:var(--card-bg-elev,#f6f8fa)";
+      "cursor:pointer;padding:6px 8px;border:1px solid var(--rule,#ccc);border-radius:6px;background:var(--panel-raised,#f6f8fa)";
 
   let auto = false;
   const autoBtn = el.querySelector("#mock-auto");

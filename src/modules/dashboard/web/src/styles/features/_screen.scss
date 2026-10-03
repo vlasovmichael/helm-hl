@@ -17,9 +17,9 @@
 }
 
 .scr-meta {
-  font-size: var(--fs-label);
-  font-family: var(--font-mono);
-  color: var(--text-muted);
+  font-size: var(--text-label);
+  font-family: var(--mono);
+  color: var(--ink-3);
   white-space: nowrap;
 }
 
@@ -30,11 +30,11 @@
   gap: 6px 28px;
   padding: 10px 14px;
   margin: 0 0 12px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule);
   border-radius: var(--radius);
-  background: var(--card-bg-elev);
-  font-family: var(--font-mono);
-  font-size: var(--fs-small);
+  background: var(--panel-raised);
+  font-family: var(--mono);
+  font-size: var(--text-small);
   font-variant-numeric: tabular-nums;
 
   &:empty {
@@ -49,25 +49,25 @@
   }
 
   .scr-budget__label {
-    color: var(--text-muted);
+    color: var(--ink-3);
   }
 
   b {
-    color: var(--text-primary);
+    color: var(--ink);
     font-weight: 600;
 
     &.is-over {
-      color: var(--red);
+      color: var(--loss);
     }
   }
 
   .scr-budget__note {
     flex-basis: 100%;
-    color: var(--text-muted);
-    font-size: var(--fs-label);
+    color: var(--ink-3);
+    font-size: var(--text-label);
 
     &.is-over {
-      color: var(--red);
+      color: var(--loss);
     }
   }
 }
@@ -79,18 +79,18 @@
   height: 7px;
   margin-right: 3px;
   border-radius: 50%;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--rule-strong);
   background: transparent;
   vertical-align: middle;
 
   &.is-on {
-    background: var(--text-muted);
-    border-color: var(--text-muted);
+    background: var(--ink-3);
+    border-color: var(--ink-3);
   }
   /* Сверх дневного лимита — единственное место карточки, где мы повышаем голос. */
   &.is-over {
-    background: var(--red);
-    border-color: var(--red);
+    background: var(--loss);
+    border-color: var(--loss);
   }
 }
 
@@ -105,11 +105,11 @@
 
     &:hover,
     &:focus-visible {
-      background: var(--card-bg-elev);
+      background: var(--panel-raised);
       outline: none;
     }
     &:focus-visible {
-      box-shadow: inset 2px 0 0 var(--accent);
+      box-shadow: inset 2px 0 0 var(--accent-2);
     }
   }
 
@@ -119,13 +119,13 @@
     font-weight: 600;
 
     &.is-bad {
-      color: var(--red);
+      color: var(--loss);
     }
     &.is-good {
-      color: var(--green);
+      color: var(--gain);
     }
     &.scr-mine--none {
-      color: var(--text-muted);
+      color: var(--ink-3);
       font-weight: 400;
     }
   }
@@ -133,7 +133,7 @@
   width: 100%;
 
   .scr-coin {
-    font-family: var(--font-mono);
+    font-family: var(--mono);
     font-weight: 600;
     letter-spacing: 0.3px;
 
@@ -154,23 +154,23 @@
   }
 
   .up {
-    color: var(--green);
+    color: var(--gain);
   }
   .down {
-    color: var(--red);
+    color: var(--loss);
   }
 
   /* Подпись под числом: окно движения либо сам спред в бп. */
   .scr-win {
     display: block;
     font-style: normal;
-    font-size: var(--fs-micro);
-    color: var(--text-muted);
+    font-size: var(--text-micro);
+    color: var(--ink-3);
     line-height: 1.2;
   }
 
   .scr-vol {
-    color: var(--text-muted);
+    color: var(--ink-3);
   }
 
   /* Трение — главная колонка карточки. Пороги в frictionClass():
@@ -180,13 +180,13 @@
     font-weight: 600;
 
     &.scr-fr--ok {
-      color: var(--green);
+      color: var(--gain);
     }
     &.scr-fr--mid {
       color: var(--amber);
     }
     &.scr-fr--bad {
-      color: var(--red);
+      color: var(--loss);
     }
   }
 }
@@ -197,7 +197,7 @@
 .hm-tools {
   display: inline-flex;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--space-2);
 }
 
 /* ── Поиск по тикеру ─────────────────────────────────────────────────────
@@ -211,8 +211,8 @@
 
   input {
     width: 108px;
-    padding-left: calc(var(--sp-3) + 15px);
-    padding-right: calc(var(--sp-3) + 12px);
+    padding-left: calc(var(--space-3) + 15px);
+    padding-right: calc(var(--space-3) + 12px);
     transition:
       width var(--dur-slow) var(--ease-out),
       border-color var(--dur-fast) var(--ease-out),
@@ -230,14 +230,14 @@
 }
 .scr-search-icon {
   position: absolute;
-  left: var(--sp-2);
+  left: var(--space-2);
   display: inline-flex;
-  color: var(--text-faint);
+  color: var(--ink-3);
   pointer-events: none;
   transition: color var(--dur-fast) var(--ease-out);
 }
 .scr-search:focus-within .scr-search-icon {
-  color: var(--accent);
+  color: var(--accent-2);
 }
 .scr-search-clear {
   position: absolute;
@@ -247,9 +247,9 @@
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: var(--border);
-  color: var(--text-secondary);
-  font-size: var(--fs-micro);
+  background: var(--rule);
+  color: var(--ink-2);
+  font-size: var(--text-micro);
   line-height: 15px;
   cursor: pointer;
   opacity: 0;
@@ -275,7 +275,7 @@
   min-width: 118px;
 
   &--none {
-    color: var(--text-faint);
+    color: var(--ink-3);
   }
 }
 /* Число стоит СЛЕВА от полосы, а не поверх неё: на тёмной половине шкалы
@@ -283,7 +283,7 @@
 .scr-lsbar {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--space-2);
   margin: 3px 0;
 
   /* Дорожка. Красная — шорт, зелёная часть внутри — лонг. */
@@ -292,7 +292,7 @@
     flex: 1;
     height: 8px;
     border-radius: 2px;
-    background: color-mix(in srgb, var(--red) 30%, transparent);
+    background: color-mix(in srgb, var(--loss) 30%, transparent);
     overflow: hidden;
     font-style: normal;
   }
@@ -300,30 +300,30 @@
     position: absolute;
     inset: 0 auto 0 0;
     width: 0;
-    background: color-mix(in srgb, var(--green) 60%, transparent);
+    background: color-mix(in srgb, var(--gain) 60%, transparent);
     /* Полосы разъезжаются из нуля тем же жестом, что и прогресс в системе;
        конечная ширина приезжает инлайновой --w. */
     animation: scr-ls-grow 620ms var(--ease-out) both;
   }
   &.is-retail span {
-    background: color-mix(in srgb, var(--green) 34%, transparent);
+    background: color-mix(in srgb, var(--gain) 34%, transparent);
   }
   &.is-empty i {
-    background: var(--border-muted);
+    background: var(--rule-soft);
   }
 
   em {
     flex: 0 0 22px;
     font-style: normal;
-    font-family: var(--font-mono);
-    font-size: var(--fs-small);
+    font-family: var(--mono);
+    font-size: var(--text-small);
     text-align: right;
-    color: var(--text-primary);
+    color: var(--ink);
     font-variant-numeric: tabular-nums;
   }
   /* Розница — вторым планом: её доля справочная, ведёт верхняя строка. */
   &.is-retail em {
-    color: var(--text-secondary);
+    color: var(--ink-2);
   }
 }
 @keyframes scr-ls-grow {
@@ -340,7 +340,7 @@
   right: -2px;
   transform: translateY(-50%);
   color: var(--amber);
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
 }
 
 /* ── Профиль суток ───────────────────────────────────────────────────────
@@ -349,7 +349,7 @@
    ровно как строки таблицы въезжают стаггером. */
 .scr-hrs {
   &--none {
-    color: var(--text-faint);
+    color: var(--ink-3);
   }
 }
 .scr-spark {
@@ -364,12 +364,12 @@
     min-height: 2px;
     height: 2px;
     border-radius: 1px;
-    background: var(--border-strong);
+    background: var(--rule-strong);
     animation: scr-bar-rise 460ms var(--ease-out) both;
     animation-delay: calc(var(--bi) * 9ms);
 
     &.is-now {
-      background: var(--accent);
+      background: var(--accent-2);
     }
   }
 }
@@ -386,10 +386,10 @@
    читалась как «столько стоит попадание в мейкера», а не как ещё один
    светофор. */
 .scr-mk {
-  color: var(--accent);
+  color: var(--accent-2);
 }
 .scr-fund {
-  font-size: var(--fs-body);
+  font-size: var(--text-body);
 }
 
 @media (prefers-reduced-motion: reduce) {

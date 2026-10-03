@@ -6,29 +6,29 @@
 
 #whatif-modal {
   .wi-title {
-    font-size: var(--fs-lead);
+    font-size: var(--text-lead);
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--ink);
     margin-bottom: 10px;
 
     .wi-px {
-      font-family: var(--font-mono);
-      font-size: var(--fs-body);
-      color: var(--text-secondary);
+      font-family: var(--mono);
+      font-size: var(--text-body);
+      color: var(--ink-2);
       margin-left: 4px;
     }
     .wi-userside {
-      font-size: var(--fs-small);
+      font-size: var(--text-small);
       font-weight: 600;
-      color: var(--text-muted);
+      color: var(--ink-3);
       margin-left: 6px;
     }
   }
 
   .wi-lead {
-    font-size: var(--fs-small);
+    font-size: var(--text-small);
     line-height: 1.5;
-    color: var(--text-muted);
+    color: var(--ink-3);
     margin-bottom: 16px;
   }
 
@@ -39,9 +39,9 @@
     gap: 6px;
   }
   .wi-label {
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
     font-weight: 600;
-    color: var(--text-muted);
+    color: var(--ink-3);
     margin-top: 6px;
   }
   /* Поле монеты — общий .field.field--ticker (core/_controls.scss).
@@ -51,13 +51,13 @@
      это единственное действие диалога, и половинчатая ширина читалась бы как
      «есть ещё вариант рядом». */
   .wi-submit {
-    margin-top: var(--sp-3);
+    margin-top: var(--space-3);
     width: 100%;
   }
   .wi-error {
     margin-top: 10px;
-    font-size: var(--fs-small);
-    color: var(--red);
+    font-size: var(--text-small);
+    color: var(--loss);
   }
 
   /* ── Loader (scanning) ── */
@@ -71,15 +71,15 @@
     width: 22px;
     height: 22px;
     flex: 0 0 auto;
-    border: 2.5px solid var(--border);
-    border-top-color: var(--accent);
+    border: 2.5px solid var(--rule);
+    border-top-color: var(--accent-2);
     border-radius: 50%;
     animation: wi-spin 0.7s linear infinite;
   }
   .wi-loader-step {
-    font-family: var(--font-mono);
-    font-size: var(--fs-small);
-    color: var(--text-secondary);
+    font-family: var(--mono);
+    font-size: var(--text-small);
+    color: var(--ink-2);
   }
 
   /* ── Verdict card ── */
@@ -87,25 +87,25 @@
     display: flex;
     gap: 12px;
     align-items: flex-start;
-    border: 1px solid var(--border);
+    border: 1px solid var(--rule);
     border-radius: 8px;
     padding: 14px;
     margin-bottom: 14px;
 
     &.wi-pat {
-      border-color: var(--green-line);
-      background: var(--green-soft);
-      .wi-verdict-icon { color: var(--green); }
+      border-color: var(--gain-line);
+      background: var(--gain-wash);
+      .wi-verdict-icon { color: var(--gain); }
     }
     &.wi-smack {
-      border-color: var(--red-line);
-      background: var(--red-soft);
-      .wi-verdict-icon { color: var(--red); }
+      border-color: var(--loss-line);
+      background: var(--loss-wash);
+      .wi-verdict-icon { color: var(--loss); }
     }
     &.wi-neutral {
-      border-color: var(--border);
-      background: var(--canvas-subtle);
-      .wi-verdict-icon { color: var(--text-muted); }
+      border-color: var(--rule);
+      background: var(--panel-sunk);
+      .wi-verdict-icon { color: var(--ink-3); }
     }
   }
   .wi-verdict-icon {
@@ -116,15 +116,15 @@
     svg { width: 100%; height: 100%; display: block; }
   }
   .wi-verdict-head {
-    font-size: var(--fs-base);
+    font-size: var(--text-base);
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--ink);
     margin-bottom: 5px;
   }
   .wi-verdict-detail {
-    font-size: var(--fs-small);
+    font-size: var(--text-small);
     line-height: 1.5;
-    color: var(--text-secondary);
+    color: var(--ink-2);
   }
 
   /* ── Raw metrics (always shown) ── */
@@ -135,39 +135,39 @@
     margin-bottom: 14px;
   }
   .wi-metric {
-    border: 1px solid var(--border);
+    border: 1px solid var(--rule);
     border-radius: 6px;
     padding: 8px;
     text-align: center;
-    background: var(--canvas-inset);
+    background: var(--panel-sunk);
 
     &.ok {
-      border-color: var(--green-line);
-      background: var(--green-soft);
+      border-color: var(--gain-line);
+      background: var(--gain-wash);
     }
   }
   .wi-metric-label {
-    font-size: var(--fs-micro);
-    color: var(--text-muted);
+    font-size: var(--text-micro);
+    color: var(--ink-3);
     margin-bottom: 3px;
   }
   .wi-metric-val {
-    font-family: var(--font-mono);
-    font-size: var(--fs-base);
+    font-family: var(--mono);
+    font-size: var(--text-base);
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--ink);
   }
 
   /* ── Plan (only when the setup fired) ── */
   .wi-plan {
-    border-top: 1px solid var(--hairline);
+    border-top: 1px solid var(--rule-soft);
     padding-top: 12px;
     margin-bottom: 14px;
   }
   .wi-plan-title {
-    font-size: var(--fs-small);
+    font-size: var(--text-small);
     font-weight: 600;
-    color: var(--text-secondary);
+    color: var(--ink-2);
     margin-bottom: 8px;
   }
   .wi-plan-grid {
@@ -176,17 +176,17 @@
     gap: 8px;
 
     > div {
-      font-family: var(--font-mono);
-      font-size: var(--fs-body);
+      font-family: var(--mono);
+      font-size: var(--text-body);
       font-weight: 600;
-      color: var(--text-primary);
+      color: var(--ink);
 
       span {
         display: block;
         font-family: inherit;
-        font-size: var(--fs-micro);
+        font-size: var(--text-micro);
         font-weight: 400;
-        color: var(--text-muted);
+        color: var(--ink-3);
         margin-bottom: 2px;
       }
     }
@@ -195,9 +195,9 @@
   // Маленький курсив в плане (дистанция до уровня).
   .wi-plan-grid > div em {
     font-style: normal;
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
     font-weight: 400;
-    color: var(--text-muted);
+    color: var(--ink-3);
   }
 
   // Сценарии «за вход» / «против».
@@ -212,7 +212,7 @@
     }
   }
   .wi-case {
-    border: 1px solid var(--hairline);
+    border: 1px solid var(--rule-soft);
     border-radius: 8px;
     padding: 8px 10px;
 
@@ -221,70 +221,70 @@
       padding-left: 16px;
     }
     li {
-      font-size: var(--fs-small);
+      font-size: var(--text-small);
       line-height: 1.4;
-      color: var(--text-primary);
+      color: var(--ink);
       margin-bottom: 3px;
     }
   }
   .wi-case-title {
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
     font-weight: 700;
     letter-spacing: 0.03em;
     text-transform: uppercase;
     margin-bottom: 6px;
   }
   .wi-case-bull {
-    border-color: color-mix(in srgb, var(--green, #30a46c) 35%, transparent);
-    .wi-case-title { color: var(--green, #30a46c); }
+    border-color: color-mix(in srgb, var(--gain, #30a46c) 35%, transparent);
+    .wi-case-title { color: var(--gain, #30a46c); }
   }
   .wi-case-bear {
-    border-color: color-mix(in srgb, var(--red, #e5484d) 35%, transparent);
-    .wi-case-title { color: var(--red, #e5484d); }
+    border-color: color-mix(in srgb, var(--loss, #e5484d) 35%, transparent);
+    .wi-case-title { color: var(--loss, #e5484d); }
   }
 
   // Под-заметки в плане (санити стопа, размер).
   .wi-subnote {
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
     line-height: 1.4;
     margin-top: 8px;
     padding: 6px 8px;
     border-radius: 6px;
-    background: var(--canvas-inset, rgba(127, 127, 127, 0.08));
+    background: var(--panel-sunk, rgba(127, 127, 127, 0.08));
   }
   .wi-ss-tight, .wi-ss-wide { color: var(--orange, #f59e0b); }
-  .wi-ss-ok { color: var(--text-secondary); }
-  .wi-size { color: var(--text-primary); }
+  .wi-ss-ok { color: var(--ink-2); }
+  .wi-size { color: var(--ink); }
 
   // Order-flow «под капотом».
   .wi-flow {
-    border: 1px dashed var(--hairline);
+    border: 1px dashed var(--rule-soft);
     border-radius: 8px;
     padding: 8px 10px;
     margin-bottom: 14px;
 
     ul { margin: 0; padding-left: 16px; }
     li {
-      font-size: var(--fs-small);
+      font-size: var(--text-small);
       line-height: 1.45;
-      color: var(--text-primary);
+      color: var(--ink);
       margin-bottom: 3px;
     }
   }
   .wi-flow-title {
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
     font-weight: 700;
     letter-spacing: 0.03em;
     text-transform: uppercase;
-    color: var(--text-secondary);
+    color: var(--ink-2);
     margin-bottom: 6px;
   }
 
   // Учёба на своей истории (зеркало).
   .wi-learn {
-    font-size: var(--fs-small);
+    font-size: var(--text-small);
     line-height: 1.5;
-    color: var(--text-primary);
+    color: var(--ink);
     background: color-mix(in srgb, var(--amber, #f0a020) 12%, transparent);
     border: 1px solid color-mix(in srgb, var(--amber, #f0a020) 42%, transparent);
     border-radius: var(--radius-sm);
@@ -299,17 +299,17 @@
   .wi-learn-meta {
     display: block;
     margin-top: 4px;
-    font-family: var(--font-mono);
-    font-size: var(--fs-micro);
-    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: var(--text-micro);
+    color: var(--ink-3);
   }
 
   // Честная вторичная строка про проверенный эдж.
   .wi-edge-note {
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
     line-height: 1.45;
-    color: var(--text-muted);
-    border-top: 1px solid var(--hairline);
+    color: var(--ink-3);
+    border-top: 1px solid var(--rule-soft);
     padding-top: 10px;
     margin-bottom: 14px;
   }
@@ -318,13 +318,13 @@
   .wi-actions {
     margin-top: 16px;
     padding-top: 12px;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--rule);
   }
   .wi-actions-label {
     margin-bottom: 6px;
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
     font-weight: 600;
-    color: var(--text-muted);
+    color: var(--ink-3);
   }
   .wi-again {
     width: 100%;

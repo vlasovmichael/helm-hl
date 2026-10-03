@@ -4,8 +4,8 @@
   align-items: center;
   gap: 10px;
   padding: 11px 0;
-  border-bottom: 1px solid var(--hairline);
-  font-size: var(--fs-base);
+  border-bottom: 1px solid var(--rule-soft);
+  font-size: var(--text-base);
 
   &:last-child {
     border-bottom: none;
@@ -22,64 +22,64 @@
 }
 
 .activity-time {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--fs-body);
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: var(--text-body);
   flex-shrink: 0;
 }
 .activity-coin {
-  color: var(--accent);
+  color: var(--accent-2);
   font-weight: 600;
-  font-family: var(--font-mono);
+  font-family: var(--mono);
 }
 .activity-reason {
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 .activity-pnl {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   margin-left: auto;
 
   &.positive {
-    color: var(--green);
+    color: var(--gain);
   }
   &.negative {
-    color: var(--red);
+    color: var(--loss);
   }
   &.dim {
-    color: var(--text-faint);
+    color: var(--ink-3);
     font-weight: 500;
   }
 }
 
 .activity-kind {
-  font-size: var(--fs-label);
+  font-size: var(--text-label);
   font-weight: 500;
   padding: 1px 7px;
   border-radius: 2em;
   text-transform: lowercase;
-  font-family: var(--font-sans);
+  font-family: var(--sans);
   border: 1px solid currentColor;
   flex-shrink: 0;
   line-height: 18px;
 
   &.open {
-    color: var(--accent);
-    background: var(--accent-soft);
-    border-color: var(--accent-line);
+    color: var(--accent-2);
+    background: var(--wash);
+    border-color: var(--accent-2);
   }
   &.close {
-    color: var(--text-muted);
-    background: var(--canvas-subtle);
-    border-color: var(--border);
+    color: var(--ink-3);
+    background: var(--panel-sunk);
+    border-color: var(--rule);
   }
 }
 
 /* Источник сделки: bot / adopted / manual */
 .src-badge {
-  font-size: var(--fs-micro);
-  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  font-family: var(--mono);
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -90,16 +90,16 @@
   flex-shrink: 0;
 }
 .src-bot {
-  color: var(--text-muted);
-  background: var(--canvas-subtle);
-  border-color: var(--border);
+  color: var(--ink-3);
+  background: var(--panel-sunk);
+  border-color: var(--rule);
 }
 /* Залитый чип (не контурный, как bot/manual) — adopted самый важный источник
    и плохо читался при alpha-фоне. Тёмный текст на ярком teal = макс. контраст
    в обеих темах. */
 .src-adopted {
-  color: var(--accent);
-  border-color: var(--accent-line);
+  color: var(--accent-2);
+  border-color: var(--accent-2);
   font-weight: 800;
 }
 .src-manual {
@@ -110,8 +110,8 @@
 
 /* Сторона позиции */
 .side-chip {
-  font-size: var(--fs-micro);
-  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  font-family: var(--mono);
   font-weight: 700;
   padding: 1px 6px;
   border-radius: 4px;
@@ -119,18 +119,18 @@
   flex-shrink: 0;
 }
 .side-long {
-  color: var(--green);
+  color: var(--gain);
   background: rgba(63, 185, 80, 0.12);
 }
 .side-short {
-  color: var(--red);
+  color: var(--loss);
   background: rgba(248, 81, 73, 0.12);
 }
 
 .activity-meta {
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: var(--fs-small);
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: var(--text-small);
   white-space: nowrap;
   flex-shrink: 0;
   margin-left: auto;

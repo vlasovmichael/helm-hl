@@ -10,7 +10,7 @@
      конфликтовать с глобальными .card/.btn/.status). Токены и база — из
      общего index.scss; тему ведёт проектный свитчер (hl-scanner-theme). ── */
 .j-mono {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-variant-numeric: tabular-nums;
 }
 
@@ -26,14 +26,14 @@
 }
 @keyframes j-tickUp {
   0% {
-    color: var(--green);
+    color: var(--gain);
   }
   100% {
   }
 }
 @keyframes j-tickDown {
   0% {
-    color: var(--red);
+    color: var(--loss);
   }
   100% {
   }
@@ -64,7 +64,7 @@
   height: 15px;
   border-radius: var(--radius-sm);
   line-height: 1;
-  color: var(--text-muted);
+  color: var(--ink-3);
   opacity: 0.55;
   margin-right: -4px;
   transition:
@@ -74,17 +74,17 @@
 }
 .tabs__tab .j-rm:hover {
   opacity: 1;
-  color: var(--red);
-  background: var(--red-soft);
+  color: var(--loss);
+  background: var(--loss-wash);
 }
 .j-addbtn {
-  color: var(--text-muted);
-  font-size: var(--fs-lead);
+  color: var(--ink-3);
+  font-size: var(--text-lead);
   padding: 0 12px;
   font-weight: 400;
 }
 .j-addbtn:hover {
-  color: var(--accent);
+  color: var(--accent-2);
 }
 // Поле «добавить монету» — общий `.field.field--ticker`. Своё здесь: ширина
 // под тикер и сразу активный вид, потому что оно появляется по клику и уже
@@ -92,18 +92,18 @@
 .j-coininput {
   width: 92px;
   height: 32px;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 3px var(--wash);
 
   &.err {
-    border-color: var(--red);
-    box-shadow: 0 0 0 3px var(--red-soft);
+    border-color: var(--loss);
+    box-shadow: 0 0 0 3px var(--loss-wash);
   }
 }
 .j-status {
   margin-left: auto;
-  color: var(--text-muted);
-  font-size: var(--fs-small);
+  color: var(--ink-3);
+  font-size: var(--text-small);
 }
 
 // Тикер в Trade log фильтрует журнал по монете: выглядит текстом, ссылкой
@@ -118,12 +118,12 @@
 }
 
 .j-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: var(--panel);
+  border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
   padding: 20px 24px;
   margin-bottom: 16px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow);
   animation: j-rise 0.45s var(--ease, cubic-bezier(0.22, 1, 0.36, 1)) both;
 }
 .j-cols {
@@ -156,23 +156,23 @@
 .j-calc-row .v small.j-calc-ok,
 .j-calc-row .v.j-calc-ok,
 .j-calc-ok {
-  color: var(--green);
+  color: var(--gain);
 }
 .j-calc-row .v small.j-calc-bad,
 .j-calc-row .v.j-calc-bad,
 .j-calc-bad {
-  color: var(--red);
+  color: var(--loss);
 }
 .j-calc-row .v small.j-calc-dim,
 .j-calc-dim {
-  color: var(--text-muted);
+  color: var(--ink-3);
 }
 // Подписи в ленте журнала и «— anchor» в блоке vs BTC.
 .j-log-bias {
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 .j-vs-none {
-  color: var(--text-muted);
+  color: var(--ink-3);
 }
 
 .j-card-title {
@@ -180,29 +180,29 @@
   align-items: center;
   gap: 12px;
   margin: 0 0 18px;
-  font-family: var(--font-sans);
+  font-family: var(--sans);
   font-weight: 600;
-  font-size: var(--fs-h3);
+  font-size: var(--text-h3);
   letter-spacing: -0.01em;
-  color: var(--text-primary);
+  color: var(--ink);
 }
 .j-idx {
-  font-size: var(--fs-label);
+  font-size: var(--text-label);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--accent-2);
+  background: var(--wash);
   padding: 4px 9px;
   border-radius: var(--radius-sm);
 }
 .j-saved {
   display: inline-flex;
   align-items: center;
-  gap: var(--sp-1);
+  gap: var(--space-1);
   margin-left: auto;
-  font-size: var(--fs-small);
-  color: var(--green);
+  font-size: var(--text-small);
+  color: var(--gain);
   font-weight: 500;
   opacity: 0;
   transform: translateY(-2px);
@@ -223,23 +223,23 @@
   flex-wrap: wrap;
 }
 .j-coin-name {
-  font-family: var(--font-sans);
+  font-family: var(--sans);
   font-weight: 700;
-  font-size: var(--fs-h1);
+  font-size: var(--text-h1);
   letter-spacing: -0.02em;
   display: block;
 }
 .j-coin-sub {
-  color: var(--text-muted);
-  font-size: var(--fs-body);
+  color: var(--ink-3);
+  font-size: var(--text-body);
 }
 .j-price-block {
   text-align: right;
 }
 .j-price {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-weight: 700;
-  font-size: var(--fs-h1);
+  font-size: var(--text-h1);
   letter-spacing: -0.02em;
   display: block;
 }
@@ -250,15 +250,15 @@
   animation: j-tickDown 1s ease;
 }
 .j-daychg {
-  font-family: var(--font-mono);
-  font-size: var(--fs-base);
+  font-family: var(--mono);
+  font-size: var(--text-base);
   font-weight: 700;
 }
 .j-up {
-  color: var(--green);
+  color: var(--gain);
 }
 .j-down {
-  color: var(--red);
+  color: var(--loss);
 }
 
 .j-bearing {
@@ -268,18 +268,18 @@
   position: relative;
   height: 12px;
   border-radius: 999px;
-  background: var(--canvas-inset);
-  border: 1px solid var(--border);
+  background: var(--panel-sunk);
+  border: 1px solid var(--rule);
 }
 .j-band {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
   height: 22px;
-  background: var(--accent-soft);
+  background: var(--wash);
   /* Тут вертикальные линии — это КРАЯ ДИАПАЗОНА на шкале, а не цветная метка
      статуса: они показывают, где полоса начинается и где кончается. */
-  border-inline: 1px solid var(--accent-line);
+  border-inline: 1px solid var(--accent-2);
   border-radius: var(--radius-sm);
   transition:
     left 0.55s var(--ease, ease),
@@ -297,23 +297,23 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--accent);
-  border: 3px solid var(--card-bg);
-  box-shadow: 0 0 0 1px var(--accent);
+  background: var(--accent-2);
+  border: 3px solid var(--panel);
+  box-shadow: 0 0 0 1px var(--accent-2);
 }
 .j-pin .j-lab {
   position: absolute;
   bottom: 26px;
   white-space: nowrap;
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-weight: 700;
-  font-size: var(--fs-body);
-  color: var(--text-primary);
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  font-size: var(--text-body);
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--rule);
   border-radius: var(--radius);
   padding: 3px 9px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lift);
 }
 .j-pin .j-lab::after {
   content: "";
@@ -323,43 +323,43 @@
   transform: translateX(-50%) rotate(45deg);
   width: 8px;
   height: 8px;
-  background: var(--card-bg);
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
 }
 .j-legend {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-top: 14px;
-  font-family: var(--font-mono);
-  font-size: var(--fs-body);
-  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--text-body);
+  color: var(--ink-3);
 }
 .j-end {
   display: flex;
   flex-direction: column;
 }
 .j-end small {
-  font-family: var(--font-sans);
-  font-size: var(--fs-micro);
+  font-family: var(--sans);
+  font-size: var(--text-micro);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--ink-3);
 }
 .j-end.hi {
   text-align: right;
 }
 .j-read {
-  font-family: var(--font-sans);
+  font-family: var(--sans);
   font-weight: 600;
-  font-size: var(--fs-base);
+  font-size: var(--text-base);
   letter-spacing: -0.01em;
   padding: 5px 13px;
   border-radius: 999px;
-  color: var(--text-primary);
-  background: var(--canvas-subtle);
-  border: 1px solid var(--border);
+  color: var(--ink);
+  background: var(--panel-sunk);
+  border: 1px solid var(--rule);
 }
 
 .j-meta-row {
@@ -368,7 +368,7 @@
   gap: 28px;
   margin-top: 26px;
   padding-top: 22px;
-  border-top: 1px solid var(--hairline);
+  border-top: 1px solid var(--rule-soft);
 }
 .j-meta {
   display: flex;
@@ -376,20 +376,20 @@
   gap: 3px;
 }
 .j-meta .j-k {
-  font-size: var(--fs-label);
+  font-size: var(--text-label);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--ink-3);
 }
 .j-meta .j-v {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-weight: 700;
-  font-size: var(--fs-base);
+  font-size: var(--text-base);
 }
 .j-principle {
   margin: 22px 0 0;
-  color: var(--text-secondary);
-  font-size: var(--fs-body);
+  color: var(--ink-2);
+  font-size: var(--text-body);
   line-height: 1.6;
   max-width: 64ch;
 }
@@ -400,12 +400,12 @@
   gap: 8px;
 }
 .j-vschip .j-num {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-weight: 700;
-  font-size: var(--fs-base);
+  font-size: var(--text-base);
 }
 .j-vschip .j-badge {
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   font-weight: 600;
   letter-spacing: 0.04em;
   padding: 3px 8px;
@@ -413,12 +413,12 @@
   text-transform: uppercase;
 }
 .j-vschip .j-badge.corr {
-  color: var(--accent);
-  background: var(--accent-soft);
+  color: var(--accent-2);
+  background: var(--wash);
 }
 .j-vschip .j-badge.div {
-  color: var(--warn);
-  background: var(--warn-soft);
+  color: var(--caution);
+  background: var(--caution-wash);
 }
 
 .j-field {
@@ -430,17 +430,17 @@
 label.j-f {
   display: block;
   margin-bottom: 7px;
-  font-size: var(--fs-label);
+  font-size: var(--text-label);
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--ink-3);
 }
 // Поля формы — общий `.field.field--block.field--lg` (core/_controls.scss).
 // Здесь остаётся только фокус: у карточки журнала он ярче обычного, потому
 // что это форма, в которой печатают, а не фильтр в шапке.
 .j-card .field:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--accent-2);
+  box-shadow: 0 0 0 3px var(--wash);
 }
 
 .j-row2 {
@@ -456,55 +456,55 @@ label.j-f {
    то, что от места: отбивка сверху и рост под палец, потому что это кнопка
    в конце формы, а не в шапке карточки. */
 .j-btn {
-  margin-top: var(--sp-5);
+  margin-top: var(--space-5);
   min-height: var(--ctl-h-lg);
-  padding: 0 var(--sp-4);
-  font-size: var(--fs-base);
+  padding: 0 var(--space-4);
+  font-size: var(--text-base);
 }
 
 .j-empty {
-  color: var(--text-muted);
-  font-size: var(--fs-base);
+  color: var(--ink-3);
+  font-size: var(--text-base);
   line-height: 1.6;
 }
 .j-kv {
   margin: 9px 0;
-  font-size: var(--fs-base);
+  font-size: var(--text-base);
   line-height: 1.55;
 }
 .j-kv b {
-  color: var(--text-muted);
+  color: var(--ink-3);
   font-weight: 600;
 }
 .j-kv .j-mono {
-  color: var(--text-primary);
+  color: var(--ink);
 }
 .j-pill {
   display: inline-flex;
   align-items: center;
   font-weight: 600;
-  font-size: var(--fs-small);
+  font-size: var(--text-small);
   padding: 2px 10px;
   border-radius: 999px;
 }
 .j-pill.up {
-  color: var(--green);
-  background: var(--green-soft);
+  color: var(--gain);
+  background: var(--gain-wash);
 }
 .j-pill.down {
-  color: var(--red);
-  background: var(--red-soft);
+  color: var(--loss);
+  background: var(--loss-wash);
 }
 .j-pill.range {
-  color: var(--warn);
-  background: var(--warn-soft);
+  color: var(--caution);
+  background: var(--caution-wash);
 }
 .j-grade {
-  color: var(--accent);
+  color: var(--accent-2);
 }
 
 .j-log-item {
-  border-top: 1px solid var(--hairline);
+  border-top: 1px solid var(--rule-soft);
   padding: 14px 0;
 }
 .j-log-item:first-child {
@@ -516,28 +516,28 @@ label.j-f {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: var(--fs-base);
+  font-size: var(--text-base);
 }
 .j-log-item summary::-webkit-details-marker {
   display: none;
 }
 .j-log-item summary::before {
   @include mask-icon("chevron-right", 13px);
-  color: var(--text-muted);
+  color: var(--ink-3);
   transition: transform 0.2s;
 }
 .j-log-item[open] summary::before {
   transform: rotate(90deg);
 }
 .j-log-item .j-date {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-2);
 }
 .j-log-item .j-done {
   margin-left: auto;
-  font-size: var(--fs-small);
-  color: var(--green);
+  font-size: var(--text-small);
+  color: var(--gain);
 }
 .j-log-body {
   padding: 8px 0 4px 24px;
@@ -545,8 +545,8 @@ label.j-f {
 
 .j-footnote {
   margin: 16px 4px 0;
-  color: var(--text-muted);
-  font-size: var(--fs-body);
+  color: var(--ink-3);
+  font-size: var(--text-body);
   line-height: 1.65;
   max-width: 72ch;
 }
@@ -565,7 +565,7 @@ label.j-f {
 .j-calc-fill {
   margin-top: 12px;
   padding: 6px 12px;
-  font-size: var(--fs-body);
+  font-size: var(--text-body);
 }
 .j-calc-out {
   margin-top: 18px;
@@ -575,63 +575,63 @@ label.j-f {
   justify-content: space-between;
   align-items: baseline;
   gap: 12px;
-  font-size: var(--fs-base);
+  font-size: var(--text-base);
   padding: 9px 0;
-  border-top: 1px solid var(--hairline);
+  border-top: 1px solid var(--rule-soft);
 }
 .j-calc-row:first-child {
   border-top: none;
 }
 .j-calc-row b {
-  color: var(--text-muted);
+  color: var(--ink-3);
   font-weight: 600;
 }
 .j-calc-row .v {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-weight: 700;
-  font-size: var(--fs-base);
+  font-size: var(--text-base);
 }
 .j-calc-row .v small {
-  font-family: var(--font-sans);
+  font-family: var(--sans);
   font-weight: 500;
-  font-size: var(--fs-small);
-  color: var(--text-muted);
+  font-size: var(--text-small);
+  color: var(--ink-3);
   margin-left: 8px;
 }
 .j-calc-hint {
   margin-top: 12px;
-  font-size: var(--fs-small);
+  font-size: var(--text-small);
   line-height: 1.55;
-  color: var(--text-muted);
+  color: var(--ink-3);
 }
 
 /* авто-разбор 4h/1h/5m — «куда и когда» */
 .j-coach {
-  border: 1px solid var(--border-muted);
+  border: 1px solid var(--rule-soft);
   border-radius: var(--radius);
 }
 .j-coach-verdict {
   padding: 14px 16px;
   border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--canvas-subtle);
+  border: 1px solid var(--rule);
+  background: var(--panel-sunk);
 }
 .j-coach-verdict.reasonable {
-  border-color: var(--green-line);
-  background: var(--green-soft);
+  border-color: var(--gain-line);
+  background: var(--gain-wash);
 }
 .j-coach-verdict.counter {
-  border-color: var(--warn);
-  background: var(--warn-soft);
+  border-color: var(--caution);
+  background: var(--caution-wash);
 }
 .j-coach-verdict.neutral {
-  border-color: var(--border-strong);
-  background: var(--canvas-subtle);
+  border-color: var(--rule-strong);
+  background: var(--panel-sunk);
 }
 .j-coach-verdict .j-vh {
-  font-family: var(--font-sans);
+  font-family: var(--sans);
   font-weight: 700;
-  font-size: var(--fs-lead);
+  font-size: var(--text-lead);
   letter-spacing: -0.01em;
   display: flex;
   align-items: center;
@@ -639,29 +639,29 @@ label.j-f {
 }
 .j-coach-verdict .j-vd {
   margin-top: 7px;
-  font-size: var(--fs-body);
+  font-size: var(--text-body);
   line-height: 1.6;
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 .j-bias {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-weight: 700;
-  font-size: var(--fs-small);
+  font-size: var(--text-small);
   padding: 3px 9px;
   border-radius: 999px;
   letter-spacing: 0.04em;
 }
 .j-bias.LONG {
-  color: var(--green);
-  background: var(--green-soft);
+  color: var(--gain);
+  background: var(--gain-wash);
 }
 .j-bias.SHORT {
-  color: var(--red);
-  background: var(--red-soft);
+  color: var(--loss);
+  background: var(--loss-wash);
 }
 .j-bias.STAND_ASIDE {
-  color: var(--text-muted);
-  background: var(--canvas-inset);
+  color: var(--ink-3);
+  background: var(--panel-sunk);
 }
 .j-tf-grid {
   display: grid;
@@ -677,8 +677,8 @@ label.j-f {
 .j-tf {
   padding: 13px 15px;
   border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--card-bg);
+  border: 1px solid var(--rule);
+  background: var(--panel);
 }
 .j-tf-head {
   display: flex;
@@ -688,51 +688,51 @@ label.j-f {
   margin-bottom: 8px;
 }
 .j-tf-tf {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-weight: 700;
-  font-size: var(--fs-base);
-  color: var(--text-primary);
+  font-size: var(--text-base);
+  color: var(--ink);
 }
 .j-tf-role {
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: var(--ink-3);
 }
 .j-tf-trend {
   font-weight: 600;
-  font-size: var(--fs-small);
+  font-size: var(--text-small);
   padding: 2px 9px;
   border-radius: 999px;
 }
 .j-tf-trend.up {
-  color: var(--green);
-  background: var(--green-soft);
+  color: var(--gain);
+  background: var(--gain-wash);
 }
 .j-tf-trend.down {
-  color: var(--red);
-  background: var(--red-soft);
+  color: var(--loss);
+  background: var(--loss-wash);
 }
 .j-tf-trend.flat {
-  color: var(--warn);
-  background: var(--warn-soft);
+  color: var(--caution);
+  background: var(--caution-wash);
 }
 .j-tf-note {
-  font-size: var(--fs-small);
+  font-size: var(--text-small);
   line-height: 1.55;
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 .j-tf-sub {
   margin-top: 7px;
-  font-family: var(--font-mono);
-  font-size: var(--fs-label);
-  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--text-label);
+  color: var(--ink-3);
 }
 .j-coach-note {
   margin: 16px 0 0;
-  font-size: var(--fs-small);
+  font-size: var(--text-small);
   line-height: 1.6;
-  color: var(--text-muted);
+  color: var(--ink-3);
   max-width: 84ch;
 }
 
@@ -743,9 +743,9 @@ label.j-f {
   width: 28px;
   height: 28px;
   border-radius: var(--radius-pill);
-  border: 1px solid var(--border);
-  background: var(--card-bg);
-  color: var(--text-muted);
+  border: 1px solid var(--rule);
+  background: var(--panel);
+  color: var(--ink-3);
   cursor: pointer;
   transition:
     color var(--dur-fast) var(--ease-out),
@@ -756,15 +756,15 @@ label.j-f {
     height: 15px;
   }
   &:hover {
-    color: var(--accent);
-    border-color: var(--accent-line);
+    color: var(--accent-2);
+    border-color: var(--accent-2);
   }
 }
 /* Справка — тон акцента вокруг всего блока: полоска слева стояла в стороне
    от текста, который объясняет. */
 .j-help {
-  border: 1px solid var(--accent-line);
-  background: var(--accent-soft);
+  border: 1px solid var(--accent-2);
+  background: var(--wash);
   border-radius: var(--radius);
 }
 .j-help-head {
@@ -776,14 +776,14 @@ label.j-f {
 }
 /* .j-help-x — общий .btn.btn--ghost.btn--sm, своих стилей нет. */
 .j-help-lead {
-  color: var(--text-secondary);
-  font-size: var(--fs-base);
+  color: var(--ink-2);
+  font-size: var(--text-base);
   line-height: 1.6;
   margin: 12px 0 18px;
   max-width: 84ch;
 }
 .j-help-lead b {
-  color: var(--text-primary);
+  color: var(--ink);
 }
 .j-help-steps {
   display: grid;
@@ -793,25 +793,25 @@ label.j-f {
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  font-size: var(--fs-body);
+  font-size: var(--text-body);
   line-height: 1.55;
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 .j-help-step .j-idx {
   flex: none;
   margin-top: 1px;
 }
 .j-help-step b {
-  color: var(--text-primary);
+  color: var(--ink);
 }
 .j-help-rule {
   margin: 18px 0 0;
   padding-top: 14px;
-  border-top: 1px solid var(--hairline);
-  font-size: var(--fs-body);
+  border-top: 1px solid var(--rule-soft);
+  font-size: var(--text-body);
   line-height: 1.6;
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 .j-help-rule b {
-  color: var(--text-primary);
+  color: var(--ink);
 }

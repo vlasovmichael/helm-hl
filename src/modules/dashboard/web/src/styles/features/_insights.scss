@@ -6,10 +6,10 @@
 
 /* Per-coin table */
 .per-coin-meta {
-  font-size: var(--fs-label);
-  color: var(--text-muted);
+  font-size: var(--text-label);
+  color: var(--ink-3);
   margin-bottom: 8px;
-  font-family: var(--font-mono);
+  font-family: var(--mono);
 }
 .per-coin-table-wrap {
   // Список монет длинный, поэтому карточка не растёт бесконечно: скроллится
@@ -31,20 +31,20 @@
   }
 }
 .breakdown-title {
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: var(--ls-wide);
-  color: var(--text-muted);
+  color: var(--ink-3);
   margin-bottom: 6px;
 }
 
 /* Heatmap */
 .heatmap-meta {
-  font-size: var(--fs-label);
-  color: var(--text-muted);
+  font-size: var(--text-label);
+  color: var(--ink-3);
   margin-bottom: 10px;
-  font-family: var(--font-mono);
+  font-family: var(--mono);
 }
 .heatmap-grid {
   display: block;
@@ -60,12 +60,12 @@
   margin-bottom: 14px;
 }
 .heatmap-year {
-  font-family: var(--font-mono);
-  font-size: var(--fs-body);
+  font-family: var(--mono);
+  font-size: var(--text-body);
   font-weight: 600;
   min-width: 48px;
   text-align: center;
-  color: var(--text-primary);
+  color: var(--ink);
 }
 /* .heatmap-year-btn — общий .btn.btn--icon.btn--sm, своих стилей нет. */
 
@@ -83,18 +83,18 @@
   margin-bottom: 5px;
 }
 .heatmap-month-name {
-  font-family: var(--font-mono);
-  font-size: var(--fs-label);
-  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--text-label);
+  color: var(--ink-3);
 }
 .heatmap-month-pnl {
-  font-family: var(--font-mono);
-  font-size: var(--fs-micro);
+  font-family: var(--mono);
+  font-size: var(--text-micro);
   &.pos {
-    color: var(--green);
+    color: var(--gain);
   }
   &.neg {
-    color: var(--red);
+    color: var(--loss);
   }
 }
 .heatmap-month-grid {
@@ -112,14 +112,14 @@
   width: 14px;
   height: 14px;
   border-radius: 3px;
-  background: var(--canvas-subtle);
+  background: var(--panel-sunk);
   border: 1px solid transparent;
 
   &.placeholder {
     background: transparent;
   }
   &.empty {
-    background: var(--canvas-subtle);
+    background: var(--panel-sunk);
   }
   &.win-weak {
     background: var(--tier-pos-weak);
@@ -140,19 +140,19 @@
     background: var(--tier-neg-strong);
   }
   &.is-today {
-    border-color: var(--accent);
+    border-color: var(--accent-2);
   }
   &.is-clickable {
     cursor: pointer;
     transition: transform 0.08s ease, box-shadow 0.08s ease;
     &:hover {
       transform: scale(1.25);
-      box-shadow: 0 0 0 1px var(--accent);
+      box-shadow: 0 0 0 1px var(--accent-2);
       position: relative;
       z-index: 1;
     }
     &:focus-visible {
-      outline: 2px solid var(--accent);
+      outline: 2px solid var(--accent-2);
       outline-offset: 1px;
     }
   }
@@ -163,9 +163,9 @@
   align-items: center;
   gap: 4px;
   margin-top: 8px;
-  font-size: var(--fs-micro);
-  color: var(--text-muted);
-  font-family: var(--font-mono);
+  font-size: var(--text-micro);
+  color: var(--ink-3);
+  font-family: var(--mono);
 
   .heatmap-cell {
     width: 10px;
@@ -181,13 +181,13 @@
 
 /* Exit quality (MFE/MAE excursion) */
 .exits-meta {
-  font-size: var(--fs-label);
-  color: var(--text-muted);
+  font-size: var(--text-label);
+  color: var(--ink-3);
   margin-bottom: 10px;
-  font-family: var(--font-mono);
+  font-family: var(--mono);
 }
 .exits-warn {
-  color: var(--amber, var(--text-muted));
+  color: var(--amber, var(--ink-3));
 }
 .exits-cards {
   display: grid;
@@ -196,30 +196,30 @@
   margin-bottom: 14px;
 }
 .exits-card {
-  background: var(--card-bg);
-  border: 1px solid var(--hairline);
+  background: var(--panel);
+  border: 1px solid var(--rule-soft);
   border-radius: 8px;
   padding: 10px 12px;
   text-align: center;
 }
 .exits-card-val {
-  font-size: var(--fs-h3);
+  font-size: var(--text-h3);
   font-weight: 600;
-  font-family: var(--font-mono);
-  color: var(--text-primary);
+  font-family: var(--mono);
+  color: var(--ink);
   line-height: 1.1;
 }
 .exits-card.is-good .exits-card-val {
-  color: var(--green);
+  color: var(--gain);
 }
 .exits-card.is-bad .exits-card-val {
-  color: var(--red);
+  color: var(--loss);
 }
 .exits-card-lbl {
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-muted);
+  color: var(--ink-3);
   margin-top: 4px;
   cursor: help;
 }
@@ -232,74 +232,74 @@
   display: flex;
   align-items: baseline;
   gap: 8px;
-  font-family: var(--font-mono);
-  font-size: var(--fs-h3);
+  font-family: var(--mono);
+  font-size: var(--text-h3);
   font-weight: 700;
   margin-bottom: 12px;
 
   .day-modal__sub {
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
     font-weight: 400;
-    color: var(--text-muted);
+    color: var(--ink-3);
   }
 }
 .day-modal__loading {
-  font-size: var(--fs-small);
-  color: var(--text-muted);
+  font-size: var(--text-small);
+  color: var(--ink-3);
   padding: 10px 0;
 }
 .day-modal__table {
   width: 100%;
   border-collapse: collapse;
-  font-size: var(--fs-small);
+  font-size: var(--text-small);
   margin-bottom: 14px;
 
   th {
     text-align: left;
     font-weight: 500;
-    color: var(--text-muted);
-    font-size: var(--fs-micro);
+    color: var(--ink-3);
+    font-size: var(--text-micro);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     padding: 4px 6px;
-    border-bottom: 1px solid var(--hairline);
+    border-bottom: 1px solid var(--rule-soft);
   }
   td {
     padding: 5px 6px;
-    border-bottom: 1px solid var(--canvas-subtle);
-    font-family: var(--font-mono);
+    border-bottom: 1px solid var(--panel-sunk);
+    font-family: var(--mono);
   }
   .r {
     text-align: right;
   }
 }
 .day-modal__src {
-  color: var(--text-muted);
-  font-size: var(--fs-label);
+  color: var(--ink-3);
+  font-size: var(--text-label);
 }
 .day-side {
   display: inline-block;
   padding: 1px 6px;
   border-radius: 4px;
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   font-weight: 700;
   letter-spacing: 0.03em;
 
   &--long {
-    color: var(--green);
+    color: var(--gain);
     background: var(--tier-pos-weak);
   }
   &--short {
-    color: var(--red);
+    color: var(--loss);
     background: var(--tier-neg-weak);
   }
 }
 .day-modal__note-lbl {
   display: block;
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-muted);
+  color: var(--ink-3);
   margin-bottom: 4px;
 }
 // Заметка дня — общий `.field.field--lg` (core/_controls.scss); здесь только
@@ -315,6 +315,6 @@
   margin-top: 10px;
 }
 .day-modal__status {
-  font-size: var(--fs-label);
-  color: var(--text-muted);
+  font-size: var(--text-label);
+  color: var(--ink-3);
 }

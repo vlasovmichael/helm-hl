@@ -91,20 +91,20 @@ function divSignalInfo(c, btcPct, hasPast) {
   const isBtc = c.coin === "BTC";
   const relColor =
     !hasPast || rel == null
-      ? "var(--text-muted)"
+      ? "var(--ink-3)"
       : rel <= -1.5
-        ? "var(--red)"
+        ? "var(--loss)"
         : rel >= 1.5
-          ? "var(--green)"
-          : "var(--text-muted)";
+          ? "var(--gain)"
+          : "var(--ink-3)";
   const coinColor =
     !hasPast || c.coinPct == null
-      ? "var(--text-muted)"
+      ? "var(--ink-3)"
       : c.coinPct > 0
-        ? "var(--green)"
+        ? "var(--gain)"
         : c.coinPct < 0
-          ? "var(--red)"
-          : "var(--text-muted)";
+          ? "var(--loss)"
+          : "var(--ink-3)";
   let signal = "—";
   if (hasPast && rel != null && btcPct != null && !isBtc) {
     if (btcPct > 0.3 && rel <= -1.5) signal = "SHORT";
@@ -112,10 +112,10 @@ function divSignalInfo(c, btcPct, hasPast) {
   }
   const signalColor =
     signal === "SHORT"
-      ? "var(--red)"
+      ? "var(--loss)"
       : signal === "LONG"
-        ? "var(--green)"
-        : "var(--text-faint)";
+        ? "var(--gain)"
+        : "var(--ink-3)";
   return { relColor, coinColor, signal, signalColor, isBtc };
 }
 
@@ -142,11 +142,11 @@ function divRenderRows(coins, btcPct, hasPast) {
         const parts = [];
         if (shortSum > 0)
           parts.push(
-            `<span style="color:var(--red);font-weight:700">${icon("short")}${fmtNotional(shortSum)}</span>`,
+            `<span style="color:var(--loss);font-weight:700">${icon("short")}${fmtNotional(shortSum)}</span>`,
           );
         if (longSum > 0)
           parts.push(
-            `<span style="color:var(--green);font-weight:700">${icon("long")}${fmtNotional(longSum)}</span>`,
+            `<span style="color:var(--gain);font-weight:700">${icon("long")}${fmtNotional(longSum)}</span>`,
           );
         whaleCell = parts.join(" ");
       }
@@ -191,12 +191,12 @@ async function divFetchAll() {
       metaEl.textContent = label;
       metaEl.style.color =
         d.btcPct == null
-          ? "var(--text-muted)"
+          ? "var(--ink-3)"
           : d.btcPct > 0.3
-            ? "var(--green)"
+            ? "var(--gain)"
             : d.btcPct < -0.3
-              ? "var(--red)"
-              : "var(--text-muted)";
+              ? "var(--loss)"
+              : "var(--ink-3)";
     }
     if (d.coins.length === 0) {
       // Ответ пришёл и он пустой — это уже не ожидание, а состояние: истории
@@ -283,12 +283,12 @@ export function renderBtcDivergence(data) {
     metaEl.textContent = age != null ? `${btcLabel} · ${age}s ago` : btcLabel;
     metaEl.style.color =
       btcPct == null
-        ? "var(--text-muted)"
+        ? "var(--ink-3)"
         : btcPct > 0.3
-          ? "var(--green)"
+          ? "var(--gain)"
           : btcPct < -0.3
-            ? "var(--red)"
-            : "var(--text-muted)";
+            ? "var(--loss)"
+            : "var(--ink-3)";
   }
 
   settle(tbody, divRenderRows(coins, btcPct, hasPast));

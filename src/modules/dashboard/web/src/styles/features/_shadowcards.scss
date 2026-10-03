@@ -12,7 +12,7 @@ $cards: ":is(#sec-candygirl)";
   }
   .cb-section {
     background: var(--bg-elev);
-    border: 1px solid var(--border);
+    border: 1px solid var(--rule);
     border-radius: 8px;
     padding: 0.6rem 0.75rem;
   }
@@ -24,7 +24,7 @@ $cards: ":is(#sec-candygirl)";
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--text-muted);
+    color: var(--ink-3);
     margin-bottom: 0.45rem;
   }
   .cb-kv {
@@ -32,11 +32,11 @@ $cards: ":is(#sec-candygirl)";
     grid-template-columns: max-content minmax(0, 1fr);
     column-gap: 0.6rem;
     row-gap: 0.25rem;
-    font-family: var(--font-mono);
+    font-family: var(--mono);
     font-size: 0.78rem;
 
     .k {
-      color: var(--text-muted);
+      color: var(--ink-3);
     }
     .v {
       color: var(--text);
@@ -47,19 +47,19 @@ $cards: ":is(#sec-candygirl)";
   .cb-table {
     width: 100%;
     border-collapse: collapse;
-    font-family: var(--font-mono);
+    font-family: var(--mono);
     font-size: 0.74rem;
 
     th {
       text-align: left;
       font-weight: 500;
-      color: var(--text-muted);
-      border-bottom: 1px solid var(--border);
+      color: var(--ink-3);
+      border-bottom: 1px solid var(--rule);
       padding: 0.25rem 0.4rem;
     }
     td {
       padding: 0.2rem 0.4rem;
-      border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+      border-bottom: 1px solid color-mix(in srgb, var(--rule) 50%, transparent);
     }
     tr:last-child td {
       border-bottom: none;
@@ -67,10 +67,10 @@ $cards: ":is(#sec-candygirl)";
   }
   .cb-pos-pnl {
     &.positive {
-      color: var(--green);
+      color: var(--gain);
     }
     &.negative {
-      color: var(--red);
+      color: var(--loss);
     }
   }
 }
@@ -82,8 +82,8 @@ $cards: ":is(#sec-candygirl)";
     gap: 1.25rem;
     margin-top: 0.55rem;
     padding-top: 0.5rem;
-    border-top: 1px solid var(--border);
-    font-family: var(--font-mono);
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono);
     font-size: 0.8rem;
   }
   .cg-sum-item {
@@ -92,7 +92,7 @@ $cards: ":is(#sec-candygirl)";
     gap: 0.35rem;
   }
   .cg-sum-label {
-    color: var(--text-muted);
+    color: var(--ink-3);
     text-transform: uppercase;
     font-size: 0.66rem;
     letter-spacing: 0.04em;
@@ -137,7 +137,7 @@ $cards: ":is(#sec-candygirl)";
     #cb-stats-inline {
       display: block;
       margin: 4px 0 0 !important;
-      font-size: var(--fs-micro);
+      font-size: var(--text-micro);
     }
   }
   #cb-watchlist-body,

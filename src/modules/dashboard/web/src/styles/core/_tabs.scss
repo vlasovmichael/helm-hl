@@ -20,9 +20,9 @@
   align-items: center;
   gap: 2px;
   padding: 4px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
-  background: var(--canvas-subtle);
+  background: var(--panel-sunk);
 }
 
 // Список монет может не влезть в строку — тогда переносим и убираем подложку:
@@ -30,7 +30,7 @@
 .tabs--wrap {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-2);
+  gap: var(--space-2);
   padding: 0;
   border: 0;
   background: none;
@@ -46,9 +46,9 @@
   border: 0;
   border-radius: var(--radius);
   background: transparent;
-  color: var(--text-secondary);
-  font-family: var(--font-sans);
-  font-size: var(--fs-base);
+  color: var(--ink-2);
+  font-family: var(--sans);
+  font-size: var(--text-base);
   font-weight: 600;
   letter-spacing: -0.01em;
   cursor: pointer;
@@ -58,33 +58,33 @@
     box-shadow var(--dur-fast) var(--ease-out);
 
   &:hover {
-    color: var(--text-primary);
+    color: var(--ink);
   }
   // Выбранная вкладка поднимается на фон карточки — «этот лист сверху».
   // Рамки нет намеренно: она прибавила бы 2px и сдвинула соседей.
   &.is-active {
-    color: var(--accent);
-    background: var(--card-bg);
-    box-shadow: var(--shadow-sm);
+    color: var(--accent-2);
+    background: var(--panel);
+    box-shadow: var(--shadow);
   }
   &:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--accent-2);
     outline-offset: 2px;
   }
 }
 
 // В переносимом ряду подложки нет, поэтому вкладка носит рамку сама.
 .tabs--wrap .tabs__tab {
-  border: 1px solid var(--border);
-  background: var(--canvas-subtle);
+  border: 1px solid var(--rule);
+  background: var(--panel-sunk);
 
   &:hover {
-    border-color: var(--border-strong);
+    border-color: var(--rule-strong);
   }
   &.is-active {
-    color: var(--text-primary);
-    border-color: var(--accent-line);
-    background: var(--accent-soft);
+    color: var(--ink);
+    border-color: var(--accent-2);
+    background: var(--wash);
     box-shadow: none;
   }
 }

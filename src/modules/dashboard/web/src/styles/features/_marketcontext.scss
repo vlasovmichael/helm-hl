@@ -17,12 +17,12 @@
   max-width: 100%;
   min-width: 0;
   overflow-x: clip;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule);
   border-radius: var(--radius);
-  background: var(--card-bg-elev);
+  background: var(--panel-raised);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.2px;
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   /* ⚠️ ЦВЕТ СОСТОЯНИЯ НЕ АНИМИРУЕМ. Здесь был transition на background и
      border-color, и он давал «мигающую серую полоску» слева (03.09.2026).
      Механика: смена класса светофора (unknown → wait/go) запускает переход, а
@@ -43,9 +43,9 @@
 
     .mc-sym {
       font-weight: 700;
-      font-size: var(--fs-base);
+      font-size: var(--text-base);
       letter-spacing: 0.8px;
-      color: var(--text-muted);
+      color: var(--ink-3);
     }
     /* Цена — как в TradingView: без анимации, цветом помечен изменившийся хвост
        числа (2026-09-01). Одометр отсюда убран: барабаны на крупном числе
@@ -53,31 +53,31 @@
        смена разряда не дёргала плашку — раньше это делал overflow одометра. */
     .mc-px {
       font-weight: 700;
-      font-size: var(--fs-h2);
-      color: var(--text-primary);
+      font-size: var(--text-h2);
+      color: var(--ink);
       font-variant-numeric: tabular-nums;
 
       .mc-px-up {
-        color: var(--green);
+        color: var(--gain);
       }
       .mc-px-dn {
-        color: var(--red);
+        color: var(--loss);
       }
     }
     .mc-24h {
-      font-size: var(--fs-base);
+      font-size: var(--text-base);
       font-weight: 600;
       i {
-        color: var(--text-muted);
+        color: var(--ink-3);
         font-style: normal;
-        font-size: var(--fs-label);
+        font-size: var(--text-label);
         font-weight: 500;
       }
       &.up {
-        color: var(--green);
+        color: var(--gain);
       }
       &.down {
-        color: var(--red);
+        color: var(--loss);
       }
     }
   }
@@ -118,27 +118,27 @@
 
       i {
         font-style: normal;
-        font-size: var(--fs-micro);
+        font-size: var(--text-micro);
         letter-spacing: 0.5px;
         text-transform: uppercase;
-        color: var(--text-muted);
+        color: var(--ink-3);
       }
       b {
         font-weight: 600;
-        font-size: var(--fs-lead);
-        color: var(--text-secondary);
+        font-size: var(--text-lead);
+        color: var(--ink-2);
         border-radius: 4px;
 
         &.up {
-          color: var(--green);
+          color: var(--gain);
         }
         &.down {
-          color: var(--red);
+          color: var(--loss);
         }
         /* Штиль BTC: сторона не называется. Приглушённый — чтобы FLAT не
            читался как сигнал наравне с LONG/SHORT. */
         &.mut {
-          color: var(--text-faint);
+          color: var(--ink-3);
         }
       }
     }
@@ -149,45 +149,45 @@
      против красного читался бы как «куда пойдёт». */
   .mc-liq {
     display: flex;
-    gap: var(--sp-5);
+    gap: var(--space-5);
     flex-wrap: wrap;
     width: 100%;
-    padding-top: var(--sp-2);
-    border-top: 1px solid var(--hairline);
-    font-size: var(--fs-small);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--rule-soft);
+    font-size: var(--text-small);
   }
   .mc-liq-row {
     display: inline-flex;
     align-items: baseline;
-    gap: var(--sp-2);
+    gap: var(--space-2);
     min-width: 0;
 
     svg {
       align-self: center;
-      color: var(--text-faint);
+      color: var(--ink-3);
     }
     i {
       font-style: normal;
-      font-size: var(--fs-micro);
+      font-size: var(--text-micro);
       letter-spacing: 0.5px;
       text-transform: uppercase;
-      color: var(--text-muted);
+      color: var(--ink-3);
     }
     b {
       font-weight: 600;
-      color: var(--text-secondary);
+      color: var(--ink-2);
       font-variant-numeric: tabular-nums;
     }
   }
 
   /* Светофор: зелёный = чёткий фонд (RISK-ON/OFF), жёлтый = MIXED. */
   &.go {
-    border-color: var(--green-line);
-    background: var(--green-soft);
+    border-color: var(--gain-line);
+    background: var(--gain-wash);
   }
   &.wait {
-    border-color: var(--warn);
-    background: var(--warn-soft);
+    border-color: var(--caution);
+    background: var(--caution-wash);
   }
 
   /* ── Вход (один раз при монтировании): стаггер fade-up, пружинный easing ── */

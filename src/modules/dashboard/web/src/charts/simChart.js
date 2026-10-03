@@ -8,10 +8,10 @@ import { cssVar } from "../utils/format.js";
 
 function themeColors() {
   return {
-    bg: cssVar("--card-bg", container) || "#0d1117",
-    text: cssVar("--text-secondary", container) || "#8b949e",
-    grid: cssVar("--border", container) || "rgba(127,127,127,0.18)",
-    warn: cssVar("--warn", container) || "#d29922",
+    bg: cssVar("--panel", container) || "#0d1117",
+    text: cssVar("--ink-2", container) || "#8b949e",
+    grid: cssVar("--rule", container) || "rgba(127,127,127,0.18)",
+    warn: cssVar("--caution", container) || "#d29922",
   };
 }
 

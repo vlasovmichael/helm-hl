@@ -58,7 +58,7 @@ function wwSaveList(list) {
 
 function fmtPnlColored(v) {
   if (v == null || !Number.isFinite(v)) return `<span>—</span>`;
-  const color = v >= 0 ? "var(--green)" : "var(--red)";
+  const color = v >= 0 ? "var(--gain)" : "var(--loss)";
   const sign = v >= 0 ? "+" : "";
   return `<span style="color:${color}">${sign}${fmtNotional(v)}</span>`;
 }
@@ -184,7 +184,7 @@ function renderWhaleWatch(results) {
 
   tbody.innerHTML = allRows
     .map((p) => {
-      const sideColor = p.side === "SHORT" ? "var(--red)" : "var(--green)";
+      const sideColor = p.side === "SHORT" ? "var(--loss)" : "var(--gain)";
       const levStr = p.leverage != null ? `${p.leverage}×` : "—";
       const entryStr =
         p.entryPrice >= 1000
@@ -201,31 +201,31 @@ function renderWhaleWatch(results) {
       let deltaBadge = "";
       if (d) {
         if (d.type === "opened") {
-          deltaBadge = `<span style="margin-left:4px;background:var(--green);color:#000;font-size: var(--fs-micro);font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">NEW</span>`;
+          deltaBadge = `<span style="margin-left:4px;background:var(--gain);color:#000;font-size: var(--text-micro);font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">NEW</span>`;
         } else if (d.type === "closed" || p._closed) {
-          deltaBadge = `<span style="margin-left:4px;background:var(--red);color:#fff;font-size: var(--fs-micro);font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
+          deltaBadge = `<span style="margin-left:4px;background:var(--loss);color:#fff;font-size: var(--text-micro);font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
         } else if (d.type === "size_up") {
           const diff = (d.sizeUsd ?? 0) - (d.prevSizeUsd ?? 0);
-          deltaBadge = `<span style="margin-left:4px;color:var(--green);font-size: var(--fs-micro);font-weight:700;vertical-align:middle">+${fmtNotional(diff)}</span>`;
+          deltaBadge = `<span style="margin-left:4px;color:var(--gain);font-size: var(--text-micro);font-weight:700;vertical-align:middle">+${fmtNotional(diff)}</span>`;
         } else if (d.type === "size_down") {
           const diff = (d.sizeUsd ?? 0) - (d.prevSizeUsd ?? 0);
-          deltaBadge = `<span style="margin-left:4px;color:var(--red);font-size: var(--fs-micro);font-weight:700;vertical-align:middle">${fmtNotional(diff)}</span>`;
+          deltaBadge = `<span style="margin-left:4px;color:var(--loss);font-size: var(--text-micro);font-weight:700;vertical-align:middle">${fmtNotional(diff)}</span>`;
         }
       } else if (p._closed) {
-        deltaBadge = `<span style="margin-left:4px;background:var(--red);color:#fff;font-size: var(--fs-micro);font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
+        deltaBadge = `<span style="margin-left:4px;background:var(--loss);color:#fff;font-size: var(--text-micro);font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
       }
 
       const sinceStr = p._closed ? "—" : fmtSince(p.firstSeenAt);
       const rowOpacity = p._closed ? "opacity:.5;" : "";
       return `<tr style="${rowOpacity}">
-      <td style="color:var(--text-muted);font-size: var(--fs-small)">${escapeHtml(p.label)}</td>
+      <td style="color:var(--ink-3);font-size: var(--text-small)">${escapeHtml(p.label)}</td>
       <td style="font-weight:700">${escapeHtml(p.coin)}</td>
       <td class="num" style="color:${sideColor};font-weight:700">${p.side}</td>
       <td class="num">${fmtNotional(p.sizeUsd)}${deltaBadge}</td>
-      <td class="num" style="color:var(--text-muted)">${levStr}</td>
+      <td class="num" style="color:var(--ink-3)">${levStr}</td>
       <td class="num">${fmtPnlColored(p.unrealizedPnl)}</td>
-      <td class="num" style="color:var(--text-muted)">${escapeHtml(entryStr)}</td>
-      <td class="num" style="color:var(--text-faint);font-size: var(--fs-label)">${sinceStr}</td>
+      <td class="num" style="color:var(--ink-3)">${escapeHtml(entryStr)}</td>
+      <td class="num" style="color:var(--ink-3);font-size: var(--text-label)">${sinceStr}</td>
     </tr>`;
     })
     .join("");
@@ -236,10 +236,10 @@ function renderWhaleWatch(results) {
     const longPct = 100 - shortPct;
     const col =
       shortPct > 60
-        ? "var(--red)"
+        ? "var(--loss)"
         : longPct > 60
-          ? "var(--green)"
-          : "var(--text-muted)";
+          ? "var(--gain)"
+          : "var(--ink-3)";
     biasEl.style.color = col;
     const pnlSign = totalPnl >= 0 ? "+" : "";
     biasEl.textContent = `SHORT ${shortPct.toFixed(0)}% · LONG ${longPct.toFixed(0)}% · ${fmtNotional(totalNotional)} · uPnL ${pnlSign}${fmtNotional(totalPnl)}`;
@@ -322,7 +322,7 @@ export function initWhaleWatch() {
     const label =
       labelInput.value.trim() || `${addr.slice(0, 6)}…${addr.slice(-4)}`;
     if (!/^0x[0-9a-f]{40}$/.test(addr)) {
-      addrInput.style.borderColor = "var(--red)";
+      addrInput.style.borderColor = "var(--loss)";
       setTimeout(() => {
         addrInput.style.borderColor = "";
       }, 1500);
@@ -377,12 +377,12 @@ async function fetchAndRenderLeaderboard() {
       .map((r, idx) => {
         const short = `${r.address.slice(0, 6)}…${r.address.slice(-4)}`;
         const nameStr = r.displayName
-          ? `${escapeHtml(r.displayName)} <span style="opacity:.5;font-size: var(--fs-micro)">${short}</span>`
+          ? `${escapeHtml(r.displayName)} <span style="opacity:.5;font-size: var(--text-micro)">${short}</span>`
           : short;
         const roi = Number.isFinite(r.roi30d)
           ? `${(r.roi30d * 100).toFixed(1)}%`
           : "—";
-        const pnlColor = r.pnl30d >= 0 ? "var(--green)" : "var(--red)";
+        const pnlColor = r.pnl30d >= 0 ? "var(--gain)" : "var(--loss)";
         const pnlSign = r.pnl30d >= 0 ? "+" : "";
         const alreadyAdded = watchedAddresses.has(r.address.toLowerCase());
         const addBtn = alreadyAdded
@@ -402,12 +402,12 @@ async function fetchAndRenderLeaderboard() {
               },
             });
         return `<tr>
-        <td style="color:var(--text-faint);font-size: var(--fs-label)">${idx + 1}</td>
-        <td style="font-family:var(--font-mono);font-size: var(--fs-label)">${nameStr}</td>
+        <td style="color:var(--ink-3);font-size: var(--text-label)">${idx + 1}</td>
+        <td style="font-family:var(--mono);font-size: var(--text-label)">${nameStr}</td>
         <td class="num">${fmtNotional(r.accountValue)}</td>
         <td class="num" style="color:${pnlColor}">${pnlSign}${fmtNotional(r.pnl30d)}</td>
         <td class="num" style="color:${pnlColor}">${roi}</td>
-        <td class="num" style="color:var(--text-muted)">${fmtNotional(r.vlm30d)}</td>
+        <td class="num" style="color:var(--ink-3)">${fmtNotional(r.vlm30d)}</td>
         <td>${addBtn}</td>
       </tr>`;
       })
@@ -426,7 +426,7 @@ async function fetchAndRenderLeaderboard() {
         }
         btn.disabled = true;
         btn.innerHTML = icon("check");
-        btn.style.color = "var(--text-faint)";
+        btn.style.color = "var(--ink-3)";
         btn.style.cursor = "default";
         fetchWhaleWatch();
       });

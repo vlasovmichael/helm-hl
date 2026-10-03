@@ -24,17 +24,17 @@
   gap: 8px;
   padding: 4px 10px;
   border-radius: 999px;
-  font-family: var(--font-mono, "JetBrains Mono", monospace);
-  font-size: var(--fs-small);
+  font-family: var(--mono, "JetBrains Mono", monospace);
+  font-size: var(--text-small);
   line-height: 1;
   background: var(--surface-2, rgba(127, 127, 127, 0.08));
-  border: 1px solid var(--border, rgba(127, 127, 127, 0.18));
+  border: 1px solid var(--rule, rgba(127, 127, 127, 0.18));
   margin-left: auto;
   margin-right: 8px;
 
   .equity-pill-value {
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--ink);
   }
   .equity-pill-delta {
     font-weight: 600;
@@ -66,8 +66,8 @@
   padding: 6px 10px;
   margin-bottom: 6px;
   border-radius: 6px;
-  background: var(--canvas-inset, rgba(127, 127, 127, 0.06));
-  font-size: var(--fs-small);
+  background: var(--panel-sunk, rgba(127, 127, 127, 0.06));
+  font-size: var(--text-small);
   line-height: 1.4;
 
   &[hidden] { display: none; }
@@ -76,38 +76,38 @@
   .cr-good { color: var(--pos, #22c55e); }
   .cr-warn { color: var(--amber, #f59e0b); }
   .cr-bad { color: var(--neg, #ef4444); }
-  .cr-neutral { color: var(--text-secondary); }
+  .cr-neutral { color: var(--ink-2); }
   .cr-meta {
-    font-family: var(--font-mono);
-    font-size: var(--fs-label);
-    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: var(--text-label);
+    color: var(--ink-3);
   }
 }
 
 /* Легенда свечного графика, как у TV: монета и OHLC бара под курсором. */
 .chart-legend {
   position: absolute;
-  top: var(--sp-2);
-  left: var(--sp-3);
+  top: var(--space-2);
+  left: var(--space-3);
   /* Шкала цен справа шириной около 80px: легенда на неё не заходит. */
   right: 88px;
   z-index: 3;
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: var(--sp-1) var(--sp-3);
+  gap: var(--space-1) var(--space-3);
   pointer-events: none;
-  font-size: var(--fs-small);
-  color: var(--text-secondary);
+  font-size: var(--text-small);
+  color: var(--ink-2);
   font-variant-numeric: tabular-nums;
 
   strong {
-    color: var(--text-primary);
+    color: var(--ink);
     font-weight: 600;
   }
   b {
     margin-left: 3px;
-    font-family: var(--font-mono);
+    font-family: var(--mono);
     font-weight: 500;
   }
   .up {
@@ -124,26 +124,26 @@
   position: absolute;
   z-index: 3;
   pointer-events: none;
-  padding: var(--sp-2) var(--sp-3);
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
-  font-size: var(--fs-small);
+  font-size: var(--text-small);
   line-height: 1.5;
-  border: 1px solid var(--border);
-  background: var(--card-bg-elev);
-  color: var(--text-primary);
-  box-shadow: var(--shadow);
+  border: 1px solid var(--rule);
+  background: var(--panel-raised);
+  color: var(--ink);
+  box-shadow: var(--shadow-lift);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .oi-tip-t {
-  color: var(--text-secondary);
-  font-size: var(--fs-label);
+  color: var(--ink-2);
+  font-size: var(--text-label);
   margin-bottom: 3px;
 }
 .oi-tip-r {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--space-2);
 
   b {
     width: 9px;
@@ -152,12 +152,12 @@
     flex: none;
   }
   span {
-    font-family: var(--font-mono);
+    font-family: var(--mono);
     margin-left: auto;
   }
   i {
     font-style: normal;
-    color: var(--text-secondary);
-    font-size: var(--fs-label);
+    color: var(--ink-2);
+    font-size: var(--text-label);
   }
 }

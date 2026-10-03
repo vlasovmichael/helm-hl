@@ -394,7 +394,7 @@ export async function refreshTgSignalLab() {
     meta.textContent = data?.enabled
       ? `${traded} closed · ${(data.positions || []).length} open`
       : "watcher off";
-    meta.style.color = data?.enabled ? "var(--text-muted)" : "var(--red)";
+    meta.style.color = data?.enabled ? "var(--ink-3)" : "var(--loss)";
   }
 
   const head =

@@ -8,7 +8,7 @@ body[data-page="login"] {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: var(--canvas-subtle);
+  background: var(--panel-sunk);
 }
 .login-shell {
   width: 100%;
@@ -28,52 +28,52 @@ body[data-page="login"] {
   width: 48px;
   height: 48px;
   border-radius: 10px;
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: var(--panel);
+  border: 1px solid var(--rule);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow);
 
   svg {
     display: block;
   }
 }
 .login-wordmark {
-  font-family: var(--font-sans);
+  font-family: var(--sans);
   font-weight: 600;
-  font-size: var(--fs-h3);
+  font-size: var(--text-h3);
   letter-spacing: -0.01em;
-  color: var(--text-primary);
+  color: var(--ink);
 }
 .login-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: var(--panel);
+  border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
   padding: 28px 24px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow);
 }
 .login-title {
-  font-size: var(--fs-h2);
+  font-size: var(--text-h2);
   font-weight: 500;
   letter-spacing: -0.01em;
   margin-bottom: 4px;
   text-align: center;
-  color: var(--text-primary);
+  color: var(--ink);
 }
 .login-subtitle {
-  color: var(--text-muted);
-  font-size: var(--fs-body);
+  color: var(--ink-3);
+  font-size: var(--text-body);
   text-align: center;
   margin-bottom: 22px;
 }
 .login-error {
-  background: var(--red-soft);
-  border: 1px solid var(--red-line);
-  color: var(--red);
+  background: var(--loss-wash);
+  border: 1px solid var(--loss-line);
+  color: var(--loss);
   padding: 8px 12px;
   border-radius: var(--radius);
-  font-size: var(--fs-body);
+  font-size: var(--text-body);
   margin-bottom: 14px;
   display: none;
 
@@ -92,19 +92,19 @@ body[data-page="login"] {
   gap: 6px;
 
   label {
-    font-size: var(--fs-small);
-    color: var(--text-primary);
+    font-size: var(--text-small);
+    color: var(--ink);
     font-weight: 600;
   }
 }
 .login-input {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: var(--panel);
+  border: 1px solid var(--rule);
   border-radius: 6px;
   padding: 7px 12px;
-  color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: var(--fs-base);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: var(--text-base);
   line-height: 20px;
   transition:
     border-color 0.12s,
@@ -113,36 +113,36 @@ body[data-page="login"] {
   outline: none;
 
   &::placeholder {
-    color: var(--text-muted);
+    color: var(--ink-3);
   }
   &:hover {
-    border-color: var(--border-strong);
+    border-color: var(--rule-strong);
   }
   &:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-soft);
+    border-color: var(--accent-2);
+    box-shadow: 0 0 0 3px var(--wash);
   }
 }
 /* Кнопка входа — общий .btn.btn--primary.btn--lg, но зелёная: на этой
    странице единственное действие — «войти», и зелёный читается как «идти»,
    а не как «главная кнопка среди прочих». */
 .login-button {
-  background: var(--green);
-  border-color: color-mix(in srgb, var(--green) 70%, #000);
+  background: var(--gain);
+  border-color: color-mix(in srgb, var(--gain) 70%, #000);
   color: #fff;
-  margin-top: var(--sp-1);
+  margin-top: var(--space-1);
 
   &:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--green) 90%, #000);
-    border-color: color-mix(in srgb, var(--green) 70%, #000);
+    background: color-mix(in srgb, var(--gain) 90%, #000);
+    border-color: color-mix(in srgb, var(--gain) 70%, #000);
   }
 }
 
 .login-meta {
   text-align: center;
-  font-family: var(--font-mono);
-  font-size: var(--fs-label);
-  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--text-label);
+  color: var(--ink-3);
   letter-spacing: 0.02em;
 }
 
@@ -158,6 +158,6 @@ body[data-page="login"] {
     border-radius: 10px;
   }
   .login-title {
-    font-size: var(--fs-h3);
+    font-size: var(--text-h3);
   }
 }

@@ -10,9 +10,9 @@
 
 /* ──────────────────────── Hunter Signals */
 .signals-meta {
-  font-family: var(--font-mono);
-  font-size: var(--fs-small);
-  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: var(--text-small);
+  color: var(--ink-3);
 }
 .hm-flush-chip {
   display: inline-block;
@@ -27,17 +27,17 @@
 /* Счётчик форвард-замера под таблицей. Пунктир — «счётчик ещё идёт, вывода
    тут нет». */
 .hm-fwd {
-  margin: var(--sp-3) 0 0;
-  padding: var(--sp-3);
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3);
   border-radius: var(--radius-sm);
-  border: 1px dashed var(--border);
-  font-size: var(--fs-small);
+  border: 1px dashed var(--rule);
+  font-size: var(--text-small);
   line-height: 1.6;
-  color: var(--text-secondary);
+  color: var(--ink-2);
 
   b {
-    color: var(--text-primary);
-    font-family: var(--font-mono);
+    color: var(--ink);
+    font-family: var(--mono);
     font-variant-numeric: tabular-nums;
   }
 }
@@ -51,7 +51,7 @@
   margin-left: 6px;
   padding: 1px 6px;
   border-radius: var(--radius-pill);
-  font-size: var(--fs-label);
+  font-size: var(--text-label);
   font-weight: 600;
   letter-spacing: var(--ls-wide);
   color: var(--orange, #f59e0b);
@@ -71,7 +71,7 @@
   gap: 3px;
   padding: 2px 7px;
   border-radius: var(--radius-pill);
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   font-weight: 600;
   letter-spacing: var(--ls-wide);
   color: #fff;
@@ -83,19 +83,19 @@
   }
 }
 .hm-costly.costly-long .setup-pill {
-  background: var(--green);
+  background: var(--gain);
 }
 .hm-costly.costly-short .setup-pill {
-  background: var(--red);
+  background: var(--loss);
 }
 /* WAIT — серая пилюля: состояние есть, стороны нет. */
 .hm-costly.costly-wait .setup-pill {
-  background: color-mix(in srgb, var(--text-muted) 22%, transparent);
-  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--ink-3) 22%, transparent);
+  color: var(--ink-2);
 }
 .hm-costly.costly-none .setup-pill {
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   padding-left: 0;
 }
 /* Сторона, за которую журнал уже заплатил. */
@@ -106,10 +106,10 @@
 /* Режим захода — хвост справа от пилюли. */
 .hm-costly .setup-mode {
   margin-left: 5px;
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   font-weight: 600;
   letter-spacing: var(--ls-wide);
-  color: var(--text-muted);
+  color: var(--ink-3);
   vertical-align: middle;
 }
 /* Сторона, за которую журнал уже заплатил. */
@@ -122,21 +122,21 @@
   text-align: right;
 }
 .hm-move-lvl {
-  font-size: var(--fs-label);
+  font-size: var(--text-label);
   letter-spacing: var(--ls-wide);
   text-transform: uppercase;
 
   &.extreme {
-    color: var(--red);
+    color: var(--loss);
     font-weight: 700;
   }
   &.strong {
-    color: var(--warn);
+    color: var(--caution);
     font-weight: 600;
   }
   &.fast,
   &.quiet {
-    color: var(--text-secondary);
+    color: var(--ink-2);
   }
   &.quiet {
     opacity: 0.6;
@@ -207,7 +207,7 @@
     position: sticky;
     top: 0;
     z-index: 1;
-    background: var(--canvas-subtle);
+    background: var(--panel-sunk);
   }
   tbody tr {
     transition: background var(--dur-fast) var(--ease-out);
@@ -286,7 +286,7 @@
 .hm-active-badge {
   display: inline-block;
   margin-left: 6px;
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   font-weight: 700;
   letter-spacing: 0.04em;
   padding: 0 5px;
@@ -301,7 +301,7 @@
 .hm-align {
   display: inline-block;
   margin-left: 6px;
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   font-weight: 700;
   letter-spacing: 0.02em;
   padding: 0 6px;
@@ -350,14 +350,14 @@
   display: block;
 }
 .hm-align-ok {
-  color: var(--green);
-  background: var(--green-soft);
-  border-color: var(--green-line);
+  color: var(--gain);
+  background: var(--gain-wash);
+  border-color: var(--gain-line);
 }
 .hm-align-bad {
-  color: var(--red);
-  background: var(--red-soft);
-  border-color: var(--red-line);
+  color: var(--loss);
+  background: var(--loss-wash);
+  border-color: var(--loss-line);
   position: relative;
 }
 /* «Против» — движение развернулось. Раньше кольцо мигало бесконечным
@@ -371,12 +371,12 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  box-shadow: 0 0 0 2px var(--red-soft);
+  box-shadow: 0 0 0 2px var(--loss-wash);
   pointer-events: none;
 }
 .hm-align-flat {
-  color: var(--text-muted);
-  border-color: var(--border);
+  color: var(--ink-3);
+  border-color: var(--rule);
 }
 /* Hot Movers — под-строка с данными открытой позиции (пиннутая монета). */
 /* Клик по строке монеты переключает встроенный график — кликабельный аффорданс. */
@@ -388,26 +388,26 @@
    а на карточной (мобильной) вёрстке они ещё и не гасились и лезли поверх
    карточки. Ховер несёт фон — как во всех остальных таблицах. */
 #hot-movers-tbody tr[data-hmkey^="m:"]:hover {
-  background: var(--card-bg-hover);
+  background: var(--sheen);
 }
 .hm-pos-row td {
   padding: 3px 10px 7px 30px !important;
-  font-size: var(--fs-label);
-  font-family: var(--font-mono);
-  color: var(--text-secondary);
-  /* Нейтральный фон вместо --accent-soft: синий фон душил синий тег BOT.
+  font-size: var(--text-label);
+  font-family: var(--mono);
+  color: var(--ink-2);
+  /* Нейтральный фон вместо --wash: синий фон душил синий тег BOT.
      Лёгкая чернильная подложка + тонкая кромка-акцент слева. */
-  background: var(--canvas-inset);
-  border-bottom: 1px solid var(--border);
+  background: var(--panel-sunk);
+  border-bottom: 1px solid var(--rule);
   /* Кромка серая: подстрока — продолжение своей монеты, а не отдельный
      акцент. Цветная полоса тут спорила с тегом позиции. */
-  box-shadow: inset 2px 0 0 var(--border-strong);
+  box-shadow: inset 2px 0 0 var(--rule-strong);
 }
 /* Теги BOT / YOU / YOU+BOT — заливные пилюли с белым текстом: контраст читаемый
    на любом фоне (раньше цветной текст на одноцветном фоне сливался). */
 .hm-pos-tag {
   display: inline-block;
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   font-weight: 700;
   letter-spacing: 0.04em;
   padding: 1px 6px;
@@ -417,7 +417,7 @@
   border: none;
 }
 .hm-pos-bot {
-  background: var(--accent);
+  background: var(--accent-2);
 }
 .hm-pos-manual {
   /* Ручная/усыновлённая поза: тёплый янтарь, тёмный текст для максимального
@@ -430,20 +430,20 @@
   font-weight: 600;
 }
 .hm-hint-bad {
-  color: var(--red);
+  color: var(--loss);
 }
 .hm-hint-danger {
-  color: var(--red);
+  color: var(--loss);
   font-weight: 700;
 }
 .hm-hint-warn {
   color: var(--orange, #f59e0b);
 }
 .hm-hint-good {
-  color: var(--green);
+  color: var(--gain);
 }
 .hm-hint-neutral {
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 .hm-hint-pnl {
   font-weight: 700;
@@ -454,16 +454,16 @@
    ручной вход (рядом меряет paper-слот fadehot). */
 .hm-fadehot-row td {
   padding: 3px 10px 7px 30px !important;
-  font-size: var(--fs-label);
-  font-family: var(--font-mono);
-  color: var(--text-secondary);
-  background: var(--canvas-inset);
-  border-bottom: 1px solid var(--border);
+  font-size: var(--text-label);
+  font-family: var(--mono);
+  color: var(--ink-2);
+  background: var(--panel-sunk);
+  border-bottom: 1px solid var(--rule);
   box-shadow: inset 2px 0 0 var(--amber, #f0a020);
 }
 .hm-fh-tag {
   display: inline-block;
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   font-weight: 700;
   letter-spacing: 0.03em;
   padding: 1px 6px;
@@ -473,13 +473,13 @@
   border: none;
 }
 .hm-fh-tag.fh-short {
-  background: var(--red);
+  background: var(--loss);
 }
 .hm-fh-tag.fh-long {
-  background: var(--green);
+  background: var(--gain);
 }
 .hm-fh-meta {
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 /* On phones the tag + meta don't fit one line → stack the meta below the tag
    and tighten the left indent so it doesn't overflow the row. */
@@ -504,20 +504,20 @@
   justify-content: center;
   width: 30px;
   height: 26px;
-  font-size: var(--fs-h3);
+  font-size: var(--text-h3);
   line-height: 1;
   border-radius: 7px;
   border: 1px solid transparent;
 }
 .hm-entry-zone .hm-entry-icon {
-  background: var(--green-soft);
-  border-color: var(--green-line);
-  color: var(--green);
+  background: var(--gain-wash);
+  border-color: var(--gain-line);
+  color: var(--gain);
 }
 .hm-entry-none .hm-entry-icon {
   opacity: 0.4;
-  font-size: var(--fs-base);
-  color: var(--text-muted);
+  font-size: var(--text-base);
+  color: var(--ink-3);
 }
 /* Line-SVG иконки Enter — stroke по currentColor (цвет из .hm-entry-${state}). */
 .hm-eico {
@@ -549,7 +549,7 @@
    поворачивается по направлению цены (up=0° / mid=90° / down=180°) с плавным
    tween и сменой цвета. */
 .hm-dir .hm-entry-icon {
-  font-size: var(--fs-h3);
+  font-size: var(--text-h3);
   font-weight: 700;
   border-color: transparent;
 }
@@ -577,7 +577,7 @@
   .hm-entry-icon {
     width: 26px;
     height: 24px;
-    font-size: var(--fs-lead);
+    font-size: var(--text-lead);
   }
 }
 /* Candy Girl signal rows — лёгкий tint по направлению. */
@@ -592,14 +592,14 @@
 }
 
 .signals-apy-good {
-  color: var(--green);
+  color: var(--gain);
   font-weight: 600;
 }
 .signals-apy-mid {
-  color: var(--text-primary);
+  color: var(--ink);
 }
 .signals-apy-low {
-  color: var(--text-muted);
+  color: var(--ink-3);
 }
 
 /* Shared data table used by BTC Divergence and Whale Watch */
@@ -608,34 +608,34 @@
   display: inline-block;
   padding: 1px 8px;
   border-radius: 2em;
-  font-size: var(--fs-label);
+  font-size: var(--text-label);
   font-weight: 500;
   border: 1px solid currentColor;
   line-height: 18px;
 
   &.tradable {
-    background: var(--red-soft);
-    color: var(--red);
-    border-color: var(--red-line);
+    background: var(--loss-wash);
+    color: var(--loss);
+    border-color: var(--loss-line);
   }
   &.long {
-    background: var(--green-soft);
-    color: var(--green);
-    border-color: var(--green-line);
+    background: var(--gain-wash);
+    color: var(--gain);
+    border-color: var(--gain-line);
   }
   &.blocked {
-    background: var(--canvas-subtle);
-    color: var(--text-muted);
-    border-color: var(--border);
+    background: var(--panel-sunk);
+    color: var(--ink-3);
+    border-color: var(--rule);
   }
   &.active {
-    background: var(--accent-soft);
-    color: var(--accent);
-    border-color: var(--accent-line);
+    background: var(--wash);
+    color: var(--accent-2);
+    border-color: var(--accent-2);
   }
 }
 .signals-drop-warn {
-  color: var(--red);
+  color: var(--loss);
 }
 
 // Тир движения: цвет числа задаёт ядро (.table), здесь — только ступени
@@ -643,22 +643,22 @@
 .signals-table {
   td.num-pos-strong,
   td.num-pos-strong * {
-    color: var(--green);
+    color: var(--gain);
     font-weight: 700;
   }
   td.num-pos-weak,
   td.num-pos-weak * {
-    color: var(--green);
+    color: var(--gain);
     font-weight: 500;
   }
   td.num-neg-strong,
   td.num-neg-strong * {
-    color: var(--red);
+    color: var(--loss);
     font-weight: 700;
   }
   td.num-neg-weak,
   td.num-neg-weak * {
-    color: var(--red);
+    color: var(--loss);
     font-weight: 500;
   }
 
@@ -693,19 +693,19 @@
 }
 .signals-table {
   .num-inline-pos {
-    color: var(--green);
+    color: var(--gain);
     font-weight: 600;
   }
   .num-inline-neg {
-    color: var(--red);
+    color: var(--loss);
     font-weight: 600;
   }
   .num-inline-muted {
-    color: var(--text-muted);
+    color: var(--ink-3);
   }
   .signals-price {
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--ink);
   }
 }
 
@@ -763,8 +763,8 @@
    WAIT  = ждём сигнала (dim, с едва заметным намёком на цвет)
    —     = нет данных */
 .signals-table td.hm-setup {
-  font-family: var(--font-mono);
-  font-size: var(--fs-label);
+  font-family: var(--mono);
+  font-size: var(--text-label);
   font-weight: 700;
   white-space: nowrap;
   text-align: center;
@@ -802,25 +802,25 @@
    рамка + тёмный насыщенный текст (соавтор-токены вместо «вылинявших»
    полупрозрачных значений, настроенных под тёмную тему) */
 html[data-theme="light"] .signals-table td.hm-setup.setup-short {
-  background: var(--red-soft);
-  color: var(--red);
-  box-shadow: inset 0 0 0 1px var(--red-line);
+  background: var(--loss-wash);
+  color: var(--loss);
+  box-shadow: inset 0 0 0 1px var(--loss-line);
 }
 html[data-theme="light"] .signals-table td.hm-setup.setup-long {
-  background: var(--green-soft);
-  color: var(--green);
-  box-shadow: inset 0 0 0 1px var(--green-line);
+  background: var(--gain-wash);
+  color: var(--gain);
+  box-shadow: inset 0 0 0 1px var(--gain-line);
 }
 /* FADE в light-теме — обведённый, без заливки (контраст с залитым trend). */
 html[data-theme="light"] .signals-table td.hm-setup.setup-fade-long {
   background: transparent;
-  color: var(--green);
-  box-shadow: inset 0 0 0 1.5px var(--green-line);
+  color: var(--gain);
+  box-shadow: inset 0 0 0 1.5px var(--gain-line);
 }
 html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   background: transparent;
-  color: var(--red);
-  box-shadow: inset 0 0 0 1.5px var(--red-line);
+  color: var(--loss);
+  box-shadow: inset 0 0 0 1.5px var(--loss-line);
 }
 /* WAIT — нейтральный серый, без тревожного тинта (это «ждём», не сигнал) */
 .signals-table td.hm-setup {
@@ -829,13 +829,13 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   &.setup-fade-wait-short,
   &.setup-fade-wait-long {
     background: transparent;
-    color: var(--text-muted);
+    color: var(--ink-3);
     font-weight: 500;
   }
   &.setup-wait,
   &.setup-none {
     background: transparent;
-    color: var(--text-muted);
+    color: var(--ink-3);
     font-weight: 500;
   }
   /* иконки в Setup ячейке */
@@ -867,7 +867,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   white-space: nowrap;
 
   .sep {
-    color: var(--text-faint);
+    color: var(--ink-3);
     margin: 0 4px;
   }
 }
@@ -891,17 +891,17 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   box-shadow: inset 2px 0 0 color-mix(in srgb, var(--pnl-down) 55%, transparent);
 }
 .signals-table tr.row-up.row-heat-strong td:first-child {
-  box-shadow: inset 3px 0 0 var(--green);
+  box-shadow: inset 3px 0 0 var(--gain);
 }
 .signals-table tr.row-down.row-heat-strong td:first-child {
-  box-shadow: inset 3px 0 0 var(--red);
+  box-shadow: inset 3px 0 0 var(--loss);
 }
 /* цена — цвет по направлению движения (theme-aware, в тон процентам) */
 .signals-table tr.row-up .signals-price {
-  color: var(--green);
+  color: var(--gain);
 }
 .signals-table tr.row-down .signals-price {
-  color: var(--red);
+  color: var(--loss);
 }
 
 /* Активная монета (позиция бота ИЛИ ручная) — всегда поверх heat-раскраски:
@@ -1005,8 +1005,8 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
 .hm-table tbody tr.hm-status-row .hm-status-cell {
   padding: 28px 0;
   text-align: center;
-  color: var(--text-muted);
-  font-size: var(--fs-body);
+  color: var(--ink-3);
+  font-size: var(--text-body);
 }
 .hm-status-spinner {
   display: inline-block;
@@ -1024,7 +1024,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   height: 3px;
   margin: 10px auto 0;
   border-radius: 2px;
-  background: var(--border);
+  background: var(--rule);
   overflow: hidden;
 }
 .hm-status-bar-fill {
@@ -1032,7 +1032,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   width: 0;
   height: 100%;
   border-radius: 2px;
-  background: var(--accent);
+  background: var(--accent-2);
   transition: width 0.18s linear;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1099,7 +1099,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--green);
+  background: var(--gain);
   margin-right: 6px;
   vertical-align: middle;
 }
@@ -1118,7 +1118,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   }
   .signals-table:not(.hm-table) {
     display: block;
-    font-size: var(--fs-small);
+    font-size: var(--text-small);
   }
   .signals-table:not(.hm-table) thead {
     display: none;
@@ -1139,22 +1139,22 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     gap: 6px 10px;
     align-items: center;
     padding: 11px 12px;
-    background: var(--card-bg);
-    border: 1px solid var(--border);
+    background: var(--panel);
+    border: 1px solid var(--rule);
     border-radius: var(--radius-sm);
   }
   /* Сторона красит рамку карточки-строки целиком. Раньше это была полоска
      border-left: на карточном (мобильном) виде она шла по всей высоте
      развёрнутой строки и перевешивала сам сигнал. */
   .signals-table:not(.hm-table) tr.row-short {
-    border-color: var(--red-line);
+    border-color: var(--loss-line);
   }
   .signals-table:not(.hm-table) tr.row-long {
-    border-color: var(--green-line);
+    border-color: var(--gain-line);
   }
   .signals-table:not(.hm-table) tr.is-active {
-    border-color: var(--accent-line);
-    background: var(--accent-soft);
+    border-color: var(--accent-2);
+    background: var(--wash);
   }
 
   .signals-table:not(.hm-table) td {
@@ -1171,26 +1171,26 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   /* Column → grid area mapping */
   .signals-table:not(.hm-table) td:nth-child(1) {
     grid-area: rank;
-    color: var(--text-muted);
-    font-size: var(--fs-label);
+    color: var(--ink-3);
+    font-size: var(--text-label);
     font-weight: 600;
   }
   .signals-table:not(.hm-table) td:nth-child(2) {
     grid-area: pair;
     font-weight: 700;
-    font-size: var(--fs-body);
-    color: var(--text-primary);
+    font-size: var(--text-body);
+    color: var(--ink);
   }
   .signals-table:not(.hm-table) td:nth-child(3) {
     grid-area: price;
     text-align: right;
     font-weight: 600;
-    font-size: var(--fs-body);
+    font-size: var(--text-body);
   }
   .signals-table:not(.hm-table) td:nth-child(4),
   .signals-table:not(.hm-table) td:nth-child(5) {
     /* Spike / Trend — keep coloured pill but inline */
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
   }
   .signals-table:not(.hm-table) td:nth-child(4) {
     grid-area: spike;
@@ -1232,14 +1232,14 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   .signals-table:not(.hm-table) td:nth-child(6) {
     grid-area: suggest;
     text-align: right;
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
   }
   .signals-table:not(.hm-table) td:nth-child(7) {
     grid-area: sltp;
-    color: var(--text-muted);
-    font-size: var(--fs-label);
+    color: var(--ink-3);
+    font-size: var(--text-label);
     padding-top: 4px !important;
-    border-top: 1px solid var(--hairline);
+    border-top: 1px solid var(--rule-soft);
   }
   /* Re-add small spacing on top edge of sltp row */
   .signals-table:not(.hm-table) td:nth-child(7).num-pos,
@@ -1268,20 +1268,20 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
       "chg   whale"
       "rel   whale";
     padding: 8px 12px;
-    border-bottom: 1px solid var(--hairline);
+    border-bottom: 1px solid var(--rule-soft);
     gap: 1px 10px;
   }
   #div-table td {
     padding: 0;
     border: none;
     white-space: normal;
-    font-size: var(--fs-small);
+    font-size: var(--text-small);
     display: block;
   }
   /* Coin — bold, top-left */
   #div-table td:nth-child(1) {
     grid-area: coin;
-    font-size: var(--fs-body);
+    font-size: var(--text-body);
     font-weight: 700;
   }
   /* Price — hidden */
@@ -1291,12 +1291,12 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   /* Change% — middle-left */
   #div-table td:nth-child(3) {
     grid-area: chg;
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
   }
   /* vs BTC — bottom-left */
   #div-table td:nth-child(4) {
     grid-area: rel;
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
     text-align: left;
   }
   /* Signal — top-right, badge-style */
@@ -1314,7 +1314,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     align-items: flex-end;
     justify-content: center;
     gap: 2px;
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
     min-width: 60px;
   }
 }
@@ -1324,7 +1324,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   #ww-table th,
   #ww-table td {
     padding: 6px 6px;
-    font-size: var(--fs-small);
+    font-size: var(--text-small);
   }
   /* Hide Lev column on small screens */
   #ww-table th:nth-child(5),
@@ -1334,7 +1334,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   /* Since column: shorter text */
   #ww-table th:nth-child(8),
   #ww-table td:nth-child(8) {
-    font-size: var(--fs-micro);
+    font-size: var(--text-micro);
   }
 }
 
@@ -1345,11 +1345,11 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   align-items: baseline;
   gap: 3px;
   margin-left: 6px;
-  font-family: var(--font-mono);
-  font-size: var(--fs-label);
+  font-family: var(--mono);
+  font-size: var(--text-label);
 }
 .setup-live-px {
-  color: var(--text-secondary);
+  color: var(--ink-2);
   font-variant-numeric: tabular-nums;
 }
 .setup-live-arrow {
@@ -1365,7 +1365,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
    Серый по умолчанию; --chv-col = цвет направления, зажигается от острия
    (chv-1) по data-strength. Волна (.wave) ставится из JS по тику цены. */
 .chv-arrow {
-  --chv-col: var(--text-muted);
+  --chv-col: var(--ink-3);
   .chv {
     display: block;
     overflow: visible;
@@ -1373,7 +1373,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
   }
   .chv-p {
     fill: none;
-    stroke: var(--text-muted);
+    stroke: var(--ink-3);
     stroke-width: 3;
     stroke-linecap: round;
     stroke-linejoin: round;
@@ -1383,10 +1383,10 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
       opacity 0.3s ease;
   }
   &.up {
-    --chv-col: var(--green);
+    --chv-col: var(--gain);
   }
   &.down {
-    --chv-col: var(--red);
+    --chv-col: var(--loss);
     .chv {
       transform: scaleY(-1);
     }
@@ -1508,11 +1508,11 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     animation: rktTrail 0.85s ease-out forwards;
   }
   &.up {
-    color: var(--green);
+    color: var(--gain);
     animation: hmRocketUp 0.85s cubic-bezier(0.3, 0.9, 0.5, 1) forwards;
   }
   &.down {
-    color: var(--red);
+    color: var(--loss);
     animation: hmRocketDown 0.85s cubic-bezier(0.3, 0.9, 0.5, 1) forwards;
   }
 }
@@ -1599,9 +1599,9 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
 // что и таблица выше в этой карточке: одна порода на весь дашборд.
 // Счётчик у заголовка Hot Movers и ширина колонки номера.
 .hm-meta {
-  font-size: var(--fs-label);
-  font-family: var(--font-mono);
-  color: var(--text-muted);
+  font-size: var(--text-label);
+  font-family: var(--mono);
+  color: var(--ink-3);
 }
 .hm-col-idx {
   width: 24px;
@@ -1610,12 +1610,12 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
 // Подписи-метки карточек Lab: счётчик у заголовка, сводка под таблицей и
 // моноширинное тело форвард-теста.
 .lab-meta {
-  font-size: var(--fs-label);
-  font-family: var(--font-mono);
-  color: var(--text-muted);
+  font-size: var(--text-label);
+  font-family: var(--mono);
+  color: var(--ink-3);
 }
 .lab-mono-body {
-  font-family: var(--font-mono);
-  font-size: var(--fs-small);
+  font-family: var(--mono);
+  font-size: var(--text-small);
 }
 

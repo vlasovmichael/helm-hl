@@ -7,11 +7,11 @@
 .tk-lead {
   max-width: 72ch;
   margin: -4px 0 18px;
-  font-size: var(--fs-body);
+  font-size: var(--text-body);
   line-height: 1.65;
-  color: var(--text-muted);
+  color: var(--ink-3);
 
-  b { color: var(--text-secondary); }
+  b { color: var(--ink-2); }
 }
 .tk-btns {
   display: grid;
@@ -23,10 +23,10 @@
   flex-direction: column;
   gap: 3px;
   padding: 14px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule);
   border-radius: 12px;
-  background: var(--canvas-inset);
-  color: var(--text-primary);
+  background: var(--panel-sunk);
+  color: var(--ink);
   font-family: inherit;
   text-align: left;
   cursor: pointer;
@@ -36,21 +36,21 @@
     background var(--dur-fast) var(--ease-out),
     transform var(--dur-fast) var(--ease-out);
 
-  b { font-size: var(--fs-base); font-weight: 700; }
-  span { font-size: var(--fs-label); color: var(--text-faint); }
+  b { font-size: var(--text-base); font-weight: 700; }
+  span { font-size: var(--text-label); color: var(--ink-3); }
 
   &:hover {
-    border-color: var(--accent-line);
-    background: var(--card-bg-hover);
+    border-color: var(--accent-2);
+    background: var(--sheen);
     transform: translateY(-1px);
   }
 }
 .tk-list {
   margin: 0;
   padding-left: 18px;
-  font-size: var(--fs-body);
+  font-size: var(--text-body);
   line-height: 1.75;
-  color: var(--text-muted);
+  color: var(--ink-3);
 
-  b { color: var(--text-secondary); }
+  b { color: var(--ink-2); }
 }

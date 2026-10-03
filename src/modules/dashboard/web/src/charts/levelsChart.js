@@ -28,17 +28,17 @@ const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 
 function palette() {
   return {
-    bg: cssVar("--card-bg", host) || "#ffffff",
-    text: cssVar("--text-secondary", host) || "#59636e",
-    strong: cssVar("--text-primary", host) || "#1f2328",
-    grid: cssVar("--hairline", host) || "#eaeef2",
-    border: cssVar("--border", host) || "#d1d9e0",
+    bg: cssVar("--panel", host) || "#ffffff",
+    text: cssVar("--ink-2", host) || "#59636e",
+    strong: cssVar("--ink", host) || "#1f2328",
+    grid: cssVar("--rule-soft", host) || "#eaeef2",
+    border: cssVar("--rule", host) || "#d1d9e0",
     up: cssVar("--pnl-up", host) || "#0ecb81",
     down: cssVar("--pnl-down", host) || "#f6465d",
-    accent: cssVar("--accent", host) || "#0969da",
-    ema: cssVar("--chart-ema", host) || "#ffd60a",
-    font: cssVar("--font-sans", host) || "sans-serif",
-    mono: cssVar("--font-mono", host) || "monospace",
+    accent: cssVar("--accent-2", host) || "#0969da",
+    ema: cssVar("--plot-ema", host) || "#ffd60a",
+    font: cssVar("--sans", host) || "sans-serif",
+    mono: cssVar("--mono", host) || "monospace",
   };
 }
 

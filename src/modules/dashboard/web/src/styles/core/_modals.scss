@@ -10,7 +10,7 @@
   padding: 2px;
   background: transparent;
   border: none;
-  color: var(--text-muted);
+  color: var(--ink-3);
   cursor: pointer;
   border-radius: 50%;
   opacity: 0.55;
@@ -21,8 +21,8 @@
 
   &:hover {
     opacity: 1;
-    color: var(--accent);
-    background: var(--accent-soft);
+    color: var(--accent-2);
+    background: var(--wash);
     transform: scale(1.15);
   }
   svg {
@@ -39,17 +39,17 @@
   }
 }
 .help-section-title {
-  font-size: var(--fs-body);
+  font-size: var(--text-body);
   font-weight: 700;
   color: var(--text);
   margin-bottom: 8px;
-  font-family: var(--font-sans);
+  font-family: var(--sans);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 .help-section-sub {
-  font-size: var(--fs-small);
-  color: var(--text-muted);
+  font-size: var(--text-small);
+  color: var(--ink-3);
   margin-bottom: 10px;
   line-height: 1.5;
 }
@@ -71,21 +71,21 @@
 }
 .help-modal {
   &__title {
-    font-size: var(--fs-h3);
+    font-size: var(--text-h3);
     font-weight: 700;
     margin-bottom: 4px;
-    font-family: var(--font-sans);
+    font-family: var(--sans);
   }
   &__lead {
-    font-size: var(--fs-small);
-    color: var(--text-muted);
+    font-size: var(--text-small);
+    color: var(--ink-3);
     margin-bottom: 18px;
     line-height: 1.5;
   }
 }
 @include until($bp-md) {
   .help-table {
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
 
     th,
     td {
@@ -117,7 +117,7 @@
   /* safe center: обычный center у грида с прокруткой обрезает ВЕРХ панели,
      если она выше экрана, — до заголовка не долистать. */
   place-items: safe center;
-  padding: var(--sp-5);
+  padding: var(--space-5);
   overflow-y: auto;
   overscroll-behavior: contain;
 
@@ -145,14 +145,14 @@
     --modal-w: 420px;
     width: min(var(--modal-w), 100%);
     max-width: 100%;
-    padding: var(--sp-5);
-    background: var(--card-bg-elev);
-    border: 1px solid var(--border);
+    padding: var(--space-5);
+    background: var(--panel-raised);
+    border: 1px solid var(--rule);
     /* 18px, как у листа Open Position: общий радиус --radius-lg (14px) рядом
        с ним читался как другое окно. */
     border-radius: 18px;
-    box-shadow: var(--shadow);
-    color: var(--text-primary);
+    box-shadow: var(--shadow-lift);
+    color: var(--ink);
     /* Вход и уход — переходы по .is-open (вешает core/dialog.js). Именно
        переход, а не @keyframes: keyframes играет только на появление. */
     opacity: 0;
@@ -188,7 +188,7 @@
     border: 0;
     border-radius: var(--radius-sm);
     background: transparent;
-    color: var(--text-muted);
+    color: var(--ink-3);
     cursor: pointer;
     transition:
       background var(--dur-fast) var(--ease-out),
@@ -196,12 +196,12 @@
       transform var(--dur) var(--spring);
 
     &:hover {
-      background: var(--card-bg-hover);
-      color: var(--text-primary);
+      background: var(--sheen);
+      color: var(--ink);
       transform: rotate(90deg);
     }
     &:focus-visible {
-      outline: 2px solid var(--accent);
+      outline: 2px solid var(--accent-2);
       outline-offset: 2px;
     }
     .icon {
@@ -214,8 +214,8 @@
   &__head {
     display: flex;
     align-items: center;
-    gap: var(--sp-3);
-    margin-bottom: var(--sp-4);
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
   }
   /* Кружок с иконкой слева от заголовка. Он же несёт тон диалога: у
      подтверждения закрытия позиции — красный, у справки — акцентный. */
@@ -226,8 +226,8 @@
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: var(--accent-soft);
-    color: var(--accent);
+    background: var(--wash);
+    color: var(--accent-2);
 
     .icon {
       width: 16px;
@@ -238,16 +238,16 @@
     min-width: 0;
   }
   &__title {
-    font-family: var(--font-display);
-    font-size: var(--fs-h3);
+    font-family: var(--display);
+    font-size: var(--text-h3);
     font-weight: 600;
     letter-spacing: var(--ls-tight);
     line-height: 1.25;
   }
   &__sub {
     margin-top: 2px;
-    font-size: var(--fs-small);
-    color: var(--text-secondary);
+    font-size: var(--text-small);
+    color: var(--ink-2);
   }
 
   /* ── Тело ──
@@ -256,7 +256,7 @@
      диалога — подсказки монет в trade ticket — обрезается его краем. */
   &__body {
     min-width: 0;
-    font-size: var(--fs-base);
+    font-size: var(--text-base);
     line-height: 1.55;
   }
 
@@ -266,19 +266,19 @@
   &__actions {
     display: flex;
     justify-content: flex-end;
-    gap: var(--sp-2);
-    margin-top: var(--sp-5);
+    gap: var(--space-2);
+    margin-top: var(--space-5);
   }
 
   /* Тон: красит кружок шапки. Больше ничего — красная рамка вокруг всего
      диалога кричит громче, чем нужно даже для необратимого действия. */
   &--danger &__glyph {
-    background: var(--red-soft);
-    color: var(--red);
+    background: var(--loss-wash);
+    color: var(--loss);
   }
   &--warn &__glyph {
-    background: var(--warn-soft);
-    color: var(--warn);
+    background: var(--caution-wash);
+    color: var(--caution);
   }
 }
 
@@ -288,7 +288,7 @@
 /* Карточка параметра: подпись, крупное число справа, слайдер под ним. Общая
    для «Open Position» и ручного папера; `.tt-card*` — псевдонимы. */
 /* Выбор стороны над карточками формы. Отбивка обязательна: фон у сегмента и у
-   .modal__card один (--canvas-inset), вплотную они читаются одним блоком.
+   .modal__card один (--panel-sunk), вплотную они читаются одним блоком.
    Правило общее — свой margin у каждой формы уже разошёлся на трёх. */
 .modal .seg--wide {
   margin-bottom: 10px;
@@ -299,7 +299,7 @@
   margin-bottom: 10px;
   padding: 14px;
   border-radius: 14px;
-  background: var(--canvas-inset);
+  background: var(--panel-sunk);
 }
 .modal__card-head,
 .tt-card__head {
@@ -310,20 +310,20 @@
 }
 .modal__card-label,
 .tt-card__label {
-  font-size: var(--fs-base);
+  font-size: var(--text-base);
   font-weight: 700;
-  color: var(--text-secondary);
+  color: var(--ink-2);
 
   i {
     font-style: normal;
-    font-size: var(--fs-label);
+    font-size: var(--text-label);
     font-weight: 400;
-    color: var(--text-faint);
+    color: var(--ink-3);
   }
 }
 .modal__card-label--accent,
 .tt-card__label--accent {
-  color: var(--accent);
+  color: var(--accent-2);
 }
 .modal__card-row,
 .tt-card__row {
@@ -340,67 +340,67 @@
   flex-direction: column;
 
   b {
-    font-family: var(--font-mono);
-    font-size: var(--fs-h3);
+    font-family: var(--mono);
+    font-size: var(--text-h3);
     font-weight: 700;
-    color: var(--text-primary);
+    color: var(--ink);
   }
   span {
-    font-size: var(--fs-label);
-    color: var(--text-faint);
+    font-size: var(--text-label);
+    color: var(--ink-3);
   }
 }
 .modal__card-major,
 .tt-card__major {
-  font-family: var(--font-mono);
-  font-size: var(--fs-h1);
+  font-family: var(--mono);
+  font-size: var(--text-h1);
   font-weight: 700;
   line-height: 1;
-  color: var(--text-primary);
+  color: var(--ink);
   transition: color 0.15s var(--ease);
 
   i {
     font-style: normal;
-    font-size: var(--fs-h3);
+    font-size: var(--text-h3);
   }
   &.is-bad {
-    color: var(--red);
+    color: var(--loss);
   }
 }
 .modal__card-err,
 .tt-card__err {
   margin-top: 6px;
-  font-size: var(--fs-label);
+  font-size: var(--text-label);
   font-weight: 600;
-  color: var(--red);
+  color: var(--loss);
   text-align: right;
 }
 .modal__card-hint,
 .tt-card__hint {
   margin-top: 6px;
-  font-size: var(--fs-label);
-  color: var(--text-faint);
+  font-size: var(--text-label);
+  color: var(--ink-3);
 }
 
 .modal__rows {
   margin: 12px 0;
   padding: 12px 14px;
   border-radius: 14px;
-  background: var(--canvas-inset);
-  font-size: var(--fs-body);
+  background: var(--panel-sunk);
+  font-size: var(--text-body);
 }
 .modal__row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--sp-3);
+  gap: var(--space-3);
   padding: 4px 0;
-  color: var(--text-secondary);
+  color: var(--ink-2);
 
   b {
-    font-family: var(--font-mono);
+    font-family: var(--mono);
     font-variant-numeric: tabular-nums;
-    color: var(--text-primary);
+    color: var(--ink);
     text-align: right;
   }
 }
@@ -409,20 +409,20 @@
 .modal__note {
   margin-top: 10px;
   text-align: center;
-  font-size: var(--fs-label);
-  color: var(--text-faint);
+  font-size: var(--text-label);
+  color: var(--ink-3);
 }
 
 /* Диалог по центру на любой ширине: короткий лист у нижней кромки не замечают. */
 @include until($bp-md) {
   .modal {
-    padding: var(--sp-4);
+    padding: var(--space-4);
   }
 }
 
 @media (max-width: 30rem) {
   .modal__panel {
-    padding: var(--sp-4);
+    padding: var(--space-4);
   }
   .modal__actions {
     flex-direction: column-reverse;
@@ -454,8 +454,8 @@
 .tm-header {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  margin-bottom: var(--sp-4);
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
 }
 /* Тикер монеты крупно: в списке сделок именно он опознаёт, что открыто. */
 .tm-coin-badge {
@@ -467,34 +467,34 @@
   height: 44px;
   border-radius: var(--radius);
   background: var(--grad-brand-soft);
-  border: 1px solid var(--border);
-  font-family: var(--font-mono);
-  font-size: var(--fs-lead);
+  border: 1px solid var(--rule);
+  font-family: var(--mono);
+  font-size: var(--text-lead);
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--ink);
 }
 .tm-header-text {
   flex: 1;
   min-width: 0;
 }
 .tm-title {
-  font-family: var(--font-display);
-  font-size: var(--fs-h3);
+  font-family: var(--display);
+  font-size: var(--text-h3);
   font-weight: 600;
   letter-spacing: var(--ls-tight);
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 .tm-side-chip {
   display: inline-flex;
   align-items: center;
-  gap: var(--sp-1);
+  gap: var(--space-1);
   padding: 2px 9px;
   border-radius: var(--radius-pill);
-  font-family: var(--font-sans);
-  font-size: var(--fs-micro);
+  font-family: var(--sans);
+  font-size: var(--text-micro);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: var(--ls-wide);
@@ -504,19 +504,19 @@
     height: 11px;
   }
   &.long {
-    background: var(--green-soft);
-    color: var(--green);
-    border: 1px solid var(--green-line);
+    background: var(--gain-wash);
+    color: var(--gain);
+    border: 1px solid var(--gain-line);
   }
   &.short {
-    background: var(--red-soft);
-    color: var(--red);
-    border: 1px solid var(--red-line);
+    background: var(--loss-wash);
+    color: var(--loss);
+    border: 1px solid var(--loss-line);
   }
 }
 .tm-sub {
-  color: var(--text-secondary);
-  font-size: var(--fs-small);
+  color: var(--ink-2);
+  font-size: var(--text-small);
   margin-top: 3px;
 }
 
@@ -525,32 +525,32 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: var(--sp-3);
-  margin: 0 0 var(--sp-5);
-  padding: var(--sp-3) var(--sp-4);
+  gap: var(--space-3);
+  margin: 0 0 var(--space-5);
+  padding: var(--space-3) var(--space-4);
   border-radius: var(--radius);
-  background: var(--canvas-subtle);
-  border: 1px solid var(--border-muted);
+  background: var(--panel-sunk);
+  border: 1px solid var(--rule-soft);
 }
 .tm-pnl-hero-label {
-  font-size: var(--fs-label);
-  color: var(--text-secondary);
+  font-size: var(--text-label);
+  color: var(--ink-2);
   text-transform: uppercase;
   letter-spacing: var(--ls-wide);
   font-weight: 600;
 }
 .tm-pnl-hero-value {
-  font-family: var(--font-mono);
-  font-size: var(--fs-h2);
+  font-family: var(--mono);
+  font-size: var(--text-h2);
   font-weight: 700;
   letter-spacing: var(--ls-tight);
   font-variant-numeric: tabular-nums;
 
   &.positive {
-    color: var(--green);
+    color: var(--gain);
   }
   &.negative {
-    color: var(--red);
+    color: var(--loss);
   }
 }
 
@@ -559,73 +559,73 @@
 .tm-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--sp-2);
+  gap: var(--space-2);
 
   .tm-cell {
     display: flex;
     flex-direction: column;
-    gap: var(--sp-1);
-    padding: var(--sp-2) var(--sp-3);
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-sm);
-    background: var(--canvas-subtle);
-    border: 1px solid var(--border-muted);
+    background: var(--panel-sunk);
+    border: 1px solid var(--rule-soft);
   }
 }
 .tm-cell.full {
   grid-column: 1 / -1;
 }
 .tm-cell-label {
-  font-size: var(--fs-micro);
-  color: var(--text-secondary);
+  font-size: var(--text-micro);
+  color: var(--ink-2);
   text-transform: uppercase;
   letter-spacing: var(--ls-wide);
   font-weight: 600;
 }
 .tm-cell-value {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-weight: 600;
-  font-size: var(--fs-body);
+  font-size: var(--text-body);
   font-variant-numeric: tabular-nums;
-  color: var(--text-primary);
+  color: var(--ink);
 
   &.muted {
-    font-family: var(--font-sans);
-    color: var(--text-secondary);
+    font-family: var(--sans);
+    color: var(--ink-2);
     font-weight: 500;
-    font-size: var(--fs-small);
+    font-size: var(--text-small);
   }
   &.positive {
-    color: var(--green);
+    color: var(--gain);
   }
   &.negative {
-    color: var(--red);
+    color: var(--loss);
   }
 }
 
 .tm-section {
-  margin-top: var(--sp-5);
-  padding-top: var(--sp-4);
-  border-top: 1px solid var(--hairline);
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--rule-soft);
 }
 .tm-section-title {
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   text-transform: uppercase;
   letter-spacing: var(--ls-wide);
-  color: var(--text-secondary);
-  margin-bottom: var(--sp-3);
+  color: var(--ink-2);
+  margin-bottom: var(--space-3);
   font-weight: 700;
 }
 
 @include until($bp-sm) {
   .tm-pnl-hero-value {
-    font-size: var(--fs-h3);
+    font-size: var(--text-h3);
   }
   .tm-coin-badge {
     width: 38px;
     height: 38px;
-    font-size: var(--fs-base);
+    font-size: var(--text-base);
   }
   .tm-grid {
-    gap: var(--sp-2);
+    gap: var(--space-2);
   }
 }

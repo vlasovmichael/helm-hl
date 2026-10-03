@@ -489,7 +489,7 @@ export function renderTax(tax) {
   const profit = tax.netProfitPLN || 0;
   const profitEl = document.getElementById("tax-profit");
   profitEl.textContent = `${profit >= 0 ? "+" : ""}${profit.toLocaleString()} PLN`;
-  profitEl.style.color = profit >= 0 ? "var(--green)" : "var(--red)";
+  profitEl.style.color = profit >= 0 ? "var(--gain)" : "var(--loss)";
   document.getElementById("tax-est").textContent =
     `${(profit > 0 ? profit * 0.19 : 0).toLocaleString()} PLN`;
 }

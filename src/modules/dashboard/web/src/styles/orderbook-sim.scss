@@ -5,8 +5,8 @@
 .obs-stage {
   display: grid;
   grid-template-columns: minmax(320px, 400px) 1fr;
-  gap: var(--sp-4);
-  margin-bottom: var(--sp-4);
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
 
   @media (max-width: 900px) {
     grid-template-columns: 1fr;
@@ -22,7 +22,7 @@
   cursor: pointer;
 
   &:hover {
-    background: var(--accent-soft);
+    background: var(--wash);
   }
 }
 
@@ -32,13 +32,13 @@
 }
 
 .obs-book .ob-row.mine .ob-usd {
-  color: var(--accent);
+  color: var(--accent-2);
   font-weight: 700;
 }
 
 @keyframes obs-eaten {
   from {
-    background: color-mix(in srgb, var(--warn) 28%, transparent);
+    background: color-mix(in srgb, var(--caution) 28%, transparent);
   }
   to {
     background: transparent;
@@ -58,8 +58,8 @@
 .obs-controls {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: var(--sp-4);
-  margin-bottom: var(--sp-4);
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
   align-items: start;
 }
 
@@ -67,8 +67,8 @@
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
-  gap: var(--sp-2) var(--sp-3);
-  margin-bottom: var(--sp-3);
+  gap: var(--space-2) var(--space-3);
+  margin-bottom: var(--space-3);
 
   .btn {
     grid-column: 1 / -1;
@@ -78,35 +78,35 @@
 .obs-buttons {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--sp-2);
-  margin-bottom: var(--sp-3);
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
 }
 
 .obs-note {
-  margin: var(--sp-2) 0 0;
-  font-size: var(--fs-body);
-  color: var(--text-secondary);
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-body);
+  color: var(--ink-2);
   line-height: 1.5;
 
   b {
-    color: var(--text-primary);
+    color: var(--ink);
   }
 }
 
 .obs-note--warn {
-  margin: 0 0 var(--sp-3);
-  color: var(--warn);
+  margin: 0 0 var(--space-3);
+  color: var(--caution);
 }
 
 .obs-empty {
-  padding: var(--sp-4);
+  padding: var(--space-4);
   text-align: center;
-  font-size: var(--fs-body);
-  color: var(--text-secondary);
+  font-size: var(--text-body);
+  color: var(--ink-2);
 }
 
 .obs-kv td.obs-warn {
-  color: var(--warn);
+  color: var(--caution);
   font-weight: 700;
 }
 

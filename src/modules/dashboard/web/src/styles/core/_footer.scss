@@ -2,25 +2,25 @@
 footer {
   margin-top: 40px;
   padding-top: 16px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--rule);
   text-align: center;
-  color: var(--text-muted);
-  font-size: var(--fs-body);
-  font-family: var(--font-mono);
+  color: var(--ink-3);
+  font-size: var(--text-body);
+  font-family: var(--mono);
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
 }
 .stale-warning {
-  color: var(--red);
+  color: var(--loss);
   font-weight: 600;
 }
 .logout-link {
-  color: var(--text-muted);
+  color: var(--ink-3);
   text-decoration: none;
-  font-family: var(--font-sans);
-  font-size: var(--fs-small);
+  font-family: var(--sans);
+  font-size: var(--text-small);
   padding: 4px 10px;
   border-radius: 4px;
   transition:
@@ -29,6 +29,6 @@ footer {
     border-color var(--dur-fast) var(--ease-out);
 }
 .logout-link:hover {
-  color: var(--accent);
-  background: var(--canvas-subtle);
+  color: var(--accent-2);
+  background: var(--panel-sunk);
 }

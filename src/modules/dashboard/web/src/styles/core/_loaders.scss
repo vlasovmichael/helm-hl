@@ -54,7 +54,7 @@
 .sk-text {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
+  gap: var(--space-2);
 }
 
 /* Число: моно-ширина, чтобы на месте скелетона встало ровно столько же.
@@ -98,7 +98,7 @@
    Рисуется реальными <tr>/<td>, а не одним прямоугольником поверх: тогда
    ширины колонок уже посчитаны, и при подстановке данных шапка не съезжает. */
 .sk-row td {
-  padding: var(--sp-2) var(--sp-3);
+  padding: var(--space-2) var(--space-3);
 }
 .sk-row .sk {
   height: 0.9em;
@@ -165,27 +165,27 @@
   /* Явно свой шрифт: пустое состояние часто стоит внутри ячейки таблицы, а та
      набрана моно с табличными цифрами — объяснение в моно читается как вывод
      программы, а не как обращение к человеку. */
-  font-family: var(--font-sans);
+  font-family: var(--sans);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--sp-2);
-  padding: var(--sp-8) var(--sp-4);
+  gap: var(--space-2);
+  padding: var(--space-8) var(--space-4);
   text-align: center;
-  color: var(--text-secondary);
-  font-size: var(--fs-body);
+  color: var(--ink-2);
+  font-size: var(--text-body);
 
   .icon {
     width: 22px;
     height: 22px;
-    color: var(--text-faint);
+    color: var(--ink-3);
     stroke-width: 1.5;
   }
   &__title {
-    color: var(--text-primary);
+    color: var(--ink);
     font-weight: 600;
-    font-size: var(--fs-base);
+    font-size: var(--text-base);
   }
   &__hint {
     max-width: 46ch;
@@ -207,7 +207,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--card-bg);
+  background: var(--panel);
   z-index: 10;
   border-radius: var(--radius);
   transition: opacity var(--dur) var(--ease-out);
@@ -220,7 +220,7 @@
 
 /* Вуаль: прежнее содержимое видно сквозь неё, пока едет новое. */
 .local-loader--veil {
-  background: color-mix(in srgb, var(--card-bg) 60%, transparent);
+  background: color-mix(in srgb, var(--panel) 60%, transparent);
   animation: veil-in var(--dur) var(--ease-out);
 }
 @keyframes veil-in {
@@ -232,8 +232,8 @@
 .loader-spinner {
   width: 24px;
   height: 24px;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
+  border: 2px solid var(--rule);
+  border-top-color: var(--accent-2);
   border-radius: 50%;
   animation: spinner-rotate 0.8s linear infinite;
 }
@@ -260,8 +260,8 @@
     position: absolute;
     width: 14px;
     height: 14px;
-    border: 1.5px solid var(--border-strong);
-    border-top-color: var(--text-primary);
+    border: 1.5px solid var(--rule-strong);
+    border-top-color: var(--ink);
     border-radius: 50%;
     animation: spinner-rotate 0.8s linear infinite;
   }
@@ -284,16 +284,16 @@
 .activity-skeleton {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-2);
-  padding: var(--sp-1) 0;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
 }
 .card-skeleton {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-3);
-  background: var(--card-bg);
+  gap: var(--space-3);
+  background: var(--panel);
   z-index: 10;
   transition: opacity var(--dur) var(--ease-out);
 

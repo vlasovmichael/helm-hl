@@ -9,7 +9,7 @@ header {
   gap: 24px;
   margin-bottom: 32px;
   padding-bottom: 24px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--rule);
 }
 
 // Шапка страницы (не дашборда): eyebrow + крупный дисплейный заголовок.
@@ -18,12 +18,12 @@ header {
   .label {
     text-transform: uppercase;
     letter-spacing: 0.09em;
-    font-size: var(--fs-label) !important;
+    font-size: var(--text-label) !important;
     font-weight: 600;
   }
   .value.page-title {
-    font-family: var(--font-display);
-    font-size: var(--fs-h1);
+    font-family: var(--display);
+    font-size: var(--text-h1);
     font-weight: 600;
     letter-spacing: -0.02em;
     line-height: 1.15;
@@ -32,38 +32,38 @@ header {
 
 .equity-group {
   .label {
-    color: var(--text-muted);
+    color: var(--ink-3);
     font-weight: 500;
-    font-size: var(--fs-body);
+    font-size: var(--text-body);
     margin-bottom: 8px;
   }
   .value {
-    font-family: var(--font-mono);
+    font-family: var(--mono);
     font-weight: 700;
-    font-size: var(--fs-hero);
+    font-size: var(--text-hero);
     letter-spacing: -0.03em;
     line-height: 1.1;
     font-variant-numeric: tabular-nums;
     margin-bottom: 8px;
-    color: var(--text-primary);
+    color: var(--ink);
   }
   .delta {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-family: var(--font-mono);
-    font-size: var(--fs-body);
+    font-family: var(--mono);
+    font-size: var(--text-body);
     font-weight: 600;
     font-variant-numeric: tabular-nums;
-    color: var(--text-muted);
+    color: var(--ink-3);
   }
 }
 .delta {
   &.positive {
-    color: var(--green);
+    color: var(--gain);
   }
   &.negative {
-    color: var(--red);
+    color: var(--loss);
   }
 }
 
@@ -71,8 +71,8 @@ header {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: var(--sp-2);
-  padding-top: var(--sp-1);
+  gap: var(--space-2);
+  padding-top: var(--space-1);
 }
 
 /* Заметка о происхождении данных под плашкой состояния. Была у /oi и
@@ -82,12 +82,12 @@ header {
   max-width: 42ch;
   margin: 0;
   text-align: right;
-  font-size: var(--fs-small);
+  font-size: var(--text-small);
   line-height: 1.5;
-  color: var(--text-secondary);
+  color: var(--ink-2);
 
   b {
-    color: var(--text-primary);
+    color: var(--ink);
   }
 }
 
@@ -118,14 +118,14 @@ header {
 
 .status-pill {
   position: relative;
-  font-family: var(--font-sans);
-  font-size: var(--fs-small);
+  font-family: var(--sans);
+  font-size: var(--text-small);
   font-weight: 500;
   padding: 2px 8px;
   border-radius: 2em;
-  background: var(--accent-soft);
-  color: var(--accent);
-  border: 1px solid var(--accent-line);
+  background: var(--wash);
+  color: var(--accent-2);
+  border: 1px solid var(--accent-2);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -139,14 +139,14 @@ header {
     background: currentColor;
   }
   &.prod {
-    color: var(--green);
-    background: var(--green-soft);
-    border-color: var(--green-line);
+    color: var(--gain);
+    background: var(--gain-wash);
+    border-color: var(--gain-line);
   }
   &.live {
-    color: var(--green);
-    background: var(--green-soft);
-    border-color: var(--green-line);
+    color: var(--gain);
+    background: var(--gain-wash);
+    border-color: var(--gain-line);
   }
   &.stale {
     color: #b45309;
@@ -154,9 +154,9 @@ header {
     border-color: rgba(245, 158, 11, 0.4);
   }
   &.offline {
-    color: var(--red);
-    background: var(--red-soft);
-    border-color: var(--red-line);
+    color: var(--loss);
+    background: var(--loss-wash);
+    border-color: var(--loss-line);
   }
 
   /* ── Соединение устанавливается ──
@@ -190,9 +190,9 @@ header {
 }
 
 .meta-info {
-  color: var(--text-muted);
-  font-size: var(--fs-body);
-  font-family: var(--font-mono);
+  color: var(--ink-3);
+  font-size: var(--text-body);
+  font-family: var(--mono);
   font-variant-numeric: tabular-nums;
   display: flex;
   gap: 14px;
@@ -210,10 +210,10 @@ header {
   width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule);
   border-radius: var(--radius);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   cursor: pointer;
   transition:
     color 0.15s var(--ease),
@@ -221,8 +221,8 @@ header {
     border-color 0.15s var(--ease);
 
   &:hover {
-    color: var(--text-primary);
-    background: var(--card-bg-hover);
+    color: var(--ink);
+    background: var(--sheen);
   }
   .nav-ico {
     opacity: 0.9;
@@ -239,20 +239,20 @@ header {
   gap: 20px;
   padding: 10px 0;
   margin-bottom: 24px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--rule);
   /* Непрозрачный фон намеренно: backdrop-filter на sticky-элементе даёт
      однократный флик при первой отрисовке (поднятие backdrop-слоя в
      композитор). Сплошной фон = чисто, без мигания. */
-  background: var(--bg);
+  background: var(--ground);
 }
 .topnav-brand {
-  font-family: var(--font-display);
+  font-family: var(--display);
   font-weight: 600;
-  font-size: var(--fs-lead);
+  font-size: var(--text-lead);
   letter-spacing: -0.01em;
   text-decoration: none;
   white-space: nowrap;
-  color: var(--text-primary);
+  color: var(--ink);
 }
 .topnav-links {
   display: flex;
@@ -272,10 +272,10 @@ header {
   gap: 7px;
   padding: 7px 13px;
   border-radius: var(--radius-pill);
-  font-family: var(--font-sans);
-  font-size: var(--fs-body);
+  font-family: var(--sans);
+  font-size: var(--text-body);
   font-weight: 500;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   text-decoration: none;
   transition:
     color 0.15s var(--ease),
@@ -283,18 +283,18 @@ header {
 
   &.active .nav-ico {
     opacity: 1;
-    stroke: var(--accent);
+    stroke: var(--accent-2);
   }
   &:hover {
-    color: var(--text-primary);
-    background: var(--card-bg-hover);
+    color: var(--ink);
+    background: var(--sheen);
   }
   /* Активный пункт — «таблетка» с подложкой, а не подчёркивание снизу:
      на sticky-навбаре подчёркивание визуально сливалось с бордером. */
   &.active {
-    color: var(--text-primary);
-    background: var(--accent-soft);
-    box-shadow: inset 0 0 0 1px var(--accent-line);
+    color: var(--ink);
+    background: var(--wash);
+    box-shadow: inset 0 0 0 1px var(--accent-2);
   }
 }
 .nav-ico {
@@ -317,7 +317,7 @@ header {
     padding: 8px 0;
   }
   .topnav-brand {
-    font-size: var(--fs-body);
+    font-size: var(--text-body);
   }
   .topnav-links {
     gap: 2px;
@@ -348,17 +348,17 @@ header {
 
 /* ──────────────────────── Cards */
 .card {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
+  background: var(--panel);
+  border: 1px solid var(--rule);
   border-radius: var(--radius-lg);
   padding: 22px 26px;
   margin-bottom: 18px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow);
 }
 
 /* Active Position — ключевая карточка. Нейтральный фон, без фирменного wash. */
 #sec-position {
-  background: var(--card-bg);
+  background: var(--panel);
   transition:
     background 0.45s ease,
     border-color 0.25s;
@@ -373,14 +373,14 @@ header {
 #sec-position[data-mood="pos"] {
   --mood-tint: color-mix(
     in srgb,
-    var(--green) calc(var(--mood, 0) * 100%),
+    var(--gain) calc(var(--mood, 0) * 100%),
     transparent
   );
 }
 #sec-position[data-mood="neg"] {
   --mood-tint: color-mix(
     in srgb,
-    var(--red) calc(var(--mood, 0) * 100%),
+    var(--loss) calc(var(--mood, 0) * 100%),
     transparent
   );
 }
@@ -390,36 +390,36 @@ header {
       var(--mood-tint, transparent),
       var(--mood-tint, transparent)
     ),
-    var(--card-bg);
+    var(--panel);
 }
 
 /* Дневной стоп: весь блок краснеет (circuit-breaker «хватит на сегодня»). */
 #sec-position.daily-danger {
-  background: var(--red-soft);
-  border-color: var(--red-line);
+  background: var(--loss-wash);
+  border-color: var(--loss-line);
 }
 
 /* Бейдж дневной цели в шапке (справа). Нейтральный → зелёный (цель) / красный. */
 .daily-goal-badge {
-  font-family: var(--font-mono);
-  font-size: var(--fs-small);
+  font-family: var(--mono);
+  font-size: var(--text-small);
   font-weight: 600;
   padding: 3px 10px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--canvas-subtle);
-  color: var(--text-secondary);
+  border: 1px solid var(--rule);
+  background: var(--panel-sunk);
+  color: var(--ink-2);
   white-space: nowrap;
 
   &.is-pos {
-    color: var(--green);
-    border-color: var(--green-line);
-    background: var(--green-soft);
+    color: var(--gain);
+    border-color: var(--gain-line);
+    background: var(--gain-wash);
   }
   &.is-neg {
-    color: var(--red);
-    border-color: var(--red-line);
-    background: var(--red-soft);
+    color: var(--loss);
+    border-color: var(--loss-line);
+    background: var(--loss-wash);
   }
 }
 
@@ -439,20 +439,20 @@ header {
 .card-tools {
   display: flex;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--space-2);
   flex-wrap: wrap;
 }
 .card-meta {
-  font-size: var(--fs-small);
-  color: var(--text-secondary);
+  font-size: var(--text-small);
+  color: var(--ink-2);
   font-variant-numeric: tabular-nums;
 }
 
 .card-title {
-  font-family: var(--font-display);
-  font-size: var(--fs-h3);
+  font-family: var(--display);
+  font-size: var(--text-h3);
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--ink);
   letter-spacing: -0.015em;
 }
 
@@ -465,16 +465,16 @@ header {
   flex-wrap: wrap;
 
   &__title {
-    font-family: var(--font-display);
-    font-size: var(--fs-h3);
+    font-family: var(--display);
+    font-size: var(--text-h3);
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--ink);
     letter-spacing: -0.015em;
   }
   &__sub {
-    font-family: var(--font-mono);
-    font-size: var(--fs-label);
-    color: var(--text-muted);
+    font-family: var(--mono);
+    font-size: var(--text-label);
+    color: var(--ink-3);
   }
 }
 .radar-acc {
@@ -494,7 +494,7 @@ header {
     &::after {
       @include mask-icon("chevron-right", 14px);
       margin-left: auto;
-      color: var(--text-muted);
+      color: var(--ink-3);
       transition: transform 0.15s var(--ease);
     }
   }
@@ -510,13 +510,13 @@ header {
   }
 }
 .radar-badge {
-  font-family: var(--font-mono);
-  font-size: var(--fs-label);
+  font-family: var(--mono);
+  font-size: var(--text-label);
   font-weight: 600;
   padding: 2px 8px;
   border-radius: 999px;
-  background: var(--border);
-  color: var(--text-secondary);
+  background: var(--rule);
+  color: var(--ink-2);
 
   &:empty {
     display: none;
@@ -530,29 +530,29 @@ header {
   gap: 5px;
 }
 .cb-sig-row {
-  font-family: var(--font-mono);
-  font-size: var(--fs-small);
+  font-family: var(--mono);
+  font-size: var(--text-small);
   line-height: 1.5;
 }
 .cb-sig-dir {
   font-weight: 600;
 }
 .cb-sig-px {
-  color: var(--text-secondary);
+  color: var(--ink-2);
 }
 .cb-sig-age {
-  color: var(--text-muted);
+  color: var(--ink-3);
   float: right;
 }
 .cb-sig-tag {
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   padding: 1px 6px;
   border-radius: 999px;
-  background: var(--border);
-  color: var(--text-secondary);
+  background: var(--rule);
+  color: var(--ink-2);
 
   &.traded {
-    color: var(--green);
+    color: var(--gain);
   }
 }
 
@@ -591,10 +591,10 @@ header {
   width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule);
   border-radius: var(--radius);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   cursor: pointer;
   transition:
     color 0.15s var(--ease),
@@ -602,8 +602,8 @@ header {
     border-color 0.15s var(--ease);
 
   &:hover {
-    color: var(--text-primary);
-    background: var(--card-bg-hover);
+    color: var(--ink);
+    background: var(--sheen);
   }
   .nav-ico {
     opacity: 0.9;
@@ -653,14 +653,14 @@ header {
   height: 16px;
   padding: 0 4px;
   border-radius: 8px;
-  background: var(--red);
-  font-family: var(--font-mono);
+  background: var(--loss);
+  font-family: var(--mono);
   color: #fff;
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   font-weight: 700;
   line-height: 16px;
   text-align: center;
-  font-family: var(--font-mono);
+  font-family: var(--mono);
 
   &[hidden] {
     display: none;
@@ -678,8 +678,8 @@ header {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--ground);
+  border: 1px solid var(--rule);
   border-radius: var(--radius);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
   z-index: 60;
@@ -742,10 +742,10 @@ header {
   width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule);
   border-radius: var(--radius);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   cursor: pointer;
   transition:
     color 0.15s var(--ease),
@@ -753,14 +753,14 @@ header {
     border-color 0.15s var(--ease);
 
   &:hover {
-    color: var(--text-primary);
-    background: var(--card-bg-hover);
+    color: var(--ink);
+    background: var(--sheen);
   }
   /* Открытое меню держит кнопку подсвеченной: иначе непонятно, откуда
      выехала панель. */
   &[aria-expanded="true"] {
-    color: var(--text-primary);
-    border-color: var(--border-strong);
+    color: var(--ink);
+    border-color: var(--rule-strong);
   }
   .nav-ico {
     opacity: 0.9;
@@ -769,7 +769,7 @@ header {
 .research-panel {
   @extend %pop-panel;
   width: 260px;
-  padding: var(--sp-1);
+  padding: var(--space-1);
   &[hidden] {
     display: none;
   }
@@ -777,31 +777,31 @@ header {
 .research-item {
   display: flex;
   align-items: flex-start;
-  gap: var(--sp-3);
-  padding: var(--sp-2) var(--sp-3);
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
-  color: var(--text-primary);
+  color: var(--ink);
   text-decoration: none;
   transition: background var(--dur-fast) var(--ease-out);
 
   &:hover {
-    background: var(--canvas-subtle);
+    background: var(--panel-sunk);
   }
   .nav-ico {
     flex: none;
     margin-top: 2px;
-    color: var(--text-muted);
+    color: var(--ink-3);
   }
   b {
     display: block;
-    font-size: var(--fs-body);
+    font-size: var(--text-body);
     font-weight: 500;
   }
   i {
     display: block;
     font-style: normal;
-    font-size: var(--fs-small);
-    color: var(--text-muted);
+    font-size: var(--text-small);
+    color: var(--ink-3);
     line-height: 1.35;
   }
 }
@@ -810,19 +810,19 @@ header {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  font-size: var(--fs-small);
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--text-small);
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 .notif-head-hint {
   font-weight: 400;
-  font-size: var(--fs-label);
+  font-size: var(--text-label);
   letter-spacing: 0;
   text-transform: none;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   opacity: 0.7;
 }
 .notif-list {
@@ -831,19 +831,19 @@ header {
 .notif-empty {
   padding: 24px 16px;
   text-align: center;
-  color: var(--text-secondary);
-  font-size: var(--fs-body);
+  color: var(--ink-2);
+  font-size: var(--text-body);
 }
 .notif-item {
   padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  font-size: var(--fs-body);
+  border-bottom: 1px solid var(--rule);
+  font-size: var(--text-body);
 
   &:last-child {
     border-bottom: none;
   }
   &--fresh {
-    background: var(--accent-soft);
+    background: var(--wash);
   }
 }
 .notif-item-head {
@@ -859,7 +859,7 @@ header {
 .notif-item-ico {
   flex: none;
   align-self: center;
-  color: var(--text-faint);
+  color: var(--ink-3);
 
   .icon {
     width: 14px;
@@ -868,11 +868,11 @@ header {
   }
 }
 .notif-item--ok .notif-item-ico,
-.notif-item--up .notif-item-ico { color: var(--green); }
+.notif-item--up .notif-item-ico { color: var(--gain); }
 .notif-item--loss .notif-item-ico,
 .notif-item--down .notif-item-ico,
-.notif-item--danger .notif-item-ico { color: var(--red); }
-.notif-item--warn .notif-item-ico { color: var(--warn); }
+.notif-item--danger .notif-item-ico { color: var(--loss); }
+.notif-item--warn .notif-item-ico { color: var(--caution); }
 
 /* Дайджест чужих сделок: имя и сумма в строку, метаданные — второй строкой.
    Сумма выровнена в колонку, поэтому знак денег ловится одним взглядом. */
@@ -885,12 +885,12 @@ header {
   padding: 5px 0;
 
   & + & {
-    border-top: 1px solid var(--hairline);
+    border-top: 1px solid var(--rule-soft);
   }
 }
 .wl-ico {
   grid-area: ico;
-  color: var(--text-faint);
+  color: var(--ink-3);
 
   .icon {
     width: 13px;
@@ -901,7 +901,7 @@ header {
 .wl-head {
   grid-area: head;
   min-width: 0;
-  color: var(--text-primary);
+  color: var(--ink);
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -909,56 +909,56 @@ header {
 }
 .wl-pnl {
   grid-area: pnl;
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .wl-pnl--none {
-  color: var(--text-faint);
+  color: var(--ink-3);
   font-weight: 400;
   font-style: italic;
 }
 .wl-meta {
   grid-area: meta;
-  color: var(--text-muted);
-  font-size: var(--fs-label);
+  color: var(--ink-3);
+  font-size: var(--text-label);
 }
 .wl-line--pos {
   .wl-ico,
   .wl-pnl {
-    color: var(--green);
+    color: var(--gain);
   }
 }
 .wl-line--neg {
   .wl-ico,
   .wl-pnl {
-    color: var(--red);
+    color: var(--loss);
   }
 }
 .notif-item-title {
   flex: 1;
   min-width: 0;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--ink);
 }
 .notif-item-time {
   flex-shrink: 0;
-  color: var(--text-secondary);
-  font-size: var(--fs-label);
-  font-family: var(--font-mono);
+  color: var(--ink-2);
+  font-size: var(--text-label);
+  font-family: var(--mono);
 }
 .notif-mail {
   margin-right: 4px;
-  color: var(--accent);
+  color: var(--accent-2);
 }
 .notif-item-body {
   margin-top: 2px;
-  color: var(--text-secondary);
+  color: var(--ink-2);
   line-height: 1.4;
 }
 /* Тикер #COIN в уведомлении → ссылка на TradingView. */
 .notif-coin {
-  color: var(--accent);
+  color: var(--accent-2);
   text-decoration: none;
   font-weight: 600;
   &:hover {
@@ -990,7 +990,7 @@ header {
   }
 }
 .toast {
-  --toast-accent: var(--accent); // по умолчанию синий; тип-модификаторы ниже красят
+  --toast-accent: var(--accent-2); // по умолчанию синий; тип-модификаторы ниже красят
   --toast-accent-rgb: 9, 105, 218;
   pointer-events: auto;
   position: relative;
@@ -1004,15 +1004,15 @@ header {
       color-mix(in srgb, var(--toast-accent) 7%, transparent),
       color-mix(in srgb, var(--toast-accent) 7%, transparent)
     ),
-    var(--bg);
+    var(--ground);
   // Тон уведомления несут рамка и заливка. Полоска слева 4px делала тост
   // асимметричным: иконка слева вставала вплотную к ней, а справа оставался
   // полный отступ.
-  border: 1px solid color-mix(in srgb, var(--toast-accent) 45%, var(--border));
+  border: 1px solid color-mix(in srgb, var(--toast-accent) 45%, var(--rule));
   border-radius: var(--radius-lg);
   box-shadow: 0 10px 34px rgba(0, 0, 0, 0.32);
   padding: 16px 18px;
-  font-size: var(--fs-base);
+  font-size: var(--text-base);
   cursor: pointer;
 
   // Въезд справа + мягкий glow-пульс, чтобы пуш «звал» взгляд. Управляем
@@ -1053,11 +1053,11 @@ header {
 }
 // Тип-модификаторы: перекрашивают акцент (border/иконка/фон/glow/полоска).
 .toast--ok {
-  --toast-accent: var(--green);
+  --toast-accent: var(--gain);
   --toast-accent-rgb: 26, 127, 55;
 }
 .toast--danger {
-  --toast-accent: var(--red);
+  --toast-accent: var(--loss);
   --toast-accent-rgb: 207, 34, 46;
 }
 .toast--warn {
@@ -1067,11 +1067,11 @@ header {
 /* Сторона сделки и направление движения. Тон здесь означает СТОРОНУ, а не
    исход: у входа исхода ещё нет. */
 .toast--up {
-  --toast-accent: var(--green);
+  --toast-accent: var(--gain);
   --toast-accent-rgb: 26, 127, 55;
 }
 .toast--down {
-  --toast-accent: var(--red);
+  --toast-accent: var(--loss);
   --toast-accent-rgb: 207, 34, 46;
 }
 .toast-ico {
@@ -1106,8 +1106,8 @@ header {
 }
 .toast-title {
   font-weight: 700;
-  font-size: var(--fs-base);
-  color: var(--text-primary);
+  font-size: var(--text-base);
+  color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1115,8 +1115,8 @@ header {
 // Пилюля стороны сделки (LONG/SHORT) — показывается, только когда сторона явная.
 .toast-side {
   display: inline-block;
-  font-family: var(--font-mono);
-  font-size: var(--fs-label);
+  font-family: var(--mono);
+  font-size: var(--text-label);
   font-weight: 700;
   letter-spacing: 0.03em;
   padding: 1px 6px;
@@ -1125,42 +1125,42 @@ header {
   vertical-align: 1px;
 }
 .toast-side--long {
-  color: var(--green);
-  background: color-mix(in srgb, var(--green) 15%, transparent);
+  color: var(--gain);
+  background: color-mix(in srgb, var(--gain) 15%, transparent);
 }
 .toast-side--short {
-  color: var(--red);
-  background: color-mix(in srgb, var(--red) 15%, transparent);
+  color: var(--loss);
+  background: color-mix(in srgb, var(--loss) 15%, transparent);
 }
 .toast-time {
   flex-shrink: 0;
   color: var(--toast-accent);
-  font-size: var(--fs-small);
+  font-size: var(--text-small);
   font-weight: 600;
-  font-family: var(--font-mono);
+  font-family: var(--mono);
 }
 .toast-body {
   margin-top: 4px;
-  color: var(--text-secondary);
-  font-size: var(--fs-body);
+  color: var(--ink-2);
+  font-size: var(--text-body);
   line-height: 1.45;
 }
 // Числовые токены в теле ($70 · 2% · +$3.10) — моно, ярче, знак красит PnL.
 .toast-num {
-  font-family: var(--font-mono);
+  font-family: var(--mono);
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 .toast-num--pos {
-  color: var(--green);
+  color: var(--gain);
 }
 .toast-num--neg {
-  color: var(--red);
+  color: var(--loss);
 }
 // Разделитель «·» между метриками — приглушённый.
 .toast-sep {
-  color: var(--text-faint, var(--text-muted));
+  color: var(--ink-3, var(--ink-3));
   margin: 0 2px;
 }
 @keyframes toast-glow {

@@ -10,17 +10,17 @@
 
 /* ── Карточка стакана ─────────────────────────────────────────────── */
 .ob-terminal {
-  --ob-line: var(--border);
-  --ob-txt: var(--text-primary);
-  --ob-dim: var(--text-secondary);
-  --ob-bid: var(--green);
-  --ob-bid-bg: color-mix(in srgb, var(--green) 14%, transparent);
-  --ob-bid-wall: color-mix(in srgb, var(--green) 32%, transparent);
-  --ob-ask: var(--red);
-  --ob-ask-bg: color-mix(in srgb, var(--red) 14%, transparent);
-  --ob-ask-wall: color-mix(in srgb, var(--red) 32%, transparent);
-  --ob-accent: var(--accent);
-  --ob-gold: var(--warn);
+  --ob-line: var(--rule);
+  --ob-txt: var(--ink);
+  --ob-dim: var(--ink-2);
+  --ob-bid: var(--gain);
+  --ob-bid-bg: color-mix(in srgb, var(--gain) 14%, transparent);
+  --ob-bid-wall: color-mix(in srgb, var(--gain) 32%, transparent);
+  --ob-ask: var(--loss);
+  --ob-ask-bg: color-mix(in srgb, var(--loss) 14%, transparent);
+  --ob-ask-wall: color-mix(in srgb, var(--loss) 32%, transparent);
+  --ob-accent: var(--accent-2);
+  --ob-gold: var(--caution);
 
   padding: 0;
   overflow: hidden;
@@ -30,8 +30,8 @@
 .ob-head {
   display: flex;
   align-items: center;
-  gap: var(--sp-3);
-  padding: var(--sp-4) var(--sp-5);
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
   margin: 0;
   border-bottom: 1px solid var(--ob-line);
   flex-wrap: wrap;
@@ -39,19 +39,19 @@
 // Площадки — общий `.tabs.tabs--wrap` (core/_tabs.scss).
 // Поле монеты — общий `.field.field--ticker` (core/_controls.scss).
 .ob-input { width: 90px; }
-.ob-input.active { color: var(--ob-accent); border-color: var(--ob-accent); background: var(--accent-soft); font-weight: 600; }
-.ob-conn { margin-left: auto; display: flex; align-items: center; gap: var(--sp-2); color: var(--ob-dim); font-size: var(--fs-small); }
+.ob-input.active { color: var(--ob-accent); border-color: var(--ob-accent); background: var(--wash); font-weight: 600; }
+.ob-conn { margin-left: auto; display: flex; align-items: center; gap: var(--space-2); color: var(--ob-dim); font-size: var(--text-small); }
 .ob-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ob-dim); transition: background-color 0.3s var(--ease); }
 .ob-dot.live { background: var(--ob-bid); }
 .ob-dot.dead { background: var(--ob-ask); }
 
 .ob-main { display: grid; grid-template-columns: 1fr 340px; }
 .ob-col { display: flex; flex-direction: column; min-width: 0; }
-.ob-ladder { overflow-y: auto; max-height: 360px; padding: var(--sp-1) 0; }
+.ob-ladder { overflow-y: auto; max-height: 360px; padding: var(--space-1) 0; }
 .ob-row {
   position: relative; display: grid; grid-template-columns: 1fr 110px 90px 70px;
-  align-items: center; height: 22px; padding: 0 var(--sp-4);
-  font-family: var(--font-mono); font-size: var(--fs-body);
+  align-items: center; height: 22px; padding: 0 var(--space-4);
+  font-family: var(--mono); font-size: var(--text-body);
   font-variant-numeric: tabular-nums; white-space: nowrap;
   transition: background-color 0.2s var(--ease);
 }
@@ -62,12 +62,12 @@
 .ob-row.wall.ask .ob-bar rect { fill: var(--ob-ask-wall); }
 .ob-row.wall.bid .ob-bar rect { fill: var(--ob-bid-wall); }
 .ob-row > span { position: relative; z-index: 1; }
-.ob-row .ob-tag { color: var(--ob-dim); font-size: var(--fs-label); text-align: left; }
+.ob-row .ob-tag { color: var(--ob-dim); font-size: var(--text-label); text-align: left; }
 .ob-row .ob-px { text-align: right; font-weight: 600; }
 .ob-row.ask .ob-px { color: var(--ob-ask); }
 .ob-row.bid .ob-px { color: var(--ob-bid); }
 .ob-row .ob-sz { text-align: right; color: var(--ob-txt); }
-.ob-row .ob-usd { text-align: right; color: var(--ob-dim); font-size: var(--fs-label); }
+.ob-row .ob-usd { text-align: right; color: var(--ob-dim); font-size: var(--text-label); }
 /* Метка стены — словом. Глиф ▮ в моношрифте занимает целую ячейку и
    в разных сборках JetBrains Mono рисуется разной высоты. */
 .ob-row.wall .ob-tag::before { content: "WALL"; color: var(--ob-gold); font-weight: 700; letter-spacing: var(--ls-wide); }
@@ -80,42 +80,42 @@
 .ob-row--sk:nth-child(3n + 1) .sk { width: 46%; }
 
 .ob-mid {
-  display: flex; align-items: center; justify-content: center; gap: var(--sp-4);
-  height: 46px; background: var(--canvas-subtle);
+  display: flex; align-items: center; justify-content: center; gap: var(--space-4);
+  height: 46px; background: var(--panel-sunk);
   border-top: 1px solid var(--ob-line); border-bottom: 1px solid var(--ob-line);
 }
-.ob-mid .ob-price { font-family: var(--font-mono); font-size: var(--fs-h2); font-weight: 700; color: var(--text-primary); font-variant-numeric: tabular-nums; }
-.ob-mid .ob-spread { color: var(--ob-dim); font-size: var(--fs-small); }
-.ob-mid .ob-spread b { color: var(--ob-gold); font-family: var(--font-mono); }
+.ob-mid .ob-price { font-family: var(--mono); font-size: var(--text-h2); font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ob-mid .ob-spread { color: var(--ob-dim); font-size: var(--text-small); }
+.ob-mid .ob-spread b { color: var(--ob-gold); font-family: var(--mono); }
 
-.ob-side { padding: var(--sp-5); border-left: 1px solid var(--ob-line); display: flex; flex-direction: column; gap: var(--sp-5); }
-.ob-block { display: flex; flex-direction: column; gap: var(--sp-2); }
+.ob-side { padding: var(--space-5); border-left: 1px solid var(--ob-line); display: flex; flex-direction: column; gap: var(--space-5); }
+.ob-block { display: flex; flex-direction: column; gap: var(--space-2); }
 
 .ob-imb-bar { display: block; width: 100%; height: 12px; border-radius: var(--radius-sm); overflow: hidden; }
 .ob-imb-bar rect { transition: x 0.4s var(--ease), width 0.4s var(--ease); }
 .ob-imb-bar .b { fill: var(--ob-bid); }
 .ob-imb-bar .a { fill: var(--ob-ask); }
-.ob-imb-legend { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: var(--fs-small); }
+.ob-imb-legend { display: flex; justify-content: space-between; font-family: var(--mono); font-size: var(--text-small); }
 .ob-imb-legend .lb { color: var(--ob-bid); font-weight: 700; }
 .ob-imb-legend .la { color: var(--ob-ask); font-weight: 700; }
 
-.ob-wallrow { display: flex; align-items: baseline; justify-content: space-between; padding: var(--sp-2) 0; border-bottom: 1px dashed var(--ob-line); }
+.ob-wallrow { display: flex; align-items: baseline; justify-content: space-between; padding: var(--space-2) 0; border-bottom: 1px dashed var(--ob-line); }
 .ob-wallrow:last-of-type { border-bottom: none; }
-.ob-wallrow .lbl { color: var(--ob-dim); font-size: var(--fs-body); }
-.ob-wallrow .ceiling { color: var(--ob-ask); font-weight: 700; font-family: var(--font-mono); }
-.ob-wallrow .floor { color: var(--ob-bid); font-weight: 700; font-family: var(--font-mono); }
-.ob-wallrow .dist { font-size: var(--fs-label); color: var(--ob-dim); margin-left: 6px; font-family: var(--font-mono); }
+.ob-wallrow .lbl { color: var(--ob-dim); font-size: var(--text-body); }
+.ob-wallrow .ceiling { color: var(--ob-ask); font-weight: 700; font-family: var(--mono); }
+.ob-wallrow .floor { color: var(--ob-bid); font-weight: 700; font-family: var(--mono); }
+.ob-wallrow .dist { font-size: var(--text-label); color: var(--ob-dim); margin-left: 6px; font-family: var(--mono); }
 
-.ob-hint { margin: 0; color: var(--ob-dim); font-size: var(--fs-body); line-height: 1.55; }
+.ob-hint { margin: 0; color: var(--ob-dim); font-size: var(--text-body); line-height: 1.55; }
 .ob-hint b { color: var(--ob-txt); }
-.ob-list { margin: 0; padding-left: var(--sp-4); display: grid; gap: var(--sp-1); color: var(--ob-dim); font-size: var(--fs-body); line-height: 1.5; }
+.ob-list { margin: 0; padding-left: var(--space-4); display: grid; gap: var(--space-1); color: var(--ob-dim); font-size: var(--text-body); line-height: 1.5; }
 .ob-list b { color: var(--ob-txt); }
-.ob-gold { color: var(--ob-gold); font-family: var(--font-mono); font-weight: 700; }
+.ob-gold { color: var(--ob-gold); font-family: var(--mono); font-weight: 700; }
 .ob-up { color: var(--ob-bid); font-weight: 600; }
 .ob-down { color: var(--ob-ask); font-weight: 600; }
 
 @media (max-width: 760px) {
   .ob-main { grid-template-columns: 1fr; }
   .ob-side { border-left: none; border-top: 1px solid var(--ob-line); }
-  .ob-row { grid-template-columns: 1fr 90px 70px 60px; padding: 0 var(--sp-3); }
+  .ob-row { grid-template-columns: 1fr 90px 70px 60px; padding: 0 var(--space-3); }
 }

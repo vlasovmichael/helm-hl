@@ -532,7 +532,7 @@ export function renderPosition(pos) {
   const sideCls = side === "SHORT" ? "negative" : "positive";
   container.innerHTML = `
     <div class="data-grid">
-      <div class="grid-item"><div class="item-label">Coin · Side</div><div class="item-value highlight">#${pos.coin} <span class="${sideCls}" style="font-size: var(--fs-label); font-weight:700; padding:2px 6px; border-radius:4px; margin-left:4px;">${side}</span></div></div>
+      <div class="grid-item"><div class="item-label">Coin · Side</div><div class="item-value highlight">#${pos.coin} <span class="${sideCls}" style="font-size: var(--text-label); font-weight:700; padding:2px 6px; border-radius:4px; margin-left:4px;">${side}</span></div></div>
       <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(pos.sizeUsd)}</div></div>
       <div class="grid-item"><div class="item-label">Entry</div><div class="item-value">${fmtPrice(pos.entryPrice)}</div></div>
       <div class="grid-item"><div class="item-label">APY · Held</div><div id="pos-apyheld" class="item-value">${fmtPct(pos.entryApy)} · ${pos.heldHours.toFixed(1)}h</div></div>
@@ -587,7 +587,7 @@ function ensureFloorTimerStyle() {
     ".floor-timer-bg{position:absolute;inset:0;transform-origin:left center;" +
     "background:linear-gradient(90deg,rgba(234,179,8,0.22),rgba(234,179,8,0.06));" +
     "animation:floorTimerDeplete 900s linear forwards;pointer-events:none;z-index:0}" +
-    ".floor-timer-chip{font-size: var(--fs-label);font-family:var(--font-mono);color:var(--yellow,#eab308);font-weight:600}" +
+    ".floor-timer-chip{font-size: var(--text-label);font-family:var(--mono);color:var(--yellow,#eab308);font-weight:600}" +
     ".floor-timer-chip:empty{display:none}";
   document.head.appendChild(st);
 }
@@ -807,13 +807,13 @@ export function renderManualPositions(list) {
       // ПОЧЕМУ, чтобы не лезть в логи. Builder-DEX (HIP-3) нянька не ведёт
       // структурно: там ни ADOPTED, ни причины, а NOT BABYSAT.
       const manualBadge = p.builder
-        ? `${escapeHtml(String(p.dex || "builder").toUpperCase())} DEX · <span style="color:var(--red,#cf222e)">NOT BABYSAT</span>`
+        ? `${escapeHtml(String(p.dex || "builder").toUpperCase())} DEX · <span style="color:var(--loss,#cf222e)">NOT BABYSAT</span>`
         : p.adoptResyncing
         ? `HANDS-OFF · MANUAL · <span style="color:var(--orange,#f59e0b)" data-card="Position side flipped — the bot closes the old DB row and re-adopts the position on the new side">RE-SYNCING ⟳</span>`
         : p.adopted
-        ? `HANDS-OFF · MANUAL · <span style="color:var(--green,#22c55e)">ADOPTED</span>`
+        ? `HANDS-OFF · MANUAL · <span style="color:var(--gain,#22c55e)">ADOPTED</span>`
         : p.adoptSkipReason
-          ? `HANDS-OFF · MANUAL · <span style="color:var(--red,#cf222e)">no stop: ${escapeHtml(p.adoptSkipReason)}</span>`
+          ? `HANDS-OFF · MANUAL · <span style="color:var(--loss,#cf222e)">no stop: ${escapeHtml(p.adoptSkipReason)}</span>`
           : "HANDS-OFF · MANUAL";
       // Глубинная заливка карточки uPnL — только у усыновлённых (нянька повесила
       // стоп). У голого HANDS-OFF стопа нет → riskTint вернёт null, карточка
@@ -904,11 +904,11 @@ export function renderBans(status) {
   }
   strip.classList.add("bans-strip");
   strip.innerHTML =
-    '<div style="font-size: var(--fs-micro); color:var(--text-muted,#888); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">Runtime bans</div>' +
+    '<div style="font-size: var(--text-micro); color:var(--ink-3,#888); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">Runtime bans</div>' +
     status.runtimeBans
       .map(
         (c) =>
-          `<div style="display:inline-block; background:rgba(239,68,68,0.1); color:var(--red); border:1px solid rgba(239,68,68,0.2); padding:3px 8px; border-radius:5px; font-size: var(--fs-micro); font-family:var(--font-mono); font-weight:600; margin:0 6px 4px 0;">#${c}</div>`,
+          `<div style="display:inline-block; background:rgba(239,68,68,0.1); color:var(--loss); border:1px solid rgba(239,68,68,0.2); padding:3px 8px; border-radius:5px; font-size: var(--text-micro); font-family:var(--mono); font-weight:600; margin:0 6px 4px 0;">#${c}</div>`,
       )
       .join("");
 }

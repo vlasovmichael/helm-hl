@@ -9,7 +9,7 @@
 .calib-gap {
   display: inline-grid;
   grid-template-columns: 56px 72px;
-  gap: var(--sp-2);
+  gap: var(--space-2);
   align-items: center;
 }
 .calib-gapval {
@@ -18,7 +18,7 @@
 .calib-gapbar {
   height: 6px;
   border-radius: var(--radius-pill);
-  background: var(--border-muted);
+  background: var(--rule-soft);
   overflow: hidden;
   i {
     display: block;
@@ -31,9 +31,9 @@
 
 /* Три тона разрыва: досягаемо / на грани / вряд ли. Тон один и тот же в
    таблице и в разборе — иначе разбор читается как другая величина. */
-.calib-up { color: var(--green); }
+.calib-up { color: var(--gain); }
 .calib-warn { color: var(--amber, #d29922); }
-.calib-down { color: var(--red); }
+.calib-down { color: var(--loss); }
 
 /* Липкая шапка перекрыла бы заголовок карточки, к которой ведёт подводка. */
 #sec-calib-grid {
@@ -41,24 +41,24 @@
 }
 
 .calib-gridwrap {
-  padding: 0 var(--sp-5) var(--sp-4);
+  padding: 0 var(--space-5) var(--space-4);
   overflow-x: auto;
 }
 .calib-heat {
   border-collapse: separate;
   border-spacing: 3px;
-  font-family: var(--font-mono);
-  font-size: var(--fs-small);
+  font-family: var(--mono);
+  font-size: var(--text-small);
   margin: 0 auto;
 
   th {
-    font-family: var(--font-sans);
-    font-size: var(--fs-label);
+    font-family: var(--sans);
+    font-size: var(--text-label);
     font-weight: 500;
-    color: var(--text-muted);
+    color: var(--ink-3);
     letter-spacing: var(--ls-wide);
     text-transform: uppercase;
-    padding: var(--sp-1);
+    padding: var(--space-1);
   }
   td {
     padding: 0;
@@ -87,20 +87,20 @@
 
   &:hover {
     transform: translateY(-1px);
-    border-color: var(--border-strong);
+    border-color: var(--rule-strong);
   }
   &.is-selected {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
+    border-color: var(--accent-2);
+    box-shadow: 0 0 0 1px var(--accent-2);
   }
 }
 .calib-e {
-  font-size: var(--fs-body);
+  font-size: var(--text-body);
   font-weight: 700;
   letter-spacing: var(--ls-tight);
 }
 .calib-p {
-  font-size: var(--fs-micro);
+  font-size: var(--text-micro);
   opacity: 0.8;
 }
 
@@ -111,10 +111,10 @@
   transition: background var(--dur, 180ms) var(--ease-out);
 
   &:hover {
-    background: var(--canvas-subtle);
+    background: var(--panel-sunk);
   }
   &.is-selected {
-    background: var(--accent-soft);
+    background: var(--wash);
   }
 }
 
@@ -130,35 +130,35 @@
 }
 
 .calib-detail {
-  border-top: 1px solid var(--border-muted);
-  padding: var(--sp-4) var(--sp-5);
+  border-top: 1px solid var(--rule-soft);
+  padding: var(--space-4) var(--space-5);
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: var(--sp-4);
+  gap: var(--space-4);
 
   .value {
     white-space: nowrap;
     transition: color var(--dur, 180ms) var(--ease-out);
   }
   small {
-    font-size: var(--fs-small);
-    color: var(--text-muted);
+    font-size: var(--text-small);
+    color: var(--ink-3);
     font-weight: 400;
   }
 }
 /* Разрыв — то, ради чего страница существует: он крупнее соседей и на своей
    подложке, иначе тонет в ряду одинаковых чисел. */
 .calib-hero {
-  padding: var(--sp-2) var(--sp-3);
+  padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
-  background: var(--canvas-subtle);
+  background: var(--panel-sunk);
   border-left: 2px solid currentColor;
 
   .label {
-    color: var(--text-muted);
+    color: var(--ink-3);
   }
   .value {
-    font-size: var(--fs-h3);
+    font-size: var(--text-h3);
     font-weight: 600;
     color: inherit;
     letter-spacing: var(--ls-tight);
@@ -167,10 +167,10 @@
 
 .calib-note {
   grid-column: 1 / -1;
-  font-size: var(--fs-body);
-  color: var(--text-secondary);
-  border-left: 2px solid var(--border-strong);
-  padding-left: var(--sp-3);
+  font-size: var(--text-body);
+  color: var(--ink-2);
+  border-left: 2px solid var(--rule-strong);
+  padding-left: var(--space-3);
 }
 
 @include reduced-motion {
@@ -193,7 +193,7 @@
     display: none;
   }
   #calib-rank .table {
-    font-size: var(--fs-small);
+    font-size: var(--text-small);
 
     th,
     td {
@@ -203,7 +203,7 @@
   /* Полоска шкалы уступает место числу: на узком важнее прочесть значение. */
   .calib-gap {
     grid-template-columns: 28px 62px;
-    gap: var(--sp-1);
+    gap: var(--space-1);
   }
   .calib-cell {
     width: 56px;
@@ -211,6 +211,6 @@
   }
   .calib-detail {
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    padding: var(--sp-3) var(--sp-4);
+    padding: var(--space-3) var(--space-4);
   }
 }

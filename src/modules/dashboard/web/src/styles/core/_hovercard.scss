@@ -13,15 +13,15 @@
   width: max-content;
   max-width: 256px;
   padding: 12px 14px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--rule);
   border-radius: var(--radius);
-  background: var(--card-bg-elev);
-  color: var(--text-secondary);
-  font-family: var(--font-sans);
-  font-size: var(--fs-small);
+  background: var(--panel-raised);
+  color: var(--ink-2);
+  font-family: var(--sans);
+  font-size: var(--text-small);
   line-height: 1.5;
   text-align: left;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lift);
   // Курсор заходит внутрь и держит карточку открытой — иначе длинный текст
   // нельзя ни дочитать, ни выделить.
   pointer-events: auto;

@@ -403,17 +403,17 @@ export function renderHotMovers(payload, fmtTime) {
         accelInner = `<span class="num-inline-muted">${arwSvg(0)}</span>`;
         accelKind = "flat";
       } else if (a > 0 !== b > 0 && Math.abs(a) > 0.2) {
-        accelInner = `<span style="color:var(--accent)">${icon("recompute")} rev</span>`;
+        accelInner = `<span style="color:var(--accent-2)">${icon("recompute")} rev</span>`;
         accelKind = "rev";
       } else {
         const expected = b * 0.4;
         const ratio = expected !== 0 ? Math.abs(a) / Math.abs(expected) : 0;
         if (ratio >= 1.2) {
-          accelInner = `<span style="color:var(--red)">${arwSvg(1)}${ratio.toFixed(1)}×</span>`;
+          accelInner = `<span style="color:var(--loss)">${arwSvg(1)}${ratio.toFixed(1)}×</span>`;
           accelCellCls = "num-neg-weak";
           accelKind = "up";
         } else if (ratio <= 0.6) {
-          accelInner = `<span style="color:var(--green)">${arwSvg(-1)}${ratio.toFixed(1)}×</span>`;
+          accelInner = `<span style="color:var(--gain)">${arwSvg(-1)}${ratio.toFixed(1)}×</span>`;
           accelCellCls = "num-pos-weak";
           accelKind = "down";
         } else {
@@ -428,15 +428,15 @@ export function renderHotMovers(payload, fmtTime) {
     let volKind = null; // 'high' | 'mid' | 'normal' | 'thin' | null
     if (typeof s.volMult === "number" && isFinite(s.volMult)) {
       const v = s.volMult;
-      let color = "var(--text-muted)";
+      let color = "var(--ink-3)";
       if (v >= 2) {
-        color = "var(--red)";
+        color = "var(--loss)";
         volKind = "high";
       } else if (v >= 1.3) {
         color = "var(--orange, #f59e0b)";
         volKind = "mid";
       } else if (v <= 0.5) {
-        color = "var(--green)";
+        color = "var(--gain)";
         volKind = "thin";
       } else {
         volKind = "normal";
@@ -470,9 +470,9 @@ export function renderHotMovers(payload, fmtTime) {
       const v = s.oiDelta5m;
       const arrow = arwSvg(v > 0 ? 1 : -1);
       if (Math.abs(v) >= 3) {
-        oiInner = `<span style="color:var(--accent);font-weight:600">${arrow}${fmtPct(v)}</span>`;
+        oiInner = `<span style="color:var(--accent-2);font-weight:600">${arrow}${fmtPct(v)}</span>`;
       } else if (Math.abs(v) >= 1) {
-        oiInner = `<span style="color:var(--text-muted)">${arrow}${fmtPct(v)}</span>`;
+        oiInner = `<span style="color:var(--ink-3)">${arrow}${fmtPct(v)}</span>`;
       } else {
         oiInner = `<span class="num-inline-muted">${fmtPct(v)}</span>`;
       }
@@ -488,7 +488,7 @@ export function renderHotMovers(payload, fmtTime) {
     if (typeof s.oiDelta15m === "number" && isFinite(s.oiDelta15m)) {
       const v = s.oiDelta15m;
       const arrow = arwSvg(v > 0 ? 1 : -1);
-      const color = Math.abs(v) >= 3 ? "var(--accent)" : "var(--text-muted)";
+      const color = Math.abs(v) >= 3 ? "var(--accent-2)" : "var(--ink-3)";
       openSetupHtml = `<span style="color:${color};font-weight:600">OI 15m ${arrow}${fmtPct(v)}</span>`;
     }
     // Открытая поза → метим сторону, в которой оператор УЖЕ сидит; закрытая →
@@ -533,11 +533,11 @@ export function renderHotMovers(payload, fmtTime) {
     // леак (контр-тренд). s.htfTrend = 'up'|'down'|'flat'|'none' из enrichHtfTrend.
     let htfChip = "";
     if (s.htfTrend === "up")
-      htfChip = `<span class="hm-htf num-inline-pos" style="margin-left:6px;font-size: var(--fs-label);font-weight:600" data-card="Higher timeframe 1h trend UP — longs go with it; shorts fight it">1h ${icon("long")}</span>`;
+      htfChip = `<span class="hm-htf num-inline-pos" style="margin-left:6px;font-size: var(--text-label);font-weight:600" data-card="Higher timeframe 1h trend UP — longs go with it; shorts fight it">1h ${icon("long")}</span>`;
     else if (s.htfTrend === "down")
-      htfChip = `<span class="hm-htf num-inline-neg" style="margin-left:6px;font-size: var(--fs-label);font-weight:600" data-card="Higher timeframe 1h trend DOWN — shorts go with it; longs fight it">1h ${icon("short")}</span>`;
+      htfChip = `<span class="hm-htf num-inline-neg" style="margin-left:6px;font-size: var(--text-label);font-weight:600" data-card="Higher timeframe 1h trend DOWN — shorts go with it; longs fight it">1h ${icon("short")}</span>`;
     else if (s.htfTrend === "flat")
-      htfChip = `<span class="hm-htf num-inline-muted" style="margin-left:6px;font-size: var(--fs-label)" data-card="Higher timeframe 1h trend flat — no tailwind either way">1h ${icon("flat")}</span>`;
+      htfChip = `<span class="hm-htf num-inline-muted" style="margin-left:6px;font-size: var(--text-label)" data-card="Higher timeframe 1h trend flat — no tailwind either way">1h ${icon("flat")}</span>`;
 
     // Чип Vol/OI: суточный оборот ≥ открытого интереса (Vol ≥ OI). На HL это
     // редкость (норма OI>Vol, медиана ~3×), поэтому Vol≥OI = монета сегодня реально
@@ -550,7 +550,7 @@ export function renderHotMovers(payload, fmtTime) {
         `Daily turnover is ${volOi.toFixed(1)}× open interest: 24h vol ${fmtUsdShort(s.vol24hUsd)} ≥ OI ${fmtUsdShort(s.oiUsd)}. ` +
         `On HL it is usually the other way round (OI>Vol), so this is rare: the coin is churning today — ` +
         `money moving in and out rather than sitting.`;
-      oiVolChip = `<span class="hm-oivol" style="margin-left:6px;font-size: var(--fs-label);font-weight:600" data-card="${escapeHtml(tip)}">Vol ${volOi.toFixed(1)}× OI</span>`;
+      oiVolChip = `<span class="hm-oivol" style="margin-left:6px;font-size: var(--text-label);font-weight:600" data-card="${escapeHtml(tip)}">Vol ${volOi.toFixed(1)}× OI</span>`;
     }
 
     const rowHtml = `

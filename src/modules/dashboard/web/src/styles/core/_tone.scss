@@ -11,8 +11,8 @@
 // ─────────────────────────────────────────────────────────────────────
 
 /// Красит блок в семантический цвет: заливка, рамка, цвет акцентного текста.
-/// $c — базовый цвет тона (var(--red)), $soft — его заливка (var(--red-soft)),
-/// $line — рамка (var(--red-line)). Заливка и рамка приходят из токенов темы,
+/// $c — базовый цвет тона (var(--loss)), $soft — его заливка (var(--loss-wash)),
+/// $line — рамка (var(--loss-line)). Заливка и рамка приходят из токенов темы,
 /// а не считаются из $c: color-mix на тёмной теме даёт грязь.
 @mixin tone($c, $soft, $line) {
   background: $soft;
@@ -23,12 +23,12 @@
 /// Нейтральное основание для всего, что потом красится @include tone.
 /// Держит геометрию (радиус, отступы, рамку) отдельно от цвета — тогда
 /// «покрасить» это одна строка, а не копия всего блока.
-@mixin tone-base($pad: var(--sp-2) var(--sp-3)) {
+@mixin tone-base($pad: var(--space-2) var(--space-3)) {
   padding: $pad;
-  border: 1px solid var(--border-muted);
+  border: 1px solid var(--rule-soft);
   border-radius: var(--radius);
-  background: var(--canvas-subtle);
-  --tone: var(--text-secondary);
+  background: var(--panel-sunk);
+  --tone: var(--ink-2);
 }
 
 /// Точка-маркер перед текстом. Нужна там, где плашек в столбик много и
