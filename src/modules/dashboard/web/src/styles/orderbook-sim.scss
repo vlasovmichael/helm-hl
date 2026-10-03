@@ -1,6 +1,12 @@
 //  orderbook-sim.html — тренажёр стакана на общем каркасе дашборда.
 //  Лесенка и её цвета — из pages/_orderbook (общая с живым стаканом),
 //  здесь только раскладка страницы и метки своих заявок.
+@use "core/kit" as *;
+
+// Контент — прямые дети container вне общей навигации и footer.
+body[data-page="ob-sim"] .container > :not(.topnav):not(.footer) {
+  @include kit-adapter;
+}
 
 .obs-stage {
   display: grid;

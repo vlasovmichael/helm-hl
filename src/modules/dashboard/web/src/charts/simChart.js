@@ -4,15 +4,14 @@
 // ─────────────────────────────────────────────────
 
 import { monoCandles } from "./candleStyle.js";
-
-const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+import { cssVar } from "../utils/format.js";
 
 function themeColors() {
   return {
-    bg: cssVar("--card-bg") || "#0d1117",
-    text: cssVar("--text-secondary") || "#8b949e",
-    grid: cssVar("--border") || "rgba(127,127,127,0.18)",
-    warn: cssVar("--warn") || "#d29922",
+    bg: cssVar("--card-bg", container) || "#0d1117",
+    text: cssVar("--text-secondary", container) || "#8b949e",
+    grid: cssVar("--border", container) || "rgba(127,127,127,0.18)",
+    warn: cssVar("--warn", container) || "#d29922",
   };
 }
 
@@ -21,8 +20,10 @@ const BASE_TS = 1_700_000_000;
 let chart = null;
 let series = null;
 let formingLine = null;
+let container = null;
 
-export async function mountSimChart(container) {
+export async function mountSimChart(host) {
+  container = host;
   const { createChart, CandlestickSeries } = await import("lightweight-charts");
   const c = themeColors();
   chart = createChart(container, {
@@ -41,7 +42,7 @@ export async function mountSimChart(container) {
     crosshair: { mode: 0 },
   });
   series = chart.addSeries(CandlestickSeries, {
-    ...monoCandles(),
+    ...monoCandles(container),
     priceFormat: { type: "price", precision: 2, minMove: 0.01 },
   });
   new ResizeObserver(() => {
@@ -79,5 +80,5 @@ export function applySimTheme() {
     rightPriceScale: { borderColor: c.grid },
     timeScale: { borderColor: c.grid },
   });
-  series.applyOptions(monoCandles());
+  series.applyOptions(monoCandles(container));
 }
