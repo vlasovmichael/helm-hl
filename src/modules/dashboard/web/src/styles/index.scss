@@ -4,6 +4,7 @@
 //  на Lab). На index таблицы стратегий нет — стили мёртвые, но безвредные.
 //  charts оставлен: _charts.scss шарит #equity-chart со statistics.
 @use "core";
+@use "core/kit" as *;
 @use "features/charts";
 @use "features/signals";
 @use "features/screen";
@@ -17,3 +18,8 @@
 @use "features/forwards";
 @use "features/calibrator";
 @use "features/levels";
+
+// Токены кита действуют только на контент маршрута, не на общий каркас.
+#outlet[data-page="index"] {
+  @include kit-adapter;
+}
