@@ -1,46 +1,10 @@
 @use "../core/breakpoints" as *;
+@use "../core/kit" as *;
 // Ledger page — было инлайн <style> в ledger.html (месячная таблица P&L).
 
-// Переходник ограничен корнем /ledger: общие переменные дашборда не меняем.
+// Страница на токенах кита: шапка и навигация вне #outlet остаются общими.
 body[data-page="ledger"] #outlet {
-  color-scheme: light;
-  --bg: var(--ground);
-  --canvas-subtle: var(--panel-sunk);
-  --canvas-inset: var(--panel-sunk);
-  --card-bg: var(--panel);
-  --card-bg-elev: var(--panel);
-  --card-bg-hover: var(--sheen);
-  --border: var(--rule);
-  --border-muted: var(--rule-soft);
-  --border-strong: var(--rule);
-  --hairline: var(--rule-soft);
-  --text-primary: var(--ink);
-  --text-secondary: var(--ink-2);
-  --text-muted: var(--ink-3);
-  --text-faint: var(--ink-3);
-  --accent: var(--accent-2);
-  --accent-strong: var(--accent-2);
-  --accent-soft: var(--wash);
-  --accent-line: var(--accent-2);
-  --green: var(--data);
-  --green-soft: var(--data-wash);
-  --green-line: var(--data-2);
-  --red: var(--attn);
-  --red-soft: var(--attn-wash);
-  --red-line: var(--attn);
-  --warn: var(--attn);
-  --warn-soft: var(--attn-wash);
-  --info: var(--accent-2);
-  --grid-line: var(--rule-soft);
-  --shadow-sm: var(--shadow-lift);
-  --shadow: var(--shadow-lift);
-  --font-sans: var(--sans);
-  --font-display: var(--display);
-  --font-mono: var(--mono);
-}
-
-html[data-theme="dark"] body[data-page="ledger"] #outlet {
-  color-scheme: dark;
+  @include kit-adapter;
 }
 
 .ledger-head {
