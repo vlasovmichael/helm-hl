@@ -9,6 +9,49 @@
 @use "../core/breakpoints" as *;
 @use "../core/tone" as *;
 
+// Переходник живёт только на /oi: общие имена дашборда не меняем, пока
+// остальные маршруты не перейдут на семантику кита.
+body[data-page="oi"] {
+  color-scheme: light;
+  --bg: var(--ground);
+  --canvas-subtle: var(--panel-sunk);
+  --canvas-inset: var(--panel-sunk);
+  --card-bg: var(--panel);
+  --card-bg-elev: var(--panel);
+  --card-bg-hover: var(--sheen);
+  --border: var(--rule);
+  --border-muted: var(--rule-soft);
+  --border-strong: var(--rule);
+  --hairline: var(--rule-soft);
+  --text-primary: var(--ink);
+  --text-secondary: var(--ink-2);
+  --text-muted: var(--ink-3);
+  --text-faint: var(--ink-3);
+  --accent: var(--accent-2);
+  --accent-strong: var(--accent-2);
+  --accent-soft: var(--wash);
+  --accent-line: var(--accent-2);
+  --green: var(--data);
+  --green-soft: var(--data-wash);
+  --green-line: var(--data-2);
+  --red: var(--attn);
+  --red-soft: var(--attn-wash);
+  --red-line: var(--attn);
+  --warn: var(--attn);
+  --warn-soft: var(--attn-wash);
+  --info: var(--accent-2);
+  --grid-line: var(--rule-soft);
+  --shadow-sm: var(--shadow-lift);
+  --shadow: var(--shadow-lift);
+  --font-sans: var(--sans);
+  --font-display: var(--display);
+  --font-mono: var(--mono);
+}
+
+html[data-theme="dark"] body[data-page="oi"] {
+  color-scheme: dark;
+}
+
 .oi-note {
   color: var(--text-secondary);
   font-size: var(--fs-body);

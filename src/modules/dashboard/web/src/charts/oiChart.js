@@ -160,7 +160,7 @@ export async function drawOiChart(points) {
       layout: {
         background: { type: "solid", color: c.bg },
         textColor: c.text,
-        fontFamily: "JetBrains Mono, monospace",
+        fontFamily: cssVar("--font-mono") || "JetBrains Mono, monospace",
         fontSize: 11,
         // Логотип TradingView садится поверх линий в левом нижнем углу.
         attributionLogo: false,
