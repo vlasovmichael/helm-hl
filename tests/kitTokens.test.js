@@ -79,3 +79,16 @@ test('каждая var(--x) без запасного значения где-т
       .map((name) => `${path}: ${name}`));
   assert.deepEqual([...new Set(missing)], []);
 });
+
+// Кит называет шрифты, но не грузит их: незагруженное семейство молча падает на системный шрифт.
+test('каждый шрифт из токенов кита грузится в head.html', () => {
+  const kit = readFileSync('node_modules/@flwls/ui/dist/tokens.css', 'utf8');
+  const head = readFileSync(join(WEB, 'head.html'), 'utf8');
+  const loaded = [...head.matchAll(/family=([^:&"]+)/g)].map((m) => m[1].replace(/\+/g, ' '));
+  const missing = ['--display', '--sans', '--mono'].filter((token) => {
+    const stack = kit.match(new RegExp(`${token}:\\s*([^;]+);`))?.[1] ?? '';
+    const families = [...stack.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+    return !families.some((family) => loaded.includes(family));
+  });
+  assert.deepEqual(missing, []);
+});

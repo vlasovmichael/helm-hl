@@ -35,7 +35,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@flwls/ui": "github:vlasovmichael/flwls-kit#ui-v0.3.0",
+    "@flwls/ui": "github:vlasovmichael/flwls-kit#ui-v0.4.0",
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.11.0",
     "eslint": "^10.9.1",
