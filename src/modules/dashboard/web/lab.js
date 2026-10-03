@@ -112,6 +112,7 @@ export default {
   nav: "lab",
 
   render(outlet) {
+    outlet.dataset.page = "lab";
     outlet.innerHTML = view();
 
     mountPageHeader({

@@ -23,3 +23,7 @@
 #outlet[data-page="index"] {
   @include kit-adapter;
 }
+
+#outlet[data-page="lab"] {
+  @include kit-adapter;
+}
