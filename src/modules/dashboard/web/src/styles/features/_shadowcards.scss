@@ -11,7 +11,7 @@ $cards: ":is(#sec-candygirl)";
     gap: 0.75rem;
   }
   .cb-section {
-    background: var(--bg-elev);
+    background: var(--panel-raised);
     border: 1px solid var(--rule);
     border-radius: 8px;
     padding: 0.6rem 0.75rem;
@@ -39,7 +39,7 @@ $cards: ":is(#sec-candygirl)";
       color: var(--ink-3);
     }
     .v {
-      color: var(--text);
+      color: var(--ink);
       min-width: 0;
       overflow-wrap: anywhere;
     }

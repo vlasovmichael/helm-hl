@@ -53,11 +53,11 @@
   overflow: hidden;
   border: 0;
   border-radius: 3px;
-  background: var(--bg-elevated);
+  background: var(--panel-raised);
   appearance: none;
 
   &::-webkit-progress-bar {
-    background: var(--bg-elevated);
+    background: var(--panel-raised);
   }
   &::-webkit-progress-value {
     background: var(--accent-2);

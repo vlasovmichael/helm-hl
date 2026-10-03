@@ -100,7 +100,7 @@
 }
 /* Сторона, за которую журнал уже заплатил. */
 .hm-costly.is-costly .setup-pill {
-  box-shadow: 0 0 0 1.5px var(--canvas), 0 0 0 3px var(--neg, #e5484d);
+  box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 3px var(--neg, #e5484d);
 }
 
 /* Режим захода — хвост справа от пилюли. */
@@ -114,7 +114,7 @@
 }
 /* Сторона, за которую журнал уже заплатил. */
 .hm-costly.is-costly .setup-pill {
-  box-shadow: 0 0 0 1.5px var(--canvas), 0 0 0 3px var(--neg, #e5484d);
+  box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 3px var(--neg, #e5484d);
 }
 
 /* Колонка Move: насколько движение уже ушло. Прижата вправо. */

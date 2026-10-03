@@ -1,5 +1,5 @@
-// Переходник на body ссылается на переменные @flwls/ui: страница без CSS кита теряет цвета,
-// а verify и сборка этого не видят.
+// Дашборд стоит на токенах @flwls/ui: страница без CSS кита или ссылка на неопределённую
+// переменную теряет цвета молча, а verify и сборка этого не видят.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -62,4 +62,20 @@ test('в исходниках нет старых имён токенов пер
     }
   }
   assert.deepEqual(occurrences, []);
+});
+
+// var(--x) без запасного значения на неопределённом имени браузер выбрасывает молча.
+test('каждая var(--x) без запасного значения где-то определена', () => {
+  const kit = readFileSync('node_modules/@flwls/ui/dist/tokens.css', 'utf8');
+  const sources = sourceFiles(WEB).map((path) => [path, readFileSync(path, 'utf8')]);
+  const defined = new Set([kit, ...sources.map(([, text]) => text)].flatMap((text) => [
+    ...[...text.matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1]),
+    ...[...text.matchAll(/setProperty\(\s*["'](--[\w-]+)/g)].map((m) => m[1]),
+  ]));
+  const missing = sources.flatMap(([path, text]) =>
+    [...text.matchAll(/var\(\s*(--[\w-]+)\s*\)/g)]
+      .map((m) => m[1])
+      .filter((name) => !defined.has(name))
+      .map((name) => `${path}: ${name}`));
+  assert.deepEqual([...new Set(missing)], []);
 });
