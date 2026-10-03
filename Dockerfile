@@ -8,6 +8,10 @@ COPY package*.json ./
 # 🚨 --ignore-scripts: витрине нужен только Vite, а postinstall у better-sqlite3
 # зовёт node-gyp — это минуты сборки и тулчейн python3/make/g++ ради модуля,
 # который на этой стадии не загружается.
+# Кит дизайн-системы ставится из публичного GitHub: нужен git, и ssh из lock-файла
+# идёт по https — ключей в образе нет.
+RUN apk add --no-cache git \
+ && git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
 RUN npm ci --ignore-scripts
 # Копируем только вход Vite: правка бота не должна пересобирать витрину.
 # 🚨 chartCoach.js лежит вне web/, но journal.js импортирует его — без него
