@@ -7,8 +7,7 @@
 import { fmtPx } from "../features/levelPlan.js";
 import { EMA_PERIOD, ema } from "../features/levelMath.js";
 import { candleStyle, lastPriceLine } from "./candleStyle.js";
-
-const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+import { cssVar } from "../utils/format.js";
 
 // Пустые бары справа от последней свечи: в них стоит коробка плана.
 const FUTURE_BARS = 34;
@@ -29,17 +28,17 @@ const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 
 function palette() {
   return {
-    bg: cssVar("--card-bg") || "#ffffff",
-    text: cssVar("--text-secondary") || "#59636e",
-    strong: cssVar("--text-primary") || "#1f2328",
-    grid: cssVar("--hairline") || "#eaeef2",
-    border: cssVar("--border") || "#d1d9e0",
-    up: cssVar("--pnl-up") || "#0ecb81",
-    down: cssVar("--pnl-down") || "#f6465d",
-    accent: cssVar("--accent") || "#0969da",
-    ema: cssVar("--chart-ema") || "#ffd60a",
-    font: cssVar("--font-sans") || "sans-serif",
-    mono: cssVar("--font-mono") || "monospace",
+    bg: cssVar("--card-bg", host) || "#ffffff",
+    text: cssVar("--text-secondary", host) || "#59636e",
+    strong: cssVar("--text-primary", host) || "#1f2328",
+    grid: cssVar("--hairline", host) || "#eaeef2",
+    border: cssVar("--border", host) || "#d1d9e0",
+    up: cssVar("--pnl-up", host) || "#0ecb81",
+    down: cssVar("--pnl-down", host) || "#f6465d",
+    accent: cssVar("--accent", host) || "#0969da",
+    ema: cssVar("--chart-ema", host) || "#ffd60a",
+    font: cssVar("--font-sans", host) || "sans-serif",
+    mono: cssVar("--font-mono", host) || "monospace",
   };
 }
 
@@ -360,7 +359,7 @@ function makeLayer() {
     },
     text: () => candleCountdown(bars.at(-1).time, meta.tf, Date.now()),
     textColor: () => "#ffffff",
-    backColor: () => lastPriceLine(bars.at(-1)).priceLineColor,
+    backColor: () => lastPriceLine(bars.at(-1), host).priceLineColor,
     visible: () => bars.length > 0 && Boolean(TF_SEC[meta.tf]),
     tickVisible: () => false,
   };
@@ -451,7 +450,7 @@ export async function drawLevels(container, data, pick) {
     const { createChart, CandlestickSeries, LineSeries } = await import("lightweight-charts");
     chart = createChart(container, { ...chartOptions(), autoSize: true });
     candles = chart.addSeries(CandlestickSeries, {
-      ...candleStyle(candleMode),
+      ...candleStyle(candleMode, host),
       priceFormat: { type: "custom", formatter: fmtPx, minMove: 1e-8 },
     });
     emaSeries = chart.addSeries(LineSeries, {
@@ -485,7 +484,7 @@ export async function drawLevels(container, data, pick) {
   meta = { coin: data.coin, tf: data.tf };
   bars = data.candles;
   candles.setData(bars);
-  candles.applyOptions(lastPriceLine(bars.at(-1)));
+  candles.applyOptions(lastPriceLine(bars.at(-1), host));
   emaLine = emaPoints(bars, data.emaSeed);
   emaSeries.setData(emaLine);
   renderLegend();
@@ -508,7 +507,7 @@ export function tickPrice(px) {
   const bar = { ...last, close: px, high: Math.max(last.high, px), low: Math.min(last.low, px) };
   bars[bars.length - 1] = bar;
   candles.update(bar);
-  candles.applyOptions(lastPriceLine(bar));
+  candles.applyOptions(lastPriceLine(bar, host));
   // Последняя точка EMA пересчитывается от предпоследней: та на закрытом баре.
   if (emaLine.length >= 2 && emaLine.at(-1).time === bar.time) {
     const prev = emaLine.at(-2).value;
@@ -540,14 +539,14 @@ export function drawScene(zones, plan, thin = []) {
 /** Чёрно-белые или цветные свечи. */
 export function setCandleMode(mode) {
   candleMode = mode;
-  candles?.applyOptions(candleStyle(mode));
+  candles?.applyOptions(candleStyle(mode, host));
 }
 
 /** Перекраска под тему: bindTheme зовёт это при смене. */
 export function applyLevelsTheme() {
   if (!chart) return;
   chart.applyOptions(chartOptions());
-  candles.applyOptions({ ...candleStyle(candleMode), ...lastPriceLine(bars.at(-1)) });
+  candles.applyOptions({ ...candleStyle(candleMode, host), ...lastPriceLine(bars.at(-1), host) });
   emaSeries.applyOptions({ color: palette().ema });
   layer?.redraw();
 }

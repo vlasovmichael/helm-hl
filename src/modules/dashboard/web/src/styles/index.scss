@@ -27,3 +27,8 @@
 #outlet[data-page="lab"] {
   @include kit-adapter;
 }
+
+// У levels нет outlet: область — прямые дети container между nav и footer.
+body[data-page="levels"] .container > :not(.topnav):not(.footer) {
+  @include kit-adapter;
+}

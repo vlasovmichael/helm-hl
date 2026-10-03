@@ -3,10 +3,10 @@
 
 import { cssVar } from "../utils/format.js";
 
-export function monoCandles() {
-  const ink = cssVar("--text-primary") || "#18181B";
+export function monoCandles(element) {
+  const ink = cssVar("--text-primary", element) || "#18181B";
   return {
-    upColor: cssVar("--card-bg") || "#fff",
+    upColor: cssVar("--card-bg", element) || "#fff",
     downColor: ink,
     borderUpColor: ink,
     borderDownColor: ink,
@@ -16,9 +16,9 @@ export function monoCandles() {
 }
 
 /** Цветные свечи: зелёная вверх, красная вниз. */
-export function colorCandles() {
-  const up = cssVar("--pnl-up") || "#0ecb81";
-  const down = cssVar("--pnl-down") || "#f6465d";
+export function colorCandles(element) {
+  const up = cssVar("--pnl-up", element) || "#0ecb81";
+  const down = cssVar("--pnl-down", element) || "#f6465d";
   return {
     upColor: up,
     downColor: down,
@@ -29,17 +29,17 @@ export function colorCandles() {
   };
 }
 
-export const candleStyle = (mode) => (mode === "color" ? colorCandles() : monoCandles());
+export const candleStyle = (mode, element) => (mode === "color" ? colorCandles(element) : monoCandles(element));
 
 const DOTTED = 1; // LineStyle.Dotted
 
 /** Линия текущей цены: тонкий пунктир цвета последней свечи. */
-export function lastPriceLine(bar) {
+export function lastPriceLine(bar, element) {
   const up = !bar || bar.close >= bar.open;
   return {
     priceLineVisible: true,
     priceLineWidth: 1,
     priceLineStyle: DOTTED,
-    priceLineColor: up ? cssVar("--pnl-up") || "#0ecb81" : cssVar("--pnl-down") || "#f6465d",
+    priceLineColor: up ? cssVar("--pnl-up", element) || "#0ecb81" : cssVar("--pnl-down", element) || "#f6465d",
   };
 }

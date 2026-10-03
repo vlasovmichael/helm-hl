@@ -29,6 +29,7 @@ export function hexToRgba(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+// Элемент нужен локальным темам страниц; без него сохраняется старый :root.
 export function cssVar(name, element = document.documentElement) {
   return getComputedStyle(element)
     .getPropertyValue(name)
