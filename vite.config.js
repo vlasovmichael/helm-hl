@@ -98,6 +98,13 @@ export default defineConfig({
           ? { headers: { cookie: process.env.DASHBOARD_DEV_COOKIE } }
           : {}),
       },
+      // Форму входа отдаёт Vite, пароль уходит на бэкенд: кука сессии ложится на localhost.
+      "/login": {
+        target: API_TARGET,
+        changeOrigin: true,
+        bypass: (req) => (req.method === "GET" ? "/login.html" : undefined),
+      },
+      "/logout": { target: API_TARGET, changeOrigin: true },
     },
   },
 });
