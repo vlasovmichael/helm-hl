@@ -4,6 +4,7 @@
 //  (проскальзывание, цену стоп-маркета в тонкой монете), а не рынок.
 // ─────────────────────────────────────────────────────────────
 
+import "@flwls/ui/tokens.css";
 import "./src/styles/orderbook.scss";
 import "./src/styles/orderbook-sim.scss";
 import { bindTheme, startFooterTimer } from "./src/core/shell.js";

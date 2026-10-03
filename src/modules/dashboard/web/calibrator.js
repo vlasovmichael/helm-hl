@@ -1,3 +1,4 @@
+import "@flwls/ui/tokens.css";
 import "./src/styles/index.scss";
 // ─────────────────────────────────────────────────
 // calibrator.html — цена входа в монету, выраженная в процентных пунктах.

@@ -1,7 +1,6 @@
 //  statistics.html — strategies, P&L summary, insights, equity chart,
 //  shadow-cards (Candy Girl), live logs.
 @use "core";
-@use "core/kit" as *;
 @use "features/pnl";
 @use "features/strategies";
 @use "features/shadowcards";
@@ -10,7 +9,3 @@
 @use "features/charts";
 @use "features/tradebreakdown";
 
-// Переходник ограничен содержимым маршрута; верхняя навигация остаётся общей.
-#outlet[data-page="statistics"] {
-  @include kit-adapter;
-}

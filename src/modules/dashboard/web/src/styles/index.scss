@@ -4,7 +4,6 @@
 //  на Lab). На index таблицы стратегий нет — стили мёртвые, но безвредные.
 //  charts оставлен: _charts.scss шарит #equity-chart со statistics.
 @use "core";
-@use "core/kit" as *;
 @use "features/charts";
 @use "features/signals";
 @use "features/screen";
@@ -19,21 +18,3 @@
 @use "features/calibrator";
 @use "features/levels";
 
-// Токены кита действуют только на контент маршрута, не на общий каркас.
-#outlet[data-page="index"] {
-  @include kit-adapter;
-}
-
-#outlet[data-page="lab"] {
-  @include kit-adapter;
-}
-
-// У levels нет outlet: область — прямые дети container между nav и footer.
-body[data-page="levels"] .container > :not(.topnav):not(.footer) {
-  @include kit-adapter;
-}
-
-// У calibrator область контента — прямые дети container вне общего каркаса.
-body[data-page="calibrator"] .container > :not(.topnav):not(.footer) {
-  @include kit-adapter;
-}

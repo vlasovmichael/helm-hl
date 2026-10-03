@@ -1,3 +1,4 @@
+import "@flwls/ui/tokens.css";
 import "./ticket.scss";
 import { mountPageHeader } from "./src/core/pageHeader.js";
 // ─────────────────────────────────────────────────

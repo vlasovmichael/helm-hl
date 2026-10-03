@@ -620,7 +620,6 @@ export default {
   nav: "dashboard",
 
   render(outlet) {
-    outlet.dataset.page = "index";
     outlet.innerHTML = view();
     // 🚨 Разметка новая, а модули помнят прошлую: без сброса плашка BTC висит
     // на спиннере, а секция позиций остаётся пустой до смены состава монет.

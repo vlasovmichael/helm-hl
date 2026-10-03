@@ -2,11 +2,6 @@
 //  features/orderbook (сетка «книга + боковая панель» на дашборде) плюс
 //  страница; неймспейсы разводим явно — имена файлов совпадают.
 @use "core";
-@use "core/kit" as *;
 @use "features/orderbook" as ob-feature;
 @use "pages/orderbook" as ob-page;
 
-// Контент — прямые дети container вне общей навигации и footer.
-body[data-page="orderbook"] .container > :not(.topnav):not(.footer) {
-  @include kit-adapter;
-}

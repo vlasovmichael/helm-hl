@@ -1,11 +1,5 @@
 @use "../core/breakpoints" as *;
-@use "../core/kit" as *;
 // Ledger page — было инлайн <style> в ledger.html (месячная таблица P&L).
-
-// Страница на токенах кита: шапка и навигация вне #outlet остаются общими.
-body[data-page="ledger"] #outlet {
-  @include kit-adapter;
-}
 
 .ledger-head {
   display: flex;

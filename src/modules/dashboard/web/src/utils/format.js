@@ -29,8 +29,8 @@ export function hexToRgba(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-// Элемент нужен локальным темам страниц; без него сохраняется старый :root.
-export function cssVar(name, element = document.documentElement) {
+// Токены кита лежат на body (core/_tokens.scss), поэтому читаем с body, а не с :root.
+export function cssVar(name, element = document.body) {
   return getComputedStyle(element)
     .getPropertyValue(name)
     .trim();

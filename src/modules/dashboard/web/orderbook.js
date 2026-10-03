@@ -6,6 +6,7 @@
 //  реальные уровни поддержки/сопротивления + давление bid/ask у центра.
 // ─────────────────────────────────────────────────
 
+import "@flwls/ui/tokens.css";
 import "./src/styles/orderbook.scss";
 import { mountPageHeader } from "./src/core/pageHeader.js";
 import { bindTheme, startFooterTimer } from "./src/core/shell.js";

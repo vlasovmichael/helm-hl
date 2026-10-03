@@ -8,12 +8,6 @@
 
 @use "../core/breakpoints" as *;
 @use "../core/tone" as *;
-@use "../core/kit" as *;
-
-// Страница на токенах кита: шапка и навигация вне #outlet остаются общими.
-body[data-page="oi"] #outlet {
-  @include kit-adapter;
-}
 
 .oi-note {
   color: var(--text-secondary);

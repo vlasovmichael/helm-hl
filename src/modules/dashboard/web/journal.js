@@ -815,7 +815,6 @@ export default {
   nav: "journal",
 
   render(outlet) {
-    outlet.dataset.page = "journal";
     outlet.innerHTML = view();
 
     segT = wireSeg("segTrend", (v) => (curTrend = v));

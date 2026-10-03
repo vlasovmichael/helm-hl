@@ -359,7 +359,6 @@ export default {
 
   render(outlet) {
     alive = true;
-    outlet.dataset.page = "statistics";
     outlet.innerHTML = view();
 
     mountPageHeader({

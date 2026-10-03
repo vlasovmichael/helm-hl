@@ -1,5 +1,6 @@
 //  login.html — автономная страница входа: стили и логика формы.
 
+import "@flwls/ui/tokens.css";
 import "./src/styles/login.scss";
 
 const BAD_CREDS = "Invalid username or password.";
