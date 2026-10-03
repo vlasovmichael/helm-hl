@@ -5,21 +5,8 @@
    грузилась — упоминание осталось от первой версии.)
    ────────────────────────────────────────────────────────────────── */
 
-@use "kit" as *;
-
 :root {
   color-scheme: normal;
-  /* Текст — IBM Plex Sans, заголовки — Geologica: спокойный гротеск + характерный
-     дисплейный. Цифры везде остаются в моно, чтобы колонки не «плясали». */
-  --font-sans:
-    "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans",
-    Helvetica, Arial, sans-serif;
-  --font-display:
-    "Geologica", "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Helvetica, Arial, sans-serif;
-  --font-mono:
-    "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
-    "Liberation Mono", monospace;
 
   --radius-sm: 6px;
   --radius: 9px;
@@ -35,40 +22,11 @@
   --pnl-up: #0ecb81;
   --pnl-down: #f6465d;
 
-  /* ── Шкала кегля ────────────────────────────────────────────────────
-     Ступени именованы по РОЛИ. Новых `font-size: Npx` не заводить — если
-     кегль не тот, правится ступень здесь. Пола «не мельче 14px» не держим:
-     интерфейс от него раздувается.
-
-     🚨 Полупиксельных значений не заводить: на нецелом кегле хинтинг у
-     JetBrains Mono плывёт, и колонка цифр перестаёт стоять. */
-  --fs-micro: 10px;  /* служебные метки в тесных местах: LIVE, ×N, tz  */
-  --fs-label: 11px;  /* заголовки колонок, eyebrow над заголовком      */
-  --fs-small: 12px;  /* чипы, бейджи, подстрочник под числом           */
-  --fs-body: 13px;   /* вторичный текст, ячейки таблиц                 */
-  --fs-base: 14px;   /* основной текст                                */
-  --fs-lead: 16px;   /* вводка, крупная ячейка                        */
-  --fs-h3: 19px;     /* заголовок блока внутри карточки               */
-  --fs-h2: 22px;     /* заголовок карточки                            */
-  --fs-h1: 30px;     /* заголовок страницы                            */
-  --fs-hero: 46px;   /* единственное число, ради которого страница     */
   --fs-hero-sm: 34px; /* оно же на телефоне                            */
 
   /* Межбуквенное: крупный дисплей сжимаем, капслок-метки разряжаем. */
   --ls-tight: -0.015em;
   --ls-wide: 0.06em;
-
-  /* ── Шаг сетки ──────────────────────────────────────────────────────
-     Всё кратно 4. Отступы карточек и модалок берутся отсюда, а не из
-     головы: иначе 22px и 26px соседствуют с 20px и никто не помнит почему. */
-  --sp-1: 4px;
-  --sp-2: 8px;
-  --sp-3: 12px;
-  --sp-4: 16px;
-  --sp-5: 20px;
-  --sp-6: 24px;
-  --sp-8: 32px;
-  --sp-10: 40px;
 
   /* ── Движение ───────────────────────────────────────────────────────
      Три длительности и две кривые на весь дашборд. --ease — стандартный
@@ -94,9 +52,9 @@
      фолбэком rgba(128,128,128,0.06). Фолбэк одинаков в обеих темах —
      отсюда мёртво-серые плашки на светлой. Псевдоним разрешается в момент
      использования, поэтому тему подхватывает правильно. Новый код зовёт
-     --canvas-subtle / --card-bg-elev напрямую; строка остаётся только для
+     --panel-sunk / --panel-raised напрямую; строка остаётся только для
      старого места. --panel принадлежит пакету кита. */
-  --panel-2: var(--canvas-subtle);
+  --panel-2: var(--panel-sunk);
 }
 
 :root[data-theme="dark"] {
@@ -111,27 +69,6 @@
 
 /* ── GitHub Primer: light theme (calm white) ─────────────────────── */
 html[data-theme="light"] {
-  --bg: #ffffff;
-  --canvas-subtle: #f6f8fa;
-  --canvas-inset: #eaeef2;
-  --card-bg: #ffffff;
-  --card-bg-elev: #f6f8fa;
-  --card-bg-hover: #f3f4f6;
-  --border: #d1d9e0;
-  --border-muted: #d8dee4;
-  --border-strong: #afb8c1;
-  --hairline: #eaeef2;
-
-  --text-primary: #1f2328;
-  --text-secondary: #59636e;
-  --text-muted: #6e7781;
-  --text-faint: #afb8c1;
-
-  --accent: #0969da;
-  --accent-strong: #0550ae;
-  --accent-soft: #ddf4ff;
-  --accent-line: #54aeff;
-
   /* Фирменный акцент: индиго→циан. Используется для хедера, ключевых кромок,
      тега BOT. Мягкий, не «крипто-казино». --amber = тёплый акцент (YOU/ручное). */
   --brand: #6c4cf1;
@@ -146,13 +83,6 @@ html[data-theme="light"] {
     rgba(27, 166, 194, 0.08) 100%
   );
 
-  --green: #1a7f37;
-  --green-soft: #dafbe1;
-  --green-line: #4ac26b;
-  --red: #cf222e;
-  --red-soft: #ffebe9;
-  --red-line: #ff8182;
-
   /* Tier backgrounds (Hot Movers): STRONG → NORMAL → WEAK */
   --tier-pos-strong: rgba(46, 160, 67, 0.38);
   --tier-pos-normal: rgba(46, 160, 67, 0.18);
@@ -160,19 +90,10 @@ html[data-theme="light"] {
   --tier-neg-strong: rgba(207, 34, 46, 0.32);
   --tier-neg-normal: rgba(207, 34, 46, 0.15);
   --tier-neg-weak: rgba(207, 34, 46, 0.06);
-  --warn: #9a6700;
-  --warn-soft: #fff8c5;
   /* --yellow: акцентный текст «ручное/таймер» (HANDS-OFF, floor-timer). На
      светлой (кремовой) теме чистый #eab308 не читался — берём тёмное золото. */
   --yellow: #8a6400;
   /* Линия EMA на графиках — чистый жёлтый в обеих темах, как на TradingView. */
-  --chart-ema: #ffd60a;
-  --info: #0969da;
-
-  --grid-line: #eaeef2;
-  --shadow-sm: 0 1px 0 rgba(31, 35, 40, 0.04);
-  --shadow: 0 1px 3px rgba(31, 35, 40, 0.04), 0 8px 24px rgba(66, 74, 83, 0.04);
-
   /* Скелетон на белой карточке. #eaeef2 (цвет разделителей) на белом почти не
      виден — блок «пусто» и блок «сейчас приедет» выглядели одинаково. Берём
      тон на две ступени плотнее: заметно, но не читается как содержимое. */
@@ -182,27 +103,6 @@ html[data-theme="light"] {
 
 /* ── GitHub Primer: dark theme ───────────────────────────────────── */
 html[data-theme="dark"] {
-  --bg: #0d1117;
-  --canvas-subtle: #161b22;
-  --canvas-inset: #010409;
-  --card-bg: #0d1117;
-  --card-bg-elev: #161b22;
-  --card-bg-hover: #1c2128;
-  --border: #30363d;
-  --border-muted: #21262d;
-  --border-strong: #484f58;
-  --hairline: #21262d;
-
-  --text-primary: #e6edf3;
-  --text-secondary: #9198a1;
-  --text-muted: #8d96a0;
-  --text-faint: #6e7681;
-
-  --accent: #4493f8;
-  --accent-strong: #58a6ff;
-  --accent-soft: rgba(56, 139, 253, 0.15);
-  --accent-line: rgba(56, 139, 253, 0.4);
-
   /* Фирменный акцент (dark): чуть ярче для контраста на тёмном. */
   --brand: #8b6dff;
   --brand-2: #2cc6e0;
@@ -216,13 +116,6 @@ html[data-theme="dark"] {
     rgba(44, 198, 224, 0.08) 100%
   );
 
-  --green: #3fb950;
-  --green-soft: rgba(46, 160, 67, 0.15);
-  --green-line: rgba(46, 160, 67, 0.4);
-  --red: #f85149;
-  --red-soft: rgba(248, 81, 73, 0.15);
-  --red-line: rgba(248, 81, 73, 0.4);
-
   /* Tier backgrounds (Hot Movers): STRONG → NORMAL → WEAK */
   --tier-pos-strong: rgba(46, 160, 67, 0.42);
   --tier-pos-normal: rgba(46, 160, 67, 0.2);
@@ -230,22 +123,7 @@ html[data-theme="dark"] {
   --tier-neg-strong: rgba(248, 81, 73, 0.38);
   --tier-neg-normal: rgba(248, 81, 73, 0.18);
   --tier-neg-weak: rgba(248, 81, 73, 0.07);
-  --warn: #d29922;
-  --warn-soft: rgba(187, 128, 9, 0.15);
   --yellow: #eab308; /* на тёмной теме яркий жёлтый читается — оставляем */
-  --chart-ema: #ffd60a;
-  --info: #4493f8;
-
-  --grid-line: #21262d;
-  --shadow-sm: 0 0 0 1px rgba(0, 0, 0, 0);
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-
   --skeleton-base: #1b2129;
   --skeleton-shine: #262d36;
-}
-
-// Дашборд целиком на ките: имена дашборда получают значения @flwls/ui. На body, а не
-// на :root: там одноимённые токены кита и дашборда перебивают друг друга.
-body {
-  @include kit-adapter;
 }
