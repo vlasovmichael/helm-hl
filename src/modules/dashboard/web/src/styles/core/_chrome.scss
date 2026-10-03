@@ -106,68 +106,41 @@ header {
   background: transparent;
   border-color: transparent;
   padding: 2px 0;
-
-  &::before {
-    display: none;
-  }
   .sk-chip {
     height: 16px;
     width: 74px;
   }
 }
 
+// Статус соединения и фидов: в норме — тихий текст, цвет и подложка только у проблемы.
+// Без точки-индикатора: цветная точка на здоровом состоянии кричит «всё хорошо» постоянно.
 .status-pill {
   position: relative;
   font-family: var(--sans);
   font-size: var(--text-small);
   font-weight: 500;
-  padding: 2px 8px;
-  border-radius: 2em;
-  background: var(--wash);
-  color: var(--accent-2);
-  border: 1px solid var(--accent-2);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  border: var(--border-thin) solid transparent;
+  color: var(--ink-3);
   display: inline-flex;
   align-items: center;
-  gap: 6px;
   line-height: 18px;
 
-  &::before {
-    content: "";
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: currentColor;
-  }
-  &.prod {
-    color: var(--gain);
-    background: var(--gain-wash);
-    border-color: var(--gain-line);
-  }
-  &.live {
-    color: var(--gain);
-    background: var(--gain-wash);
-    border-color: var(--gain-line);
-  }
   &.stale {
-    color: #b45309;
-    background: rgba(245, 158, 11, 0.15);
-    border-color: rgba(245, 158, 11, 0.4);
+    color: var(--caution);
+    background: var(--caution-wash);
   }
   &.offline {
     color: var(--loss);
     background: var(--loss-wash);
-    border-color: var(--loss-line);
   }
 
   /* ── Соединение устанавливается ──
      По плашке идёт тот же блик слева направо, что и по скелетонам
      (core/_loaders.scss). Это намеренно ОДИН приём на весь дашборд: «здесь
      ждут данные» говорится везде одинаково, и плашка связи не заводит
-     собственную идиому ради самой себя.
-
-     Точка при этом не мигает и кольца не пускает: пульсирующий кружок ничего
-     не добавляет к слову «reconnecting» рядом с ним — он только дёргает
-     периферийное зрение в шапке, где человек и так следит за деньгами. */
+     собственную идиому ради самой себя. */
   &.is-connecting {
     background-image: linear-gradient(
       90deg,
@@ -991,7 +964,6 @@ header {
 }
 .toast {
   --toast-accent: var(--accent-2); // по умолчанию синий; тип-модификаторы ниже красят
-  --toast-accent-rgb: 9, 105, 218;
   pointer-events: auto;
   position: relative;
   display: grid;
@@ -1026,7 +998,6 @@ header {
   &.is-in {
     opacity: 1;
     transform: none;
-    animation: toast-glow 1.4s var(--ease) 1;
   }
   // Полёт в колокольчик: JS ставит --fly-x/--fly-y (дельта до иконки) и класс.
   &.is-out {
@@ -1051,28 +1022,23 @@ header {
     animation: toast-life var(--toast-life, 5200ms) linear 1 forwards;
   }
 }
-// Тип-модификаторы: перекрашивают акцент (border/иконка/фон/glow/полоска).
+// Тип-модификаторы: перекрашивают акцент (border/иконка/фон/полоска).
 .toast--ok {
   --toast-accent: var(--gain);
-  --toast-accent-rgb: 26, 127, 55;
 }
 .toast--danger {
   --toast-accent: var(--loss);
-  --toast-accent-rgb: 207, 34, 46;
 }
 .toast--warn {
   --toast-accent: var(--amber);
-  --toast-accent-rgb: 217, 147, 10;
 }
 /* Сторона сделки и направление движения. Тон здесь означает СТОРОНУ, а не
    исход: у входа исхода ещё нет. */
 .toast--up {
   --toast-accent: var(--gain);
-  --toast-accent-rgb: 26, 127, 55;
 }
 .toast--down {
   --toast-accent: var(--loss);
-  --toast-accent-rgb: 207, 34, 46;
 }
 .toast-ico {
   flex-shrink: 0;
@@ -1162,18 +1128,6 @@ header {
 .toast-sep {
   color: var(--ink-3, var(--ink-3));
   margin: 0 2px;
-}
-@keyframes toast-glow {
-  0% {
-    box-shadow:
-      0 10px 34px rgba(0, 0, 0, 0.32),
-      0 0 0 0 rgba(var(--toast-accent-rgb), 0.5);
-  }
-  100% {
-    box-shadow:
-      0 10px 34px rgba(0, 0, 0, 0.32),
-      0 0 0 14px rgba(var(--toast-accent-rgb), 0);
-  }
 }
 @keyframes toast-life {
   to {
