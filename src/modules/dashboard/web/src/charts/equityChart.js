@@ -9,6 +9,10 @@ let equityChart = null;
 let equitySeries = null;
 let equityData = []; // [{time, value}]
 let onResize = null;
+let chartContainer = null;
+
+// Цвета берём из области страницы: переходник не меняет :root.
+const chartVar = (name) => cssVar(name, chartContainer);
 
 // Оверлей-лоадер графика Performance (#chart-loader).
 export function showChartLoader() {
@@ -35,10 +39,10 @@ export function setEquityData(data) {
 export function applyChartTheme() {
   if (!equityChart) return;
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  const accent = cssVar("--accent") || "#635BFF";
-  const textMuted = cssVar("--text-muted") || (isDark ? "#71717A" : "#52525B");
-  const grid = cssVar("--grid-line") || (isDark ? "#1F1F23" : "#E4E4E7");
-  const bgColor = cssVar("--card-bg") || (isDark ? "#131316" : "#FFFFFF");
+  const accent = chartVar("--accent") || "#635BFF";
+  const textMuted = chartVar("--text-muted") || (isDark ? "#71717A" : "#52525B");
+  const grid = chartVar("--grid-line") || (isDark ? "#1F1F23" : "#E4E4E7");
+  const bgColor = chartVar("--card-bg") || (isDark ? "#131316" : "#FFFFFF");
 
   equityChart.applyOptions({
     layout: {
@@ -67,15 +71,16 @@ export async function initEquityChart() {
   const container = document.getElementById("equity-chart");
   if (!container) return;
   if (equityChart) return;
+  chartContainer = container;
 
   // lightweight-charts грузим лениво (отдельный чанк) — нужен только здесь, на index.
   const { createChart, AreaSeries } = await import("lightweight-charts");
 
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  const accent = cssVar("--accent") || "#635BFF";
-  const textMuted = cssVar("--text-muted") || (isDark ? "#71717A" : "#52525B");
-  const grid = cssVar("--grid-line") || (isDark ? "#1F1F23" : "#E4E4E7");
-  const bgColor = cssVar("--card-bg") || (isDark ? "#131316" : "#FFFFFF");
+  const accent = chartVar("--accent") || "#635BFF";
+  const textMuted = chartVar("--text-muted") || (isDark ? "#71717A" : "#52525B");
+  const grid = chartVar("--grid-line") || (isDark ? "#1F1F23" : "#E4E4E7");
+  const bgColor = chartVar("--card-bg") || (isDark ? "#131316" : "#FFFFFF");
 
   equityChart = createChart(container, {
     width: container.clientWidth,
@@ -175,6 +180,7 @@ export function destroyEquityChart() {
   if (equityChart) equityChart.remove();
   equityChart = null;
   equitySeries = null;
+  chartContainer = null;
   // equityData оставляем: на возврате линия рисуется сразу, не дожидаясь /api/history.
 }
 

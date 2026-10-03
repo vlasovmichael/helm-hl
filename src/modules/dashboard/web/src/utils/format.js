@@ -29,8 +29,8 @@ export function hexToRgba(hex, alpha) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-export function cssVar(name) {
-  return getComputedStyle(document.documentElement)
+export function cssVar(name, element = document.documentElement) {
+  return getComputedStyle(element)
     .getPropertyValue(name)
     .trim();
 }
