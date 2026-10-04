@@ -56,7 +56,7 @@ function openModal(body) {
 // ── Start form: coin field + side toggle + submit ──
 function formHtml(coin = "", side = "LONG") {
   // 🚨 Своего заголовка у формы нет: его несёт шапка диалога (dialog.head).
-  // Раньше здесь стоял <div class="wi-title">Chart breakdown</div>, и в окне
+
   // оказывалось два заголовка подряд про одно и то же.
   return `
     <div class="wi-lead">Coin + side → the coach lays out trend, levels, RSI, a plan with stop/target and where you are wrong. Structure analysis, <strong>not a proven-edge signal</strong> — the decision and the risk are yours.</div>
