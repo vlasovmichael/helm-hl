@@ -63,6 +63,8 @@ async function capture(context,theme,width,name,file) {
   // screenshot timing-dependent; the app itself still renders its first frame.
   await page.addInitScript(({ theme, status })=>{
     localStorage.setItem("hl-scanner-theme",theme);document.documentElement?.dataset && (document.documentElement.dataset.theme=theme);
+    const freezeMotion=()=>{const style=document.createElement("style");style.textContent="*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}";document.documentElement.append(style)};
+    if(document.documentElement) freezeMotion(); else document.addEventListener("readystatechange",freezeMotion,{once:true});
     // Страницы с ?mock=1 рисуют демо-графики. Их генератор должен быть таким
     // же фиксированным, как API и часы, иначе сеть сравнивает два разных рынка.
     let seed=0x6d2b79f5;
@@ -92,7 +94,6 @@ async function capture(context,theme,width,name,file) {
   await page.waitForLoadState("networkidle",{timeout:10000});
   await page.clock.runFor(100);
   await page.evaluate(() => document.fonts.ready);
-  await page.addStyleTag({content:"*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}"});
   // Дождаться следующего композитного кадра, не двигая замороженные часы.
   await page.waitForTimeout(250);
   const guard=await page.evaluate((selector)=>{const body=getComputedStyle(document.body),p=document.createElement("i");p.style.background="var(--ground)";document.body.append(p);const ground=getComputedStyle(p).backgroundColor;p.remove();return {overlay:!!document.querySelector("vite-error-overlay"),ground:body.backgroundColor===ground,styled:!!document.querySelector(selector),text:document.body.innerText.length}},pageStyleSelector[name]);
