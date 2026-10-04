@@ -10,6 +10,7 @@ const args = process.argv.slice(2), out = args.find((x) => !x.startsWith("--"));
 const project = args.includes("--project") ? args[args.indexOf("--project") + 1] : process.cwd();
 if (!out) throw new Error("node scripts/snapshotDash.mjs <каталог> [--project путь] [--twice]");
 const twice = args.includes("--twice"), legacy = args.includes("--legacy"), dist = join(project, "src/modules/dashboard/dist");
+const skipBuild = args.includes("--skip-build");
 const port = Number(process.env.KIT_COLORS_PORT || 4174);
 const defaultPages = ["index", "orderbook", "orderbook-sim", "journal", "ledger", "statistics", "lab", "oi", "calibrator", "levels", "login", "ticket"];
 const pages = process.env.KIT_COLORS_PAGES?.split(",").filter(Boolean) || defaultPages;
@@ -95,7 +96,7 @@ async function capture(context,theme,width,name,file) {
   await page.clock.runFor(100);
   await page.evaluate(() => document.fonts.ready);
   // Дождаться следующего композитного кадра, не двигая замороженные часы.
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(1000);
   const guard=await page.evaluate((selector)=>{const body=getComputedStyle(document.body),p=document.createElement("i");p.style.background="var(--ground)";document.body.append(p);const ground=getComputedStyle(p).backgroundColor;p.remove();return {overlay:!!document.querySelector("vite-error-overlay"),ground:body.backgroundColor===ground,styled:!!document.querySelector(selector),text:document.body.innerText.length}},pageStyleSelector[name]);
   const runtime=await page.evaluate(()=>window.__kitSnapshot);
   if(guard.overlay||(!legacy&&!guard.ground)||!guard.styled||guard.text<40) throw Error(`${name}/${theme}/${width}: invalid screen ${JSON.stringify({guard,runtime})}`);
@@ -103,6 +104,8 @@ async function capture(context,theme,width,name,file) {
   log.assertClean(); log.save(`${file}.network.json`);
   } finally { await context.tracing.stop({path:trace}); await page.close(); }
 }
-execFileSync("npm",["run","build:dash"],{cwd:project,stdio:"inherit"}); mkdirSync(out,{recursive:true}); const srv=server(); await new Promise(ok=>srv.listen(port,"127.0.0.1",ok));
+if (!skipBuild) execFileSync("npm",["run","build:dash"],{cwd:project,stdio:"inherit"});
+if (!existsSync(dist)) throw new Error(`нет собранной витрины: ${dist}`);
+mkdirSync(out,{recursive:true}); const srv=server(); await new Promise(ok=>srv.listen(port,"127.0.0.1",ok));
 const browser=await chromium.launch({headless:true}), context=await browser.newContext();
 try { for(const theme of ["light","dark"])for(const width of [390,1280])for(const name of pages)for(let run=0;run<(twice?2:1);run++){const dir=twice?join(out,`run-${run+1}`):out;mkdirSync(dir,{recursive:true});console.log(`[snapshot ${run+1}] ${name} ${theme} ${width}`);await capture(context,theme,width,name,join(dir,`${name}-${theme}-${width}.png`));} } finally { await context.close(); await browser.close(); await new Promise(ok=>srv.close(ok)); }
