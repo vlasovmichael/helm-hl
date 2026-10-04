@@ -175,7 +175,7 @@ export async function handlePnlSummary(_req, res) {
       /* equityNow=0 → процент просадки не показываем */
     }
 
-    // ЕДИНЫЙ источник с Monthly Ledger — round-trip'ы из HL fills. Раньше
+
     // бот-сделки брались из history-таблицы, а ручные из fills за 60 дней:
     // «All» показывала −$47.59 против −$156.78 в Ledger, потому что ручные
     // сделки апреля–июня в окно не попадали, а history после rebuild'ов
@@ -390,19 +390,33 @@ export function buildInsights(combined) {
 }
 
 // ─────────────────────────────────────────────────
+
 //  Exit quality — MFE/MAE excursion analysis
+
 // ─────────────────────────────────────────────────
+
 // Проф-метрика (Tradezella/Edgewise): насколько хорошо мы ВЫХОДИМ. Источник —
+
 // DB-таблица history (бот трекает intra-trade peak/trough), НЕ fills: из fills
+
 // excursion не восстановить. Покрывает ТОЛЬКО adopt-сделки (мой ручной вход +
+
 // выход боту) с записанным mfe/mae — бумажные стратегии бота исключены.
+
 //
+
 // · capture = realized / MFE — какую долю доступного хода забрали (только winners,
+
 //   MFE>0). Низкий % = выход рано/трейл отдаёт; ~50%+ = крепко. Гнаться за 100%
+
 //   нельзя — MFE это мгновенный пик, не достижимая цель.
+
 // · leftOnTable = MFE − realized ($, сколько отдали от пика).
+
 // · heat (MAE) на winners = сколько «терпели» до разворота (тайминг входа / нож).
+
 // · roundTripped = был в заметном плюсе (MFE≥floor), закрылся в минус — худший
+
 //   тип выхода (зелёную в красную).
 export function buildExcursion(rows) {
   const ROUNDTRIP_FLOOR = 0.3; // $ — порог «был заметно в плюсе», глушит шум
@@ -474,7 +488,7 @@ export async function handleInsights(_req, res) {
     const now = Date.now();
 
     // ЕДИНЫЙ источник = HL fills (тот же reconstructRoundTrips, что у Monthly
-    // Ledger) → Insights сходится с Ledger. Раньше bot брался из trades.db
+
     // (теряет историю при порче БД, см. ledger.js), а manual — из fills: две
     // правды не сходились. realized_pnl = tradeNet, как в P&L Summary.
     const roundTrips = await getAllRoundTrips();
