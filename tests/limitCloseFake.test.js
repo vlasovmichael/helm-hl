@@ -114,13 +114,22 @@ maybeTest('после resting fill возвращает VWAP только све
 });
 
 maybeTest('считает fill на точной нижней границе окна и не подмешивает другую монету', async () => {
+  const savedNow = Date.now;
+  let now = 100_000;
+  Date.now = () => ++now;
   let n = 0;
-  reset({ nextLimitResult: resting(49), nextPositions: () => (++n === 1 ? [{ position: { coin: 'ETH', szi: '-2' } }] : []) });
-  fills.setFills((since) => [
-    { coin: 'ETH', time: since, sz: 2, px: 100 },
-    { coin: 'BTC', time: since + 1, sz: 99, px: 1 },
-  ]);
-  assert.deepEqual(await closeLimitFirst({ coin: 'ETH', side: 'short' }), { ok: true, oid: 49, totalSz: 2, avgPx: 100, kind: 'limit' });
+  try {
+    reset({ nextLimitResult: resting(49), nextPositions: () => (++n === 1 ? [{ position: { coin: 'ETH', szi: '-2' } }] : []) });
+    timing.setTiming({ waitMs: 10, pollMs: 0 });
+    fills.setFills([
+      { coin: 'ETH', time: 95_001, sz: 1, px: 100 },
+      { coin: 'BTC', time: 95_002, sz: 99, px: 1 },
+    ]);
+    assert.deepEqual(await closeLimitFirst({ coin: 'ETH', side: 'short' }), { ok: true, oid: 49, totalSz: 1, avgPx: 100, kind: 'limit' });
+    assert.deepEqual(fills.calls[0], [95_001, { force: true }]);
+  } finally {
+    Date.now = savedNow;
+  }
 });
 
 maybeTest('пустые, битые или недоступные fills не меняют размер и цену maker-закрытия', async () => {
@@ -198,4 +207,136 @@ maybeTest('market fallback передаёт парсеру CLOSE и retry точ
   parser.resetFillParser({ nextParsed: { ok: true, oid: 19, totalSz: 2, avgPx: 98 } });
   await closeLimitFirst({ coin: 'ETH', side: 'short' });
   assert.deepEqual(retry.calls, [{ label: 'close-ETH', maxRetries: 2, baseDelayMs: 1500 }]);
+  assert.deepEqual(parser.calls, [[{}, 'CLOSE']]);
+});
+
+maybeTest('не отменяет неидентифицированный resting-ордер и добивает позицию маркетом', async () => {
+  reset({ nextLimitResult: { response: { data: { statuses: [{ resting: {} }] } } } });
+  timing.setTiming({ waitMs: 0 });
+  await closeLimitFirst({ coin: 'ETH', side: 'short' });
+  assert.equal(exchange.calls.some(([kind]) => kind === 'cancel'), false);
+  assert.equal(exchange.calls.at(-1)[0], 'market');
+});
+
+maybeTest('чистый market не становится mixed только из-за лишних свежих fills', async () => {
+  reset({ nextBook: { levels: [[], []] } });
+  parser.resetFillParser({ nextParsed: { ok: true, oid: 71, totalSz: 2, avgPx: 99 } });
+  fills.setFills([{ coin: 'ETH', time: Date.now(), sz: 3, px: 98 }]);
+  assert.deepEqual(await closeLimitFirst({ coin: 'ETH', side: 'short' }),
+    { ok: true, oid: 71, totalSz: 3, avgPx: 98, kind: 'market' });
+});
+
+maybeTest('mixed требует строго большего объёма fills, чем market-fill с допуском', async () => {
+  let n = 0;
+  reset({ nextLimitResult: resting(72), nextPositions: () => (++n === 1
+    ? [{ position: { coin: 'ETH', szi: '-2' } }]
+    : [{ position: { coin: 'ETH', szi: '-1' } }]) });
+  timing.setTiming({ waitMs: 0 });
+  parser.resetFillParser({ nextParsed: { ok: true, oid: 73, totalSz: 1, avgPx: 102 } });
+  fills.setFills([{ coin: 'ETH', time: Date.now(), sz: 1 + 1e-12, px: 101 }]);
+  assert.deepEqual(await closeLimitFirst({ coin: 'ETH', side: 'short' }),
+    { ok: true, oid: 73, totalSz: 1 + 1e-12, avgPx: 101, kind: 'market' });
+});
+
+maybeTest('не падает на пустом объекте позиции и на отсутствующем уровне книги', async () => {
+  reset({
+    nextPositions: [{}, { position: { coin: 'ETH', szi: '-2' } }],
+    nextBook: { levels: [undefined, [{ px: '101' }]] },
+  });
+  assert.equal((await closeLimitFirst({ coin: 'ETH', side: 'short' })).kind, 'market');
+});
+
+maybeTest('не учитывает fill с непригодным размером, даже если цена пригодна', async () => {
+  let n = 0;
+  reset({ nextLimitResult: resting(74), nextPositions: () => (++n === 1
+    ? [{ position: { coin: 'ETH', szi: '-2' } }]
+    : []) });
+  fills.setFills([{ coin: 'ETH', time: Date.now(), sz: Infinity, px: 100 }]);
+  assert.deepEqual(await closeLimitFirst({ coin: 'ETH', side: 'short' }),
+    { ok: true, oid: 74, totalSz: 2, avgPx: 100, kind: 'limit' });
+});
+
+maybeTest('после полного fill в polling не переходит к market-добивке и логирует длительность и цену', async () => {
+  let n = 0;
+  reset({ nextLimitResult: resting(75), nextPositions: () => (++n === 1
+    ? [{ position: { coin: 'ETH', szi: '-2' } }]
+    : [{ position: { coin: 'ETH', szi: '0' } }]) });
+  timing.setTiming({ waitMs: 20, pollMs: 1 });
+  fills.setFills([{ coin: 'ETH', time: Date.now(), sz: 2, px: 100.5 }]);
+  assert.deepEqual(await closeLimitFirst({ coin: 'ETH', side: 'short' }),
+    { ok: true, oid: 75, totalSz: 2, avgPx: 100.5, kind: 'limit' });
+  assert.equal(exchange.calls.some(([kind]) => kind === 'market'), false);
+  assert.match(logger.calls.at(-1)[1], /налилось мейкером за 0\.0с @ \$100\.5/);
+});
+
+maybeTest('на нулевом дедлайне не делает лишний poll: остаток добивается market-ордером', async () => {
+  let n = 0;
+  reset({ nextLimitResult: resting(76), nextPositions: () => (++n === 1
+    ? [{ position: { coin: 'ETH', szi: '-2' } }]
+    : n === 2 ? [{ position: { coin: 'ETH', szi: '-1' } }] : []) });
+  timing.setTiming({ waitMs: 0 });
+  assert.equal((await closeLimitFirst({ coin: 'ETH', side: 'short' })).kind, 'market');
+  assert.equal(exchange.calls.at(-1)[0], 'market');
+});
+
+maybeTest('на дедлайне без индексированных fills сохраняет исходный размер и пассивную цену', async () => {
+  let n = 0;
+  reset({ nextLimitResult: resting(77), nextPositions: () => (++n === 1
+    ? [{ position: { coin: 'ETH', szi: '-2' } }]
+    : []) });
+  timing.setTiming({ waitMs: 0 });
+  const result = await closeLimitFirst({ coin: 'ETH', side: 'short' });
+  assert.deepEqual(result, { ok: true, oid: 77, totalSz: 2, avgPx: 100, kind: 'limit' });
+  assert.match(logger.calls.at(-1)[1], /налилось мейкером на дедлайне @ \$100/);
+});
+
+maybeTest('resting-ветка сохраняет диагностический лог с oid', async () => {
+  reset({ nextLimitResult: resting(78) });
+  timing.setTiming({ waitMs: 0 });
+  await closeLimitFirst({ coin: 'ETH', side: 'short' });
+  assert.match(logger.calls[0][1], /reduce-only Alo sz=2 @ 100 oid=78/);
+});
+
+maybeTest('на дедлайне берёт фактический неполный объём fills, а не исходный размер', async () => {
+  let n = 0;
+  reset({ nextLimitResult: resting(79), nextPositions: () => (++n === 1
+    ? [{ position: { coin: 'ETH', szi: '-2' } }]
+    : []) });
+  timing.setTiming({ waitMs: 0 });
+  fills.setFills([{ coin: 'ETH', time: Date.now(), sz: 1, px: 100 }]);
+  assert.equal((await closeLimitFirst({ coin: 'ETH', side: 'short' })).totalSz, 1);
+});
+
+maybeTest('чистый market с нулевыми fills не считается mixed при отрицательном parser-объёме', async () => {
+  let n = 0;
+  reset({ nextLimitResult: resting(80), nextPositions: () => (++n === 1
+    ? [{ position: { coin: 'ETH', szi: '-2' } }]
+    : [{ position: { coin: 'ETH', szi: '-1' } }]) });
+  timing.setTiming({ waitMs: 0 });
+  parser.resetFillParser({ nextParsed: { ok: true, oid: 81, totalSz: -1, avgPx: 99 } });
+  assert.equal((await closeLimitFirst({ coin: 'ETH', side: 'short' })).kind, 'market');
+});
+
+maybeTest('отсутствующий размер найденной позиции считается отсутствием позиции', async () => {
+  reset({ nextPositions: [{ position: { coin: 'ETH' } }] });
+  await assert.rejects(closeLimitFirst({ coin: 'ETH', side: 'short' }), /No position found/);
+});
+
+maybeTest('для long отсутствие ask-уровня ведёт в защитный market-путь', async () => {
+  reset({ nextBook: { levels: [[{ px: '100' }], undefined] } });
+  assert.equal((await closeLimitFirst({ coin: 'ETH', side: 'long' })).kind, 'market');
+});
+
+maybeTest('лог дедлайна переводит миллисекунды ожидания в секунды', async () => {
+  const savedNow = Date.now;
+  let now = 100_000;
+  Date.now = () => ++now;
+  try {
+    reset({ nextLimitResult: resting(82) });
+    timing.setTiming({ waitMs: 10, pollMs: 0 });
+    await closeLimitFirst({ coin: 'ETH', side: 'short' });
+    assert.match(logger.calls.at(-1)[1], /за 0с налилось 0% \(остаток 2\)/);
+  } finally {
+    Date.now = savedNow;
+  }
 });
