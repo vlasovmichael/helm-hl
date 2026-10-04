@@ -83,7 +83,7 @@ export function isAuthenticated(req) {
 const PUBLIC_PATHS = new Set(["/login", "/login.js", "/favicon.ico"]);
 
 // Логин-страница рендерится до авторизации, а её стили/скрипты теперь — это
-// хешированные Vite-бандлы в /assets/* (раньше был один публичный styles.css).
+
 // Хеш-ассеты безопасно отдавать без сессии: это статика сборки, не данные.
 function isPublicPath(p) {
   return PUBLIC_PATHS.has(p) || p.startsWith("/assets/");
