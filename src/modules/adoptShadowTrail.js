@@ -154,7 +154,7 @@ export function finalizeAdoptShadowTrail(position, closePrice) {
 /**
  * Чистка по одной позиции. Вызывать рядом с clearAdoptState: позиции без
  * resting-SL помечены skip и сами никогда не финализируются, а Map, которая
- * только растёт, — это ровно то, чем 09.08 выбило кучу V8.
+
  */
 export function clearAdoptShadowTrail(positionId) {
   state.delete(positionId);
