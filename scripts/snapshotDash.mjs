@@ -1,8 +1,8 @@
 /* global document, window, getComputedStyle */
 /* Собранная визуальная сеть: изолирована от бота и реального API. */
 import { createServer } from "node:http";
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { chromium } from "@playwright/test";
 
@@ -55,13 +55,30 @@ function diagnostics(page, label) {
     save(file) { writeFileSync(file, JSON.stringify(events, null, 2)); },
   };
 }
+async function stableScreenshot(page, file, label) {
+  const probe = `${file}.probe.png`;
+  try {
+    // Canvas графиков завершает композитную отрисовку чуть позже networkidle.
+    // Не угадываем задержку: принимаем кадр только после двух одинаковых подряд.
+    for (let attempt = 1; attempt <= 10; attempt++) {
+      await page.screenshot({ path: probe, fullPage: false, timeout: 5000 });
+      await page.waitForTimeout(100);
+      await page.screenshot({ path: file, fullPage: false, timeout: 5000 });
+      const diff = spawnSync("compare", ["-metric", "AE", probe, file, "null:"], { encoding: "utf8" });
+      if (diff.stderr.trim().startsWith("0 ")) return;
+    }
+    throw Error(`${label}: кадр не стабилизировался за 10 попыток`);
+  } finally {
+    rmSync(probe, { force: true });
+  }
+}
 async function capture(context,theme,width,name,file) {
   const page=await context.newPage();
   await page.setViewportSize({width,height:900});
+  await page.emulateMedia({ reducedMotion: "reduce" });
   const log=diagnostics(page,`${name}/${theme}/${width}`);
-  // The fixture deliberately freezes time and animation frames.  That makes a
-  // perpetual render loop visible in diagnostics without letting it make a
-  // screenshot timing-dependent; the app itself still renders its first frame.
+  // Время и данные фиксированы, но RAF оставляем браузеру: lightweight-charts
+  // завершает через него композитную отрисовку canvas.
   await page.addInitScript(({ theme, status })=>{
     localStorage.setItem("hl-scanner-theme",theme);document.documentElement?.dataset && (document.documentElement.dataset.theme=theme);
     const freezeMotion=()=>{const style=document.createElement("style");style.textContent="*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}";document.documentElement.append(style)};
@@ -70,9 +87,7 @@ async function capture(context,theme,width,name,file) {
     // же фиксированным, как API и часы, иначе сеть сравнивает два разных рынка.
     let seed=0x6d2b79f5;
     Math.random=()=>{seed=(seed+0x6d2b79f5)|0;let t=Math.imul(seed^(seed>>>15),1|seed);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296};
-    const rafs=[]; window.__kitSnapshot={rafs,websockets:[]};
-    window.requestAnimationFrame=(fn)=>{rafs.push(String(fn).slice(0,120));return rafs.length};
-    window.cancelAnimationFrame=()=>{};
+    window.__kitSnapshot={websockets:[]};
     class FixtureWebSocket {
       static CONNECTING=0; static OPEN=1; static CLOSING=2; static CLOSED=3;
       constructor(url){this.url=url;this.readyState=0;this._ls={};window.__kitSnapshot.websockets.push(url);
@@ -100,7 +115,7 @@ async function capture(context,theme,width,name,file) {
   const guard=await page.evaluate((selector)=>{const body=getComputedStyle(document.body),p=document.createElement("i");p.style.background="var(--ground)";document.body.append(p);const ground=getComputedStyle(p).backgroundColor;p.remove();return {overlay:!!document.querySelector("vite-error-overlay"),ground:body.backgroundColor===ground,styled:!!document.querySelector(selector),text:document.body.innerText.length}},pageStyleSelector[name]);
   const runtime=await page.evaluate(()=>window.__kitSnapshot);
   if(guard.overlay||(!legacy&&!guard.ground)||!guard.styled||guard.text<40) throw Error(`${name}/${theme}/${width}: invalid screen ${JSON.stringify({guard,runtime})}`);
-  await page.screenshot({path:file,fullPage:false,timeout:5000}); const colors=Number(execFileSync("identify",["-format","%k",file],{encoding:"utf8"})); if(colors<50) throw Error(`${name}/${theme}/${width}: only ${colors} colours`);
+  await stableScreenshot(page, file, `${name}/${theme}/${width}`); const colors=Number(execFileSync("identify",["-format","%k",file],{encoding:"utf8"})); if(colors<50) throw Error(`${name}/${theme}/${width}: only ${colors} colours`);
   log.assertClean(); log.save(`${file}.network.json`);
   } finally { await context.tracing.stop({path:trace}); await page.close(); }
 }
