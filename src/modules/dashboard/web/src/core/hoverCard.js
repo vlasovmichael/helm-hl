@@ -129,7 +129,7 @@ export function initHoverCards() {
     const host = hostOf(e.target);
     if (!host) return;
     // 🚨 Таймер открытия гасим ВСЕГДА, а не только когда карточка уже видна:
-    // иначе курсор уходит раньше задержки, а карточка всё равно выскакивает —
+
     // над местом, где мыши давно нет.
     clearTimeout(openTimer);
     if (host === owner) close();

@@ -125,7 +125,7 @@ export function close(root) {
     if (!dlg.root.classList.contains("is-open")) dlg.root.hidden = true;
   };
   // 🚨 Событие только СВОЁ: переход крестика или кнопки внутри панели кончается
-  // раньше, всплывает сюда и прячет диалог на полпути (уход пропадал целиком).
+
   const onEnd = (e) => {
     if (e.target !== dlg.panel) return;
     dlg.panel.removeEventListener("transitionend", onEnd);
