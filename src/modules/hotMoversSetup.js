@@ -113,11 +113,17 @@ export function deriveAccelKind(w2, w5) {
 }
 
 // Fade = ставка на ВЫДОХ движения. actionable снимаем, когда выдоха НЕТ:
+
 //  (a) accelKind === 'up' — ход ускоряется в свою сторону (нож разгоняется, не
+
 //      тормозит) → лов ножа, не истощение;
+
 //  (b) фейдим ПО старшему 1h-тренду: fade-short (priceUp) при htfTrend==='up'
+
 //      или fade-long (!priceUp) при htfTrend==='down' — движение по тренду, а
+
 //      не откат под фейд.
+
 // Возвращает причину ('accel'|'htf') или null. ⚠️ Зеркало в momentum.js.
 export function fadeExhaustionMuted(mode, priceUp, accelKind, htfTrend) {
   if (mode !== 'fade') return null;
@@ -233,7 +239,7 @@ export function buildCoinFeatures(item, now, deps) {
 /**
  * Решает, надо ли пушить по монете, и обновляет prevByCoin. Пуш = направленный
  * подтверждённый Setup (mode + score≥minScore) ПЕРЕШЁЛ в зону 🎯 из любого
- * не-zone состояния (улетел → откатился). Первое наблюдение и флип стороны не
+
  * пушат (анти-спам на старте).
  *
  * htfTrend (1h-EMA тренд) гасит fade по тренду — fetch'ит воркер и прокидывает.

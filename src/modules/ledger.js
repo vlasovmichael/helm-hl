@@ -107,7 +107,7 @@ function totalCount(m) {
 }
 
 // Реконструкция round-trip'ов вынесена в userFills.reconstructRoundTrips() —
-// единый движок для Ledger и дашборда (Activity/Insights). Раньше тут была своя
+
 // копия, которая отстала от net-position фикса и теряла/иначе классифицировала
 // деньги (commit 7175611 чинил только userFills, не ledger).
 
