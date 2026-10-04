@@ -352,7 +352,7 @@ export async function handleOpen(req, res) {
   if (!b.side) return res.status(400).json({ error: "side must be long|short" });
   if (!(b.marginUsd > 0)) return res.status(400).json({ error: "marginUsd must be > 0" });
 
-  // Плечо — против потолка по стопу этой монеты: ликвидация не должна прийти раньше стопа.
+
   const exchangeMax = exchangeMaxFor(b.coin);
   if (!exchangeMax) return res.status(422).json({ error: `the exchange does not know the ticker ${b.coin}` });
   if (!Number.isInteger(b.leverage) || b.leverage < 1) {
@@ -378,7 +378,7 @@ export async function handleOpen(req, res) {
     return res.status(423).json({ error: "the daily stop fired — entries are closed until midnight" });
   }
 
-  // Дневной бюджет сделок. Раньше был надписью и пропустил 17 сделок за сутки.
+
   const budget = tradesTodayStatus();
   if (budget.over) {
     return res.status(423).json({
@@ -387,7 +387,7 @@ export async function handleOpen(req, res) {
   }
 
   // Пауза после закрытия по этой монете. Ловит перезаход через секунду после
-  // стопа — на 31.08 такие входы дали −$6.37 при итоге дня −$4.38.
+
   const cool = reentryCooldown(b.coin);
   if (cool.blocked) {
     const mins = Math.ceil(cool.secondsLeft / 60);
@@ -419,7 +419,7 @@ export async function handleOpen(req, res) {
   const entryPx = b.orderType === "limit" ? b.limitPx : price;
   if (b.orderType === "limit") {
     if (!(b.limitPx > 0)) return res.status(400).json({ error: "limitPx required for limit order" });
-    // Post-only, пересекающая рынок, будет отклонена биржей — ловим раньше,
+
     // чтобы оператор не решил, что ордер поставился.
     const wouldCross = b.side === "short" ? b.limitPx < price : b.limitPx > price;
     if (wouldCross) {
@@ -429,7 +429,7 @@ export async function handleOpen(req, res) {
 
   // Размер в монетах округляем до szDecimals. У монет с szDecimals=0
   // (CHIP, CASHCAT, DOGE) шаг равен ЦЕЛОЙ монете, и округление вниз легко
-  // уводит нотионал под биржевой минимум: $10.02 по CHIP → 360 шт → $9.99,
+
   // биржа такой ордер отбивает. Поэтому если после округления вниз не хватает
   // до минимума — добираем один шаг вверх, но только если хватает маржи.
   const step = Math.pow(10, szDecimals);
