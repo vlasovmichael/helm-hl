@@ -303,7 +303,7 @@ export function reconstructRoundTrips(fills, botTrades, botOidSet = null) {
   // history с entry_time = временем того же ручного open-fill. Точный матч по
   // entry (±ENTRY_MATCH_MS, а НЕ 60с-grace) → 'adopted': быстрый ручной re-open
   // сразу после bot-close той же монеты иначе глотался бы грейсом (XPL 35с,
-  // ср. commit 7e76034).
+
   const ENTRY_MATCH_MS = 3000;
   function isBotOwnedEntry(coin, entryTime) {
     const ranges = botByCoin.get(coin.toUpperCase()) || [];
@@ -426,10 +426,6 @@ export function reconstructRoundTrips(fills, botTrades, botOidSet = null) {
  * чтобы записать РЕАЛЬНУЮ ногу, а не сумму всех fills с момента входа: при флипе
  * (short→long той же монеты) classifyClose складывал обе ноги в одну цифру, и
  * минусовая нога пропадала из history.
- *
- * Классификация source здесь не нужна — берём чистое net-zero разбиение, поэтому
- * botTrades/botOidSet можно не передавать.
- *
  * @param {Object} position — row из positions (coin, side, entry_time)
  * @param {Array}  fills    — fills (любой порядок; группировка внутри)
  * @returns {{ pnl:number, fee:number, closePx:number|null, closedAt:number|null,
