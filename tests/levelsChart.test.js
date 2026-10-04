@@ -8,11 +8,11 @@ import assert from "node:assert/strict";
 const { withAlpha, tickLabel, emaPoints, candleCountdown } = await import("../src/modules/dashboard/web/src/charts/levelsChart.js");
 const { ema } = await import("../src/modules/dashboard/web/src/features/levelMath.js");
 
-test("withAlpha: hex и rgba токены получают заданную прозрачность", () => {
-  assert.equal(withAlpha("#0ecb81", 0.2), "rgba(14, 203, 129, 0.2)");
-  assert.equal(withAlpha("#fff", 0.5), "rgba(255, 255, 255, 0.5)");
-  assert.equal(withAlpha("rgba(46, 160, 67, 0.15)", 0.4), "rgba(46, 160, 67, 0.4)");
-  assert.equal(withAlpha("red", 0.3), "red");
+test("withAlpha: возвращает прозрачный слой от исходного цвета", () => {
+  assert.equal(withAlpha("#0ecb81", 0.2), "color-mix(in srgb, #0ecb81 20.00%, transparent)");
+  assert.equal(withAlpha("#fff", 0.5), "color-mix(in srgb, #fff 50.00%, transparent)");
+  assert.equal(withAlpha("rgba(46, 160, 67, 0.15)", 0.4), "color-mix(in srgb, rgba(46, 160, 67, 0.15) 40.00%, transparent)");
+  assert.equal(withAlpha("red", 0.3), "color-mix(in srgb, red 30.00%, transparent)");
 });
 
 test("tickLabel: год, месяц, число и часы по местному времени", () => {

@@ -19,8 +19,8 @@
      uPnL/Net (см. _datagrid.scss). В глобальном :root (не в темах) → едины и
      определены в обеих темах; ярко читаются на тёмном и светлом, белый текст
      внутри заливки контрастит. */
-  --pnl-up: #0ecb81;
-  --pnl-down: #f6465d;
+  --pnl-up: var(--color-green-500);
+  --pnl-down: var(--color-red-400);
 
   --fs-hero-sm: 34px; /* оно же на телефоне                            */
 
@@ -48,7 +48,7 @@
 
   /* ── Псевдоним к старому имени ──────────────────────────────────────
      🚨 --panel-2 не был определён НИГДЕ, а oi.html звал его шесть раз с
-     фолбэком rgba(128,128,128,0.06). Фолбэк одинаков в обеих темах —
+     фолбэком color-mix(in srgb, var(--color-gray-500) 6.00%, transparent). Фолбэк одинаков в обеих темах —
      отсюда мёртво-серые плашки на светлой. Псевдоним разрешается в момент
      использования, поэтому тему подхватывает правильно. Новый код зовёт
      --panel-sunk / --panel-raised напрямую; строка остаётся только для
@@ -70,59 +70,59 @@
 html[data-theme="light"] {
   /* Фирменный акцент: индиго→циан. Используется для хедера, ключевых кромок,
      тега BOT. Мягкий, не «крипто-казино». --amber = тёплый акцент (YOU/ручное). */
-  --brand: #6c4cf1;
-  --brand-2: #1ba6c2;
-  --brand-soft: rgba(108, 76, 241, 0.08);
-  --brand-line: rgba(108, 76, 241, 0.32);
-  --amber: #d9930a;
-  --grad-brand: linear-gradient(135deg, #6c4cf1 0%, #1ba6c2 100%);
+  --brand: var(--color-blue-500);
+  --brand-2: var(--color-blue-500);
+  --brand-soft: color-mix(in srgb, var(--color-blue-500) 8.00%, transparent);
+  --brand-line: color-mix(in srgb, var(--color-blue-500) 32.00%, transparent);
+  --amber: var(--color-red-400);
+  --grad-brand: linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-500) 100%);
   --grad-brand-soft: linear-gradient(
     135deg,
-    rgba(108, 76, 241, 0.1) 0%,
-    rgba(27, 166, 194, 0.08) 100%
+    color-mix(in srgb, var(--color-blue-500) 10.00%, transparent) 0%,
+    color-mix(in srgb, var(--color-blue-500) 8.00%, transparent) 100%
   );
 
   /* Tier backgrounds (Hot Movers): STRONG → NORMAL → WEAK */
-  --tier-pos-strong: rgba(46, 160, 67, 0.38);
-  --tier-pos-normal: rgba(46, 160, 67, 0.18);
-  --tier-pos-weak: rgba(46, 160, 67, 0.07);
-  --tier-neg-strong: rgba(207, 34, 46, 0.32);
-  --tier-neg-normal: rgba(207, 34, 46, 0.15);
-  --tier-neg-weak: rgba(207, 34, 46, 0.06);
+  --tier-pos-strong: color-mix(in srgb, var(--color-green-500) 38.00%, transparent);
+  --tier-pos-normal: color-mix(in srgb, var(--color-green-500) 18.00%, transparent);
+  --tier-pos-weak: color-mix(in srgb, var(--color-green-500) 7.00%, transparent);
+  --tier-neg-strong: color-mix(in srgb, var(--color-red-400) 32.00%, transparent);
+  --tier-neg-normal: color-mix(in srgb, var(--color-red-400) 15.00%, transparent);
+  --tier-neg-weak: color-mix(in srgb, var(--color-red-400) 6.00%, transparent);
   /* --yellow: акцентный текст «ручное/таймер» (HANDS-OFF, floor-timer). На
-     светлой (кремовой) теме чистый #eab308 не читался — берём тёмное золото. */
-  --yellow: #8a6400;
+     светлой (кремовой) теме чистый var(--color-red-400) не читался — берём тёмное золото. */
+  --yellow: var(--color-red-400);
   /* Линия EMA на графиках — чистый жёлтый в обеих темах, как на TradingView. */
-  /* Скелетон на белой карточке. #eaeef2 (цвет разделителей) на белом почти не
+  /* Скелетон на белой карточке. var(--color-gray-0) (цвет разделителей) на белом почти не
      виден — блок «пусто» и блок «сейчас приедет» выглядели одинаково. Берём
      тон на две ступени плотнее: заметно, но не читается как содержимое. */
-  --skeleton-base: #dfe3e9;
-  --skeleton-shine: #f0f2f5;
+  --skeleton-base: var(--color-gray-0);
+  --skeleton-shine: var(--color-gray-0);
 }
 
 /* ── GitHub Primer: dark theme ───────────────────────────────────── */
 html[data-theme="dark"] {
   /* Фирменный акцент (dark): чуть ярче для контраста на тёмном. */
-  --brand: #8b6dff;
-  --brand-2: #2cc6e0;
-  --brand-soft: rgba(139, 109, 255, 0.12);
-  --brand-line: rgba(139, 109, 255, 0.4);
-  --amber: #f0a020;
-  --grad-brand: linear-gradient(135deg, #8b6dff 0%, #2cc6e0 100%);
+  --brand: var(--color-blue-500);
+  --brand-2: var(--color-blue-500);
+  --brand-soft: color-mix(in srgb, var(--color-blue-500) 12.00%, transparent);
+  --brand-line: color-mix(in srgb, var(--color-blue-500) 40.00%, transparent);
+  --amber: var(--color-red-400);
+  --grad-brand: linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-500) 100%);
   --grad-brand-soft: linear-gradient(
     135deg,
-    rgba(139, 109, 255, 0.14) 0%,
-    rgba(44, 198, 224, 0.08) 100%
+    color-mix(in srgb, var(--color-blue-500) 14.00%, transparent) 0%,
+    color-mix(in srgb, var(--color-blue-500) 8.00%, transparent) 100%
   );
 
   /* Tier backgrounds (Hot Movers): STRONG → NORMAL → WEAK */
-  --tier-pos-strong: rgba(46, 160, 67, 0.42);
-  --tier-pos-normal: rgba(46, 160, 67, 0.2);
-  --tier-pos-weak: rgba(46, 160, 67, 0.08);
-  --tier-neg-strong: rgba(248, 81, 73, 0.38);
-  --tier-neg-normal: rgba(248, 81, 73, 0.18);
-  --tier-neg-weak: rgba(248, 81, 73, 0.07);
-  --yellow: #eab308; /* на тёмной теме яркий жёлтый читается — оставляем */
-  --skeleton-base: #1b2129;
-  --skeleton-shine: #262d36;
+  --tier-pos-strong: color-mix(in srgb, var(--color-green-500) 42.00%, transparent);
+  --tier-pos-normal: color-mix(in srgb, var(--color-green-500) 20.00%, transparent);
+  --tier-pos-weak: color-mix(in srgb, var(--color-green-500) 8.00%, transparent);
+  --tier-neg-strong: color-mix(in srgb, var(--color-red-400) 38.00%, transparent);
+  --tier-neg-normal: color-mix(in srgb, var(--color-red-400) 18.00%, transparent);
+  --tier-neg-weak: color-mix(in srgb, var(--color-red-400) 7.00%, transparent);
+  --yellow: var(--color-red-400); /* на тёмной теме яркий жёлтый читается — оставляем */
+  --skeleton-base: var(--color-gray-800);
+  --skeleton-shine: var(--color-gray-800);
 }

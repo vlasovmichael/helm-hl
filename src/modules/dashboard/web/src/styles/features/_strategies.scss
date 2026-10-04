@@ -38,7 +38,7 @@
     height: 6px;
     margin-top: -3px;
     border-radius: 50%;
-    background: hsl(var(--fam-hue, 0) 60% 55% / 0.9);
+    background: color-mix(in srgb, var(--accent-2) 90%, transparent);
   }
 }
 .strat-fam-first td {
@@ -83,9 +83,9 @@
   border-color: var(--accent-2);
 }
 .strat-radar {
-  background: color-mix(in srgb, #a855f7 16%, transparent);
-  color: #a855f7;
-  border-color: color-mix(in srgb, #a855f7 40%, transparent);
+  background: color-mix(in srgb, var(--accent-2) 16%, transparent);
+  color: var(--accent-2);
+  border-color: color-mix(in srgb, var(--accent-2) 40%, transparent);
 }
 .strat-off {
   background: var(--panel-raised);
@@ -131,7 +131,7 @@
   /* Кромка оттенком семейства вместо точки: раскрытый блок принадлежит строке
      над ним, и связь должна быть видна, но точка тут читалась как вторая
      строка семейства (см. strategies.js). */
-  box-shadow: inset 3px 0 0 hsl(var(--fam-hue, 0) 60% 55% / 0.55);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent-2) 55%, transparent);
 }
 .strat-detail {
   display: flex;

@@ -4,9 +4,9 @@
 import { cssVar } from "../utils/format.js";
 
 export function monoCandles(element) {
-  const ink = cssVar("--ink", element) || "#18181B";
+  const ink = cssVar("--ink", element) || "var(--ink)";
   return {
-    upColor: cssVar("--panel", element) || "#fff",
+    upColor: cssVar("--panel", element) || "var(--accent-ink)",
     downColor: ink,
     borderUpColor: ink,
     borderDownColor: ink,
@@ -17,8 +17,8 @@ export function monoCandles(element) {
 
 /** Цветные свечи: зелёная вверх, красная вниз. */
 export function colorCandles(element) {
-  const up = cssVar("--pnl-up", element) || "#0ecb81";
-  const down = cssVar("--pnl-down", element) || "#f6465d";
+  const up = cssVar("--pnl-up", element) || "var(--gain)";
+  const down = cssVar("--pnl-down", element) || "var(--loss)";
   return {
     upColor: up,
     downColor: down,
@@ -40,6 +40,6 @@ export function lastPriceLine(bar, element) {
     priceLineVisible: true,
     priceLineWidth: 1,
     priceLineStyle: DOTTED,
-    priceLineColor: up ? cssVar("--pnl-up", element) || "#0ecb81" : cssVar("--pnl-down", element) || "#f6465d",
+    priceLineColor: up ? cssVar("--pnl-up", element) || "var(--gain)" : cssVar("--pnl-down", element) || "var(--loss)",
   };
 }

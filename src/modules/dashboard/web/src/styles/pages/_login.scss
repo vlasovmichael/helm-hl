@@ -128,13 +128,13 @@ body[data-page="login"] {
    а не как «главная кнопка среди прочих». */
 .login-button {
   background: var(--gain);
-  border-color: color-mix(in srgb, var(--gain) 70%, #000);
-  color: #fff;
+  border-color: color-mix(in srgb, var(--gain) 70%, var(--ink));
+  color: var(--accent-ink);
   margin-top: var(--space-1);
 
   &:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--gain) 90%, #000);
-    border-color: color-mix(in srgb, var(--gain) 70%, #000);
+    background: color-mix(in srgb, var(--gain) 90%, var(--ink));
+    border-color: color-mix(in srgb, var(--gain) 70%, var(--ink));
   }
 }
 

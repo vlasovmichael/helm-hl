@@ -28,15 +28,15 @@ const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 
 function palette() {
   return {
-    bg: cssVar("--panel", host) || "#ffffff",
-    text: cssVar("--ink-2", host) || "#59636e",
-    strong: cssVar("--ink", host) || "#1f2328",
-    grid: cssVar("--rule-soft", host) || "#eaeef2",
-    border: cssVar("--rule", host) || "#d1d9e0",
-    up: cssVar("--pnl-up", host) || "#0ecb81",
-    down: cssVar("--pnl-down", host) || "#f6465d",
-    accent: cssVar("--accent-2", host) || "#0969da",
-    ema: cssVar("--plot-ema", host) || "#ffd60a",
+    bg: cssVar("--panel", host) || "var(--accent-ink)",
+    text: cssVar("--ink-2", host) || "var(--ink-3)",
+    strong: cssVar("--ink", host) || "var(--ink)",
+    grid: cssVar("--rule-soft", host) || "var(--accent-ink)",
+    border: cssVar("--rule", host) || "var(--accent-ink)",
+    up: cssVar("--pnl-up", host) || "var(--gain)",
+    down: cssVar("--pnl-down", host) || "var(--loss)",
+    accent: cssVar("--accent-2", host) || "var(--accent-2)",
+    ema: cssVar("--plot-ema", host) || "var(--caution)",
     font: cssVar("--sans", host) || "sans-serif",
     mono: cssVar("--mono", host) || "monospace",
   };
@@ -61,14 +61,7 @@ export function emaPoints(series, seed = null) {
 
 /** Цвет токена с прозрачностью: токены бывают и hex, и rgba. */
 export function withAlpha(color, a) {
-  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color);
-  if (hex) {
-    const h = hex[1].length === 3 ? [...hex[1]].map((c) => c + c).join("") : hex[1];
-    const n = parseInt(h, 16);
-    return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
-  }
-  const rgb = /^rgba?\(([^,]+),([^,]+),([^,)]+)/i.exec(color);
-  return rgb ? `rgba(${rgb[1].trim()}, ${rgb[2].trim()}, ${rgb[3].trim()}, ${a})` : color;
+  return `color-mix(in srgb, ${color} ${(a * 100).toFixed(2)}%, transparent)`;
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -306,7 +299,7 @@ function drawPositionLabels(ctx, c) {
   const outside = (edge, below, row = 0) =>
     below ? edge + PILL_GAP + row * (PILL_H + 2) : edge - PILL_GAP - PILL_H - row * (PILL_H + 2);
   const roomy = Math.min(Math.abs(r.yt - r.ye), Math.abs(r.ys - r.ye)) >= PILL_H + 4;
-  const white = "#ffffff";
+  const white = "var(--accent-ink)";
   pill(ctx, c, cx, outside(r.yt, !up), `Target ${fmtPx(plan.target)} (+${plan.rewardPct.toFixed(2)}%)`, c.up, white);
   pill(ctx, c, cx, outside(r.ys, up), `Stop ${fmtPx(plan.stop)} (−${plan.riskPct.toFixed(2)}%)`, c.down, white);
   const head = `${plan.side === "long" ? "Long" : "Short"} · R:R ${plan.netRr.toFixed(2)}`;
@@ -346,7 +339,7 @@ function makeLayer() {
       return p ? (candles.priceToCoordinate(p[key]) ?? -100) : -100;
     },
     text: () => (scene.plan ? fmtPx(scene.plan[key]) : ""),
-    textColor: () => (tone === "strong" ? palette().bg : "#ffffff"),
+    textColor: () => (tone === "strong" ? palette().bg : "var(--accent-ink)"),
     backColor: () => palette()[tone],
     visible: () => Boolean(scene.plan),
     tickVisible: () => true,
@@ -358,7 +351,7 @@ function makeLayer() {
       return y == null ? -100 : y + TIMER_STEP;
     },
     text: () => candleCountdown(bars.at(-1).time, meta.tf, Date.now()),
-    textColor: () => "#ffffff",
+    textColor: () => "var(--accent-ink)",
     backColor: () => lastPriceLine(bars.at(-1), host).priceLineColor,
     visible: () => bars.length > 0 && Boolean(TF_SEC[meta.tf]),
     tickVisible: () => false,

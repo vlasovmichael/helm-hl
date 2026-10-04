@@ -39,10 +39,10 @@ export function setEquityData(data) {
 export function applyChartTheme() {
   if (!equityChart) return;
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  const accent = chartVar("--accent-2") || "#635BFF";
-  const textMuted = chartVar("--ink-3") || (isDark ? "#71717A" : "#52525B");
-  const grid = chartVar("--plot-grid") || (isDark ? "#1F1F23" : "#E4E4E7");
-  const bgColor = chartVar("--panel") || (isDark ? "#131316" : "#FFFFFF");
+  const accent = chartVar("--accent-2") || "var(--accent-2)";
+  const textMuted = chartVar("--ink-3") || (isDark ? "var(--ink-3)" : "var(--ink-3)");
+  const grid = chartVar("--plot-grid") || (isDark ? "var(--ink)" : "var(--accent-ink)");
+  const bgColor = chartVar("--panel") || (isDark ? "var(--ink)" : "var(--accent-ink)");
 
   equityChart.applyOptions({
     layout: {
@@ -77,10 +77,10 @@ export async function initEquityChart() {
   const { createChart, AreaSeries } = await import("lightweight-charts");
 
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
-  const accent = chartVar("--accent-2") || "#635BFF";
-  const textMuted = chartVar("--ink-3") || (isDark ? "#71717A" : "#52525B");
-  const grid = chartVar("--plot-grid") || (isDark ? "#1F1F23" : "#E4E4E7");
-  const bgColor = chartVar("--panel") || (isDark ? "#131316" : "#FFFFFF");
+  const accent = chartVar("--accent-2") || "var(--accent-2)";
+  const textMuted = chartVar("--ink-3") || (isDark ? "var(--ink-3)" : "var(--ink-3)");
+  const grid = chartVar("--plot-grid") || (isDark ? "var(--ink)" : "var(--accent-ink)");
+  const bgColor = chartVar("--panel") || (isDark ? "var(--ink)" : "var(--accent-ink)");
 
   equityChart = createChart(container, {
     width: container.clientWidth,

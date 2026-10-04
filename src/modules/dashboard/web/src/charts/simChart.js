@@ -8,10 +8,10 @@ import { cssVar } from "../utils/format.js";
 
 function themeColors() {
   return {
-    bg: cssVar("--panel", container) || "#0d1117",
-    text: cssVar("--ink-2", container) || "#8b949e",
-    grid: cssVar("--rule", container) || "rgba(127,127,127,0.18)",
-    warn: cssVar("--caution", container) || "#d29922",
+    bg: cssVar("--panel", container) || "var(--ink)",
+    text: cssVar("--ink-2", container) || "var(--ink-3)",
+    grid: cssVar("--rule", container) || "color-mix(in srgb, var(--ink-3) 18.00%, transparent)",
+    warn: cssVar("--caution", container) || "var(--loss)",
   };
 }
 
