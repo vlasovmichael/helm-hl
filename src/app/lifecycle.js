@@ -152,9 +152,7 @@ export async function loadPriceHistory() {
  * BOT_STATE_FLUSH_INTERVAL_MS. Тихий по умолчанию — debug-лог при skip'е,
  * ошибка не пробрасывается (tick должен продолжаться).
  *
- * Why: до этого фикса bot_state.json писался только на SIGTERM → при крэше
- * (kill -9, OOM) терялись oi_cap_bans и другое сериализуемое состояние,
- * 64.7h stale на рестарте.
+ * Без периодической записи аварийный выход теряет сериализуемое состояние.
  */
 export async function flushBotStatePeriodic() {
   const now = Date.now();
@@ -280,9 +278,7 @@ export async function shutdown(signal) {
     }
   }
 
-  // Маркер штатного выхода — ставим последним, когда всё уже прибрано. Если
-  // процесс умрёт раньше этой строки, следующий старт увидит clean:false и
-  // протрубит (см. restartWatch.js).
+  // Маркер ставится после уборки: аварийный выход оставляет clean:false для алерта.
   try {
     markCleanShutdown();
   } catch (err) {
