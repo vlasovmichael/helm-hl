@@ -63,7 +63,7 @@ export function clearAdoptState(positionId) {
   troughPctMap.delete(positionId);
   beArmedMap.delete(positionId);
   // Замерные карты чистим здесь же: несмываемая Map — это ровно тот механизм,
-  // которым 09.08 выбило кучу V8 (см. шапку candleCache.js).
+
   lastSeenAtMap.delete(positionId);
   lastGbMap.delete(positionId);
   clearAdoptTrail(positionId); // снять персист, иначе орфан доживёт до TTL

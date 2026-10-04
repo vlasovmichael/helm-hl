@@ -107,21 +107,10 @@ async function loadBotState() {
 
 /**
  * Запрашивает открытые позиции на Hyperliquid через clearinghouseState.
- *
  * Ответ содержит assetPositions — массив объектов:
  * {
  *   type: "oneWay",
  *   position: {
- *     coin: "ETH",
- *     szi: "0.5",           // size с знаком (- = short)
- *     entryPx: "3500.0",
- *     positionValue: "1750.0",
- *     unrealizedPnl: "10.5",
- *     liquidationPx: "2800.0",
- *     cumFunding: { allTime: "5.2", sinceOpen: "2.1", sinceChange: "0.5" }
- *   }
- * }
- *
  * @returns {Promise<Array<{ coin, szi, entryPx, positionValue, unrealizedPnl }>>}
  */
 export async function fetchExchangePositions() {
@@ -192,7 +181,7 @@ async function handleMismatch(dbPosition) {
   );
 
   // ── Дотягиваем реальный PnL/цену закрытия из HL fills ───
-  // Раньше писали нули («PnL неизвестен») → Recent Activity показывал +$0.00
+
   // на сделках, закрытых пока бот лежал, хотя на бирже PnL реальный. Берём тот
   // же источник истины, что integrity.js/ledger (userFills + classifyClose).
   let realizedPnl = 0;
