@@ -2,12 +2,7 @@
 //  HL /info — единая точка входа, semaphore + retry
 // ─────────────────────────────────────────────────
 //
-// Why: до этого каждый модуль (scout, dashboard, volatility, candleCache,
-// sync, wallet, exchange, userFills) делал свой axios.post / fetch к
-// api.hyperliquid.xyz/info. Дашбордовский enrichVolMult бросал 20
-// параллельных candleSnapshot каждые ~30s и системно ловил 429,
-// рикошетом убивая Scout. Здесь — глобальный потолок concurrency,
-// мин-gap и retry с уважением к Retry-After.
+// Общий клиент ограничивает параллелизм, интервал и ретраи /info.
 
 import axios from 'axios';
 import { retryWithBackoff } from './retry.js';
@@ -64,10 +59,8 @@ export function weightOf(body) {
 
 const DEFAULT_HEADERS = { 'Content-Type': 'application/json' };
 
-// Приоритеты очереди. Торговый путь (позиции/баланс/цены/ордера/scout) должен
-// обходить косметику дашборда (volMult/htf/divergence/whale) — иначе бурст
-// тяжёлых candleSnapshot выжирает весовой бюджет HL, ловит 429-кулдаун и
-// рикошетом тормозит критичные вызовы бота. Больше число → раньше из очереди.
+// Торговый путь обходит косметику дашборда, чтобы не ждать исчерпанный бюджет HL.
+
 export const HL_PRIORITY = { HIGH: 2, NORMAL: 1, LOW: 0 };
 
 let inFlight = 0;
@@ -350,9 +343,7 @@ export async function hlInfo(body, opts = {}) {
         release();
       }
     },
-    // LOW-приоритет = косметика дашборда (volMult/htf/divergence/whale). Её 429
-    // и ретраи логируем тихо (debug): они безвредны (гасятся в null) и раньше
-    // забивали лог «авариями», маскируя реальные торговые сбои.
+    // LOW-запросы гасятся в null: их ретраи не должны маскировать торговые сбои.
     { maxRetries, label, quiet: priority === HL_PRIORITY.LOW },
   );
 }

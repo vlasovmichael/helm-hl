@@ -111,12 +111,19 @@ function loadConfig() {
 
 
   // ── Риск на сделку в % от депо ────────────────────────────────────────────
+
   // Единственная величина в риск-модели, которая переносится между счетами:
+
   // 5% это $0.21 на депо $4 и $1000 на $20 000. Дистанция стопа остаётся по ATR
+
   // (волатильность монеты), а РАЗМЕР позиции из них выводится:
+
   //   нотионал = депо × RISK_PCT / дистанция_стопа.
+
   // Бот размер не навязывает (вход ручной) — он считает его и говорит, когда
+
   // фактический риск выше порога. Сужать стоп под слишком крупную позу нельзя:
+
   // это меняет вынос движением на вынос шумом.
   const adoptRiskPct = parseFloat(process.env.ADOPT_RISK_PCT || '5');
   if (!Number.isFinite(adoptRiskPct) || adoptRiskPct <= 0 || adoptRiskPct >= 100) {
@@ -124,11 +131,17 @@ function loadConfig() {
   }
 
   // ── TP-лимитка на бирже при подхвате ──────────────────────────────────────
+
   // Цель ставится СРАЗУ вместе со стопом и висит в книге reduce-only: исполняется
+
   // мейкером и не зависит от того, проснулся ли бот. Дистанция считается не от
+
   // ATR напрямую, а от фактической дистанции стопа (сам стоп уже по ATR и зажат
+
   // в ADOPT_STOP_MIN/MAX_PCT) — только так заявленный R:R не плывёт в зажатых
+
   // случаях. RR=1 значит «цель на том же расстоянии, что и стоп», то есть
+
   // breakeven-winrate 50%; RR=0.5 требует уже 67%, RR=0.33 — 75%.
   const adoptTpEnabled = (process.env.ADOPT_TP_ENABLED || 'true').toLowerCase() === 'true';
   const adoptTpRr      = parseFloat(process.env.ADOPT_TP_RR      || '1');
@@ -271,12 +284,19 @@ function loadConfig() {
   const adoptTrailShadowEnabled = (process.env.ADOPT_TRAIL_SHADOW_ENABLED || 'true').toLowerCase() === 'true';
 
   // Target-trail: на подходе к цели снять reduce-only лимитку и вести стоп за
+
   // ценой. ⛔ ВЫКЛЮЧЕН — типичная сделка выходила хуже простой фиксации.
+
   // TP-сетка: цель лесенкой вместо одной лимитки (см. шапку tpGrid.js).
+
   // Пусто = выключено. Формат «доля@R» (ход в долях стопа) или «доля@N%» (ход в
+
   // процентах от входа); в одной спеке не смешивать. Сумма долей строго < 1,
+
   // остаток уходит под обычную цель/трейл. Спецификацию проверяем ЗДЕСЬ и падаем на
+
   // старте: кривая сетка — это неправильные ордера на живом счету, и узнать об
+
   // этом на первом же усыновлении хуже, чем не подняться.
   const adoptTpGridSpec = String(process.env.ADOPT_TP_GRID || '').trim();
   // Пол трейла БИРЖЕВЫМ ордером: бот не закрывает позу сам, а переставляет
@@ -307,7 +327,7 @@ function loadConfig() {
   // Пик-алерт: систематизация дискрец-выхода. Юзер закрывает 63%
   // adopt-поз рукой (capture 68% MFE) — даём звонок в момент решения: пик ≥ MFE_PCT
   // (p75 его шортов ≈2.5%) и откат ≥ GIVEBACK_PCT от пика. GIVEBACK строго МЕНЬШЕ
-  // ADOPT_TRAIL_GIVE_BACK_PCT (30) — иначе трейл закроет раньше звонка.
+
   const adoptPeakAlertEnabled     = (process.env.ADOPT_PEAK_ALERT_ENABLED || 'true').toLowerCase() === 'true';
   const adoptPeakAlertMfePct      = parseFloat(process.env.ADOPT_PEAK_ALERT_MFE_PCT      || '2.5');
   const adoptPeakAlertGiveBackPct = parseFloat(process.env.ADOPT_PEAK_ALERT_GIVEBACK_PCT || '15');
