@@ -7,7 +7,7 @@
 //  - HTML вместо JSON не превращается в «Unexpected token '<'»
 //  - 401 уводит на логин И прерывает выполнение (голый redirect его не прерывал)
 //  - пустое тело отличается от нечитаемого
-//  - нормальный JSON проходит как раньше
+
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -21,7 +21,7 @@ test("нормальный JSON разбирается", async () => {
 });
 
 test("HTML вместо JSON даёт человеческую причину, а не имя токена", async () => {
-  // Именно это висело в красной плашке модалки 31.08: страница логина
+
   // Cloudflare Access прилетела в парсер JSON.
   await assert.rejects(
     () => readJson(res(200, '<!DOCTYPE html><html><body>login</body></html>')),
