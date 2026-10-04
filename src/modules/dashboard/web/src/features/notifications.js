@@ -239,7 +239,7 @@ function showToast(item) {
   stack.prepend(el);
   requestAnimationFrame(() => el.classList.add("is-in"));
 
-  // Переполнение стека — самые старые (снизу) улетают раньше.
+
   const extra = [...stack.querySelectorAll(".toast:not([data-leaving])")].slice(TOAST_MAX);
   extra.forEach(flyToBell);
 

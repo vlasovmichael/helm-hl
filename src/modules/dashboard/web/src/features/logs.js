@@ -77,7 +77,7 @@ function renderLogs() {
   countEl.textContent = `${filtered.length} / ${logsState.buffer.length} lines`;
 
   if (filtered.length === 0) {
-    // Два разных «пусто», и раньше оба показывали одну строку «Waiting for
+
     // logs…»: при активном фильтре она врала — логи-то шли, просто ни один
     // не подходил под запрос.
     list.innerHTML = "";
