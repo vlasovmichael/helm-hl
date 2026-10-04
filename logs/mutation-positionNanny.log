@@ -1,0 +1,6 @@
+Команда: npm run mutation -- src/modules/positionNanny.js
+Дата: 2026-10-04
+
+Stryker: 349 mutants, 291 killed, 58 survived, 0 no coverage.
+Mutation score: 83.38%.
+Время: 33 seconds.
