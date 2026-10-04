@@ -9,12 +9,12 @@ import { chromium } from "@playwright/test";
 const args = process.argv.slice(2), out = args.find((x) => !x.startsWith("--"));
 const project = args.includes("--project") ? args[args.indexOf("--project") + 1] : process.cwd();
 if (!out) throw new Error("node scripts/snapshotDash.mjs <каталог> [--project путь] [--twice]");
-const twice = args.includes("--twice"), dist = join(project, "src/modules/dashboard/dist");
+const twice = args.includes("--twice"), legacy = args.includes("--legacy"), dist = join(project, "src/modules/dashboard/dist");
 const port = Number(process.env.KIT_COLORS_PORT || 4174);
 const defaultPages = ["index", "orderbook", "orderbook-sim", "journal", "ledger", "statistics", "lab", "oi", "calibrator", "levels", "login", "ticket"];
 const pages = process.env.KIT_COLORS_PAGES?.split(",").filter(Boolean) || defaultPages;
 const routerPages = new Set(["index", "oi", "ledger", "statistics", "lab", "journal"]);
-const pageStyleSelector = { index:".card", orderbook:".ob-terminal", "orderbook-sim":".obs-book", journal:".j-vh", ledger:".ledger-head", statistics:".pnl-hero", lab:".lab", oi:".oi-coin", calibrator:".calib-hero", levels:".lv-context", login:".login-card", ticket:".ticket" };
+const pageStyleSelector = { index:".card", orderbook:".ob-terminal", "orderbook-sim":".obs-book", journal:".j-vh", ledger:".ledger-head", statistics:".pnl-hero", lab:".lab-meta", oi:".oi-coin", calibrator:".calib-hero", levels:".lv-context", login:".login-card", ticket:".tk-btn" };
 const now = Date.parse("2026-10-04T10:00:00Z");
 const points = Array.from({ length: 36 }, (_, i) => ({ t: now - (35-i)*3600000, ts: now-(35-i)*3600000, px: 62000+i*55, oi: 120000+i*500, oiUsd: 7.4e9+i*8e6, f: .0001, v: 2e8, equity: 10000+i*22 }));
 const oi = { oi: 120000, oiUsd: 7.6e9, at: now, windows: [{ label: "24h", oiPct: 3.1, mode: "new-longs" }] };
@@ -55,13 +55,18 @@ function diagnostics(page, label) {
   };
 }
 async function capture(context,theme,width,name,file) {
-  const page=await context.newPage({viewport:{width,height:900},colorScheme:"light"});
+  const page=await context.newPage();
+  await page.setViewportSize({width,height:900});
   const log=diagnostics(page,`${name}/${theme}/${width}`);
   // The fixture deliberately freezes time and animation frames.  That makes a
   // perpetual render loop visible in diagnostics without letting it make a
   // screenshot timing-dependent; the app itself still renders its first frame.
   await page.addInitScript(({ theme, status })=>{
     localStorage.setItem("hl-scanner-theme",theme);document.documentElement?.dataset && (document.documentElement.dataset.theme=theme);
+    // Страницы с ?mock=1 рисуют демо-графики. Их генератор должен быть таким
+    // же фиксированным, как API и часы, иначе сеть сравнивает два разных рынка.
+    let seed=0x6d2b79f5;
+    Math.random=()=>{seed=(seed+0x6d2b79f5)|0;let t=Math.imul(seed^(seed>>>15),1|seed);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296};
     const rafs=[]; window.__kitSnapshot={rafs,websockets:[]};
     window.requestAnimationFrame=(fn)=>{rafs.push(String(fn).slice(0,120));return rafs.length};
     window.cancelAnimationFrame=()=>{};
@@ -80,17 +85,23 @@ async function capture(context,theme,width,name,file) {
   try {
   // index is the History-API application: /index.html is not a registered
   // route and used to redirect to itself forever. Express serves it at /.
-  const target=routerPages.has(name) ? `/${name==="index" ? "" : name}?mock=1` : `/${name}.html`;
-  await page.goto(`http://127.0.0.1:${port}${target}`,{waitUntil:"domcontentloaded",timeout:10000});
+  const target=routerPages.has(name) ? `/${name==="index" ? "" : name}?snapshot=1` : `/${name}.html`;
   await page.clock.install({time:now});
+  await page.goto(`http://127.0.0.1:${port}${target}`,{waitUntil:"domcontentloaded",timeout:10000});
+  // Динамические моки и графики должны закончить импорт до фиксации первого кадра.
+  await page.waitForLoadState("networkidle",{timeout:10000});
   await page.clock.runFor(100);
+  await page.evaluate(() => document.fonts.ready);
   await page.addStyleTag({content:"*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}"});
+  // Дождаться следующего композитного кадра, не двигая замороженные часы.
+  await page.waitForTimeout(250);
   const guard=await page.evaluate((selector)=>{const body=getComputedStyle(document.body),p=document.createElement("i");p.style.background="var(--ground)";document.body.append(p);const ground=getComputedStyle(p).backgroundColor;p.remove();return {overlay:!!document.querySelector("vite-error-overlay"),ground:body.backgroundColor===ground,styled:!!document.querySelector(selector),text:document.body.innerText.length}},pageStyleSelector[name]);
   const runtime=await page.evaluate(()=>window.__kitSnapshot);
-  if(guard.overlay||!guard.ground||!guard.styled||guard.text<40) throw Error(`${name}/${theme}/${width}: invalid screen ${JSON.stringify({guard,runtime})}`);
+  if(guard.overlay||(!legacy&&!guard.ground)||!guard.styled||guard.text<40) throw Error(`${name}/${theme}/${width}: invalid screen ${JSON.stringify({guard,runtime})}`);
   await page.screenshot({path:file,fullPage:false,timeout:5000}); const colors=Number(execFileSync("identify",["-format","%k",file],{encoding:"utf8"})); if(colors<50) throw Error(`${name}/${theme}/${width}: only ${colors} colours`);
   log.assertClean(); log.save(`${file}.network.json`);
   } finally { await context.tracing.stop({path:trace}); await page.close(); }
 }
 execFileSync("npm",["run","build:dash"],{cwd:project,stdio:"inherit"}); mkdirSync(out,{recursive:true}); const srv=server(); await new Promise(ok=>srv.listen(port,"127.0.0.1",ok));
-try { for(let run=0;run<(twice?2:1);run++){const dir=twice?join(out,`run-${run+1}`):out;mkdirSync(dir,{recursive:true});const browser=await chromium.launch({headless:true});const context=await browser.newContext();for(const theme of ["light","dark"])for(const width of [390,1280])for(const name of pages){console.log(`[snapshot] ${name} ${theme} ${width}`);await capture(context,theme,width,name,join(dir,`${name}-${theme}-${width}.png`));}await context.close();await browser.close()} } finally { await new Promise(ok=>srv.close(ok)); }
+const browser=await chromium.launch({headless:true}), context=await browser.newContext();
+try { for(const theme of ["light","dark"])for(const width of [390,1280])for(const name of pages)for(let run=0;run<(twice?2:1);run++){const dir=twice?join(out,`run-${run+1}`):out;mkdirSync(dir,{recursive:true});console.log(`[snapshot ${run+1}] ${name} ${theme} ${width}`);await capture(context,theme,width,name,join(dir,`${name}-${theme}-${width}.png`));} } finally { await context.close(); await browser.close(); await new Promise(ok=>srv.close(ok)); }

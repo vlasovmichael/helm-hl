@@ -20,7 +20,8 @@
      определены в обеих темах; ярко читаются на тёмном и светлом, белый текст
      внутри заливки контрастит. */
   --pnl-up: var(--color-green-500);
-  --pnl-down: var(--color-red-400);
+  /* Net/uPnL — отдельная биржевая заливка, не коралловый общий alert. */
+  --pnl-down: var(--color-red-600);
 
   --fs-hero-sm: 34px; /* оно же на телефоне                            */
 
@@ -74,7 +75,7 @@ html[data-theme="light"] {
   --brand-2: var(--color-blue-500);
   --brand-soft: color-mix(in srgb, var(--color-blue-500) 8.00%, transparent);
   --brand-line: color-mix(in srgb, var(--color-blue-500) 32.00%, transparent);
-  --amber: var(--color-red-400);
+  --amber: var(--color-amber-700);
   --grad-brand: linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-500) 100%);
   --grad-brand-soft: linear-gradient(
     135deg,
@@ -91,7 +92,7 @@ html[data-theme="light"] {
   --tier-neg-weak: color-mix(in srgb, var(--color-red-400) 6.00%, transparent);
   /* --yellow: акцентный текст «ручное/таймер» (HANDS-OFF, floor-timer). На
      светлой (кремовой) теме чистый var(--color-red-400) не читался — берём тёмное золото. */
-  --yellow: var(--color-red-400);
+  --yellow: var(--color-amber-700);
   /* Линия EMA на графиках — чистый жёлтый в обеих темах, как на TradingView. */
   /* Скелетон на белой карточке. var(--color-gray-0) (цвет разделителей) на белом почти не
      виден — блок «пусто» и блок «сейчас приедет» выглядели одинаково. Берём
@@ -107,7 +108,7 @@ html[data-theme="dark"] {
   --brand-2: var(--color-blue-500);
   --brand-soft: color-mix(in srgb, var(--color-blue-500) 12.00%, transparent);
   --brand-line: color-mix(in srgb, var(--color-blue-500) 40.00%, transparent);
-  --amber: var(--color-red-400);
+  --amber: var(--color-amber-400);
   --grad-brand: linear-gradient(135deg, var(--color-blue-500) 0%, var(--color-blue-500) 100%);
   --grad-brand-soft: linear-gradient(
     135deg,
@@ -122,7 +123,7 @@ html[data-theme="dark"] {
   --tier-neg-strong: color-mix(in srgb, var(--color-red-400) 38.00%, transparent);
   --tier-neg-normal: color-mix(in srgb, var(--color-red-400) 18.00%, transparent);
   --tier-neg-weak: color-mix(in srgb, var(--color-red-400) 7.00%, transparent);
-  --yellow: var(--color-red-400); /* на тёмной теме яркий жёлтый читается — оставляем */
+  --yellow: var(--color-amber-300); /* на тёмной теме яркий жёлтый читается — оставляем */
   --skeleton-base: var(--color-gray-800);
   --skeleton-shine: var(--color-gray-800);
 }
