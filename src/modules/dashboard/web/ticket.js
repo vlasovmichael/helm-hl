@@ -2,12 +2,19 @@ import "@flwls/ui/tokens.css";
 import "./ticket.scss";
 import { mountPageHeader } from "./src/core/pageHeader.js";
 // ─────────────────────────────────────────────────
+
 //  ticket.html — локальный стенд модалки Trade Ticket
+
 // ─────────────────────────────────────────────────
+
 // Гоняет НАСТОЯЩИЙ модуль features/tradeTicket.js на мок-адаптере: биржи,
+
 // кошелька и бэкенда тут нет вообще. Нужен, чтобы смотреть и править дизайн
+
 // (`npm run dev:dash` → /ticket.html) до того, как что-то поедет в прод.
+
 //
+
 // Числа взяты из реальных сделок и реального депо, чтобы масштаб был честный.
 
 import { createTradeTicketModal } from "./src/features/tradeTicket.js";

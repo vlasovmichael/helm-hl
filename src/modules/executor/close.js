@@ -39,10 +39,10 @@ import {
 /**
  * Отказ биржи, означающий «позиции, которую мы собирались закрыть, уже нет».
  * `Reduce only order would increase position` — reduce-only ордер на флэте/после
- * разворота (оператор закрыл руками за секунду до нас). Раньше такой отказ только
+
  * логировался, DB-строка оставалась OPEN со СТАРЫМ entry_price — и если оператор
  * тут же перезаходил, бот продолжал вести чужую позу по старому входу
- * (KAITO 30.07: трейл увидел фейковый пик +8.8% и записал +$1.94 вместо −$0.58).
+
  */
 export function isPositionGoneRejection(msg) {
   const m = String(msg || '').toLowerCase();
@@ -246,7 +246,7 @@ async function syncDbAfterExternalClose(position, coin, holdHours) {
     }
 
     // Цифры — из round-trip матчера: он даёт комиссию за ОБЕ ноги и матчит
-    // ногу по entry_price (фикс KAITO 13.07), а classifyClose отдаёт fee
+
     // только закрывающих филлов. Обычный путь закрытия пишет в fee_paid обе
     // ноги (size × (ONE_LEG + exitFeeRate)) — внешний обязан быть с ним
     // согласован, иначе комиссии внешних закрытий систематически занижены,
@@ -265,7 +265,7 @@ async function syncDbAfterExternalClose(position, coin, holdHours) {
     // ДЕТЕКТА (бот замечает внешнее закрытие через десятки секунд), и
     // дедуп ленты (makeHistoryCoverage, допуск 5с) промахивался — одна
     // сделка показывалась дважды: `close` из history + `manual_close` из
-    // fills. Кейс kSHIB 26.07: fill 09:40:01, детект 09:40:30.
+
     if (Number.isFinite(src.closedAt)) classified.closedAt = src.closedAt;
     logger.info(
       `[Executor] PROD CLOSE #${coin} — external classified as '${classified.reason}' | ` +

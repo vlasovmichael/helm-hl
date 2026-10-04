@@ -79,13 +79,23 @@ export function notify(event, context) {
 }
 
 // ── Перечень событий ───────────────────────────
+
 //
+
 // Gate (блокирующие):
+
 //   "beforeOpen"   — { coin, price, apy, sizeUsd }
+
 //
+
 // Notify (fire-and-forget):
+
 //   "afterOpen"    — { coin, price, apy, sizeUsd, positionId, fill?, mode }
+
 //   "afterClose"   — { coin, pnl, holdHours, reason, fill?, mode }
+
 //   "afterRotate"  — { closeCoin, openCoin, closePnl, positionId }
+
 //   "onError"      — { operation, coin, error }
+
 //   "stateChange"  — { type, coin, data }
