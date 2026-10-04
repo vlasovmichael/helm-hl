@@ -26,7 +26,7 @@ test('открытые позиции входят в дневной бюдже�
 });
 
 test('бюджет запирается ПО достижении лимита, а не после превышения', () => {
-  // Граница именно здесь: at cap вход уже запрещён. 31.08 счётчик пустил
+
   // сделки с шестой по семнадцатую, показывая «over the daily trade budget».
   assert.equal(computeTradesToday({ closed: 4, open: 0, cap: 5 }).over, false);
   assert.equal(computeTradesToday({ closed: 5, open: 0, cap: 5 }).over, true);
