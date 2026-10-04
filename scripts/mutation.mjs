@@ -9,7 +9,7 @@ const testsByModule = {
   'src/modules/executor/fill-parser.js': ['tests/fillParser.test.js', 'tests/fillParserResolveFake.test.js'],
   'src/modules/executor/close.js': ['tests/closeRejectionSync.test.js'],
   'src/modules/executor/limitClose.js': ['tests/executorMath.test.js'],
-  'src/modules/executor/triggers.js': ['tests/executorMath.test.js'],
+  'src/modules/executor/triggers.js': ['tests/triggersFake.test.js'],
   'src/modules/dailyRisk.js': ['tests/dailyRisk.test.js', 'tests/dailyFeeBudget.test.js'],
   'src/modules/targetTrail.js': ['tests/targetTrail.test.js'],
   'src/modules/positionNanny.js': ['tests/positionNanny.test.js'],
@@ -34,7 +34,7 @@ if (!modulePath) {
       env: {
         ...process.env,
         NODE_ENV: 'test',
-        STRYKER_TEST_COMMAND: `NODE_ENV=test FILL_PARSER_FAKE_DEPS=1 node ${normalized === 'src/modules/executor/fill-parser.js' ? '--experimental-loader ./tests/helpers/fill-parser-loader.mjs ' : ''}--test ${(testsByModule[normalized] ?? ['tests/*.test.js']).join(' ')}`,
+        STRYKER_TEST_COMMAND: `NODE_ENV=test FILL_PARSER_FAKE_DEPS=1 TRIGGERS_FAKE_DEPS=1 node ${normalized === 'src/modules/executor/fill-parser.js' ? '--experimental-loader ./tests/helpers/fill-parser-loader.mjs ' : normalized === 'src/modules/executor/triggers.js' ? '--experimental-loader ./tests/helpers/triggers-loader.mjs ' : ''}--test ${(testsByModule[normalized] ?? ['tests/*.test.js']).join(' ')}`,
       },
     });
     child.on('exit', (code, signal) => {
