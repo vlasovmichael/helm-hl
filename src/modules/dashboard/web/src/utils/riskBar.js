@@ -47,12 +47,12 @@ export function riskTint({
   const rawArmDist = beArmPct != null && beArmPct > 0 ? entry * (beArmPct / 100) : null;
   const targetDist = tpPrice != null ? Math.abs(entry - tpPrice) : 2 * risk;
   // Храповик выключают, задрав порог за небо (ADOPT_BE_ARM_PCT=999). Веха, до
-  // которой цена не дойдёт раньше самой цели прибыли — не веха: иначе фаза «до
+
   // храповика» съедает весь плюс и полоса стоит на нуле, пока в минусе живёт.
   const armDist = rawArmDist != null && rawArmDist < targetDist ? rawArmDist : null;
   const armed = beArmed === true || (armDist != null && move >= armDist);
 
-  // Веха трейла — та же проверка «веха раньше цели», иначе она не веха.
+
   const rawTrailDist =
     trailArmPct != null && trailArmPct > 0 ? entry * (trailArmPct / 100) : null;
   const trailDist =
@@ -86,7 +86,7 @@ export function riskTint({
     fracOf = (m) => Math.min(1, Math.max(0, m / armDist));
   } else if (trailDist != null && !trailOn) {
     // Храповик взят (или выключен), трейл ещё нет — это и есть ближайшее
-    // событие. Раньше этой фазы не было: полоса сразу мерила до 2R (≈+10% при
+
     // стопе 5%), ползла на четверть и трейл на +2% в ней было не разглядеть.
     const base = armed && armDist != null ? armDist : 0;
     const span = Math.max(trailDist - base, 1e-9);
