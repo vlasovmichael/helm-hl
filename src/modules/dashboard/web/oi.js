@@ -3,11 +3,17 @@ import { paintIcons } from "./src/core/icon.js";
 import { emptyRow, emptyState, settle } from "./src/core/placeholders.js";
 import { mountPageHeader } from "./src/core/pageHeader.js";
 // ─────────────────────────────────────────────────
+
 //  OI — витрина истории open interest (все монеты).
+
 //  Читает /api/oi-collector/* (данные от tools/oiCollector.mjs). Сверху —
+
 //  сортируемая таблица-обзор по всем монетам с ΔOI 24ч/1ч; клик по монете →
+
 //  ряд во времени (dual-axis спарклайн OI vs цена + таблица).
+
 //  ЭТО ПОКАЗ ДАННЫХ, не сигнал — вывод про эдж требует месяца разных режимов.
+
 // ─────────────────────────────────────────────────
 
 import { onThemeChange } from "./src/core/shell.js";

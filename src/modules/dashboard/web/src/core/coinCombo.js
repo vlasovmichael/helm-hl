@@ -103,7 +103,7 @@ export function attachCoinCombo(input, { getCoins, onPick, onInput, state } = {}
     if (active) input.setAttribute("aria-activedescendant", active.id);
     else input.removeAttribute("aria-activedescendant");
     box.querySelectorAll("[data-pick]").forEach((li) => {
-      // mousedown, а не click: blur поля успел бы закрыть список раньше клика.
+
       li.addEventListener("mousedown", (e) => {
         e.preventDefault();
         pick(li.dataset.pick);
