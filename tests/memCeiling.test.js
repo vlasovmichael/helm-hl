@@ -1,6 +1,6 @@
 // Какой потолок памяти связывает первым.
 //
-// Why: алерт, написанный после cgroup-OOM 02.08, был недостижим ПО
+
 // ПОСТРОЕНИЮ. Он смотрел на rss/cgroup и трубил на 80% от 512 МБ, то есть на 410.
 // Но Node 20 вывел heap_size_limit из того же cgroup и поставил себе 259 МБ —
 // процесс умирал по FATAL heap limit на rss около 242, не дойдя до порога
@@ -23,7 +23,7 @@ test('реальный расклад падения 09.08: связывает �
     cgroupLimit: 512 * MB, heapLimit: 259 * MB,
   });
   assert.equal(b.kind, 'heap');
-  // Именно этот порог и не срабатывал раньше: по rss было 47%, по куче — 93%.
+
   assert.ok(b.fraction > 0.9);
   assert.equal(shouldAlertMemory({ fraction: b.fraction, alreadyAlerted: false }), true);
 });

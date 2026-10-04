@@ -86,7 +86,7 @@ test('внутри приоритета — FIFO: кто встал раньше
   await sleep(20);
   const second = hlInfo(heavy, { label: 'test/n2', priority: HL_PRIORITY.NORMAL })
     .then(() => order.push('second'));
-  // Поздний гость — тот самый barging-кейс: раньше он мог обогнать ждущих.
+
   await sleep(100);
   const late = hlInfo(heavy, { label: 'test/n3', priority: HL_PRIORITY.NORMAL })
     .then(() => order.push('late'));
