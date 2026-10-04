@@ -2,7 +2,7 @@
 /* Собранная визуальная сеть: изолирована от бота и реального API. */
 import { createServer } from "node:http";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import { chromium } from "@playwright/test";
 
@@ -12,6 +12,8 @@ if (!out) throw new Error("node scripts/snapshotDash.mjs <каталог> [--pro
 const twice = args.includes("--twice"), dist = join(project, "src/modules/dashboard/dist");
 const port = Number(process.env.KIT_COLORS_PORT || 4174);
 const pages = ["index", "orderbook", "orderbook-sim", "journal", "ledger", "statistics", "lab", "oi", "calibrator", "levels", "login", "ticket"];
+const routerPages = new Set(["index", "oi", "ledger", "statistics", "lab", "journal"]);
+const pageStyleSelector = { index:".card", orderbook:".ob-terminal", "orderbook-sim":".obs-book", journal:".j-vh", ledger:".ledger-head", statistics:".pnl-hero", lab:".lab", oi:".oi-coin", calibrator:".calib-hero", levels:".lv-context", login:".login-card", ticket:".ticket" };
 const now = Date.parse("2026-10-04T10:00:00Z");
 const points = Array.from({ length: 36 }, (_, i) => ({ t: now - (35-i)*3600000, ts: now-(35-i)*3600000, px: 62000+i*55, oi: 120000+i*500, oiUsd: 7.4e9+i*8e6, f: .0001, v: 2e8, equity: 10000+i*22 }));
 const oi = { oi: 120000, oiUsd: 7.6e9, at: now, windows: [{ label: "24h", oiPct: 3.1, mode: "new-longs" }] };
@@ -31,15 +33,63 @@ function api(url) {
   return { ok:true,points,rows:[],coins:["BTC","ETH","SOL"],data:[] };
 }
 const types={".html":"text/html",".js":"text/javascript",".css":"text/css",".svg":"image/svg+xml",".woff2":"font/woff2",".png":"image/png"};
-function server() { return createServer((req,res)=>{ const name=normalize(decodeURIComponent(new URL(req.url,"http://x").pathname)).replace(/^\/+/,"")||"index.html", file=join(dist,name); if(!file.startsWith(dist)||!existsSync(file)||statSync(file).isDirectory()) return res.writeHead(404).end(); res.writeHead(200,{"content-type":types[extname(file)]||"application/octet-stream"});res.end(readFileSync(file)); }); }
-async function capture(page,theme,width,name,file) {
-  await page.addInitScript((t)=>{localStorage.setItem("hl-scanner-theme",t);document.documentElement.dataset.theme=t;window.WebSocket=class{constructor(){this.readyState=3}addEventListener(){}close(){}send(){}}},theme);
+function server() { return createServer((req,res)=>{ let name=normalize(decodeURIComponent(new URL(req.url,"http://x").pathname)).replace(/^\/+/,"")||"index.html"; if(routerPages.has(name)) name=`${name}.html`; const file=join(dist,name); if(!file.startsWith(dist)||!existsSync(file)||statSync(file).isDirectory()) return res.writeHead(404).end(); res.writeHead(200,{"content-type":types[extname(file)]||"application/octet-stream"});res.end(readFileSync(file)); }); }
+const shorten = (value) => String(value).replace(/\?.*/, "");
+function diagnostics(page, label) {
+  const events = [];
+  const note = (kind, value) => events.push({ kind, value: String(value).slice(0, 600) });
+  page.on("console", (msg) => {
+    if (msg.type() === "error" || msg.type() === "warning") note(`console:${msg.type()}`, msg.text());
+  });
+  page.on("pageerror", (err) => note("pageerror", err.stack || err.message));
+  page.on("requestfailed", (req) => note("requestfailed", `${req.method()} ${shorten(req.url())}: ${req.failure()?.errorText || "unknown"}`));
+  page.on("request", (req) => note("request", `${req.method()} ${shorten(req.url())}`));
+  page.on("websocket", (ws) => note("websocket", shorten(ws.url())));
+  return {
+    assertClean() {
+      const bad = events.filter((e) => e.kind === "pageerror" || e.kind === "requestfailed");
+      if (bad.length) throw Error(`${label}: browser diagnostics ${JSON.stringify(bad)}`);
+    },
+    save(file) { writeFileSync(file, JSON.stringify(events, null, 2)); },
+  };
+}
+async function capture(context,theme,width,name,file) {
+  const page=await context.newPage({viewport:{width,height:900},colorScheme:"light"});
+  const log=diagnostics(page,`${name}/${theme}/${width}`);
+  // The fixture deliberately freezes time and animation frames.  That makes a
+  // perpetual render loop visible in diagnostics without letting it make a
+  // screenshot timing-dependent; the app itself still renders its first frame.
+  await page.addInitScript(({ theme, status })=>{
+    localStorage.setItem("hl-scanner-theme",theme);document.documentElement?.dataset && (document.documentElement.dataset.theme=theme);
+    const rafs=[]; window.__kitSnapshot={rafs,websockets:[]};
+    window.requestAnimationFrame=(fn)=>{rafs.push(String(fn).slice(0,120));return rafs.length};
+    window.cancelAnimationFrame=()=>{};
+    class FixtureWebSocket {
+      static CONNECTING=0; static OPEN=1; static CLOSING=2; static CLOSED=3;
+      constructor(url){this.url=url;this.readyState=0;this._ls={};window.__kitSnapshot.websockets.push(url);
+        queueMicrotask(()=>{if(this.readyState!==0)return;this.readyState=1;this._emit("open",{});
+          if(String(url).startsWith("ws:"))this._emit("message",{data:JSON.stringify({type:"status",data:status})});});}
+      addEventListener(type,fn){(this._ls[type]??=[]).push(fn)} removeEventListener(type,fn){this._ls[type]=(this._ls[type]??[]).filter(x=>x!==fn)}
+      _emit(type,event){this[`on${type}`]?.(event);for(const fn of this._ls[type]??[])fn.call(this,event)} send(){} close(){this.readyState=3;this._emit("close",{})}
+    }
+    window.WebSocket=FixtureWebSocket;
+  },{theme,status:{equity:10048,sessionProfit:48,sessionStartEquity:10000,uptimeMin:42,available:8100,activePosition:null,manualPositions:[],runtimeBans:[],btcLivePrice:63920,hotMovers:{ts:now,universeSize:3,signals:[]},dataHealth:{overall:"ok",checks:[]}}});
   await page.route("**/api/**",r=>r.fulfill({contentType:"application/json",body:JSON.stringify(api(r.request().url()))}));
-  await page.goto(`http://127.0.0.1:${port}/${name}.html${name==="index"?"?mock=1":""}`,{waitUntil:"domcontentloaded"});
+  const trace=join(out,`trace-${name}-${theme}-${width}.zip`); await context.tracing.start({screenshots:true,snapshots:true,sources:true});
+  try {
+  // index is the History-API application: /index.html is not a registered
+  // route and used to redirect to itself forever. Express serves it at /.
+  const target=routerPages.has(name) ? `/${name==="index" ? "" : name}?mock=1` : `/${name}.html`;
+  await page.goto(`http://127.0.0.1:${port}${target}`,{waitUntil:"domcontentloaded",timeout:10000});
+  await page.clock.install({time:now});
+  await page.clock.runFor(100);
   await page.addStyleTag({content:"*,*::before,*::after{animation:none!important;transition:none!important;caret-color:transparent!important}"});
-  const guard=await page.evaluate(()=>{const body=getComputedStyle(document.body),p=document.createElement("i");p.style.background="var(--ground)";document.body.append(p);const ground=getComputedStyle(p).backgroundColor;p.remove();return {overlay:!!document.querySelector("vite-error-overlay"),ground:body.backgroundColor===ground,styled:!!document.querySelector(".card,.lv-context,.oi-coin,.login-card,.ticket"),text:document.body.innerText.length}});
-  if(guard.overlay||!guard.ground||!guard.styled||guard.text<40) throw Error(`${name}/${theme}/${width}: invalid screen ${JSON.stringify(guard)}`);
+  const guard=await page.evaluate((selector)=>{const body=getComputedStyle(document.body),p=document.createElement("i");p.style.background="var(--ground)";document.body.append(p);const ground=getComputedStyle(p).backgroundColor;p.remove();return {overlay:!!document.querySelector("vite-error-overlay"),ground:body.backgroundColor===ground,styled:!!document.querySelector(selector),text:document.body.innerText.length}},pageStyleSelector[name]);
+  const runtime=await page.evaluate(()=>window.__kitSnapshot);
+  if(guard.overlay||!guard.ground||!guard.styled||guard.text<40) throw Error(`${name}/${theme}/${width}: invalid screen ${JSON.stringify({guard,runtime})}`);
   await page.screenshot({path:file,fullPage:false,timeout:5000}); const colors=Number(execFileSync("identify",["-format","%k",file],{encoding:"utf8"})); if(colors<50) throw Error(`${name}/${theme}/${width}: only ${colors} colours`);
+  log.assertClean(); log.save(`${file}.network.json`);
+  } finally { await context.tracing.stop({path:trace}); await page.close(); }
 }
 execFileSync("npm",["run","build:dash"],{cwd:project,stdio:"inherit"}); mkdirSync(out,{recursive:true}); const srv=server(); await new Promise(ok=>srv.listen(port,"127.0.0.1",ok));
-try { for(let run=0;run<(twice?2:1);run++){const dir=twice?join(out,`run-${run+1}`):out;mkdirSync(dir,{recursive:true});const browser=await chromium.launch({headless:true});for(const theme of ["light","dark"])for(const width of [390,1280])for(const name of pages){console.log(`[snapshot] ${name} ${theme} ${width}`);const page=await browser.newPage({viewport:{width,height:900},colorScheme:"light"});await capture(page,theme,width,name,join(dir,`${name}-${theme}-${width}.png`));await page.close()}await browser.close()} } finally { await new Promise(ok=>srv.close(ok)); }
+try { for(let run=0;run<(twice?2:1);run++){const dir=twice?join(out,`run-${run+1}`):out;mkdirSync(dir,{recursive:true});const browser=await chromium.launch({headless:true});const context=await browser.newContext();for(const theme of ["light","dark"])for(const width of [390,1280])for(const name of pages){console.log(`[snapshot] ${name} ${theme} ${width}`);await capture(context,theme,width,name,join(dir,`${name}-${theme}-${width}.png`));}await context.close();await browser.close()} } finally { await new Promise(ok=>srv.close(ok)); }
