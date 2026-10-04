@@ -14,6 +14,8 @@ const skipBuild = args.includes("--skip-build");
 const port = Number(process.env.KIT_COLORS_PORT || 4174);
 const defaultPages = ["index", "orderbook", "orderbook-sim", "journal", "ledger", "statistics", "lab", "oi", "calibrator", "levels", "login", "ticket"];
 const pages = process.env.KIT_COLORS_PAGES?.split(",").filter(Boolean) || defaultPages;
+const themes = process.env.KIT_COLORS_THEMES?.split(",").filter(Boolean) || ["light", "dark"];
+const widths = (process.env.KIT_COLORS_WIDTHS?.split(",") || ["390", "1280"]).map(Number);
 const routerPages = new Set(["index", "oi", "ledger", "statistics", "lab", "journal"]);
 const pageStyleSelector = { index:".card", orderbook:".ob-terminal", "orderbook-sim":".obs-book", journal:".j-vh", ledger:".ledger-head", statistics:".pnl-hero", lab:".lab-meta", oi:".oi-coin", calibrator:".calib-hero", levels:".lv-context", login:".login-card", ticket:".tk-btn" };
 const now = Date.parse("2026-10-04T10:00:00Z");
@@ -123,4 +125,4 @@ if (!skipBuild) execFileSync("npm",["run","build:dash"],{cwd:project,stdio:"inhe
 if (!existsSync(dist)) throw new Error(`нет собранной витрины: ${dist}`);
 mkdirSync(out,{recursive:true}); const srv=server(); await new Promise(ok=>srv.listen(port,"127.0.0.1",ok));
 const browser=await chromium.launch({headless:true}), context=await browser.newContext();
-try { for(const theme of ["light","dark"])for(const width of [390,1280])for(const name of pages)for(let run=0;run<(twice?2:1);run++){const dir=twice?join(out,`run-${run+1}`):out;mkdirSync(dir,{recursive:true});console.log(`[snapshot ${run+1}] ${name} ${theme} ${width}`);await capture(context,theme,width,name,join(dir,`${name}-${theme}-${width}.png`));} } finally { await context.close(); await browser.close(); await new Promise(ok=>srv.close(ok)); }
+try { for(const theme of themes)for(const width of widths)for(const name of pages)for(let run=0;run<(twice?2:1);run++){const dir=twice?join(out,`run-${run+1}`):out;mkdirSync(dir,{recursive:true});console.log(`[snapshot ${run+1}] ${name} ${theme} ${width}`);await capture(context,theme,width,name,join(dir,`${name}-${theme}-${width}.png`));} } finally { await context.close(); await browser.close(); await new Promise(ok=>srv.close(ok)); }
