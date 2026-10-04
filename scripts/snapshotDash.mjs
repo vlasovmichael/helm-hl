@@ -11,7 +11,8 @@ const project = args.includes("--project") ? args[args.indexOf("--project") + 1]
 if (!out) throw new Error("node scripts/snapshotDash.mjs <каталог> [--project путь] [--twice]");
 const twice = args.includes("--twice"), dist = join(project, "src/modules/dashboard/dist");
 const port = Number(process.env.KIT_COLORS_PORT || 4174);
-const pages = ["index", "orderbook", "orderbook-sim", "journal", "ledger", "statistics", "lab", "oi", "calibrator", "levels", "login", "ticket"];
+const defaultPages = ["index", "orderbook", "orderbook-sim", "journal", "ledger", "statistics", "lab", "oi", "calibrator", "levels", "login", "ticket"];
+const pages = process.env.KIT_COLORS_PAGES?.split(",").filter(Boolean) || defaultPages;
 const routerPages = new Set(["index", "oi", "ledger", "statistics", "lab", "journal"]);
 const pageStyleSelector = { index:".card", orderbook:".ob-terminal", "orderbook-sim":".obs-book", journal:".j-vh", ledger:".ledger-head", statistics:".pnl-hero", lab:".lab", oi:".oi-coin", calibrator:".calib-hero", levels:".lv-context", login:".login-card", ticket:".ticket" };
 const now = Date.parse("2026-10-04T10:00:00Z");
