@@ -86,7 +86,7 @@ test('чужое закрытие той же монеты в истории (д
     makeFill({ time: 5_000_000, dir: 'Open Long',  oid: 100, px: 10, sz: 5 }),
     makeFill({ time: 5_030_000, dir: 'Close Long', oid: 101, px: 11, sz: 5, closedPnl: 5 }),
   ];
-  // history знает ДРУГУЮ сделку по X, закрытую на час раньше — не должна матчить.
+
   const botTrades = [{ coin: 'X', entry_time: 1_000_000, closed_at: 1_300_000 }];
   const trades = reconstructRoundTrips(fills, botTrades, new Set([999]));
   assert.equal(trades[0].source, 'manual', 'close-матч не должен ловить чужую ногу');
