@@ -131,7 +131,7 @@ export function serializeOiCapBans() {
 /**
  * Восстанавливает OI-cap баны из bot_state.json. Толерантен к null/мусору.
  * Поддерживает старый flat-формат `{ coin: exp }` (без repeat) для обратной
- * совместимости с stateы до этого фикса.
+
  */
 export function restoreOiCapBans(saved) {
   if (!saved || typeof saved !== 'object') return;

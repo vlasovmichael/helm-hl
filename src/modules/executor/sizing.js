@@ -54,14 +54,10 @@ export function equityCappedNotional(free, equity, util, leverage, safety = 0.97
 
 /**
  * Бюджет входа от полного депо + решение «стоит ли вообще открывать».
- *
  * intended  = нормальный размер бота (equity × util × lev) — что он взял бы на
  *             пустом депо.
  * available = реально доступный размер с потолком по свободной марже.
  * ok        = available ≥ intended × minFraction. Не привязано к $: масштабируется
- *             под депо. Когда свободного мало (занят ручными позами), доступный
- *             размер падает — и ниже доли minFraction бот ЖДЁТ, а не лезет пылью.
- *
  * @returns {{ available:number, intended:number, ok:boolean }}
  */
 export function sizeBudgetFromEquity(free, equity, util, leverage, minFraction, safety = 0.97) {
