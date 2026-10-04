@@ -136,9 +136,7 @@ async function tickBody() {
   } finally {
     state.tickRunning = false;
     state.lastTickAt = Date.now();
-    // Вытеснение кэшей свечей — они росли без потолка и уронили процесс по
-    // heap-limit 09.08 (см. шапку candleCache.js). Сама себя троттлит до раза в
-    // 5 мин, поэтому живёт в finally: подметём даже если тик упал с ошибкой.
+    // Вытеснение кэшей ограничивает кучу и выполняется даже при ошибке тика.
     try { sweepCandleCaches(); } catch (err) { logger.debug(`[CandleCache] sweep: ${err.message}`); }
     await flushBotStatePeriodic();
   }

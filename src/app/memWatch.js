@@ -78,9 +78,7 @@ export function shouldAlertMemory({ fraction, alreadyAlerted }) {
 /**
  * Какой из двух потолков связывает первым — ядро или V8.
  *
- * Оба реальны и убивают по-разному: cgroup даёт OOM-kill (правда в dmesg,
- * `docker inspect` при этом врёт oom=false), V8 — FATAL heap limit с чистым
- * dmesg. Раньше следили только за первым, а умерли от второго.
+ * cgroup завершается OOM-kill, а V8 — FATAL heap limit; следим за обоими.
  *
  * @param {{rss:number, heapUsed:number, cgroupLimit:number|null, heapLimit:number|null}} p
  * @returns {{kind:'rss'|'heap', fraction:number, used:number, limit:number}|null}
