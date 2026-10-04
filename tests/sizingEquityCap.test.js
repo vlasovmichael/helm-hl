@@ -7,7 +7,9 @@ import assert from 'node:assert/strict';
 
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-const { equityCappedNotional, sizeBudgetFromEquity } = await import('../src/modules/executor/sizing.js');
+const { equityCappedNotional, sizeBudgetFromEquity, resolveEntrySize } = await import('../src/modules/executor/sizing.js');
+const { config } = await import('../src/core/config.js');
+const { logger } = await import('../src/core/logger.js');
 
 const UTIL = 0.5;
 const LEV = 2;
@@ -33,6 +35,8 @@ test('поза открыта, свободного мало: режется п�
 
 test('нет свободной маржи → 0', () => {
   assert.equal(equityCappedNotional(0, 50, UTIL, LEV), 0);
+  assert.equal(equityCappedNotional(10, 0, UTIL, LEV), 0);
+  assert.equal(equityCappedNotional(-1, 50, UTIL, LEV), 0);
 });
 
 test('старый free-based и новый совпадают, когда free=equity (для любого util)', () => {
@@ -67,4 +71,70 @@ test('budget: free $30 → доступно полная норма → откр
 test('budget: free $12 → доступно ~$23 = 47% нормы < 50% → НЕ открывать', () => {
   const b = sizeBudgetFromEquity(12, 50, UTIL, LEV, MINFRAC);
   assert.equal(b.ok, false);
+});
+
+test('budget: на самой границе доли размер разрешён, но нулевой intended запрещён', () => {
+  const b = sizeBudgetFromEquity(25 / (SAFETY * LEV), 50, UTIL, LEV, MINFRAC);
+  assert.equal(b.available, 25);
+  assert.equal(b.ok, true);
+  assert.deepEqual(sizeBudgetFromEquity(10, 50, 0, LEV, MINFRAC), { available: 0, intended: 0, ok: false });
+});
+
+test('resolveEntrySize возвращает balance-size при выключенном risk режиме и невалидном стопе', () => {
+  const saved = { ...config.trading };
+  try {
+    config.trading.riskBasedSizing = false;
+    assert.deepEqual(resolveEntrySize({ coin: 'ETH', tag: 'T', equity: 1000, capBase: 100, capUtil: 0.5, price: 100, sl: 90, szDecimals: 2 }),
+      { sizeUsd: 50, sz: 0.5, tooSmall: false });
+    config.trading.riskBasedSizing = true;
+    for (const sl of [undefined, Number.NaN, 0, -1, 100]) {
+      assert.deepEqual(resolveEntrySize({ coin: 'ETH', tag: 'T', equity: 1000, capBase: 100, capUtil: 0.5, price: 100, sl, szDecimals: 2 }),
+        { sizeUsd: 50, sz: 0.5, tooSmall: false });
+    }
+  } finally {
+    Object.assign(config.trading, saved);
+  }
+});
+
+test('resolveEntrySize: невалидный стоп не включает risk-size даже при положительной разнице', () => {
+  const saved = { ...config.trading };
+  try {
+    Object.assign(config.trading, { riskBasedSizing: true, riskSizingShadow: false, riskPctPerTrade: 0.01 });
+    for (const sl of [-10, 0, Number.NaN]) {
+      const result = resolveEntrySize({ coin: 'ETH', tag: 'T', equity: 1000, capBase: 1000, capUtil: 0.5, price: 100, sl, szDecimals: 2 });
+      assert.deepEqual(result, { sizeUsd: 500, sz: 5, tooSmall: false });
+    }
+  } finally {
+    Object.assign(config.trading, saved);
+  }
+});
+
+test('resolveEntrySize отдаёт риск-сайз либо shadow balance-size с полным логом', () => {
+  const saved = { ...config.trading };
+  const oldInfo = logger.info;
+  const messages = [];
+  try {
+    Object.assign(config.trading, { riskBasedSizing: true, riskSizingShadow: false, riskPctPerTrade: 0.01 });
+    assert.deepEqual(resolveEntrySize({ coin: 'ETH', tag: 'Hunter', equity: 1000, capBase: 1000, capUtil: 0.5, price: 100, sl: 90, szDecimals: 2 }),
+      { sizeUsd: 100, sz: 1, tooSmall: false, stopDistPct: 0.1 });
+    Object.assign(config.trading, { riskSizingShadow: true });
+    logger.info = (message) => messages.push(message);
+    assert.deepEqual(resolveEntrySize({ coin: 'ETH', tag: 'Hunter', equity: 1000, capBase: 1000, capUtil: 0.5, price: 100, sl: 90, szDecimals: 2 }),
+      { sizeUsd: 500, sz: 5, tooSmall: false });
+    assert.deepEqual(messages, ['[RiskSizing SHADOW] [Hunter] #ETH — balance-size $500.00 → risk-size $100.00 (stop 10.00%, risk $10.00)']);
+  } finally {
+    logger.info = oldInfo;
+    Object.assign(config.trading, saved);
+  }
+});
+
+test('resolveEntrySize ограничивает risk-size произведением базы и utilisation', () => {
+  const saved = { ...config.trading };
+  try {
+    Object.assign(config.trading, { riskBasedSizing: true, riskSizingShadow: false, riskPctPerTrade: 0.01 });
+    assert.deepEqual(resolveEntrySize({ coin: 'ETH', tag: 'T', equity: 10_000, capBase: 100, capUtil: 0.5, price: 100, sl: 99, szDecimals: 2 }),
+      { sizeUsd: 50, sz: 0.5, tooSmall: false, stopDistPct: 0.01 });
+  } finally {
+    Object.assign(config.trading, saved);
+  }
 });
