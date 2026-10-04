@@ -30,15 +30,25 @@ export function classifyEvent(raw) {
 }
 
 // ─────────────────────────────────────────────────
+
 //  /sapi/v1/fiat/orders — банковские переводы
+
 // ─────────────────────────────────────────────────
+
 // Депозит/withdraw фиата на биржу — это НЕ налоговое событие для PIT-38.
+
 // Это просто перемещение твоих денег между банком и Binance, без обмена крипта↔фиат.
+
 // Налог возникает только в момент сделки (Card Buy/Sell, P2P, Convert) — её ловят
+
 // другие источники. Классификация fiat_orders как COST/REVENUE приводила к двойному
+
 // счёту (депозит 100 PLN + Convert этих 100 PLN в USDT = 200 PLN расхода вместо 100).
+
 //
+
 // Поэтому всегда возвращаем null. Тип параметра остаётся, чтобы классификатор был
+
 // устойчив к добавлению этого источника в будущем.
 
 function classifyFiatOrder(_raw) {
@@ -111,11 +121,17 @@ function classifyC2c(raw) {
 }
 
 // ─────────────────────────────────────────────────
+
 //  /sapi/v1/convert/tradeFlow — Convert
+
 // ─────────────────────────────────────────────────
+
 // Поля: quoteId, orderId, orderStatus, fromAsset, fromAmount, toAsset, toAmount, createTime
+
 // orderStatus === 'SUCCESS' — только успешные
+
 // Учитываем ТОЛЬКО когда одна из сторон — фиат (PLN/USD/EUR).
+
 // Крипта↔крипта пропускаем.
 
 function classifyConvert(raw) {
@@ -162,16 +178,27 @@ function classifyConvert(raw) {
 }
 
 // ─────────────────────────────────────────────────
+
 //  Kraken — /0/private/Ledgers, пара фиат↔крипта
+
 // ─────────────────────────────────────────────────
+
 // Поля приходят уже сведёнными в krakenClient.pairLedgerEntries:
+
 //   refid, time (unix seconds), fiatAsset, fiatAmount, fiatFee,
+
 //   cryptoAsset, cryptoAmount, isBuy
+
 //
+
 // 🚨 КОМИССИЯ. В ledger'е Kraken поле amount НЕ включает fee — баланс меняется
+
 // на (amount − fee). Значит на покупке из кармана уходит fiatAmount + fee, а на
+
 // продаже приходит fiatAmount − fee. Для PIT-38 это существенно: prowizja
+
 // входит в koszt uzyskania przychodu, и брать «чистый» amount значило бы
+
 // занизить расход и переплатить налог.
 
 function classifyKrakenTrade(raw) {
