@@ -14,7 +14,7 @@ const testsByModule = {
   'src/modules/targetTrail.js': ['tests/targetTrail.test.js'],
   'src/modules/positionNanny.js': ['tests/positionNanny.test.js'],
   'src/modules/executor/reconciler.js': ['tests/executorMath.test.js'],
-  'src/modules/executor/state.js': ['tests/executorMath.test.js'],
+  'src/modules/executor/state.js': ['tests/executorState.test.js'],
 };
 if (!modulePath) {
   console.error('Usage: npm run mutation -- src/modules/path/to/module.js');
