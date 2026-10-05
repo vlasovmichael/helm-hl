@@ -20,6 +20,8 @@ const testsByModule = {
   'src/modules/adoptTrailStore.js': ['tests/adoptTrailStore.test.js'],
   'src/modules/adoptPeakTruth.js': ['tests/adoptPeakTruth.test.js'],
   'src/modules/adoptShadowTrail.js': ['tests/adoptShadowTrail.test.js'],
+  'src/modules/paperEntry.js': ['tests/paperEntry.test.js'],
+  'src/modules/ledger.js': ['tests/ledger.test.js'],
 };
 if (!modulePath) {
   console.error('Usage: npm run mutation -- src/modules/path/to/module.js');
@@ -39,7 +41,7 @@ if (!modulePath) {
       env: {
         ...process.env,
         NODE_ENV: 'test',
-      STRYKER_TEST_COMMAND: `NODE_ENV=test FILL_PARSER_FAKE_DEPS=1 TRIGGERS_FAKE_DEPS=1 DAILY_RISK_FAKE_DEPS=1 LIMIT_CLOSE_FAKE_DEPS=1 RECONCILER_FAKE_DEPS=1 CLOSE_FAKE_DEPS=1 node ${normalized === 'src/modules/executor/fill-parser.js' ? '--experimental-loader ./tests/helpers/fill-parser-loader.mjs ' : normalized === 'src/modules/executor/triggers.js' ? '--experimental-loader ./tests/helpers/triggers-loader.mjs ' : normalized === 'src/modules/dailyRisk.js' ? '--experimental-loader ./tests/helpers/daily-risk-loader.mjs ' : normalized === 'src/modules/executor/limitClose.js' ? '--experimental-loader ./tests/helpers/limit-close-loader.mjs ' : normalized === 'src/modules/executor/reconciler.js' ? '--experimental-loader ./tests/helpers/reconciler-loader.mjs ' : normalized === 'src/modules/executor/close.js' ? '--experimental-loader ./tests/helpers/close-loader.mjs ' : ''}--test ${(testsByModule[normalized] ?? ['tests/*.test.js']).join(' ')}`,
+      STRYKER_TEST_COMMAND: `NODE_ENV=test PUBLIC_WALLET_ADDRESS=0x0000000000000000000000000000000000000000 PAPER_ENTRY_FAKE_DEPS=1 LEDGER_FAKE_DEPS=1 FILL_PARSER_FAKE_DEPS=1 TRIGGERS_FAKE_DEPS=1 DAILY_RISK_FAKE_DEPS=1 LIMIT_CLOSE_FAKE_DEPS=1 RECONCILER_FAKE_DEPS=1 CLOSE_FAKE_DEPS=1 node ${normalized === 'src/modules/executor/fill-parser.js' ? '--experimental-loader ./tests/helpers/fill-parser-loader.mjs ' : normalized === 'src/modules/executor/triggers.js' ? '--experimental-loader ./tests/helpers/triggers-loader.mjs ' : normalized === 'src/modules/dailyRisk.js' ? '--experimental-loader ./tests/helpers/daily-risk-loader.mjs ' : normalized === 'src/modules/executor/limitClose.js' ? '--experimental-loader ./tests/helpers/limit-close-loader.mjs ' : normalized === 'src/modules/executor/reconciler.js' ? '--experimental-loader ./tests/helpers/reconciler-loader.mjs ' : normalized === 'src/modules/executor/close.js' ? '--experimental-loader ./tests/helpers/close-loader.mjs ' : normalized === 'src/modules/paperEntry.js' ? '--experimental-loader ./tests/helpers/paper-entry-loader.mjs ' : normalized === 'src/modules/ledger.js' ? '--experimental-loader ./tests/helpers/ledger-loader.mjs ' : ''}--test ${(testsByModule[normalized] ?? ['tests/*.test.js']).join(' ')}`,
       },
     });
     child.on('exit', (code, signal) => {
