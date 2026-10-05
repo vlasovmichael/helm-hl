@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import {
   coalesce,
   invalidateAccountState,
+  accountStateStats,
   _resetAccountState,
 } from '../src/core/accountState.js';
 
@@ -102,4 +103,60 @@ test('ошибка фетчера не залипает в кэше (следу�
 
   assert.equal(second, 'ok');
   assert.equal(calls, 2);
+});
+
+test('пограничный TTL не считается свежим, а invalidate без ключей очищает всё', async () => {
+  _resetAccountState();
+  const realNow = Date.now;
+  let now = 10_000;
+  Date.now = () => now;
+  try {
+    let calls = 0;
+    const fetcher = async () => ++calls;
+    await coalesce('one', fetcher, 100);
+    now += 100;
+    assert.equal(await coalesce('one', fetcher, 100), 2);
+    await coalesce('two', fetcher, 100);
+    invalidateAccountState();
+    assert.deepEqual(accountStateStats(), { cachedKeys: [], ageMs: {}, inflight: [] });
+  } finally {
+    Date.now = realNow;
+    _resetAccountState();
+  }
+});
+
+test('invalidate одного ключа не стирает соседний кэш', async () => {
+  _resetAccountState();
+  let one = 0;
+  let two = 0;
+  await coalesce('one', async () => ++one, 1_000);
+  await coalesce('two', async () => ++two, 1_000);
+  invalidateAccountState('one');
+  assert.equal(await coalesce('one', async () => ++one, 1_000), 2);
+  assert.equal(await coalesce('two', async () => ++two, 1_000), 1);
+});
+
+test('диагностика показывает ключи, возраст и запрос в полёте', async () => {
+  _resetAccountState();
+  const realNow = Date.now;
+  let now = 100;
+  Date.now = () => now;
+  try {
+    await coalesce('cached', async () => 'value', 1_000);
+    now = 150;
+    assert.deepEqual(accountStateStats(), {
+      cachedKeys: ['cached'], ageMs: { cached: 50 }, inflight: [],
+    });
+    let release;
+    const pending = coalesce('pending', () => new Promise((resolve) => { release = resolve; }), 1_000);
+    assert.deepEqual(accountStateStats().inflight, ['pending']);
+    _resetAccountState();
+    assert.deepEqual(accountStateStats(), { cachedKeys: [], ageMs: {}, inflight: [] });
+    release('done');
+    await pending;
+    assert.deepEqual(accountStateStats().inflight, []);
+  } finally {
+    Date.now = realNow;
+    _resetAccountState();
+  }
 });

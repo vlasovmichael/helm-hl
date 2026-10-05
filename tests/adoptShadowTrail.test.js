@@ -140,3 +140,113 @@ test('выключенный флаг не пишет ничего', () => {
   config.trading.adoptTrailShadowEnabled = true;
 });
 
+test('проценты и денежные результаты считаются от неединичного входа и notional', () => {
+  _resetAdoptShadowTrailState();
+  recorded.length = 0;
+  const pos = { id: 30, coin: 'SCALE', side: 'long', entry_price: 100, sl_price: 98, size_usd: 250 };
+
+  // Пик +2%, затем ровно пол 0.25R: обе модели записывают наблюдаемые PnL.
+  for (const px of [101, 102, 101.5, 101.39, 100]) trackAdoptShadowTrailTick(pos, px);
+  finalizeAdoptShadowTrail(pos, 100);
+
+  const row = recorded[0];
+  assert.equal(row.actual_pct, 0);
+  assert.equal(row.actual_pnl, 0);
+  assert.equal(row.td_pct, 1.5);
+  assert.equal(row.td_pnl, 3.75);
+  assert.ok(Math.abs(row.ch_pct - 1.39) < 1e-9);
+  assert.ok(Math.abs(row.ch_pnl - 3.475) < 1e-9);
+  assert.ok(row.td_min >= 0 && row.td_min < 1, 'время срабатывания дано в минутах');
+  assert.ok(row.ch_min >= 0 && row.ch_min < 1, 'время срабатывания дано в минутах');
+});
+
+test('short без side по умолчанию и невалидный тик не создают ложную строку', () => {
+  _resetAdoptShadowTrailState();
+  recorded.length = 0;
+  const pos = { id: 31, coin: 'DEFAULT', entry_price: 100, sl_price: 102, size_usd: 100 };
+
+  trackAdoptShadowTrailTick(pos, NaN);
+  trackAdoptShadowTrailTick(pos, 98);
+  finalizeAdoptShadowTrail(pos, 99);
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].side, 'short');
+  assert.equal(recorded[0].actual_pct, 1);
+});
+
+test('ошибка записи не вылетает из закрытия и очищенное состояние начинается заново', () => {
+  _resetAdoptShadowTrailState();
+  const pos = longPos(32);
+  _setShadowTrailRecorder(() => { throw new Error('disk full'); });
+  trackAdoptShadowTrailTick(pos, 1.02);
+  assert.doesNotThrow(() => finalizeAdoptShadowTrail(pos, 1.01));
+
+  _setShadowTrailRecorder((row) => recorded.push(row));
+  recorded.length = 0;
+  trackAdoptShadowTrailTick(pos, 1.01);
+  clearAdoptShadowTrail(pos.id);
+  trackAdoptShadowTrailTick(pos, 1.02);
+  finalizeAdoptShadowTrail(pos, 1.02);
+  assert.equal(recorded.length, 1, 'после clear нет следа старого пика');
+  assert.equal(recorded[0].td_fired, 0);
+});
+
+test('выключенный трекер и невалидная цена не оставляют состояние для следующего finalize', () => {
+  _resetAdoptShadowTrailState();
+  recorded.length = 0;
+  const pos = longPos(33);
+
+  config.trading.adoptTrailShadowEnabled = false;
+  trackAdoptShadowTrailTick(pos, 1.02);
+  config.trading.adoptTrailShadowEnabled = true;
+  finalizeAdoptShadowTrail(pos, 1.01);
+  assert.equal(recorded.length, 0);
+
+  trackAdoptShadowTrailTick(pos, NaN);
+  finalizeAdoptShadowTrail(pos, 1.01);
+  assert.equal(recorded.length, 0);
+});
+
+test('сработавшая модель не переписывает цену выхода, а ровный пол текущего трейла включителен', () => {
+  _resetAdoptShadowTrailState();
+  recorded.length = 0;
+  const pos = { id: 34, coin: 'EDGE', side: 'long', entry_price: 100, sl_price: 98, size_usd: 100 };
+  const oldGiveBack = config.trading.adoptTrailGiveBackPct;
+  config.trading.adoptTrailGiveBackPct = 50;
+  try {
+    for (const px of [102, 101.5, 101, 100]) trackAdoptShadowTrailTick(pos, px);
+    finalizeAdoptShadowTrail(pos, 100);
+  } finally {
+    config.trading.adoptTrailGiveBackPct = oldGiveBack;
+  }
+
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].ch_fired, 1);
+  assert.equal(recorded[0].ch_pct, 1, 'граница пола входит в условие');
+  assert.equal(recorded[0].td_fired, 1);
+  assert.equal(recorded[0].td_pct, 1.5, 'первое срабатывание R не перезаписывается худшим тиком');
+});
+
+test('reset действительно забывает пик предыдущей позиции', () => {
+  recorded.length = 0;
+  const pos = longPos(35);
+  trackAdoptShadowTrailTick(pos, 1.02);
+  _resetAdoptShadowTrailState();
+  trackAdoptShadowTrailTick(pos, 1.01);
+  finalizeAdoptShadowTrail(pos, 1.01);
+  assert.equal(recorded[0].td_fired, 0);
+  assert.equal(recorded[0].ch_fired, 0);
+});
+
+test('0.25R не режет откат выше пола и сохраняет ненулевой фактический PnL', () => {
+  _resetAdoptShadowTrailState();
+  recorded.length = 0;
+  const pos = { id: 36, coin: 'BUFFER', side: 'long', entry_price: 100, sl_price: 98, size_usd: 250 };
+  trackAdoptShadowTrailTick(pos, 102);   // peak 2%, R-floor 1.5%
+  trackAdoptShadowTrailTick(pos, 101.8); // выше R-пола и выше current-пола 1.4%
+  finalizeAdoptShadowTrail(pos, 101.8);
+
+  assert.equal(recorded[0].td_fired, 0);
+  assert.equal(recorded[0].ch_fired, 0);
+  assert.ok(Math.abs(recorded[0].actual_pct - 1.8) < 1e-9);
+  assert.ok(Math.abs(recorded[0].actual_pnl - 4.5) < 1e-9);
+});

@@ -4,11 +4,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  candleTruth,
+  clearPeakTruth,
   peakPctFromCandles,
   lastClosedClose,
   lookbackMinutesFor,
   MAX_LOOKBACK_MIN,
 } from '../src/modules/adoptPeakTruth.js';
+import { clearOneMinCache, seedOneMinCache } from '../src/modules/candleCache.js';
 
 const MIN = 60_000;
 const c = (time, high, low, close = low) => ({ time, high, low, open: high, close });
@@ -144,4 +147,43 @@ test('фитиль в пике есть, а в решении о выходе �
   const now = 2 * MIN;
   assert.equal(peakPctFromCandles({ candles: [bar], entry: 100, entryTime: 0, isShort: true }), 10);
   assert.equal(lastClosedClose([bar], now).px, 99); // решение — по 99, не по 90
+});
+
+test('candleTruth возвращает пик и закрытый бар, а короткий TTL не пересчитывает снимок', async () => {
+  clearPeakTruth();
+  clearOneMinCache();
+  const now = Date.now();
+  const pos = { id: 91, coin: 'TRUTH', side: 'long', entry_price: 100, entry_time: now - 3 * MIN };
+  seedOneMinCache('TRUTH', [c(now - 2 * MIN, 106, 99, 104), c(now - MIN, 108, 102, 107)], now);
+
+  const first = await candleTruth(pos, now);
+  assert.deepEqual(first, { peakPct: 8, close: { px: 107, time: now - MIN } });
+
+  // Новый снимок в candleCache не должен обойти 30-секундный троттл truth.
+  seedOneMinCache('TRUTH', [c(now - 2 * MIN, 120, 99, 119)], now + 1);
+  assert.deepEqual(await candleTruth(pos, now + 29_999), first);
+});
+
+test('candleTruth пересчитывает истёкший truth для short и clear чистит только указанную позицию', async () => {
+  clearPeakTruth();
+  clearOneMinCache();
+  const now = Date.now();
+  const a = { id: 92, coin: 'SHORT', entry_price: 100, entry_time: now - 3 * MIN };
+  const b = { id: 93, coin: 'OTHER', entry_price: 100, entry_time: now - 3 * MIN };
+  seedOneMinCache('SHORT', [c(now - 2 * MIN, 101, 95, 96)], now);
+  seedOneMinCache('OTHER', [c(now - 2 * MIN, 103, 99, 102)], now);
+  assert.equal((await candleTruth(a, now)).peakPct, 5);
+  assert.equal((await candleTruth(b, now)).peakPct, 1);
+
+  clearPeakTruth(a.id);
+  assert.equal((await candleTruth(b, now + 29_999)).peakPct, 1, 'другая позиция осталась в своём TTL');
+  seedOneMinCache('SHORT', [c(now - 2 * MIN, 101, 90, 91)], now + 31_000);
+  assert.equal((await candleTruth(a, now + 31_000)).peakPct, 10);
+});
+
+test('candleTruth не ходит за свечами для позиции без корректных входных данных', async () => {
+  clearPeakTruth();
+  assert.equal(await candleTruth(null, Date.now()), null);
+  assert.equal(await candleTruth({ id: 1, entry_price: 0, entry_time: Date.now() }, Date.now()), null);
+  assert.equal(await candleTruth({ id: 1, entry_price: 1, entry_time: NaN }, Date.now()), null);
 });

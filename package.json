@@ -11,7 +11,8 @@
     "dev:dash": "vite",
     "build:dash": "vite build",
     "preview:dash": "vite preview",
-    "test": "NODE_ENV=test node --test tests/*.test.js",
+    "test": "NODE_ENV=test PUBLIC_WALLET_ADDRESS=0x0000000000000000000000000000000000000000 node --test tests/*.test.js",
+    "mutation": "node scripts/mutation.mjs",
     "guards": "node scripts/guards.mjs",
     "verify": "npm run guards && npm run lint && npm test",
     "lint": "eslint .",
@@ -36,6 +37,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@flwls/ui": "github:vlasovmichael/flwls-kit#ui-v0.5.0",
+    "@stryker-mutator/core": "^10.0.0",
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.11.0",
     "eslint": "^10.9.1",

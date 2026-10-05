@@ -30,6 +30,7 @@ npm-debug.log*
 
 # Системные файлы
 .DS_Store
+reports/mutation/
 Thumbs.db
 # Runtime data (never commit) — добавлено после corruption 2026-05-25
 data/trades.db

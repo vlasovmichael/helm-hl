@@ -23,6 +23,7 @@ test('открытые позиции входят в дневной бюдже�
   const r = computeTradesToday({ closed: 3, open: 2, cap: 5 });
   assert.equal(r.today, 5);
   assert.equal(r.over, true);
+  assert.equal(r.known, true);
 });
 
 test('бюджет запирается ПО достижении лимита, а не после превышения', () => {
@@ -60,4 +61,6 @@ test('нулевая пауза и отсутствие сделок по мон
   const now = 1_000 * MIN;
   assert.equal(computeCooldown({ lastCloseAt: now - MIN, minutes: 0, now }).blocked, false);
   assert.equal(computeCooldown({ lastCloseAt: null, minutes: 15, now }).blocked, false);
+  assert.equal(computeCooldown({ lastCloseAt: now - MIN, minutes: 0, now }).lastCloseAt, null);
+  assert.equal(computeCooldown({ lastCloseAt: Number.NaN, minutes: 15, now }).lastPnl, null);
 });
