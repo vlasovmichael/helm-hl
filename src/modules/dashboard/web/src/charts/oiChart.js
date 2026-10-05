@@ -20,7 +20,6 @@ import { cssVar } from "../utils/format.js";
 
 const OI_COLOR = "var(--accent-2)";
 const PX_COLOR = "var(--amber)";
-const PX_FILL = "color-mix(in srgb, var(--amber) 16.00%, transparent)";
 
 let chart = null;
 let oiSeries = null;
@@ -72,6 +71,9 @@ function themeColors() {
     text: cssVar("--ink-2") || (isDark ? "var(--ink-3)" : "var(--ink-3)"),
     grid: cssVar("--rule-soft") || cssVar("--plot-grid") || (isDark ? "var(--ink)" : "var(--accent-ink)"),
     bg: cssVar("--panel") || (isDark ? "var(--ink)" : "var(--color-gray-0)"),
+    // Холст графика не понимает var(): линии берут значения токенов.
+    oi: cssVar("--accent-2"),
+    px: cssVar("--amber"),
   };
 }
 
@@ -183,7 +185,7 @@ export async function drawOiChart(points) {
       },
       crosshair: {
         mode: 0,
-        vertLine: { color: c.text, width: 1, style: 3, labelBackgroundColor: OI_COLOR },
+        vertLine: { color: c.text, width: 1, style: 3, labelBackgroundColor: c.oi },
         horzLine: { visible: false, labelVisible: false },
       },
       handleScroll: true,
@@ -194,9 +196,9 @@ export async function drawOiChart(points) {
     // Порядок добавления = порядок отрисовки: цена первой, чтобы лечь ПОД OI.
     // Она здесь контекст, а не вторая героиня — заливка приглушена, линия тонкая.
     pxSeries = chart.addSeries(AreaSeries, {
-      lineColor: PX_COLOR,
-      topColor: PX_FILL,
-      bottomColor: "color-mix(in srgb, var(--amber) 0.00%, transparent)",
+      lineColor: c.px,
+      topColor: `color-mix(in srgb, ${c.px} 16.00%, transparent)`,
+      bottomColor: `color-mix(in srgb, ${c.px} 0.00%, transparent)`,
       lineWidth: 1,
       priceScaleId: "left",
       priceLineVisible: false,
@@ -205,7 +207,7 @@ export async function drawOiChart(points) {
       crosshairMarkerRadius: 3,
     });
     oiSeries = chart.addSeries(LineSeries, {
-      color: OI_COLOR,
+      color: c.oi,
       lineWidth: 2,
       priceScaleId: "right",
       priceLineVisible: false,
