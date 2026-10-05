@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 const {
-  push, getPriceNMinAgo, hasEnoughHistory, getBufferLength, clearAll,
+  push, getPriceNMinAgo, getLatestPrice, getSamplesSince, getPriceSpark,
+  snapshot, restore, hasEnoughHistory, getBufferLength, clearAll,
 } = await import('../src/core/priceHistory.js');
 
 const MIN = 60_000;
@@ -96,4 +97,51 @@ test('hasEnoughHistory: true только когда есть сэмпл на г
   assert.equal(hasEnoughHistory('BTC', 2, t0 + 1 * MIN), false);  // только 1 мин
   assert.equal(hasEnoughHistory('BTC', 2, t0 + 2 * MIN), true);   // 2 мин есть
   assert.equal(hasEnoughHistory('BTC', 2, t0 + 5 * MIN), true);
+});
+
+test('latest, выборка окна и spark возвращают наблюдаемые цены без пустых корзин', () => {
+  clearAll();
+  const t = 2_000_000;
+  push('BTC', 10, t - 4 * MIN);
+  push('BTC', 20, t - 2 * MIN);
+  push('BTC', 30, t - MIN);
+  push('BTC', 40, t);
+  assert.equal(getLatestPrice('BTC'), 40);
+  assert.equal(getLatestPrice('ETH'), null);
+  assert.deepEqual(getSamplesSince('BTC', 2, t).map((x) => x.price), [20, 30, 40]);
+  assert.deepEqual(getSamplesSince('ETH', 2, t), []);
+  assert.deepEqual(getPriceSpark('BTC', 4, 4, t), [10, 20, 40]);
+  assert.deepEqual(getPriceSpark('ETH', 4, 4, t), []);
+  assert.deepEqual(getPriceSpark('BTC', 0, 4, t), []);
+});
+
+test('spark берёт последнюю цену корзины, включая правую границу', () => {
+  clearAll();
+  const t = 3_000_000;
+  push('BTC', 1, t - 4 * MIN);
+  push('BTC', 2, t - 3 * MIN - 1);
+  push('BTC', 3, t - 2 * MIN);
+  push('BTC', 4, t);
+  assert.deepEqual(getPriceSpark('BTC', 4, 2, t), [2, 4]);
+});
+
+test('snapshot отбрасывает старое, restore валидирует, сортирует и не дублирует live', () => {
+  clearAll();
+  const t = 10_000_000;
+  push('BTC', 1, t - 61 * MIN);
+  push('BTC', 2, t - 60 * MIN);
+  push('BTC', 3, t - MIN);
+  assert.deepEqual(snapshot(60, t), {
+    v: 1, savedAt: t, coins: { BTC: [[t - 60 * MIN, 2], [t - MIN, 3]] }, samples: 2,
+  });
+  clearAll();
+  push('BTC', 9, t - 30_000);
+  const result = restore({ v: 1, coins: {
+    BTC: [[t - MIN, 3], [t - 2 * MIN, 2], [t - 30_000, 7], [t + 1, 8], ['bad', 1]],
+    ETH: 'bad',
+  } }, t);
+  assert.deepEqual(result, { coins: 1, samples: 3 });
+  assert.deepEqual(getSamplesSince('BTC', 3, t).map((x) => x.price), [2, 3, 9]);
+  assert.deepEqual(restore(null, t), { coins: 0, samples: 0 });
+  assert.deepEqual(restore({ v: 2, coins: {} }, t), { coins: 0, samples: 0 });
 });
