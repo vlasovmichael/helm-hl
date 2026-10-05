@@ -94,6 +94,39 @@ function onFetchFail(store, coin, err, tag) {
 }
 
 /**
+ * Общий путь всех кэшей: запись одна на монету, но помнит глубину (span).
+ * Запрос глубже записи идёт в сеть, каждый вызывающий получает ровно своё окно:
+ * не отдавать чужую глубину, по длине массива считают и уровни, и сигналы.
+ */
+function cachedCandles(store, coin, { spanMs, stepMs, now, ttlMs, interval, label, priority, tag }) {
+  markAccess(store, coin, now);
+  const cut = (candles) => (candles ? candles.slice(-Math.ceil(spanMs / stepMs)) : candles);
+  const cached = store.get(coin);
+  const covers = (span) => (span ?? Infinity) >= spanMs;
+  if (cached?.candles && covers(cached.span) && now - cached.fetchedAt < ttlMs) {
+    return Promise.resolve(cut(cached.candles));
+  }
+  if (cached?.inflight && covers(cached.inflightSpan)) {
+    return cached.inflight.then(cut, () => null);
+  }
+
+  const promise = hlInfo(
+    {
+      type: 'candleSnapshot',
+      req:  { coin: resolveApiCoin(coin), interval, startTime: now - spanMs, endTime: now },
+    },
+    { label, priority },
+  ).then((data) => {
+    const candles = parseCandles(data);
+    store.set(coin, { fetchedAt: Date.now(), lastAccess: Date.now(), candles, span: spanMs, inflight: null });
+    return candles;
+  }).catch((err) => onFetchFail(store, coin, err, tag));
+
+  store.set(coin, { ...(cached || {}), inflight: promise, inflightSpan: spanMs });
+  return promise.then(cut);
+}
+
+/**
  * Получает 1h свечи для монеты. С кэшем + защитой от одновременных fetch'ей.
  *
  * @param {string} coin
@@ -102,32 +135,17 @@ function onFetchFail(store, coin, err, tag) {
  * @param {number} [priority=HL_PRIORITY.NORMAL] — LOW для косметики дашборда
  * @returns {Promise<Array<{open,high,low,close,time}>|null>}
  */
-export async function getHourlyCandles(coin, lookbackHours, now = Date.now(), priority = HL_PRIORITY.NORMAL) {
-  markAccess(cache, coin, now);
-  const cached = cache.get(coin);
-  if (cached && now - cached.fetchedAt < TTL_MS) {
-    return cached.candles;
-  }
-  // Если уже идёт fetch — ждём его, не делаем дубль.
-  if (cached?.inflight) {
-    try { return await cached.inflight; } catch { return null; }
-  }
-
-  const startTime = now - lookbackHours * 3_600_000;
-  const promise = hlInfo(
-    {
-      type: 'candleSnapshot',
-      req:  { coin: resolveApiCoin(coin), interval: INTERVAL, startTime, endTime: now },
-    },
-    { label: `candleCache/${coin}`, priority },
-  ).then((data) => {
-    const candles = parseCandles(data);
-    cache.set(coin, { fetchedAt: Date.now(), lastAccess: Date.now(), candles, inflight: null });
-    return candles;
-  }).catch((err) => onFetchFail(cache, coin, err, 'CandleCache'));
-
-  cache.set(coin, { ...(cached || {}), inflight: promise });
-  return promise;
+export function getHourlyCandles(coin, lookbackHours, now = Date.now(), priority = HL_PRIORITY.NORMAL) {
+  return cachedCandles(cache, coin, {
+    spanMs: lookbackHours * 3_600_000,
+    stepMs: 3_600_000,
+    now,
+    ttlMs: TTL_MS,
+    interval: INTERVAL,
+    label: `candleCache/${coin}`,
+    priority,
+    tag: 'CandleCache',
+  });
 }
 
 /** Очистить кэш (тесты). */
@@ -155,31 +173,16 @@ const cache5m = new Map();   // coin → { fetchedAt, candles, inflight }
  * @param {number} [now=Date.now()]
  * @returns {Promise<Array<{open,high,low,close,time}>|null>}
  */
-export async function getFiveMinCandles(coin, lookbackMinutes, now = Date.now()) {
-  markAccess(cache5m, coin, now);
-  const cached = cache5m.get(coin);
-  if (cached && now - cached.fetchedAt < FIVE_MIN_TTL_MS) {
-    return cached.candles;
-  }
-  if (cached?.inflight) {
-    try { return await cached.inflight; } catch { return null; }
-  }
-
-  const startTime = now - lookbackMinutes * 60_000;
-  const promise = hlInfo(
-    {
-      type: 'candleSnapshot',
-      req:  { coin: resolveApiCoin(coin), interval: FIVE_MIN_INTERVAL, startTime, endTime: now },
-    },
-    { label: `candleCache5m/${coin}` },
-  ).then((data) => {
-    const candles = parseCandles(data);
-    cache5m.set(coin, { fetchedAt: Date.now(), lastAccess: Date.now(), candles, inflight: null });
-    return candles;
-  }).catch((err) => onFetchFail(cache5m, coin, err, 'CandleCache5m'));
-
-  cache5m.set(coin, { ...(cached || {}), inflight: promise });
-  return promise;
+export function getFiveMinCandles(coin, lookbackMinutes, now = Date.now()) {
+  return cachedCandles(cache5m, coin, {
+    spanMs: lookbackMinutes * 60_000,
+    stepMs: 5 * 60_000,
+    now,
+    ttlMs: FIVE_MIN_TTL_MS,
+    interval: FIVE_MIN_INTERVAL,
+    label: `candleCache5m/${coin}`,
+    tag: 'CandleCache5m',
+  });
 }
 
 /** Прямая инжекция 5m-свечей (тесты). */
@@ -220,31 +223,17 @@ const cache1m = new Map();   // coin → { fetchedAt, candles, inflight }
  * @param {number} [priority=HL_PRIORITY.NORMAL] — путь торговый: пик решает выход
  * @returns {Promise<Array<{open,high,low,close,time}>|null>}
  */
-export async function getOneMinCandles(coin, lookbackMinutes, now = Date.now(), priority = HL_PRIORITY.NORMAL) {
-  markAccess(cache1m, coin, now);
-  const cached = cache1m.get(coin);
-  if (cached && now - cached.fetchedAt < ONE_MIN_TTL_MS) {
-    return cached.candles;
-  }
-  if (cached?.inflight) {
-    try { return await cached.inflight; } catch { return null; }
-  }
-
-  const startTime = now - lookbackMinutes * 60_000;
-  const promise = hlInfo(
-    {
-      type: 'candleSnapshot',
-      req:  { coin: resolveApiCoin(coin), interval: ONE_MIN_INTERVAL, startTime, endTime: now },
-    },
-    { label: `candleCache1m/${coin}`, priority },
-  ).then((data) => {
-    const candles = parseCandles(data);
-    cache1m.set(coin, { fetchedAt: Date.now(), lastAccess: Date.now(), candles, inflight: null });
-    return candles;
-  }).catch((err) => onFetchFail(cache1m, coin, err, 'CandleCache1m'));
-
-  cache1m.set(coin, { ...(cached || {}), inflight: promise });
-  return promise;
+export function getOneMinCandles(coin, lookbackMinutes, now = Date.now(), priority = HL_PRIORITY.NORMAL) {
+  return cachedCandles(cache1m, coin, {
+    spanMs: lookbackMinutes * 60_000,
+    stepMs: 60_000,
+    now,
+    ttlMs: ONE_MIN_TTL_MS,
+    interval: ONE_MIN_INTERVAL,
+    label: `candleCache1m/${coin}`,
+    priority,
+    tag: 'CandleCache1m',
+  });
 }
 
 /** Прямая инжекция 1m-свечей (тесты). */
@@ -274,31 +263,17 @@ const cache15m = new Map();   // coin → { fetchedAt, candles, inflight }
  * @param {number} [priority=HL_PRIORITY.LOW] — косметика/paper, не торговое чтение
  * @returns {Promise<Array<{open,high,low,close,time}>|null>}
  */
-export async function getFifteenMinCandles(coin, lookbackMinutes, now = Date.now(), priority = HL_PRIORITY.LOW) {
-  markAccess(cache15m, coin, now);
-  const cached = cache15m.get(coin);
-  if (cached && now - cached.fetchedAt < FIFTEEN_MIN_TTL_MS) {
-    return cached.candles;
-  }
-  if (cached?.inflight) {
-    try { return await cached.inflight; } catch { return null; }
-  }
-
-  const startTime = now - lookbackMinutes * 60_000;
-  const promise = hlInfo(
-    {
-      type: 'candleSnapshot',
-      req:  { coin: resolveApiCoin(coin), interval: FIFTEEN_MIN_INTERVAL, startTime, endTime: now },
-    },
-    { label: `candleCache15m/${coin}`, priority },
-  ).then((data) => {
-    const candles = parseCandles(data);
-    cache15m.set(coin, { fetchedAt: Date.now(), lastAccess: Date.now(), candles, inflight: null });
-    return candles;
-  }).catch((err) => onFetchFail(cache15m, coin, err, 'CandleCache15m'));
-
-  cache15m.set(coin, { ...(cached || {}), inflight: promise });
-  return promise;
+export function getFifteenMinCandles(coin, lookbackMinutes, now = Date.now(), priority = HL_PRIORITY.LOW) {
+  return cachedCandles(cache15m, coin, {
+    spanMs: lookbackMinutes * 60_000,
+    stepMs: 15 * 60_000,
+    now,
+    ttlMs: FIFTEEN_MIN_TTL_MS,
+    interval: FIFTEEN_MIN_INTERVAL,
+    label: `candleCache15m/${coin}`,
+    priority,
+    tag: 'CandleCache15m',
+  });
 }
 
 /** Прямая инжекция 15m-свечей (тесты). */
@@ -326,31 +301,16 @@ const cache4h = new Map();   // coin → { fetchedAt, candles, inflight }
  * @param {number} [now=Date.now()]
  * @returns {Promise<Array<{open,high,low,close,time}>|null>}
  */
-export async function getFourHourCandles(coin, lookbackHours, now = Date.now()) {
-  markAccess(cache4h, coin, now);
-  const cached = cache4h.get(coin);
-  if (cached && now - cached.fetchedAt < FOUR_HOUR_TTL_MS) {
-    return cached.candles;
-  }
-  if (cached?.inflight) {
-    try { return await cached.inflight; } catch { return null; }
-  }
-
-  const startTime = now - lookbackHours * 3_600_000;
-  const promise = hlInfo(
-    {
-      type: 'candleSnapshot',
-      req:  { coin: resolveApiCoin(coin), interval: FOUR_HOUR_INTERVAL, startTime, endTime: now },
-    },
-    { label: `candleCache4h/${coin}` },
-  ).then((data) => {
-    const candles = parseCandles(data);
-    cache4h.set(coin, { fetchedAt: Date.now(), lastAccess: Date.now(), candles, inflight: null });
-    return candles;
-  }).catch((err) => onFetchFail(cache4h, coin, err, 'CandleCache4h'));
-
-  cache4h.set(coin, { ...(cached || {}), inflight: promise });
-  return promise;
+export function getFourHourCandles(coin, lookbackHours, now = Date.now()) {
+  return cachedCandles(cache4h, coin, {
+    spanMs: lookbackHours * 3_600_000,
+    stepMs: 4 * 3_600_000,
+    now,
+    ttlMs: FOUR_HOUR_TTL_MS,
+    interval: FOUR_HOUR_INTERVAL,
+    label: `candleCache4h/${coin}`,
+    tag: 'CandleCache4h',
+  });
 }
 
 /** Прямая инжекция 4h-свечей (тесты). */
@@ -364,8 +324,7 @@ export function clearFourHourCache() {
 }
 
 // ── Глубокая история для прогрева индикаторов ──────────────────────────────
-// Отдельная карта: общие кэши делят одну запись на монету при разной глубине
-// запроса, и длинная история из них протекла бы в сигналы, считаемые по длине массива.
+// Отдельная карта с длинным TTL: прогреву индикатора свежесть последнего бара не нужна.
 const DEEP_TTL_MS = 30 * 60_000;
 const DEEP_INTERVAL_MS = { '15m': 15 * 60_000, '1h': 3_600_000, '4h': 4 * 3_600_000 };
 // `${interval}:${coin}` → { fetchedAt, lastAccess, candles, inflight }
