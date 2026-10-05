@@ -248,6 +248,7 @@ npm run mutation -- src/core/accountState.js
 | `core/healthRegistry.js` | — | 93.90% / 77 / 5 / 0 | 9 с |
 | `core/priceHistory.js` | — | 90.43% / 169 / 18 / 0 (1 timeout) | 23 с |
 | `core/oiHistory.js` | — | 90.00% / 54 / 6 / 0 | 6 с |
+| `core/retry.js` | — | 85.59% / 93 / 16 / 0 (2 timeout) | 14 с |
 
 `accountState` теперь проверяет границу TTL, массовую инвалидацию и
 диагностику single-flight. `priceHistory` — latest/sample/spark, snapshot и
@@ -259,12 +260,18 @@ restore (включая сортировку и склейку с живым б�
 пустой вход, уже достигнутые условия кольцевого буфера и необязательный
 `maxStaleMin`; рабочие пути записи, границы и отсечка stale-пары проверены.
 
+`retry` покрыт классификацией сетевых, HTTP, весовых и бизнес-ошибок, числом
+попыток, экспоненциальной паузой, Retry-After, потолком, jitter и quiet-логом.
+16 выживших мутантов относятся к диагностическим строкам, необязательным
+полям ошибочного ответа и эквивалентным границам HTTP-диапазона; две мутации
+таймера Stryker завершил по timeout.
+
 ### Ещё не выполнено
 
 Этап 3 **не завершён**. Не сняты замеры и не добавлены требуемые строки для
 `core/balanceCache.js`, `config.js`, `database.js`, `fillFeed.js`, `hlClient.js`,
 `liqEvents.js`, `logger.js`, `mail.js`, `notifyLog.js`, `ntfy.js`, `priceFeed.js`,
-`retry.js`, `runtimeFlags.js`, `universe.js`; а также для
+`runtimeFlags.js`, `universe.js`; а также для
 `adoptShadowTimeCut.js`, `binancePositioning.js`, `builderPositions.js`,
 `calibrator.js`, `candleCache.js`, `carry.js`, `chartCoach.js`, `dayDesk.js`,
 `exchange.js`, `execCosts.js`, `fadeHotSignal.js`, `forwards.js`, `funding.js`,
