@@ -282,3 +282,130 @@ test('adopt: trail и BE публикуют причину закрытия с �
   assert.match(messages[1], /пред\.осмотр=0\.0%.*пауза=/);
   assert.match(messages[2], /BREAKEVEN RATCHET #NIL: peak \+1\.50% → now \+0\.00% ≤ floor 0/);
 });
+
+test('adopt: восстановление не превращает битый snapshot в MFE, MAE или взвод', () => {
+  storeDir = mkdtempSync(join(tmpdir(), 'adopt-trail-'));
+  const file = join(storeDir, 'trail.json');
+  writeFileSync(file, JSON.stringify({ version: 1, trail: {
+    111: { peak: 0, trough: 0, beArmed: false, updatedAt: Date.now() },
+    112: { peak: '2', trough: 'bad', beArmed: true, updatedAt: Date.now() },
+    113: { peak: 2, trough: -1, beArmed: true, updatedAt: Date.now() },
+  } }));
+  _setFileForTest(file);
+  assert.deepEqual(consumeAdoptMfeMae(111), { mfePct: null, maePct: null });
+  assert.deepEqual(consumeAdoptMfeMae(112), { mfePct: null, maePct: null });
+  assert.deepEqual(consumeAdoptMfeMae(113), { mfePct: 2, maePct: -1 });
+  assert.equal(analyzeAdopt(long(112), 100).action, 'HOLD', 'битый peak не должен взводить защиту');
+});
+
+test('adopt: отсутствие side означает short, а нулевой внешний peak не меняет MFE', () => {
+  assert.equal(analyzeAdopt({ id: 114, coin: 'NIL', entry_price: 100 }, 98).action, 'HOLD');
+  assert.equal(getAdoptPeakPct(114), 2);
+  assert.equal(notePeakPct(115, 0), false);
+  assert.equal(consumeAdoptMfeMae(115).mfePct, null);
+});
+
+test('adopt: точный порог персиста и MAE пишутся только после значимого peak', () => {
+  storeDir = mkdtempSync(join(tmpdir(), 'adopt-trail-'));
+  const file = join(storeDir, 'trail.json');
+  _setFileForTest(file);
+  const p = { ...long(116), mode: 'PRODUCTION' };
+  analyzeAdopt(p, 99);
+  assert.equal(existsSync(file), false, 'просадка без защитного peak не персистится');
+  analyzeAdopt(p, 101.5);
+  assert.equal(JSON.parse(readFileSync(file, 'utf8')).trail['116'].peak, 1.5);
+  analyzeAdopt(p, 98);
+  assert.equal(JSON.parse(readFileSync(file, 'utf8')).trail['116'].trough, -2);
+});
+
+test('adopt: после reset первый probe не наследует прежний осмотр', () => {
+  const messages = [];
+  const info = logger.info;
+  logger.info = (message) => messages.push(message);
+  try {
+    const p = long(117);
+    analyzeAdopt(p, 110);
+    analyzeAdopt(p, 109);
+    resetAdoptState();
+    notePeakPct(p.id, 10);
+    analyzeAdopt(p, 106);
+  } finally {
+    logger.info = info;
+  }
+  assert.match(messages.at(-1), /пред\.осмотр=нет.*пауза=нет/);
+});
+
+test('adopt: trail probe сообщает расчёт отдачи и интервал между осмотрами', () => {
+  const messages = [];
+  const info = logger.info;
+  const dateNow = Date.now;
+  let now = 1_000;
+  Date.now = () => now;
+  logger.info = (message) => messages.push(message);
+  try {
+    const p = long(118);
+    analyzeAdopt(p, 110);
+    now = 3_500;
+    analyzeAdopt(p, 106);
+  } finally {
+    logger.info = info;
+    Date.now = dateNow;
+  }
+  assert.equal(messages[0], '[Adopt] 🎯 TRAIL CLOSE #NIL: peak +10.00% → now +6.00% (gave back 40% ≥ 30%)');
+  assert.equal(messages[1], '[AdoptTrailProbe] #NIL перелёт=10.0пп порог=30% факт=40.0% пред.осмотр=0.0% пауза=2.5с');
+});
+
+test('adopt: сохранённый явный BE работает и без peak выше порога', () => {
+  storeDir = mkdtempSync(join(tmpdir(), 'adopt-trail-'));
+  const file = join(storeDir, 'trail.json');
+  writeFileSync(file, JSON.stringify({ version: 1, trail: {
+    119: { peak: 1, trough: 0, beArmed: true, updatedAt: Date.now() },
+    120: { peak: 1, trough: 0, beArmed: false, updatedAt: Date.now() },
+  } }));
+  _setFileForTest(file);
+  assert.equal(analyzeAdopt(long(119), 100).reason, 'adopt_breakeven_ratchet');
+  assert.equal(analyzeAdopt(long(120), 100).action, 'HOLD');
+});
+
+test('adopt: clear и reset действительно очищают MAE и probe-карты', () => {
+  const messages = [];
+  const info = logger.info;
+  logger.info = (message) => messages.push(message);
+  try {
+    const p = long(121);
+    analyzeAdopt(p, 99);
+    assert.equal(getAdoptMaePct(p.id), -1);
+    resetAdoptState();
+    assert.deepEqual(consumeAdoptMfeMae(p.id), { mfePct: null, maePct: null });
+    notePeakPct(p.id, 10);
+    analyzeAdopt(p, 106);
+    clearAdoptState(p.id);
+    notePeakPct(p.id, 10);
+    analyzeAdopt(p, 106);
+  } finally {
+    logger.info = info;
+  }
+  assert.match(messages.at(-1), /пред\.осмотр=нет.*пауза=нет/);
+});
+
+test('adopt: внешний peak на точном пороге пишется только с persist', () => {
+  storeDir = mkdtempSync(join(tmpdir(), 'adopt-trail-'));
+  const file = join(storeDir, 'trail.json');
+  _setFileForTest(file);
+  assert.equal(notePeakPct(122, 1.5, { persist: true }), true);
+  assert.equal(JSON.parse(readFileSync(file, 'utf8')).trail['122'].peak, 1.5);
+});
+
+test('adopt: BE-лог сохраняет знак просадки', () => {
+  const messages = [];
+  const warn = logger.warn;
+  logger.warn = (message) => messages.push(message);
+  try {
+    const be = long(124);
+    analyzeAdopt(be, 101.5);
+    analyzeAdopt(be, 99);
+  } finally {
+    logger.warn = warn;
+  }
+  assert.match(messages[0], /now -1\.00%/);
+});
