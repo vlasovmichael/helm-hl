@@ -233,8 +233,51 @@ equity, валидация входа, нормализация тикера, с
 
 Не найдены.
 
+## Этап 3
+
+Команда воспроизведения core-модуля (скрипт принимает и `src/core/`, и
+`src/modules/`):
+
+```bash
+npm run mutation -- src/core/accountState.js
+```
+
+| Модуль | До: балл / killed / survived / no coverage | После: балл / killed / survived / no coverage | Время |
+| --- | --- | --- | --- |
+| `core/accountState.js` | — | 100.00% / 31 / 0 / 0 | 4 с |
+| `core/healthRegistry.js` | — | 93.90% / 77 / 5 / 0 | 9 с |
+| `core/priceHistory.js` | — | 90.43% / 169 / 18 / 0 (1 timeout) | 23 с |
+| `core/oiHistory.js` | — | 90.00% / 54 / 6 / 0 | 6 с |
+
+`accountState` теперь проверяет границу TTL, массовую инвалидацию и
+диагностику single-flight. `priceHistory` — latest/sample/spark, snapshot и
+restore (включая сортировку и склейку с живым буфером). `oiHistory` —
+допустимость OI, отсечку устаревшей базы и ограничение кольцевого буфера.
+В `priceHistory` остались 18 мутантов в защитных проверках пустого буфера,
+границах уже покрытых интервалов и недостижимой форме snapshot-а; один timeout
+относится к мутации цикла очистки. В `oiHistory` шесть выживших мутантов —
+пустой вход, уже достигнутые условия кольцевого буфера и необязательный
+`maxStaleMin`; рабочие пути записи, границы и отсечка stale-пары проверены.
+
+### Ещё не выполнено
+
+Этап 3 **не завершён**. Не сняты замеры и не добавлены требуемые строки для
+`core/balanceCache.js`, `config.js`, `database.js`, `fillFeed.js`, `hlClient.js`,
+`liqEvents.js`, `logger.js`, `mail.js`, `notifyLog.js`, `ntfy.js`, `priceFeed.js`,
+`retry.js`, `runtimeFlags.js`, `universe.js`; а также для
+`adoptShadowTimeCut.js`, `binancePositioning.js`, `builderPositions.js`,
+`calibrator.js`, `candleCache.js`, `carry.js`, `chartCoach.js`, `dayDesk.js`,
+`exchange.js`, `execCosts.js`, `fadeHotSignal.js`, `forwards.js`, `funding.js`,
+`hotMoversSetup.js`, `levelReads.js`, `mailDigest.js`, `nearMisses.js`,
+`paperNannyGate.js`, `scout.js`, `sync.js`, `tgSignalFeed.js`, `tgSignals.js`,
+`tradeGuards.js`, `tradeJournal.js`, `trendEma.js`, `trendFollowAtr.js`,
+`userFills.js`, `volatility.js`, `wallet.js`, `watchlistAlerts.js`,
+`winnersPositions.js`. Причина: для каждого из них ещё нужны отдельные
+изолированные тесты и фактический Stryker-замер, либо документированное
+обоснование невозможности осмысленного замера без сети; подменять их
+предположениями нельзя.
+
 ## Осталось несделанным
 
-Ничего: все модули задачи достигли заданных порогов. Оставшиеся выжившие
-мутации относятся к недостижимым без смены публичного контракта защитным
-веткам, диагностике и пограничному округлению трейла.
+Продолжается этап 3: список модулей и причина приведены в его подразделе
+«Ещё не выполнено».
