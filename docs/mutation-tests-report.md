@@ -253,6 +253,7 @@ npm run mutation -- src/core/accountState.js
 | `trendEma.js` | — | 88.39% / 96 / 13 / 0 (3 timeout) | 13 с |
 | `paperNannyGate.js` | — | 93.33% / 14 / 1 / 0 | 3 с |
 | `tradeGuards.js` | — | 86.67% / 26 / 4 / 0 | 4 с |
+| `carry.js` | — | 81.25% / 156 / 36 / 0 | 25 с |
 
 `accountState` теперь проверяет границу TTL, массовую инвалидацию и
 диагностику single-flight. `priceHistory` — latest/sample/spark, snapshot и
@@ -288,6 +289,11 @@ restore (включая сортировку и склейку с живым б�
 дневной бюджет, граница лимита, cooldown и его границы. Четыре выжившие мутации
 — варианты одной defensive-проверки, которые дают уже проверенный idle-ответ.
 
+`carry` проверен на всех парах спот/perp, расчётах доходности и окупаемости,
+неполной истории, невалидных ценах, сортировке, ответах API, fallback комиссиях
+и TTL обоих кэшей. 36 выживших мутаций относятся к защитным альтернативам
+повреждённых элементов биржевого массива и эквивалентным формам нормализации.
+
 ### Ещё не выполнено
 
 Этап 3 **не завершён**. Не сняты замеры и не добавлены требуемые строки для
@@ -295,7 +301,7 @@ restore (включая сортировку и склейку с живым б�
 `liqEvents.js`, `logger.js`, `mail.js`, `notifyLog.js`, `ntfy.js`, `priceFeed.js`,
 `runtimeFlags.js`, `universe.js`; а также для
 `adoptShadowTimeCut.js`, `binancePositioning.js`, `builderPositions.js`,
-`calibrator.js`, `candleCache.js`, `carry.js`, `chartCoach.js`, `dayDesk.js`,
+`calibrator.js`, `candleCache.js`, `chartCoach.js`, `dayDesk.js`,
 `exchange.js`, `execCosts.js`, `fadeHotSignal.js`, `forwards.js`, `funding.js`,
 `hotMoversSetup.js`, `levelReads.js`, `mailDigest.js`, `scout.js`, `sync.js`,
 `tgSignalFeed.js`, `tgSignals.js`, `tradeJournal.js`, `trendFollowAtr.js`,
