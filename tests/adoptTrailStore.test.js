@@ -80,3 +80,34 @@ test('другая версия и битый JSON безопасно дают �
   writeFileSync(file, '{');
   assert.deepEqual(loadAdoptTrail().trail, {});
 });
+
+test('TTL оставляет часовую запись, но отбрасывает неполные и null-строки', () => {
+  const file = setup();
+  const now = 2_000_000_000;
+  writeFileSync(file, JSON.stringify({ version: 1, trail: {
+    hour: { peak: 2, updatedAt: now - 60 * 60_000 },
+    noPeak: { updatedAt: now - 1 },
+    noTime: { peak: 2 },
+    nil: null,
+  } }));
+  const trail = loadAdoptTrail(now).trail;
+  assert.deepEqual(trail, { hour: { peak: 2, trough: 0, beArmed: false, updatedAt: now - 60 * 60_000 } });
+});
+
+test('reset сбрасывает и кэш, и флаг загрузки перед новым файлом', () => {
+  const first = setup();
+  setAdoptTrail(1, { peak: 2 });
+  assert.ok(getAdoptTrailAll()['1']);
+  _resetForTest();
+  const secondDir = mkdtempSync(join(tmpdir(), 'adopt-store-second-'));
+  const second = join(secondDir, 'trail.json');
+  try {
+    writeFileSync(second, JSON.stringify({ version: 1, trail: { 2: { peak: 4, updatedAt: Date.now() } } }));
+    _setFileForTest(second);
+    assert.equal(getAdoptTrailAll()['1'], undefined);
+    assert.equal(getAdoptTrailAll()['2'].peak, 4);
+  } finally {
+    rmSync(secondDir, { recursive: true, force: true });
+  }
+  assert.ok(first);
+});
