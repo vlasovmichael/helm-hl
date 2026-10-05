@@ -42,7 +42,7 @@ export function applyChartTheme() {
   const accent = chartVar("--accent-2") || "var(--accent-2)";
   const textMuted = chartVar("--ink-3") || (isDark ? "var(--ink-3)" : "var(--ink-3)");
   const grid = chartVar("--plot-grid") || (isDark ? "var(--ink)" : "var(--accent-ink)");
-  const bgColor = chartVar("--panel") || (isDark ? "var(--ink)" : "var(--accent-ink)");
+  const bgColor = chartVar("--panel") || (isDark ? "var(--ink)" : "var(--color-gray-0)");
 
   equityChart.applyOptions({
     layout: {
@@ -80,7 +80,7 @@ export async function initEquityChart() {
   const accent = chartVar("--accent-2") || "var(--accent-2)";
   const textMuted = chartVar("--ink-3") || (isDark ? "var(--ink-3)" : "var(--ink-3)");
   const grid = chartVar("--plot-grid") || (isDark ? "var(--ink)" : "var(--accent-ink)");
-  const bgColor = chartVar("--panel") || (isDark ? "var(--ink)" : "var(--accent-ink)");
+  const bgColor = chartVar("--panel") || (isDark ? "var(--ink)" : "var(--color-gray-0)");
 
   equityChart = createChart(container, {
     width: container.clientWidth,

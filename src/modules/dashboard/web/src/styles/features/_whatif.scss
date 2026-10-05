@@ -235,12 +235,12 @@
     margin-bottom: 6px;
   }
   .wi-case-bull {
-    border-color: color-mix(in srgb, var(--gain, var(--gain)) 35%, transparent);
-    .wi-case-title { color: var(--gain, var(--gain)); }
+    border-color: color-mix(in srgb, var(--gain) 35%, transparent);
+    .wi-case-title { color: var(--gain); }
   }
   .wi-case-bear {
-    border-color: color-mix(in srgb, var(--loss, var(--loss)) 35%, transparent);
-    .wi-case-title { color: var(--loss, var(--loss)); }
+    border-color: color-mix(in srgb, var(--loss) 35%, transparent);
+    .wi-case-title { color: var(--loss); }
   }
 
   // Под-заметки в плане (санити стопа, размер).
@@ -252,7 +252,7 @@
     border-radius: 6px;
     background: var(--panel-sunk, color-mix(in srgb, var(--ink-3) 8.00%, transparent));
   }
-  .wi-ss-tight, .wi-ss-wide { color: var(--orange, var(--loss)); }
+  .wi-ss-tight, .wi-ss-wide { color: var(--amber); }
   .wi-ss-ok { color: var(--ink-2); }
   .wi-size { color: var(--ink); }
 
@@ -285,8 +285,8 @@
     font-size: var(--text-small);
     line-height: 1.5;
     color: var(--ink);
-    background: color-mix(in srgb, var(--amber, var(--loss)) 12%, transparent);
-    border: 1px solid color-mix(in srgb, var(--amber, var(--loss)) 42%, transparent);
+    background: color-mix(in srgb, var(--amber) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--amber) 42%, transparent);
     border-radius: var(--radius-sm);
     padding: 8px 10px;
     margin-bottom: 14px;

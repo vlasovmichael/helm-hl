@@ -28,7 +28,7 @@ const easeOut = (t) => 1 - Math.pow(1 - t, 3);
 
 function palette() {
   return {
-    bg: cssVar("--panel", host) || "var(--accent-ink)",
+    bg: cssVar("--panel", host) || "var(--color-gray-0)",
     text: cssVar("--ink-2", host) || "var(--ink-3)",
     strong: cssVar("--ink", host) || "var(--ink)",
     grid: cssVar("--rule-soft", host) || "var(--accent-ink)",
@@ -299,7 +299,7 @@ function drawPositionLabels(ctx, c) {
   const outside = (edge, below, row = 0) =>
     below ? edge + PILL_GAP + row * (PILL_H + 2) : edge - PILL_GAP - PILL_H - row * (PILL_H + 2);
   const roomy = Math.min(Math.abs(r.yt - r.ye), Math.abs(r.ys - r.ye)) >= PILL_H + 4;
-  const white = "var(--accent-ink)";
+  const white = "var(--color-gray-0)";
   pill(ctx, c, cx, outside(r.yt, !up), `Target ${fmtPx(plan.target)} (+${plan.rewardPct.toFixed(2)}%)`, c.up, white);
   pill(ctx, c, cx, outside(r.ys, up), `Stop ${fmtPx(plan.stop)} (−${plan.riskPct.toFixed(2)}%)`, c.down, white);
   const head = `${plan.side === "long" ? "Long" : "Short"} · R:R ${plan.netRr.toFixed(2)}`;
@@ -339,7 +339,7 @@ function makeLayer() {
       return p ? (candles.priceToCoordinate(p[key]) ?? -100) : -100;
     },
     text: () => (scene.plan ? fmtPx(scene.plan[key]) : ""),
-    textColor: () => (tone === "strong" ? palette().bg : "var(--accent-ink)"),
+    textColor: () => (tone === "strong" ? palette().bg : "var(--color-gray-0)"),
     backColor: () => palette()[tone],
     visible: () => Boolean(scene.plan),
     tickVisible: () => true,
@@ -351,7 +351,7 @@ function makeLayer() {
       return y == null ? -100 : y + TIMER_STEP;
     },
     text: () => candleCountdown(bars.at(-1).time, meta.tf, Date.now()),
-    textColor: () => "var(--accent-ink)",
+    textColor: () => "var(--color-gray-0)",
     backColor: () => lastPriceLine(bars.at(-1), host).priceLineColor,
     visible: () => bars.length > 0 && Boolean(TF_SEC[meta.tf]),
     tickVisible: () => false,

@@ -16,7 +16,7 @@
     transition: background 0.12s ease;
 
     &:hover {
-      background: color-mix(in srgb, var(--accent-ink) 4.00%, transparent);
+      background: color-mix(in srgb, var(--color-gray-0) 4.00%, transparent);
     }
   }
 }
@@ -103,9 +103,9 @@
   font-weight: 800;
 }
 .src-manual {
-  color: var(--yellow, var(--loss));
-  background: color-mix(in srgb, var(--loss) 12.00%, transparent);
-  border-color: color-mix(in srgb, var(--loss) 32.00%, transparent);
+  color: var(--yellow);
+  background: color-mix(in srgb, var(--yellow) 12.00%, transparent);
+  border-color: color-mix(in srgb, var(--yellow) 32.00%, transparent);
 }
 
 /* Сторона позиции */

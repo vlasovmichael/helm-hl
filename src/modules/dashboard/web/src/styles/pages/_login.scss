@@ -129,7 +129,7 @@ body[data-page="login"] {
 .login-button {
   background: var(--gain);
   border-color: color-mix(in srgb, var(--gain) 70%, var(--ink));
-  color: var(--accent-ink);
+  color: var(--color-gray-0);
   margin-top: var(--space-1);
 
   &:hover:not(:disabled) {

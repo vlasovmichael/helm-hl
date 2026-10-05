@@ -13,42 +13,42 @@
     margin-top: 2px;
   }
   &:hover {
-    background: color-mix(in srgb, var(--accent-ink) 3.00%, transparent);
+    background: color-mix(in srgb, var(--color-gray-0) 3.00%, transparent);
   }
 }
 .near-miss-coin {
   font-weight: 700;
 }
 .near-miss-side-long {
-  color: var(--gain, var(--gain));
+  color: var(--gain);
 }
 .near-miss-side-short {
-  color: var(--loss, var(--loss));
+  color: var(--loss);
 }
 .near-miss-reason {
   display: inline-block;
   padding: 1px 6px;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--loss) 10.00%, transparent);
-  color: var(--yellow, var(--loss));
-  border: 1px solid color-mix(in srgb, var(--loss) 25.00%, transparent);
+  background: color-mix(in srgb, var(--yellow) 10.00%, transparent);
+  color: var(--yellow);
+  border: 1px solid color-mix(in srgb, var(--yellow) 25.00%, transparent);
   font-size: var(--text-micro);
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 .near-miss-detail {
-  color: var(--ink-3, var(--ink-3));
+  color: var(--ink-3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .near-miss-age {
-  color: var(--ink-3, var(--ink-3));
+  color: var(--ink-3);
   font-size: var(--text-micro);
 }
 .bans-strip {
   margin-bottom: 6px;
   padding-bottom: 6px;
-  border-bottom: 1px dashed color-mix(in srgb, var(--accent-ink) 6.00%, transparent);
+  border-bottom: 1px dashed color-mix(in srgb, var(--color-gray-0) 6.00%, transparent);
 }

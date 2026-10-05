@@ -6,7 +6,7 @@ import { cssVar } from "../utils/format.js";
 export function monoCandles(element) {
   const ink = cssVar("--ink", element) || "var(--ink)";
   return {
-    upColor: cssVar("--panel", element) || "var(--accent-ink)",
+    upColor: cssVar("--panel", element) || "var(--color-gray-0)",
     downColor: ink,
     borderUpColor: ink,
     borderDownColor: ink,

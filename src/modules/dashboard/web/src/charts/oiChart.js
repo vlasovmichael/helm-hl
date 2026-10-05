@@ -19,8 +19,8 @@
 import { cssVar } from "../utils/format.js";
 
 const OI_COLOR = "var(--accent-2)";
-const PX_COLOR = "var(--loss)";
-const PX_FILL = "color-mix(in srgb, var(--loss) 16.00%, transparent)";
+const PX_COLOR = "var(--amber)";
+const PX_FILL = "color-mix(in srgb, var(--amber) 16.00%, transparent)";
 
 let chart = null;
 let oiSeries = null;
@@ -71,7 +71,7 @@ function themeColors() {
   return {
     text: cssVar("--ink-2") || (isDark ? "var(--ink-3)" : "var(--ink-3)"),
     grid: cssVar("--rule-soft") || cssVar("--plot-grid") || (isDark ? "var(--ink)" : "var(--accent-ink)"),
-    bg: cssVar("--panel") || (isDark ? "var(--ink)" : "var(--accent-ink)"),
+    bg: cssVar("--panel") || (isDark ? "var(--ink)" : "var(--color-gray-0)"),
   };
 }
 
@@ -196,7 +196,7 @@ export async function drawOiChart(points) {
     pxSeries = chart.addSeries(AreaSeries, {
       lineColor: PX_COLOR,
       topColor: PX_FILL,
-      bottomColor: "color-mix(in srgb, var(--loss) 0.00%, transparent)",
+      bottomColor: "color-mix(in srgb, var(--amber) 0.00%, transparent)",
       lineWidth: 1,
       priceScaleId: "left",
       priceLineVisible: false,

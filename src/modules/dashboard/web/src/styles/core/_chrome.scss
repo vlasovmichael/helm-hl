@@ -628,7 +628,7 @@ header {
   border-radius: 8px;
   background: var(--loss);
   font-family: var(--mono);
-  color: var(--accent-ink);
+  color: var(--color-gray-0);
   font-size: var(--text-micro);
   font-weight: 700;
   line-height: 16px;
@@ -654,7 +654,7 @@ header {
   background: var(--ground);
   border: 1px solid var(--rule);
   border-radius: var(--radius);
-  box-shadow: 0 8px 28px color-mix(in srgb, var(--ink) 28.00%, transparent);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--color-gray-950) 28.00%, transparent);
   z-index: 60;
 
   // Состояние видимости — класс .is-open (его ставит/снимает JS), а атрибут
@@ -982,7 +982,7 @@ header {
   // полный отступ.
   border: 1px solid color-mix(in srgb, var(--toast-accent) 45%, var(--rule));
   border-radius: var(--radius-lg);
-  box-shadow: 0 10px 34px color-mix(in srgb, var(--ink) 32.00%, transparent);
+  box-shadow: 0 10px 34px color-mix(in srgb, var(--color-gray-950) 32.00%, transparent);
   padding: 16px 18px;
   font-size: var(--text-base);
   cursor: pointer;
@@ -1126,7 +1126,7 @@ header {
 }
 // Разделитель «·» между метриками — приглушённый.
 .toast-sep {
-  color: var(--ink-3, var(--ink-3));
+  color: var(--ink-3);
   margin: 0 2px;
 }
 @keyframes toast-life {

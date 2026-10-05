@@ -46,7 +46,7 @@
   background: var(--accent-2);
 }
 .oi-legend-px {
-  background: var(--loss);
+  background: var(--amber);
 }
 
 // Таблица OI — общий `.table` (core/_table.scss), числа по классу `num`.
@@ -227,7 +227,7 @@
   letter-spacing: var(--ls-wide);
   padding: 5px 13px;
   border-radius: var(--radius-pill);
-  color: var(--accent-ink);
+  color: var(--color-gray-0);
   white-space: nowrap;
 
   .icon {

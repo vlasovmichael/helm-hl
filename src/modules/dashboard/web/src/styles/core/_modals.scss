@@ -130,7 +130,7 @@
   &__backdrop {
     position: fixed;
     inset: 0;
-    background: color-mix(in srgb, var(--ink) 62.00%, transparent);
+    background: var(--scrim);
     opacity: 0;
     transition: opacity var(--dur) var(--ease-out);
   }

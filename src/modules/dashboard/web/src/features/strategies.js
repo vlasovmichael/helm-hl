@@ -67,7 +67,7 @@ function stratSparkline(series) {
     return `${x},${y}`;
   });
   const up = pts[pts.length - 1] >= 0;
-  const color = up ? "var(--gain, var(--gain))" : "var(--loss, var(--loss))";
+  const color = up ? "var(--gain)" : "var(--loss)";
   return (
     `<svg class="strat-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">` +
     `<polyline points="${coords.join(" ")}" fill="none" stroke="${color}" stroke-width="1.5"/>` +

@@ -11,7 +11,7 @@ function themeColors() {
     bg: cssVar("--panel", container) || "var(--ink)",
     text: cssVar("--ink-2", container) || "var(--ink-3)",
     grid: cssVar("--rule", container) || "color-mix(in srgb, var(--ink-3) 18.00%, transparent)",
-    warn: cssVar("--caution", container) || "var(--loss)",
+    warn: cssVar("--caution", container) || "var(--amber)",
   };
 }
 

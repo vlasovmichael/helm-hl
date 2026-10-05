@@ -54,8 +54,8 @@
   font-size: var(--text-label);
   font-weight: 600;
   letter-spacing: var(--ls-wide);
-  color: var(--orange, var(--loss));
-  border: 1px solid color-mix(in srgb, var(--orange, var(--loss)) 45%, transparent);
+  color: var(--amber);
+  border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
 
   .icon,
   svg {
@@ -74,7 +74,7 @@
   font-size: var(--text-micro);
   font-weight: 600;
   letter-spacing: var(--ls-wide);
-  color: var(--accent-ink);
+  color: var(--color-gray-0);
 
   .icon,
   svg {
@@ -413,7 +413,7 @@
   padding: 1px 6px;
   border-radius: 4px;
   margin-right: 6px;
-  color: var(--accent-ink);
+  color: var(--color-gray-0);
   border: none;
 }
 .hm-pos-bot {
@@ -422,8 +422,8 @@
 .hm-pos-manual {
   /* Ручная/усыновлённая поза: тёплый янтарь, тёмный текст для максимального
      контраста (на жёлтом белый плохо читается). */
-  color: var(--ink);
-  background: var(--amber, var(--loss));
+  color: var(--color-gray-950);
+  background: var(--amber);
 }
 /* Подсказки реального времени по открытой позиции. */
 .hm-hint {
@@ -437,7 +437,7 @@
   font-weight: 700;
 }
 .hm-hint-warn {
-  color: var(--orange, var(--loss));
+  color: var(--amber);
 }
 .hm-hint-good {
   color: var(--gain);
@@ -459,7 +459,7 @@
   color: var(--ink-2);
   background: var(--panel-sunk);
   border-bottom: 1px solid var(--rule);
-  box-shadow: inset 2px 0 0 var(--amber, var(--loss));
+  box-shadow: inset 2px 0 0 var(--amber);
 }
 .hm-fh-tag {
   display: inline-block;
@@ -469,7 +469,7 @@
   padding: 1px 6px;
   border-radius: 4px;
   margin-right: 6px;
-  color: var(--accent-ink);
+  color: var(--color-gray-0);
   border: none;
 }
 .hm-fh-tag.fh-short {
@@ -881,7 +881,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
    цвет цены + цвет процентов + тонкая левая кромка ТОЛЬКО на заметном
    движении (mid ≥0.6% / strong ≥1.5%) + flash при изменении цены.
    Слабые движения (<0.6%) — строка чистая, ничего не отвлекает. */
-/* Токены, а не color-mix(in srgb, var(--gain) 50.00%, transparent): захардкоженные значения подбирались под
+/* Токены, а не rgba-константы: захардкоженные значения подбирались под
    тёмный фон и на светлой теме давали блёклую кромку. --pnl-up/--pnl-down —
    биржевые up/down, они определены в обеих темах. */
 .signals-table tr.row-up.row-heat-mid td:first-child {
@@ -1469,7 +1469,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     width: 100%;
     height: 100%;
     overflow: visible;
-    filter: drop-shadow(0 1px 3px color-mix(in srgb, var(--ink) 25.00%, transparent));
+    filter: drop-shadow(0 1px 3px color-mix(in srgb, var(--color-gray-950) 25.00%, transparent));
   }
   .rkt-body {
     fill: currentColor;
@@ -1481,10 +1481,10 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     stroke-linejoin: round;
   }
   .rkt-win {
-    fill: color-mix(in srgb, var(--accent-ink) 92.00%, transparent);
+    fill: color-mix(in srgb, var(--color-gray-0) 92.00%, transparent);
   }
   .rkt-flame {
-    fill: var(--loss);
+    fill: var(--amber);
     transform-origin: 12px 16px;
     animation: rktFlame 0.16s ease-in-out infinite alternate;
   }
@@ -1501,8 +1501,8 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     border-radius: 50%;
     background: linear-gradient(
       to bottom,
-      color-mix(in srgb, var(--loss) 55.00%, transparent),
-      color-mix(in srgb, var(--loss) 0.00%, transparent)
+      color-mix(in srgb, var(--amber) 55.00%, transparent),
+      color-mix(in srgb, var(--amber) 0.00%, transparent)
     );
     filter: blur(1.5px);
     animation: rktTrail 0.85s ease-out forwards;

@@ -74,7 +74,7 @@
 
   .cr-head { font-weight: 700; }
   .cr-good { color: var(--pos, var(--gain)); }
-  .cr-warn { color: var(--amber, var(--loss)); }
+  .cr-warn { color: var(--amber); }
   .cr-bad { color: var(--neg, var(--loss)); }
   .cr-neutral { color: var(--ink-2); }
   .cr-meta {
