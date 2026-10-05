@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { logger } from '../src/core/logger.js';
 
 import {
   loadAdoptTrail, getAdoptTrailAll, setAdoptTrail, clearAdoptTrail,
@@ -110,4 +111,79 @@ test('reset сбрасывает и кэш, и флаг загрузки пер�
     rmSync(secondDir, { recursive: true, force: true });
   }
   assert.ok(first);
+});
+
+test('default-путь в test-режиме не читает и не пишет рабочий файл', () => {
+  _resetForTest();
+  setAdoptTrail(41, { peak: 3 });
+  assert.equal(getAdoptTrailAll()['41'].peak, 3);
+  clearAdoptTrail(41);
+  assert.equal(getAdoptTrailAll()['41'], undefined);
+});
+
+test('частичный patch сохраняет прежние поля, а null-id не становится записью', () => {
+  setup();
+  setAdoptTrail(42, { peak: 3, trough: -2, beArmed: true });
+  setAdoptTrail(42, { peak: 4, trough: null, beArmed: null });
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(getAdoptTrailAll()['42']).filter(([key]) => key !== 'updatedAt')),
+    { peak: 4, trough: -2, beArmed: true },
+  );
+  setAdoptTrail(null, { peak: 99 });
+  assert.equal(getAdoptTrailAll().null, undefined);
+});
+
+test('ошибки загрузки и версия схемы публикуются, ENOENT не шумит', () => {
+  const messages = [];
+  const warn = logger.warn;
+  const info = logger.info;
+  logger.warn = (message) => messages.push(`warn:${message}`);
+  logger.info = (message) => messages.push(`info:${message}`);
+  try {
+    const file = setup();
+    writeFileSync(file, JSON.stringify({ version: 9, trail: {} }));
+    loadAdoptTrail();
+    _setFileForTest(file);
+    writeFileSync(file, '{');
+    loadAdoptTrail();
+  } finally {
+    logger.warn = warn;
+    logger.info = info;
+  }
+  assert.match(messages[0], /Unknown version 9, ignoring/);
+  assert.match(messages[1], /Load failed:/);
+});
+
+test('загрузка считает и сообщает число отброшенных TTL-записей', () => {
+  const messages = [];
+  const info = logger.info;
+  logger.info = (message) => messages.push(message);
+  try {
+    const file = setup();
+    const now = 3_000_000_000;
+    writeFileSync(file, JSON.stringify({ version: 1, trail: {
+      live: { peak: 2, updatedAt: now - 1 }, stale: { peak: 2, updatedAt: now - 86_400_000 },
+    } }));
+    assert.equal(loadAdoptTrail(now).trail.live.peak, 2);
+  } finally {
+    logger.info = info;
+  }
+  assert.match(messages[0], /Loaded: trail=1 \(1 expired\)/);
+});
+
+test('первый запуск без файла тихий, а загруженный снимок повторно не читается', () => {
+  const messages = [];
+  const warn = logger.warn;
+  const info = logger.info;
+  logger.warn = (message) => messages.push(`warn:${message}`);
+  logger.info = (message) => messages.push(`info:${message}`);
+  try {
+    const file = setup();
+    assert.deepEqual(loadAdoptTrail().trail, {});
+    assert.deepEqual(loadAdoptTrail().trail, {});
+  } finally {
+    logger.warn = warn;
+    logger.info = info;
+  }
+  assert.deepEqual(messages, []);
 });
