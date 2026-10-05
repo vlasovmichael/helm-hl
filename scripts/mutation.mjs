@@ -15,6 +15,7 @@ const testsByModule = {
   'src/modules/positionNanny.js': ['tests/positionNanny.test.js'],
   'src/modules/executor/reconciler.js': ['tests/reconcilerFake.test.js'],
   'src/modules/executor/state.js': ['tests/executorState.test.js'],
+  'src/modules/tpGrid.js': ['tests/tpGrid.test.js'],
 };
 if (!modulePath) {
   console.error('Usage: npm run mutation -- src/modules/path/to/module.js');
