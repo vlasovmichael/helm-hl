@@ -187,3 +187,38 @@ test('первый запуск без файла тихий, а загруже�
   }
   assert.deepEqual(messages, []);
 });
+
+test('пустой patch и clear отсутствующей записи не создают снимок', () => {
+  const file = setup();
+  setAdoptTrail(50, {});
+  clearAdoptTrail(50);
+  assert.equal(existsSync(file), false);
+  assert.deepEqual(getAdoptTrailAll(), {});
+});
+
+test('загруженный кэш не перечитывает изменённый снимок до reset', () => {
+  const file = setup();
+  writeFileSync(file, JSON.stringify({ version: 1, trail: {
+    51: { peak: 2, updatedAt: Date.now() },
+  } }));
+  assert.equal(loadAdoptTrail().trail['51'].peak, 2);
+  writeFileSync(file, JSON.stringify({ version: 1, trail: {
+    51: { peak: 9, updatedAt: Date.now() },
+  } }));
+  assert.equal(loadAdoptTrail().trail['51'].peak, 2);
+});
+
+test('ошибка атомарного сохранения видима в логе и не ломает кэш', () => {
+  const messages = [];
+  const warn = logger.warn;
+  logger.warn = (message) => messages.push(message);
+  try {
+    dir = mkdtempSync(join(tmpdir(), 'adopt-store-fail-'));
+    _setFileForTest(join(dir, 'missing', 'trail.json'));
+    setAdoptTrail(52, { peak: 2 });
+    assert.equal(getAdoptTrailAll()['52'].peak, 2);
+  } finally {
+    logger.warn = warn;
+  }
+  assert.match(messages[0], /^\[AdoptTrailStore\] Save failed: /);
+});
