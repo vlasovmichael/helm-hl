@@ -585,9 +585,9 @@ function ensureFloorTimerStyle() {
     ".grid-item.floor-timed{position:relative;overflow:hidden}" +
     ".grid-item.floor-timed>*:not(.floor-timer-bg){position:relative;z-index:1}" +
     ".floor-timer-bg{position:absolute;inset:0;transform-origin:left center;" +
-    "background:linear-gradient(90deg,rgba(234,179,8,0.22),rgba(234,179,8,0.06));" +
+    "background:linear-gradient(90deg,color-mix(in srgb, var(--yellow) 22.00%, transparent),color-mix(in srgb, var(--yellow) 6.00%, transparent));" +
     "animation:floorTimerDeplete 900s linear forwards;pointer-events:none;z-index:0}" +
-    ".floor-timer-chip{font-size: var(--text-label);font-family:var(--mono);color:var(--yellow,#eab308);font-weight:600}" +
+    ".floor-timer-chip{font-size: var(--text-label);font-family:var(--mono);color:var(--yellow);font-weight:600}" +
     ".floor-timer-chip:empty{display:none}";
   document.head.appendChild(st);
 }
@@ -807,13 +807,13 @@ export function renderManualPositions(list) {
       // ПОЧЕМУ, чтобы не лезть в логи. Builder-DEX (HIP-3) нянька не ведёт
       // структурно: там ни ADOPTED, ни причины, а NOT BABYSAT.
       const manualBadge = p.builder
-        ? `${escapeHtml(String(p.dex || "builder").toUpperCase())} DEX · <span style="color:var(--loss,#cf222e)">NOT BABYSAT</span>`
+        ? `${escapeHtml(String(p.dex || "builder").toUpperCase())} DEX · <span style="color:var(--loss)">NOT BABYSAT</span>`
         : p.adoptResyncing
-        ? `HANDS-OFF · MANUAL · <span style="color:var(--orange,#f59e0b)" data-card="Position side flipped — the bot closes the old DB row and re-adopts the position on the new side">RE-SYNCING ⟳</span>`
+        ? `HANDS-OFF · MANUAL · <span style="color:var(--amber)" data-card="Position side flipped — the bot closes the old DB row and re-adopts the position on the new side">RE-SYNCING ⟳</span>`
         : p.adopted
-        ? `HANDS-OFF · MANUAL · <span style="color:var(--gain,#22c55e)">ADOPTED</span>`
+        ? `HANDS-OFF · MANUAL · <span style="color:var(--gain)">ADOPTED</span>`
         : p.adoptSkipReason
-          ? `HANDS-OFF · MANUAL · <span style="color:var(--loss,#cf222e)">no stop: ${escapeHtml(p.adoptSkipReason)}</span>`
+          ? `HANDS-OFF · MANUAL · <span style="color:var(--loss)">no stop: ${escapeHtml(p.adoptSkipReason)}</span>`
           : "HANDS-OFF · MANUAL";
       // Глубинная заливка карточки uPnL — только у усыновлённых (нянька повесила
       // стоп). У голого HANDS-OFF стопа нет → riskTint вернёт null, карточка
@@ -904,11 +904,11 @@ export function renderBans(status) {
   }
   strip.classList.add("bans-strip");
   strip.innerHTML =
-    '<div style="font-size: var(--text-micro); color:var(--ink-3,#888); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">Runtime bans</div>' +
+    '<div style="font-size: var(--text-micro); color:var(--ink-3); margin-bottom:4px; text-transform:uppercase; letter-spacing:0.5px;">Runtime bans</div>' +
     status.runtimeBans
       .map(
         (c) =>
-          `<div style="display:inline-block; background:rgba(239,68,68,0.1); color:var(--loss); border:1px solid rgba(239,68,68,0.2); padding:3px 8px; border-radius:5px; font-size: var(--text-micro); font-family:var(--mono); font-weight:600; margin:0 6px 4px 0;">#${c}</div>`,
+          `<div style="display:inline-block; background:color-mix(in srgb, var(--loss) 10.00%, transparent); color:var(--loss); border:1px solid color-mix(in srgb, var(--loss) 20.00%, transparent); padding:3px 8px; border-radius:5px; font-size: var(--text-micro); font-family:var(--mono); font-weight:600; margin:0 6px 4px 0;">#${c}</div>`,
       )
       .join("");
 }

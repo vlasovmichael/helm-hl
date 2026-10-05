@@ -180,3 +180,4 @@ logs/level-*
 data/binance-f2/
 # OI Binance UM daily metrics для магнита ликвидаций, восстановимо по CHECKSUM.
 data/binance-oi/
+docs/kit-colors/

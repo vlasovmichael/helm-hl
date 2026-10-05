@@ -21,12 +21,7 @@ export function formatUptime(minutes) {
 }
 
 export function hexToRgba(hex, alpha) {
-  const h = hex.replace("#", "");
-  const bigint = parseInt(h, 16);
-  const r = (bigint >> 16) & 255;
-  const g = (bigint >> 8) & 255;
-  const b = bigint & 255;
-  return `rgba(${r},${g},${b},${alpha})`;
+  return `color-mix(in srgb, ${hex} ${(alpha * 100).toFixed(2)}%, transparent)`;
 }
 
 // Токены кита лежат на body (core/_tokens.scss), поэтому читаем с body, а не с :root.

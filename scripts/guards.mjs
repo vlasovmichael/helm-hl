@@ -9,6 +9,7 @@ const GUARDS = [
   'checkStyleScope.mjs',
   'checkUiLanguage.mjs',
   'checkComments.mjs',
+  'checkRawColors.mjs',
   'checkEnvTemplate.mjs',
   'checkLabLeak.mjs',
 ];

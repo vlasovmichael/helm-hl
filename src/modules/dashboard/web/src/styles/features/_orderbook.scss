@@ -54,7 +54,7 @@
 .toolkit-tile {
   display: block;
   padding: 14px 16px;
-  background: var(--panel, rgba(255, 255, 255, 0.02));
+  background: var(--panel, color-mix(in srgb, var(--color-gray-0) 2.00%, transparent));
   border: 1px solid var(--rule-soft);
   border-radius: 10px;
   text-decoration: none;

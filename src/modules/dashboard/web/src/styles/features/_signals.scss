@@ -20,9 +20,9 @@
   border-radius: 4px;
   font-weight: 700;
   letter-spacing: 0.3px;
-  color: var(--neg, #e5484d);
-  background: color-mix(in srgb, var(--neg, #e5484d) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--neg, #e5484d) 35%, transparent);
+  color: var(--neg, var(--loss));
+  background: color-mix(in srgb, var(--neg, var(--loss)) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--neg, var(--loss)) 35%, transparent);
 }
 /* Счётчик форвард-замера под таблицей. Пунктир — «счётчик ещё идёт, вывода
    тут нет». */
@@ -54,8 +54,8 @@
   font-size: var(--text-label);
   font-weight: 600;
   letter-spacing: var(--ls-wide);
-  color: var(--orange, #f59e0b);
-  border: 1px solid color-mix(in srgb, var(--orange, #f59e0b) 45%, transparent);
+  color: var(--amber);
+  border: 1px solid color-mix(in srgb, var(--amber) 45%, transparent);
 
   .icon,
   svg {
@@ -74,7 +74,7 @@
   font-size: var(--text-micro);
   font-weight: 600;
   letter-spacing: var(--ls-wide);
-  color: #fff;
+  color: var(--color-gray-0);
 
   .icon,
   svg {
@@ -100,7 +100,7 @@
 }
 /* Сторона, за которую журнал уже заплатил. */
 .hm-costly.is-costly .setup-pill {
-  box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 3px var(--neg, #e5484d);
+  box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 3px var(--neg, var(--loss));
 }
 
 /* Режим захода — хвост справа от пилюли. */
@@ -114,7 +114,7 @@
 }
 /* Сторона, за которую журнал уже заплатил. */
 .hm-costly.is-costly .setup-pill {
-  box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 3px var(--neg, #e5484d);
+  box-shadow: 0 0 0 1.5px var(--panel), 0 0 0 3px var(--neg, var(--loss));
 }
 
 /* Колонка Move: насколько движение уже ушло. Прижата вправо. */
@@ -413,7 +413,7 @@
   padding: 1px 6px;
   border-radius: 4px;
   margin-right: 6px;
-  color: #fff;
+  color: var(--color-gray-0);
   border: none;
 }
 .hm-pos-bot {
@@ -422,8 +422,8 @@
 .hm-pos-manual {
   /* Ручная/усыновлённая поза: тёплый янтарь, тёмный текст для максимального
      контраста (на жёлтом белый плохо читается). */
-  color: #1a1205;
-  background: var(--amber, #f0a020);
+  color: var(--color-gray-950);
+  background: var(--amber);
 }
 /* Подсказки реального времени по открытой позиции. */
 .hm-hint {
@@ -437,7 +437,7 @@
   font-weight: 700;
 }
 .hm-hint-warn {
-  color: var(--orange, #f59e0b);
+  color: var(--amber);
 }
 .hm-hint-good {
   color: var(--gain);
@@ -459,7 +459,7 @@
   color: var(--ink-2);
   background: var(--panel-sunk);
   border-bottom: 1px solid var(--rule);
-  box-shadow: inset 2px 0 0 var(--amber, #f0a020);
+  box-shadow: inset 2px 0 0 var(--amber);
 }
 .hm-fh-tag {
   display: inline-block;
@@ -469,7 +469,7 @@
   padding: 1px 6px;
   border-radius: 4px;
   margin-right: 6px;
-  color: #fff;
+  color: var(--color-gray-0);
   border: none;
 }
 .hm-fh-tag.fh-short {
@@ -582,10 +582,10 @@
 }
 /* Candy Girl signal rows — лёгкий tint по направлению. */
 .signals-table tr.cg-sig-row.dir-long {
-  background: rgba(61, 220, 132, 0.07);
+  background: color-mix(in srgb, var(--gain) 7.00%, transparent);
 }
 .signals-table tr.cg-sig-row.dir-short {
-  background: rgba(255, 92, 92, 0.07);
+  background: color-mix(in srgb, var(--loss) 7.00%, transparent);
 }
 .signals-coin {
   font-weight: 600;
@@ -774,28 +774,28 @@
 
   /* SHORT: fade pump → красный как на бирже «продажа» */
   &.setup-short {
-    background: rgba(239, 68, 68, 0.25);
-    color: #f87171;
-    box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.4);
+    background: color-mix(in srgb, var(--loss) 25.00%, transparent);
+    color: var(--loss);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--loss) 40.00%, transparent);
   }
   /* LONG: fade dump → зелёный как на бирже «покупка» */
   &.setup-long {
-    background: rgba(34, 197, 94, 0.22);
-    color: #4ade80;
-    box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.35);
+    background: color-mix(in srgb, var(--gain) 22.00%, transparent);
+    color: var(--gain);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gain) 35.00%, transparent);
   }
   /* FADE = контртренд → ОБВЕДЁННЫЙ пилл (без заливки, в отличие от trend), та
      же семантика цвета: зелёный = fade-long, красный = fade-short. Залитый =
      «по тренду», обведённый = «против» — спутать нельзя. */
   &.setup-fade-long {
     background: transparent;
-    color: #4ade80;
-    box-shadow: inset 0 0 0 1.5px rgba(34, 197, 94, 0.6);
+    color: var(--gain);
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--gain) 60.00%, transparent);
   }
   &.setup-fade-short {
     background: transparent;
-    color: #f87171;
-    box-shadow: inset 0 0 0 1.5px rgba(239, 68, 68, 0.6);
+    color: var(--loss);
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--loss) 60.00%, transparent);
   }
 }
 /* Light theme: pill-стиль в духе GitHub label — сочный фон + чёткая
@@ -881,7 +881,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
    цвет цены + цвет процентов + тонкая левая кромка ТОЛЬКО на заметном
    движении (mid ≥0.6% / strong ≥1.5%) + flash при изменении цены.
    Слабые движения (<0.6%) — строка чистая, ничего не отвлекает. */
-/* Токены, а не rgba(34,197,94,.5): захардкоженные значения подбирались под
+/* Токены, а не rgba-константы: захардкоженные значения подбирались под
    тёмный фон и на светлой теме давали блёклую кромку. --pnl-up/--pnl-down —
    биржевые up/down, они определены в обеих темах. */
 .signals-table tr.row-up.row-heat-mid td:first-child {
@@ -918,7 +918,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
 /* Биржевые flash-вспышки на ячейке цены при изменении (зелёный вверх / красный вниз). */
 /* Вспышка цены. Это НАСТОЯЩЕЕ событие (цена изменилась), поэтому анимация
    здесь уместна и остаётся. Цвета — биржевые up/down из токенов, а не
-   захардкоженные rgba: на светлой теме зелень #22c55e при 55% давала мутное
+   захардкоженные rgba: на светлой теме зелень var(--gain) при 55% давала мутное
    пятно, потому что подбиралась под тёмный фон. */
 @keyframes hmFlashUp {
   from {
@@ -1469,7 +1469,7 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     width: 100%;
     height: 100%;
     overflow: visible;
-    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.25));
+    filter: drop-shadow(0 1px 3px color-mix(in srgb, var(--color-gray-950) 25.00%, transparent));
   }
   .rkt-body {
     fill: currentColor;
@@ -1481,10 +1481,10 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     stroke-linejoin: round;
   }
   .rkt-win {
-    fill: rgba(255, 255, 255, 0.92);
+    fill: color-mix(in srgb, var(--color-gray-0) 92.00%, transparent);
   }
   .rkt-flame {
-    fill: #ff8a3d;
+    fill: var(--amber);
     transform-origin: 12px 16px;
     animation: rktFlame 0.16s ease-in-out infinite alternate;
   }
@@ -1501,8 +1501,8 @@ html[data-theme="light"] .signals-table td.hm-setup.setup-fade-short {
     border-radius: 50%;
     background: linear-gradient(
       to bottom,
-      rgba(255, 138, 61, 0.55),
-      rgba(255, 138, 61, 0)
+      color-mix(in srgb, var(--amber) 55.00%, transparent),
+      color-mix(in srgb, var(--amber) 0.00%, transparent)
     );
     filter: blur(1.5px);
     animation: rktTrail 0.85s ease-out forwards;

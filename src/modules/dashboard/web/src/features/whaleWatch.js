@@ -201,9 +201,9 @@ function renderWhaleWatch(results) {
       let deltaBadge = "";
       if (d) {
         if (d.type === "opened") {
-          deltaBadge = `<span style="margin-left:4px;background:var(--gain);color:#000;font-size: var(--text-micro);font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">NEW</span>`;
+          deltaBadge = `<span style="margin-left:4px;background:var(--gain);color:var(--ink);font-size: var(--text-micro);font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">NEW</span>`;
         } else if (d.type === "closed" || p._closed) {
-          deltaBadge = `<span style="margin-left:4px;background:var(--loss);color:#fff;font-size: var(--text-micro);font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
+          deltaBadge = `<span style="margin-left:4px;background:var(--loss);color:var(--color-gray-0);font-size: var(--text-micro);font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
         } else if (d.type === "size_up") {
           const diff = (d.sizeUsd ?? 0) - (d.prevSizeUsd ?? 0);
           deltaBadge = `<span style="margin-left:4px;color:var(--gain);font-size: var(--text-micro);font-weight:700;vertical-align:middle">+${fmtNotional(diff)}</span>`;
@@ -212,7 +212,7 @@ function renderWhaleWatch(results) {
           deltaBadge = `<span style="margin-left:4px;color:var(--loss);font-size: var(--text-micro);font-weight:700;vertical-align:middle">${fmtNotional(diff)}</span>`;
         }
       } else if (p._closed) {
-        deltaBadge = `<span style="margin-left:4px;background:var(--loss);color:#fff;font-size: var(--text-micro);font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
+        deltaBadge = `<span style="margin-left:4px;background:var(--loss);color:var(--color-gray-0);font-size: var(--text-micro);font-weight:700;border-radius:3px;padding:1px 4px;vertical-align:middle">CLOSED</span>`;
       }
 
       const sinceStr = p._closed ? "—" : fmtSince(p.firstSeenAt);

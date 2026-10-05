@@ -297,19 +297,19 @@
     transition: background 0.5s ease;
 
     .item-label {
-      color: rgba(255, 255, 255, 0.82);
+      color: color-mix(in srgb, var(--color-gray-0) 82.00%, transparent);
     }
     .item-value {
-      color: #fff;
+      color: var(--color-gray-0);
     }
     /* R-под-строка под заливкой → белая, как и число (символы под ярким краем
        «переливаются» вместе с uPnL). */
     .pnl-sub {
-      color: rgba(255, 255, 255, 0.9);
+      color: color-mix(in srgb, var(--color-gray-0) 90.00%, transparent);
     }
     .primary-tag {
-      color: #fff;
-      background: rgba(255, 255, 255, 0.18);
+      color: var(--color-gray-0);
+      background: color-mix(in srgb, var(--color-gray-0) 18.00%, transparent);
       box-shadow: none;
     }
   }
@@ -353,7 +353,7 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: rgba(255, 255, 255, 0.14);
+  background: color-mix(in srgb, var(--color-gray-0) 14.00%, transparent);
   opacity: 0;
   pointer-events: none;
   will-change: opacity;

@@ -16,7 +16,7 @@
     transition: background 0.12s ease;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.04);
+      background: color-mix(in srgb, var(--color-gray-0) 4.00%, transparent);
     }
   }
 }
@@ -103,9 +103,9 @@
   font-weight: 800;
 }
 .src-manual {
-  color: var(--yellow, #eab308);
-  background: rgba(234, 179, 8, 0.12);
-  border-color: rgba(234, 179, 8, 0.32);
+  color: var(--yellow);
+  background: color-mix(in srgb, var(--yellow) 12.00%, transparent);
+  border-color: color-mix(in srgb, var(--yellow) 32.00%, transparent);
 }
 
 /* Сторона позиции */
@@ -120,11 +120,11 @@
 }
 .side-long {
   color: var(--gain);
-  background: rgba(63, 185, 80, 0.12);
+  background: color-mix(in srgb, var(--gain) 12.00%, transparent);
 }
 .side-short {
   color: var(--loss);
-  background: rgba(248, 81, 73, 0.12);
+  background: color-mix(in srgb, var(--loss) 12.00%, transparent);
 }
 
 .activity-meta {

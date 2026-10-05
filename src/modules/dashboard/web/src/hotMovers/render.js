@@ -433,7 +433,7 @@ export function renderHotMovers(payload, fmtTime) {
         color = "var(--loss)";
         volKind = "high";
       } else if (v >= 1.3) {
-        color = "var(--orange, #f59e0b)";
+        color = "var(--amber)";
         volKind = "mid";
       } else if (v <= 0.5) {
         color = "var(--gain)";

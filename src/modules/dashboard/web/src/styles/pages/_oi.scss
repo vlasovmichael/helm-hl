@@ -43,10 +43,10 @@
 // Ключ к линиям графика. 🚨 Цвета обязаны совпадать с OI_COLOR / PX_COLOR в
 // charts/oiChart.js — легенда, которая врёт цветом, хуже отсутствующей.
 .oi-legend-oi {
-  background: #5b9dff;
+  background: var(--accent-2);
 }
 .oi-legend-px {
-  background: #e8b84b;
+  background: var(--amber);
 }
 
 // Таблица OI — общий `.table` (core/_table.scss), числа по классу `num`.
@@ -227,7 +227,7 @@
   letter-spacing: var(--ls-wide);
   padding: 5px 13px;
   border-radius: var(--radius-pill);
-  color: #fff;
+  color: var(--color-gray-0);
   white-space: nowrap;
 
   .icon {

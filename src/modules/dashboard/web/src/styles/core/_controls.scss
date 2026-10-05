@@ -65,7 +65,7 @@
 .btn--primary {
   background: var(--accent-2);
   border-color: var(--accent-2);
-  color: #fff;
+  color: var(--color-gray-0);
 
   &:hover:not(:disabled) {
     background: var(--accent-2);
@@ -522,7 +522,7 @@ textarea.field {
     border: 2px solid var(--panel-raised);
     border-radius: 50%;
     background: var(--accent-2);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--color-gray-950) 25.00%, transparent);
     transition: transform 0.12s var(--ease);
   }
   &::-webkit-slider-thumb:active {

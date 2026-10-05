@@ -31,8 +31,8 @@ function cellTone(g) {
   if (!sure) return { bg: "var(--panel-sunk)", fg: "var(--ink-3)" };
   const k = Math.min(Math.abs(expect(g)) / 12, 1);
   return expect(g) > 0
-    ? { bg: `rgba(46,160,67,${(0.1 + k * 0.35).toFixed(2)})`, fg: "var(--gain)" }
-    : { bg: `rgba(248,81,73,${(0.07 + k * 0.28).toFixed(2)})`, fg: "var(--loss)" };
+    ? { bg: `color-mix(in srgb, var(--gain) ${((0.1 + k * 0.35) * 100).toFixed(2)}%, transparent)`, fg: "var(--gain)" }
+    : { bg: `color-mix(in srgb, var(--loss) ${((0.07 + k * 0.28) * 100).toFixed(2)}%, transparent)`, fg: "var(--loss)" };
 }
 
 function rankTable() {

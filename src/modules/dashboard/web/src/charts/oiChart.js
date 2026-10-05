@@ -18,9 +18,9 @@
 
 import { cssVar } from "../utils/format.js";
 
-const OI_COLOR = "#5b9dff";
-const PX_COLOR = "#e8b84b";
-const PX_FILL = "rgba(232, 184, 75, 0.16)";
+const OI_COLOR = "var(--accent-2)";
+const PX_COLOR = "var(--amber)";
+const PX_FILL = "color-mix(in srgb, var(--amber) 16.00%, transparent)";
 
 let chart = null;
 let oiSeries = null;
@@ -69,9 +69,9 @@ const px = (n) => {
 function themeColors() {
   const isDark = document.documentElement.getAttribute("data-theme") === "dark";
   return {
-    text: cssVar("--ink-2") || (isDark ? "#71717A" : "#52525B"),
-    grid: cssVar("--rule-soft") || cssVar("--plot-grid") || (isDark ? "#1F1F23" : "#E4E4E7"),
-    bg: cssVar("--panel") || (isDark ? "#131316" : "#FFFFFF"),
+    text: cssVar("--ink-2") || (isDark ? "var(--ink-3)" : "var(--ink-3)"),
+    grid: cssVar("--rule-soft") || cssVar("--plot-grid") || (isDark ? "var(--ink)" : "var(--accent-ink)"),
+    bg: cssVar("--panel") || (isDark ? "var(--ink)" : "var(--color-gray-0)"),
   };
 }
 
@@ -196,7 +196,7 @@ export async function drawOiChart(points) {
     pxSeries = chart.addSeries(AreaSeries, {
       lineColor: PX_COLOR,
       topColor: PX_FILL,
-      bottomColor: "rgba(232, 184, 75, 0)",
+      bottomColor: "color-mix(in srgb, var(--amber) 0.00%, transparent)",
       lineWidth: 1,
       priceScaleId: "left",
       priceLineVisible: false,

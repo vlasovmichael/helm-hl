@@ -130,7 +130,7 @@
   &__backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(1, 4, 9, 0.62);
+    background: var(--scrim);
     opacity: 0;
     transition: opacity var(--dur) var(--ease-out);
   }
