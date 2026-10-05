@@ -15,6 +15,7 @@ export function resetCloseDeps(overrides = {}) {
     slippage: { ban: false, warn: false, label: '0.00%' },
     pnl: { pricePnl: 2, fundingPnl: 0.5, totalFee: 0.1, realizedPnl: 2.4, fundingSource: 'real' },
     lossTrips: false,
+    mfeMae: { mfePct: 4, maePct: -2 },
     ...overrides,
   };
   calls.length = 0;
@@ -24,7 +25,7 @@ resetCloseDeps();
 const note = (name, ...args) => calls.push([name, ...args]);
 export const logger = Object.fromEntries(['info', 'warn', 'error', 'debug'].map((level) => [level, (...args) => note(`log:${level}`, ...args)]));
 export async function retryWithBackoff(fn, options) { note('retry', options); return fn(); }
-export function closePosition(...args) { note('dbClose', ...args); }
+export function closePosition(...args) { note('dbClose', ...args); if (state.dbError) throw state.dbError; }
 export function recordBotOid(...args) { note('oid', ...args); }
 export async function closeMarket(...args) { note('market', ...args); if (state.marketError) throw state.marketError; return state.marketResult; }
 export async function getAccountSummary() { note('summary'); if (state.summaryError) throw state.summaryError; return state.summary; }
@@ -50,7 +51,7 @@ export function reconcile(...args) { note('reconcile', ...args); }
 export function notify(...args) { note('hook', ...args); }
 export function clearAdoptState(...args) { note('clearAdopt', ...args); }
 export function getAdoptPeakPct() { return 9; }
-export function consumeAdoptMfeMae(...args) { note('mfeMae', ...args); return { mfePct: 4, maePct: -2 }; }
+export function consumeAdoptMfeMae(...args) { note('mfeMae', ...args); return state.mfeMae; }
 export function finalizeAdoptTimeCut(...args) { note('timeCut', ...args); }
 export function finalizeAdoptShadowTrail(...args) { note('trail', ...args); }
 export function clearAdoptShadowTrail(...args) { note('clearTrail', ...args); }
