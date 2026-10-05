@@ -252,6 +252,7 @@ npm run mutation -- src/core/accountState.js
 | `nearMisses.js` | — | 91.43% / 32 / 3 / 0 | 4 с |
 | `trendEma.js` | — | 88.39% / 96 / 13 / 0 (3 timeout) | 13 с |
 | `paperNannyGate.js` | — | 93.33% / 14 / 1 / 0 | 3 с |
+| `tradeGuards.js` | — | 86.67% / 26 / 4 / 0 | 4 с |
 
 `accountState` теперь проверяет границу TTL, массовую инвалидацию и
 диагностику single-flight. `priceHistory` — latest/sample/spark, snapshot и
@@ -283,6 +284,10 @@ restore (включая сортировку и склейку с живым б�
 включения и неизвестной стратегии. Оставшаяся мутация — эквивалентная ветка,
 которая возвращает тот же ручной флаг.
 
+`tradeGuards` получил проверку поля known и защитных невалидных входов; покрыты
+дневной бюджет, граница лимита, cooldown и его границы. Четыре выжившие мутации
+— варианты одной defensive-проверки, которые дают уже проверенный idle-ответ.
+
 ### Ещё не выполнено
 
 Этап 3 **не завершён**. Не сняты замеры и не добавлены требуемые строки для
@@ -293,8 +298,7 @@ restore (включая сортировку и склейку с живым б�
 `calibrator.js`, `candleCache.js`, `carry.js`, `chartCoach.js`, `dayDesk.js`,
 `exchange.js`, `execCosts.js`, `fadeHotSignal.js`, `forwards.js`, `funding.js`,
 `hotMoversSetup.js`, `levelReads.js`, `mailDigest.js`, `scout.js`, `sync.js`,
-`tgSignalFeed.js`, `tgSignals.js`,
-`tradeGuards.js`, `tradeJournal.js`, `trendFollowAtr.js`,
+`tgSignalFeed.js`, `tgSignals.js`, `tradeJournal.js`, `trendFollowAtr.js`,
 `userFills.js`, `volatility.js`, `wallet.js`, `watchlistAlerts.js`,
 `winnersPositions.js`. Причина: для каждого из них ещё нужны отдельные
 изолированные тесты и фактический Stryker-замер, либо документированное

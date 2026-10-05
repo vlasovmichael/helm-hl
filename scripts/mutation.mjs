@@ -32,6 +32,7 @@ const testsByModule = {
   'src/modules/nearMisses.js': ['tests/nearMisses.test.js'],
   'src/modules/trendEma.js': ['tests/trendEma.test.js'],
   'src/modules/paperNannyGate.js': ['tests/paperNannyGate.test.js'],
+  'src/modules/tradeGuards.js': ['tests/tradeGuards.test.js'],
   'src/modules/carry.js': ['tests/carry.test.js'],
   'src/modules/chartCoach.js': ['tests/chartCoach.test.js'],
   'src/modules/dayDesk.js': ['tests/dayDesk.test.js'],
