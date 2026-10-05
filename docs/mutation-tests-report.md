@@ -249,6 +249,7 @@ npm run mutation -- src/core/accountState.js
 | `core/priceHistory.js` | — | 90.43% / 169 / 18 / 0 (1 timeout) | 23 с |
 | `core/oiHistory.js` | — | 90.00% / 54 / 6 / 0 | 6 с |
 | `core/retry.js` | — | 85.59% / 93 / 16 / 0 (2 timeout) | 14 с |
+| `nearMisses.js` | — | 91.43% / 32 / 3 / 0 | 4 с |
 
 `accountState` теперь проверяет границу TTL, массовую инвалидацию и
 диагностику single-flight. `priceHistory` — latest/sample/spark, snapshot и
@@ -266,6 +267,10 @@ restore (включая сортировку и склейку с живым б�
 полям ошибочного ответа и эквивалентным границам HTTP-диапазона; две мутации
 таймера Stryker завершил по timeout.
 
+`nearMisses` проверен на нормализации записи, обратном порядке выдачи,
+отсечке по времени, limit, очистке и границе кольца из 200 элементов. Три
+выжившие мутации эквивалентны для пустого начального буфера и ровно 200 строк.
+
 ### Ещё не выполнено
 
 Этап 3 **не завершён**. Не сняты замеры и не добавлены требуемые строки для
@@ -275,8 +280,8 @@ restore (включая сортировку и склейку с живым б�
 `adoptShadowTimeCut.js`, `binancePositioning.js`, `builderPositions.js`,
 `calibrator.js`, `candleCache.js`, `carry.js`, `chartCoach.js`, `dayDesk.js`,
 `exchange.js`, `execCosts.js`, `fadeHotSignal.js`, `forwards.js`, `funding.js`,
-`hotMoversSetup.js`, `levelReads.js`, `mailDigest.js`, `nearMisses.js`,
-`paperNannyGate.js`, `scout.js`, `sync.js`, `tgSignalFeed.js`, `tgSignals.js`,
+`hotMoversSetup.js`, `levelReads.js`, `mailDigest.js`, `paperNannyGate.js`,
+`scout.js`, `sync.js`, `tgSignalFeed.js`, `tgSignals.js`,
 `tradeGuards.js`, `tradeJournal.js`, `trendEma.js`, `trendFollowAtr.js`,
 `userFills.js`, `volatility.js`, `wallet.js`, `watchlistAlerts.js`,
 `winnersPositions.js`. Причина: для каждого из них ещё нужны отдельные
