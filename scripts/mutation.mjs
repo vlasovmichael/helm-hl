@@ -17,6 +17,7 @@ const testsByModule = {
   'src/modules/executor/state.js': ['tests/executorState.test.js'],
   'src/modules/tpGrid.js': ['tests/tpGrid.test.js'],
   'src/modules/strategistAdopt.js': ['tests/strategistAdopt.test.js'],
+  'src/modules/adoptTrailStore.js': ['tests/adoptTrailStore.test.js'],
 };
 if (!modulePath) {
   console.error('Usage: npm run mutation -- src/modules/path/to/module.js');
