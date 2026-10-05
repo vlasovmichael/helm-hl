@@ -22,6 +22,25 @@ const testsByModule = {
   'src/modules/adoptShadowTrail.js': ['tests/adoptShadowTrail.test.js'],
   'src/modules/paperEntry.js': ['tests/paperEntry.test.js'],
   'src/modules/ledger.js': ['tests/ledger.test.js'],
+  'src/core/accountState.js': ['tests/accountState.test.js'],
+  'src/core/fillFeed.js': ['tests/fillFeed.test.js'],
+  'src/core/healthRegistry.js': ['tests/healthRegistry.test.js'],
+  'src/core/liqEvents.js': ['tests/liqEvents.test.js'],
+  'src/core/priceHistory.js': ['tests/priceHistory.test.js', 'tests/priceHistoryWarmStart.test.js'],
+  'src/modules/carry.js': ['tests/carry.test.js'],
+  'src/modules/chartCoach.js': ['tests/chartCoach.test.js'],
+  'src/modules/dayDesk.js': ['tests/dayDesk.test.js'],
+  'src/modules/execCosts.js': ['tests/execCosts.test.js'],
+  'src/modules/fadeHotSignal.js': ['tests/fadeHotSignal.test.js'],
+  'src/modules/forwards.js': ['tests/forwards.test.js'],
+  'src/modules/levelReads.js': ['tests/levelReads.test.js'],
+  'src/modules/tgSignals.js': ['tests/tgSignals.test.js'],
+  'src/modules/tradeGuards.js': ['tests/tradeGuards.test.js'],
+  'src/modules/tradeJournal.js': ['tests/tradeJournal.test.js'],
+  'src/modules/trendFollowAtr.js': ['tests/trendFollowAtr.test.js'],
+  'src/modules/userFills.js': ['tests/userFills.test.js'],
+  'src/modules/wallet.js': ['tests/wallet.test.js'],
+  'src/modules/winnersPositions.js': ['tests/winnersPositions.test.js'],
 };
 if (!modulePath) {
   console.error('Usage: npm run mutation -- src/modules/path/to/module.js');
@@ -30,8 +49,8 @@ if (!modulePath) {
   const root = process.cwd();
   const absolute = resolve(root, modulePath);
   const normalized = relative(root, absolute);
-  if (!normalized.startsWith('src/modules/') || !normalized.endsWith('.js') || !existsSync(absolute)) {
-    console.error(`Expected an existing source module below src/modules/: ${modulePath}`);
+  if (!(normalized.startsWith('src/modules/') || normalized.startsWith('src/core/')) || !normalized.endsWith('.js') || !existsSync(absolute)) {
+    console.error(`Expected an existing source module below src/modules/ or src/core/: ${modulePath}`);
     process.exitCode = 1;
   } else {
     const child = spawn(process.platform === 'win32' ? 'npx.cmd' : 'npx', [
