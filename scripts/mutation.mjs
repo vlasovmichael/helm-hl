@@ -25,6 +25,7 @@ const testsByModule = {
   'src/core/accountState.js': ['tests/accountState.test.js'],
   'src/core/fillFeed.js': ['tests/fillFeed.test.js'],
   'src/core/healthRegistry.js': ['tests/healthRegistry.test.js'],
+  'src/core/oiHistory.js': ['tests/oiHistory.test.js'],
   'src/core/liqEvents.js': ['tests/liqEvents.test.js'],
   'src/core/priceHistory.js': ['tests/priceHistory.test.js', 'tests/priceHistoryWarmStart.test.js'],
   'src/modules/carry.js': ['tests/carry.test.js'],
