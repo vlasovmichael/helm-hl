@@ -102,7 +102,13 @@ export default defineConfig({
       "/login": {
         target: API_TARGET,
         changeOrigin: true,
-        bypass: (req) => (req.method === "GET" ? "/login.html" : undefined),
+        // Правило ловит и /login.js: скрипт формы Vite отдаёт сам, иначе он придёт как HTML.
+        bypass: (req) => {
+          if (req.method !== "GET") return undefined;
+          return /^\/login(\?|$)/.test(req.url) ? "/login.html" : req.url;
+        },
+        // Vite успевает дописать к /login .html и для POST: бэкенд ждёт форму на /login.
+        rewrite: (path) => path.replace(/^\/login\.html/, "/login"),
       },
       "/logout": { target: API_TARGET, changeOrigin: true },
     },
