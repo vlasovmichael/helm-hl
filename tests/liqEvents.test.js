@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 process.env.PUBLIC_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
 
-const { contractUsd, withinWindow, summarize, WINDOW_MS } =
+const { contractUsd, contractSpec, withinWindow, summarize, WINDOW_MS } =
   await import('../src/core/liqEvents.js');
 
 test('liqEvents: номинал = контракты × множитель × цена', () => {
@@ -47,4 +47,17 @@ test('liqEvents: свод делит стороны и фильтрует по �
   const market = summarize(list, { now });
   assert.equal(market.totalUsd, 147);
   assert.equal(market.n, 3);
+});
+
+test('обратный контракт: множитель в долларах, цену не умножаем', () => {
+  // 1000 контрактов BTC-USD-SWAP по $100 = $100 000, а не $8.6 млрд.
+  assert.equal(contractUsd('1000', 100, '86000', true), 100_000);
+});
+
+test('справочник: у обратного контракта монета из базы пары, у прямого — из ctValCcy', () => {
+  const inverse = { instCategory: '1', ctType: 'inverse', ctVal: '100', ctValCcy: 'USD', uly: 'BTC-USD' };
+  const linear = { instCategory: '1', ctType: 'linear', ctVal: '0.01', ctValCcy: 'BTC', uly: 'BTC-USDT' };
+  assert.deepEqual(contractSpec(inverse), { ctVal: 100, coin: 'BTC', inverse: true });
+  assert.deepEqual(contractSpec(linear), { ctVal: 0.01, coin: 'BTC', inverse: false });
+  assert.equal(contractSpec({ ...linear, instCategory: '3' }), null);
 });

@@ -38,7 +38,7 @@ const STATUS_LOG_MS = 300_000;
 const RECONNECT_BASE_MS = 1_000;
 const RECONNECT_MAX_MS = 30_000;
 
-// instId → { ctVal, coin }. Только крипта, только то, что умеем считать.
+// instId → { ctVal, coin, inverse }. Только крипта, только то, что умеем считать.
 let contracts = new Map();
 let contractsAt = 0;
 
@@ -63,15 +63,28 @@ let seenSinceLog = 0;
  * 🚨 `sz` приходит в КОНТРАКТАХ, а не в монетах: у BTC контракт равен 0.01 BTC,
  * у DOGE — 1000 DOGE. Без множителя число в плашке было бы выдумкой.
  *
+ * У обратного контракта (`BTC-USD-SWAP`) множитель уже в долларах: цену не умножать,
+ * иначе номинал раздувается в цену монеты раз.
+ *
  * @returns {number|null} null, если данных не хватает на честный счёт
  */
-export function contractUsd(sz, ctVal, px) {
+export function contractUsd(sz, ctVal, px, inverse = false) {
   const s = Number(sz);
   const v = Number(ctVal);
   const p = Number(px);
   if (!Number.isFinite(s) || !Number.isFinite(v) || !Number.isFinite(p)) return null;
   if (s <= 0 || v <= 0 || p <= 0) return null;
-  return s * v * p;
+  return inverse ? s * v : s * v * p;
+}
+
+/** Строка справочника OKX → множитель; у обратного контракта монета берётся из базы пары. */
+export function contractSpec(r) {
+  if (r?.instCategory !== CRYPTO_CATEGORY) return null;
+  const ctVal = Number(r.ctVal);
+  if (!Number.isFinite(ctVal) || ctVal <= 0) return null;
+  const inverse = r.ctType === 'inverse';
+  const coin = inverse ? String(r.uly || '').split('-')[0] : String(r.ctValCcy || '');
+  return coin ? { ctVal, coin: coin.toUpperCase(), inverse } : null;
 }
 
 /** Событие принадлежит окну. Вынесено отдельно ради теста границы. */
@@ -106,10 +119,8 @@ async function loadContracts(force = false) {
     if (!Array.isArray(body?.data)) throw new Error('instruments: неожиданный ответ');
     const next = new Map();
     for (const r of body.data) {
-      if (r.instCategory !== CRYPTO_CATEGORY) continue;
-      const ctVal = Number(r.ctVal);
-      if (!Number.isFinite(ctVal) || ctVal <= 0) continue;
-      next.set(r.instId, { ctVal, coin: String(r.ctValCcy || '').toUpperCase() });
+      const spec = contractSpec(r);
+      if (spec) next.set(r.instId, spec);
     }
     if (next.size) {
       contracts = next;
@@ -132,7 +143,7 @@ function handleRows(rows) {
     const c = contracts.get(row.instId);
     if (!c) continue; // не крипта либо множитель неизвестен — молча мимо
     for (const d of row.details || []) {
-      const usd = contractUsd(d.sz, c.ctVal, d.bkPx);
+      const usd = contractUsd(d.sz, c.ctVal, d.bkPx, c.inverse);
       if (usd == null) continue;
       const t = Number(d.ts);
       events.push({
