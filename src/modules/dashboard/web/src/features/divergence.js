@@ -11,7 +11,7 @@ import { isActiveCoin } from "../state/activeCoins.js";
 import { getWhalePositions } from "./whaleWatch.js";
 import { emptyRow, settle, skeletonRows } from "../core/placeholders.js";
 import { icon } from "../core/icon.js";
-import { chip, field } from "../core/ui.js";
+import { chip, coinIcon, field } from "../core/ui.js";
 
 let _divData = null;
 let _divWindow = "15m";
@@ -151,7 +151,7 @@ function divRenderRows(coins, btcPct, hasPast) {
         whaleCell = parts.join(" ");
       }
       return `<tr class="${isActiveCoin(c.coin) ?"is-active" : ""}">
-      <td style="font-weight:600">${c.coin}</td>
+      <td style="font-weight:600">${coinIcon(c.coin)}${c.coin}</td>
       <td class="num">${fmtPrice(c.price)}</td>
       <td class="num" style="color:${coinColor}">${hasPast ? fmtPct(c.coinPct) : "—"}</td>
       <td class="num" style="color:${relColor};font-weight:${Math.abs(rel ?? 0) >= 1.5 ? 600 : 400}">${hasPast && !isBtc ? fmtPct(rel) : isBtc ? "baseline" : "—"}</td>

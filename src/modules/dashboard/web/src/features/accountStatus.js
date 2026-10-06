@@ -13,6 +13,7 @@ import { riskTint } from "../utils/riskBar.js";
 import { updateAnimatedNumber } from "../utils/animatedNumber.js";
 import { startPriceStream, setWatchedCoins, getLivePrice, onPriceTick } from "../net/priceStream.js";
 import { TAKER_FEE_RATE } from "../state/activeCoins.js";
+import { coinIcon } from "../core/ui.js";
 
 // Доп. классы + inline-стиль для глубинной заливки PnL-карточки.
 // tint = riskTint(...) | null. Возвращает { cls, attr } для подстановки в HTML.
@@ -532,7 +533,7 @@ export function renderPosition(pos) {
   const sideCls = side === "SHORT" ? "negative" : "positive";
   container.innerHTML = `
     <div class="data-grid">
-      <div class="grid-item"><div class="item-label">Coin · Side</div><div class="item-value highlight">#${pos.coin} <span class="${sideCls}" style="font-size: var(--text-label); font-weight:700; padding:2px 6px; border-radius:4px; margin-left:4px;">${side}</span></div></div>
+      <div class="grid-item"><div class="item-label">Coin · Side</div><div class="item-value highlight">${coinIcon(pos.coin)}#${pos.coin} <span class="${sideCls}" style="font-size: var(--text-label); font-weight:700; padding:2px 6px; border-radius:4px; margin-left:4px;">${side}</span></div></div>
       <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(pos.sizeUsd)}</div></div>
       <div class="grid-item"><div class="item-label">Entry</div><div class="item-value">${fmtPrice(pos.entryPrice)}</div></div>
       <div class="grid-item"><div class="item-label">APY · Held</div><div id="pos-apyheld" class="item-value">${fmtPct(pos.entryApy)} · ${pos.heldHours.toFixed(1)}h</div></div>
@@ -866,7 +867,7 @@ export function renderManualPositions(list) {
       <div class="mcard" data-mcard="${escapeHtml(p.coin)}">
         <div class="mcard-head">
           <span class="mcard-badge">${manualBadge}</span>
-          <span class="item-value highlight">#${p.coin}</span>
+          <span class="item-value highlight">${coinIcon(p.coin)}#${p.coin}</span>
           <span class="item-value ${sideCls}">${p.side}</span>
           <!-- Закрытие живёт ЗДЕСЬ, а не в модалке: на карточке цена уже
                обновляется в реальном времени, а пока откроешь окно и

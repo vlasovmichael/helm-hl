@@ -8,6 +8,7 @@
 import { fetchJson } from "../net/api.js";
 import { emptyState } from "../core/placeholders.js";
 import { icon } from "../core/icon.js";
+import { coinIcon } from "../core/ui.js";
 
 function esc(s) {
   return String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
@@ -50,7 +51,7 @@ function statRow(label, s, { strong = false } = {}) {
 }
 
 function coinChip(c) {
-  return `<span class="mt-chip ${signCls(c.net)}">${esc(c.coin)} <b>${money(c.net)}</b><i>n=${c.n}</i></span>`;
+  return `<span class="mt-chip ${signCls(c.net)}">${coinIcon(c.coin)}${esc(c.coin)} <b>${money(c.net)}</b><i>n=${c.n}</i></span>`;
 }
 
 function renderBreakdown(data) {

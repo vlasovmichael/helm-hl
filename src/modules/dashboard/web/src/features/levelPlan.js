@@ -6,7 +6,7 @@
 //  Порог RR 1.5: ниже него сделка при винрейте оператора минусовая после комиссий.
 // ─────────────────────────────────────────────────
 
-import { segmented, stat } from "../core/ui.js";
+import { coinIcon, segmented, stat } from "../core/ui.js";
 import {
   ACCEPT_BARS,
   MIN_RR,
@@ -136,7 +136,7 @@ export function renderContext(node, data) {
     : "";
   node.innerHTML = `<div class="lv-context">
     <div class="lv-context-row mono"><span class="label">BTC</span>${esc(moves("btc"))}</div>
-    <div class="lv-context-row mono"><span class="label">${esc(data.coin)}</span>${esc(moves("coin"))}</div>
+    <div class="lv-context-row mono"><span class="label">${coinIcon(data.coin)}${esc(data.coin)}</span>${esc(moves("coin"))}</div>
     <div class="lv-context-row"><span class="label">Link</span><span class="mono">corr ${ctx.corr.toFixed(2)} · beta ${ctx.beta.toFixed(2)}</span>${head ? `<b>${esc(head)}</b>` : ""}</div>
   </div>`;
 }

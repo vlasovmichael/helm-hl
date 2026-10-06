@@ -15,6 +15,7 @@
 
 import { settle, emptyRow } from "../core/placeholders.js";
 import { icon } from "../core/icon.js";
+import { coinIcon } from "../core/ui.js";
 
 const fmtPct = (v, d = 2) =>
   v == null || !Number.isFinite(v) ? "—" : (v >= 0 ? "+" : "") + v.toFixed(d) + "%";
@@ -265,7 +266,7 @@ function renderRows() {
         // потом повесит стоп (см. границу ответственности в tradeTicket.js).
         `<tr class="scr-row" data-coin="${c.coin}" tabindex="0" role="button"` +
           ` data-card="Open trade ticket for ${c.coin}">` +
-          `<td class="scr-coin"><a href="/oi?coin=${encodeURIComponent(c.coin)}" data-card="Open ${c.coin} on OI">${c.coin}</a></td>` +
+          `<td class="scr-coin"><a href="/oi?coin=${encodeURIComponent(c.coin)}" data-card="Open ${c.coin} on OI">${coinIcon(c.coin)}${c.coin}</a></td>` +
           `<td class="num scr-payoff ${payoffClass(c.payoff)}">${
             c.payoff == null ? "—" : c.payoff.toFixed(1) + "×"
           }</td>` +

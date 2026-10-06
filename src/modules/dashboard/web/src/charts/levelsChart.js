@@ -8,6 +8,7 @@ import { fmtPx } from "../features/levelPlan.js";
 import { EMA_PERIOD, ema } from "../features/levelMath.js";
 import { candleStyle, lastPriceLine } from "./candleStyle.js";
 import { cssVar } from "../utils/format.js";
+import { coinIcon } from "../core/ui.js";
 
 // Пустые бары справа от последней свечи: в них стоит коробка плана.
 const FUTURE_BARS = 34;
@@ -396,7 +397,7 @@ function renderLegend(bar) {
   const tone = b.close >= b.open ? "up" : "down";
   const v = (k, n) => `<span>${k}<b class="${tone}">${fmtPx(n)}</b></span>`;
   legend.innerHTML =
-    `<strong>${meta.coin} · ${meta.tf} · Hyperliquid</strong>` +
+    `<strong>${coinIcon(meta.coin)}${meta.coin} · ${meta.tf} · Hyperliquid</strong>` +
     v("O", b.open) +
     v("H", b.high) +
     v("L", b.low) +

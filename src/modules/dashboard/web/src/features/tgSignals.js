@@ -9,7 +9,7 @@
 import { escapeHtml, fmtUsd, fmtPct, fmtPrice, fmtSince } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 import { icon } from "../core/icon.js";
-import { button, badge } from "../core/ui.js";
+import { button, badge, coinIcon } from "../core/ui.js";
 import { emptyState, skeletonRows, settle } from "../core/placeholders.js";
 import * as dialog from "../core/dialog.js";
 
@@ -32,7 +32,7 @@ function rowHtml(p) {
 
   return `
     <tr>
-      <td><span class="signals-price">#${escapeHtml(p.coin)}</span></td>
+      <td><span class="signals-price">${coinIcon(p.coin)}#${escapeHtml(p.coin)}</span></td>
       <td class="center ${isShort ? "num-neg" : "num-pos"}"><strong>${arrow} ${escapeHtml(p.side)}</strong></td>
       <td class="num">${p.leverage}&times;</td>
       <td class="num">${fmtUsd(p.sizeUsd)}</td>
@@ -360,7 +360,7 @@ function journalRow(s) {
     <tr class="${opened ? "" : "tg-j-skipped"}">
       <td class="tg-j-time">${new Date(s.postedAt).toISOString().slice(5, 16).replace("T", " ")}</td>
       <td class="tg-j-chan">${escapeHtml(s.channel)}</td>
-      <td><span class="signals-price">#${escapeHtml(s.coin)}</span></td>
+      <td><span class="signals-price">${coinIcon(s.coin)}#${escapeHtml(s.coin)}</span></td>
       <td class="center ${isShort ? "num-neg" : "num-pos"}">${icon(isShort ? "short" : "long")} ${escapeHtml(s.side)}</td>
       <td>${opened
         ? badge({ label: "traded", tone: "accent" })

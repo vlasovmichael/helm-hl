@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────
 
 import { fetchJson } from "../net/api.js";
-import { badge, chip, segmented, stat } from "../core/ui.js";
+import { badge, chip, coinIcon, segmented, stat } from "../core/ui.js";
 import { emptyRow, emptyState, skeletonRows, skeletonText } from "../core/placeholders.js";
 import { escapeHtml, fmtMoney } from "../utils/format.js";
 
@@ -173,7 +173,7 @@ function renderTrades({ trades, flags, notes }) {
       return `
       <tr>
         <td>${dateTime.format(trade.entryTime)}</td>
-        <td><a href="/journal?view=trades&amp;coin=${encodeURIComponent(trade.coin)}" data-coin-filter="${coin}" data-card="Show only ${coin}">${coin}</a></td>
+        <td><a href="/journal?view=trades&amp;coin=${encodeURIComponent(trade.coin)}" data-coin-filter="${coin}" data-card="Show only ${coin}">${coinIcon(trade.coin)}${coin}</a></td>
         <td>${badge({ label: trade.side, tone: trade.side })}</td>
         <td>${SESSION_LABELS[trade.session]}</td>
         <td data-card="${escapeHtml(trendCard)}">${TREND_LABELS[trade.trend]}</td>

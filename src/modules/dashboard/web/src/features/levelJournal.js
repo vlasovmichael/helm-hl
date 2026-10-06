@@ -5,6 +5,7 @@
 // ─────────────────────────────────────────────────
 
 import { esc, fmtPx } from "./levelPlan.js";
+import { coinIcon } from "../core/ui.js";
 
 export const MIN_TRIGGERED = 30;
 
@@ -96,7 +97,7 @@ export function renderJournal(node, journal) {
         .map(
           (r) => `<tr>
             <td class="mono">${esc(time(r.ts))}</td>
-            <td class="strong">${esc(r.coin)}</td>
+            <td class="strong">${coinIcon(r.coin)}${esc(r.coin)}</td>
             <td class="mono">${esc(r.tf)}</td>
             <td class="num mono">${fmtPx(r.price)}</td>
             <td>${outcomeCell(r)}</td>

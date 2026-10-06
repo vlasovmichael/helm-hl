@@ -14,6 +14,7 @@ import { fetchJson, postJson } from "../net/api.js";
 import { icon } from "../core/icon.js";
 import * as dialog from "../core/dialog.js";
 import { emptyRow, emptyState, skeletonText } from "../core/placeholders.js";
+import { coinIcon } from "../core/ui.js";
 
 let currentPnlPeriod = "today";
 let lastPnlSummary = null;
@@ -291,7 +292,7 @@ function renderExits() {
       const capPct = isWinner ? `${(t.capture * 100).toFixed(0)}%` : "—";
       const capCls = isWinner ? (t.capture >= 0.5 ? "num-pos" : "num-neg") : "";
       return `<tr>
-        <td>${escapeHtml(t.coin)}</td>
+        <td>${coinIcon(t.coin)}${escapeHtml(t.coin)}</td>
         <td>${sideLabel(t.side)}</td>
         <td class="num ${pnlCls}">${fmtMoney(t.pnl)}</td>
         <td class="num">${t.mfeUsd == null ? "—" : fmtMoney(t.mfeUsd)}</td>
@@ -344,7 +345,7 @@ function renderPerCoin() {
         r.winRate >= 60 ? "num-pos" : r.winRate < 40 ? "num-neg" : "";
       return `
         <tr>
-          <td class="coin-cell">#${escapeHtml(r.coin)}</td>
+          <td class="coin-cell">${coinIcon(r.coin)}#${escapeHtml(r.coin)}</td>
           <td class="num">${r.trades}</td>
           <td class="num ${pnlCls}">${fmtMoney(r.pnl)}</td>
           <td class="num ${wrCls}">${r.winRate.toFixed(0)}%</td>
@@ -680,7 +681,7 @@ function renderDayTrades(trades) {
       const pnlCls = t.pnl > 0 ? "num-pos" : t.pnl < 0 ? "num-neg" : "";
       const src = SOURCE_LABEL[t.source] || t.source || "—";
       return `<tr>
-        <td>${escapeHtml(t.coin || "?")}</td>
+        <td>${coinIcon(t.coin)}${escapeHtml(t.coin || "?")}</td>
         <td><span class="day-side day-side--${sideCls}">${sideCls.toUpperCase()}</span></td>
         <td class="day-modal__src">${escapeHtml(src)}</td>
         <td class="num">${_fmtTime(t.closeTime)}</td>

@@ -19,6 +19,7 @@ import { mountPageHeader } from "./src/core/pageHeader.js";
 import { onThemeChange } from "./src/core/shell.js";
 import { fetchJson } from "./src/net/api.js";
 import { drawOiChart, clearOiChart, destroyOiChart, applyOiChartTheme } from "./src/charts/oiChart.js";
+import { coinIcon, coinLabel } from "./src/core/ui.js";
 
 // Экран жив, пока его не сменили. Ответы, приехавшие после ухода, писать
 // некуда: разметки этой страницы в документе уже нет.
@@ -168,7 +169,7 @@ function carryTable(rows) {
       </tr></thead>
       <tbody>${rows
         .map((r) => `<tr>
-          <td class="strong">${r.coin}</td>
+          <td class="strong">${coinIcon(r.coin)}${r.coin}</td>
           <td class="num mono ${r.aprNow > 0 ? "up" : "down"}">${carryNum(r.aprNow)}%</td>
           <td class="num mono ${(r.aprAvg ?? 0) > 0 ? "up" : "down"}">${r.aprAvg == null ? "—" : `${carryNum(r.aprAvg)}%`}</td>
           <td class="num mono col-opt">${r.positiveShare == null ? "—" : `${Math.round(r.positiveShare * 100)}%`}</td>
@@ -302,7 +303,7 @@ function renderTable() {
     .map(
       (r) => `
       <tr data-coin="${r.coin}"${r.coin === activeCoin ? ' class="active"' : ""}>
-        <td class="oi-coin">#${r.coin}</td>
+        <td class="oi-coin">${coinIcon(r.coin)}#${r.coin}</td>
         <td class="num">${fmtUsd(r.oiUsd)}</td>
         <td class="num">${fmtPctCell(r.dOi24hPct)}</td>
         <td class="num">${fmtPctCell(r.dOi1hPct)}</td>
@@ -346,7 +347,7 @@ async function selectCoin(coin, { scroll = true } = {}) {
   // (html { scroll-behavior }), поэтому системную настройку «меньше движения»
   // браузер учитывает сам.
   if (scroll) detail.scrollIntoView({ behavior: "smooth", block: "start" });
-  document.getElementById("oi-detail-coin").textContent = coin;
+  document.getElementById("oi-detail-coin").innerHTML = coinLabel(coin);
   document.getElementById("oi-to-journal").href = `/journal?coin=${encodeURIComponent(coin)}`;
   const url = new URL(location.href);
   url.searchParams.set("coin", coin);

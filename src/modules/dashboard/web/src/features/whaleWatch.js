@@ -9,7 +9,7 @@ import { escapeHtml, fmtNotional, fmtSince } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 import { emptyRow } from "../core/placeholders.js";
 import { icon } from "../core/icon.js";
-import { button, chip } from "../core/ui.js";
+import { button, chip, coinIcon } from "../core/ui.js";
 
 // Колбэк «китовые позиции обновились» — main.js вешает на него renderBtcDivergence.
 let onPositionsUpdated = () => {};
@@ -219,7 +219,7 @@ function renderWhaleWatch(results) {
       const rowOpacity = p._closed ? "opacity:.5;" : "";
       return `<tr style="${rowOpacity}">
       <td style="color:var(--ink-3);font-size: var(--text-small)">${escapeHtml(p.label)}</td>
-      <td style="font-weight:700">${escapeHtml(p.coin)}</td>
+      <td style="font-weight:700">${coinIcon(p.coin)}${escapeHtml(p.coin)}</td>
       <td class="num" style="color:${sideColor};font-weight:700">${p.side}</td>
       <td class="num">${fmtNotional(p.sizeUsd)}${deltaBadge}</td>
       <td class="num" style="color:var(--ink-3)">${levStr}</td>

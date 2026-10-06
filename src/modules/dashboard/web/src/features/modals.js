@@ -18,6 +18,7 @@ import { fetchJson } from "../net/api.js";
 import * as dialog from "../core/dialog.js";
 import { icon } from "../core/icon.js";
 import { emptyState } from "../core/placeholders.js";
+import { coinIcon } from "../core/ui.js";
 
 let lastActivityEvents = [];
 
@@ -95,7 +96,7 @@ export function renderActivity(activity) {
       return `
       <div class="activity-item ${clickable}" ${idxAttr}>
         <span class="activity-kind ${kindClass}">${kindLabel}</span>
-        <span class="activity-coin">#${escapeHtml(e.coin)}</span>
+        <span class="activity-coin">${coinIcon(e.coin)}#${escapeHtml(e.coin)}</span>
         ${sideChip}
         ${srcBadge}
         ${reason}
@@ -166,7 +167,7 @@ function tmHeader({ coin, side, kindLabel, strat, isManual, when }) {
   // сделку опознаёт именно он.
   return `
     <div class="tm-header">
-      <div class="tm-coin-badge">${coin.slice(0, 4)}</div>
+      <div class="tm-coin-badge">${coinIcon(coin, { cls: "coin-icon--lg" })}</div>
       <div class="tm-header-text">
         <div class="tm-title">${kindLabel} #${coin} ${sideChip}</div>
         <div class="tm-sub">${stratText} · ${when}</div>

@@ -14,7 +14,7 @@ import { escapeHtml } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 import * as dialog from "../core/dialog.js";
 import { icon } from "../core/icon.js";
-import { button, segmented } from "../core/ui.js";
+import { button, coinIcon, segmented } from "../core/ui.js";
 import { attachCoinCombo, coinCombo, loadCoinUniverse } from "../core/coinCombo.js";
 
 let busy = false;
@@ -155,7 +155,7 @@ function resultHtml(r) {
   const sideLine = r.userSide
     ? `<span class="wi-userside">your side: ${r.userSide}</span>`
     : "";
-  const head = `<div class="wi-title">#${escapeHtml(r.coin)} <span class="wi-px">${fmtPrice(r.price)}</span> ${sideLine}</div>`;
+  const head = `<div class="wi-title">${coinIcon(r.coin)}#${escapeHtml(r.coin)} <span class="wi-px">${fmtPrice(r.price)}</span> ${sideLine}</div>`;
 
   const c = r.coach;
   // Фолбэк: если coach не построился (нет свечей) — старый fade-вердикт.

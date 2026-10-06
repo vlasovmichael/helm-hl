@@ -3,6 +3,7 @@
 // Стили — `.combo*` и `.field--coin` в core/_controls.scss.
 
 import { fetchJson } from "../net/api.js";
+import { coinIcon } from "./ui.js";
 
 /**
  * Подсказки тикеров под вводом. Совпадение с НАЧАЛА строки идёт выше, чем
@@ -90,7 +91,7 @@ export function attachCoinCombo(input, { getCoins, onPick, onInput, state } = {}
         (c, i) =>
           `<li class="combo__item${i === st.idx ? " is-on" : ""}" role="option"` +
           ` id="${OPT_ID}${i}" aria-selected="${i === st.idx}"` +
-          ` data-pick="${esc(c)}">${esc(c)}</li>`,
+          ` data-pick="${esc(c)}">${coinIcon(c)}${esc(c)}</li>`,
       )
       .join("")}</ul>`;
   };

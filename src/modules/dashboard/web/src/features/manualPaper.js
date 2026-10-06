@@ -15,7 +15,7 @@ import { fetchJson } from "../net/api.js";
 import * as dialog from "../core/dialog.js";
 import { icon } from "../core/icon.js";
 import { renderTickValue } from "../core/tickValue.js";
-import { button, segmented, slider, card } from "../core/ui.js";
+import { button, coinIcon, segmented, slider, card } from "../core/ui.js";
 import { attachCoinCombo, coinCombo } from "../core/coinCombo.js";
 
 let busy = false;
@@ -288,7 +288,7 @@ function rowHtml(p) {
       : "";
   return `
     <tr data-mp-row="${escapeHtml(p.id)}">
-      <td><span class="signals-price">#${escapeHtml(p.coin)}</span></td>
+      <td><span class="signals-price">${coinIcon(p.coin)}#${escapeHtml(p.coin)}</span></td>
       <td class="center ${sideCls}"><strong>${arrow} ${escapeHtml(p.side)}</strong></td>
       <td class="num">${p.leverage}×</td>
       <td class="num">${fmtUsd(p.sizeUsd)}</td>

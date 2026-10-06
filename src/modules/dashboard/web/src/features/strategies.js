@@ -10,6 +10,7 @@ import { escapeHtml, fmtMoney, fmtUsd, fmtPrice } from "../utils/format.js";
 import { fetchJson } from "../net/api.js";
 import { icon } from "../core/icon.js";
 import { emptyState } from "../core/placeholders.js";
+import { coinIcon } from "../core/ui.js";
 
 const _stratExpanded = new Set(); // id'шники развёрнутых строк (переживают re-render)
 let _lastStrategies = null;
@@ -126,7 +127,7 @@ function stratTradesBlock(s) {
       const side = (t.side || "").toUpperCase();
       const held = t.hold_seconds ? stratHold(t.hold_seconds) : "";
       return (
-        `<tr><td class="strat-dt-coin">${escapeHtml(t.coin)}</td>` +
+        `<tr><td class="strat-dt-coin">${coinIcon(t.coin)}${escapeHtml(t.coin)}</td>` +
         `<td class="strat-dt-side">${side}</td>` +
         `<td class="num ${cls}">${fmtMoney(net)}</td>` +
         `<td class="strat-dt-reason strat-dim">${escapeHtml(t.reason || "")}</td>` +
@@ -195,7 +196,7 @@ function stratDetail(s) {
         const arrow = dir === "LONG" ? icon("long") : dir === "SHORT" ? icon("short") : icon("flat");
         const dcls = dir === "LONG" ? "strat-pos" : dir === "SHORT" ? "strat-neg" : "strat-dim";
         return (
-          `<tr><td class="strat-dt-coin">${escapeHtml(sig.coin || "")}</td>` +
+          `<tr><td class="strat-dt-coin">${coinIcon(sig.coin)}${escapeHtml(sig.coin || "")}</td>` +
           `<td class="strat-dt-side ${dcls}">${arrow} ${dir}</td>` +
           `<td class="num strat-dim">${fmtPrice(sig.price)}</td>` +
           `<td class="num strat-dim strat-dt-age">${stratAge(sig.ts || sig.at || sig.time)} ago</td></tr>`
@@ -241,7 +242,7 @@ function stratRowHtml(s, planned, opts = {}) {
 
   const e = s.edge || {};
   const pos = s.active
-    ? `<span class="strat-pos-coin">${escapeHtml(s.active.coin)}</span> ` +
+    ? `<span class="strat-pos-coin">${coinIcon(s.active.coin)}${escapeHtml(s.active.coin)}</span> ` +
       `<span class="strat-${s.active.side ==="LONG" ? "pos" : "neg"}">${s.active.side}</span>` +
       ` <span class="strat-dim">${s.active.heldHours.toFixed(1)}h</span>`
     : '<span class="strat-dim">—</span>';

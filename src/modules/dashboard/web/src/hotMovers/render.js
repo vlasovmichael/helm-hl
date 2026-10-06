@@ -24,6 +24,7 @@ import {
   getActiveCoins,
   getActivePos,
 } from "../state/activeCoins.js";
+import { coinIcon } from "../core/ui.js";
 
 const _hmPrevPrices = new Map();
 
@@ -555,7 +556,7 @@ export function renderHotMovers(payload, fmtTime) {
 
     const rowHtml = `
       <td>${isOpen ? icon("pinned", { label: "Open position" }) : idx + 1}</td>
-      <td><a class="signals-price hm-coin-link" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" data-card="Open ${escapeHtml(s.coin)} in TradingView">#${escapeHtml(s.coin)}</a>${htfChip}${oiVolChip}${fadeHotChip(s.fadeHot)}</td>
+      <td><a class="signals-price hm-coin-link" href="${tvUrl(s.coin)}" target="_blank" rel="noopener" data-card="Open ${escapeHtml(s.coin)} in TradingView">${coinIcon(s.coin)}#${escapeHtml(s.coin)}</a>${htfChip}${oiVolChip}${fadeHotChip(s.fadeHot)}</td>
       ${setupCell}
       ${entryCell}
       <td class="hm-price-cell num ${flashCls}"><span class="hm-price-inner"><span class="hm-spark-wrap" data-card="Price over ~20 min (live)">${sparkSvg(s.spark, { w: SPARK_W, h: SPARK_H, cls: "hm-spark" })}</span><span class="signals-price">${fmtPrice(s.price)}</span></span></td>

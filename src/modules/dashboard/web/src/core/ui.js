@@ -297,3 +297,21 @@ export function stat({
     `</div>`
   );
 }
+
+/**
+ * Иконка монеты перед тикером. Картинку отдаёт наш сервер (`/api/coin-icon`),
+ * монете без иконки он рисует букву — разметка от этого не зависит.
+ */
+export function coinIcon(coin, { cls = "" } = {}) {
+  const c = String(coin ?? "").trim();
+  if (!c) return "";
+  return (
+    `<img class="coin-icon${cls ? " " + cls : ""}" src="/api/coin-icon/${encodeURIComponent(c)}"` +
+    ` alt="" width="16" height="16" loading="lazy" decoding="async">`
+  );
+}
+
+/** Тикер с иконкой: одна запись монеты на всех страницах. */
+export function coinLabel(coin, { cls = "" } = {}) {
+  return `<span class="coin-label${cls ? " " + cls : ""}">${coinIcon(coin)}${esc(coin)}</span>`;
+}

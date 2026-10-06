@@ -9,6 +9,7 @@
 
 import { sparkSvg } from "../utils/spark.js";
 import { icon } from "../core/icon.js";
+import { coinIcon } from "../core/ui.js";
 
 function fmtPrice(p) {
   if (p == null || !Number.isFinite(p)) return "—";
@@ -246,7 +247,7 @@ export function renderMarketContext(d) {
         liqEventRow(ev.marketShortUsd, "short") +
         liqEventRow(ev.marketLongUsd, "long") +
         (ev.n > 0
-          ? `<span class="mc-liq-row"><i>${ev.coin}</i>` +
+          ? `<span class="mc-liq-row"><i>${coinIcon(ev.coin)}${ev.coin}</i>` +
             `<b>${fmtUsd(ev.longUsd + ev.shortUsd)}</b></span>`
           : "");
     }

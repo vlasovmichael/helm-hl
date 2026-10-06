@@ -91,6 +91,7 @@ import { handlePositionNanny } from "./routes/positionNanny.js";
 import { handleCarry } from "./routes/carry.js";
 import { handleEntryFilter } from "./routes/entryFilter.js";
 import { handleLevels, handleLevelsOi } from "./routes/levels.js";
+import { handleCoinIcon } from "./routes/coinIcon.js";
 import { levelJournal } from "../levelReads.js";
 import { isTargetTrailArmed } from "../../app/adoptSupervise.js";
 import { rebuild as rebuildCalibrator, readCache as calibratorCache } from "../calibrator.js";
@@ -1161,6 +1162,7 @@ export function startDashboard() {
   app.get("/api/carry", handleCarry);
   app.get("/api/entry-filter", handleEntryFilter);
   // Механические уровни: зоны считаются правилом, страница даёт только геометрию сделки.
+  app.get("/api/coin-icon/:coin", handleCoinIcon);
   app.get("/api/levels", handleLevels);
   app.get("/api/levels/journal", (req, res) => res.json(levelJournal()));
   app.get("/api/levels/oi", handleLevelsOi);

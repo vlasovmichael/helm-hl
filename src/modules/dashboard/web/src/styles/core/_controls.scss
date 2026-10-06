@@ -556,3 +556,34 @@ textarea.field {
   stroke-width: 2;
   color: currentColor;
 }
+
+/* Иконка монеты: круг размером со строку, по базовой линии тикера. Цвет
+   бренда несёт сама картинка, токены её не красят. */
+.coin-icon {
+  display: inline-block;
+  flex: none;
+  width: 1.15em;
+  height: 1.15em;
+  border-radius: 50%;
+  vertical-align: -0.2em;
+  object-fit: contain;
+}
+
+.coin-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* В строке с текстом иконке нужен зазор справа. */
+:not(.coin-label) > .coin-icon {
+  margin-right: 6px;
+}
+
+/* Крупная — одна в плашке-опознавателе (шапка сделки), без текста рядом. */
+.coin-icon.coin-icon--lg {
+  width: 26px;
+  height: 26px;
+  margin: 0;
+}

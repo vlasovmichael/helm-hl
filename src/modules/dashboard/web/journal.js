@@ -10,7 +10,7 @@
 import "./src/styles/journal.scss";
 import { icon, paintIcons } from "./src/core/icon.js";
 import { analyzeMultiTF } from "../../chartCoach.js";
-import { segmented } from "./src/core/ui.js";
+import { coinIcon, coinLabel, segmented } from "./src/core/ui.js";
 import { mountTradeLog, setUrlCoin } from "./src/features/tradeLog.js";
 
 const COINS = ["BTC", "HYPE", "SOL"];
@@ -278,7 +278,7 @@ function renderYesterday() {
   G("saveGrade").onclick = () => { d.grade = G("grade").value.trim(); entries(coin)[p.date] = d; saveDb(); renderYesterday(); renderHist(); flashSaved(); };
 }
 function renderHist() {
-  G("histCoin").textContent = coin; const e = entries(coin); const days = Object.keys(e).sort().reverse(); const h = G("hist");
+  G("histCoin").innerHTML = coinLabel(coin); const e = entries(coin); const days = Object.keys(e).sort().reverse(); const h = G("hist");
   if (!days.length) { h.innerHTML = '<p class="j-empty">Empty.</p>'; return; }
   h.innerHTML = days.map((d) => {
     const x = e[d];
@@ -295,7 +295,7 @@ function flashSaved() { const s = G("saved"); s.classList.add("show"); setTimeou
 // ── вкладки монет ──
 function renderTabs() {
   G("tabs").innerHTML = allCoins().map((c) =>
-    `<button class="tabs__tab${c === coin ? " is-active" : ""}" data-coin="${c}">${c}${COINS.includes(c) ? "" : `<span class="j-rm" data-rm="${c}" data-card="Remove">${icon("close")}</span>`}</button>`,
+    `<button class="tabs__tab${c === coin ? " is-active" : ""}" data-coin="${c}">${coinIcon(c)}${c}${COINS.includes(c) ? "" : `<span class="j-rm" data-rm="${c}" data-card="Remove">${icon("close")}</span>`}</button>`,
   ).join("") + `<button class="tabs__tab j-addbtn" id="addCoin" data-card="Add a coin">+</button>`;
 }
 function showAddInput() {
@@ -395,7 +395,7 @@ function wireCalc() {
 
 function switchCoin(c) {
   coin = c; renderTabs();
-  G("anchorCoin").textContent = c; G("histCoin").textContent = c;
+  G("anchorCoin").innerHTML = coinLabel(c); G("histCoin").innerHTML = coinLabel(c);
   G("anchorDate").textContent = "markup for " + todayKey();
   fillForm(entries(c)[todayKey()] || null); renderYesterday(); renderHist();
   loadAnchor();
