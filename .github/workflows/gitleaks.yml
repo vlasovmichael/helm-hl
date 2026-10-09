@@ -1,0 +1,26 @@
+# Репо публичный: секрет в пуше виден всем. Локальный хук можно обойти --no-verify, этот — нет.
+name: gitleaks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: gitleaks
+        env:
+          V: 8.30.1
+        run: |
+          base=https://github.com/gitleaks/gitleaks/releases/download/v$V
+          curl -fsSLO "$base/gitleaks_${V}_linux_x64.tar.gz"
+          curl -fsSL "$base/gitleaks_${V}_checksums.txt" | grep " gitleaks_${V}_linux_x64.tar.gz$" | sha256sum -c -
+          tar -xzf "gitleaks_${V}_linux_x64.tar.gz" gitleaks
+          ./gitleaks git . --redact --no-banner -c .gitleaks.toml
