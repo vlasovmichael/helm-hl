@@ -43,7 +43,7 @@ if (!isTest) {
   mkdirSync("logs", { recursive: true });
 }
 
-const { combine, timestamp, printf, colorize, errors } = winston.format;
+const { combine, timestamp, printf, errors } = winston.format;
 
 const lineFormat = printf(({ level, message, timestamp, stack }) => {
   return stack
@@ -57,11 +57,32 @@ const fileFormat = combine(
   lineFormat,
 );
 
+const MODULE_PREFIX = /^\[([A-Za-z][\w-]*)\]\s*/;
+const FIXED = new Set(["time", "level", "module", "msg", "stack", "message", "timestamp"]);
+
+// stdout — JSON для Loki (`| json | module="Adopt"`); файлы и лента дашборда остаются текстом.
+// Префикс `[Модуль]` уходит в поле module, стек ошибки — одним полем, а не россыпью строк.
+export function jsonLine(info, now = new Date()) {
+  const text = typeof info.message === "string" ? info.message : String(info.message ?? "");
+  const prefix = MODULE_PREFIX.exec(text);
+  const line = { time: now.toISOString(), level: info.level };
+  if (prefix) line.module = prefix[1];
+  line.msg = prefix ? text.slice(prefix[0].length) : text;
+  for (const [key, value] of Object.entries(info)) {
+    if (!FIXED.has(key)) line[key] = value;
+  }
+  if (info.stack) line.stack = info.stack;
+  try {
+    return JSON.stringify(line);
+  } catch {
+    // Циклический meta не должен ронять логирование.
+    return JSON.stringify({ time: line.time, level: line.level, module: line.module, msg: line.msg });
+  }
+}
+
 const consoleFormat = combine(
   errors({ stack: true }),
-  timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
-  colorize({ all: true }),
-  lineFormat,
+  printf((info) => jsonLine(info)),
 );
 
 // В тестах: один молчаливый Console transport — winston требует хотя
@@ -92,5 +113,7 @@ const transports = isTest
 
 export const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || "info",
+  // errors на уровне логгера: в формате транспорта winston теряет message у logger.error(err).
+  format: errors({ stack: true }),
   transports,
 });
