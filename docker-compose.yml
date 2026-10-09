@@ -1,5 +1,7 @@
 services:
   hl-paper-scanner:
+    # :prod — то, что крутится сейчас: автодеплой кладёт сюда образ из CI, deploy.sh собирает сюда же.
+    image: ghcr.io/vlasovmichael/helm-hl:prod
     build: .
     container_name: hl-paper-scanner
     restart: unless-stopped
@@ -37,6 +39,8 @@ services:
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
+      # Образ из CI собран без приватной лабы; её файлы в tools/ есть только на хосте.
+      - ./tools:/app/tools:ro
     deploy:
       resources:
         limits:
@@ -83,6 +87,7 @@ services:
   # маржи Kraken, которые потом не восстановить.
   # Сборщик гипотезы сам выходит с кодом 0, когда её закрыли в реестре; on-failure не поднимает его обратно.
   negfunding-forward:
+    image: ghcr.io/vlasovmichael/helm-hl:prod
     build: .
     container_name: hl-negfunding-forward
     restart: on-failure
@@ -93,6 +98,7 @@ services:
       HYPOTHESIS_ID: hl-negfunding-kraken-forward-2026-10
     volumes:
       - ./data:/app/data
+      - ./tools:/app/tools:ro
     # Не веб-сервер → HEALTHCHECK из Dockerfile (пинг :3010) тут не применим.
     healthcheck:
       disable: true
