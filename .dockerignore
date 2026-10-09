@@ -1,28 +1,16 @@
-# Зависимости ставятся внутри образа (npm ci) — host-node_modules могут быть
-# под другую архитектуру (darwin) и сломать native-биндинги (better-sqlite3).
-node_modules
+# Белый список: в образ едет только перечисленное. Случайный файл в корне
+# (ключ, дамп, диагностика) не попадёт, даже если его забыли в .gitignore.
+*
+!package.json
+!package-lock.json
+!docker-entrypoint.sh
+!vite.config.js
+!src
+!tools
+!scripts
 
-# Vite-сборка генерится в build-stage, не тащим хостовую
+# Витрину собирает build-stage; хостовая сборка и модули под другую архитектуру
+# сломали бы native-биндинги (better-sqlite3).
 src/modules/dashboard/dist
-
-# Секреты и мусор
-.env
-.git
-*.log
-logs/*.log
-
-# 🚨 data/ и logs/ — bind-mount тома во всех сервисах: в образе они мёртвый
-# груз (на проде это ~1 ГБ в каждом слое), а в рантайме всё равно перекрыты.
-data
-logs
-
-# Разработка: в рантайме не грузится ничего из этого.
-# 🚨 tools/ НЕ исключать — из него импортируют бот и дашборд.
-tests
-docs
-.claude
-.github
-*.md
-.vscode
-.eslintrc*
-eslint.config.js
+**/node_modules
+**/.DS_Store
