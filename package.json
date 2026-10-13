@@ -43,9 +43,9 @@
     "eslint": "^10.12.0",
     "globals": "^17.13.0",
     "lightweight-charts": "^5.2.1",
-    "lucide": "^1.52.0",
+    "lucide": "^1.54.0",
     "sass": "^1.105.1",
-    "vite": "^8.3.3"
+    "vite": "^8.3.4"
   },
   "overrides": {
     "brace-expansion": "5.0.12",
