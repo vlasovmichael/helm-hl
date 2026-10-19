@@ -26,7 +26,7 @@
   "dependencies": {
     "axios": "^1.20.0",
     "better-sqlite3": "^12.11.1",
-    "dotenv": "^17.4.2",
+    "dotenv": "^18.0.8",
     "ethers": "^6.17.0",
     "express": "^5.3.0",
     "hyperliquid": "^1.0.0",
