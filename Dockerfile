@@ -1,8 +1,8 @@
 # ───────────────────────────────────────────────────────────────
-#  build-stage: собираем дашборду (Vite). node:22 — Vite 8 требует
+#  build-stage: собираем дашборду (Vite). node:24 — Vite 8 требует
 #  Node ≥20.19/≥22.12. Тут нужны devDeps (vite), в рантайм они не едут.
 # ───────────────────────────────────────────────────────────────
-FROM node:22-alpine AS dashboard-build
+FROM node:24-alpine AS dashboard-build
 WORKDIR /app
 COPY package*.json ./
 # 🚨 --ignore-scripts: витрине нужен только Vite, а postinstall у better-sqlite3
@@ -24,7 +24,7 @@ RUN npm run build:dash
 # ───────────────────────────────────────────────────────────────
 #  runtime-stage
 # ───────────────────────────────────────────────────────────────
-FROM node:22-alpine
+FROM node:24-alpine
 
 # tzdata нужен чтобы переменная TZ (Europe/Warsaw и т.п.) реально применялась.
 # Без него alpine молча падает на UTC.
