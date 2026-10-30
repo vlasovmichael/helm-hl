@@ -6,6 +6,10 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
+    # Свежий релиз ждёт: заражённые версии пакетов обычно снимают в первые дни.
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
     groups:
       production-deps:
         dependency-type: production
