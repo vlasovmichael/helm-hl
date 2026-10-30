@@ -37,13 +37,13 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@flwls/ui": "github:vlasovmichael/flwls-kit#ui-v0.8.1",
-    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/core": "^10.1.1",
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.11.0",
     "eslint": "^10.13.0",
     "globals": "^17.13.0",
     "lightweight-charts": "^5.2.1",
-    "lucide": "^1.61.0",
+    "lucide": "^1.62.0",
     "sass": "^1.106.1",
     "vite": "^8.3.5"
   },
