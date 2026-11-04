@@ -28,16 +28,20 @@ export function isQuietHour(now = Date.now()) {
  * urgent=true — риск-алерт: priority=5, тихий час НЕ глушит.
  *
  * @param {{topic?:string, title:string, message:string, tags?:string[], priority?:number, urgent?:boolean, now?:number}} opts
- * @returns {Promise<boolean>} true если запрос ушёл, false если не настроено/ошибка
+ * @returns {Promise<boolean>} true если запрос ушёл или алерт записан в колокольчик, false если не настроено/ошибка
  */
 export async function fireNtfy({ topic, title, message, tags = [], priority, urgent = false, now = Date.now() } = {}) {
-  const { url, token } = config.ntfy;
+  const { url, token, bellOnly } = config.ntfy;
   const t = topic || config.ntfy.topic;
-  if (!url || !t) return false;
+  if (!t || (!url && !bellOnly)) return false;
   try {
+    const prio = urgent ? 5 : (isQuietHour(now) ? 1 : (priority ?? config.ntfy.priority ?? 3));
+    if (bellOnly) {
+      recordNotification({ title, message, topic: t, tags, priority: prio, emailed: false, ts: now });
+      return true;
+    }
     const { default: https } = await import('node:https');
     const { default: http } = await import('node:http');
-    const prio = urgent ? 5 : (isQuietHour(now) ? 1 : (priority ?? config.ntfy.priority ?? 3));
     const body = JSON.stringify({ topic: t, title, message, priority: prio, tags });
     const u = new URL(`${url}/`);
     const lib = u.protocol === 'https:' ? https : http;

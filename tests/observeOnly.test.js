@@ -3,16 +3,22 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 const WALLET = '0x0000000000000000000000000000000000000000';
 const CONFIG = new URL('../src/core/config.js', import.meta.url).href;
 const EXCHANGE = new URL('../src/modules/exchange.js', import.meta.url).href;
+const NTFY = new URL('../src/core/ntfy.js', import.meta.url).href;
+const NOTIFY_LOG = new URL('../src/core/notifyLog.js', import.meta.url).href;
 
-function runIn(env, script) {
+function runIn(env, script, cwd) {
   const { NODE_ENV: _ignored, ...parent } = process.env;
   const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
     env: { ...parent, PUBLIC_WALLET_ADDRESS: WALLET, HL_PRIVATE_KEY: '', HL_AGENT_PRIVATE_KEY: '', ...env },
     encoding: 'utf8',
+    cwd,
   });
   return { status: result.status, stderr: result.stderr, stdout: result.stdout.trim() };
 }
@@ -83,4 +89,40 @@ test('NTFY_ENABLED=false оставляет отправителей без ад
   assert.equal(off.ntfy, '');
   const on = JSON.parse(runIn({ OBSERVE_ONLY: 'true', NTFY_URL: 'http://ntfy:80' }, DUMP_CONFIG).stdout);
   assert.equal(on.ntfy, 'http://ntfy:80');
+});
+
+// Журнал пишется в data/ рабочей папки: запуск из корня испортил бы настоящий журнал.
+function fireAlert(env) {
+  const cwd = mkdtempSync(join(tmpdir(), 'bell-only-'));
+  mkdirSync(join(cwd, 'data'));
+  try {
+    const { status, stdout, stderr } = runIn({ OBSERVE_ONLY: 'true', NTFY_URL: 'http://127.0.0.1:9', ...env }, `
+      const { config } = await import(${JSON.stringify(CONFIG)});
+      const { fireNtfy } = await import(${JSON.stringify(NTFY)});
+      const { getNotifications } = await import(${JSON.stringify(NOTIFY_LOG)});
+      const fired = await fireNtfy({ title: 'alert', message: 'body', urgent: true });
+      console.log('RESULT' + JSON.stringify({ fired, url: config.ntfy.url, bell: getNotifications(10) }));
+    `, cwd);
+    assert.equal(status, 0, stderr);
+    return JSON.parse(stdout.split('\n').find((line) => line.startsWith('RESULT')).slice('RESULT'.length));
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
+test('NTFY_BELL_ONLY пишет алерт в колокольчик и оставляет телефон без адреса', () => {
+  for (const enabled of ['true', 'false']) {
+    const seen = fireAlert({ NTFY_ENABLED: enabled, NTFY_BELL_ONLY: 'true' });
+    assert.equal(seen.fired, true);
+    assert.equal(seen.url, '');
+    assert.equal(seen.bell.length, 1);
+    assert.equal(seen.bell[0].title, 'alert');
+    assert.equal(seen.bell[0].emailed, false);
+  }
+});
+
+test('без NTFY_BELL_ONLY выключенный ntfy не пишет в колокольчик', () => {
+  const seen = fireAlert({ NTFY_ENABLED: 'false' });
+  assert.equal(seen.fired, false);
+  assert.deepEqual(seen.bell, []);
 });

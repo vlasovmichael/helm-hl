@@ -180,6 +180,7 @@ function loadConfig() {
   // Размер крошечный и плечо 1 намеренно: замер про направление канала, а не
   // про то, сколько мы бы заработали.
   const tgSignalEnabled = !observeOnly && (process.env.TG_SIGNAL_ENABLED || 'false').toLowerCase() === 'true';
+  const ntfyBellOnly = (process.env.NTFY_BELL_ONLY || 'false').toLowerCase() === 'true';
   // `хэндл|Подпись` через запятую. Хэндлы держим в окружении, а не в коде:
   // это данные замера, и в публичном репозитории им делать нечего.
   const tgSignalChannels = String(process.env.TG_SIGNAL_CHANNELS || '')
@@ -545,7 +546,9 @@ function loadConfig() {
 
     ntfy: {
       // Пустой url глушит всех отправителей: каждый из них проверяет его перед POST.
-      url:   (process.env.NTFY_ENABLED || 'true').toLowerCase() === 'false' ? '' : (process.env.NTFY_URL || 'http://ntfy:80'),
+      url:   (process.env.NTFY_ENABLED || 'true').toLowerCase() === 'false' || ntfyBellOnly ? '' : (process.env.NTFY_URL || 'http://ntfy:80'),
+      // Алерты fireNtfy пишутся только в колокольчик: без телефона и почты.
+      bellOnly: ntfyBellOnly,
       topic: process.env.NTFY_TOPIC || 'hl-signals',
       token: process.env.NTFY_TOKEN || '',
       // Приоритет пуша (шкала ntfy 1..5, НЕ Gotify 0..8): 1=min, 2=low,
