@@ -15,20 +15,22 @@ function loadConfig() {
   // что локальный запуск без них ордеров не шлёт.
   // 🚨 NODE_ENV=test в проде превратит бота в симулятор — не ставить.
   const isProduction = process.env.NODE_ENV !== 'test';
-  const mode = isProduction ? 'PRODUCTION' : 'PAPER';
+  // Режим наблюдения: бот только читает рынок. Ключи игнорируются, ордеров и бумажных поз нет.
+  const observeOnly = (process.env.OBSERVE_ONLY || 'false').toLowerCase() === 'true';
+  const mode = observeOnly ? 'OBSERVE' : (isProduction ? 'PRODUCTION' : 'PAPER');
 
-  const privateKey = process.env.HL_PRIVATE_KEY || null;
+  const privateKey = observeOnly ? null : (process.env.HL_PRIVATE_KEY || null);
 
-  const agentPrivateKey = process.env.HL_AGENT_PRIVATE_KEY || null;
+  const agentPrivateKey = observeOnly ? null : (process.env.HL_AGENT_PRIVATE_KEY || null);
 
-  if (isProduction && !agentPrivateKey && !privateKey) {
+  if (isProduction && !observeOnly && !agentPrivateKey && !privateKey) {
     throw new Error(
       'PRODUCTION run but neither HL_AGENT_PRIVATE_KEY nor HL_PRIVATE_KEY is set. ' +
       'Set HL_AGENT_PRIVATE_KEY (recommended) or HL_PRIVATE_KEY. Refusing to start.',
     );
   }
 
-  if (isProduction && !agentPrivateKey) {
+  if (isProduction && !observeOnly && !agentPrivateKey) {
     console.warn(
       '⚠️  WARNING: Using HL_PRIVATE_KEY (main wallet) instead of HL_AGENT_PRIVATE_KEY (agent). ' +
       'Agent wallet is strongly recommended for production — it cannot withdraw funds.',
@@ -170,14 +172,14 @@ function loadConfig() {
   // ── Adopt Mode — бот-нянька на ручные входы (plans/adopt-mode-plan.md) ──
   // Ручная поза подхватывается в свободный слот как strategy_id='adopt', бот
   // сразу ставит реальный reduce-only стоп на бирже.
-  const adoptEnabled          = (process.env.ADOPT_ENABLED || 'false').toLowerCase() === 'true';
+  const adoptEnabled          = !observeOnly && (process.env.ADOPT_ENABLED || 'false').toLowerCase() === 'true';
   // «Бумажный adopt»: выход бумажных поз (manual_paper) ведётся той же
   // механикой, что реальный adopt, но без денег.
-  const manualPaperAdoptEnabled = (process.env.MANUAL_PAPER_ADOPT_ENABLED || 'true').toLowerCase() === 'true';
+  const manualPaperAdoptEnabled = !observeOnly && (process.env.MANUAL_PAPER_ADOPT_ENABLED || 'true').toLowerCase() === 'true';
   // ── Форвард по чужим прогнозам: сигнал TG-канала → бумажная поза ──────────
   // Размер крошечный и плечо 1 намеренно: замер про направление канала, а не
   // про то, сколько мы бы заработали.
-  const tgSignalEnabled = (process.env.TG_SIGNAL_ENABLED || 'false').toLowerCase() === 'true';
+  const tgSignalEnabled = !observeOnly && (process.env.TG_SIGNAL_ENABLED || 'false').toLowerCase() === 'true';
   // `хэндл|Подпись` через запятую. Хэндлы держим в окружении, а не в коде:
   // это данные замера, и в публичном репозитории им делать нечего.
   const tgSignalChannels = String(process.env.TG_SIGNAL_CHANNELS || '')
@@ -430,11 +432,12 @@ function loadConfig() {
   return {
     mode,
     isProduction,
+    observeOnly,
 
     wallet: {
       address:         walletAddress,
       privateKey,                                        // основной ключ (fallback)
-      agentPrivateKey: process.env.HL_AGENT_PRIVATE_KEY || null,  // ключ агента для торговли
+      agentPrivateKey,                                   // ключ агента для торговли
     },
 
     trading: {
@@ -541,7 +544,8 @@ function loadConfig() {
     },
 
     ntfy: {
-      url:   process.env.NTFY_URL   || 'http://ntfy:80',
+      // Пустой url глушит всех отправителей: каждый из них проверяет его перед POST.
+      url:   (process.env.NTFY_ENABLED || 'true').toLowerCase() === 'false' ? '' : (process.env.NTFY_URL || 'http://ntfy:80'),
       topic: process.env.NTFY_TOPIC || 'hl-signals',
       token: process.env.NTFY_TOKEN || '',
       // Приоритет пуша (шкала ntfy 1..5, НЕ Gotify 0..8): 1=min, 2=low,

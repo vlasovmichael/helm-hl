@@ -64,17 +64,16 @@ export async function initExchange() {
   const privateKey = config.wallet.agentPrivateKey || config.wallet.privateKey;
   const isAgent = !!config.wallet.agentPrivateKey;
 
-  if (!privateKey) {
+  if (!privateKey && !config.observeOnly) {
     throw new Error("[Exchange] No private key available for PRODUCTION mode");
   }
 
-  logger.info(
-    `[Exchange] Initializing SDK (${isAgent ? "AGENT wallet" : "⚠️ MAIN wallet"})…`,
-  );
+  const walletKind = config.observeOnly ? "read-only" : (isAgent ? "AGENT wallet" : "⚠️ MAIN wallet");
+  logger.info(`[Exchange] Initializing SDK (${walletKind})…`);
 
   try {
     sdk = new Hyperliquid({
-      privateKey,
+      privateKey: privateKey ?? undefined,
       // walletAddress нужен при использовании agent key —
       // SDK не может вывести основной адрес из ключа агента.
       // При использовании main key SDK выведет адрес сам,
@@ -144,6 +143,14 @@ export function getExchange() {
   return sdk;
 }
 
+/** Клиент для подписанных запросов: режим наблюдения их не допускает. */
+function signingClient() {
+  if (config.observeOnly) {
+    throw new Error("[Exchange] observe-only mode: signed requests are disabled");
+  }
+  return getExchange();
+}
+
 /**
  * Отключает SDK (для graceful shutdown).
  */
@@ -186,11 +193,12 @@ export async function setLeverage(coin, leverage = 1, marginMode = "isolated") {
     return;
   }
 
+  const client = signingClient();
   const symbol = perpSymbol(coin);
 
   try {
     await retryWithBackoff(
-      () => sdk.exchange.updateLeverage(symbol, marginMode, leverage),
+      () => client.exchange.updateLeverage(symbol, marginMode, leverage),
       { label: `set-leverage-${coin}`, maxRetries: 2 },
     );
     logger.info(
@@ -556,7 +564,7 @@ export async function getLivePrice(coin) {
  * @returns {Promise<Object>} — сырой результат SDK (со statuses)
  */
 export function openMarket(coin, isBuy, sz, slippage) {
-  return getExchange().custom.marketOpen(perpSymbol(coin), isBuy, sz, undefined, slippage);
+  return signingClient().custom.marketOpen(perpSymbol(coin), isBuy, sz, undefined, slippage);
 }
 
 /**
@@ -567,7 +575,7 @@ export function openMarket(coin, isBuy, sz, slippage) {
  * @returns {Promise<Object>} — сырой результат SDK
  */
 export function closeMarket(coin, sz, slippage) {
-  return getExchange().custom.marketClose(perpSymbol(coin), sz, undefined, slippage);
+  return signingClient().custom.marketClose(perpSymbol(coin), sz, undefined, slippage);
 }
 
 /**
@@ -584,7 +592,7 @@ export function closeMarket(coin, sz, slippage) {
  * @returns {Promise<Object>} — сырой результат SDK (со statuses)
  */
 export function placeTrigger({ coin, isBuy, sz, px, tpsl, reduceOnly = true, isMarket = true }) {
-  return getExchange().exchange.placeOrder({
+  return signingClient().exchange.placeOrder({
     coin: perpSymbol(coin),
     is_buy: isBuy,
     sz,
@@ -607,7 +615,7 @@ export function placeTrigger({ coin, isBuy, sz, px, tpsl, reduceOnly = true, isM
  * @returns {Promise<Object>} — сырой результат SDK (со statuses)
  */
 export function placeLimit({ coin, isBuy, sz, px, tif = 'Alo', reduceOnly = true }) {
-  return getExchange().exchange.placeOrder({
+  return signingClient().exchange.placeOrder({
     coin: perpSymbol(coin),
     is_buy: isBuy,
     sz,
@@ -624,7 +632,7 @@ export function placeLimit({ coin, isBuy, sz, px, tif = 'Alo', reduceOnly = true
  * @returns {Promise<Object>}
  */
 export function cancelOrderFor(coin, oid) {
-  return getExchange().exchange.cancelOrder({ coin: perpSymbol(coin), o: oid });
+  return signingClient().exchange.cancelOrder({ coin: perpSymbol(coin), o: oid });
 }
 
 /**

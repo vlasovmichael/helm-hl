@@ -12,6 +12,7 @@ import { serializeCircuitBreaker, serializeOiCapBans } from '../modules/executor
 import { stopDashboard } from '../modules/dashboard/server.js';
 import { stopPriceFeed } from '../core/priceFeed.js';
 import { stopLiqEvents } from '../core/liqEvents.js';
+import { stopKafkaTrades } from '../core/kafkaTrades.js';
 import { stopWsExitLoop } from './wsExitTick.js';
 import { stopTickWatchdog } from './tickWatchdog.js';
 import { stopAgentExpiryWatch } from './agentExpiryWatch.js';
@@ -208,6 +209,7 @@ export async function shutdown(signal) {
   stopMemWatch();
   stopPriceFeed();
   stopLiqEvents();
+  stopKafkaTrades();
   try {
     await stopDashboard();
   } catch (err) {

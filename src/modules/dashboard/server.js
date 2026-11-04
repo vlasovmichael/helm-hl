@@ -1127,6 +1127,14 @@ export function startDashboard() {
       res.status(500).json({ items: [], error: true });
     }
   });
+  // Режим наблюдения закрывает ручки сделок, бумажных тоже.
+  if (config.observeOnly) {
+    app.post(
+      ["/api/manual-paper/open", "/api/manual-paper/close", "/api/tg-signals/close", "/api/ticket/open", "/api/ticket/close"],
+      (_req, res) => res.status(403).json({ error: "observe-only mode: trading is off" }),
+    );
+  }
+
   // Личный paper-журнал (Rabbit-style): открыть/закрыть/список бумажных сделок.
   app.get("/api/manual-paper", handleManualPaperList);
   app.post("/api/manual-paper/open", handleManualPaperOpen);

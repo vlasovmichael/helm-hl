@@ -34,6 +34,7 @@ import { startToastBridge } from './app/toastBridge.js';
 import { startEquityHeal } from './app/equityHeal.js';
 import { startForwardWatch } from './app/forwardWatch.js';
 import { startLevelReads } from './modules/levelReads.js';
+import { startKafkaTrades } from './core/kafkaTrades.js';
 
 async function main() {
   logger.info('═══════════════════════════════════════════════');
@@ -90,6 +91,7 @@ async function main() {
   // торговую логику не трогает. Fail-soft: ошибки WS не валят бота.
   startPriceFeed();
   startLiqEvents();
+  startKafkaTrades();
 
   // Буфер цен из снимка прошлого запуска — до первого тика, иначе окна
   // 2/5/15м пусты первые ~15 минут после каждой пересборки.
@@ -100,7 +102,8 @@ async function main() {
   // смотрят. Этот наблюдатель звонит в ntfy, когда состояние держится плохим
   // несколько минут подряд. Ничего не считает сам — читает healthRegistry.
   startHealthWatch();
-  startAgentExpiryWatch();
+  // Без ключа агента следить не за чем.
+  if (!config.observeOnly) startAgentExpiryWatch();
 
   // ── WS-фид собственных филлов ──────────────────
   // Бот узнаёт о своей сделке в момент исполнения, а не следующим опросом:
@@ -131,7 +134,7 @@ async function main() {
   startWatchlistAlerts();
 
   // Сторож форвардов: пуш на молчание сборщика и однократная оценка на пороге.
-  startForwardWatch();
+  if (!config.observeOnly) startForwardWatch();
 
   // Исходы разборов страницы уровней: через сутки после разбора, по 15m барам.
   startLevelReads();

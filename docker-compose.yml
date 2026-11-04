@@ -55,6 +55,7 @@ services:
     networks:
       - gateway_net
       - tax_net
+      - kafka_net
 
   tui:
     profiles: [tui]
@@ -90,6 +91,8 @@ services:
     image: ghcr.io/vlasovmichael/helm-hl:prod
     build: .
     container_name: hl-negfunding-forward
+    # Только явный запуск: docker compose --profile research up -d negfunding-forward
+    profiles: [research]
     restart: on-failure
     command: node tools/runWhileOpen.mjs tools/negFundingKrakenForward.mjs
     env_file: .env
@@ -115,4 +118,8 @@ networks:
     external: true
   tax_net:
     name: tax_net
+    external: true
+  # Сеть стенда security-lab/event-stream: без него бот не поднимется, удалять вместе с ним.
+  kafka_net:
+    name: event-stream_event_stream
     external: true
