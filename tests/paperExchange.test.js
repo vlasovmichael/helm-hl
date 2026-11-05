@@ -22,6 +22,7 @@ const { hlInfo } = await import('../src/core/hlClient.js');
 const { invalidateAccountState } = await import('../src/core/accountState.js');
 const { fetchUserFills } = await import('../src/modules/userFills.js');
 const { paperTitle } = await import('../src/core/notifyLog.js');
+const { handleCancel, getEntryOrders } = await import('../src/modules/dashboard/routes/tradeTicket.js');
 
 let mid = 50_000;
 const FUNDING_RATE = '0.0001';
@@ -262,6 +263,49 @@ test('сторонний DEX показывает пустой счёт: поз�
   await exchange.openMarket('BTC', true, 0.001, 0.03);
   const state = await hlInfo({ type: 'clearinghouseState', user: config.wallet.address, dex: 'mkts' });
   assert.deepEqual(state.assetPositions, []);
+});
+
+async function cancelViaRoute(body) {
+  const reply = {};
+  const res = {
+    status(code) { reply.code = code; return this; },
+    json(payload) { reply.body = payload; return this; },
+  };
+  await handleCancel({ body }, res);
+  return reply;
+}
+
+test('отмена лимитки на вход освобождает маржу', async () => {
+  const placed = await exchange.placeLimit({ coin: 'BTC', isBuy: true, sz: 0.001, px: 49_000, reduceOnly: false });
+  const { oid } = statuses(placed)[0].resting;
+  const reply = await cancelViaRoute({ coin: 'BTC', oid });
+  assert.equal(reply.body.ok, true);
+  assert.deepEqual(await exchange.getFrontendOpenOrders(), []);
+  await moveAndMatch(48_000);
+  assert.deepEqual(await exchange.getPositions(), []);
+});
+
+test('через окно отмены нельзя снять стоп и чужой номер ордера', async () => {
+  await exchange.openMarket('BTC', true, 0.001, 0.03);
+  const stop = await exchange.placeTrigger({ coin: 'BTC', isBuy: false, sz: 0.001, px: 49_000, tpsl: 'sl' });
+  const { oid } = statuses(stop)[0].resting;
+  assert.equal((await cancelViaRoute({ coin: 'BTC', oid })).code, 422);
+  assert.equal((await exchange.getFrontendOpenOrders()).length, 1);
+  assert.equal((await cancelViaRoute({ coin: 'ETH', oid })).code, 404);
+  assert.equal((await cancelViaRoute({ coin: 'BTC', oid: 999 })).code, 404);
+  assert.equal((await cancelViaRoute({ coin: 'BTC' })).code, 400);
+});
+
+test('в список лимиток на вход не попадают стоп и цель', async () => {
+  await exchange.openMarket('BTC', true, 0.001, 0.03);
+  await exchange.placeTrigger({ coin: 'BTC', isBuy: false, sz: 0.001, px: 49_000, tpsl: 'sl' });
+  await exchange.placeLimit({ coin: 'BTC', isBuy: false, sz: 0.001, px: 51_000, tif: 'Gtc', reduceOnly: true });
+  await exchange.placeLimit({ coin: 'BTC', isBuy: true, sz: 0.001, px: 48_000, reduceOnly: false });
+  const orders = await getEntryOrders(Date.now() + 3_600_000);
+  assert.equal(orders.length, 1);
+  assert.equal(orders[0].side, 'LONG');
+  assert.equal(orders[0].px, 48_000);
+  assert.equal(orders[0].sizeUsd, 48);
 });
 
 test('заголовок уведомления получает метку один раз', () => {

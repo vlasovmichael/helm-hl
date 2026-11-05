@@ -67,13 +67,17 @@ export function sizeInCoins(notional, price) {
 }
 
 /** Цена, от которой считается вход: лимитка либо рынок. */
-// Цена для подстановки в input: без "$" и разделителей, 5 значащих цифр —
-// столько держит цена перпа на HL. Бэкенд всё равно прогонит через formatHlPrice,
-// но класть в поле заведомо валидное значение честнее, чем "$1,234.5".
-function plainPrice(p) {
-  const n = Number(p);
+/**
+ * Цена для подстановки в поле лимитки: без "$" и разделителей, 5 значащих цифр,
+ * как держит цена перпа на HL. Округляет от рынка: иначе post-only пересечёт книгу.
+ */
+export function passiveLimitPrice(price, side) {
+  const n = Number(price);
   if (!Number.isFinite(n) || !(n > 0)) return "";
-  return String(Number(n.toPrecision(5)));
+  const scale = 10 ** (4 - Math.floor(Math.log10(n)));
+  const scaled = Number((n * scale).toPrecision(12));
+  const rounded = side === "short" ? Math.ceil(scaled) : Math.floor(scaled);
+  return String(Number((rounded / scale).toPrecision(5)));
 }
 
 export function effectiveEntry({ orderType, limitPx, price }) {
@@ -300,6 +304,8 @@ function createModal(io) {
     // 3 бп комиссии, а медиану ~16 бп спреда. Маркет остался на переключателе.
     orderType: "limit",
     limitPx: "",
+    // Цену подставила форма: при смене стороны её надо округлить заново.
+    limitAuto: false,
     submitting: false,
     error: null,
     result: null,
@@ -602,12 +608,16 @@ function createModal(io) {
     const q = (sel) => bodyEl.querySelectorAll(sel);
 
     q("[data-side]").forEach((b) =>
-      b.addEventListener("click", () => { state.side = b.dataset.side; render(); }),
+      b.addEventListener("click", () => {
+        state.side = b.dataset.side;
+        if (state.limitAuto) fillLimitFromMarket();
+        render();
+      }),
     );
     q("[data-toggle-type]").forEach((b) =>
       b.addEventListener("click", () => {
         state.orderType = state.orderType === "limit" ? "market" : "limit";
-        if (state.orderType === "limit" && !state.limitPx) state.limitPx = plainPrice(ctx.price);
+        if (state.orderType === "limit" && !state.limitPx) fillLimitFromMarket();
         render();
       }),
     );
@@ -631,19 +641,17 @@ function createModal(io) {
       if (key === "coin") return wireCombo(el);
       el.addEventListener("input", () => {
         state[key] = el.value;
+        if (key === "limitPx") state.limitAuto = false;
         state.error = null;
         softRefresh();
       });
     });
 
-    // «use current» — подставить текущую цену в поле лимитки. Ровно текущая цена
-    // валидацию на пересечение не нарушает (wouldCross строго больше/меньше),
-    // дальше её двигают руками на нужную сторону книги.
+    // «use current» — подставить текущую цену в поле лимитки, дальше её двигают руками.
     q("[data-use-price]").forEach((b) =>
       b.addEventListener("click", () => {
-        const px = plainPrice(ctx.price);
-        if (!px) return;
-        state.limitPx = px;
+        if (!(ctx.price > 0)) return;
+        fillLimitFromMarket();
         state.error = null;
         render();
       }),
@@ -821,6 +829,11 @@ function createModal(io) {
     }
   }
 
+  function fillLimitFromMarket() {
+    state.limitPx = passiveLimitPrice(ctx.price, state.side);
+    state.limitAuto = Boolean(state.limitPx);
+  }
+
   /** Смена монеты гасит её поля: цена или лимитка прошлой монеты под именем новой уводят ордер от рынка. */
   function switchCoin(coin) {
     if (coin === state.coin) return;
@@ -924,9 +937,7 @@ function createModal(io) {
       ctx = { ...ctx, ...fresh };
       // Пустое поле лимитки блокирует отправку — заполняем текущей ценой, её
       // дальше двигают руками на свою сторону книги.
-      if (state.orderType === "limit" && !state.limitPx) {
-        state.limitPx = plainPrice(ctx.price) || "";
-      }
+      if (state.orderType === "limit" && !state.limitPx) fillLimitFromMarket();
       if (!(state.marginUsd > 0) && ctx.available > 0) {
         // Стартовая маржа — половина свободного, но не меньше минимума ордера.
         state.marginUsd = Math.min(ctx.available, Math.max(ctx.available / 2, MIN_ORDER_USD / state.leverage));

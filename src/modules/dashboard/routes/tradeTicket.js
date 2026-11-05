@@ -29,7 +29,7 @@ import {
 import { getLivePrice } from "../../../core/priceFeed.js";
 import { getLivePriceMap } from "../../exchange.js";
 import { fetchExchangePositions } from "../../sync.js";
-import { getFrontendOpenOrders } from "../../exchange.js";
+import { cancelOrderFor, getFrontendOpenOrders } from "../../exchange.js";
 import { resolveAsset, parseFillResponse } from "../../executor/fill-parser.js";
 import { formatHlPrice, MARKET_SLIPPAGE } from "../../executor/math.js";
 import { computeStopDistPct } from "../../../app/adoptReconcile.js";
@@ -321,6 +321,43 @@ export async function handleContext(req, res) {
   }
 }
 
+// Лимитки на вход едут в статус раз в 2с, а чтение ордеров у биржи тяжёлое.
+const ENTRY_ORDERS_TTL_MS = 10_000;
+let entryOrdersCache = { at: 0, orders: [] };
+
+/** Лимитка на вход: reduce-only и триггеры относятся к выходу открытой позиции. */
+const isEntryOrder = (order) => !order.reduceOnly && !order.isTrigger;
+
+function entryOrderView(order) {
+  const px = Number(order.limitPx);
+  const sz = Number(order.sz);
+  return {
+    coin: order.coin,
+    oid: order.oid,
+    side: order.side === "B" ? "LONG" : "SHORT",
+    px,
+    sz,
+    sizeUsd: px * sz,
+    placedAt: order.timestamp,
+  };
+}
+
+/** Лимитки на вход для Active Position. Сбой чтения оставляет прошлый список: пропавшая строка хуже устаревшей. */
+export async function getEntryOrders(now = Date.now()) {
+  if (now - entryOrdersCache.at < ENTRY_ORDERS_TTL_MS) return entryOrdersCache.orders;
+  try {
+    const orders = (await getFrontendOpenOrders()).filter(isEntryOrder).map(entryOrderView);
+    entryOrdersCache = { at: now, orders };
+  } catch (err) {
+    logger.debug(`[TradeTicket] entry orders unavailable: ${err.message}`);
+  }
+  return entryOrdersCache.orders;
+}
+
+const dropEntryOrdersCache = () => {
+  entryOrdersCache = { at: 0, orders: entryOrdersCache.orders };
+};
+
 /**
  * Открытые позы + их стопы. Стоп берём из живых trigger-ордеров на бирже, а НЕ
  * из нашей БД: 🚨 истина о том, защищена ли поза, живёт на бирже — в БД стопы
@@ -518,6 +555,7 @@ export async function handleOpen(req, res) {
       if (typeof status === "string") throw new Error(status);
       if (status?.error) throw new Error(status.error);
       const oid = status?.resting?.oid ?? status?.filled?.oid ?? null;
+      dropEntryOrdersCache();
       logger.info(
         `[TradeTicket] 📝 LIMIT ${b.side.toUpperCase()} #${b.coin} sz=${sz} @ ${px} ` +
           `($${notional.toFixed(2)} = ${b.marginUsd.toFixed(2)}×${b.leverage}) oid=${oid}`,
@@ -552,6 +590,39 @@ export async function handleOpen(req, res) {
     logger.error(`[TradeTicket] open #${b.coin} failed: ${err.message}`);
     if (wasAdoptOff) markAdoptOff(b.coin);
     else clearAdoptOff(b.coin);
+    return res.status(422).json({ error: err.message });
+  }
+}
+
+/**
+ * POST /api/ticket/cancel
+ * Снимает только лимитку на вход: стоп и цель открытой позы отсюда не снять.
+ * Как и выход, не гейтится дневным стопом.
+ */
+export async function handleCancel(req, res) {
+  if (!config.isProduction) {
+    return res.status(409).json({ error: "the bot is in PAPER mode — there are no real orders" });
+  }
+  const coin = String(req.body?.coin || "").toUpperCase().replace(/-PERP$/i, "");
+  const oid = Number(req.body?.oid);
+  if (!coin) return res.status(400).json({ error: "coin required" });
+  if (!Number.isInteger(oid)) return res.status(400).json({ error: "oid required" });
+
+  try {
+    const orders = await getFrontendOpenOrders();
+    const order = orders.find((o) => o.oid === oid && sameCoin(o.coin, coin));
+    if (!order) return res.status(404).json({ error: `no open order ${oid} in ${coin}` });
+    if (!isEntryOrder(order)) {
+      return res.status(422).json({ error: "only entry limit orders can be canceled here" });
+    }
+    const result = await cancelOrderFor(order.coin, oid);
+    const status = result?.response?.data?.statuses?.[0];
+    if (status !== "success") throw new Error(status?.error || "exchange rejected the cancel");
+    dropEntryOrdersCache();
+    logger.info(`[TradeTicket] ✖ CANCEL #${coin} oid=${oid}`);
+    return res.json({ ok: true, message: `${coin}: limit order canceled` });
+  } catch (err) {
+    logger.error(`[TradeTicket] cancel #${coin} oid=${oid} failed: ${err.message}`);
     return res.status(422).json({ error: err.message });
   }
 }

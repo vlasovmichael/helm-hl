@@ -761,6 +761,57 @@ function patchManualCard(container, p) {
     _manualLastUpnl.set(p.coin, p.unrealizedPnl);
 }
 
+export const CANCEL_ORDER_HINT = "Cancel this limit order and free its margin";
+
+let _entryOrderKeys = "";
+
+function entryOrderDistance(order) {
+  if (!(order.currentPrice > 0)) return "";
+  const pct = ((order.px - order.currentPrice) / order.currentPrice) * 100;
+  return `${pct >= 0 ? "+" : "−"}${Math.abs(pct).toFixed(2)}%`;
+}
+
+/** Лимитки на вход: позиции по ним ещё нет, но маржа уже занята. */
+export function renderEntryOrders(list) {
+  const container = document.getElementById("entry-orders-container");
+  if (!container) return;
+  const orders = Array.isArray(list) ? list : [];
+  // Тот же набор ордеров двигает только цены: перерисовка сбросила бы кнопку во время отмены.
+  const keys = orders.map((o) => `${o.oid}:${o.adoptOff ? 1 : 0}`).join("|");
+  if (keys === _entryOrderKeys) {
+    for (const order of orders) {
+      const card = container.querySelector(`[data-entry-order="${order.oid}"]`);
+      if (!card) continue;
+      card.querySelector("[data-order-now]").textContent = order.currentPrice > 0 ? fmtPrice(order.currentPrice) : "—";
+      card.querySelector("[data-order-distance]").textContent = entryOrderDistance(order);
+    }
+    return;
+  }
+  _entryOrderKeys = keys;
+  container.innerHTML = orders
+    .map((order) => {
+      const tags = order.adoptOff ? "LIMIT · RESTING · NOT ADOPTED" : "LIMIT · RESTING";
+      const coin = escapeHtml(order.coin);
+      return `
+      <div class="mcard" data-entry-order="${order.oid}">
+        <div class="mcard-head">
+          <span class="mcard-badge">${tags}</span>
+          <span class="item-value highlight">${coinIcon(order.coin)}#${coin}</span>
+          <span class="item-value ${order.side === "SHORT" ? "negative" : "positive"}">${order.side}</span>
+          <button type="button" class="pos-close-btn" data-order-cancel="${order.oid}" data-order-coin="${coin}"
+                  data-card="${CANCEL_ORDER_HINT}"><span>Cancel</span></button>
+        </div>
+        <div class="data-grid">
+          <div class="grid-item"><div class="item-label">Size</div><div class="item-value">${fmtUsd(order.sizeUsd)}</div></div>
+          <div class="grid-item"><div class="item-label">Limit</div><div class="item-value">${fmtPrice(order.px)}</div></div>
+          <div class="grid-item"><div class="item-label">Now</div><div class="item-value" data-order-now>${order.currentPrice > 0 ? fmtPrice(order.currentPrice) : "—"}</div></div>
+          <div class="grid-item"><div class="item-label">From market</div><div class="item-value" data-order-distance>${entryOrderDistance(order)}</div></div>
+        </div>
+      </div>`;
+    })
+    .join("");
+}
+
 export function renderManualPositions(list) {
   const container = document.getElementById("manual-positions-container");
   if (!container) return;

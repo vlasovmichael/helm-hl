@@ -24,6 +24,7 @@ import {
   marginForRisk,
   attemptsLeft,
   ticketAdopted,
+  passiveLimitPrice,
 } from "../src/modules/dashboard/web/src/features/tradeTicket.js";
 
 const { notionalCapUsd } = await import("../src/modules/dashboard/routes/tradeTicket.js");
@@ -398,4 +399,23 @@ test("Adopted выключен: форма предупреждает, что п
 test("потолок сделки $60 держит настоящий счёт, на бумаге его нет", () => {
   assert.equal(notionalCapUsd(false), 60);
   assert.equal(notionalCapUsd(true), null);
+});
+
+test("цена лимитки округляется от рынка: post-only не пересекает книгу", () => {
+  assert.equal(passiveLimitPrice(2388.95, "short"), "2389");
+  assert.equal(passiveLimitPrice(2388.95, "long"), "2388.9");
+  assert.equal(passiveLimitPrice(95.4105, "short"), "95.411");
+  assert.equal(passiveLimitPrice(95.4105, "long"), "95.41");
+});
+
+test("цена лимитки: ровная цена не сдвигается, мелкие монеты не теряют точность", () => {
+  assert.equal(passiveLimitPrice(0.045166, "short"), "0.045166");
+  assert.equal(passiveLimitPrice(0.045166, "long"), "0.045166");
+  assert.equal(passiveLimitPrice(79702, "short"), "79702");
+  assert.equal(passiveLimitPrice(99999.5, "short"), "100000");
+});
+
+test("цена лимитки: без цены поле остаётся пустым", () => {
+  assert.equal(passiveLimitPrice(null, "long"), "");
+  assert.equal(passiveLimitPrice(0, "short"), "");
 });

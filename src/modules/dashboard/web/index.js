@@ -27,6 +27,8 @@ import {
   renderHeader,
   renderPosition,
   renderManualPositions,
+  renderEntryOrders,
+  CANCEL_ORDER_HINT,
   renderBans,
   setDailyPnl,
   setActivePositionsPnl,
@@ -68,6 +70,7 @@ function onStatus(data) {
   updateActiveCoinSet(data.activePosition, data.manualPositions);
   renderPosition(data.activePosition);
   renderManualPositions(data.manualPositions);
+  renderEntryOrders(data.entryOrders);
   renderBans(data);
   // Настроение секции Active Position: Σ uPnL открытых поз (бот + ручные) — живёт
   // по WS (≤2с); Today (realized) добавляет setDailyPnl. См. refreshSectionMood.
@@ -215,6 +218,36 @@ function initTradeButton() {
     }
   });
 
+  // Отмена в один клик: ордер не исполнен, и его снятие ничего не закрывает.
+  document.getElementById("entry-orders-container")?.addEventListener("click", async (e) => {
+    const cancelBtn = e.target.closest("[data-order-cancel]");
+    if (!cancelBtn) return;
+    const label = cancelBtn.querySelector("span");
+    const fail = (msg) => {
+      label.textContent = "failed";
+      cancelBtn.dataset.card = msg;
+      cancelBtn.classList.add("is-failed");
+      cancelBtn.disabled = false;
+      setTimeout(() => {
+        label.textContent = "Cancel";
+        cancelBtn.classList.remove("is-failed");
+        cancelBtn.dataset.card = CANCEL_ORDER_HINT;
+      }, 4000);
+    };
+    cancelBtn.disabled = true;
+    label.textContent = "…";
+    try {
+      const res = await post("/api/ticket/cancel", {
+        coin: cancelBtn.dataset.orderCoin,
+        oid: Number(cancelBtn.dataset.orderCancel),
+      });
+      if (res?.ok) label.textContent = "canceled";
+      else fail(res?.error || "exchange rejected the cancel");
+    } catch (err) {
+      fail(err?.message || "network unavailable");
+    }
+  });
+
   const ticket = initTradeTicket({
     getContext: async (coin) =>
       parseApi(await fetch(`/api/ticket/context?coin=${encodeURIComponent(coin || "")}`), toLogin),
@@ -341,6 +374,7 @@ function view() {
       </div>
       <div id="position-container"></div>
       <div id="manual-positions-container"></div>
+      <div id="entry-orders-container"></div>
       <div id="mp-active-container"></div>
       <!-- Позы по сигналам TG-каналов. Отдельная таблица, а не строки в
            бумажной: иначе не видно, в плюс ли чужие прогнозы. -->

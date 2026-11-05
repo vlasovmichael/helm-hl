@@ -69,6 +69,8 @@ import {
   handleContext as handleTicketContext,
   handleOpen as handleTicketOpen,
   handleClose as handleTicketClose,
+  handleCancel as handleTicketCancel,
+  getEntryOrders,
 } from "./routes/tradeTicket.js";
 import {
   handleWhaleWatch,
@@ -512,6 +514,14 @@ async function getStatusData() {
     }
   }
 
+  const entryOrders = config.isProduction
+    ? (await getEntryOrders()).map((order) => ({
+        ...order,
+        currentPrice: wsPrice(order.coin),
+        adoptOff: isAdoptOff(order.coin),
+      }))
+    : [];
+
   // Hot Movers едут в WS-статусе (≤2с свежесть вместо 10с-поллинга). enrich=false:
   // always-on броадкаст НЕ дёргает candleSnapshot (Vol×/HTF) — иначе шторм
   // тяжёлых запросов выжирал весовой бюджет HL и 429-ил торговые чтения. Строки
@@ -552,6 +562,7 @@ async function getStatusData() {
         }
       : null,
     manualPositions,
+    entryOrders,
     // Дневной стоп-лосс (backend-правда по fills, см. dailyRisk.js): фронт
     // переключает бейдж «Today» в «стоп: входы закрыты».
     dailyRisk: getLastDailyRiskStatus(),
@@ -1134,7 +1145,7 @@ export function startDashboard() {
   // Режим наблюдения закрывает ручки сделок, бумажных тоже.
   if (config.observeOnly) {
     app.post(
-      ["/api/manual-paper/open", "/api/manual-paper/close", "/api/tg-signals/close", "/api/ticket/open", "/api/ticket/close"],
+      ["/api/manual-paper/open", "/api/manual-paper/close", "/api/tg-signals/close", "/api/ticket/open", "/api/ticket/close", "/api/ticket/cancel"],
       (_req, res) => res.status(403).json({ error: "observe-only mode: trading is off" }),
     );
   }
@@ -1154,6 +1165,7 @@ export function startDashboard() {
   app.get("/api/ticket/context", handleTicketContext);
   app.post("/api/ticket/open", handleTicketOpen);
   app.post("/api/ticket/close", handleTicketClose);
+  app.post("/api/ticket/cancel", handleTicketCancel);
 
   app.get("/api/insights", handleInsights);
   app.get("/api/my-trades", handleTradeBreakdown);
