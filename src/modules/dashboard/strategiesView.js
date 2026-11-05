@@ -199,6 +199,7 @@ function buildRow(entry, side = null, overrides = {}) {
     label:    side ? `${entry.label} ${side.toUpperCase()}` : entry.label,
     kind:     side ? `${entry.kind} · ${side}${status === 'radar' ? '-only' : ''}` : entry.kind,
     status,                                    // live | paper | radar | off
+    paperAccount: config.paperTrading,
     radar:    !!(r.radar || entry.radar),
     statMode,
     active:   activeSummary(pos),

@@ -10,7 +10,8 @@
 
 import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
-import { getExchange } from '../modules/exchange.js';
+import { getClearinghouseStateFull } from '../modules/exchange.js';
+import { hlInfo, HL_PRIORITY } from '../core/hlClient.js';
 import { saveEquitySnapshot } from '../core/database.js';
 
 const DIAG_INTERVAL_MS = 5 * 60_000; // каждые 5 мин
@@ -23,11 +24,12 @@ export async function runBalanceDiag() {
   lastDiagAt = now;
 
   try {
-    const sdk = getExchange();
-
     const [perp, spot] = await Promise.all([
-      sdk.info.perpetuals.getClearinghouseState(config.wallet.address),
-      sdk.info.spot.getSpotClearinghouseState(config.wallet.address),
+      getClearinghouseStateFull(),
+      hlInfo(
+        { type: 'spotClearinghouseState', user: config.wallet.address },
+        { label: 'balance-diag', priority: HL_PRIORITY.LOW },
+      ),
     ]);
 
     // 🚨 не marginSummary: totalUnrealizedPnl HL не отдаёт, в логе выходил

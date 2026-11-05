@@ -29,11 +29,12 @@
 
 import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { config } from './config.js';
 import { logger } from './logger.js';
 import { fireNtfy } from './ntfy.js';
 
 const STALE_MAX_AGE_MS = 6 * 60 * 60_000; // 6 часов
-const CACHE_FILE = join('data', 'balance_cache.json');
+const CACHE_FILE = join(config.accountDir, 'balance_cache.json');
 
 let lastGood = null;         // { value: {accountValue, withdrawable, unrealizedPnl}, ts }
 let zeroStreakStart = 0;     // когда начался эпизод $0
@@ -96,7 +97,7 @@ function persistToDisk() {
   const tmpPath = `${CACHE_FILE}.${process.pid}.tmp`;
 
   try {
-    mkdirSync('data', { recursive: true });
+    mkdirSync(config.accountDir, { recursive: true });
     writeFileSync(tmpPath, payload, 'utf-8');
     renameSync(tmpPath, CACHE_FILE);
     persisted = { key, at: lastGood.ts };

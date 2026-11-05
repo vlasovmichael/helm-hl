@@ -19,7 +19,7 @@
 import { escapeHtml, fmtUsd, fmtPrice } from "../utils/format.js";
 import * as dialog from "../core/dialog.js";
 import { icon } from "../core/icon.js";
-import { button, segmented } from "../core/ui.js";
+import { button, paperMoneyBadge, segmented } from "../core/ui.js";
 import { attachCoinCombo, coinCombo, suggestCoins } from "../core/coinCombo.js";
 
 // Биржевой минимум ордера на HL. Меньше — отказ, поэтому это блокер, а не
@@ -449,6 +449,7 @@ function createModal(io) {
         <div class="tt-card__head">
           <span class="tt-card__label tt-card__label--accent">Margin <i>(USDC)</i></span>
           <span class="tt-chip">Isolated</span>
+          <span data-paper-note>${ctx.paperTrading ? paperMoneyBadge() : ""}</span>
         </div>
         <div class="tt-card__row">
           <div class="tt-card__minor">
@@ -701,6 +702,11 @@ function createModal(io) {
       usePriceEl.textContent = ctx.price > 0 ? fmtPrice(ctx.price) : "—";
       const btn = usePriceEl.closest("[data-use-price]");
       if (btn) btn.disabled = !(ctx.price > 0);
+    }
+
+    const paperNote = bodyEl.querySelector("[data-paper-note]");
+    if (paperNote && paperNote.childElementCount !== (ctx.paperTrading ? 1 : 0)) {
+      paperNote.innerHTML = ctx.paperTrading ? paperMoneyBadge() : "";
     }
 
     const availEl = bodyEl.querySelector("[data-avail]");

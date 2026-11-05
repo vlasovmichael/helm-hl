@@ -3,9 +3,10 @@ import { mkdirSync, readFileSync, writeFileSync, renameSync, statSync } from 'fs
 import { logger } from './logger.js';
 import { config } from './config.js';
 
-mkdirSync('data', { recursive: true });
+mkdirSync(config.accountDir, { recursive: true });
 
-const DB_PATH = 'data/trades.db';
+const DB_PATH = `${config.accountDir}/trades.db`;
+const ARCHIVE_PATH = `${config.accountDir}/history_archive.json`;
 
 let db;
 
@@ -1405,7 +1406,6 @@ export function getStrategyTradesPage(strategyId, mode, limit = 10, offset = 0, 
 let archiveCache = { key: null, rows: [] };
 
 export function getArchivedHistorySince(sinceMs) {
-  const ARCHIVE_PATH = 'data/history_archive.json';
   try {
     const st = statSync(ARCHIVE_PATH);
     const key = `${st.mtimeMs}:${st.size}`;
@@ -1557,7 +1557,6 @@ export function getSetupScannerRows() {
 }
 
 export function archiveAndClearHistory() {
-  const ARCHIVE_PATH = 'data/history_archive.json';
 
   const rows = getDb()
     .prepare('SELECT * FROM history ORDER BY closed_at ASC')
@@ -1610,7 +1609,6 @@ export function archiveAndClearHistory() {
  * по тем же причинам прав, что и archiveAndClearHistory. Возвращает байты экономии.
  */
 export function compactHistoryArchive() {
-  const ARCHIVE_PATH = 'data/history_archive.json';
   let before;
   try {
     before = statSync(ARCHIVE_PATH).size;

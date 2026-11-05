@@ -103,7 +103,7 @@ async function main() {
   // несколько минут подряд. Ничего не считает сам — читает healthRegistry.
   startHealthWatch();
   // Без ключа агента следить не за чем.
-  if (!config.observeOnly) startAgentExpiryWatch();
+  if (!config.observeOnly && !config.paperTrading) startAgentExpiryWatch();
 
   // ── WS-фид собственных филлов ──────────────────
   // Бот узнаёт о своей сделке в момент исполнения, а не следующим опросом:
@@ -153,33 +153,36 @@ async function main() {
   );
   logger.info('[System] Mail digest cron scheduled: 21:05 Europe/Warsaw daily');
 
-  // ── Tax Collector — ежедневный сбор PIT-38 в 03:00 (Europe/Warsaw) ──
-  // Fail-soft: модуль сам отключается, если BINANCE_API_KEY не задан.
-  cron.schedule(
-    '0 3 * * *',
-    () => {
-      probeAlloc('cron:tax', taxDailyJob).catch((err) => {
-        logger.error(`[Tax] Cron job crashed: ${err.message}`);
-      });
-    },
-    { timezone: 'Europe/Warsaw' },
-  );
-  logger.info('[System] Tax collector cron scheduled: 03:00 Europe/Warsaw daily');
+  // Налоговый учёт — про настоящие деньги: бумажному счёту с его отдельной БД он не нужен.
+  if (!config.paperTrading) {
+    // ── Tax Collector — ежедневный сбор PIT-38 в 03:00 (Europe/Warsaw) ──
+    // Fail-soft: модуль сам отключается, если BINANCE_API_KEY не задан.
+    cron.schedule(
+      '0 3 * * *',
+      () => {
+        probeAlloc('cron:tax', taxDailyJob).catch((err) => {
+          logger.error(`[Tax] Cron job crashed: ${err.message}`);
+        });
+      },
+      { timezone: 'Europe/Warsaw' },
+    );
+    logger.info('[System] Tax collector cron scheduled: 03:00 Europe/Warsaw daily');
 
-  // Разовый прогон при старте: после деплоя налоговые данные подтягиваются
-  // сразу, не дожидаясь 03:00. Non-blocking + fail-soft.
-  taxDailyJob().catch((err) => {
-    logger.error(`[Tax] Startup run crashed: ${err.message}`);
-  });
-
-  // ── Tax Outbox pusher — каждые 15 минут ──
-  // Драйнит tax_outbox в tax-manager. Fail-soft: если env не задан — skip.
-  cron.schedule('*/15 * * * *', () => {
-    probeAlloc('cron:taxOutbox', taxDrainOutbox).catch((err) => {
-      logger.error(`[TaxPusher] Cron crashed: ${err.message}`);
+    // Разовый прогон при старте: после деплоя налоговые данные подтягиваются
+    // сразу, не дожидаясь 03:00. Non-blocking + fail-soft.
+    taxDailyJob().catch((err) => {
+      logger.error(`[Tax] Startup run crashed: ${err.message}`);
     });
-  });
-  logger.info('[System] Tax outbox pusher scheduled: every 15 min');
+
+    // ── Tax Outbox pusher — каждые 15 минут ──
+    // Драйнит tax_outbox в tax-manager. Fail-soft: если env не задан — skip.
+    cron.schedule('*/15 * * * *', () => {
+      probeAlloc('cron:taxOutbox', taxDrainOutbox).catch((err) => {
+        logger.error(`[TaxPusher] Cron crashed: ${err.message}`);
+      });
+    });
+    logger.info('[System] Tax outbox pusher scheduled: every 15 min');
+  }
 
   // ── DB maintenance — ежедневно 04:00 (перед borg-бэкапом 04:30) ──
   // checkpoint WAL + integrity + optimize + сжатие архива. VACUUM по воскресеньям

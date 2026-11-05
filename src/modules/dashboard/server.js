@@ -522,6 +522,7 @@ async function getStatusData() {
 
   return {
     mode: config.mode,
+    paperTrading: config.paperTrading,
     hotMovers,
     btcLivePrice,
     equity,

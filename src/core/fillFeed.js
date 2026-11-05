@@ -19,6 +19,7 @@
 import WebSocket from 'ws';
 import { logger } from './logger.js';
 import { config } from './config.js';
+import { onPaperFills } from './paperExchange.js';
 
 const WS_URL = 'wss://api.hyperliquid.xyz/ws';
 const PING_INTERVAL_MS = 30_000;
@@ -32,6 +33,7 @@ let connected = false;
 let reconnectAttempts = 0;
 let pingTimer = null;
 let onFillCb = null;
+let stopPaperFills = null;
 
 const seen = new Set();   // Set держит порядок вставки — этого хватает для подрезки
 const stats = { events: 0, lastFillAt: 0, connectedAt: 0 };
@@ -79,6 +81,22 @@ export function pickFreshFills(msg, seenSet) {
   return fresh;
 }
 
+function deliver(fresh) {
+  stats.events += fresh.length;
+  stats.lastFillAt = Date.now();
+  recordLiveFills(fresh);
+  const summary = fresh
+    .map((f) => `${f.dir ?? '?'} #${f.coin} ${f.sz}@${f.px}`)
+    .join(', ');
+  logger.info(`[FillFeed] ⚡ ${fresh.length} филл(ов): ${summary} — бужу сверку`);
+
+  try {
+    onFillCb?.(fresh);
+  } catch (err) {
+    logger.warn(`[FillFeed] обработчик упал: ${err.message}`);
+  }
+}
+
 function connect() {
   if (stopping) return;
   const address = config.wallet?.address;
@@ -112,21 +130,7 @@ function connect() {
     if (msg.channel !== 'userFills') return;
 
     const fresh = pickFreshFills(msg, seen);
-    if (fresh.length === 0) return;
-
-    stats.events += fresh.length;
-    stats.lastFillAt = Date.now();
-    recordLiveFills(fresh);
-    const summary = fresh
-      .map((f) => `${f.dir ?? '?'} #${f.coin} ${f.sz}@${f.px}`)
-      .join(', ');
-    logger.info(`[FillFeed] ⚡ ${fresh.length} филл(ов): ${summary} — бужу сверку`);
-
-    try {
-      onFillCb?.(fresh);
-    } catch (err) {
-      logger.warn(`[FillFeed] обработчик упал: ${err.message}`);
-    }
+    if (fresh.length) deliver(fresh);
   });
 
   ws.on('error', (err) => {
@@ -151,11 +155,18 @@ function connect() {
 export function startFillFeed({ onFill } = {}) {
   onFillCb = onFill ?? null;
   stopping = false;
+  if (config.paperTrading) {
+    stopPaperFills = onPaperFills(deliver);
+    connected = true;
+    return;
+  }
   connect();
 }
 
 export function stopFillFeed() {
   stopping = true;
+  stopPaperFills?.();
+  stopPaperFills = null;
   if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
   try { ws?.close(); } catch { /* noop */ }
   ws = null;

@@ -24,6 +24,7 @@ import {
   isFeedFresh,
 } from "../core/priceFeed.js";
 import { resolveApiCoin } from "../core/universe.js";
+import { paperClient, startPaperEngine, startPaperExchange } from "../core/paperExchange.js";
 
 /**
  * Символ перпа для SDK. Внутри бот держит монеты в UPPERCASE, но HL требует
@@ -60,15 +61,17 @@ export async function initExchange() {
     return null;
   }
 
+  if (config.paperTrading) startPaperExchange();
+
   // Выбираем ключ: агент (рекомендуется) → основной (fallback)
   const privateKey = config.wallet.agentPrivateKey || config.wallet.privateKey;
   const isAgent = !!config.wallet.agentPrivateKey;
 
-  if (!privateKey && !config.observeOnly) {
+  if (!privateKey && !config.observeOnly && !config.paperTrading) {
     throw new Error("[Exchange] No private key available for PRODUCTION mode");
   }
 
-  const walletKind = config.observeOnly ? "read-only" : (isAgent ? "AGENT wallet" : "⚠️ MAIN wallet");
+  const walletKind = (config.observeOnly || config.paperTrading) ? "read-only" : (isAgent ? "AGENT wallet" : "⚠️ MAIN wallet");
   logger.info(`[Exchange] Initializing SDK (${walletKind})…`);
 
   try {
@@ -87,6 +90,8 @@ export async function initExchange() {
     await sdk.connect();
 
     logger.info("[Exchange] ✅ SDK connected successfully");
+
+    if (config.paperTrading) startPaperEngine();
 
     // Верификация: запрашиваем состояние аккаунта
     await verifyConnection();
@@ -143,8 +148,9 @@ export function getExchange() {
   return sdk;
 }
 
-/** Клиент для подписанных запросов: режим наблюдения их не допускает. */
+/** Клиент для подписанных запросов: на бумаге симулятор, в режиме наблюдения их нет. */
 function signingClient() {
+  if (config.paperTrading) return paperClient;
   if (config.observeOnly) {
     throw new Error("[Exchange] observe-only mode: signed requests are disabled");
   }
@@ -230,10 +236,7 @@ export async function checkAccountLeverage(maxSafe = 1) {
     return [];
   }
 
-  const state = await retryWithBackoff(
-    () => sdk.info.perpetuals.getClearinghouseState(config.wallet.address),
-    { label: "check-leverage", maxRetries: 3 },
-  );
+  const state = await getClearinghouseStateFull();
 
   const results = [];
 

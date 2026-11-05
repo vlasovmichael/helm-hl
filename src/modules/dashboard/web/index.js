@@ -293,7 +293,7 @@ function view() {
   return `
     <header data-edition="">
       <div class="equity-group">
-        <div class="label">Total Equity</div>
+        <div class="label">Total Equity <span id="paper-badge"></span></div>
         <!-- 🚨 Не «$0.00»: до первого кадра это НЕ ноль на счету, а
              отсутствие данных, и выглядели они одинаково. -->
         <div class="value animated-value" id="equity-value">

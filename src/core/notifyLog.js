@@ -9,6 +9,7 @@
 // тик (журнал — вспомогательный, не критичный путь).
 
 import { readFileSync, writeFileSync } from 'node:fs';
+import { config } from './config.js';
 import { logger } from './logger.js';
 
 const FILE = 'data/notifications.json';
@@ -23,6 +24,8 @@ let loaded = false;
 // — тот же паттерн, что subscribeLogs в logger.js). Fail-soft: ошибка подписчика
 // не валит запись в журнал.
 const subscribers = new Set();
+
+const PAPER_PREFIX = 'PAPER · ';
 
 /** Подписка на каждое новое уведомление. Возвращает функцию отписки. */
 export function subscribeNotifications(fn) {
@@ -55,12 +58,18 @@ function persist() {
  * @param {{title:string, message:string, topic?:string, tags?:string[], priority?:number, emailed?:boolean, ts?:number}} n
  * @returns {object} записанная строка
  */
+/** Алерт о бумажной сделке не должен читаться как новость о настоящих деньгах. */
+export function paperTitle(title) {
+  if (!config.paperTrading || title.startsWith(PAPER_PREFIX)) return title;
+  return `${PAPER_PREFIX}${title}`;
+}
+
 export function recordNotification(n = {}) {
   load();
   const row = {
     id: nextId++,
     ts: n.ts ?? Date.now(),
-    title: n.title || '',
+    title: paperTitle(n.title || ''),
     message: n.message || '',
     topic: n.topic || '',
     tags: Array.isArray(n.tags) ? n.tags : [],

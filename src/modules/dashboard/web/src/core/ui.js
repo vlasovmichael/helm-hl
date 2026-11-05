@@ -152,6 +152,15 @@ export function badge({ label = "", tone = "", title = "", cls = "" } = {}) {
   );
 }
 
+/** Метка рядом с суммами бумажного счёта: деньги на нём не настоящие. */
+export function paperMoneyBadge() {
+  return badge({
+    label: "Paper · not real money",
+    tone: "accent",
+    title: "Virtual account: real market prices, simulated orders and balance. No real funds are involved.",
+  });
+}
+
 /**
  * Чип списка: короткая метка, которую можно убрать. Вотчлист монет
  * (/divergence) и список китовых адресов — один и тот же приём.

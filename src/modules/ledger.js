@@ -40,7 +40,7 @@ import {
 const VERSION = 3;
 // Аккаунт начал торговать 8 апреля 2026. Берём с 1 апреля с запасом.
 const LEDGER_START_MS = Date.UTC(2026, 3, 1);
-const SNAPSHOT_FILE = join('data', 'ledger_months.json');
+const SNAPSHOT_FILE = join(config.accountDir, 'ledger_months.json');
 const CACHE_TTL_MS = 60_000;
 
 let cache = { ts: 0, payload: null };

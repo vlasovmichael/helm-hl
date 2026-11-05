@@ -290,6 +290,13 @@ function trip429() {
   if (newUntil > cooldownUntil) cooldownUntil = newUntil;
 }
 
+let infoInterceptor = null;
+
+/** Подмена ответов /info: функция вернула не undefined — в сеть запрос не идёт. null снимает. */
+export function setInfoInterceptor(interceptor) {
+  infoInterceptor = interceptor;
+}
+
 /**
  * Один POST на /info с retry, semaphore и min-gap.
  *
@@ -302,6 +309,9 @@ function trip429() {
  * @returns {Promise<any>} data из ответа HL
  */
 export async function hlInfo(body, opts = {}) {
+  const intercepted = infoInterceptor?.(body);
+  if (intercepted !== undefined) return intercepted;
+
   const { label = 'hl/info', timeoutMs, maxRetries = 3, priority = HL_PRIORITY.NORMAL } = opts;
 
   const weight = weightOf(body);

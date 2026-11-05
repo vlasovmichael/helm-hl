@@ -16,10 +16,11 @@
 
 import { readFileSync, writeFileSync, renameSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 
 const VERSION = 1;
-const DEFAULT_FILE = join('data', 'adopt_trail.json');
+const DEFAULT_FILE = join(config.accountDir, 'adopt_trail.json');
 
 let FILE = DEFAULT_FILE;
 let loaded = false;
@@ -78,7 +79,7 @@ function persist() {
   if (process.env.NODE_ENV === 'test' && FILE === DEFAULT_FILE) return;
   const tmpPath = `${FILE}.${process.pid}.tmp`;
   try {
-    mkdirSync('data', { recursive: true });
+    mkdirSync(config.accountDir, { recursive: true });
     writeFileSync(tmpPath, JSON.stringify(cache, null, 2), 'utf-8');
     renameSync(tmpPath, FILE);
   } catch (err) {

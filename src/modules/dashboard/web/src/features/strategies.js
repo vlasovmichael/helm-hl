@@ -16,6 +16,9 @@ const _stratExpanded = new Set(); // id'шники развёрнутых стр
 let _lastStrategies = null;
 let _lastStrategiesHtml = "";
 
+// На бумажном счёте боевой путь торгует виртуальными деньгами: подпись LIVE была бы неправдой.
+const displayStatus = (s) => (s.status === "live" && s.paperAccount ? "paper" : s.status);
+
 const STRAT_STATUS = {
   live:    { label: "LIVE",    cls: "strat-live"    },
   paper:   { label: "PAPER",   cls: "strat-paper"   },
@@ -222,7 +225,7 @@ function stratHold(sec) {
 }
 
 function stratRowHtml(s, planned, opts = {}) {
-  const st = STRAT_STATUS[s.status] || STRAT_STATUS.off;
+  const st = STRAT_STATUS[displayStatus(s)] || STRAT_STATUS.off;
   const dim = planned || s.status === "off" ? " strat-row-dim" : "";
   // Акцент семейства: оттенок по базовому id + класс strat-fam-first на первой
   // строке группы (рисует разделитель между семействами).
@@ -333,7 +336,7 @@ export function renderStrategies(payload, force) {
   // Сводка в шапке: сколько live / paper / radar.
   const summary = document.getElementById("strategies-summary");
   if (summary) {
-    const count = (st) => rows.filter((r) => r.status === st).length;
+    const count = (st) => rows.filter((r) => displayStatus(r) === st).length;
     const sumHtml =
       `<span class="strat-pill strat-live">${count("live")} live</span>` +
       `<span class="strat-pill strat-paper">${count("paper")} paper</span>` +

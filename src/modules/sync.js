@@ -14,7 +14,7 @@ import { restoreCircuitBreaker, restoreOiCapBans } from './executor/state.js';
 
 import { state as appState } from '../app/state.js';
 
-const BOT_STATE_PATH = 'data/bot_state.json';
+const BOT_STATE_PATH = `${config.accountDir}/bot_state.json`;
 
 // ─────────────────────────────────────────────────
 //  Helpers

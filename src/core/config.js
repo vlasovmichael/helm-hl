@@ -1,6 +1,8 @@
 import 'dotenv/config';
 import { parseTpGrid } from '../modules/tpGrid.js';
 
+const PAPER_WALLET_ADDRESS = '0x0000000000000000000000000000000000000000';
+
 function requireEnv(key) {
   const value = process.env[key];
   if (!value) {
@@ -10,34 +12,46 @@ function requireEnv(key) {
 }
 
 function loadConfig() {
-  // isProduction = «не тестовый прогон»: глобального paper-режима нет, прод
-  // всегда живой. Реальные ордера дополнительно гейтятся *_PROD_ENABLED, так
-  // что локальный запуск без них ордеров не шлёт.
+  // isProduction = «не тестовый прогон». Бумажная торговля тоже isProduction:
+  // бот идёт боевым путём, а биржу за него изображает core/paperExchange.js.
   // 🚨 NODE_ENV=test в проде превратит бота в симулятор — не ставить.
   const isProduction = process.env.NODE_ENV !== 'test';
   // Режим наблюдения: бот только читает рынок. Ключи игнорируются, ордеров и бумажных поз нет.
   const observeOnly = (process.env.OBSERVE_ONLY || 'false').toLowerCase() === 'true';
-  const mode = observeOnly ? 'OBSERVE' : (isProduction ? 'PRODUCTION' : 'PAPER');
+  // Бумажная торговля: виртуальный счёт на настоящих ценах. Ключи и адрес кошелька игнорируются.
+  const paperTrading = (process.env.PAPER_TRADING || 'false').toLowerCase() === 'true';
+  if (observeOnly && paperTrading) {
+    throw new Error('OBSERVE_ONLY and PAPER_TRADING are mutually exclusive: observe mode forbids paper positions');
+  }
+  const keyless = observeOnly || paperTrading;
+  const paperStartBalance = parseFloat(process.env.PAPER_START_BALANCE || '100');
+  if (paperTrading && !(paperStartBalance > 0)) {
+    throw new Error(`PAPER_START_BALANCE must be > 0. Got: "${process.env.PAPER_START_BALANCE}"`);
+  }
+  const mode = observeOnly
+    ? 'OBSERVE'
+    : (paperTrading ? 'PAPER_TRADING' : (isProduction ? 'PRODUCTION' : 'PAPER'));
 
-  const privateKey = observeOnly ? null : (process.env.HL_PRIVATE_KEY || null);
+  const privateKey = keyless ? null : (process.env.HL_PRIVATE_KEY || null);
 
-  const agentPrivateKey = observeOnly ? null : (process.env.HL_AGENT_PRIVATE_KEY || null);
+  const agentPrivateKey = keyless ? null : (process.env.HL_AGENT_PRIVATE_KEY || null);
 
-  if (isProduction && !observeOnly && !agentPrivateKey && !privateKey) {
+  if (isProduction && !keyless && !agentPrivateKey && !privateKey) {
     throw new Error(
       'PRODUCTION run but neither HL_AGENT_PRIVATE_KEY nor HL_PRIVATE_KEY is set. ' +
       'Set HL_AGENT_PRIVATE_KEY (recommended) or HL_PRIVATE_KEY. Refusing to start.',
     );
   }
 
-  if (isProduction && !observeOnly && !agentPrivateKey) {
+  if (isProduction && !keyless && !agentPrivateKey) {
     console.warn(
       '⚠️  WARNING: Using HL_PRIVATE_KEY (main wallet) instead of HL_AGENT_PRIVATE_KEY (agent). ' +
       'Agent wallet is strongly recommended for production — it cannot withdraw funds.',
     );
   }
 
-  const walletAddress = requireEnv('PUBLIC_WALLET_ADDRESS');
+  // Нулевой адрес: пропущенное мимо симулятора чтение вернёт пустой счёт, а не настоящий.
+  const walletAddress = paperTrading ? PAPER_WALLET_ADDRESS : requireEnv('PUBLIC_WALLET_ADDRESS');
 
   const minApy   = parseFloat(process.env.MIN_APY_THRESHOLD   || '30');
   const entryApy = parseFloat(process.env.ENTRY_APY_THRESHOLD || '60');
@@ -172,7 +186,8 @@ function loadConfig() {
   // ── Adopt Mode — бот-нянька на ручные входы (plans/adopt-mode-plan.md) ──
   // Ручная поза подхватывается в свободный слот как strategy_id='adopt', бот
   // сразу ставит реальный reduce-only стоп на бирже.
-  const adoptEnabled          = !observeOnly && (process.env.ADOPT_ENABLED || 'false').toLowerCase() === 'true';
+  // На бумаге нянька включена по умолчанию: без неё у позы не появится стоп.
+  const adoptEnabled          = !observeOnly && (process.env.ADOPT_ENABLED || String(paperTrading)).toLowerCase() === 'true';
   // «Бумажный adopt»: выход бумажных поз (manual_paper) ведётся той же
   // механикой, что реальный adopt, но без денег.
   const manualPaperAdoptEnabled = !observeOnly && (process.env.MANUAL_PAPER_ADOPT_ENABLED || 'true').toLowerCase() === 'true';
@@ -434,6 +449,9 @@ function loadConfig() {
     mode,
     isProduction,
     observeOnly,
+    paperTrading,
+    // Всё, что описывает счёт, а не рынок: БД сделок, кэш баланса, состояние няньки.
+    accountDir: paperTrading ? 'data/paper' : 'data',
 
     wallet: {
       address:         walletAddress,
@@ -445,7 +463,7 @@ function loadConfig() {
       minApy,
       entryApy,
       leverage,
-      fakeBalance:       process.env.FAKE_BALANCE ? parseFloat(process.env.FAKE_BALANCE) : null,
+      paperStartBalance,
       // Монеты, которые нельзя торговать (HLP-индексы, деривативы и т.п.)
       coinBlacklist:     new Set(
         (process.env.COIN_BLACKLIST || 'STBL')

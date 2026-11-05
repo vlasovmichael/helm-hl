@@ -13,7 +13,7 @@ import { riskTint } from "../utils/riskBar.js";
 import { updateAnimatedNumber } from "../utils/animatedNumber.js";
 import { startPriceStream, setWatchedCoins, getLivePrice, onPriceTick } from "../net/priceStream.js";
 import { TAKER_FEE_RATE } from "../state/activeCoins.js";
-import { coinIcon } from "../core/ui.js";
+import { coinIcon, paperMoneyBadge } from "../core/ui.js";
 
 // Доп. классы + inline-стиль для глубинной заливки PnL-карточки.
 // tint = riskTint(...) | null. Возвращает { cls, attr } для подстановки в HTML.
@@ -301,6 +301,10 @@ export function renderHeader(status) {
   // Unified-аккаунт: equity = spot.total + perp.uPnL, available = spot.total −
   // spot.hold. Разбивки perp/spot нет: это один пул.
   updateAnimatedNumber("equity-value", fmtUsd(status.equity));
+  const paperBadge = document.getElementById("paper-badge");
+  if (paperBadge && paperBadge.childElementCount !== (status.paperTrading ? 1 : 0)) {
+    paperBadge.innerHTML = status.paperTrading ? paperMoneyBadge() : "";
+  }
   // Запоминаем equity как базу для относительной дневной цели (setDailyPnl
   // приходит отдельным поллингом, без equity). Держим последнее известное.
   if (status.equity > 0) _lastEquity = status.equity;

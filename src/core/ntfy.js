@@ -7,7 +7,7 @@
 
 import { config } from './config.js';
 import { logger } from './logger.js';
-import { recordNotification } from './notifyLog.js';
+import { paperTitle, recordNotification } from './notifyLog.js';
 import { sendMail, isMailEnabled } from './mail.js';
 
 const QUIET_FROM = parseInt(process.env.NTFY_QUIET_FROM ?? '0', 10);
@@ -30,7 +30,8 @@ export function isQuietHour(now = Date.now()) {
  * @param {{topic?:string, title:string, message:string, tags?:string[], priority?:number, urgent?:boolean, now?:number}} opts
  * @returns {Promise<boolean>} true если запрос ушёл или алерт записан в колокольчик, false если не настроено/ошибка
  */
-export async function fireNtfy({ topic, title, message, tags = [], priority, urgent = false, now = Date.now() } = {}) {
+export async function fireNtfy({ topic, title: rawTitle, message, tags = [], priority, urgent = false, now = Date.now() } = {}) {
+  const title = paperTitle(rawTitle);
   const { url, token, bellOnly } = config.ntfy;
   const t = topic || config.ntfy.topic;
   if (!t || (!url && !bellOnly)) return false;

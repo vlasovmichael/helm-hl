@@ -42,6 +42,7 @@ data/trades_snapshot.db*
 data/_corrupted/
 data/*.json
 data/tax/
+data/paper/
 data/oi-collector/
 data/spike-fade/
 data/leaderboard/

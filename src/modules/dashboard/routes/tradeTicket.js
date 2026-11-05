@@ -266,6 +266,7 @@ export async function handleContext(req, res) {
       equity,                                  // депо целиком — база для риска
       riskPct: config.trading.adoptRiskPct,    // порог риска на сделку
       adoptEnabled: config.trading.adoptEnabled,
+      paperTrading: config.paperTrading,
       spreadBp: live?.spreadBp ?? null,
       fees: { takerBp: TAKER_FEE_BP, makerBp: MAKER_FEE_BP },
       hasPosition: positions.some((p) => p.coin === coin),
