@@ -8,7 +8,8 @@
 // Они не пишут в `positions`, не ставят стопы и не ведут позицию — дальше всё
 // как при входе с сайта биржи: orphanCheck увидит позу, adopt усыновит её и
 // повесит ATR-стоп. Своя строка в БД сделала бы второго владельца позиции —
-// класс рассинхрона «зеркало ≠ биржа».
+// класс рассинхрона «зеркало ≠ биржа». Выключенный Adopted лишь оставляет няньке
+// отметку «не трогать» (adoptOptOut.js).
 //
 // Почему серверные проверки дублируют клиентские: клиенту доверять нельзя, это
 // живые деньги. Всё, что гейтит форму в браузере, продублировано здесь.
@@ -39,6 +40,7 @@ import { getHistorySince, getActiveAdoptPositions, getActivePosition } from "../
 import { getUniverse } from "../../../core/universe.js";
 import { liveCoinSnapshot, MAKER_FEE_BP, TAKER_FEE_BP } from "./screen.js";
 import { stopSafeLeverage } from "../web/src/features/leverageMath.js";
+import { clearAdoptOff, isAdoptOff, markAdoptOff } from "../../adoptOptOut.js";
 
 // Биржевой минимум ордера на HL. Меньше — гарантированный отказ.
 const MIN_ORDER_USD = 10;
@@ -61,6 +63,21 @@ async function stopForCap(coin) {
   }
 }
 
+const sameCoin = (left, right) => String(left).toUpperCase() === String(right).toUpperCase();
+
+/** Ведёт ли бот уже позу по монете: её режим окно сделки не меняет. */
+function botOwnsCoin(coin) {
+  const slot = getActivePosition();
+  return (slot && sameCoin(slot.coin, coin)) || getActiveAdoptPositions().some((p) => sameCoin(p.coin, coin));
+}
+
+/** Режим открытой позы, который нельзя сменить докупкой: "on", "off" или null. */
+function adoptLockFor(coin, positions) {
+  if (!coin || !positions.some((p) => sameCoin(p.coin, coin))) return null;
+  if (botOwnsCoin(coin)) return "on";
+  return isAdoptOff(coin) ? "off" : null;
+}
+
 /** Почему плечо выше потолка — словами для отказа. */
 function leverageWhy(coin, lev, exchangeMax, stopDistPct) {
   if (lev.basis === "exchange") return `the exchange maximum for ${coin} is ${exchangeMax}x`;
@@ -71,6 +88,9 @@ function leverageWhy(coin, lev, exchangeMax, stopDistPct) {
 // Потолок нотионала на одну ручную сделку. Защита от опечатки и от того, что
 // одна сделка съест весь депозит. Не риск-менеджмент — грубый предохранитель.
 const MAX_NOTIONAL_USD = 60;
+
+/** Потолок нотионала сделки; null на бумажном счёте: опечатка там денег не стоит. */
+export const notionalCapUsd = (paperTrading = config.paperTrading) => (paperTrading ? null : MAX_NOTIONAL_USD);
 
 // Потолок ожидания справочного ATR-стопа в контексте модалки. Меньше секунды
 // человек не замечает; больше — форма кажется зависшей.
@@ -196,6 +216,8 @@ function readOpenBody(b) {
     leverage: Math.round(Number(b?.leverage)),
     orderType: b?.orderType === "limit" ? "limit" : "market",
     limitPx: Number(b?.limitPx),
+    // Без поля поза идёт под опеку: выключение должно быть явным.
+    adopted: b?.adopted !== false,
   };
 }
 
@@ -259,13 +281,14 @@ export async function handleContext(req, res) {
       maxLeverage: lev?.cap ?? null,
       leverageBasis: lev?.basis ?? null,
       exchangeMaxLeverage,
-      maxNotionalUsd: MAX_NOTIONAL_USD,
+      maxNotionalUsd: notionalCapUsd(),
       minOrderUsd: MIN_ORDER_USD,
       stopDistPct,
       stopBasis,
       equity,                                  // депо целиком — база для риска
       riskPct: config.trading.adoptRiskPct,    // порог риска на сделку
       adoptEnabled: config.trading.adoptEnabled,
+      adoptLock: adoptLockFor(coin, positions),
       paperTrading: config.paperTrading,
       spreadBp: live?.spreadBp ?? null,
       fees: { takerBp: TAKER_FEE_BP, makerBp: MAKER_FEE_BP },
@@ -359,8 +382,28 @@ export async function handleOpen(req, res) {
   if (!Number.isInteger(b.leverage) || b.leverage < 1) {
     return res.status(400).json({ error: "leverage must be a positive integer" });
   }
-  const stopDistPct = await stopForCap(b.coin);
-  const lev = stopSafeLeverage({ exchangeMax, stopDistPct });
+  // Выключатель действует, только когда нянька вообще работает.
+  const adoptOff = !b.adopted && config.trading.adoptEnabled;
+  if (adoptOff && botOwnsCoin(b.coin)) {
+    return res.status(422).json({ error: `${b.coin} is already adopted — close it before opening without the bot` });
+  }
+  if (!adoptOff && isAdoptOff(b.coin)) {
+    let open;
+    try {
+      open = await fetchExchangePositions();
+    } catch (err) {
+      return res.status(422).json({ error: `could not read positions: ${err.message}` });
+    }
+    if (open.some((p) => sameCoin(p.coin, b.coin))) {
+      return res.status(422).json({ error: `${b.coin} was opened without adoption — close it before opening with the bot` });
+    }
+  }
+
+  // Без стопа потолок плеча задаёт только биржа: ликвидации не от чего отступать.
+  const stopDistPct = adoptOff ? null : await stopForCap(b.coin);
+  const lev = adoptOff
+    ? { cap: exchangeMax, basis: "exchange" }
+    : stopSafeLeverage({ exchangeMax, stopDistPct });
   if (b.leverage > lev.cap) {
     return res.status(422).json({ error: `leverage ${b.leverage}x is not allowed: ${leverageWhy(b.coin, lev, exchangeMax, stopDistPct)}` });
   }
@@ -369,8 +412,9 @@ export async function handleOpen(req, res) {
   if (notional < MIN_ORDER_USD) {
     return res.status(422).json({ error: `the exchange minimum order is $${MIN_ORDER_USD}` });
   }
-  if (notional > MAX_NOTIONAL_USD) {
-    return res.status(422).json({ error: `notional $${notional.toFixed(2)} exceeds the cap of $${MAX_NOTIONAL_USD}` });
+  const notionalCap = notionalCapUsd();
+  if (notionalCap !== null && notional > notionalCap) {
+    return res.status(422).json({ error: `notional $${notional.toFixed(2)} exceeds the cap of $${notionalCap}` });
   }
 
   // Дневной стоп запирает ВХОД. Выход не запирает никогда (см. handleClose).
@@ -459,6 +503,10 @@ export async function handleOpen(req, res) {
   }
 
   const isBuy = b.side === "long";
+  // Отметка ставится до ордера: тик няньки может увидеть позу до ответа биржи.
+  const wasAdoptOff = isAdoptOff(b.coin);
+  if (adoptOff) markAdoptOff(b.coin);
+  else clearAdoptOff(b.coin);
   try {
     if (b.orderType === "limit") {
       const px = formatHlPrice(b.limitPx, szDecimals);
@@ -478,7 +526,7 @@ export async function handleOpen(req, res) {
         ok: true,
         kind: "limit",
         oid,
-        message: `${b.side === "short" ? "Short" : "Long"} ${b.coin} · limit ${px} resting · $${notional.toFixed(2)} (${b.marginUsd.toFixed(2)}×${b.leverage}) · bot will attach the stop once it fills`,
+        message: `${b.side === "short" ? "Short" : "Long"} ${b.coin} · limit ${px} resting · $${notional.toFixed(2)} (${b.marginUsd.toFixed(2)}×${b.leverage}) · ${adoptOff ? "not adopted: no stop or target from the bot" : "bot will attach the stop once it fills"}`,
       });
     }
 
@@ -498,10 +546,12 @@ export async function handleOpen(req, res) {
       oid: fill.oid,
       fillPx: fill.avgPx,
       sz: fill.totalSz,
-      message: `${b.side === "short" ? "Short" : "Long"} ${b.coin} filled ${fill.totalSz} @ ${fill.avgPx} · $${(fill.totalSz * fill.avgPx).toFixed(2)} · bot attaches the stop in ~15s`,
+      message: `${b.side === "short" ? "Short" : "Long"} ${b.coin} filled ${fill.totalSz} @ ${fill.avgPx} · $${(fill.totalSz * fill.avgPx).toFixed(2)} · ${adoptOff ? "not adopted: no stop or target from the bot" : "bot attaches the stop in ~15s"}`,
     });
   } catch (err) {
     logger.error(`[TradeTicket] open #${b.coin} failed: ${err.message}`);
+    if (wasAdoptOff) markAdoptOff(b.coin);
+    else clearAdoptOff(b.coin);
     return res.status(422).json({ error: err.message });
   }
 }

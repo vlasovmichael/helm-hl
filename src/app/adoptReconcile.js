@@ -31,6 +31,7 @@ import { atr } from '../modules/trendFollowAtr.js';
 import { getHourlyCandles } from '../modules/candleCache.js';
 import { getPriceNMinAgo, getLatestPrice } from '../core/priceHistory.js';
 import { getOiNMinAgo } from '../core/oiHistory.js';
+import { isAdoptOff } from '../modules/adoptOptOut.js';
 
 // Минимальный ордер HL — та же величина, что показывает тикет. Нужна, чтобы
 // отличить «возьми размер поменьше» от «на этом депо монета недоступна вовсе».
@@ -428,6 +429,11 @@ export async function maybeAdoptManualPosition(manualPositions) {
     const entry   = ex.entryPx;
     const sz      = Math.abs(ex.szi);
     const sizeUsd = sz * entry;
+
+    if (isAdoptOff(coin)) {
+      _adoptSkipReason.delete(coin);
+      continue;
+    }
 
     // 🚨 Hunter cross-cooldown здесь не применяется: оператор вошёл руками сам,
     // няньке остаётся повесить стоп. С гардом такие позы оставались без стопа.

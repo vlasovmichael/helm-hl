@@ -244,6 +244,40 @@ textarea.field {
 
 /* Бейдж: метка состояния (LONG / PAPER / BOT). На неё не нажимают — пилюля,
    тонкий кегль, без тени. */
+.switch {
+  flex: none;
+  display: inline-flex;
+  width: 34px;
+  height: 20px;
+  padding: 2px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--wash);
+  cursor: pointer;
+  transition: background-color var(--dur-fast) ease;
+
+  &.is-on {
+    border-color: var(--accent-2);
+    background: var(--accent-2);
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+.switch__thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  transition: transform var(--dur-fast) ease;
+
+  .switch.is-on & {
+    background: var(--panel);
+    transform: translateX(14px);
+  }
+}
+
 .badge {
   display: inline-flex;
   align-items: center;

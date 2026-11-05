@@ -793,7 +793,7 @@ export function renderManualPositions(list) {
   // и без этого бейдж застывает на до-adopt тексте — «HANDS-OFF · MANUAL» на
   // позе, которой нянька уже повесила стоп.
   const keys = list
-    .map((p) => `${p.coin}:${p.adopted ? 1 : 0}:${p.adoptResyncing ? 1 : 0}:${p.adoptSkipReason ?? ""}:${p.builder ? 1 : 0}:${targetModeFor(p, manualStats(p)) ? "t" : "f"}`)
+    .map((p) => `${p.coin}:${p.adopted ? 1 : 0}:${p.adoptOff ? 1 : 0}:${p.adoptResyncing ? 1 : 0}:${p.adoptSkipReason ?? ""}:${p.builder ? 1 : 0}:${targetModeFor(p, manualStats(p)) ? "t" : "f"}`)
     .join("|");
   if (keys === _manualKeys) {
     for (const p of list) patchManualCard(container, p);
@@ -817,6 +817,8 @@ export function renderManualPositions(list) {
         ? `HANDS-OFF · MANUAL · <span style="color:var(--amber)" data-card="Position side flipped — the bot closes the old DB row and re-adopts the position on the new side">RE-SYNCING ⟳</span>`
         : p.adopted
         ? `HANDS-OFF · MANUAL · <span style="color:var(--gain)">ADOPTED</span>`
+        : p.adoptOff
+        ? "HANDS-OFF · MANUAL · NOT ADOPTED"
         : p.adoptSkipReason
           ? `HANDS-OFF · MANUAL · <span style="color:var(--loss)">no stop: ${escapeHtml(p.adoptSkipReason)}</span>`
           : "HANDS-OFF · MANUAL";

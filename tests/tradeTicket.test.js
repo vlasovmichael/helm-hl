@@ -23,7 +23,10 @@ import {
   roundTripCost,
   marginForRisk,
   attemptsLeft,
+  ticketAdopted,
 } from "../src/modules/dashboard/web/src/features/tradeTicket.js";
+
+const { notionalCapUsd } = await import("../src/modules/dashboard/routes/tradeTicket.js");
 
 const FEES = { takerBp: 4.32, makerBp: 1.44 };
 const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -354,4 +357,45 @@ test("riskVsEquity: без порога считает долю, но ничег
   assert.equal(r.pctOfEquity.toFixed(0), "5");
   assert.equal(r.over, false);
   assert.equal(r.suggestedNotional, null);
+});
+
+const adoptForm = { coin: "BTC", side: "long", marginUsd: 10, leverage: 20, orderType: "market" };
+const adoptCtx = { price: 100, available: 100, maxLeverage: 5, exchangeMaxLeverage: 40, adoptEnabled: true };
+
+test("Adopted: без явного выключения поза идёт под опеку", () => {
+  assert.equal(ticketAdopted({}, adoptCtx), true);
+  assert.equal(ticketAdopted({ adopted: false }, adoptCtx), false);
+});
+
+test("Adopted: открытая поза держит свой режим сильнее переключателя", () => {
+  assert.equal(ticketAdopted({ adopted: false }, { ...adoptCtx, adoptLock: "on" }), true);
+  assert.equal(ticketAdopted({ adopted: true }, { ...adoptCtx, adoptLock: "off" }), false);
+});
+
+test("Adopted: без няньки выбирать нечего, предупреждение остаётся прежним", () => {
+  const ctx = { ...adoptCtx, adoptEnabled: false };
+  assert.equal(ticketAdopted({ adopted: false }, ctx), true);
+  assert.ok(validateOpen({ ...adoptForm, adopted: false, leverage: 3 }, ctx).warnings.some((w) => w.includes("bot sitter")));
+});
+
+test("Adopted выключен: потолок плеча задаёт биржа, а не стоп", () => {
+  assert.equal(leverageCap(adoptCtx), 5);
+  assert.equal(leverageCap(adoptCtx, false), 40);
+  assert.ok(validateOpen(adoptForm, adoptCtx).blockers.some((b) => b.includes("max leverage")));
+  assert.deepEqual(validateOpen({ ...adoptForm, adopted: false }, adoptCtx).blockers, []);
+});
+
+test("Adopted выключен: предел биржи всё равно держит", () => {
+  const v = validateOpen({ ...adoptForm, adopted: false, leverage: 41 }, adoptCtx);
+  assert.ok(v.blockers.some((b) => b.includes("max leverage")));
+});
+
+test("Adopted выключен: форма предупреждает, что позу никто не закроет", () => {
+  assert.ok(validateOpen({ ...adoptForm, adopted: false }, adoptCtx).warnings.some((w) => w.includes("no stop, target or trail")));
+  assert.equal(validateOpen({ ...adoptForm, leverage: 3 }, adoptCtx).warnings.length, 0);
+});
+
+test("потолок сделки $60 держит настоящий счёт, на бумаге его нет", () => {
+  assert.equal(notionalCapUsd(false), 60);
+  assert.equal(notionalCapUsd(true), null);
 });

@@ -19,7 +19,7 @@
 import { escapeHtml, fmtUsd, fmtPrice } from "../utils/format.js";
 import * as dialog from "../core/dialog.js";
 import { icon } from "../core/icon.js";
-import { button, paperMoneyBadge, segmented } from "../core/ui.js";
+import { button, paperMoneyBadge, segmented, toggleSwitch } from "../core/ui.js";
 import { attachCoinCombo, coinCombo, suggestCoins } from "../core/coinCombo.js";
 
 // Биржевой минимум ордера на HL. Меньше — отказ, поэтому это блокер, а не
@@ -30,12 +30,23 @@ const MIN_ORDER_USD = 10;
 // ctx.maxLeverage. Эта константа — только пока контекст не приехал.
 const FALLBACK_LEVERAGE_CAP = 10;
 
+/** Пойдёт ли поза под опеку няньки: открытая поза держит свой режим, а без няньки выбирать нечего. */
+export function ticketAdopted(s, ctx) {
+  if (ctx?.adoptEnabled === false) return true;
+  if (ctx?.adoptLock === "on") return true;
+  if (ctx?.adoptLock === "off") return false;
+  return s?.adopted !== false;
+}
+
+// Без стопа плечо ограничивает только биржа: ликвидации не от чего отступать.
+const capSource = (ctx, adopted) => Number(adopted ? ctx?.maxLeverage : ctx?.exchangeMaxLeverage);
+
 /** Пришёл ли потолок плеча для выбранной монеты. */
-export const leverageCapKnown = (ctx) => Number(ctx?.maxLeverage) >= 1;
+export const leverageCapKnown = (ctx, adopted = true) => capSource(ctx, adopted) >= 1;
 
 /** Эффективный потолок плеча: что сказал сервер, иначе осторожный fallback. */
-export function leverageCap(ctx) {
-  return leverageCapKnown(ctx) ? Math.floor(Number(ctx.maxLeverage)) : FALLBACK_LEVERAGE_CAP;
+export function leverageCap(ctx, adopted = true) {
+  return leverageCapKnown(ctx, adopted) ? Math.floor(capSource(ctx, adopted)) : FALLBACK_LEVERAGE_CAP;
 }
 
 // ── Чистая математика (экспортируется — на неё есть тесты) ──────────────────
@@ -163,6 +174,7 @@ export function validateOpen(s, ctx) {
   const entry = effectiveEntry({ orderType: s.orderType, limitPx: s.limitPx, price: ctx?.price });
   const notional = notionalUsd(s.marginUsd, s.leverage);
   const isShort = s.side === "short";
+  const adopted = ticketAdopted(s, ctx);
 
   if (!String(s.coin || "").trim()) blockers.push("pick a coin");
   if (!(Number(s.marginUsd) > 0)) blockers.push("margin not set");
@@ -185,8 +197,8 @@ export function validateOpen(s, ctx) {
   // Плечо против лимита КОНКРЕТНОЙ монеты. Слайдер и так ограничен, но состояние
   // переживает смену монеты: выставил 10x на DOGE, переключился на CASHCAT (3x) —
   // без этой проверки ушёл бы заведомо отбойный ордер.
-  const cap = leverageCap(ctx);
-  if (s.coin && !leverageCapKnown(ctx)) blockers.push("checking the leverage limit…");
+  const cap = leverageCap(ctx, adopted);
+  if (s.coin && !leverageCapKnown(ctx, adopted)) blockers.push("checking the leverage limit…");
   else if (Number(s.leverage) > cap) {
     blockers.push(`max leverage for ${s.coin || "this coin"} is ${cap}x`);
   }
@@ -209,6 +221,7 @@ export function validateOpen(s, ctx) {
   }
 
   if (ctx?.adoptEnabled === false) warnings.push("bot sitter is off — nobody will place a stop");
+  if (!adopted) warnings.push("no stop, target or trail from the bot — only you or liquidation can close it");
   if (ctx?.hasPosition) warnings.push(`${s.coin} position already open — this adds to it`);
 
   return { ok: blockers.length === 0, blockers, warnings, entry, notional };
@@ -282,6 +295,7 @@ function createModal(io) {
     leverage: 3,
     // Плечо, выбранное руками; leverage = min(оно, потолок монеты) и возвращается к нему сам.
     wantLeverage: 3,
+    adopted: true,
     // Лимитка по умолчанию: 97% филлов уходили тейкером, а мейкер снимает не
     // 3 бп комиссии, а медиану ~16 бп спреда. Маркет остался на переключателе.
     orderType: "limit",
@@ -339,8 +353,10 @@ function createModal(io) {
    * биткоине выглядело бы как ограничение биржи, чем оно не является.
    */
   function levCapLabel() {
-    if (state.coin && !leverageCapKnown(ctx)) return "checking the limit…";
-    const cap = leverageCap(ctx);
+    const adopted = ticketAdopted(state, ctx);
+    if (state.coin && !leverageCapKnown(ctx, adopted)) return "checking the limit…";
+    const cap = leverageCap(ctx, adopted);
+    if (!adopted) return `up to ${cap}x · venue limit`;
     const ex = Number(ctx.exchangeMaxLeverage);
     if (ctx.leverageBasis === "stop") {
       return `up to ${cap}x · liquidation beyond the ${Number(ctx.stopDistPct).toFixed(1)}% stop · venue ${ex}x`;
@@ -352,12 +368,21 @@ function createModal(io) {
   /** Содержимое строки Stop Loss — общее для render и точечного обновления. */
   function botStopHtml(botStop) {
     if (ctx.adoptEnabled === false) return "nobody will set it";
+    if (!ticketAdopted(state, ctx)) return `none <i class="tt-row__sub">you manage the exit</i>`;
     if (botStop == null) return "by ATR after entry";
     return `${escapeHtml(fmtPrice(botStop))} <i class="tt-row__sub">−${Number(ctx.stopDistPct).toFixed(1)}% ATR</i>`;
   }
 
+  /** Содержимое строки Adopted. Открытая поза держит свой режим, поэтому там он заперт. */
+  function adoptRowHtml() {
+    const locked = Boolean(ctx.adoptLock);
+    return `<span>Adopted <i class="tt-row__by">${locked ? "set by the open position" : "stop · target · trail"}</i></span>
+      ${toggleSwitch({ on: ticketAdopted(state, ctx), disabled: locked, label: "Adopted", attrs: { "data-adopt-toggle": true } })}`;
+  }
+
   /** Маржа под порог риска при текущем плече; null — нет депо или стопа. */
   function riskSizing() {
+    if (!ticketAdopted(state, ctx)) return null;
     return marginForRisk({
       equity: ctx.equity,
       riskPct: ctx.riskPct,
@@ -373,7 +398,7 @@ function createModal(io) {
       orderType: state.orderType,
       spreadBp: ctx.spreadBp,
       fees: ctx.fees,
-      stopDistPct: ctx.stopDistPct,
+      stopDistPct: ticketAdopted(state, ctx) ? ctx.stopDistPct : null,
     });
     const tries = attemptsLeft({
       equity: ctx.equity,
@@ -403,6 +428,7 @@ function createModal(io) {
 
   function renderOpen() {
     const v = validateOpen(state, ctx);
+    const adopted = ticketAdopted(state, ctx);
     const isShort = state.side === "short";
     const notional = v.notional;
     const coins = sizeInCoins(notional, v.entry ?? ctx.price);
@@ -508,11 +534,12 @@ function createModal(io) {
           <span>Size</span>
           <b data-size>${notional > 0 ? `${fmtUsd(notional)} = ${coinAmount(coins)} ${escapeHtml(state.coin || "")}` : "—"}</b>
         </div>
+        <div class="tt-row" data-adopt-row ${ctx.adoptEnabled === false ? "hidden" : ""}>${adoptRowHtml()}</div>
         <div class="tt-row ${ctx.adoptEnabled === false ?"tt-row--bad" : ""}">
-          <span>Stop Loss <i class="tt-row__by">set by bot</i></span>
+          <span>Stop Loss <i class="tt-row__by" data-bot-only ${adopted ? "" : "hidden"}>set by bot</i></span>
           <b data-botstop>${botStopHtml(botStop)}</b>
         </div>
-        <div class="tt-row ${riskEq?.over ?"tt-row--bad" : ""}">
+        <div class="tt-row ${riskEq?.over ?"tt-row--bad" : ""}" data-bot-only ${adopted ? "" : "hidden"}>
           <span>Risk at that stop</span>
           <b class="${risk != null ?"is-risk" : ""}">${
             risk != null
@@ -522,7 +549,7 @@ function createModal(io) {
         </div>
         <!-- Размер от риска одной кнопкой: стоп двигать нельзя (он по ATR),
              двигается маржа. Строка есть всегда — контекст может приехать позже. -->
-        <div class="tt-row tt-row--sub">
+        <div class="tt-row tt-row--sub" data-bot-only ${adopted ? "" : "hidden"}>
           <span></span>
           <button type="button" class="tt-row__toggle" data-size-risk ${sizing ? "" : "disabled"}
                   data-card="Sets the margin so that the bot's stop loses exactly your risk share of equity at the current leverage">
@@ -631,6 +658,15 @@ function createModal(io) {
       }),
     );
 
+    // Строку перерисовывает softRefresh, поэтому слушатель на ней, а не на кнопке.
+    bodyEl.querySelector("[data-adopt-row]")?.addEventListener("click", (e) => {
+      const toggle = e.target.closest("[data-adopt-toggle]");
+      if (!toggle || toggle.disabled) return;
+      state.adopted = !state.adopted;
+      state.error = null;
+      render();
+    });
+
     bodyEl.querySelector("[data-submit]")?.addEventListener("click", submitOpen);
   }
 
@@ -642,7 +678,8 @@ function createModal(io) {
    * оно уходит на сервер.
    */
   function clampState() {
-    state.leverage = leverageCapKnown(ctx) ? Math.min(state.wantLeverage, leverageCap(ctx)) : state.wantLeverage;
+    const adopted = ticketAdopted(state, ctx);
+    state.leverage = leverageCapKnown(ctx, adopted) ? Math.min(state.wantLeverage, leverageCap(ctx, adopted)) : state.wantLeverage;
     const maxMargin = Math.max(Number(ctx.available) || 0, 0);
     if (maxMargin > 0 && state.marginUsd > maxMargin) state.marginUsd = maxMargin;
   }
@@ -650,7 +687,8 @@ function createModal(io) {
   let lastCap = FALLBACK_LEVERAGE_CAP;
   /** Потолок слайдера; пока монета грузится — прежний, чтобы ползунок не прыгал. */
   function sliderCap() {
-    if (leverageCapKnown(ctx)) lastCap = leverageCap(ctx);
+    const adopted = ticketAdopted(state, ctx);
+    if (leverageCapKnown(ctx, adopted)) lastCap = leverageCap(ctx, adopted);
     return Math.max(lastCap, state.leverage);
   }
 
@@ -708,6 +746,14 @@ function createModal(io) {
     if (paperNote && paperNote.childElementCount !== (ctx.paperTrading ? 1 : 0)) {
       paperNote.innerHTML = ctx.paperTrading ? paperMoneyBadge() : "";
     }
+
+    const adoptRow = bodyEl.querySelector("[data-adopt-row]");
+    if (adoptRow) {
+      adoptRow.hidden = ctx.adoptEnabled === false;
+      adoptRow.innerHTML = adoptRowHtml();
+    }
+    const adoptedNow = ticketAdopted(state, ctx);
+    bodyEl.querySelectorAll("[data-bot-only]").forEach((node) => { node.hidden = !adoptedNow; });
 
     const availEl = bodyEl.querySelector("[data-avail]");
     if (availEl) availEl.textContent = (Number(ctx.available) || 0).toFixed(2);
@@ -791,6 +837,7 @@ function createModal(io) {
           exchangeMaxLeverage: null,
           coinKnown: null,
           hasPosition: false,
+          adoptLock: null,
           cooldown: null,
         };
         render();
@@ -826,6 +873,7 @@ function createModal(io) {
         side: state.side,
         marginUsd: Number(state.marginUsd),
         leverage: Number(state.leverage),
+        adopted: ticketAdopted(state, ctx),
         sizeUsd: notionalUsd(state.marginUsd, state.leverage),
         orderType: state.orderType,
         limitPx: state.orderType === "limit" ? Number(state.limitPx) : null,
@@ -873,6 +921,7 @@ function createModal(io) {
     ensureDom();
     if (coin) state.coin = String(coin).toUpperCase();
     if (side) state.side = side;
+    state.adopted = true;
     state.error = null;
     state.result = null;
     if (closeAfter) { clearTimeout(closeAfter); closeAfter = null; }
@@ -932,7 +981,7 @@ export function createTradeTicketModal(io) {
 
 /**
  * Единственная модалка тикета на страницу.
- * io: { getContext(coin) → {price, available, maxLeverage, stopDistPct, day, positions, adoptEnabled},
+ * io: { getContext(coin) → {price, available, maxLeverage, stopDistPct, day, positions, adoptEnabled, adoptLock},
  *       open(payload), close(payload) }
  */
 export function initTradeTicket(io) {

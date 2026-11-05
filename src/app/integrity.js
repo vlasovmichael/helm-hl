@@ -15,6 +15,7 @@ import { recordNotification } from '../core/notifyLog.js';
 import { note } from '../core/healthRegistry.js';
 import { fetchExchangePositions } from '../modules/sync.js';
 import { fetchUserFills, classifyClose, findRoundTripForPosition } from '../modules/userFills.js';
+import { pruneAdoptOff } from '../modules/adoptOptOut.js';
 import { maybeAdoptManualPosition, reconcileProvisionalAdoptEntries, resolveManualOpenTime } from './adoptReconcile.js';
 import { clearAdoptState, consumeAdoptMfeMae } from '../modules/strategistAdopt.js';
 import { finalizeAdoptTimeCut } from '../modules/adoptShadowTimeCut.js';
@@ -728,6 +729,10 @@ export async function orphanCheck() {
   } catch (err) {
     logger.debug(`[Manual] fetchExchangePositions failed: ${err.message}`);
     return state.manualPositionActive ? 'paused' : false;
+  }
+
+  if (config.trading.adoptEnabled) {
+    await pruneAdoptOff(exchangePositions.map((p) => p.coin), getFrontendOpenOrders, now);
   }
 
   // Остаётся только «ручное» — позы на бирже, которых нет в БД бота

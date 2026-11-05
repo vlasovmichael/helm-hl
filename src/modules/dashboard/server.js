@@ -40,6 +40,7 @@ import { getTaxSummary } from "../taxCollector/index.js";
 import { getRuntimeBlacklist } from "../executor/index.js";
 import { TICK_INTERVAL_MS, state } from "../../app/state.js";
 import { getAdoptSkipReason } from "../../app/adoptReconcile.js";
+import { isAdoptOff } from "../adoptOptOut.js";
 import { getAdoptPeakPct, getAdoptMaePct } from "../strategistAdopt.js";
 import { getLastDailyRiskStatus } from "../dailyRisk.js";
 import { buildStrategiesPayload } from "./strategiesView.js";
@@ -420,6 +421,8 @@ async function getStatusData() {
           entryTime: adoptPos?.entry_time ?? null,
           // Бот уже подхватил этот ручной вход (adopt-нянька повесила стоп+трейл)?
           adopted: adoptedCoins.has(normCoin(p.coin)),
+          // Открыта с выключенным Adopted: нянька её не ведёт по просьбе оператора.
+          adoptOff: !adoptedCoins.has(normCoin(p.coin)) && isAdoptOff(p.coin),
           // Флип: DB-строка отстала от живой стороны → бот пере-усыновляет.
           adoptResyncing,
           // Если НЕ подхватил — почему (виден на дашборде, без лазанья в логи).

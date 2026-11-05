@@ -102,6 +102,18 @@ export function segmented({ options = [], value = "", name = "seg", cls = "", wi
   return `<div class="seg${wide ?" seg--wide" : ""}${cls ? " " + cls : ""}" role="group">${items}</div>`;
 }
 
+/** Переключатель одного свойства: включено или выключено. Подпись несёт строка рядом. */
+export function toggleSwitch({ on = false, disabled = false, label = "", attrs = {} } = {}) {
+  const extra = Object.entries(attrs)
+    .filter(([, v]) => v !== false && v != null)
+    .map(([k, v]) => (v === true ? ` ${k}` : ` ${k}="${esc(v)}"`))
+    .join("");
+  return (
+    `<button type="button" class="switch${on ? " is-on" : ""}" role="switch" aria-checked="${on}"` +
+    ` aria-label="${esc(label)}"${disabled ? " disabled" : ""}${extra}><span class="switch__thumb"></span></button>`
+  );
+}
+
 /**
  * Поле ввода. `ticker` — моно + капслок (поле монеты, одно на все диалоги).
  *
