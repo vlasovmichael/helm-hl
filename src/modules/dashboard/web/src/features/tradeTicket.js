@@ -607,6 +607,7 @@ function createModal(io) {
     q("[data-toggle-type]").forEach((b) =>
       b.addEventListener("click", () => {
         state.orderType = state.orderType === "limit" ? "market" : "limit";
+        if (state.orderType === "limit" && !state.limitPx) state.limitPx = plainPrice(ctx.price);
         render();
       }),
     );
@@ -755,6 +756,13 @@ function createModal(io) {
     const adoptedNow = ticketAdopted(state, ctx);
     bodyEl.querySelectorAll("[data-bot-only]").forEach((node) => { node.hidden = !adoptedNow; });
 
+    // Поле, в котором сейчас печатают, не перезаписывать: собьётся каретка.
+    const limitInput = bodyEl.querySelector('[data-f="limitPx"]');
+    if (limitInput) {
+      limitInput.placeholder = ctx.price > 0 ? fmtPrice(ctx.price) : "0.00";
+      if (document.activeElement !== limitInput) limitInput.value = state.limitPx;
+    }
+
     const availEl = bodyEl.querySelector("[data-avail]");
     if (availEl) availEl.textContent = (Number(ctx.available) || 0).toFixed(2);
 
@@ -813,33 +821,39 @@ function createModal(io) {
     }
   }
 
+  /** Смена монеты гасит её поля: цена или лимитка прошлой монеты под именем новой уводят ордер от рынка. */
+  function switchCoin(coin) {
+    if (coin === state.coin) return;
+    state.coin = coin;
+    state.limitPx = "";
+    ctx = {
+      ...ctx,
+      price: null,
+      stopDistPct: null,
+      stopBasis: null,
+      maxLeverage: null,
+      exchangeMaxLeverage: null,
+      coinKnown: null,
+      hasPosition: false,
+      adoptLock: null,
+      cooldown: null,
+    };
+  }
+
   /** Поле монеты — общий контрол (core/coinCombo.js). */
   function wireCombo(input) {
     attachCoinCombo(input, {
       getCoins: () => ctx.coins,
       state: state.combo,
       onInput: (coin) => {
-        state.coin = coin;
+        switchCoin(coin);
         state.error = null;
         scheduleContext();
         softRefresh();
       },
       onPick: (coin) => {
-        state.coin = coin;
-        // Рисуем сразу: запрос ATR-свечей ждёт бюджета веса 3-5 секунд. Поля
-        // монеты гасим — цена прошлой монеты под именем новой хуже прочерка.
-        ctx = {
-          ...ctx,
-          price: null,
-          stopDistPct: null,
-          stopBasis: null,
-          maxLeverage: null,
-          exchangeMaxLeverage: null,
-          coinKnown: null,
-          hasPosition: false,
-          adoptLock: null,
-          cooldown: null,
-        };
+        switchCoin(coin);
+        // Рисуем сразу: запрос ATR-свечей ждёт бюджета веса 3-5 секунд.
         render();
         clearTimeout(ctxTimer);
         loadContext().then(softRefresh);
@@ -902,8 +916,12 @@ function createModal(io) {
 
   async function loadContext() {
     if (!io?.getContext) return;
+    const requestedCoin = state.coin;
     try {
-      ctx = { ...ctx, ...(await io.getContext(state.coin)) };
+      const fresh = await io.getContext(requestedCoin);
+      // Ответ по прошлой монете не должен лечь под новую: запросы гонятся.
+      if (requestedCoin !== state.coin) return;
+      ctx = { ...ctx, ...fresh };
       // Пустое поле лимитки блокирует отправку — заполняем текущей ценой, её
       // дальше двигают руками на свою сторону книги.
       if (state.orderType === "limit" && !state.limitPx) {
@@ -919,9 +937,10 @@ function createModal(io) {
 
   async function open({ coin = "", side } = {}) {
     ensureDom();
-    if (coin) state.coin = String(coin).toUpperCase();
+    if (coin) switchCoin(String(coin).toUpperCase());
     if (side) state.side = side;
     state.adopted = true;
+    state.limitPx = "";
     state.error = null;
     state.result = null;
     if (closeAfter) { clearTimeout(closeAfter); closeAfter = null; }
