@@ -22,12 +22,12 @@
  * можно набрать пять открытых и получить «0 / 5», потому что ни одна ещё не
  * закрылась.
  *
- * @param {{closed:number, open:number, cap:number}} p
- * @returns {{ today:number, cap:number, over:boolean, known:boolean }}
+ * @param {{closed:number, open:number, cap:number|null}} p  cap=null — бюджет выключен
+ * @returns {{ today:number, cap:number|null, over:boolean, known:boolean }}
  */
 export function computeTradesToday({ closed, open, cap }) {
   const today = closed + open;
-  return { today, cap, over: today >= cap, known: true };
+  return { today, cap, over: cap != null && today >= cap, known: true };
 }
 
 /**

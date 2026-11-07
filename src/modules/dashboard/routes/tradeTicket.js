@@ -122,7 +122,7 @@ function startOfDay(now) {
  * никогда не разошлись — иначе форма говорит «3 / 5», а сервер отбивает.
  */
 function tradesTodayStatus(now = Date.now()) {
-  const cap = config.trading.screenTradesPerDay;
+  const cap = config.trading.tradeBudgetEnabled ? config.trading.screenTradesPerDay : null;
   try {
     const closed = getHistorySince(startOfDay(now)).filter((r) => r.mode === "PRODUCTION").length;
     const open = getActiveAdoptPositions().length + (getActivePosition() ? 1 : 0);

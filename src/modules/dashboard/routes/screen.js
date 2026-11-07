@@ -163,6 +163,8 @@ export function buildTrackRecord(limit = 2000) {
  * «сколько я уже сделал», а не «сколько закрыл».
  */
 export function buildBudget(now = Date.now()) {
+  // Без бюджета сделок счётчик пуст и на экран не попадает.
+  if (!config.trading.tradeBudgetEnabled) return null;
   const day = getLastDailyRiskStatus();
   const dayStart = new Date(now);
   dayStart.setHours(0, 0, 0, 0);

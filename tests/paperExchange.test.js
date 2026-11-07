@@ -14,6 +14,9 @@ delete process.env.NODE_ENV;
 process.env.PAPER_TRADING = 'true';
 process.env.PAPER_START_BALANCE = '100';
 process.env.HL_PRIVATE_KEY = '0xshould-be-ignored';
+process.env.DAILY_LOSS_LIMIT_ENABLED = 'true';
+process.env.DAILY_FEE_BUDGET_PCT = '1.5';
+process.env.REENTRY_COOLDOWN_MIN = '15';
 
 const { config } = await import('../src/core/config.js');
 const exchange = await import('../src/modules/exchange.js');
@@ -23,6 +26,7 @@ const { invalidateAccountState } = await import('../src/core/accountState.js');
 const { fetchUserFills } = await import('../src/modules/userFills.js');
 const { paperTitle } = await import('../src/core/notifyLog.js');
 const { handleCancel, getEntryOrders } = await import('../src/modules/dashboard/routes/tradeTicket.js');
+const { buildBudget } = await import('../src/modules/dashboard/routes/screen.js');
 
 let mid = 50_000;
 const FUNDING_RATE = '0.0001';
@@ -79,6 +83,14 @@ test('флаг отключает ключи, подменяет адрес и �
   assert.equal(config.wallet.privateKey, null);
   assert.equal(config.wallet.address, '0x0000000000000000000000000000000000000000');
   assert.equal(config.accountDir, 'data/paper');
+});
+
+test('на бумаге рельсы входа выключены, даже если .env их включает', () => {
+  assert.equal(config.trading.dailyLossLimitEnabled, false);
+  assert.equal(config.trading.dailyFeeBudgetPct, 0);
+  assert.equal(config.trading.reentryCooldownMin, 0);
+  assert.equal(config.trading.tradeBudgetEnabled, false);
+  assert.equal(buildBudget(), null);
 });
 
 test('новый счёт стартует со ста долларов, чтения счёта в сеть не ходят', async () => {

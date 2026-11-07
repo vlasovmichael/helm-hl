@@ -356,18 +356,23 @@ function loadConfig() {
     throw new Error(`ADOPT_PEAK_ALERT_GIVEBACK_PCT must be in (0, ADOPT_TRAIL_GIVE_BACK_PCT). Got: "${process.env.ADOPT_PEAK_ALERT_GIVEBACK_PCT}"`);
   }
 
+  // Рельсы входа (дневной стоп, бюджеты сделок и комиссий, пауза перезахода) берегут
+  // живые деньги. На бумаге они выключены поверх .env: там они только режут выборку.
+  const entryRails = !paperTrading;
+
   // ── Daily loss limit — дневной стоп-лосс по fills ──
   // День достиг −LIMIT$ net → urgent-алерт, гейт новых авто-входов и тильт-алерт
   // на усыновления до полуночи. 🚨 Няньку и выходы не трогает: вход без стопа
   // хуже, чем превышенный лимит.
-  const dailyLossLimitEnabled = (process.env.DAILY_LOSS_LIMIT_ENABLED || 'true').toLowerCase() === 'true';
+  const dailyLossLimitEnabled = entryRails && (process.env.DAILY_LOSS_LIMIT_ENABLED || 'true').toLowerCase() === 'true';
   const dailyLossLimitUsd     = parseFloat(process.env.DAILY_LOSS_LIMIT_USD || '5');
   // Комиссии — единственная статья, которая растёт с числом сделок гарантированно,
   // а не вероятностно. Бюджет в % от счёта за день; 0 = рельса выключена.
-  const dailyFeeBudgetPct     = parseFloat(process.env.DAILY_FEE_BUDGET_PCT || '1.5');
-  if (!Number.isFinite(dailyFeeBudgetPct) || dailyFeeBudgetPct < 0 || dailyFeeBudgetPct > 100) {
+  const dailyFeeBudgetEnvPct  = parseFloat(process.env.DAILY_FEE_BUDGET_PCT || '1.5');
+  if (!Number.isFinite(dailyFeeBudgetEnvPct) || dailyFeeBudgetEnvPct < 0 || dailyFeeBudgetEnvPct > 100) {
     throw new Error(`DAILY_FEE_BUDGET_PCT must be in [0, 100]. Got: "${process.env.DAILY_FEE_BUDGET_PCT}"`);
   }
+  const dailyFeeBudgetPct = entryRails ? dailyFeeBudgetEnvPct : 0;
   if (isNaN(dailyLossLimitUsd) || dailyLossLimitUsd <= 0) {
     throw new Error(`DAILY_LOSS_LIMIT_USD must be > 0. Got: "${process.env.DAILY_LOSS_LIMIT_USD}"`);
   }
@@ -385,11 +390,13 @@ function loadConfig() {
   if (isNaN(screenTradesPerDay) || screenTradesPerDay <= 0) {
     throw new Error(`SCREEN_TRADES_PER_DAY must be > 0. Got: "${process.env.SCREEN_TRADES_PER_DAY}"`);
   }
+  const tradeBudgetEnabled = entryRails;
   // Пауза после закрытия сделки по монете, минуты. 0 = выключено.
-  const reentryCooldownMin = parseInt(process.env.REENTRY_COOLDOWN_MIN || '15', 10);
-  if (isNaN(reentryCooldownMin) || reentryCooldownMin < 0) {
+  const reentryCooldownEnvMin = parseInt(process.env.REENTRY_COOLDOWN_MIN || '15', 10);
+  if (isNaN(reentryCooldownEnvMin) || reentryCooldownEnvMin < 0) {
     throw new Error(`REENTRY_COOLDOWN_MIN must be >= 0. Got: "${process.env.REENTRY_COOLDOWN_MIN}"`);
   }
+  const reentryCooldownMin = entryRails ? reentryCooldownEnvMin : 0;
   // Нотионал, от которого считается стоимость трения в карточке. Биржевой
   // минимум ордера — на нём и показываем, иначе цифра не про эту жизнь.
   const screenNotionalUsd = parseFloat(process.env.SCREEN_NOTIONAL_USD || '10');
@@ -535,6 +542,7 @@ function loadConfig() {
       dailyLossLimitUsd,
       screenMaxFrictionBp,
       screenTradesPerDay,
+      tradeBudgetEnabled,
       reentryCooldownMin,
       screenNotionalUsd,
       // ── Candy Girl радар (signal-only) ──

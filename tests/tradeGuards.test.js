@@ -34,6 +34,12 @@ test('бюджет запирается ПО достижении лимита, 
   assert.equal(computeTradesToday({ closed: 9, open: 0, cap: 5 }).over, true);
 });
 
+test('выключенный бюджет (cap=null) не запирает вход', () => {
+  const r = computeTradesToday({ closed: 40, open: 3, cap: null });
+  assert.equal(r.today, 43);
+  assert.equal(r.over, false);
+});
+
 test('пауза блокирует перезаход и считает остаток', () => {
   const now = 1_000 * MIN;
   const r = computeCooldown({ lastCloseAt: now - 4 * MIN, lastPnl: -1.1, minutes: 15, now });
