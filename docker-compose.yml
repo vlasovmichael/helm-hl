@@ -53,7 +53,7 @@ services:
     ports:
       - "127.0.0.1:3010:3010"
     networks:
-      - gateway_net
+      - edge_hl
       - kafka_net
 
   tui:
@@ -79,7 +79,7 @@ services:
     depends_on:
       - hl-paper-scanner
     networks:
-      - gateway_net
+      - edge_hl
 
   # Paper-forward отрицательного фандинга HL против маржинального спота Kraken.
   # Ордеров ноль. Код приватный: приезжает из лабы через lab pull до сборки
@@ -108,12 +108,11 @@ services:
       resources:
         limits:
           memory: 256M
-    networks:
-      - gateway_net
 
 networks:
-  gateway_net:
-    name: gateway_net
+  # Создаёт oracle-workspace: в сети только бот, его TUI и cloudflared.
+  edge_hl:
+    name: edge_hl
     external: true
   # Сеть стенда security-lab/event-stream: без него бот не поднимется, удалять вместе с ним.
   kafka_net:
