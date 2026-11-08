@@ -54,7 +54,6 @@ services:
       - "127.0.0.1:3010:3010"
     networks:
       - gateway_net
-      - tax_net
       - kafka_net
 
   tui:
@@ -115,9 +114,6 @@ services:
 networks:
   gateway_net:
     name: gateway_net
-    external: true
-  tax_net:
-    name: tax_net
     external: true
   # Сеть стенда security-lab/event-stream: без него бот не поднимется, удалять вместе с ним.
   kafka_net:
